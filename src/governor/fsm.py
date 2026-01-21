@@ -54,6 +54,26 @@ class TransitionError(Exception):
 
 
 @dataclass
+class ClaimError:
+    """Detailed error for a specific claim."""
+
+    claim_index: int
+    error_type: str  # "file_not_found", "verification_failed", etc.
+    message: str
+    suggestion: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data = {
+            "claim_index": self.claim_index,
+            "error_type": self.error_type,
+            "message": self.message,
+        }
+        if self.suggestion:
+            data["suggestion"] = self.suggestion
+        return data
+
+
+@dataclass
 class RejectionInfo:
     """Structured feedback when a proposal is rejected."""
 
@@ -67,6 +87,9 @@ class RejectionInfo:
     failed_claims: list[int] = field(default_factory=list)
     """Indices of claims that failed verification."""
 
+    claim_errors: list[ClaimError] = field(default_factory=list)
+    """Detailed errors for each failed claim."""
+
     details: dict[str, Any] = field(default_factory=dict)
     """Additional structured feedback."""
 
@@ -76,11 +99,21 @@ class RejectionInfo:
             "missing_receipts": self.missing_receipts,
             "conflicting_decisions": [str(d) for d in self.conflicting_decisions],
             "failed_claims": self.failed_claims,
+            "claim_errors": [e.to_dict() for e in self.claim_errors],
             "details": self.details,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "RejectionInfo":
+        claim_errors = []
+        for e in data.get("claim_errors", []):
+            claim_errors.append(ClaimError(
+                claim_index=e["claim_index"],
+                error_type=e["error_type"],
+                message=e["message"],
+                suggestion=e.get("suggestion"),
+            ))
+
         return cls(
             reason=data["reason"],
             missing_receipts=data.get("missing_receipts", []),
@@ -88,8 +121,32 @@ class RejectionInfo:
                 UUID(d) for d in data.get("conflicting_decisions", [])
             ],
             failed_claims=data.get("failed_claims", []),
+            claim_errors=claim_errors,
             details=data.get("details", {}),
         )
+
+    def get_suggestions(self) -> list[str]:
+        """Get actionable suggestions for resolving the rejection."""
+        suggestions = []
+
+        if self.conflicting_decisions:
+            suggestions.append(
+                "Use 'governor revise <decision-id>' to explicitly change a decision"
+            )
+
+        if self.missing_receipts:
+            suggestions.append(
+                "Ensure files exist and tests pass before proposing"
+            )
+
+        for error in self.claim_errors:
+            if error.suggestion:
+                suggestions.append(error.suggestion)
+
+        if not suggestions:
+            suggestions.append("Review the error details and fix the issues")
+
+        return suggestions
 
 
 @dataclass

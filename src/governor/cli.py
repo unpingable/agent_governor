@@ -18,7 +18,8 @@ from uuid import UUID
 import click
 
 from .claims import Claim, ClaimType, decision, file_exists, claim_tests_pass, changeset
-from .fsm import ProposalFSM, ProposalState, RejectionInfo, create_proposal
+from .envelopes import EnvelopeMode, get_current_envelope, set_envelope, clear_envelope
+from .fsm import ProposalFSM, ProposalState, RejectionInfo, ClaimError, create_proposal
 from .ledgers import FactLedger, DecisionLedger
 from .verifiers import create_default_verifiers
 
@@ -175,8 +176,9 @@ def propose(ctx: click.Context, patch: str | None, claim: tuple[str, ...]) -> No
 
 @cli.command()
 @click.argument("proposal_id")
+@click.option("--json", "json_output", is_flag=True, help="Output results as JSON")
 @click.pass_context
-def verify(ctx: click.Context, proposal_id: str) -> None:
+def verify(ctx: click.Context, proposal_id: str, json_output: bool) -> None:
     """Verify a proposal by running checks and producing receipts."""
     gov_dir = ensure_initialized(ctx)
     root = Path(ctx.obj["root"])
@@ -196,33 +198,147 @@ def verify(ctx: click.Context, proposal_id: str) -> None:
         click.echo(f"Error: Proposal is in {fsm.state.value} state, cannot verify", err=True)
         ctx.exit(1)
 
+    # Get current envelope
+    envelope = get_current_envelope(gov_dir)
+    click.echo(f"Operating in {envelope.mode.value} mode")
+
+    # Check for decision conflicts before verification (unless envelope allows)
+    decision_ledger = DecisionLedger(gov_dir)
+    conflicts = []
+
+    if not envelope.allow_conflicts:
+        for i, claim in enumerate(proposal.claims):
+            if claim.type == ClaimType.DECISION:
+                conflict = decision_ledger.check_conflict(claim)
+                if conflict:
+                    conflicts.append((i, claim, conflict))
+
+    if conflicts and not envelope.allow_conflicts:
+        rejection = RejectionInfo(
+            reason="Decision conflicts with existing decisions",
+            conflicting_decisions=[c.id for _, _, c in conflicts],
+            details={
+                "conflicts": [
+                    {
+                        "claim_index": i,
+                        "proposed": {"topic": claim.topic, "choice": claim.choice},
+                        "existing": {"topic": conflict.topic, "choice": conflict.choice, "id": str(conflict.id)},
+                    }
+                    for i, claim, conflict in conflicts
+                ]
+            },
+        )
+        fsm.reject(rejection)
+        proposals[proposal_id] = fsm.proposal.to_dict()
+        save_proposals(gov_dir, proposals)
+
+        if json_output:
+            import json as json_mod
+            output = {
+                "status": "rejected",
+                "proposal_id": proposal_id,
+                "rejection": rejection.to_dict(),
+                "suggestions": rejection.get_suggestions(),
+            }
+            click.echo(json_mod.dumps(output, indent=2))
+        else:
+            click.echo("Decision conflict(s) detected:\n", err=True)
+            for i, claim, conflict in conflicts:
+                click.echo(f"  Claim [{i}]: {claim.topic} = {claim.choice}", err=True)
+                click.echo(f"    Conflicts with existing: {conflict.topic} = {conflict.choice}", err=True)
+                click.echo(f"    Existing decision ID: {conflict.id}", err=True)
+                click.echo()
+
+            click.echo("Suggestions:", err=True)
+            for suggestion in rejection.get_suggestions():
+                click.echo(f"  • {suggestion}", err=True)
+
+        ctx.exit(1)
+
     # Run verifiers
     verifier = create_default_verifiers(root)
     results = verifier.verify_all(proposal.claims)
 
     # Check results
     failed_indices = []
+    claim_errors = []
     receipts = []
 
     for i, result in enumerate(results):
         if result.success:
             receipts.append(result.receipt)
-            click.echo(f"  [✓] Claim {i}: verified")
+            if not json_output:
+                click.echo(f"  [✓] Claim {i}: verified")
         else:
             failed_indices.append(i)
-            click.echo(f"  [✗] Claim {i}: {result.error}")
+            # Create detailed error
+            error_type = "verification_failed"
+            suggestion = None
+            if result.error and "not found" in result.error.lower():
+                error_type = "file_not_found"
+                suggestion = f"Create the file or check the path: {proposal.claims[i].path}"
+            elif result.error and "exit code" in result.error.lower():
+                error_type = "tests_failed"
+                suggestion = "Fix failing tests before proposing"
+
+            claim_errors.append(ClaimError(
+                claim_index=i,
+                error_type=error_type,
+                message=result.error or "Unknown error",
+                suggestion=suggestion,
+            ))
+
+            if not json_output:
+                click.echo(f"  [✗] Claim {i}: {result.error}")
 
     if failed_indices:
-        # Reject
-        fsm.reject(RejectionInfo(
-            reason="Verification failed",
-            failed_claims=failed_indices,
-        ))
-        proposals[proposal_id] = fsm.proposal.to_dict()
-        save_proposals(gov_dir, proposals)
+        if envelope.require_receipts:
+            # Reject in strict mode
+            rejection = RejectionInfo(
+                reason="Verification failed",
+                failed_claims=failed_indices,
+                claim_errors=claim_errors,
+            )
+            fsm.reject(rejection)
+            proposals[proposal_id] = fsm.proposal.to_dict()
+            save_proposals(gov_dir, proposals)
 
-        click.echo(f"\nProposal REJECTED: {len(failed_indices)} claim(s) failed")
-        ctx.exit(1)
+            if json_output:
+                import json as json_mod
+                output = {
+                    "status": "rejected",
+                    "proposal_id": proposal_id,
+                    "rejection": rejection.to_dict(),
+                    "suggestions": rejection.get_suggestions(),
+                }
+                click.echo(json_mod.dumps(output, indent=2))
+            else:
+                click.echo(f"\nProposal REJECTED: {len(failed_indices)} claim(s) failed")
+                click.echo("\nErrors:")
+                for error in claim_errors:
+                    click.echo(f"  [{error.claim_index}] {error.error_type}: {error.message}")
+                    if error.suggestion:
+                        click.echo(f"      Suggestion: {error.suggestion}")
+                click.echo("\nSuggestions:")
+                for suggestion in rejection.get_suggestions():
+                    click.echo(f"  • {suggestion}")
+
+            ctx.exit(1)
+        else:
+            # In exploratory mode, warn but continue
+            click.echo(f"\n⚠️  Warning: {len(failed_indices)} claim(s) failed verification")
+            click.echo("Continuing in exploratory mode (receipts not required)")
+            # Create stub receipts for failed claims
+            from datetime import datetime, timezone
+            from .receipts import FileSnapshot
+            for i in failed_indices:
+                stub = FileSnapshot(
+                    path=f"exploratory:{i}",
+                    blob_hash="exploratory",
+                    size_bytes=0,
+                    timestamp=datetime.now(timezone.utc),
+                )
+                receipts.append(stub)
 
     # All passed - verify
     fsm.verify(receipts)
@@ -279,22 +395,38 @@ def apply(ctx: click.Context, proposal_id: str) -> None:
             click.echo(f"Error applying patch: {e}", err=True)
             ctx.exit(1)
 
+    # Get current envelope
+    envelope = get_current_envelope(gov_dir)
+
     # Update ledgers with facts/decisions
     fact_ledger = FactLedger(gov_dir)
     decision_ledger = DecisionLedger(gov_dir)
 
     for claim, receipt in zip(proposal.claims, proposal.receipts):
         if claim.type == ClaimType.DECISION:
-            # Check for conflicts
-            conflict = decision_ledger.check_conflict(claim)
-            if conflict:
-                click.echo(f"Warning: Overwriting decision on '{claim.topic}'")
+            if envelope.commit_decisions:
+                # Check for conflicts
+                conflict = decision_ledger.check_conflict(claim)
+                if conflict:
+                    click.echo(f"Warning: Overwriting decision on '{claim.topic}'")
 
-            decision_ledger.add(claim)
-            click.echo(f"  Added decision: {claim.topic} = {claim.choice}")
+                decision_ledger.add(claim)
+                click.echo(f"  Added decision: {claim.topic} = {claim.choice}")
+            else:
+                click.echo(f"  Skipped decision (exploratory mode): {claim.topic} = {claim.choice}")
         else:
-            # Add as fact
-            fact_ledger.add(claim, receipt)
+            # Add as fact with file hashes for decay tracking
+            file_hashes = {}
+            if claim.path:
+                # Extract current file hash for staleness detection
+                full_path = root / claim.path
+                if full_path.exists() and full_path.is_file():
+                    import hashlib
+                    file_hashes[claim.path] = hashlib.sha256(
+                        full_path.read_bytes()
+                    ).hexdigest()
+
+            fact_ledger.add(claim, receipt, file_hashes=file_hashes)
             click.echo(f"  Added fact: {claim.describe()}")
 
     # Mark as applied
@@ -353,6 +485,50 @@ def decisions(ctx: click.Context, topic: str | None) -> None:
 
 
 @cli.command()
+@click.option("--auto-prune", "-p", is_flag=True, help="Automatically remove stale facts")
+@click.pass_context
+def decay(ctx: click.Context, auto_prune: bool) -> None:
+    """Check for and optionally remove stale facts."""
+    gov_dir = ensure_initialized(ctx)
+    root = Path(ctx.obj["root"])
+
+    ledger = FactLedger(gov_dir)
+    facts = ledger.all()
+
+    if not facts:
+        click.echo("No facts to check")
+        return
+
+    click.echo(f"Checking {len(facts)} fact(s) for staleness...\n")
+
+    stale_facts = []
+    for fact in facts:
+        is_stale = ledger.check_staleness(fact, base_path=root)
+        status = "STALE" if is_stale else "ok"
+        icon = "⚠️ " if is_stale else "✓ "
+
+        click.echo(f"  {icon}[{status}] {fact.claim.describe()}")
+
+        if is_stale:
+            stale_facts.append(fact)
+
+    click.echo()
+
+    if not stale_facts:
+        click.echo("All facts are fresh")
+        return
+
+    click.echo(f"Found {len(stale_facts)} stale fact(s)")
+
+    if auto_prune:
+        for fact in stale_facts:
+            ledger.invalidate(fact.id)
+        click.echo(f"Pruned {len(stale_facts)} stale fact(s)")
+    else:
+        click.echo("Run with --auto-prune to remove stale facts")
+
+
+@cli.command()
 @click.option("--limit", "-n", default=20, help="Number of proposals to show")
 @click.pass_context
 def status(ctx: click.Context, limit: int) -> None:
@@ -383,6 +559,96 @@ def status(ctx: click.Context, limit: int) -> None:
         click.echo(f"  {state_icon} [{proposal.state.value}] {pid[:8]}...")
         click.echo(f"     Claims: {len(proposal.claims)}")
         click.echo()
+
+
+@cli.command()
+@click.argument("mode", type=click.Choice(["exploratory", "strict"]), required=False)
+@click.option("--clear", "-c", is_flag=True, help="Clear envelope override, use default")
+@click.pass_context
+def envelope(ctx: click.Context, mode: str | None, clear: bool) -> None:
+    """
+    Get or set the operating envelope.
+
+    Envelopes control how strictly the governor enforces rules:
+    - exploratory: Hypotheses allowed, decisions not committed
+    - strict: All claims require receipts, full enforcement
+
+    Examples:
+        governor envelope              # Show current envelope
+        governor envelope exploratory  # Switch to exploratory mode
+        governor envelope strict       # Switch to strict mode
+        governor envelope --clear      # Revert to default
+    """
+    gov_dir = ensure_initialized(ctx)
+
+    if clear:
+        clear_envelope(gov_dir)
+        click.echo("Envelope override cleared, using default from config")
+        return
+
+    if mode:
+        try:
+            envelope_mode = EnvelopeMode(mode)
+            set_envelope(gov_dir, envelope_mode)
+            click.echo(f"Envelope set to: {mode}")
+        except ValueError:
+            click.echo(f"Error: Unknown envelope mode: {mode}", err=True)
+            ctx.exit(1)
+    else:
+        # Show current envelope
+        current = get_current_envelope(gov_dir)
+        click.echo(f"Current envelope: {current.mode.value}")
+        click.echo(f"  require_receipts: {current.require_receipts}")
+        click.echo(f"  commit_decisions: {current.commit_decisions}")
+        click.echo(f"  allow_conflicts: {current.allow_conflicts}")
+
+
+@cli.command()
+@click.argument("decision_id")
+@click.option("--choice", "-c", required=True, help="New choice value")
+@click.option("--rationale", "-r", help="Reason for the revision")
+@click.pass_context
+def revise(ctx: click.Context, decision_id: str, choice: str, rationale: str | None) -> None:
+    """
+    Revise an existing decision.
+
+    This is the proper way to change a decision - explicitly supersede it.
+
+    Example:
+        governor revise <decision-id> --choice vue --rationale "Migrating from React"
+    """
+    gov_dir = ensure_initialized(ctx)
+
+    decision_ledger = DecisionLedger(gov_dir)
+
+    try:
+        old_id = UUID(decision_id)
+    except ValueError:
+        click.echo(f"Error: Invalid decision ID: {decision_id}", err=True)
+        ctx.exit(1)
+
+    old_decision = decision_ledger.get(old_id)
+    if not old_decision:
+        click.echo(f"Error: Decision {decision_id} not found", err=True)
+        ctx.exit(1)
+
+    # Create new decision claim with same topic
+    new_claim = decision(old_decision.topic, choice)
+
+    # Revise
+    new_decision = decision_ledger.revise(old_id, new_claim, rationale=rationale)
+
+    if new_decision:
+        click.echo(f"Decision revised:")
+        click.echo(f"  Topic: {new_decision.topic}")
+        click.echo(f"  Old choice: {old_decision.choice}")
+        click.echo(f"  New choice: {new_decision.choice}")
+        if rationale:
+            click.echo(f"  Rationale: {rationale}")
+        click.echo(f"  New ID: {new_decision.id}")
+    else:
+        click.echo("Error: Revision failed", err=True)
+        ctx.exit(1)
 
 
 def parse_claim(claim_str: str) -> Claim:

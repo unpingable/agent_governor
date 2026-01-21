@@ -263,6 +263,99 @@ class FactLedger:
         """Get all facts."""
         return list(self._facts.values())
 
+    def get_changed_files_git(self, base_path: Path | None = None) -> set[str]:
+        """
+        Get files that have changed since last commit using git.
+
+        Returns set of changed file paths (relative to repo root).
+        """
+        import subprocess
+
+        base = base_path or Path.cwd()
+
+        try:
+            # Get uncommitted changes (staged + unstaged)
+            result = subprocess.run(
+                ["git", "diff", "--name-only", "HEAD"],
+                cwd=base,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                return set()
+
+            changed = set(result.stdout.strip().split("\n")) if result.stdout.strip() else set()
+
+            # Also get untracked files that might affect facts
+            result2 = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=base,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result2.returncode == 0:
+                for line in result2.stdout.strip().split("\n"):
+                    if line and len(line) > 3:
+                        # Format is "XY filename" where XY is status
+                        changed.add(line[3:].strip())
+
+            return changed
+
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return set()
+
+    def invalidate_by_changed_files(
+        self,
+        changed_files: set[str],
+        base_path: Path | None = None,
+    ) -> list[UUID]:
+        """
+        Invalidate facts that depend on any of the changed files.
+
+        Args:
+            changed_files: Set of changed file paths.
+            base_path: Base path for the project.
+
+        Returns:
+            List of invalidated fact IDs.
+        """
+        invalidated = []
+
+        for fact in list(self._facts.values()):
+            # Check if any of the fact's dependencies changed
+            fact_files = set(fact.file_hashes.keys())
+
+            # Also check the claim's path if it's a file-based claim
+            if fact.claim.path:
+                fact_files.add(fact.claim.path)
+
+            if fact_files & changed_files:
+                invalidated.append(fact.id)
+                self.invalidate(fact.id)
+
+        return invalidated
+
+    def decay_check(self, base_path: Path | None = None) -> dict[str, list[UUID]]:
+        """
+        Perform a full decay check using both git and hash-based detection.
+
+        Returns dict with 'git_invalidated' and 'hash_invalidated' lists.
+        """
+        base = base_path or Path.cwd()
+        result = {"git_invalidated": [], "hash_invalidated": []}
+
+        # First, check git for changed files
+        changed = self.get_changed_files_git(base)
+        if changed:
+            result["git_invalidated"] = self.invalidate_by_changed_files(changed, base)
+
+        # Then, hash-check remaining facts
+        result["hash_invalidated"] = self.invalidate_stale(base)
+
+        return result
+
 
 class DecisionLedger:
     """

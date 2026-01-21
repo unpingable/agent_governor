@@ -316,6 +316,85 @@ class TestStatus:
             assert "proposed" in result.output
 
 
+class TestRejections:
+    """Test governor rejections command."""
+
+    def test_rejections_empty(self, runner, tmp_path):
+        """rejections shows empty message when no rejections."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runner.invoke(cli, ["init"])
+
+            result = runner.invoke(cli, ["rejections"])
+
+            assert result.exit_code == 0
+            assert "No rejected" in result.output
+
+    def test_rejections_shows_rejected(self, runner, tmp_path):
+        """rejections shows rejected proposals."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runner.invoke(cli, ["init"])
+
+            # Create a proposal that will be rejected
+            result = runner.invoke(cli, [
+                "propose",
+                "--claim", "type=file_exists,path=nonexistent.py"
+            ])
+            proposal_id = result.output.split("Proposal created: ")[1].split("\n")[0]
+
+            # Verify will reject it
+            runner.invoke(cli, ["verify", proposal_id])
+
+            # Check rejections
+            result = runner.invoke(cli, ["rejections"])
+
+            assert result.exit_code == 0
+            assert proposal_id[:8] in result.output
+            assert "Reason:" in result.output
+
+    def test_rejections_json_output(self, runner, tmp_path):
+        """rejections --json outputs JSON."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runner.invoke(cli, ["init"])
+
+            # Create a rejected proposal
+            result = runner.invoke(cli, [
+                "propose",
+                "--claim", "type=file_exists,path=missing.py"
+            ])
+            proposal_id = result.output.split("Proposal created: ")[1].split("\n")[0]
+            runner.invoke(cli, ["verify", proposal_id])
+
+            # Get JSON output
+            result = runner.invoke(cli, ["rejections", "--json"])
+
+            assert result.exit_code == 0
+            import json
+            data = json.loads(result.output)
+            assert len(data) == 1
+            assert "rejection" in data[0]
+
+    def test_rejections_limit(self, runner, tmp_path):
+        """rejections respects --limit."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runner.invoke(cli, ["init"])
+
+            # Create multiple rejected proposals
+            for i in range(5):
+                result = runner.invoke(cli, [
+                    "propose",
+                    "--claim", f"type=file_exists,path=missing{i}.py"
+                ])
+                proposal_id = result.output.split("Proposal created: ")[1].split("\n")[0]
+                runner.invoke(cli, ["verify", proposal_id])
+
+            # Get with limit
+            result = runner.invoke(cli, ["rejections", "--limit", "2", "--json"])
+
+            import json
+            data = json.loads(result.output)
+            assert len(data) == 2
+
+
 class TestFullFlow:
     """Test complete propose → verify → apply flow."""
 

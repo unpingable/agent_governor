@@ -8,7 +8,7 @@ without evidence that passes the admissibility predicate.
 import json
 import hashlib
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from uuid import UUID, uuid4
@@ -164,7 +164,7 @@ class CodebaseLedger:
             id=uuid4(),
             claim=claim,
             evidence=evidence,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             topic=topic,
             supersedes=supersedes,
         )
@@ -183,7 +183,7 @@ class CodebaseLedger:
             id=uuid4(),
             claim=claim,
             reason=reason,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             contradiction=contradiction,
         )
         self._rejections.append(rejection)

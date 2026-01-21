@@ -562,6 +562,74 @@ def status(ctx: click.Context, limit: int) -> None:
 
 
 @cli.command()
+@click.option("--limit", "-n", default=20, help="Number of rejections to show")
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def rejections(ctx: click.Context, limit: int, json_output: bool) -> None:
+    """
+    Show rejection history.
+
+    Displays recently rejected proposals with their rejection reasons.
+    This is useful for debugging and understanding why proposals failed.
+
+    Note: Rejection history is local only (not git-tracked).
+    """
+    gov_dir = ensure_initialized(ctx)
+
+    proposals = load_proposals(gov_dir)
+
+    # Filter to rejected proposals
+    from .fsm import Proposal
+    rejected = []
+    for pid, data in proposals.items():
+        proposal = Proposal.from_dict(data)
+        if proposal.state == ProposalState.REJECTED and proposal.rejection:
+            rejected.append((pid, proposal))
+
+    # Sort by creation time (most recent first)
+    rejected.sort(key=lambda x: x[1].created_at, reverse=True)
+    rejected = rejected[:limit]
+
+    if not rejected:
+        click.echo("No rejected proposals")
+        return
+
+    if json_output:
+        output = []
+        for pid, proposal in rejected:
+            output.append({
+                "id": pid,
+                "created_at": proposal.created_at.isoformat(),
+                "claims": [c.describe() for c in proposal.claims],
+                "rejection": proposal.rejection.to_dict(),
+            })
+        click.echo(json.dumps(output, indent=2))
+        return
+
+    click.echo(f"Rejected proposals ({len(rejected)}):\n")
+
+    for pid, proposal in rejected:
+        click.echo(f"  ❌ {pid[:8]}...")
+        click.echo(f"     Reason: {proposal.rejection.reason}")
+
+        if proposal.rejection.failed_claims:
+            click.echo(f"     Failed claims: {proposal.rejection.failed_claims}")
+
+        if proposal.rejection.claim_errors:
+            for error in proposal.rejection.claim_errors[:3]:
+                click.echo(f"       [{error.claim_index}] {error.error_type}: {error.message}")
+
+        if proposal.rejection.conflicting_decisions:
+            click.echo(f"     Conflicts: {len(proposal.rejection.conflicting_decisions)} decision(s)")
+
+        suggestions = proposal.rejection.get_suggestions()
+        if suggestions:
+            click.echo(f"     Suggestion: {suggestions[0]}")
+
+        click.echo()
+
+
+@cli.command()
 @click.argument("mode", type=click.Choice(["exploratory", "strict"]), required=False)
 @click.option("--clear", "-c", is_flag=True, help="Clear envelope override, use default")
 @click.pass_context

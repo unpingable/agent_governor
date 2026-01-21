@@ -12,6 +12,10 @@ requires-python = ">=3.10"
 authors = [
     { name = "James Beck"}
 ]
+dependencies = [
+    "click>=8.0",
+    "tomli>=2.0; python_version < '3.11'",
+]
 keywords = [
     "ai",
     "llm",
@@ -35,6 +39,9 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
 ]
+
+[project.scripts]
+governor = "governor.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/epistemic-governor"

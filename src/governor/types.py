@@ -1,7 +1,7 @@
 """Core types for the epistemic governor."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
@@ -25,7 +25,7 @@ class Evidence:
     type: str  # "file_exists", "test_passed", "api_verified", etc.
     source: str  # Path, URL, or identifier
     content_hash: Optional[str] = None  # SHA256 of verified content
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def __post_init__(self):
         # Evidence cannot be "model said so"
@@ -42,7 +42,7 @@ class Contradiction:
     new_claim: str
     reason: str
     id: UUID = field(default_factory=uuid4)
-    detected_at: datetime = field(default_factory=datetime.utcnow)
+    detected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def __str__(self) -> str:
         return f"Contradiction: '{self.new_claim}' conflicts with '{self.existing_claim}' - {self.reason}"

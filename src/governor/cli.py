@@ -700,6 +700,335 @@ def parse_claim(claim_str: str) -> Claim:
         raise ValueError(f"Unknown claim type: {claim_type}")
 
 
+# Hook command group
+@cli.group()
+@click.pass_context
+def hook(ctx: click.Context) -> None:
+    """
+    Git hook management.
+
+    Install and manage the pre-commit hook that enforces governor approval.
+    """
+    pass
+
+
+@hook.command("install")
+@click.pass_context
+def hook_install(ctx: click.Context) -> None:
+    """Install the pre-commit hook."""
+    from .hooks import install_hook, get_git_root
+
+    root = Path(ctx.obj["root"])
+    git_root = get_git_root(root)
+
+    if not git_root:
+        click.echo("Error: Not in a git repository", err=True)
+        ctx.exit(1)
+
+    success, message = install_hook(git_root)
+
+    if success:
+        click.echo(message)
+    else:
+        click.echo(f"Error: {message}", err=True)
+        ctx.exit(1)
+
+
+@hook.command("uninstall")
+@click.pass_context
+def hook_uninstall(ctx: click.Context) -> None:
+    """Uninstall the pre-commit hook."""
+    from .hooks import uninstall_hook, get_git_root
+
+    root = Path(ctx.obj["root"])
+    git_root = get_git_root(root)
+
+    if not git_root:
+        click.echo("Error: Not in a git repository", err=True)
+        ctx.exit(1)
+
+    success, message = uninstall_hook(git_root)
+
+    if success:
+        click.echo(message)
+    else:
+        click.echo(f"Error: {message}", err=True)
+        ctx.exit(1)
+
+
+@hook.command("status")
+@click.pass_context
+def hook_status(ctx: click.Context) -> None:
+    """Show hook installation status."""
+    from .hooks import get_hook_status, get_git_root
+
+    root = Path(ctx.obj["root"])
+    git_root = get_git_root(root)
+
+    if not git_root:
+        click.echo("Error: Not in a git repository", err=True)
+        ctx.exit(1)
+
+    status = get_hook_status(git_root)
+
+    click.echo("Git Hook Status:")
+    click.echo(f"  Installed: {'yes' if status['installed'] else 'no'}")
+
+    if status["installed"]:
+        click.echo(f"  Is Governor hook: {'yes' if status['is_governor_hook'] else 'no'}")
+        click.echo(f"  Executable: {'yes' if status['executable'] else 'no'}")
+
+    if status["has_backup"]:
+        click.echo(f"  Backup exists: yes")
+
+
+@hook.command("pre-commit")
+@click.option("--bypass", is_flag=True, help="Bypass the check")
+@click.pass_context
+def hook_pre_commit(ctx: click.Context, bypass: bool) -> None:
+    """
+    Run the pre-commit check.
+
+    This is called by the git pre-commit hook script.
+    Not typically called directly by users.
+    """
+    from .hooks import run_pre_commit_check, get_git_root
+
+    root = Path(ctx.obj["root"])
+    git_root = get_git_root(root)
+
+    success, message = run_pre_commit_check(git_root, bypass=bypass)
+
+    click.echo(message)
+
+    if not success:
+        ctx.exit(1)
+
+
+@hook.command("bypass")
+@click.pass_context
+def hook_bypass(ctx: click.Context) -> None:
+    """
+    Create a one-time bypass for the next commit.
+
+    Use this for emergency commits that need to skip governor approval.
+    The bypass is consumed after one commit.
+    """
+    gov_dir = ensure_initialized(ctx)
+
+    bypass_file = gov_dir / ".bypass"
+    bypass_file.write_text("")
+
+    click.echo("One-time bypass created")
+    click.echo("Next commit will skip governor check")
+    click.echo("(Bypass is automatically removed after use)")
+
+
+@cli.command("wrap")
+@click.argument("command", nargs=-1, required=True)
+@click.option("--auto-approve", "-a", is_flag=True, help="Auto-approve in exploratory mode")
+@click.pass_context
+def wrap(ctx: click.Context, command: tuple[str, ...], auto_approve: bool) -> None:
+    """
+    Wrap an agent command with governor enforcement.
+
+    Monitors file changes made by the agent and ensures they go
+    through the governor approval workflow.
+
+    Examples:
+        governor wrap -- python script.py
+        governor wrap --auto-approve -- claude-code
+        governor wrap -- npm run build
+    """
+    from .wrapper import wrap_agent
+
+    root = Path(ctx.obj["root"])
+
+    exit_code, message = wrap_agent(
+        list(command),
+        root=root,
+        auto_approve=auto_approve,
+    )
+
+    click.echo(message)
+    ctx.exit(exit_code)
+
+
+@cli.command("changes")
+@click.pass_context
+def changes(ctx: click.Context) -> None:
+    """
+    Show uncommitted file changes and their approval status.
+
+    Shows which files have been modified and whether they've been
+    approved through the governor workflow.
+    """
+    from .wrapper import DirectorySnapshot
+    from .hooks import get_approved_files, get_git_root
+
+    root = Path(ctx.obj["root"])
+    gov_dir = root / ".governor"
+
+    if not gov_dir.exists():
+        click.echo("Governor not initialized")
+        ctx.exit(1)
+
+    git_root = get_git_root(root)
+    if not git_root:
+        click.echo("Not in a git repository")
+        ctx.exit(1)
+
+    # Get approved files
+    approved = get_approved_files(gov_dir)
+
+    # Get current changes from git
+    import subprocess
+    result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=git_root,
+        capture_output=True,
+        text=True,
+    )
+
+    if not result.stdout.strip():
+        click.echo("No uncommitted changes")
+        return
+
+    click.echo("Uncommitted changes:\n")
+
+    for line in result.stdout.strip().split("\n"):
+        if not line.strip():
+            continue
+
+        status = line[:2]
+        file_path = line[3:].strip()
+
+        # Handle renamed files
+        if " -> " in file_path:
+            file_path = file_path.split(" -> ")[1]
+
+        is_approved = file_path in approved or file_path.startswith(".governor/")
+        icon = "✓" if is_approved else "✗"
+        approval = "approved" if is_approved else "NOT approved"
+
+        click.echo(f"  {icon} [{status.strip() or 'M'}] {file_path} ({approval})")
+
+    click.echo()
+
+    unapproved = [
+        line[3:].strip()
+        for line in result.stdout.strip().split("\n")
+        if line.strip() and line[3:].strip() not in approved
+        and not line[3:].strip().startswith(".governor/")
+    ]
+
+    if unapproved:
+        click.echo(f"{len(unapproved)} file(s) need governor approval before commit")
+    else:
+        click.echo("All changes are approved")
+
+
+# MCP command group
+@cli.group()
+@click.pass_context
+def mcp(ctx: click.Context) -> None:
+    """
+    MCP (Model Context Protocol) server management.
+
+    Run governor as an MCP server for integration with Claude Desktop
+    and other MCP-compatible clients.
+    """
+    pass
+
+
+@mcp.command("serve")
+@click.pass_context
+def mcp_serve(ctx: click.Context) -> None:
+    """
+    Run the MCP server.
+
+    This starts a JSON-RPC server on stdio that implements the
+    Model Context Protocol. Configure this in your MCP client
+    (e.g., Claude Desktop) to use governor tools.
+
+    Example Claude Desktop config:
+        {
+            "mcpServers": {
+                "governor": {
+                    "command": "governor",
+                    "args": ["mcp", "serve"]
+                }
+            }
+        }
+    """
+    from .mcp_server import run_mcp_server
+
+    root = Path(ctx.obj["root"])
+    run_mcp_server(root)
+
+
+@mcp.command("tools")
+@click.pass_context
+def mcp_tools(ctx: click.Context) -> None:
+    """List available MCP tools."""
+    from .mcp_server import create_mcp_server
+
+    root = Path(ctx.obj["root"])
+    server = create_mcp_server(root)
+
+    tools = server.list_tools()
+
+    click.echo(f"Available MCP tools ({len(tools)}):\n")
+
+    for tool in tools:
+        click.echo(f"  {tool['name']}")
+        click.echo(f"    {tool['description']}")
+        click.echo()
+
+
+@mcp.command("call")
+@click.argument("tool_name")
+@click.option("--arg", "-a", multiple=True, help="Tool argument in key=value format")
+@click.pass_context
+def mcp_call(ctx: click.Context, tool_name: str, arg: tuple[str, ...]) -> None:
+    """
+    Call an MCP tool directly.
+
+    Useful for testing tools without an MCP client.
+
+    Examples:
+        governor mcp call governor_status
+        governor mcp call governor_propose -a 'claims=[{"type":"file_exists","path":"test.py"}]'
+    """
+    from .mcp_server import create_mcp_server
+
+    root = Path(ctx.obj["root"])
+    server = create_mcp_server(root)
+
+    # Parse arguments
+    arguments = {}
+    for a in arg:
+        if "=" not in a:
+            click.echo(f"Invalid argument format: {a}", err=True)
+            click.echo("Use key=value format", err=True)
+            ctx.exit(1)
+
+        key, value = a.split("=", 1)
+
+        # Try to parse as JSON
+        try:
+            arguments[key] = json.loads(value)
+        except json.JSONDecodeError:
+            arguments[key] = value
+
+    result = server.call_tool(tool_name, arguments)
+
+    click.echo(json.dumps(result, indent=2))
+
+    if not result.get("success", True):
+        ctx.exit(1)
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

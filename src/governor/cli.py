@@ -1575,6 +1575,915 @@ def task_cancel(ctx: click.Context, agent_id: str, task_id: str) -> None:
     click.echo(f"  Scope released: {json.loads(reservation['scope_json'])}")
 
 
+# Issue/Task command group
+@cli.group()
+@click.pass_context
+def issue(ctx: click.Context) -> None:
+    """
+    Issue/task management.
+
+    Create, track, and organize tasks with subtasks, dependencies,
+    labels, milestones, and time tracking.
+    """
+    pass
+
+
+@issue.command("add")
+@click.argument("title")
+@click.option("--description", "-d", default="", help="Task description")
+@click.option("--priority", "-p", type=click.Choice(["critical", "high", "medium", "low", "none"]), default="medium")
+@click.option("--parent", help="Parent task ID for subtask")
+@click.option("--milestone", "-m", help="Milestone ID or name")
+@click.option("--label", "-l", multiple=True, help="Label name(s)")
+@click.pass_context
+def issue_add(
+    ctx: click.Context,
+    title: str,
+    description: str,
+    priority: str,
+    parent: str | None,
+    milestone: str | None,
+    label: tuple[str, ...],
+) -> None:
+    """
+    Create a new task/issue.
+
+    Examples:
+        governor issue add "Implement login"
+        governor issue add "Fix bug" -p high -l bug -l urgent
+        governor issue add "Subtask" --parent abc123
+    """
+    from .tasks import get_task_manager, Priority
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    # Map priority
+    priority_map = {
+        "critical": Priority.CRITICAL,
+        "high": Priority.HIGH,
+        "medium": Priority.MEDIUM,
+        "low": Priority.LOW,
+        "none": Priority.NONE,
+    }
+
+    # Resolve parent
+    parent_id = None
+    if parent:
+        try:
+            parent_id = UUID(parent)
+        except ValueError:
+            click.echo(f"Error: Invalid parent ID: {parent}", err=True)
+            ctx.exit(1)
+
+    # Resolve milestone
+    milestone_id = None
+    if milestone:
+        try:
+            milestone_id = UUID(milestone)
+        except ValueError:
+            # Try by name
+            milestones = tm.list_milestones(include_closed=True)
+            for m in milestones:
+                if m.name.lower() == milestone.lower():
+                    milestone_id = m.id
+                    break
+            if not milestone_id:
+                click.echo(f"Error: Milestone not found: {milestone}", err=True)
+                ctx.exit(1)
+
+    # Resolve labels
+    label_ids = []
+    for lbl in label:
+        existing = tm.get_label_by_name(lbl)
+        if existing:
+            label_ids.append(existing.id)
+        else:
+            # Create the label
+            new_label = tm.create_label(lbl)
+            label_ids.append(new_label.id)
+            click.echo(f"Created label: {lbl}")
+
+    task = tm.create_task(
+        title=title,
+        description=description,
+        priority=priority_map[priority],
+        parent_id=parent_id,
+        milestone_id=milestone_id,
+        label_ids=label_ids,
+    )
+
+    click.echo(f"Created task: {task.id}")
+    click.echo(f"  Title: {task.title}")
+    if parent_id:
+        click.echo(f"  Parent: {parent_id}")
+
+
+@issue.command("list")
+@click.option("--status", "-s", type=click.Choice(["open", "in_progress", "blocked", "done", "all"]), default="open")
+@click.option("--milestone", "-m", help="Filter by milestone")
+@click.option("--label", "-l", help="Filter by label")
+@click.option("--tree", "-t", is_flag=True, help="Show as tree view")
+@click.option("--archived", "-a", is_flag=True, help="Include archived tasks")
+@click.pass_context
+def issue_list(
+    ctx: click.Context,
+    status: str,
+    milestone: str | None,
+    label: str | None,
+    tree: bool,
+    archived: bool,
+) -> None:
+    """List tasks/issues."""
+    from .tasks import get_task_manager, TaskStatus
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    # Resolve milestone
+    milestone_id = None
+    if milestone:
+        try:
+            milestone_id = UUID(milestone)
+        except ValueError:
+            milestones = tm.list_milestones(include_closed=True)
+            for m in milestones:
+                if m.name.lower() == milestone.lower():
+                    milestone_id = m.id
+                    break
+
+    if tree:
+        output = tm.format_tree(milestone_id)
+        click.echo(output)
+        return
+
+    # Resolve label
+    label_id = None
+    if label:
+        lbl = tm.get_label_by_name(label)
+        if lbl:
+            label_id = lbl.id
+
+    # Get tasks
+    status_filter = None if status == "all" else TaskStatus(status)
+    tasks = tm.list_tasks(
+        status=status_filter,
+        milestone_id=milestone_id,
+        include_archived=archived,
+        label_id=label_id,
+    )
+
+    if not tasks:
+        click.echo("No tasks found")
+        return
+
+    click.echo(f"Tasks ({len(tasks)}):\n")
+
+    status_icons = {
+        TaskStatus.OPEN: "○",
+        TaskStatus.IN_PROGRESS: "●",
+        TaskStatus.BLOCKED: "⊗",
+        TaskStatus.DONE: "✓",
+        TaskStatus.ARCHIVED: "▣",
+    }
+
+    for task in tasks:
+        icon = status_icons.get(task.status, "?")
+        priority_str = ""
+        if task.priority.value <= 2:
+            priority_str = f" [{task.priority.name}]"
+
+        labels_str = ""
+        if task.label_ids:
+            label_names = []
+            for lid in task.label_ids:
+                lbl = tm.get_label(lid)
+                if lbl:
+                    label_names.append(lbl.name)
+            if label_names:
+                labels_str = f" ({', '.join(label_names)})"
+
+        click.echo(f"  {icon} {task.title}{priority_str}{labels_str}")
+        click.echo(f"    ID: {task.id}")
+        if task.is_subtask:
+            click.echo(f"    Parent: {task.parent_id}")
+        click.echo()
+
+
+@issue.command("show")
+@click.argument("task_id")
+@click.pass_context
+def issue_show(ctx: click.Context, task_id: str) -> None:
+    """Show detailed task information."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    try:
+        tid = UUID(task_id)
+    except ValueError:
+        click.echo(f"Error: Invalid task ID: {task_id}", err=True)
+        ctx.exit(1)
+
+    task = tm.get_task(tid)
+    if not task:
+        click.echo(f"Error: Task not found: {task_id}", err=True)
+        ctx.exit(1)
+
+    click.echo(f"Task: {task.title}")
+    click.echo(f"  ID: {task.id}")
+    click.echo(f"  Status: {task.status.value}")
+    click.echo(f"  Priority: {task.priority.name}")
+
+    if task.description:
+        click.echo(f"\n  Description: {task.description}")
+
+    if task.parent_id:
+        parent = tm.get_task(task.parent_id)
+        click.echo(f"\n  Parent: {parent.title if parent else task.parent_id}")
+
+    subtasks = tm.get_subtasks(task.id)
+    if subtasks:
+        click.echo(f"\n  Subtasks ({len(subtasks)}):")
+        for st in subtasks:
+            click.echo(f"    - {st.title} [{st.status.value}]")
+
+    if task.label_ids:
+        labels = [tm.get_label(lid) for lid in task.label_ids]
+        click.echo(f"\n  Labels: {', '.join(l.name for l in labels if l)}")
+
+    if task.milestone_id:
+        milestone = tm.get_milestone(task.milestone_id)
+        click.echo(f"  Milestone: {milestone.name if milestone else task.milestone_id}")
+
+    blocking = tm.get_blocking_tasks(task.id)
+    if blocking:
+        click.echo(f"\n  Blocked by ({len(blocking)}):")
+        for bt in blocking:
+            click.echo(f"    - {bt.title}")
+
+    dependents = tm.get_dependent_tasks(task.id)
+    if dependents:
+        click.echo(f"\n  Blocking ({len(dependents)}):")
+        for dt in dependents:
+            click.echo(f"    - {dt.title}")
+
+    related = tm.get_related_tasks(task.id)
+    if related:
+        click.echo(f"\n  Related ({len(related)}):")
+        for rt in related:
+            click.echo(f"    - {rt.title}")
+
+    # Time tracking
+    total_time = tm.get_total_time(task.id)
+    if total_time.total_seconds() > 0:
+        hours = total_time.total_seconds() / 3600
+        click.echo(f"\n  Time tracked: {hours:.1f}h")
+
+    running = tm.get_running_timer(task.id)
+    if running:
+        click.echo(f"  Timer running: {running.duration}")
+
+    click.echo(f"\n  Created: {task.created_at.isoformat()}")
+    click.echo(f"  Updated: {task.updated_at.isoformat()}")
+    if task.closed_at:
+        click.echo(f"  Closed: {task.closed_at.isoformat()}")
+
+
+@issue.command("start")
+@click.argument("task_id")
+@click.pass_context
+def issue_start(ctx: click.Context, task_id: str) -> None:
+    """Start working on a task."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    try:
+        tid = UUID(task_id)
+    except ValueError:
+        click.echo(f"Error: Invalid task ID: {task_id}", err=True)
+        ctx.exit(1)
+
+    task = tm.start_task(tid)
+    if not task:
+        click.echo(f"Error: Task not found: {task_id}", err=True)
+        ctx.exit(1)
+
+    click.echo(f"Started: {task.title}")
+    click.echo(f"  Status: {task.status.value}")
+
+    if task.status.value == "blocked":
+        blocking = tm.get_blocking_tasks(task.id)
+        click.echo("\n  Blocked by:")
+        for bt in blocking:
+            click.echo(f"    - {bt.title}")
+
+
+@issue.command("done")
+@click.argument("task_id")
+@click.pass_context
+def issue_done(ctx: click.Context, task_id: str) -> None:
+    """Mark a task as done."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    try:
+        tid = UUID(task_id)
+    except ValueError:
+        click.echo(f"Error: Invalid task ID: {task_id}", err=True)
+        ctx.exit(1)
+
+    task = tm.complete_task(tid)
+    if not task:
+        click.echo(f"Error: Task not found: {task_id}", err=True)
+        ctx.exit(1)
+
+    click.echo(f"Completed: {task.title}")
+
+    # Check if this unblocked anything
+    dependents = tm.get_dependent_tasks(task.id)
+    unblocked = [d for d in dependents if d.status.value == "open"]
+    if unblocked:
+        click.echo("\n  Unblocked:")
+        for t in unblocked:
+            click.echo(f"    - {t.title}")
+
+
+@issue.command("block")
+@click.argument("task_id")
+@click.argument("blocked_by_id")
+@click.pass_context
+def issue_block(ctx: click.Context, task_id: str, blocked_by_id: str) -> None:
+    """Add a blocking dependency."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    try:
+        tid = UUID(task_id)
+        bid = UUID(blocked_by_id)
+    except ValueError as e:
+        click.echo(f"Error: Invalid ID: {e}", err=True)
+        ctx.exit(1)
+
+    success = tm.add_dependency(tid, bid)
+    if success:
+        click.echo(f"Added dependency: {task_id} is blocked by {blocked_by_id}")
+    else:
+        click.echo("Error: Could not add dependency (may create circular dependency)", err=True)
+        ctx.exit(1)
+
+
+@issue.command("unblock")
+@click.argument("task_id")
+@click.argument("blocked_by_id")
+@click.pass_context
+def issue_unblock(ctx: click.Context, task_id: str, blocked_by_id: str) -> None:
+    """Remove a blocking dependency."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    try:
+        tid = UUID(task_id)
+        bid = UUID(blocked_by_id)
+    except ValueError as e:
+        click.echo(f"Error: Invalid ID: {e}", err=True)
+        ctx.exit(1)
+
+    tm.remove_dependency(tid, bid)
+    click.echo(f"Removed dependency: {task_id} is no longer blocked by {blocked_by_id}")
+
+
+@issue.command("link")
+@click.argument("task_id_1")
+@click.argument("task_id_2")
+@click.pass_context
+def issue_link(ctx: click.Context, task_id_1: str, task_id_2: str) -> None:
+    """Link two related tasks."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    try:
+        tid1 = UUID(task_id_1)
+        tid2 = UUID(task_id_2)
+    except ValueError as e:
+        click.echo(f"Error: Invalid ID: {e}", err=True)
+        ctx.exit(1)
+
+    success = tm.link_tasks(tid1, tid2)
+    if success:
+        click.echo(f"Linked tasks: {task_id_1} <-> {task_id_2}")
+    else:
+        click.echo("Error: Could not link tasks", err=True)
+        ctx.exit(1)
+
+
+@issue.command("archive")
+@click.option("--older-than", "-o", type=int, default=30, help="Archive done tasks older than N days")
+@click.option("--task-id", "-t", help="Archive specific task")
+@click.pass_context
+def issue_archive(ctx: click.Context, older_than: int, task_id: str | None) -> None:
+    """Archive completed tasks."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    if task_id:
+        try:
+            tid = UUID(task_id)
+        except ValueError:
+            click.echo(f"Error: Invalid task ID: {task_id}", err=True)
+            ctx.exit(1)
+
+        task = tm.archive_task(tid)
+        if task:
+            click.echo(f"Archived: {task.title}")
+        else:
+            click.echo(f"Error: Task not found: {task_id}", err=True)
+            ctx.exit(1)
+    else:
+        count = tm.archive_done_tasks(older_than)
+        click.echo(f"Archived {count} task(s) completed more than {older_than} days ago")
+
+
+# Label commands
+@issue.group()
+@click.pass_context
+def label(ctx: click.Context) -> None:
+    """Label management."""
+    pass
+
+
+@label.command("add")
+@click.argument("name")
+@click.option("--color", "-c", default="#808080", help="Hex color (e.g., #ff0000)")
+@click.option("--description", "-d", default="", help="Label description")
+@click.pass_context
+def label_add(ctx: click.Context, name: str, color: str, description: str) -> None:
+    """Create a new label."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    label = tm.create_label(name, color, description)
+    click.echo(f"Created label: {label.name}")
+    click.echo(f"  ID: {label.id}")
+    click.echo(f"  Color: {label.color}")
+
+
+@label.command("list")
+@click.pass_context
+def label_list(ctx: click.Context) -> None:
+    """List all labels."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    labels = tm.list_labels()
+    if not labels:
+        click.echo("No labels defined")
+        return
+
+    click.echo(f"Labels ({len(labels)}):\n")
+    for lbl in labels:
+        click.echo(f"  {lbl.color} {lbl.name}")
+        if lbl.description:
+            click.echo(f"    {lbl.description}")
+
+
+# Milestone commands
+@issue.group()
+@click.pass_context
+def milestone(ctx: click.Context) -> None:
+    """Milestone management."""
+    pass
+
+
+@milestone.command("add")
+@click.argument("name")
+@click.option("--description", "-d", default="", help="Milestone description")
+@click.option("--due", help="Due date (YYYY-MM-DD)")
+@click.pass_context
+def milestone_add(ctx: click.Context, name: str, description: str, due: str | None) -> None:
+    """Create a new milestone."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    due_date = None
+    if due:
+        try:
+            due_date = datetime.strptime(due, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            click.echo(f"Error: Invalid date format: {due}", err=True)
+            ctx.exit(1)
+
+    milestone = tm.create_milestone(name, description, due_date)
+    click.echo(f"Created milestone: {milestone.name}")
+    click.echo(f"  ID: {milestone.id}")
+    if due_date:
+        click.echo(f"  Due: {due_date.date()}")
+
+
+@milestone.command("list")
+@click.option("--closed", "-c", is_flag=True, help="Include closed milestones")
+@click.pass_context
+def milestone_list(ctx: click.Context, closed: bool) -> None:
+    """List milestones with progress."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    milestones = tm.list_milestones(include_closed=closed)
+    if not milestones:
+        click.echo("No milestones defined")
+        return
+
+    click.echo(f"Milestones ({len(milestones)}):\n")
+    for m in milestones:
+        progress = tm.get_milestone_progress(m.id)
+        status = "CLOSED" if m.is_closed else "OPEN"
+
+        click.echo(f"  [{status}] {m.name}")
+        click.echo(f"    ID: {m.id}")
+        if m.due_date:
+            click.echo(f"    Due: {m.due_date.date()}")
+        click.echo(f"    Progress: {progress['done']}/{progress['total']} ({progress['percent_complete']}%)")
+        if progress['blocked'] > 0:
+            click.echo(f"    Blocked: {progress['blocked']}")
+        click.echo()
+
+
+@milestone.command("close")
+@click.argument("milestone_id")
+@click.pass_context
+def milestone_close(ctx: click.Context, milestone_id: str) -> None:
+    """Close a milestone."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    try:
+        mid = UUID(milestone_id)
+    except ValueError:
+        click.echo(f"Error: Invalid milestone ID: {milestone_id}", err=True)
+        ctx.exit(1)
+
+    m = tm.close_milestone(mid)
+    if m:
+        click.echo(f"Closed milestone: {m.name}")
+    else:
+        click.echo(f"Error: Milestone not found: {milestone_id}", err=True)
+        ctx.exit(1)
+
+
+# Time tracking commands
+@issue.group()
+@click.pass_context
+def timer(ctx: click.Context) -> None:
+    """Time tracking."""
+    pass
+
+
+@timer.command("start")
+@click.argument("task_id")
+@click.option("--note", "-n", default="", help="Note for this time entry")
+@click.pass_context
+def timer_start(ctx: click.Context, task_id: str, note: str) -> None:
+    """Start a timer for a task."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    try:
+        tid = UUID(task_id)
+    except ValueError:
+        click.echo(f"Error: Invalid task ID: {task_id}", err=True)
+        ctx.exit(1)
+
+    entry = tm.start_timer(tid, note)
+    task = tm.get_task(tid)
+    click.echo(f"Timer started for: {task.title if task else task_id}")
+    click.echo(f"  Entry ID: {entry.id}")
+
+
+@timer.command("stop")
+@click.argument("task_id")
+@click.pass_context
+def timer_stop(ctx: click.Context, task_id: str) -> None:
+    """Stop the timer for a task."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    try:
+        tid = UUID(task_id)
+    except ValueError:
+        click.echo(f"Error: Invalid task ID: {task_id}", err=True)
+        ctx.exit(1)
+
+    entry = tm.stop_timer(tid)
+    if entry:
+        hours = entry.duration.total_seconds() / 3600
+        click.echo(f"Timer stopped. Duration: {hours:.2f}h")
+    else:
+        click.echo("No running timer for this task")
+
+
+@timer.command("status")
+@click.pass_context
+def timer_status(ctx: click.Context) -> None:
+    """Show all running timers."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    # Find all running timers by checking active tasks
+    tasks = tm.list_tasks()
+    running = []
+    for task in tasks:
+        entry = tm.get_running_timer(task.id)
+        if entry:
+            running.append((task, entry))
+
+    if not running:
+        click.echo("No running timers")
+        return
+
+    click.echo(f"Running timers ({len(running)}):\n")
+    for task, entry in running:
+        hours = entry.duration.total_seconds() / 3600
+        click.echo(f"  {task.title}")
+        click.echo(f"    Running: {hours:.2f}h")
+        if entry.note:
+            click.echo(f"    Note: {entry.note}")
+        click.echo()
+
+
+# Session commands
+@issue.group()
+@click.pass_context
+def session(ctx: click.Context) -> None:
+    """Session management with handoff notes."""
+    pass
+
+
+@session.command("start")
+@click.option("--agent-id", "-a", help="Agent identifier")
+@click.pass_context
+def session_start(ctx: click.Context, agent_id: str | None) -> None:
+    """Start a new work session."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    # Check for existing active session
+    existing = tm.get_active_session(agent_id)
+    if existing:
+        click.echo(f"Warning: Active session already exists: {existing.id}")
+        click.echo("End it first with 'governor issue session end'")
+        return
+
+    session = tm.start_session(agent_id)
+    click.echo(f"Session started: {session.id}")
+    click.echo(f"  Started: {session.started_at.isoformat()}")
+
+    # Show handoff from previous session
+    last = tm.get_last_session(agent_id)
+    if last:
+        click.echo("\n--- Previous Session Handoff ---")
+        click.echo(tm.format_handoff(last))
+
+
+@session.command("end")
+@click.option("--summary", "-s", default="", help="Session summary")
+@click.option("--next", "next_steps", multiple=True, help="Next step(s)")
+@click.option("--blocker", "-b", multiple=True, help="Blocker(s)")
+@click.option("--notes", "-n", default="", help="Additional notes")
+@click.pass_context
+def session_end(
+    ctx: click.Context,
+    summary: str,
+    next_steps: tuple[str, ...],
+    blocker: tuple[str, ...],
+    notes: str,
+) -> None:
+    """End the current session with handoff notes."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    session = tm.get_active_session()
+    if not session:
+        click.echo("No active session")
+        return
+
+    session = tm.end_session(
+        session.id,
+        summary=summary,
+        next_steps=list(next_steps),
+        blockers=list(blocker),
+        notes=notes,
+    )
+
+    click.echo(f"Session ended: {session.id}")
+    click.echo(f"  Duration: {session.duration}")
+
+    if summary:
+        click.echo(f"\n  Summary: {summary}")
+    if next_steps:
+        click.echo(f"\n  Next steps:")
+        for step in next_steps:
+            click.echo(f"    - {step}")
+    if blocker:
+        click.echo(f"\n  Blockers:")
+        for b in blocker:
+            click.echo(f"    - {b}")
+
+
+@session.command("handoff")
+@click.option("--agent-id", "-a", help="Agent identifier")
+@click.pass_context
+def session_handoff(ctx: click.Context, agent_id: str | None) -> None:
+    """Show the most recent handoff notes."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    handoff = tm.format_handoff()
+    click.echo(handoff)
+
+
+@session.command("list")
+@click.option("--limit", "-n", type=int, default=10, help="Number of sessions to show")
+@click.pass_context
+def session_list(ctx: click.Context, limit: int) -> None:
+    """List recent sessions."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    sessions = tm.list_sessions(limit)
+    if not sessions:
+        click.echo("No sessions found")
+        return
+
+    click.echo(f"Sessions ({len(sessions)}):\n")
+    for s in sessions:
+        status = "ACTIVE" if s.is_active else "ended"
+        click.echo(f"  [{status}] {s.id}")
+        click.echo(f"    Started: {s.started_at.isoformat()}")
+        if s.ended_at:
+            click.echo(f"    Ended: {s.ended_at.isoformat()}")
+            click.echo(f"    Duration: {s.duration}")
+        if s.summary:
+            click.echo(f"    Summary: {s.summary[:60]}...")
+        click.echo()
+
+
+# Recommendation command
+@issue.command("next")
+@click.option("--agent-id", "-a", help="Agent identifier")
+@click.pass_context
+def issue_next(ctx: click.Context, agent_id: str | None) -> None:
+    """
+    Recommend what to work on next.
+
+    Considers:
+    - Task priority
+    - Milestone deadlines
+    - Blocking relationships
+    - Recent activity
+    """
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    recommendations = tm.recommend_next(agent_id)
+
+    if not recommendations:
+        click.echo("No tasks to recommend. All done!")
+        return
+
+    click.echo("Recommended tasks:\n")
+    for i, task in enumerate(recommendations, 1):
+        priority_str = f"[{task.priority.name}]" if task.priority.value <= 2 else ""
+
+        reason = []
+        if task.status.value == "in_progress":
+            reason.append("in progress")
+
+        if task.milestone_id:
+            milestone = tm.get_milestone(task.milestone_id)
+            if milestone and milestone.due_date:
+                days = (milestone.due_date - datetime.now(timezone.utc)).days
+                if days < 7:
+                    reason.append(f"due in {days}d")
+
+        dependents = tm.get_dependent_tasks(task.id)
+        blocked_count = sum(1 for d in dependents if d.status.value == "blocked")
+        if blocked_count > 0:
+            reason.append(f"unblocks {blocked_count}")
+
+        reason_str = f" ({', '.join(reason)})" if reason else ""
+
+        click.echo(f"  {i}. {task.title} {priority_str}{reason_str}")
+        click.echo(f"     ID: {task.id}")
+        click.echo()
+
+
+# Export/Import commands
+@issue.command("export")
+@click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout)")
+@click.pass_context
+def issue_export(ctx: click.Context, output: str | None) -> None:
+    """Export all task data to JSON."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    data = tm.export_json()
+    json_str = json.dumps(data, indent=2)
+
+    if output:
+        Path(output).write_text(json_str)
+        click.echo(f"Exported to: {output}")
+    else:
+        click.echo(json_str)
+
+
+@issue.command("import")
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--replace", "-r", is_flag=True, help="Replace existing data (default: merge)")
+@click.pass_context
+def issue_import(ctx: click.Context, file: str, replace: bool) -> None:
+    """Import task data from JSON."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    data = json.loads(Path(file).read_text())
+    counts = tm.import_json(data, merge=not replace)
+
+    click.echo("Import complete:")
+    click.echo(f"  Tasks: {counts['tasks']}")
+    click.echo(f"  Labels: {counts['labels']}")
+    click.echo(f"  Milestones: {counts['milestones']}")
+    click.echo(f"  Sessions: {counts['sessions']}")
+
+
+# Tree view command
+@issue.command("tree")
+@click.option("--milestone", "-m", help="Filter by milestone")
+@click.pass_context
+def issue_tree(ctx: click.Context, milestone: str | None) -> None:
+    """Display tasks as a tree."""
+    from .tasks import get_task_manager
+
+    gov_dir = ensure_initialized(ctx)
+    tm = get_task_manager(gov_dir)
+
+    milestone_id = None
+    if milestone:
+        try:
+            milestone_id = UUID(milestone)
+        except ValueError:
+            milestones = tm.list_milestones(include_closed=True)
+            for m in milestones:
+                if m.name.lower() == milestone.lower():
+                    milestone_id = m.id
+                    break
+
+    output = tm.format_tree(milestone_id)
+    click.echo(output)
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

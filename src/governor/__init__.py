@@ -27,6 +27,19 @@ from .permissions import (
     create_default_config,
 )
 
+# Task management
+from .tasks import (
+    Task,
+    TaskStatus,
+    Priority,
+    Label,
+    Milestone,
+    TimeEntry,
+    Session,
+    TaskManager,
+    get_task_manager,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -53,6 +66,16 @@ __all__ = [
     "PermissionManager",
     "PERMISSION_PROFILES",
     "create_default_config",
+    # Task management
+    "Task",
+    "TaskStatus",
+    "Priority",
+    "Label",
+    "Milestone",
+    "TimeEntry",
+    "Session",
+    "TaskManager",
+    "get_task_manager",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

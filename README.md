@@ -140,7 +140,7 @@ No hallucination can fake a receipt.
 
 ## Current Status
 
-**642 tests passing** - Core system complete, multi-agent support, fiction/non-fiction governors.
+**705 tests passing** - Core system complete, multi-agent support, fiction/non-fiction governors, task management.
 
 ### What Works Now
 
@@ -153,6 +153,10 @@ No hallucination can fake a receipt.
 - Agent permissions and blast radius limits
 - MCP server for Claude Desktop integration
 - Git pre-commit hook enforcement
+- **Issue/task tracking with subtasks, dependencies, and milestones**
+- **Session management with handoff notes**
+- **Time tracking with start/stop timers**
+- **Smart recommendations for what to work on next**
 
 ### CLI Commands
 
@@ -173,6 +177,31 @@ governor status
 # Multi-agent coordination
 governor agent register --id worker-1 --class implementer
 governor task claim --agent-id worker-1 --task "implement feature" --scope "src/api.py"
+
+# Issue/task management
+governor issue add "Implement feature" -p high -l feature
+governor issue list --tree
+governor issue start <task-id>
+governor issue done <task-id>
+governor issue block <task-id> <blocked-by-id>
+governor issue next  # Get recommendations
+
+# Milestones and labels
+governor issue milestone add "v1.0" --due 2024-03-01
+governor issue label add "bug" --color "#ff0000"
+
+# Time tracking
+governor issue timer start <task-id>
+governor issue timer stop <task-id>
+
+# Session handoffs
+governor issue session start
+governor issue session end --summary "Did X" --next "Do Y" --blocker "Waiting on Z"
+governor issue session handoff  # Show last session's notes
+
+# Export/import
+governor issue export -o backup.json
+governor issue import backup.json
 
 # Integration
 governor hook install
@@ -220,6 +249,33 @@ result = governor.propose(
 # Get context for your agent's next session
 context = governor.get_context(topics=["architecture", "api"])
 # Inject into system prompt - agent now knows what was decided
+```
+
+### Task Management
+```bash
+# Break work into trackable pieces
+governor issue add "Implement auth" -p high -m "v1.0"
+governor issue add "Add login endpoint" --parent <auth-task-id>
+governor issue add "Add logout endpoint" --parent <auth-task-id>
+
+# Track dependencies
+governor issue block <logout-id> <login-id>  # logout depends on login
+
+# Get smart recommendations
+governor issue next
+# > 1. Add login endpoint [HIGH] (unblocks 1)
+# > 2. Implement auth [HIGH] (milestone due in 5d)
+
+# Preserve context across sessions
+governor issue session start
+# ... do work ...
+governor issue session end \
+  --summary "Implemented login, tests passing" \
+  --next "Add logout endpoint" \
+  --blocker "Need API docs for OAuth"
+
+# Next session picks up where you left off
+governor issue session handoff
 ```
 
 ---

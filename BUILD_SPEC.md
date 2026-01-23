@@ -1,4 +1,4 @@
-# Epistemic Governor: Build Spec v2
+# Agent Governor: Build Spec v2
 
 ## The One Rule That Makes This Real
 

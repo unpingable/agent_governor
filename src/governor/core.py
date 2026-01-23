@@ -1,5 +1,5 @@
 """
-AgentGovernor: Main interface for the epistemic governor.
+AgentGovernor: Main interface for the agent governor.
 
 This is the harness that wraps coding agents, enforcing evidence requirements
 and maintaining architectural coherence.
@@ -16,7 +16,7 @@ from .types import Evidence, ProposalResult, ProposalStatus, Contradiction
 
 class AgentGovernor:
     """
-    The epistemic governor for agentic coding.
+    The agent governor for agentic coding.
     
     Sits between the agent and the codebase, enforcing:
     - Evidence requirements (no hallucinated APIs)

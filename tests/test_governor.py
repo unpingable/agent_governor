@@ -1,4 +1,4 @@
-"""Tests for the epistemic governor."""
+"""Tests for the agent governor."""
 
 import tempfile
 from pathlib import Path

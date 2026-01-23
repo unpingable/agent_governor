@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Demo: Epistemic Governor catching agent hallucinations.
+Demo: Agent Governor catching agent hallucinations.
 
 This demonstrates the core value proposition:
 - Agent can't claim files exist when they don't

@@ -68,7 +68,7 @@ def save_proposals(gov_dir: Path, proposals: dict[str, dict]) -> None:
 )
 @click.pass_context
 def cli(ctx: click.Context, root: str) -> None:
-    """Epistemic Governor - Gate for file mutations."""
+    """Agent Governor - Gate for file mutations."""
     ctx.ensure_object(dict)
     ctx.obj["root"] = root
 

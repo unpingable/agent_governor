@@ -1,1 +1,1 @@
-# Tests for epistemic-governor
+# Tests for agent-governor

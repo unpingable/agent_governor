@@ -1,4 +1,4 @@
-"""Core types for the epistemic governor."""
+"""Core types for the agent governor."""
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone

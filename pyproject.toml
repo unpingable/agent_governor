@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "agent-governor"
 version = "0.1.0"
-description = "Epistemic Governor for Agentic Development - constraint system that makes AI coding agents production-safe"
+description = "Agent Governor - constraint system that makes AI coding agents production-safe"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
@@ -43,11 +43,12 @@ dev = [
 [project.scripts]
 governor = "governor.cli:main"
 fiction-gov = "fiction_governor.cli:main"
+nonfiction-gov = "nonfiction_governor.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/epistemic-governor"
-Documentation = "https://github.com/yourusername/epistemic-governor#readme"
-Issues = "https://github.com/yourusername/epistemic-governor/issues"
+Homepage = "https://github.com/yourusername/agent-governor"
+Documentation = "https://github.com/yourusername/agent-governor#readme"
+Issues = "https://github.com/yourusername/agent-governor/issues"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -55,7 +56,7 @@ include = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/governor", "src/fiction_governor"]
+packages = ["src/governor", "src/fiction_governor", "src/nonfiction_governor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,5 +1,5 @@
 """
-Epistemic Governor for Agentic Development
+Agent Governor for Agentic Development
 
 A constraint system that makes AI coding agents production-safe by preventing
 hallucination, maintaining architectural coherence, and enforcing evidence requirements.

@@ -2,12 +2,13 @@
 
 ## Project Overview
 
-This is the **Epistemic Governor** - a constraint system for agentic coding tools. The core principle: **Language is a proposal, not an authority (NLAI)**.
+This is the **Agent Governor** - a constraint system for agentic coding tools. The core principle: **Language is a proposal, not an authority (NLAI)**.
 
 **Status: Phase 1-3 COMPLETE** - All 14 steps from BUILD_SPEC.md implemented.
 **Multi-Agent v2**: SQLite backend, leases, epochs, permissions, dispatcher protocol.
 **Fiction Governor**: Prototype complete.
-**Total: 551 tests**
+**Non-Fiction Governor**: Corpus management, DOI fetching, citation verification.
+**Total: 642 tests**
 
 ## Key Documents
 
@@ -140,6 +141,14 @@ src/fiction_governor/
 ├── canon.py          # Canon ledger (events, relationships)
 ├── verifiers.py      # InCharacterVerifier, TropeVerifier, ToneVerifier
 └── cli.py            # fiction-gov CLI
+
+src/nonfiction_governor/
+├── __init__.py       # Public API exports
+├── types.py          # Source, Concept, Position, WritingClaim
+├── doi.py            # DOI metadata fetching (CrossRef/DataCite)
+├── corpus.py         # Corpus ledger (your papers, concepts, positions)
+├── verifiers.py      # CitationVerifier, TerminologyVerifier, ConsistencyVerifier
+└── cli.py            # nonfiction-gov CLI
 ```
 
 ## Implementation Summary
@@ -193,7 +202,17 @@ src/fiction_governor/
 
 **Fiction Governor tests: 51**
 
-**Total: 551 tests**
+### Non-Fiction Governor (Academic Writing)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| types.py | Source, Concept, Position, WritingClaim | 40 |
+| corpus.py | Corpus ledger, conflict detection | 26 |
+| verifiers.py | Citation, terminology, consistency verification | 25 |
+| doi.py | DOI metadata fetching (CrossRef/DataCite) | -- |
+
+**Non-Fiction Governor tests: 91**
+
+**Total: 642 tests**
 
 ## Common Mistakes to Avoid
 

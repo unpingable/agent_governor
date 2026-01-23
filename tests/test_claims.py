@@ -14,6 +14,8 @@ from governor.claims import (
     claim_tests_pass,
     decision,
     changeset,
+    work_reservation,
+    intent,
 )
 
 
@@ -28,6 +30,9 @@ class TestClaimType:
         assert ClaimType.TESTS_PASS.value == "tests_pass"
         assert ClaimType.DECISION.value == "decision"
         assert ClaimType.CHANGESET.value == "changeset"
+        # Multi-agent types
+        assert ClaimType.WORK_RESERVATION.value == "work_reservation"
+        assert ClaimType.INTENT.value == "intent"
 
     def test_from_string(self):
         """Can create ClaimType from string value."""
@@ -354,3 +359,132 @@ class TestClaimImmutability:
         claim = file_exists("test.py")
         with pytest.raises(AttributeError):
             claim.path = "other.py"  # type: ignore
+
+
+class TestMultiAgentClaims:
+    """Test multi-agent coordination claims."""
+
+    def test_work_reservation_requires_scope_and_task(self):
+        """WORK_RESERVATION requires scope and task."""
+        with pytest.raises(ClaimValidationError, match="missing required"):
+            Claim(type=ClaimType.WORK_RESERVATION)
+
+        with pytest.raises(ClaimValidationError, match="missing required"):
+            Claim(type=ClaimType.WORK_RESERVATION, scope=("a.py",))
+
+        with pytest.raises(ClaimValidationError, match="missing required"):
+            Claim(type=ClaimType.WORK_RESERVATION, task="implement feature")
+
+    def test_work_reservation_valid(self):
+        """WORK_RESERVATION with scope and task is valid."""
+        claim = Claim(
+            type=ClaimType.WORK_RESERVATION,
+            scope=("src/api.py", "tests/test_api.py"),
+            task="implement /users endpoint",
+        )
+        assert claim.scope == ("src/api.py", "tests/test_api.py")
+        assert claim.task == "implement /users endpoint"
+
+    def test_work_reservation_with_eta(self):
+        """WORK_RESERVATION can include eta_minutes."""
+        claim = Claim(
+            type=ClaimType.WORK_RESERVATION,
+            scope=("src/api.py",),
+            task="implement feature",
+            eta_minutes=30,
+        )
+        assert claim.eta_minutes == 30
+
+    def test_work_reservation_constructor(self):
+        """work_reservation() creates valid claim."""
+        claim = work_reservation(
+            task="implement feature",
+            scope=["src/api.py", "tests/test_api.py"],
+            eta_minutes=30,
+        )
+        assert claim.type == ClaimType.WORK_RESERVATION
+        assert claim.scope == ("src/api.py", "tests/test_api.py")
+        assert claim.task == "implement feature"
+        assert claim.eta_minutes == 30
+
+    def test_intent_requires_scope_and_task(self):
+        """INTENT requires scope and task."""
+        with pytest.raises(ClaimValidationError, match="missing required"):
+            Claim(type=ClaimType.INTENT)
+
+    def test_intent_valid(self):
+        """INTENT with scope and task is valid."""
+        claim = Claim(
+            type=ClaimType.INTENT,
+            scope=("src/api.py",),
+            task="refactor authentication",
+        )
+        assert claim.scope == ("src/api.py",)
+        assert claim.task == "refactor authentication"
+
+    def test_intent_constructor(self):
+        """intent() creates valid claim."""
+        claim = intent(
+            task="refactor authentication",
+            scope=["src/api.py"],
+        )
+        assert claim.type == ClaimType.INTENT
+        assert claim.scope == ("src/api.py",)
+        assert claim.task == "refactor authentication"
+
+    def test_work_reservation_describe(self):
+        """WORK_RESERVATION description includes task and scope."""
+        claim = work_reservation(
+            task="implement feature",
+            scope=["src/api.py", "tests/test_api.py"],
+        )
+        desc = claim.describe()
+        assert "implement feature" in desc
+        assert "src/api.py" in desc
+
+    def test_intent_describe(self):
+        """INTENT description includes task and scope."""
+        claim = intent(
+            task="refactor auth",
+            scope=["src/auth.py"],
+        )
+        desc = claim.describe()
+        assert "refactor auth" in desc
+        assert "src/auth.py" in desc
+
+    def test_work_reservation_round_trip(self):
+        """WORK_RESERVATION survives serialization round-trip."""
+        original = work_reservation(
+            task="implement feature",
+            scope=["src/api.py"],
+            eta_minutes=30,
+        )
+        restored = Claim.from_dict(original.to_dict())
+        assert restored == original
+
+    def test_intent_round_trip(self):
+        """INTENT survives serialization round-trip."""
+        original = intent(
+            task="refactor",
+            scope=["src/api.py", "src/utils.py"],
+        )
+        restored = Claim.from_dict(original.to_dict())
+        assert restored == original
+
+    def test_scope_must_be_tuple(self):
+        """scope must be a tuple."""
+        with pytest.raises(ClaimValidationError, match="scope must be a tuple"):
+            Claim(
+                type=ClaimType.WORK_RESERVATION,
+                scope="not a tuple",  # type: ignore
+                task="task",
+            )
+
+    def test_scope_elements_must_be_strings(self):
+        """scope elements must be strings."""
+        with pytest.raises(ClaimValidationError, match="scope elements must be strings"):
+            Claim(
+                type=ClaimType.WORK_RESERVATION,
+                scope=(1, 2, 3),  # type: ignore
+                task="task",
+            )

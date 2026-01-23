@@ -12,15 +12,18 @@ Commands:
 
 import json
 import sys
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import click
 
-from .claims import Claim, ClaimType, decision, file_exists, claim_tests_pass, changeset
+from .claims import Claim, ClaimType, decision, file_exists, claim_tests_pass, changeset, work_reservation
 from .envelopes import EnvelopeMode, get_current_envelope, set_envelope, clear_envelope
 from .fsm import ProposalFSM, ProposalState, RejectionInfo, ClaimError, create_proposal
 from .ledgers import FactLedger, DecisionLedger
+from .permissions import PermissionManager, AgentPermissions, PROFILES, create_default_config
+from .storage import get_storage
 from .verifiers import create_default_verifiers
 
 
@@ -71,8 +74,9 @@ def cli(ctx: click.Context, root: str) -> None:
 
 
 @cli.command()
+@click.option("--v2", "use_v2", is_flag=True, help="Initialize with SQLite backend (v2)")
 @click.pass_context
-def init(ctx: click.Context) -> None:
+def init(ctx: click.Context, use_v2: bool) -> None:
     """Initialize governor in the current directory."""
     root = Path(ctx.obj["root"])
     gov_dir = root / GOVERNOR_DIR
@@ -87,35 +91,29 @@ def init(ctx: click.Context) -> None:
     (gov_dir / "facts" / "receipts").mkdir()
     (gov_dir / "decisions").mkdir()
 
-    # Create empty index files
+    # Create empty index files (v1 compatibility)
     (gov_dir / "facts" / "index.json").write_text("[]")
     (gov_dir / "decisions" / "index.json").write_text("[]")
     (gov_dir / PROPOSALS_FILE).write_text("{}")
 
-    # Create config file
-    config = """\
-# Governor configuration
-[test]
-command = ["pytest", "-q"]
-timeout_seconds = 300
-
-[envelopes]
-default = "strict"
-
-[envelopes.exploratory]
-require_receipts = false
-
-[envelopes.strict]
-require_receipts = true
-"""
-    (gov_dir / "config.toml").write_text(config)
+    # Create default config with permissions
+    create_default_config(gov_dir)
 
     # Create .gitignore
     gitignore = """\
 # Local debugging only
 rejections.log
+# SQLite database (local state)
+governor.db
+governor.db-wal
+governor.db-shm
 """
     (gov_dir / ".gitignore").write_text(gitignore)
+
+    # Initialize SQLite storage if v2 mode
+    if use_v2:
+        storage = get_storage(gov_dir)
+        click.echo(f"Initialized SQLite database at {gov_dir / 'governor.db'}")
 
     click.echo(f"Initialized governor at {gov_dir}")
 
@@ -1095,6 +1093,486 @@ def mcp_call(ctx: click.Context, tool_name: str, arg: tuple[str, ...]) -> None:
 
     if not result.get("success", True):
         ctx.exit(1)
+
+
+# Agent command group (dispatcher protocol)
+@cli.group()
+@click.pass_context
+def agent(ctx: click.Context) -> None:
+    """
+    Agent management for multi-agent coordination.
+
+    Register agents, check permissions, and manage agent state.
+    """
+    pass
+
+
+@agent.command("register")
+@click.option("--id", "agent_id", required=True, help="Unique agent identifier")
+@click.option("--class", "agent_class", default="default", help="Agent class (default, architect, implementer, docs)")
+@click.option("--capabilities", "-c", default="", help="Comma-separated capabilities (changeset, fact, decision)")
+@click.pass_context
+def agent_register(ctx: click.Context, agent_id: str, agent_class: str, capabilities: str) -> None:
+    """
+    Register an agent with the governor.
+
+    Agents must register before they can claim tasks or submit proposals.
+
+    Examples:
+        governor agent register --id "worker-1" --class implementer
+        governor agent register --id "architect-1" --class architect --capabilities "changeset,fact,decision"
+    """
+    gov_dir = ensure_initialized(ctx)
+    storage = get_storage(gov_dir)
+
+    now = datetime.now(timezone.utc)
+    caps = [c.strip() for c in capabilities.split(",") if c.strip()]
+
+    # Get permissions for this agent class
+    perm_manager = PermissionManager(gov_dir)
+    perms = perm_manager.get_permissions(agent_id, agent_class)
+
+    # Check if agent already exists
+    existing = storage.get_by_id("agents", agent_id)
+    if existing:
+        # Update registration
+        storage.update(
+            "agents",
+            "id",
+            agent_id,
+            {
+                "agent_class": agent_class,
+                "capabilities_json": json.dumps(caps),
+                "last_heartbeat": now.isoformat(),
+                "permissions_json": json.dumps(perms.to_dict()),
+            },
+        )
+        click.echo(f"Agent '{agent_id}' updated")
+    else:
+        # New registration
+        storage.insert(
+            "agents",
+            {
+                "id": agent_id,
+                "agent_class": agent_class,
+                "capabilities_json": json.dumps(caps),
+                "registered_at": now.isoformat(),
+                "last_heartbeat": now.isoformat(),
+                "permissions_json": json.dumps(perms.to_dict()),
+            },
+        )
+        click.echo(f"Agent '{agent_id}' registered")
+
+    click.echo(f"  Class: {agent_class}")
+    click.echo(f"  Capabilities: {caps or ['(default)']}")
+    click.echo(f"  Can propose decisions: {perms.can_propose_decisions}")
+    click.echo(f"  Can propose changesets: {perms.can_propose_changesets}")
+
+
+@agent.command("list")
+@click.option("--class", "agent_class", help="Filter by agent class")
+@click.pass_context
+def agent_list(ctx: click.Context, agent_class: str | None) -> None:
+    """List registered agents."""
+    gov_dir = ensure_initialized(ctx)
+    storage = get_storage(gov_dir)
+
+    where = {"agent_class": agent_class} if agent_class else None
+    agents = storage.query("agents", where=where, order_by="registered_at DESC")
+
+    if not agents:
+        click.echo("No agents registered")
+        return
+
+    click.echo(f"Registered agents ({len(agents)}):\n")
+
+    now = datetime.now(timezone.utc)
+    for agent in agents:
+        last_hb = datetime.fromisoformat(agent["last_heartbeat"])
+        age = now - last_hb
+        status = "active" if age.total_seconds() < 300 else "stale"
+        status_icon = "✓" if status == "active" else "⚠️"
+
+        caps = json.loads(agent["capabilities_json"])
+
+        click.echo(f"  {status_icon} {agent['id']}")
+        click.echo(f"     Class: {agent['agent_class']}")
+        click.echo(f"     Capabilities: {caps or ['(default)']}")
+        click.echo(f"     Last seen: {age.total_seconds():.0f}s ago ({status})")
+        click.echo()
+
+
+@agent.command("permissions")
+@click.argument("agent_id")
+@click.option("--class", "agent_class", help="Override agent class")
+@click.pass_context
+def agent_permissions(ctx: click.Context, agent_id: str, agent_class: str | None) -> None:
+    """
+    Show permissions for an agent.
+
+    Examples:
+        governor agent permissions worker-1
+        governor agent permissions unknown-agent --class architect
+    """
+    gov_dir = ensure_initialized(ctx)
+
+    # Check if agent is registered
+    storage = get_storage(gov_dir)
+    registered = storage.get_by_id("agents", agent_id)
+
+    if registered and not agent_class:
+        agent_class = registered["agent_class"]
+
+    perm_manager = PermissionManager(gov_dir)
+    perms = perm_manager.get_permissions(agent_id, agent_class)
+
+    click.echo(f"Permissions for '{agent_id}':")
+    if agent_class:
+        click.echo(f"  (class: {agent_class})")
+    click.echo()
+
+    click.echo(f"  can_propose_decisions: {perms.can_propose_decisions}")
+    click.echo(f"  can_propose_changesets: {perms.can_propose_changesets}")
+    click.echo(f"  can_propose_facts: {perms.can_propose_facts}")
+    click.echo(f"  can_propose_reservations: {perms.can_propose_reservations}")
+    click.echo()
+    click.echo(f"  allowed_paths: {perms.allowed_paths}")
+    click.echo(f"  denied_paths: {perms.denied_paths}")
+    click.echo()
+    click.echo(f"  allowed_decision_topics: {perms.allowed_decision_topics or '(all)'}")
+    click.echo(f"  max_files_per_changeset: {perms.max_files_per_changeset}")
+
+
+@agent.command("heartbeat")
+@click.option("--id", "agent_id", required=True, help="Agent identifier")
+@click.pass_context
+def agent_heartbeat(ctx: click.Context, agent_id: str) -> None:
+    """
+    Send a heartbeat to keep agent registration active.
+
+    Agents should send heartbeats periodically (every 60s recommended).
+    """
+    gov_dir = ensure_initialized(ctx)
+    storage = get_storage(gov_dir)
+
+    now = datetime.now(timezone.utc)
+
+    updated = storage.update(
+        "agents",
+        "id",
+        agent_id,
+        {"last_heartbeat": now.isoformat()},
+    )
+
+    if updated:
+        click.echo(f"Heartbeat recorded for '{agent_id}'")
+    else:
+        click.echo(f"Error: Agent '{agent_id}' not registered", err=True)
+        ctx.exit(1)
+
+
+# Task command group (dispatcher protocol)
+@cli.group()
+@click.pass_context
+def task(ctx: click.Context) -> None:
+    """
+    Task management for multi-agent coordination.
+
+    Claim tasks, send heartbeats, and mark tasks complete.
+    """
+    pass
+
+
+@task.command("claim")
+@click.option("--agent-id", required=True, help="Agent claiming the task")
+@click.option("--task", "task_desc", required=True, help="Task description")
+@click.option("--scope", required=True, help="Comma-separated file paths")
+@click.option("--eta", "eta_minutes", type=int, default=30, help="Estimated time in minutes")
+@click.pass_context
+def task_claim(ctx: click.Context, agent_id: str, task_desc: str, scope: str, eta_minutes: int) -> None:
+    """
+    Claim a task/work reservation.
+
+    Creates a work reservation for the specified scope, preventing conflicts
+    with other agents.
+
+    Examples:
+        governor task claim --agent-id worker-1 --task "implement /users endpoint" --scope "src/api/users.py,tests/test_users.py"
+    """
+    gov_dir = ensure_initialized(ctx)
+    storage = get_storage(gov_dir)
+
+    # Check agent is registered
+    agent = storage.get_by_id("agents", agent_id)
+    if not agent:
+        click.echo(f"Error: Agent '{agent_id}' not registered. Run 'governor agent register' first.", err=True)
+        ctx.exit(1)
+
+    # Parse scope
+    scope_paths = [p.strip() for p in scope.split(",") if p.strip()]
+
+    # Check permissions
+    perm_manager = PermissionManager(gov_dir)
+    perms = perm_manager.get_permissions(agent_id, agent["agent_class"])
+
+    for path in scope_paths:
+        if not perms.can_touch_path(path):
+            click.echo(f"Error: Agent '{agent_id}' cannot touch path '{path}'", err=True)
+            ctx.exit(1)
+
+    # Check for conflicting reservations
+    now = datetime.now(timezone.utc)
+    active_reservations = storage.query(
+        "reservations",
+        where=None,
+        order_by="started_at DESC",
+    )
+
+    for res in active_reservations:
+        if res["completed_at"]:
+            continue
+        expires = datetime.fromisoformat(res["expires_at"])
+        if expires < now:
+            continue
+
+        res_scope = json.loads(res["scope_json"])
+        overlap = set(res_scope) & set(scope_paths)
+        if overlap:
+            click.echo(f"Error: Scope conflict with existing reservation", err=True)
+            click.echo(f"  Task: {res['task']}", err=True)
+            click.echo(f"  Agent: {res['agent_id']}", err=True)
+            click.echo(f"  Overlapping paths: {overlap}", err=True)
+            ctx.exit(1)
+
+    # Create reservation
+    task_id = str(uuid4())
+    expires_at = now + timedelta(minutes=eta_minutes)
+
+    storage.insert(
+        "reservations",
+        {
+            "id": task_id,
+            "task": task_desc,
+            "scope_json": json.dumps(scope_paths),
+            "agent_id": agent_id,
+            "started_at": now.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "completed_at": None,
+        },
+    )
+
+    # Update agent heartbeat
+    storage.update("agents", "id", agent_id, {"last_heartbeat": now.isoformat()})
+
+    click.echo(f"Task claimed: {task_id}")
+    click.echo(f"  Agent: {agent_id}")
+    click.echo(f"  Task: {task_desc}")
+    click.echo(f"  Scope: {scope_paths}")
+    click.echo(f"  ETA: {eta_minutes} minutes")
+    click.echo(f"  Expires: {expires_at.isoformat()}")
+
+
+@task.command("heartbeat")
+@click.option("--agent-id", required=True, help="Agent identifier")
+@click.option("--task-id", required=True, help="Task/reservation ID")
+@click.option("--extend", "extend_minutes", type=int, default=30, help="Extend reservation by minutes")
+@click.pass_context
+def task_heartbeat(ctx: click.Context, agent_id: str, task_id: str, extend_minutes: int) -> None:
+    """
+    Send heartbeat for an active task, extending the reservation.
+
+    Examples:
+        governor task heartbeat --agent-id worker-1 --task-id abc123
+        governor task heartbeat --agent-id worker-1 --task-id abc123 --extend 60
+    """
+    gov_dir = ensure_initialized(ctx)
+    storage = get_storage(gov_dir)
+
+    # Get reservation
+    reservation = storage.get_by_id("reservations", task_id)
+    if not reservation:
+        click.echo(f"Error: Task '{task_id}' not found", err=True)
+        ctx.exit(1)
+
+    if reservation["agent_id"] != agent_id:
+        click.echo(f"Error: Task '{task_id}' is owned by '{reservation['agent_id']}', not '{agent_id}'", err=True)
+        ctx.exit(1)
+
+    if reservation["completed_at"]:
+        click.echo(f"Error: Task '{task_id}' is already completed", err=True)
+        ctx.exit(1)
+
+    # Extend reservation
+    now = datetime.now(timezone.utc)
+    new_expires = now + timedelta(minutes=extend_minutes)
+
+    storage.update(
+        "reservations",
+        "id",
+        task_id,
+        {"expires_at": new_expires.isoformat()},
+    )
+
+    # Update agent heartbeat
+    storage.update("agents", "id", agent_id, {"last_heartbeat": now.isoformat()})
+
+    click.echo(f"Task heartbeat recorded")
+    click.echo(f"  Task: {task_id}")
+    click.echo(f"  New expiry: {new_expires.isoformat()}")
+
+
+@task.command("complete")
+@click.option("--agent-id", required=True, help="Agent identifier")
+@click.option("--task-id", required=True, help="Task/reservation ID")
+@click.option("--proposal-id", help="Associated proposal ID (if any)")
+@click.pass_context
+def task_complete(ctx: click.Context, agent_id: str, task_id: str, proposal_id: str | None) -> None:
+    """
+    Mark a task as complete.
+
+    Examples:
+        governor task complete --agent-id worker-1 --task-id abc123
+        governor task complete --agent-id worker-1 --task-id abc123 --proposal-id def456
+    """
+    gov_dir = ensure_initialized(ctx)
+    storage = get_storage(gov_dir)
+
+    # Get reservation
+    reservation = storage.get_by_id("reservations", task_id)
+    if not reservation:
+        click.echo(f"Error: Task '{task_id}' not found", err=True)
+        ctx.exit(1)
+
+    if reservation["agent_id"] != agent_id:
+        click.echo(f"Error: Task '{task_id}' is owned by '{reservation['agent_id']}', not '{agent_id}'", err=True)
+        ctx.exit(1)
+
+    if reservation["completed_at"]:
+        click.echo(f"Task '{task_id}' was already completed", err=True)
+        ctx.exit(1)
+
+    # Mark complete
+    now = datetime.now(timezone.utc)
+
+    storage.update(
+        "reservations",
+        "id",
+        task_id,
+        {"completed_at": now.isoformat()},
+    )
+
+    # Update agent heartbeat
+    storage.update("agents", "id", agent_id, {"last_heartbeat": now.isoformat()})
+
+    click.echo(f"Task completed: {task_id}")
+    click.echo(f"  Agent: {agent_id}")
+    click.echo(f"  Task: {reservation['task']}")
+    if proposal_id:
+        click.echo(f"  Proposal: {proposal_id}")
+
+    # Show duration
+    started = datetime.fromisoformat(reservation["started_at"])
+    duration = now - started
+    click.echo(f"  Duration: {duration.total_seconds() / 60:.1f} minutes")
+
+
+@task.command("list")
+@click.option("--agent-id", help="Filter by agent")
+@click.option("--active-only", is_flag=True, help="Only show active (non-expired, non-completed) tasks")
+@click.pass_context
+def task_list(ctx: click.Context, agent_id: str | None, active_only: bool) -> None:
+    """List tasks/reservations."""
+    gov_dir = ensure_initialized(ctx)
+    storage = get_storage(gov_dir)
+
+    where = {"agent_id": agent_id} if agent_id else None
+    reservations = storage.query("reservations", where=where, order_by="started_at DESC")
+
+    if not reservations:
+        click.echo("No tasks found")
+        return
+
+    now = datetime.now(timezone.utc)
+    displayed = []
+
+    for res in reservations:
+        completed = res["completed_at"] is not None
+        expires = datetime.fromisoformat(res["expires_at"])
+        expired = expires < now
+
+        if active_only and (completed or expired):
+            continue
+
+        displayed.append((res, completed, expired))
+
+    if not displayed:
+        click.echo("No active tasks found")
+        return
+
+    click.echo(f"Tasks ({len(displayed)}):\n")
+
+    for res, completed, expired in displayed:
+        if completed:
+            status = "completed"
+            icon = "✅"
+        elif expired:
+            status = "expired"
+            icon = "⏰"
+        else:
+            status = "active"
+            icon = "🔄"
+
+        scope = json.loads(res["scope_json"])
+
+        click.echo(f"  {icon} [{status}] {res['id'][:8]}...")
+        click.echo(f"     Task: {res['task']}")
+        click.echo(f"     Agent: {res['agent_id']}")
+        click.echo(f"     Scope: {scope}")
+
+        started = datetime.fromisoformat(res["started_at"])
+        if completed:
+            completed_at = datetime.fromisoformat(res["completed_at"])
+            duration = completed_at - started
+            click.echo(f"     Duration: {duration.total_seconds() / 60:.1f} minutes")
+        else:
+            expires = datetime.fromisoformat(res["expires_at"])
+            remaining = (expires - now).total_seconds() / 60
+            click.echo(f"     Expires in: {remaining:.1f} minutes")
+        click.echo()
+
+
+@task.command("cancel")
+@click.option("--agent-id", required=True, help="Agent identifier")
+@click.option("--task-id", required=True, help="Task/reservation ID")
+@click.pass_context
+def task_cancel(ctx: click.Context, agent_id: str, task_id: str) -> None:
+    """
+    Cancel a task/reservation without completing it.
+
+    This releases the scope for other agents to claim.
+    """
+    gov_dir = ensure_initialized(ctx)
+    storage = get_storage(gov_dir)
+
+    # Get reservation
+    reservation = storage.get_by_id("reservations", task_id)
+    if not reservation:
+        click.echo(f"Error: Task '{task_id}' not found", err=True)
+        ctx.exit(1)
+
+    if reservation["agent_id"] != agent_id:
+        click.echo(f"Error: Task '{task_id}' is owned by '{reservation['agent_id']}', not '{agent_id}'", err=True)
+        ctx.exit(1)
+
+    if reservation["completed_at"]:
+        click.echo(f"Error: Task '{task_id}' is already completed", err=True)
+        ctx.exit(1)
+
+    # Delete reservation (cancel)
+    storage.delete("reservations", "id", task_id)
+
+    click.echo(f"Task cancelled: {task_id}")
+    click.echo(f"  Scope released: {json.loads(reservation['scope_json'])}")
 
 
 def main() -> None:

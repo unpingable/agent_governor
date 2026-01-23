@@ -36,6 +36,13 @@ class ClaimType(Enum):
     CHANGESET = "changeset"
     """Proposed file mutations. Requires: diff"""
 
+    # Multi-agent coordination claims
+    WORK_RESERVATION = "work_reservation"
+    """Reserve work on a scope (locks resources). Requires: scope, task"""
+
+    INTENT = "intent"
+    """Declare intent to work on something (advisory, no lock). Requires: scope, task"""
+
 
 # Define required fields for each claim type
 _REQUIRED_FIELDS: dict[ClaimType, set[str]] = {
@@ -45,6 +52,8 @@ _REQUIRED_FIELDS: dict[ClaimType, set[str]] = {
     ClaimType.TESTS_PASS: {"command"},
     ClaimType.DECISION: {"topic", "choice"},
     ClaimType.CHANGESET: {"diff"},
+    ClaimType.WORK_RESERVATION: {"scope", "task"},
+    ClaimType.INTENT: {"scope", "task"},
 }
 
 # Define optional fields for each claim type
@@ -55,6 +64,8 @@ _OPTIONAL_FIELDS: dict[ClaimType, set[str]] = {
     ClaimType.TESTS_PASS: set(),
     ClaimType.DECISION: set(),
     ClaimType.CHANGESET: {"paths"},  # Optional list of affected paths
+    ClaimType.WORK_RESERVATION: {"eta_minutes"},
+    ClaimType.INTENT: set(),
 }
 
 
@@ -99,6 +110,11 @@ class Claim:
     choice: str | None = None
     diff: str | None = None
     paths: tuple[str, ...] | None = None  # for changeset
+
+    # Multi-agent coordination fields
+    scope: tuple[str, ...] | None = None  # paths/resources this work touches
+    task: str | None = None  # description of the work
+    eta_minutes: int | None = None  # estimated time to completion
 
     def __post_init__(self) -> None:
         """Validate that required fields are present for this claim type."""
@@ -156,6 +172,22 @@ class Claim:
         if self.diff is not None and not isinstance(self.diff, str):
             raise ClaimValidationError(self.type, "diff must be a string")
 
+        if self.scope is not None:
+            if not isinstance(self.scope, tuple):
+                raise ClaimValidationError(
+                    self.type, "scope must be a tuple of strings"
+                )
+            if not all(isinstance(x, str) for x in self.scope):
+                raise ClaimValidationError(
+                    self.type, "scope elements must be strings"
+                )
+
+        if self.task is not None and not isinstance(self.task, str):
+            raise ClaimValidationError(self.type, "task must be a string")
+
+        if self.eta_minutes is not None and not isinstance(self.eta_minutes, int):
+            raise ClaimValidationError(self.type, "eta_minutes must be an integer")
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize claim to dict."""
         data: dict[str, Any] = {"type": self.type.value}
@@ -176,6 +208,12 @@ class Claim:
             data["diff"] = self.diff
         if self.paths is not None:
             data["paths"] = list(self.paths)
+        if self.scope is not None:
+            data["scope"] = list(self.scope)
+        if self.task is not None:
+            data["task"] = self.task
+        if self.eta_minutes is not None:
+            data["eta_minutes"] = self.eta_minutes
 
         return data
 
@@ -194,6 +232,9 @@ class Claim:
             choice=data.get("choice"),
             diff=data.get("diff"),
             paths=tuple(data["paths"]) if data.get("paths") else None,
+            scope=tuple(data["scope"]) if data.get("scope") else None,
+            task=data.get("task"),
+            eta_minutes=data.get("eta_minutes"),
         )
 
     def describe(self) -> str:
@@ -212,6 +253,12 @@ class Claim:
             return f"Decision [{self.topic}]: {self.choice}"
         elif self.type == ClaimType.CHANGESET:
             return f"Changeset ({len(self.diff or '')} bytes)"
+        elif self.type == ClaimType.WORK_RESERVATION:
+            scope_str = ", ".join(self.scope) if self.scope else ""
+            return f"Work reservation: {self.task} (scope: {scope_str})"
+        elif self.type == ClaimType.INTENT:
+            scope_str = ", ".join(self.scope) if self.scope else ""
+            return f"Intent: {self.task} (scope: {scope_str})"
         else:
             return f"Claim: {self.type.value}"
 
@@ -260,4 +307,27 @@ def changeset(diff: str, paths: list[str] | tuple[str, ...] | None = None) -> Cl
         type=ClaimType.CHANGESET,
         diff=diff,
         paths=tuple(paths) if paths else None,
+    )
+
+
+def work_reservation(
+    task: str,
+    scope: list[str] | tuple[str, ...],
+    eta_minutes: int | None = None,
+) -> Claim:
+    """Create a WORK_RESERVATION claim."""
+    return Claim(
+        type=ClaimType.WORK_RESERVATION,
+        task=task,
+        scope=tuple(scope),
+        eta_minutes=eta_minutes,
+    )
+
+
+def intent(task: str, scope: list[str] | tuple[str, ...]) -> Claim:
+    """Create an INTENT claim (advisory, no lock)."""
+    return Claim(
+        type=ClaimType.INTENT,
+        task=task,
+        scope=tuple(scope),
     )

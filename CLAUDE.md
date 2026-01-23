@@ -4,7 +4,16 @@
 
 This is the **Epistemic Governor** - a constraint system for agentic coding tools. The core principle: **Language is a proposal, not an authority (NLAI)**.
 
-**Status: COMPLETE** - All 14 steps from BUILD_SPEC.md are implemented with 381 tests.
+**Status: Phase 1-3 COMPLETE** - All 14 steps from BUILD_SPEC.md implemented.
+**Multi-Agent v2**: SQLite backend, leases, epochs, permissions, dispatcher protocol.
+**Fiction Governor**: Prototype complete.
+**Total: 551 tests**
+
+## Key Documents
+
+- `BUILD_SPEC.md` - Step-by-step build guide, receipt types, claim types, FSM
+- `MULTI_AGENT.md` - Concurrency model, conflict detection, permissions, dispatcher protocol
+- `TODO.md` - Future enhancements
 
 ## Quick Start
 
@@ -48,6 +57,18 @@ governor changes                 # Show file approval status
 governor mcp serve               # Run MCP server for Claude integration
 governor mcp tools               # List available MCP tools
 governor mcp call <tool>         # Test MCP tools directly
+
+# Multi-Agent Dispatcher Protocol (v2)
+governor init --v2               # Initialize with SQLite backend
+governor agent register --id X   # Register agent with governor
+governor agent list              # List registered agents
+governor agent permissions X     # Show permissions for agent
+governor agent heartbeat --id X  # Keep agent registration active
+governor task claim --agent-id X --task "..." --scope "..."  # Claim task
+governor task heartbeat --agent-id X --task-id Y             # Extend task
+governor task complete --agent-id X --task-id Y              # Complete task
+governor task list               # List tasks/reservations
+governor task cancel --agent-id X --task-id Y                # Cancel task
 ```
 
 ## Architecture Rules (Non-Negotiable)
@@ -70,6 +91,19 @@ governor mcp call <tool>         # Test MCP tools directly
 4. **Typed claims, not prose.**
    - Claims are structured: `ClaimType.FILE_EXISTS`, `ClaimType.TESTS_PASS`, etc.
    - No free-form string assertions
+   - If the claim type doesn't exist, add it to the enum first
+
+5. **Agents don't talk to each other. They talk to the ledger.**
+   - No agent-to-agent messaging
+   - No "Mayor" or coordinator agent
+   - Ledger is the only shared state
+   - Conflicts are structural, not political
+
+6. **Concurrency is transactional.** (see MULTI_AGENT.md)
+   - SQLite with WAL mode for concurrent access
+   - Leases prevent collision during verification
+   - Epochs enable optimistic concurrency
+   - No partial commits - atomic or nothing
 
 ## File Structure
 
@@ -88,11 +122,24 @@ src/governor/
 ├── mcp_server.py     # MCP protocol server for Claude integration
 ├── cli.py            # Click CLI with all commands
 │
+# Multi-Agent v2 (SQLite-backed):
+├── storage.py        # SQLite backend with WAL mode, leases, epochs
+├── ledgers_v2.py     # SQLiteFactLedger, SQLiteDecisionLedger
+├── permissions.py    # AgentPermissions, PermissionManager, profiles
+│
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
 ├── ledger.py         # Original CodebaseLedger
 ├── validators.py     # Original validators
 └── types.py          # Original type definitions
+
+src/fiction_governor/
+├── __init__.py       # Public API exports
+├── types.py          # Character, WorldRule, BannedTrope, CanonEvent, etc.
+├── bible.py          # Bible ledger (characters, world rules, tone, tropes)
+├── canon.py          # Canon ledger (events, relationships)
+├── verifiers.py      # InCharacterVerifier, TropeVerifier, ToneVerifier
+└── cli.py            # fiction-gov CLI
 ```
 
 ## Implementation Summary
@@ -123,7 +170,92 @@ src/governor/
 | 13 | Wrapper | Agent file write interception | 29 |
 | 14 | MCP server | Claude Desktop integration | 22 |
 
-**Total: 381 tests**
+**Phase 1-3 tests: 381**
+
+### Multi-Agent v2 (SQLite Backend)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| storage.py | SQLite with WAL, leases, epochs | 26 |
+| ledgers_v2.py | SQLiteFactLedger, SQLiteDecisionLedger | 29 |
+| claims.py | WORK_RESERVATION, INTENT claim types | 13 |
+| permissions.py | AgentPermissions, PermissionManager | 27 |
+| cli.py | Dispatcher protocol (agent/task commands) | 24 |
+
+**Multi-Agent v2 tests: 119**
+
+### Fiction Governor (Prototype)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| types.py | Character, WorldRule, BannedTrope, CanonEvent | 12 |
+| bible.py | Bible ledger (decisions about story) | 12 |
+| canon.py | Canon ledger (facts about story) | 9 |
+| verifiers.py | In-character, trope, tone verification | 18 |
+
+**Fiction Governor tests: 51**
+
+**Total: 551 tests**
+
+## Common Mistakes to Avoid
+
+1. **Don't let agents provide evidence directly.**
+   ```python
+   # WRONG - agent can lie
+   def propose(claim: str, evidence: Evidence): ...
+
+   # RIGHT - agent provides pointers, governor verifies
+   def propose(claim: Claim, pointers: list[str]): ...
+   ```
+
+2. **Don't use free-form strings for claims.**
+   ```python
+   # WRONG - unstructured, hard to validate
+   propose(claim="I think the tests pass")
+
+   # RIGHT - typed, machine-checkable
+   propose(claim=Claim(type=ClaimType.TESTS_PASS, command=["pytest"]))
+   ```
+
+3. **Don't mix facts and decisions.**
+   ```python
+   # WRONG - treating preference as theorem
+   facts.add("we use React")
+
+   # RIGHT - normative choice in decisions ledger
+   decisions.add(Decision(topic="framework", choice="react"))
+   ```
+
+4. **Don't make it advisory.**
+   ```python
+   # WRONG - can be ignored
+   if not governor.approve(patch):
+       logger.warning("Governor rejected patch")
+       apply_patch_anyway(patch)  # oops
+
+   # RIGHT - gate is mandatory
+   if not governor.approve(patch):
+       raise GovernorRejection(patch, reason)
+   ```
+
+5. **Don't let agents coordinate directly.**
+   ```python
+   # WRONG - agent-to-agent messaging, Gas Town style
+   agent_a.tell(agent_b, "I'm working on /users")
+
+   # RIGHT - coordination as state in ledger
+   propose(Claim(type=ClaimType.WORK_RESERVATION, scope=["src/api/users.py"]))
+   ```
+
+6. **Don't skip the transaction.**
+   ```python
+   # WRONG - race condition village
+   if not has_conflict(claim):
+       commit(claim)  # another agent could have committed between check and write
+
+   # RIGHT - atomic transaction
+   with db.transaction():
+       if not has_conflict(claim):
+           commit(claim)
+   ```
 
 ## Claim Types
 
@@ -134,6 +266,10 @@ ClaimType.API_SURFACE      # endpoint/signature at location
 ClaimType.TESTS_PASS       # command exits 0
 ClaimType.DECISION         # normative choice (framework, style)
 ClaimType.CHANGESET        # proposed file mutations
+
+# Multi-agent coordination (v2):
+ClaimType.WORK_RESERVATION # reserve scope for task (locks resources)
+ClaimType.INTENT           # declare intent (advisory, no lock)
 ```
 
 ## Receipt Types

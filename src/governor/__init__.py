@@ -10,9 +10,27 @@ from .ledger import CodebaseLedger, Commitment, CommitID
 from .validators import Validator, FileValidator, Evidence
 from .types import ProposalResult, Contradiction
 
+# SQLite-backed multi-agent components
+from .storage import Storage, Lease, get_storage
+from .ledgers_v2 import (
+    Fact,
+    Decision,
+    SQLiteFactLedger,
+    SQLiteDecisionLedger,
+    ConflictError,
+    get_ledgers,
+)
+from .permissions import (
+    AgentPermissions,
+    PermissionManager,
+    PROFILES as PERMISSION_PROFILES,
+    create_default_config,
+)
+
 __all__ = [
+    # Legacy v0.1
     "AgentGovernor",
-    "CodebaseLedger", 
+    "CodebaseLedger",
     "Commitment",
     "CommitID",
     "Validator",
@@ -20,6 +38,21 @@ __all__ = [
     "Evidence",
     "ProposalResult",
     "Contradiction",
+    # Multi-agent (v2)
+    "Storage",
+    "Lease",
+    "get_storage",
+    "Fact",
+    "Decision",
+    "SQLiteFactLedger",
+    "SQLiteDecisionLedger",
+    "ConflictError",
+    "get_ledgers",
+    # Permissions
+    "AgentPermissions",
+    "PermissionManager",
+    "PERMISSION_PROFILES",
+    "create_default_config",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

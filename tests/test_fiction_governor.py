@@ -770,3 +770,516 @@ class TestCommonTropes:
         for text in test_texts:
             matched = any(re.search(p, text, re.IGNORECASE) for p in trope.patterns)
             assert matched, f"Pattern should match: {text}"
+
+
+# ============================================================================
+# Narrative Constraint Tests (Motivation, Belief, BehavioralConstraint)
+# ============================================================================
+
+from fiction_governor import (
+    MotivationType,
+    Motivation,
+    Belief,
+    BehavioralConstraint,
+    NarrativeWarning,
+    CharacterState,
+    NarrativeVerifier,
+)
+
+
+class TestMotivation:
+    """Tests for Motivation type."""
+
+    def test_create_motivation(self):
+        """Test creating a motivation."""
+        mot = Motivation(
+            character="Elena",
+            type=MotivationType.GOAL,
+            description="find her missing brother",
+            intensity=8,
+            as_of_chapter=1,
+        )
+
+        assert mot.character == "Elena"
+        assert mot.type == MotivationType.GOAL
+        assert mot.description == "find her missing brother"
+        assert mot.intensity == 8
+        assert mot.is_active
+
+    def test_motivation_decay(self):
+        """Test motivation intensity decay over time."""
+        mot = Motivation(
+            character="Elena",
+            description="initial enthusiasm",
+            intensity=10,
+            as_of_chapter=1,
+            decay_rate=0.2,  # 20% decay per chapter
+        )
+
+        # At chapter 1, full intensity
+        assert mot.effective_intensity(1) == 10.0
+
+        # At chapter 2, 80% of 10 = 8
+        assert mot.effective_intensity(2) == pytest.approx(8.0)
+
+        # At chapter 3, 80% of 8 = 6.4
+        assert mot.effective_intensity(3) == pytest.approx(6.4)
+
+    def test_motivation_resolved(self):
+        """Test resolved motivation."""
+        mot = Motivation(
+            character="Elena",
+            description="find the key",
+            as_of_chapter=1,
+        )
+
+        assert mot.is_active
+
+        mot.resolved_at_chapter = 5
+        mot.resolution = "achieved"
+
+        assert not mot.is_active
+        assert mot.effective_intensity(6) == 0.0
+
+    def test_motivation_serialization(self):
+        """Test motivation roundtrip serialization."""
+        mot = Motivation(
+            character="Elena",
+            type=MotivationType.FEAR,
+            description="being abandoned",
+            intensity=7,
+            decay_rate=0.1,
+            conflicts_with=["some-id"],
+        )
+
+        data = mot.to_dict()
+        restored = Motivation.from_dict(data)
+
+        assert restored.character == mot.character
+        assert restored.type == mot.type
+        assert restored.description == mot.description
+        assert restored.intensity == mot.intensity
+        assert restored.decay_rate == mot.decay_rate
+        assert restored.conflicts_with == mot.conflicts_with
+
+
+class TestBelief:
+    """Tests for Belief type."""
+
+    def test_create_belief(self):
+        """Test creating a belief."""
+        belief = Belief(
+            character="Marcus",
+            belief="Elena is dead",
+            is_true=False,
+            learned_at_chapter=3,
+            source="saw her fall",
+        )
+
+        assert belief.character == "Marcus"
+        assert belief.belief == "Elena is dead"
+        assert belief.is_true is False
+        assert belief.is_held
+
+    def test_belief_invalidated(self):
+        """Test invalidating a belief."""
+        belief = Belief(
+            character="Marcus",
+            belief="Elena is dead",
+            is_true=False,
+            learned_at_chapter=3,
+        )
+
+        assert belief.is_held
+
+        belief.invalidated_at_chapter = 7
+
+        assert not belief.is_held
+
+    def test_belief_serialization(self):
+        """Test belief roundtrip serialization."""
+        belief = Belief(
+            character="Marcus",
+            belief="the king is trustworthy",
+            is_true=False,
+            confidence=8,
+            source="official propaganda",
+        )
+
+        data = belief.to_dict()
+        restored = Belief.from_dict(data)
+
+        assert restored.belief == belief.belief
+        assert restored.is_true == belief.is_true
+        assert restored.confidence == belief.confidence
+        assert restored.source == belief.source
+
+
+class TestBehavioralConstraint:
+    """Tests for BehavioralConstraint type."""
+
+    def test_create_constraint(self):
+        """Test creating a behavioral constraint."""
+        constraint = BehavioralConstraint(
+            character="Elena",
+            action_type="violence",
+            constraint="requires extreme provocation",
+            cost="psychological damage",
+            prerequisites=["must be backed into corner"],
+            exceptions=["if family is threatened"],
+        )
+
+        assert constraint.character == "Elena"
+        assert constraint.action_type == "violence"
+        assert "provocation" in constraint.constraint
+        assert "psychological" in constraint.cost
+        assert len(constraint.prerequisites) == 1
+        assert len(constraint.exceptions) == 1
+
+    def test_constraint_serialization(self):
+        """Test constraint roundtrip serialization."""
+        constraint = BehavioralConstraint(
+            character="Elena",
+            action_type="deception",
+            constraint="struggles with lying",
+            cost="guilt and self-loathing",
+            source="raised by honest parents",
+        )
+
+        data = constraint.to_dict()
+        restored = BehavioralConstraint.from_dict(data)
+
+        assert restored.action_type == constraint.action_type
+        assert restored.constraint == constraint.constraint
+        assert restored.cost == constraint.cost
+        assert restored.source == constraint.source
+
+
+class TestCharacterState:
+    """Tests for CharacterState manager."""
+
+    @pytest.fixture
+    def state(self, tmp_path):
+        """Create a fresh CharacterState."""
+        return CharacterState(tmp_path)
+
+    def test_add_and_get_motivation(self, state):
+        """Test adding and retrieving motivations."""
+        mot = state.add_motivation(
+            character="Elena",
+            description="find her brother",
+            type=MotivationType.GOAL,
+            intensity=8,
+        )
+
+        retrieved = state.get_motivation(mot.id)
+
+        assert retrieved is not None
+        assert retrieved.description == "find her brother"
+
+    def test_motivations_for_character(self, state):
+        """Test getting motivations for a character."""
+        state.add_motivation("Elena", "find brother", type=MotivationType.GOAL)
+        state.add_motivation("Elena", "avoid capture", type=MotivationType.FEAR)
+        state.add_motivation("Marcus", "protect Elena", type=MotivationType.DRIVE)
+
+        elena_mots = state.motivations_for_character("Elena")
+
+        assert len(elena_mots) == 2
+
+    def test_motivations_time_filtered(self, state):
+        """Test filtering motivations by chapter."""
+        state.add_motivation("Elena", "early goal", as_of_chapter=1)
+        state.add_motivation("Elena", "later goal", as_of_chapter=5)
+
+        # At chapter 3, only early goal should be visible
+        mots = state.motivations_for_character("Elena", at_chapter=3)
+        assert len(mots) == 1
+        assert "early" in mots[0].description
+
+    def test_resolve_motivation(self, state):
+        """Test resolving a motivation."""
+        mot = state.add_motivation("Elena", "find the key")
+
+        resolved = state.resolve_motivation(mot.id, chapter=5, resolution="achieved")
+
+        assert resolved is not None
+        assert not resolved.is_active
+        assert resolved.resolution == "achieved"
+
+    def test_conflicting_motivations(self, state):
+        """Test detecting conflicting motivations."""
+        mot_a = state.add_motivation("Elena", "protect Marcus")
+        mot_b = state.add_motivation("Elena", "complete the mission")
+
+        state.add_motivation_conflict(mot_a.id, mot_b.id)
+
+        conflicts = state.conflicting_motivations("Elena", at_chapter=1)
+
+        assert len(conflicts) == 1
+        assert mot_a in conflicts[0]
+        assert mot_b in conflicts[0]
+
+    def test_add_and_get_belief(self, state):
+        """Test adding and retrieving beliefs."""
+        belief = state.add_belief(
+            character="Marcus",
+            belief="Elena is dead",
+            is_true=False,
+            learned_at_chapter=3,
+        )
+
+        retrieved = state.get_belief(belief.id)
+
+        assert retrieved is not None
+        assert retrieved.belief == "Elena is dead"
+        assert retrieved.is_true is False
+
+    def test_beliefs_time_filtered(self, state):
+        """Test filtering beliefs by chapter."""
+        state.add_belief("Marcus", "world is flat", learned_at_chapter=1)
+        state.add_belief("Marcus", "world is round", learned_at_chapter=5)
+
+        # At chapter 3
+        beliefs = state.beliefs_for_character("Marcus", at_chapter=3)
+        assert len(beliefs) == 1
+        assert "flat" in beliefs[0].belief
+
+    def test_character_believes(self, state):
+        """Test checking what character believes."""
+        state.add_belief("Marcus", "Elena is dead", learned_at_chapter=3)
+
+        # At chapter 4, should find the belief
+        belief = state.character_believes("Marcus", "Elena", at_chapter=4)
+        assert belief is not None
+        assert "dead" in belief.belief
+
+        # At chapter 2, shouldn't find it yet
+        belief = state.character_believes("Marcus", "Elena", at_chapter=2)
+        assert belief is None
+
+    def test_false_beliefs(self, state):
+        """Test getting false beliefs."""
+        state.add_belief("Marcus", "Elena is dead", learned_at_chapter=1, is_true=False)
+        state.add_belief("Marcus", "the sun rises", learned_at_chapter=1, is_true=True)
+        state.add_belief("Marcus", "fate is real", learned_at_chapter=1, is_true=None)
+
+        false_beliefs = state.false_beliefs("Marcus")
+
+        assert len(false_beliefs) == 1
+        assert "dead" in false_beliefs[0].belief
+
+    def test_add_and_get_constraint(self, state):
+        """Test adding and retrieving constraints."""
+        constraint = state.add_constraint(
+            character="Elena",
+            action_type="violence",
+            constraint="extreme provocation required",
+            cost="psychological damage",
+        )
+
+        retrieved = state.get_constraint(constraint.id)
+
+        assert retrieved is not None
+        assert retrieved.action_type == "violence"
+
+    def test_constraints_for_action_type(self, state):
+        """Test filtering constraints by action type."""
+        state.add_constraint("Elena", "violence", "needs provocation")
+        state.add_constraint("Elena", "deception", "struggles with lies")
+        state.add_constraint("Elena", "vulnerability", "walls up")
+
+        violence_constraints = state.constraints_for_character("Elena", action_type="violence")
+
+        assert len(violence_constraints) == 1
+        assert "provocation" in violence_constraints[0].constraint
+
+    def test_check_action_returns_warnings(self, state):
+        """Test that check_action returns appropriate warnings."""
+        mot_a = state.add_motivation("Elena", "protect family")
+        mot_b = state.add_motivation("Elena", "complete dangerous mission")
+        state.add_motivation_conflict(mot_a.id, mot_b.id)
+
+        state.add_constraint("Elena", "violence", "requires extreme cause", cost="guilt")
+
+        warnings = state.check_action(
+            character="Elena",
+            action="attack the guard",
+            chapter=1,
+            action_type="violence",
+        )
+
+        assert len(warnings) >= 2  # conflict + constraint
+        types = [w.warning_type for w in warnings]
+        assert "motivation_conflict" in types
+        assert "constraint_breach" in types
+
+    def test_format_character_state(self, state):
+        """Test formatting character state for prompt."""
+        state.add_motivation("Elena", "find brother", intensity=8)
+        state.add_belief("Elena", "Marcus is trustworthy", learned_at_chapter=1, is_true=True)
+        state.add_constraint("Elena", "violence", "extreme provocation needed")
+
+        formatted = state.format_character_state("Elena")
+
+        assert "Elena" in formatted
+        assert "find brother" in formatted
+        assert "trustworthy" in formatted
+        assert "violence" in formatted
+
+    def test_state_persistence(self, tmp_path):
+        """Test that state persists across instances."""
+        state1 = CharacterState(tmp_path)
+        state1.add_motivation("Elena", "test goal")
+        state1.add_belief("Elena", "test belief", learned_at_chapter=1)
+        state1.add_constraint("Elena", "test", "test constraint")
+
+        # Create new instance pointing to same directory
+        state2 = CharacterState(tmp_path)
+
+        assert len(state2.motivations_for_character("Elena")) == 1
+        assert len(state2.beliefs_for_character("Elena")) == 1
+        assert len(state2.constraints_for_character("Elena")) == 1
+
+
+class TestNarrativeVerifier:
+    """Tests for NarrativeVerifier."""
+
+    @pytest.fixture
+    def setup(self, tmp_path):
+        """Set up bible and state for testing."""
+        bible = Bible(tmp_path)
+        bible.add_character("Elena", role="protagonist")
+
+        state = CharacterState(tmp_path)
+        state.add_motivation("Elena", "find her brother", intensity=8, as_of_chapter=1)
+        state.add_belief("Elena", "Marcus is dead", is_true=False, learned_at_chapter=3)
+        state.add_constraint("Elena", "violence", "extreme cause needed", cost="guilt")
+
+        return tmp_path, bible, state
+
+    def test_verify_action_with_constraint(self, setup):
+        """Test verifying action against constraints."""
+        project_dir, _, _ = setup
+        verifier = NarrativeVerifier(project_dir)
+
+        warnings = verifier.verify_action(
+            character="Elena",
+            action="attacks the guard",
+            chapter=5,
+            action_type="violence",
+        )
+
+        constraint_warnings = [w for w in warnings if w.warning_type == "constraint_breach"]
+        assert len(constraint_warnings) >= 1
+
+    def test_verify_knowledge_gap(self, setup):
+        """Test detecting knowledge gaps."""
+        project_dir, _, _ = setup
+        verifier = NarrativeVerifier(project_dir)
+
+        warning = verifier.verify_knowledge(
+            character="Elena",
+            uses_knowledge_of="the secret passage",
+            chapter=1,
+        )
+
+        assert warning is not None
+        assert warning.warning_type == "knowledge_gap"
+
+    def test_verify_knowledge_exists(self, setup):
+        """Test that known beliefs don't trigger warnings."""
+        project_dir, _, _ = setup
+        verifier = NarrativeVerifier(project_dir)
+
+        # Elena knows about Marcus at chapter 5 (learned at chapter 3)
+        warning = verifier.verify_knowledge(
+            character="Elena",
+            uses_knowledge_of="Marcus",
+            chapter=5,
+        )
+
+        assert warning is None
+
+    def test_verify_reaction_without_knowledge(self, setup):
+        """Test detecting reaction to unknown information."""
+        project_dir, _, _ = setup
+        verifier = NarrativeVerifier(project_dir)
+
+        warnings = verifier.verify_reaction(
+            character="Elena",
+            reacts_to="the king's betrayal",
+            reaction="is furious",
+            chapter=5,
+        )
+
+        belief_warnings = [w for w in warnings if w.warning_type == "belief_violation"]
+        assert len(belief_warnings) >= 1
+
+    def test_verify_reaction_to_false_belief(self, setup):
+        """Test flagging reactions based on false beliefs."""
+        project_dir, _, _ = setup
+        verifier = NarrativeVerifier(project_dir)
+
+        # Elena believes Marcus is dead (but it's false)
+        warnings = verifier.verify_reaction(
+            character="Elena",
+            reacts_to="Marcus",
+            reaction="mourns deeply",
+            chapter=5,
+        )
+
+        false_belief_warnings = [w for w in warnings if w.warning_type == "false_belief_reaction"]
+        assert len(false_belief_warnings) >= 1
+
+    def test_verify_scene(self, setup):
+        """Test verifying a complete scene."""
+        project_dir, _, state = setup
+
+        # Add conflicting motivations
+        mot_a = state.add_motivation("Elena", "save herself")
+        mot_b = state.add_motivation("Elena", "save others")
+        state.add_motivation_conflict(mot_a.id, mot_b.id)
+
+        verifier = NarrativeVerifier(project_dir)
+
+        warnings = verifier.verify_scene(
+            characters=["Elena"],
+            chapter=5,
+            actions=[("Elena", "runs away")],
+        )
+
+        # Should detect the motivation conflict
+        conflict_warnings = [w for w in warnings if w.warning_type == "motivation_conflict"]
+        assert len(conflict_warnings) >= 1
+
+    def test_get_character_context(self, setup):
+        """Test getting character context for prompts."""
+        project_dir, _, _ = setup
+        verifier = NarrativeVerifier(project_dir)
+
+        context = verifier.get_character_context("Elena", chapter=5)
+
+        assert "Elena" in context
+        assert "find her brother" in context
+        assert "Marcus" in context  # belief about Marcus
+        assert "violence" in context  # constraint
+
+
+class TestNarrativeWarning:
+    """Tests for NarrativeWarning type."""
+
+    def test_create_warning(self):
+        """Test creating a narrative warning."""
+        warning = NarrativeWarning(
+            character="Elena",
+            chapter=5,
+            warning_type="motivation_conflict",
+            message="Character has conflicting goals",
+            severity="warning",
+            suggestion="Consider showing internal struggle",
+        )
+
+        assert warning.character == "Elena"
+        assert warning.warning_type == "motivation_conflict"
+        assert warning.severity == "warning"

@@ -480,3 +480,277 @@ class Relationship:
             as_of_chapter=data.get("as_of_chapter", 0),
             created_at=datetime.fromisoformat(data["created_at"]),
         )
+
+
+# ============================================================================
+# NARRATIVE CONSTRAINT TYPES
+# These track character state changes over time: motivations, beliefs, costs
+# ============================================================================
+
+
+class MotivationType(Enum):
+    """Categories of character motivation."""
+
+    GOAL = "goal"
+    """Explicit objective the character is pursuing."""
+
+    DRIVE = "drive"
+    """Implicit force pushing the character (fear, desire, need)."""
+
+    FEAR = "fear"
+    """What the character is trying to avoid."""
+
+    INCENTIVE = "incentive"
+    """External pressure or reward shaping behavior."""
+
+
+@dataclass
+class Motivation:
+    """
+    A character motivation at a point in time.
+
+    Motivations are stateful, time-indexed, and can conflict or decay.
+    They explain WHY a character does things, not WHAT they are.
+    """
+
+    id: UUID = field(default_factory=uuid4)
+    character: str = ""
+    type: MotivationType = MotivationType.GOAL
+
+    description: str = ""
+    """What the motivation is (e.g., 'find her missing brother')."""
+
+    intensity: int = 5
+    """How strongly this motivation drives behavior (1-10)."""
+
+    as_of_chapter: int = 0
+    """When this motivation was established or last updated."""
+
+    conflicts_with: list[str] = field(default_factory=list)
+    """IDs of motivations this conflicts with (creates tension)."""
+
+    resolved_at_chapter: int | None = None
+    """Chapter where this motivation was resolved/achieved (None if active)."""
+
+    resolution: str | None = None
+    """How it was resolved (e.g., 'achieved', 'abandoned', 'replaced')."""
+
+    decay_rate: float = 0.0
+    """How quickly this motivation fades per chapter (0 = never, 1 = immediately)."""
+
+    source_event: str | None = None
+    """What triggered this motivation (reference to canon event)."""
+
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def is_active(self) -> bool:
+        """Whether this motivation is still driving behavior."""
+        return self.resolved_at_chapter is None
+
+    def effective_intensity(self, at_chapter: int) -> float:
+        """Calculate intensity after decay at a given chapter."""
+        if not self.is_active:
+            return 0.0
+        chapters_elapsed = max(0, at_chapter - self.as_of_chapter)
+        decayed = self.intensity * ((1 - self.decay_rate) ** chapters_elapsed)
+        return max(0.0, decayed)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": str(self.id),
+            "character": self.character,
+            "type": self.type.value,
+            "description": self.description,
+            "intensity": self.intensity,
+            "as_of_chapter": self.as_of_chapter,
+            "conflicts_with": self.conflicts_with,
+            "resolved_at_chapter": self.resolved_at_chapter,
+            "resolution": self.resolution,
+            "decay_rate": self.decay_rate,
+            "source_event": self.source_event,
+            "created_at": self.created_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Motivation":
+        return cls(
+            id=UUID(data["id"]),
+            character=data["character"],
+            type=MotivationType(data["type"]),
+            description=data["description"],
+            intensity=data.get("intensity", 5),
+            as_of_chapter=data.get("as_of_chapter", 0),
+            conflicts_with=data.get("conflicts_with", []),
+            resolved_at_chapter=data.get("resolved_at_chapter"),
+            resolution=data.get("resolution"),
+            decay_rate=data.get("decay_rate", 0.0),
+            source_event=data.get("source_event"),
+            created_at=datetime.fromisoformat(data["created_at"]),
+        )
+
+
+@dataclass
+class Belief:
+    """
+    What a character believes to be true (may differ from world truth).
+
+    The crucial distinction: what is true in the world vs what this
+    character believes. This catches impossible reactions, premature
+    knowledge, and emotional responses that assume facts not yet learned.
+    """
+
+    id: UUID = field(default_factory=uuid4)
+    character: str = ""
+
+    belief: str = ""
+    """What the character believes (e.g., 'Marcus is dead')."""
+
+    is_true: bool | None = None
+    """Whether this belief is actually true in the world (None = unknown)."""
+
+    confidence: int = 5
+    """How certain the character is (1-10)."""
+
+    learned_at_chapter: int = 0
+    """When the character learned/formed this belief."""
+
+    source: str | None = None
+    """How they learned it (e.g., 'witnessed', 'told by X', 'assumed')."""
+
+    contradicts_belief: str | None = None
+    """ID of a belief this replaces (character changed their mind)."""
+
+    invalidated_at_chapter: int | None = None
+    """Chapter where character learned this was wrong (None if still held)."""
+
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def is_held(self) -> bool:
+        """Whether character still holds this belief."""
+        return self.invalidated_at_chapter is None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": str(self.id),
+            "character": self.character,
+            "belief": self.belief,
+            "is_true": self.is_true,
+            "confidence": self.confidence,
+            "learned_at_chapter": self.learned_at_chapter,
+            "source": self.source,
+            "contradicts_belief": self.contradicts_belief,
+            "invalidated_at_chapter": self.invalidated_at_chapter,
+            "created_at": self.created_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Belief":
+        return cls(
+            id=UUID(data["id"]),
+            character=data["character"],
+            belief=data["belief"],
+            is_true=data.get("is_true"),
+            confidence=data.get("confidence", 5),
+            learned_at_chapter=data.get("learned_at_chapter", 0),
+            source=data.get("source"),
+            contradicts_belief=data.get("contradicts_belief"),
+            invalidated_at_chapter=data.get("invalidated_at_chapter"),
+            created_at=datetime.fromisoformat(data["created_at"]),
+        )
+
+
+@dataclass
+class BehavioralConstraint:
+    """
+    What makes an action HARD for a character (not what's forbidden).
+
+    Not "would they do this?" but:
+    - What would make this action hard?
+    - What cost would this impose?
+    - What prior justification would be required?
+
+    This keeps the system from policing creativity while flagging cheap moves.
+    """
+
+    id: UUID = field(default_factory=uuid4)
+    character: str = ""
+
+    action_type: str = ""
+    """Category of action (e.g., 'violence', 'deception', 'betrayal', 'vulnerability')."""
+
+    constraint: str = ""
+    """What makes this hard (e.g., 'requires extreme provocation')."""
+
+    cost: str | None = None
+    """What it costs the character to do this (e.g., 'psychological damage', 'relationship rupture')."""
+
+    prerequisites: list[str] = field(default_factory=list)
+    """What must happen first (e.g., 'must be backed into corner', 'must see no alternative')."""
+
+    exceptions: list[str] = field(default_factory=list)
+    """When this constraint doesn't apply (e.g., 'if family is threatened')."""
+
+    as_of_chapter: int = 0
+    """Chapter this constraint was established."""
+
+    source: str | None = None
+    """Why this constraint exists (links to background/trauma/values)."""
+
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": str(self.id),
+            "character": self.character,
+            "action_type": self.action_type,
+            "constraint": self.constraint,
+            "cost": self.cost,
+            "prerequisites": self.prerequisites,
+            "exceptions": self.exceptions,
+            "as_of_chapter": self.as_of_chapter,
+            "source": self.source,
+            "created_at": self.created_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BehavioralConstraint":
+        return cls(
+            id=UUID(data["id"]),
+            character=data["character"],
+            action_type=data["action_type"],
+            constraint=data["constraint"],
+            cost=data.get("cost"),
+            prerequisites=data.get("prerequisites", []),
+            exceptions=data.get("exceptions", []),
+            as_of_chapter=data.get("as_of_chapter", 0),
+            source=data.get("source"),
+            created_at=datetime.fromisoformat(data["created_at"]),
+        )
+
+
+@dataclass
+class NarrativeWarning:
+    """
+    A gentle intervention about potential narrative issues.
+
+    Not "this is wrong" but "this might need justification."
+    """
+
+    character: str
+    chapter: int
+    warning_type: str
+    """Type: 'motivation_conflict', 'belief_violation', 'constraint_breach', 'knowledge_gap'."""
+
+    message: str
+    """The warning message."""
+
+    details: dict[str, Any] = field(default_factory=dict)
+    """Additional context (e.g., conflicting motivation IDs, missing belief)."""
+
+    severity: str = "warning"
+    """'warning' (flag but allow) or 'error' (requires justification)."""
+
+    suggestion: str | None = None
+    """How to resolve this (e.g., 'Add a scene where X learns Y')."""

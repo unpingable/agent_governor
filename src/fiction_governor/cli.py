@@ -12,8 +12,9 @@ from typing import Any
 
 from .bible import Bible, COMMON_TROPES
 from .canon import Canon
-from .types import FictionClaim, FictionClaimType
-from .verifiers import FictionVerifier, VerificationResult
+from .state import CharacterState
+from .types import FictionClaim, FictionClaimType, MotivationType
+from .verifiers import FictionVerifier, NarrativeVerifier, VerificationResult
 
 
 def get_project_dir() -> Path:
@@ -379,6 +380,298 @@ def cmd_canon_show(args: argparse.Namespace) -> int:
     return 0
 
 
+# State commands (motivations, beliefs, constraints)
+
+def cmd_state_motivation_add(args: argparse.Namespace) -> int:
+    """Add a motivation for a character."""
+    state = CharacterState(get_project_dir())
+
+    # Parse motivation type
+    mot_type = MotivationType.GOAL
+    if args.type:
+        try:
+            mot_type = MotivationType(args.type.lower())
+        except ValueError:
+            print(f"Invalid motivation type: {args.type}")
+            print(f"Valid types: {', '.join(t.value for t in MotivationType)}")
+            return 1
+
+    mot = state.add_motivation(
+        character=args.character,
+        description=args.description,
+        type=mot_type,
+        intensity=args.intensity or 5,
+        as_of_chapter=args.chapter or 0,
+        decay_rate=args.decay or 0.0,
+        source_event=args.source,
+    )
+
+    print(f"Added motivation for {mot.character}:")
+    print(f"  [{mot.type.value.upper()}] {mot.description}")
+    print(f"  Intensity: {mot.intensity}/10")
+    if mot.decay_rate > 0:
+        print(f"  Decays at: {mot.decay_rate * 100:.0f}% per chapter")
+
+    return 0
+
+
+def cmd_state_motivation_list(args: argparse.Namespace) -> int:
+    """List motivations for a character."""
+    state = CharacterState(get_project_dir())
+
+    motivations = state.motivations_for_character(
+        args.character,
+        active_only=not args.all,
+        at_chapter=args.chapter,
+    )
+
+    if not motivations:
+        print(f"No motivations recorded for {args.character}.")
+        return 0
+
+    active_count = sum(1 for m in motivations if m.is_active)
+    print(f"Motivations for {args.character} ({active_count} active):\n")
+
+    for mot in motivations:
+        status = "✓" if mot.is_active else "✗"
+        intensity = mot.effective_intensity(args.chapter) if args.chapter else mot.intensity
+        print(f"  {status} [{mot.type.value.upper()}] {mot.description}")
+        print(f"      Intensity: {intensity:.1f}/10 (ch{mot.as_of_chapter})")
+        if mot.conflicts_with:
+            print(f"      Conflicts with: {len(mot.conflicts_with)} other motivation(s)")
+        if mot.resolution:
+            print(f"      Resolved: {mot.resolution} (ch{mot.resolved_at_chapter})")
+        print()
+
+    return 0
+
+
+def cmd_state_motivation_resolve(args: argparse.Namespace) -> int:
+    """Mark a motivation as resolved."""
+    state = CharacterState(get_project_dir())
+
+    mot = state.resolve_motivation(args.id, args.chapter, resolution=args.resolution or "achieved")
+    if not mot:
+        print(f"Motivation not found: {args.id}")
+        return 1
+
+    print(f"Resolved motivation: {mot.description}")
+    print(f"  Resolution: {mot.resolution} (ch{mot.resolved_at_chapter})")
+
+    return 0
+
+
+def cmd_state_motivation_conflict(args: argparse.Namespace) -> int:
+    """Mark two motivations as conflicting."""
+    state = CharacterState(get_project_dir())
+
+    if state.add_motivation_conflict(args.id_a, args.id_b):
+        print(f"Marked motivations as conflicting.")
+        return 0
+    else:
+        print(f"Motivation not found: {args.id_a}")
+        return 1
+
+
+def cmd_state_belief_add(args: argparse.Namespace) -> int:
+    """Add a belief for a character."""
+    state = CharacterState(get_project_dir())
+
+    is_true = None
+    if args.true:
+        is_true = True
+    elif args.false:
+        is_true = False
+
+    belief = state.add_belief(
+        character=args.character,
+        belief=args.belief,
+        learned_at_chapter=args.chapter or 0,
+        is_true=is_true,
+        confidence=args.confidence or 5,
+        source=args.source,
+    )
+
+    truth_marker = ""
+    if belief.is_true is True:
+        truth_marker = " [TRUE]"
+    elif belief.is_true is False:
+        truth_marker = " [FALSE]"
+
+    print(f"Added belief for {belief.character}:")
+    print(f"  \"{belief.belief}\"{truth_marker}")
+    print(f"  Confidence: {belief.confidence}/10")
+    print(f"  Learned: ch{belief.learned_at_chapter}")
+    if belief.source:
+        print(f"  Source: {belief.source}")
+
+    return 0
+
+
+def cmd_state_belief_list(args: argparse.Namespace) -> int:
+    """List beliefs for a character."""
+    state = CharacterState(get_project_dir())
+
+    beliefs = state.beliefs_for_character(
+        args.character,
+        held_only=not args.all,
+        at_chapter=args.chapter,
+    )
+
+    if not beliefs:
+        print(f"No beliefs recorded for {args.character}.")
+        return 0
+
+    held_count = sum(1 for b in beliefs if b.is_held)
+    print(f"Beliefs held by {args.character} ({held_count} current):\n")
+
+    for belief in beliefs:
+        status = "✓" if belief.is_held else "✗"
+        truth = ""
+        if belief.is_true is True:
+            truth = " [TRUE]"
+        elif belief.is_true is False:
+            truth = " [FALSE]"
+        else:
+            truth = " [?]"
+
+        print(f"  {status} \"{belief.belief}\"{truth}")
+        print(f"      Confidence: {belief.confidence}/10, learned ch{belief.learned_at_chapter}")
+        if belief.source:
+            print(f"      Source: {belief.source}")
+        if belief.invalidated_at_chapter:
+            print(f"      Invalidated: ch{belief.invalidated_at_chapter}")
+        print()
+
+    return 0
+
+
+def cmd_state_belief_invalidate(args: argparse.Namespace) -> int:
+    """Mark a belief as invalidated (character learned it was wrong)."""
+    state = CharacterState(get_project_dir())
+
+    belief = state.invalidate_belief(args.id, args.chapter)
+    if not belief:
+        print(f"Belief not found: {args.id}")
+        return 1
+
+    print(f"Invalidated belief: \"{belief.belief}\"")
+    print(f"  {belief.character} learned the truth at ch{belief.invalidated_at_chapter}")
+
+    return 0
+
+
+def cmd_state_constraint_add(args: argparse.Namespace) -> int:
+    """Add a behavioral constraint for a character."""
+    state = CharacterState(get_project_dir())
+
+    prerequisites = args.requires.split(",") if args.requires else None
+    exceptions = args.unless.split(",") if args.unless else None
+
+    constraint = state.add_constraint(
+        character=args.character,
+        action_type=args.action,
+        constraint=args.constraint,
+        cost=args.cost,
+        prerequisites=prerequisites,
+        exceptions=exceptions,
+        as_of_chapter=args.chapter or 0,
+        source=args.source,
+    )
+
+    print(f"Added constraint for {constraint.character}:")
+    print(f"  Action: {constraint.action_type}")
+    print(f"  Constraint: {constraint.constraint}")
+    if constraint.cost:
+        print(f"  Cost: {constraint.cost}")
+    if constraint.prerequisites:
+        print(f"  Requires: {', '.join(constraint.prerequisites)}")
+    if constraint.exceptions:
+        print(f"  Unless: {', '.join(constraint.exceptions)}")
+
+    return 0
+
+
+def cmd_state_constraint_list(args: argparse.Namespace) -> int:
+    """List constraints for a character."""
+    state = CharacterState(get_project_dir())
+
+    constraints = state.constraints_for_character(args.character, action_type=args.action)
+
+    if not constraints:
+        if args.action:
+            print(f"No constraints for {args.character} on '{args.action}'.")
+        else:
+            print(f"No constraints recorded for {args.character}.")
+        return 0
+
+    print(f"Behavioral constraints for {args.character}:\n")
+
+    for c in constraints:
+        print(f"  [{c.action_type.upper()}] {c.constraint}")
+        if c.cost:
+            print(f"      Cost: {c.cost}")
+        if c.prerequisites:
+            print(f"      Requires: {', '.join(c.prerequisites)}")
+        if c.exceptions:
+            print(f"      Unless: {', '.join(c.exceptions)}")
+        if c.source:
+            print(f"      Source: {c.source}")
+        print()
+
+    return 0
+
+
+def cmd_state_show(args: argparse.Namespace) -> int:
+    """Show complete state for a character."""
+    state = CharacterState(get_project_dir())
+
+    if args.character:
+        print(state.format_character_state(args.character, at_chapter=args.chapter))
+    else:
+        print(state.format_all_for_prompt(at_chapter=args.chapter))
+
+    return 0
+
+
+def cmd_state_check(args: argparse.Namespace) -> int:
+    """Check narrative coherence for a character action."""
+    project_dir = get_project_dir()
+    verifier = NarrativeVerifier(project_dir)
+
+    warnings = verifier.verify_action(
+        character=args.character,
+        action=args.action,
+        chapter=args.chapter or 1,
+        action_type=args.type,
+    )
+
+    if not warnings:
+        print("✓ No narrative warnings")
+        return 0
+
+    print(f"Narrative warnings ({len(warnings)}):\n")
+    for w in warnings:
+        severity_icon = "⚠️" if w.severity == "warning" else "ℹ️"
+        print(f"  {severity_icon} [{w.warning_type}] {w.message}")
+        if w.suggestion:
+            print(f"      → {w.suggestion}")
+        print()
+
+    return 0
+
+
+def cmd_state_context(args: argparse.Namespace) -> int:
+    """Get narrative context for LLM prompts."""
+    project_dir = get_project_dir()
+    verifier = NarrativeVerifier(project_dir)
+
+    context = verifier.get_character_context(args.character, args.chapter or 1)
+    print(context)
+
+    return 0
+
+
 # Verification commands
 
 def cmd_verify(args: argparse.Namespace) -> int:
@@ -617,6 +910,106 @@ def main() -> int:
     canon_show.add_argument("--character", help="Show character's history")
     canon_show.add_argument("--recent", type=int, help="Show recent N chapters")
     canon_show.set_defaults(func=cmd_canon_show)
+
+    # state (motivations, beliefs, constraints)
+    state_parser = subparsers.add_parser("state", help="Manage character state (motivations, beliefs, constraints)")
+    state_subs = state_parser.add_subparsers(dest="state_cmd")
+
+    # state motivation
+    mot_parser = state_subs.add_parser("motivation", help="Manage character motivations")
+    mot_subs = mot_parser.add_subparsers(dest="mot_cmd")
+
+    mot_add = mot_subs.add_parser("add", help="Add a motivation")
+    mot_add.add_argument("character", help="Character name")
+    mot_add.add_argument("description", help="What they want/fear/drive")
+    mot_add.add_argument("--type", "-t", choices=["goal", "drive", "fear", "incentive"], default="goal")
+    mot_add.add_argument("--intensity", "-i", type=int, help="Intensity 1-10 (default 5)")
+    mot_add.add_argument("--chapter", "-c", type=int, help="As of chapter")
+    mot_add.add_argument("--decay", "-d", type=float, help="Decay rate 0-1 per chapter")
+    mot_add.add_argument("--source", "-s", help="Source event")
+    mot_add.set_defaults(func=cmd_state_motivation_add)
+
+    mot_list = mot_subs.add_parser("list", help="List motivations")
+    mot_list.add_argument("character", help="Character name")
+    mot_list.add_argument("--chapter", "-c", type=int, help="At chapter")
+    mot_list.add_argument("--all", "-a", action="store_true", help="Include resolved")
+    mot_list.set_defaults(func=cmd_state_motivation_list)
+
+    mot_resolve = mot_subs.add_parser("resolve", help="Mark motivation as resolved")
+    mot_resolve.add_argument("id", help="Motivation ID")
+    mot_resolve.add_argument("--chapter", "-c", type=int, required=True, help="Resolution chapter")
+    mot_resolve.add_argument("--resolution", "-r", help="How resolved (achieved, abandoned, replaced)")
+    mot_resolve.set_defaults(func=cmd_state_motivation_resolve)
+
+    mot_conflict = mot_subs.add_parser("conflict", help="Mark motivations as conflicting")
+    mot_conflict.add_argument("id_a", help="First motivation ID")
+    mot_conflict.add_argument("id_b", help="Second motivation ID")
+    mot_conflict.set_defaults(func=cmd_state_motivation_conflict)
+
+    # state belief
+    belief_parser = state_subs.add_parser("belief", help="Manage character beliefs")
+    belief_subs = belief_parser.add_subparsers(dest="belief_cmd")
+
+    belief_add = belief_subs.add_parser("add", help="Add a belief")
+    belief_add.add_argument("character", help="Character name")
+    belief_add.add_argument("belief", help="What they believe")
+    belief_add.add_argument("--chapter", "-c", type=int, help="When learned")
+    belief_add.add_argument("--true", action="store_true", help="Belief is actually true")
+    belief_add.add_argument("--false", action="store_true", help="Belief is actually false")
+    belief_add.add_argument("--confidence", type=int, help="Confidence 1-10 (default 5)")
+    belief_add.add_argument("--source", "-s", help="How learned (witnessed, told by X, assumed)")
+    belief_add.set_defaults(func=cmd_state_belief_add)
+
+    belief_list = belief_subs.add_parser("list", help="List beliefs")
+    belief_list.add_argument("character", help="Character name")
+    belief_list.add_argument("--chapter", "-c", type=int, help="At chapter")
+    belief_list.add_argument("--all", "-a", action="store_true", help="Include invalidated")
+    belief_list.set_defaults(func=cmd_state_belief_list)
+
+    belief_inv = belief_subs.add_parser("invalidate", help="Mark belief as learned-false")
+    belief_inv.add_argument("id", help="Belief ID")
+    belief_inv.add_argument("--chapter", "-c", type=int, required=True, help="When they learned")
+    belief_inv.set_defaults(func=cmd_state_belief_invalidate)
+
+    # state constraint
+    con_parser = state_subs.add_parser("constraint", help="Manage behavioral constraints")
+    con_subs = con_parser.add_subparsers(dest="con_cmd")
+
+    con_add = con_subs.add_parser("add", help="Add a constraint")
+    con_add.add_argument("character", help="Character name")
+    con_add.add_argument("action", help="Action type (violence, deception, vulnerability...)")
+    con_add.add_argument("constraint", help="What makes this hard")
+    con_add.add_argument("--cost", help="What it costs to do anyway")
+    con_add.add_argument("--requires", help="Prerequisites (comma-separated)")
+    con_add.add_argument("--unless", help="Exceptions (comma-separated)")
+    con_add.add_argument("--chapter", "-c", type=int, help="As of chapter")
+    con_add.add_argument("--source", "-s", help="Why this constraint exists")
+    con_add.set_defaults(func=cmd_state_constraint_add)
+
+    con_list = con_subs.add_parser("list", help="List constraints")
+    con_list.add_argument("character", help="Character name")
+    con_list.add_argument("--action", "-a", help="Filter by action type")
+    con_list.set_defaults(func=cmd_state_constraint_list)
+
+    # state show
+    state_show = state_subs.add_parser("show", help="Show character state")
+    state_show.add_argument("--character", "-n", help="Character name (omit for all)")
+    state_show.add_argument("--chapter", "-c", type=int, help="At chapter")
+    state_show.set_defaults(func=cmd_state_show)
+
+    # state check (verify action narrative coherence)
+    state_check = state_subs.add_parser("check", help="Check action narrative coherence")
+    state_check.add_argument("character", help="Character name")
+    state_check.add_argument("action", help="The action to check")
+    state_check.add_argument("--type", "-t", help="Action type (for constraint checking)")
+    state_check.add_argument("--chapter", "-c", type=int, help="Chapter number")
+    state_check.set_defaults(func=cmd_state_check)
+
+    # state context (get LLM-ready context)
+    state_context = state_subs.add_parser("context", help="Get narrative context for LLM prompts")
+    state_context.add_argument("character", help="Character name")
+    state_context.add_argument("--chapter", "-c", type=int, help="At chapter")
+    state_context.set_defaults(func=cmd_state_context)
 
     # verify
     verify_parser = subparsers.add_parser("verify", help="Verify content")

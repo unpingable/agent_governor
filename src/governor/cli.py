@@ -2484,6 +2484,422 @@ def issue_tree(ctx: click.Context, milestone: str | None) -> None:
     click.echo(output)
 
 
+# Graph command group (audit surface)
+@cli.group()
+@click.pass_context
+def graph(ctx: click.Context) -> None:
+    """
+    Audit graph operations.
+
+    Maltego-style graph of governor state for auditing:
+    - Claims -> Evidence edges (provenance)
+    - Actions -> Preconditions (what had to be true)
+    - Sessions -> Handoffs -> Drift (state changes)
+    - Actors -> Authority scope (who can assert what)
+    """
+    pass
+
+
+@graph.command("export")
+@click.option("--format", "-f", "fmt", type=click.Choice(["json", "cytoscape", "graphviz", "obsidian"]), default="json")
+@click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout)")
+@click.pass_context
+def graph_export(ctx: click.Context, fmt: str, output: str | None) -> None:
+    """
+    Export the audit graph.
+
+    Formats:
+    - json: Generic JSON (nodes + edges)
+    - cytoscape: Cytoscape.js compatible
+    - graphviz: DOT format (render with `dot -Tpng`)
+    - obsidian: Obsidian Canvas format (.canvas)
+
+    Examples:
+        governor graph export -f json -o audit.json
+        governor graph export -f graphviz | dot -Tpng -o graph.png
+        governor graph export -f obsidian -o audit.canvas
+    """
+    from .graph import build_graph
+
+    gov_dir = ensure_initialized(ctx)
+    graph = build_graph(gov_dir)
+
+    if fmt == "json":
+        content = graph.to_json()
+    elif fmt == "cytoscape":
+        content = json.dumps(graph.to_cytoscape(), indent=2)
+    elif fmt == "graphviz":
+        content = graph.to_graphviz()
+    elif fmt == "obsidian":
+        content = json.dumps(graph.to_obsidian_canvas(), indent=2)
+    else:
+        content = graph.to_json()
+
+    if output:
+        Path(output).write_text(content)
+        click.echo(f"Exported to: {output}")
+    else:
+        click.echo(content)
+
+
+@graph.command("stats")
+@click.pass_context
+def graph_stats(ctx: click.Context) -> None:
+    """Show graph statistics."""
+    from .graph import build_graph, NodeType, EdgeType
+
+    gov_dir = ensure_initialized(ctx)
+    graph = build_graph(gov_dir)
+
+    # Count nodes by type
+    node_counts: dict[str, int] = {}
+    for node in graph.nodes.values():
+        type_name = node.type.value
+        node_counts[type_name] = node_counts.get(type_name, 0) + 1
+
+    # Count edges by type
+    edge_counts: dict[str, int] = {}
+    for edge in graph.edges:
+        type_name = edge.type.value
+        edge_counts[type_name] = edge_counts.get(type_name, 0) + 1
+
+    click.echo(f"Audit Graph Statistics\n")
+    click.echo(f"Total nodes: {len(graph.nodes)}")
+    click.echo(f"Total edges: {len(graph.edges)}")
+
+    if node_counts:
+        click.echo(f"\nNodes by type:")
+        for type_name, count in sorted(node_counts.items()):
+            click.echo(f"  {type_name}: {count}")
+
+    if edge_counts:
+        click.echo(f"\nEdges by type:")
+        for type_name, count in sorted(edge_counts.items()):
+            click.echo(f"  {type_name}: {count}")
+
+
+@graph.command("weak")
+@click.option("--threshold", "-t", type=int, default=1, help="Minimum receipts required")
+@click.pass_context
+def graph_weak(ctx: click.Context, threshold: int) -> None:
+    """
+    Transform: Find proposals with weak grounding.
+
+    Shows proposals with fewer than threshold supporting receipts.
+    """
+    from .graph import build_graph
+
+    gov_dir = ensure_initialized(ctx)
+    graph = build_graph(gov_dir)
+
+    weak = graph.weak_grounding(threshold)
+
+    if not weak:
+        click.echo(f"No proposals with fewer than {threshold} receipt(s)")
+        return
+
+    click.echo(f"Proposals with weak grounding ({len(weak)}):\n")
+    for node in weak:
+        click.echo(f"  {node.label}")
+        click.echo(f"    State: {node.properties.get('state', 'unknown')}")
+        if node.timestamp:
+            click.echo(f"    Created: {node.timestamp.isoformat()}")
+        click.echo()
+
+
+@graph.command("unverified")
+@click.pass_context
+def graph_unverified(ctx: click.Context) -> None:
+    """
+    Transform: Show claims lacking evidence.
+
+    Lists claims that have no supporting receipts.
+    """
+    from .graph import build_graph
+
+    gov_dir = ensure_initialized(ctx)
+    graph = build_graph(gov_dir)
+
+    unverified = graph.claims_without_evidence()
+
+    if not unverified:
+        click.echo("All claims have supporting evidence")
+        return
+
+    click.echo(f"Claims without evidence ({len(unverified)}):\n")
+    for node in unverified:
+        click.echo(f"  {node.label}")
+        if node.properties:
+            for key, value in node.properties.items():
+                if key not in ("description",) and value:
+                    click.echo(f"    {key}: {value}")
+        click.echo()
+
+
+@graph.command("rejections")
+@click.pass_context
+def graph_rejections(ctx: click.Context) -> None:
+    """
+    Transform: Analyze rejection patterns.
+
+    Groups rejections by root cause to identify common failure modes.
+    """
+    from .graph import build_graph
+
+    gov_dir = ensure_initialized(ctx)
+    graph = build_graph(gov_dir)
+
+    patterns = graph.rejection_patterns()
+
+    if not patterns:
+        click.echo("No rejections found")
+        return
+
+    click.echo("Rejection patterns:\n")
+    for pattern, proposals in sorted(patterns.items(), key=lambda x: -len(x[1])):
+        click.echo(f"  {pattern}: {len(proposals)} rejection(s)")
+        for proposal in proposals[:3]:
+            click.echo(f"    - {proposal.label}")
+        if len(proposals) > 3:
+            click.echo(f"    ... and {len(proposals) - 3} more")
+        click.echo()
+
+
+@graph.command("drift")
+@click.pass_context
+def graph_drift(ctx: click.Context) -> None:
+    """
+    Transform: Analyze session drift.
+
+    Shows contradictions and forgotten items across sessions.
+    """
+    from .graph import build_graph
+
+    gov_dir = ensure_initialized(ctx)
+    graph = build_graph(gov_dir)
+
+    drift_events = graph.session_drift()
+
+    if not drift_events:
+        click.echo("No drift detected across sessions")
+        return
+
+    click.echo(f"Session drift events ({len(drift_events)}):\n")
+    for event in drift_events:
+        click.echo(f"  {event['type'].upper()}")
+        click.echo(f"    After session: {event['previous_session'][:8]}...")
+        click.echo(f"    Count: {event['count']}")
+        for detail in event.get("details", [])[:3]:
+            click.echo(f"      - {detail}")
+        click.echo()
+
+
+@graph.command("authority")
+@click.pass_context
+def graph_authority(ctx: click.Context) -> None:
+    """
+    Transform: Show actor authority map.
+
+    Displays what each agent has done (proposals, decisions, tasks).
+    """
+    from .graph import build_graph
+
+    gov_dir = ensure_initialized(ctx)
+    graph = build_graph(gov_dir)
+
+    authority = graph.actor_authority_map()
+
+    if not authority:
+        click.echo("No agents found")
+        return
+
+    click.echo("Agent authority map:\n")
+    for agent_id, counts in sorted(authority.items()):
+        click.echo(f"  {agent_id}:")
+        for action, count in counts.items():
+            if count > 0:
+                click.echo(f"    {action}: {count}")
+        click.echo()
+
+
+@graph.command("view")
+@click.option("--port", "-p", type=int, default=8765, help="Port for local server")
+@click.pass_context
+def graph_view(ctx: click.Context, port: int) -> None:
+    """
+    Launch interactive graph viewer in browser.
+
+    Starts a local server and opens the graph visualization.
+    """
+    from .graph import build_graph
+    import http.server
+    import socketserver
+    import webbrowser
+    import threading
+
+    gov_dir = ensure_initialized(ctx)
+    graph = build_graph(gov_dir)
+
+    # Generate HTML with embedded graph data
+    html_content = generate_viewer_html(graph)
+
+    # Write to temp file
+    viewer_path = gov_dir / "viewer.html"
+    viewer_path.write_text(html_content)
+
+    click.echo(f"Starting viewer at http://localhost:{port}")
+    click.echo("Press Ctrl+C to stop")
+
+    # Simple HTTP server
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(gov_dir), **kwargs)
+
+        def log_message(self, format, *args):
+            pass  # Suppress logging
+
+    try:
+        with socketserver.TCPServer(("", port), Handler) as httpd:
+            webbrowser.open(f"http://localhost:{port}/viewer.html")
+            httpd.serve_forever()
+    except KeyboardInterrupt:
+        click.echo("\nStopped viewer")
+    finally:
+        viewer_path.unlink(missing_ok=True)
+
+
+def generate_viewer_html(graph) -> str:
+    """Generate an interactive HTML viewer using vis.js."""
+    graph_data = graph.to_cytoscape()
+
+    # Convert to vis.js format
+    vis_nodes = []
+    vis_edges = []
+
+    colors = {
+        "proposal": "#e3f2fd",
+        "claim": "#fff3e0",
+        "receipt": "#e8f5e9",
+        "decision": "#fce4ec",
+        "task": "#f3e5f5",
+        "session": "#e0f7fa",
+        "agent": "#fff8e1",
+        "rejection": "#ffebee",
+        "fact": "#f1f8e9",
+        "file": "#eceff1",
+        "milestone": "#e8eaf6",
+    }
+
+    for element in graph_data["elements"]:
+        data = element["data"]
+        if "source" in data:
+            # Edge
+            vis_edges.append({
+                "from": data["source"],
+                "to": data["target"],
+                "label": data.get("type", ""),
+                "arrows": "to",
+            })
+        else:
+            # Node
+            node_type = data.get("type", "unknown")
+            vis_nodes.append({
+                "id": data["id"],
+                "label": data.get("label", data["id"])[:30],
+                "title": data.get("label", data["id"]),
+                "color": colors.get(node_type, "#ffffff"),
+                "group": node_type,
+            })
+
+    return f'''<!DOCTYPE html>
+<html>
+<head>
+    <title>Governor Audit Graph</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body {{ margin: 0; padding: 0; font-family: system-ui, sans-serif; }}
+        #graph {{ width: 100vw; height: 100vh; }}
+        #legend {{
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            font-size: 12px;
+        }}
+        .legend-item {{
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }}
+        .legend-color {{
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border-radius: 3px;
+        }}
+        #info {{
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 400px;
+            display: none;
+        }}
+    </style>
+</head>
+<body>
+    <div id="graph"></div>
+    <div id="legend">
+        <strong>Node Types</strong>
+        {"".join(f'<div class="legend-item"><div class="legend-color" style="background:{color}"></div>{name}</div>' for name, color in colors.items())}
+    </div>
+    <div id="info"></div>
+    <script>
+        var nodes = new vis.DataSet({json.dumps(vis_nodes)});
+        var edges = new vis.DataSet({json.dumps(vis_edges)});
+
+        var container = document.getElementById('graph');
+        var data = {{ nodes: nodes, edges: edges }};
+        var options = {{
+            physics: {{
+                stabilization: {{ iterations: 100 }},
+                barnesHut: {{ gravitationalConstant: -2000 }}
+            }},
+            interaction: {{ hover: true }},
+            nodes: {{
+                shape: 'box',
+                font: {{ size: 12 }}
+            }},
+            edges: {{
+                font: {{ size: 10, align: 'middle' }},
+                smooth: {{ type: 'cubicBezier' }}
+            }}
+        }};
+
+        var network = new vis.Network(container, data, options);
+
+        network.on('click', function(params) {{
+            var info = document.getElementById('info');
+            if (params.nodes.length > 0) {{
+                var nodeId = params.nodes[0];
+                var node = nodes.get(nodeId);
+                info.innerHTML = '<strong>' + node.group + '</strong><br>' + node.title;
+                info.style.display = 'block';
+            }} else {{
+                info.style.display = 'none';
+            }}
+        }});
+    </script>
+</body>
+</html>'''
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

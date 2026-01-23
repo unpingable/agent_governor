@@ -113,3 +113,4 @@ Sync governor state to an Obsidian vault for knowledge management:
 - [x] Time tracking
 - [x] MCP server
 - [x] Git hooks
+- [x] Audit graph with Maltego-style transforms

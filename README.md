@@ -140,7 +140,7 @@ No hallucination can fake a receipt.
 
 ## Current Status
 
-**705 tests passing** - Core system complete, multi-agent support, fiction/non-fiction governors, task management.
+**737 tests passing** - Core system complete, multi-agent support, fiction/non-fiction governors, task management, audit graph.
 
 ### What Works Now
 
@@ -157,6 +157,7 @@ No hallucination can fake a receipt.
 - **Session management with handoff notes**
 - **Time tracking with start/stop timers**
 - **Smart recommendations for what to work on next**
+- **Audit graph with Maltego-style transforms** (claims→evidence, drift detection, rejection patterns)
 
 ### CLI Commands
 
@@ -202,6 +203,16 @@ governor issue session handoff  # Show last session's notes
 # Export/import
 governor issue export -o backup.json
 governor issue import backup.json
+
+# Audit graph (Maltego-style)
+governor graph export -f json -o audit.json
+governor graph export -f graphviz | dot -Tpng -o graph.png
+governor graph stats           # Node/edge counts by type
+governor graph unverified      # Claims lacking evidence
+governor graph weak            # Proposals with weak grounding
+governor graph rejections      # Rejection patterns
+governor graph drift           # Session drift analysis
+governor graph view            # Interactive browser viewer
 
 # Integration
 governor hook install

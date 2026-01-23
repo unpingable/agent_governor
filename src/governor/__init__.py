@@ -40,6 +40,17 @@ from .tasks import (
     get_task_manager,
 )
 
+# Audit graph
+from .graph import (
+    Node,
+    Edge,
+    NodeType,
+    EdgeType,
+    AuditGraph,
+    GraphBuilder,
+    build_graph,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -76,6 +87,14 @@ __all__ = [
     "Session",
     "TaskManager",
     "get_task_manager",
+    # Audit graph
+    "Node",
+    "Edge",
+    "NodeType",
+    "EdgeType",
+    "AuditGraph",
+    "GraphBuilder",
+    "build_graph",
 ]
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

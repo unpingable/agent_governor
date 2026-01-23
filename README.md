@@ -330,6 +330,27 @@ This is the same philosophy as:
 
 **You wouldn't let untrusted code deploy without CI/CD. Why let untrusted agents write without verification?**
 
+### The Audit Graph: Knowledge Governance
+
+The audit graph isn't intelligence gathering - it's **knowledge governance**.
+
+Where OSINT tools extract and correlate facts, Governor maps:
+- **Epistemic provenance** - why a claim exists
+- **Hypothesis stress-testing** - what supports it, what it displaced
+- **Contradiction surfacing** - what it contradicts
+- **Lineage and drift analysis** - what downstream actions depended on it
+- **"What must be true for this to be allowed"** - made visible
+
+This is research in the old sense. The kind that produces:
+- Invariants
+- Refutations
+- Stable objects
+- Reusable insight
+
+**The spicy part:** Once you have that graph, LLMs stop being oracles and become junior analysts. They don't get to invent structure - they navigate one.
+
+You're not building OSINT tooling. You're building a **lab bench for reasoning under constraint**.
+
 ---
 
 ## Installation

@@ -12,6 +12,7 @@ from governor.graph import (
     NodeType,
     EdgeType,
     AuditGraph,
+    StableSummary,
 )
 
 
@@ -464,3 +465,200 @@ class TestRejectionPatternNormalization:
         """Unknown patterns become 'other'."""
         pattern = empty_graph._normalize_rejection_pattern("Something else happened")
         assert pattern == "other"
+
+
+class TestStableSummary:
+    """Test StableSummary dataclass."""
+
+    def test_create_summary(self):
+        """Can create a summary."""
+        summary = StableSummary(
+            id="test-id",
+            title="Test Summary",
+        )
+
+        assert summary.id == "test-id"
+        assert summary.title == "Test Summary"
+
+    def test_summary_to_dict(self):
+        """Summary can serialize to dict."""
+        summary = StableSummary(
+            id="test-id",
+            title="Test",
+            decisions=[{"topic": "framework", "choice": "react"}],
+            invariants=["framework = react"],
+        )
+
+        data = summary.to_dict()
+
+        assert data["id"] == "test-id"
+        assert len(data["decisions"]) == 1
+        assert len(data["invariants"]) == 1
+
+    def test_summary_from_dict(self):
+        """Summary can deserialize from dict."""
+        data = {
+            "id": "test-id",
+            "title": "Test",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "decisions": [{"topic": "api", "choice": "rest"}],
+            "invariants": ["api = rest"],
+        }
+
+        summary = StableSummary.from_dict(data)
+
+        assert summary.id == "test-id"
+        assert len(summary.decisions) == 1
+
+    def test_summary_to_markdown(self):
+        """Summary can export to markdown."""
+        summary = StableSummary(
+            id="test-id",
+            title="Test Summary",
+            decisions=[{"topic": "framework", "choice": "react"}],
+            claims_verified=["File exists"],
+            claims_unverified=["Tests pass"],
+            invariants=["framework = react"],
+        )
+
+        md = summary.to_markdown()
+
+        assert "# Test Summary" in md
+        assert "## Decisions" in md
+        assert "framework" in md
+        assert "## Verified Claims" in md
+        assert "## Unverified Claims" in md
+
+    def test_summary_to_node(self):
+        """Summary can convert to graph node."""
+        summary = StableSummary(
+            id="test-id",
+            title="Test Summary",
+        )
+
+        node = summary.to_node()
+
+        assert node.id == "summary:test-id"
+        assert node.type == NodeType.SUMMARY
+        assert node.label == "Test Summary"
+
+
+class TestGraphCollapse:
+    """Test collapse transform."""
+
+    def test_collapse_entire_graph(self, sample_graph):
+        """Can collapse entire graph into summary."""
+        summary = sample_graph.collapse(title="Full Graph Summary")
+
+        assert summary.title == "Full Graph Summary"
+        assert len(summary.node_ids) == len(sample_graph.nodes)
+        assert len(summary.decisions) > 0
+
+    def test_collapse_extracts_decisions(self, sample_graph):
+        """Collapse extracts decisions."""
+        summary = sample_graph.collapse()
+
+        # sample_graph has 2 decisions
+        assert len(summary.decisions) == 2
+        topics = {d["topic"] for d in summary.decisions}
+        assert "framework" in topics
+
+    def test_collapse_extracts_invariants(self, sample_graph):
+        """Collapse extracts invariants from decisions."""
+        summary = sample_graph.collapse(extract_invariants=True)
+
+        # Should have invariant for each decision
+        assert len(summary.invariants) == 2
+        assert any("framework" in inv for inv in summary.invariants)
+
+    def test_collapse_classifies_claims(self, sample_graph):
+        """Collapse classifies claims as verified/unverified."""
+        summary = sample_graph.collapse()
+
+        # claim:1:0 has receipt, claim:2:0 does not
+        assert "File exists" in summary.claims_verified
+        assert "Tests pass" in summary.claims_unverified
+
+    def test_collapse_captures_rejections(self, sample_graph):
+        """Collapse captures rejections."""
+        summary = sample_graph.collapse()
+
+        assert len(summary.rejections) == 1
+        assert "File not found" in summary.rejections[0]["reason"]
+
+    def test_collapse_tracks_agents(self, sample_graph):
+        """Collapse tracks agents involved."""
+        summary = sample_graph.collapse()
+
+        assert "worker-1" in summary.agents_involved
+
+    def test_collapse_with_notes(self, sample_graph):
+        """Collapse can include notes."""
+        summary = sample_graph.collapse(notes="Additional context here")
+
+        assert summary.notes == "Additional context here"
+        assert "Additional context here" in summary.to_markdown()
+
+    def test_collapse_subgraph(self, sample_graph):
+        """Can collapse a subgraph."""
+        # Create a subgraph with just the decisions
+        subgraph = sample_graph.expand_dependency_chain("decision:2")
+
+        summary = sample_graph.collapse(subgraph, title="Decision Chain")
+
+        assert summary.title == "Decision Chain"
+        assert len(summary.node_ids) == 2  # Just the two decisions
+
+    def test_collapse_and_add(self, sample_graph):
+        """Collapse and add creates summary node in graph."""
+        initial_count = len(sample_graph.nodes)
+
+        summary_node = sample_graph.collapse_and_add(title="Added Summary")
+
+        assert len(sample_graph.nodes) == initial_count + 1
+        assert summary_node.id in sample_graph.nodes
+        assert summary_node.type == NodeType.SUMMARY
+
+        # Should have SUMMARIZES edges
+        summarizes_edges = [
+            e for e in sample_graph.edges
+            if e.type == EdgeType.SUMMARIZES
+        ]
+        assert len(summarizes_edges) > 0
+
+    def test_collapse_time_range(self, sample_graph):
+        """Collapse captures time range."""
+        summary = sample_graph.collapse()
+
+        assert summary.time_range[0] is not None
+        assert summary.time_range[1] is not None
+        assert summary.time_range[0] <= summary.time_range[1]
+
+    def test_collapse_contradictions_resolved(self):
+        """Collapse captures resolved contradictions (supersedes)."""
+        graph = AuditGraph()
+
+        # Add decisions with supersedes relationship
+        graph.add_node(Node(
+            id="decision:old",
+            type=NodeType.DECISION,
+            label="framework: angular",
+            properties={"topic": "framework", "choice": "angular"},
+        ))
+        graph.add_node(Node(
+            id="decision:new",
+            type=NodeType.DECISION,
+            label="framework: react",
+            properties={"topic": "framework", "choice": "react"},
+        ))
+        graph.add_edge(Edge(
+            source="decision:new",
+            target="decision:old",
+            type=EdgeType.SUPERSEDES,
+        ))
+
+        summary = graph.collapse()
+
+        assert len(summary.contradictions_resolved) == 1
+        assert summary.contradictions_resolved[0]["old"] == "framework: angular"
+        assert summary.contradictions_resolved[0]["new"] == "framework: react"

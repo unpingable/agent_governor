@@ -47,6 +47,7 @@ class NodeType(Enum):
 
     # Meta
     REJECTION = "rejection"
+    SUMMARY = "summary"  # Collapsed stable summary object
 
 
 class EdgeType(Enum):
@@ -79,6 +80,9 @@ class EdgeType(Enum):
     # Files
     REFERENCES = "references"       # claim/fact → file
     MODIFIES = "modifies"           # proposal → file
+
+    # Summaries
+    SUMMARIZES = "summarizes"       # summary → node (collapsed into summary)
 
 
 @dataclass
@@ -117,6 +121,171 @@ class Edge:
             "properties": self.properties,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
         }
+
+
+@dataclass
+class StableSummary:
+    """
+    A collapsed summary of a subgraph - a reusable insight object.
+
+    Captures:
+    - What was decided/claimed
+    - What evidence supported it
+    - What contradictions were resolved
+    - What the lineage looks like
+    - Key invariants established
+
+    This is not just a compression - it's a stable artifact that can be
+    referenced, cited, and built upon without needing to traverse the
+    full subgraph.
+    """
+    id: str
+    title: str
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # What this summary covers
+    node_ids: list[str] = field(default_factory=list)  # Original nodes collapsed
+    time_range: tuple[datetime | None, datetime | None] = (None, None)
+
+    # Key content extracted
+    decisions: list[dict[str, Any]] = field(default_factory=list)  # topic -> choice
+    claims_verified: list[str] = field(default_factory=list)  # Verified claims
+    claims_unverified: list[str] = field(default_factory=list)  # Claims lacking evidence
+    contradictions_resolved: list[dict[str, Any]] = field(default_factory=list)
+    rejections: list[dict[str, Any]] = field(default_factory=list)
+
+    # Lineage
+    agents_involved: list[str] = field(default_factory=list)
+    files_touched: list[str] = field(default_factory=list)
+    sessions_spanned: list[str] = field(default_factory=list)
+
+    # Invariants / insights
+    invariants: list[str] = field(default_factory=list)  # Extracted stable truths
+    notes: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "created_at": self.created_at.isoformat(),
+            "node_ids": self.node_ids,
+            "time_range": [
+                self.time_range[0].isoformat() if self.time_range[0] else None,
+                self.time_range[1].isoformat() if self.time_range[1] else None,
+            ],
+            "decisions": self.decisions,
+            "claims_verified": self.claims_verified,
+            "claims_unverified": self.claims_unverified,
+            "contradictions_resolved": self.contradictions_resolved,
+            "rejections": self.rejections,
+            "agents_involved": self.agents_involved,
+            "files_touched": self.files_touched,
+            "sessions_spanned": self.sessions_spanned,
+            "invariants": self.invariants,
+            "notes": self.notes,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "StableSummary":
+        time_range = data.get("time_range", [None, None])
+        return cls(
+            id=data["id"],
+            title=data["title"],
+            created_at=datetime.fromisoformat(data["created_at"]),
+            node_ids=data.get("node_ids", []),
+            time_range=(
+                datetime.fromisoformat(time_range[0]) if time_range[0] else None,
+                datetime.fromisoformat(time_range[1]) if time_range[1] else None,
+            ),
+            decisions=data.get("decisions", []),
+            claims_verified=data.get("claims_verified", []),
+            claims_unverified=data.get("claims_unverified", []),
+            contradictions_resolved=data.get("contradictions_resolved", []),
+            rejections=data.get("rejections", []),
+            agents_involved=data.get("agents_involved", []),
+            files_touched=data.get("files_touched", []),
+            sessions_spanned=data.get("sessions_spanned", []),
+            invariants=data.get("invariants", []),
+            notes=data.get("notes", ""),
+        )
+
+    def to_markdown(self) -> str:
+        """Export summary as markdown document."""
+        lines = [
+            f"# {self.title}",
+            "",
+            f"*Summary ID: {self.id}*",
+            f"*Created: {self.created_at.isoformat()}*",
+            "",
+        ]
+
+        if self.time_range[0] or self.time_range[1]:
+            start = self.time_range[0].isoformat() if self.time_range[0] else "?"
+            end = self.time_range[1].isoformat() if self.time_range[1] else "?"
+            lines.append(f"**Time span:** {start} → {end}")
+            lines.append("")
+
+        if self.decisions:
+            lines.append("## Decisions")
+            for dec in self.decisions:
+                lines.append(f"- **{dec.get('topic', '?')}**: {dec.get('choice', '?')}")
+            lines.append("")
+
+        if self.claims_verified:
+            lines.append("## Verified Claims")
+            for claim in self.claims_verified:
+                lines.append(f"- ✓ {claim}")
+            lines.append("")
+
+        if self.claims_unverified:
+            lines.append("## Unverified Claims")
+            for claim in self.claims_unverified:
+                lines.append(f"- ⚠ {claim}")
+            lines.append("")
+
+        if self.contradictions_resolved:
+            lines.append("## Contradictions Resolved")
+            for c in self.contradictions_resolved:
+                lines.append(f"- {c.get('old', '?')} → {c.get('new', '?')}")
+            lines.append("")
+
+        if self.rejections:
+            lines.append("## Rejections")
+            for r in self.rejections:
+                lines.append(f"- {r.get('reason', '?')}")
+            lines.append("")
+
+        if self.invariants:
+            lines.append("## Invariants Established")
+            for inv in self.invariants:
+                lines.append(f"- {inv}")
+            lines.append("")
+
+        if self.agents_involved:
+            lines.append(f"**Agents:** {', '.join(self.agents_involved)}")
+        if self.files_touched:
+            lines.append(f"**Files:** {', '.join(self.files_touched[:10])}")
+            if len(self.files_touched) > 10:
+                lines.append(f"  *(and {len(self.files_touched) - 10} more)*")
+        if self.sessions_spanned:
+            lines.append(f"**Sessions:** {len(self.sessions_spanned)}")
+
+        if self.notes:
+            lines.extend(["", "## Notes", self.notes])
+
+        lines.extend(["", f"---", f"*Collapsed from {len(self.node_ids)} nodes*"])
+
+        return "\n".join(lines)
+
+    def to_node(self) -> Node:
+        """Convert this summary to a graph node."""
+        return Node(
+            id=f"summary:{self.id}",
+            type=NodeType.SUMMARY,
+            label=self.title,
+            properties=self.to_dict(),
+            timestamp=self.created_at,
+        )
 
 
 @dataclass
@@ -400,6 +569,160 @@ class AuditGraph:
                 })
 
         return drift_events
+
+    # =========================================================================
+    # Collapse (stable summary objects)
+    # =========================================================================
+
+    def collapse(
+        self,
+        subgraph: "AuditGraph | None" = None,
+        title: str = "Summary",
+        notes: str = "",
+        extract_invariants: bool = True,
+    ) -> StableSummary:
+        """
+        Transform: Collapse a subgraph into a stable summary object.
+
+        A summary is not just compression - it's a reusable insight artifact that
+        captures:
+        - What was decided
+        - What evidence supported it
+        - What contradictions were resolved
+        - What the lineage looks like
+        - Key invariants established
+
+        Args:
+            subgraph: The subgraph to collapse (defaults to entire graph)
+            title: Title for the summary
+            notes: Additional notes to include
+            extract_invariants: Whether to extract invariants from decisions
+
+        Returns:
+            A StableSummary object that can be stored, referenced, and built upon.
+        """
+        from uuid import uuid4
+
+        target = subgraph or self
+
+        summary = StableSummary(
+            id=str(uuid4()),
+            title=title,
+            notes=notes,
+        )
+
+        # Collect node IDs
+        summary.node_ids = list(target.nodes.keys())
+
+        # Determine time range
+        timestamps = [
+            n.timestamp for n in target.nodes.values()
+            if n.timestamp is not None
+        ]
+        if timestamps:
+            summary.time_range = (min(timestamps), max(timestamps))
+
+        # Extract decisions
+        for node in target.nodes.values():
+            if node.type == NodeType.DECISION:
+                summary.decisions.append({
+                    "topic": node.properties.get("topic", ""),
+                    "choice": node.properties.get("choice", ""),
+                    "rationale": node.properties.get("rationale", ""),
+                    "id": node.id,
+                })
+
+                # Extract invariants from decisions if requested
+                if extract_invariants:
+                    topic = node.properties.get("topic", "")
+                    choice = node.properties.get("choice", "")
+                    if topic and choice:
+                        summary.invariants.append(f"{topic} = {choice}")
+
+        # Classify claims as verified or unverified
+        supported_claims = {
+            e.target for e in target.edges
+            if e.type == EdgeType.SUPPORTS
+        }
+
+        for node in target.nodes.values():
+            if node.type == NodeType.CLAIM:
+                if node.id in supported_claims:
+                    summary.claims_verified.append(node.label)
+                else:
+                    summary.claims_unverified.append(node.label)
+
+        # Find contradictions that were resolved (superseded decisions)
+        for edge in target.edges:
+            if edge.type == EdgeType.SUPERSEDES:
+                old_node = target.get_node(edge.target)
+                new_node = target.get_node(edge.source)
+                if old_node and new_node:
+                    summary.contradictions_resolved.append({
+                        "old": old_node.label,
+                        "new": new_node.label,
+                        "old_id": old_node.id,
+                        "new_id": new_node.id,
+                    })
+
+        # Collect rejections
+        for node in target.nodes.values():
+            if node.type == NodeType.REJECTION:
+                summary.rejections.append({
+                    "reason": node.properties.get("reason", ""),
+                    "suggestion": node.properties.get("suggestion", ""),
+                    "id": node.id,
+                })
+
+        # Collect agents involved
+        for node in target.nodes.values():
+            if node.type == NodeType.AGENT:
+                # Extract agent name from ID (e.g., "agent:worker-1" -> "worker-1")
+                agent_name = node.id.split(":", 1)[-1] if ":" in node.id else node.id
+                summary.agents_involved.append(agent_name)
+
+        # Collect files touched
+        for node in target.nodes.values():
+            if node.type == NodeType.FILE:
+                file_path = node.id.split(":", 1)[-1] if ":" in node.id else node.label
+                summary.files_touched.append(file_path)
+
+        # Collect sessions spanned
+        for node in target.nodes.values():
+            if node.type == NodeType.SESSION:
+                summary.sessions_spanned.append(node.id)
+
+        return summary
+
+    def collapse_and_add(
+        self,
+        subgraph: "AuditGraph | None" = None,
+        title: str = "Summary",
+        notes: str = "",
+    ) -> Node:
+        """
+        Collapse a subgraph and add the summary as a node in this graph.
+
+        Creates SUMMARIZES edges from the summary node to all nodes it collapsed.
+
+        Returns the summary node.
+        """
+        summary = self.collapse(subgraph, title, notes)
+        summary_node = summary.to_node()
+
+        self.add_node(summary_node)
+
+        # Add edges to collapsed nodes
+        target = subgraph or self
+        for node_id in summary.node_ids:
+            if node_id != summary_node.id:  # Don't link to self
+                self.add_edge(Edge(
+                    source=summary_node.id,
+                    target=node_id,
+                    type=EdgeType.SUMMARIZES,
+                ))
+
+        return summary_node
 
     # =========================================================================
     # Export

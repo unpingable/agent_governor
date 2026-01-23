@@ -2722,6 +2722,78 @@ def graph_authority(ctx: click.Context) -> None:
         click.echo()
 
 
+@graph.command("collapse")
+@click.option("--title", "-t", default="Summary", help="Title for the summary")
+@click.option("--task", help="Collapse subgraph for a specific task")
+@click.option("--decision", help="Collapse decision chain for a specific decision")
+@click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout)")
+@click.option("--format", "-f", "fmt", type=click.Choice(["json", "markdown"]), default="markdown")
+@click.option("--notes", "-n", default="", help="Additional notes to include")
+@click.pass_context
+def graph_collapse(
+    ctx: click.Context,
+    title: str,
+    task: str | None,
+    decision: str | None,
+    output: str | None,
+    fmt: str,
+    notes: str,
+) -> None:
+    """
+    Transform: Collapse a subgraph into a stable summary object.
+
+    Creates a reusable insight artifact that captures:
+    - What was decided
+    - What evidence supported it
+    - What contradictions were resolved
+    - Key invariants established
+
+    Examples:
+        governor graph collapse --title "Auth Implementation"
+        governor graph collapse --task <task-id> --title "Task Summary"
+        governor graph collapse --decision <decision-id> --title "Decision Chain"
+        governor graph collapse -f json -o summary.json
+    """
+    from .graph import build_graph
+
+    gov_dir = ensure_initialized(ctx)
+    graph = build_graph(gov_dir)
+
+    # Determine what to collapse
+    subgraph = None
+
+    if task:
+        subgraph = graph.subgraph_for_task(f"task:{task}" if not task.startswith("task:") else task)
+        if not subgraph.nodes:
+            click.echo(f"Error: Task not found: {task}", err=True)
+            ctx.exit(1)
+
+    if decision:
+        decision_id = f"decision:{decision}" if not decision.startswith("decision:") else decision
+        subgraph = graph.expand_dependency_chain(decision_id)
+        if not subgraph.nodes:
+            click.echo(f"Error: Decision not found: {decision}", err=True)
+            ctx.exit(1)
+
+    # Create summary
+    summary = graph.collapse(subgraph, title=title, notes=notes)
+
+    # Output
+    if fmt == "markdown":
+        content = summary.to_markdown()
+    else:
+        content = json.dumps(summary.to_dict(), indent=2)
+
+    if output:
+        Path(output).write_text(content)
+        click.echo(f"Summary written to: {output}")
+        click.echo(f"  Nodes collapsed: {len(summary.node_ids)}")
+        click.echo(f"  Decisions: {len(summary.decisions)}")
+        click.echo(f"  Invariants: {len(summary.invariants)}")
+    else:
+        click.echo(content)
+
+
 @graph.command("view")
 @click.option("--port", "-p", type=int, default=8765, help="Port for local server")
 @click.pass_context

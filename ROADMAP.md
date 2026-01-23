@@ -77,6 +77,46 @@ Sync governor state to an Obsidian vault for knowledge management:
 
 ---
 
+## Priority: SRE/Ops Governor
+
+**Status:** Not started
+**Priority:** HIGH - This is where "real tool" vs "toy" becomes unambiguous
+
+The highest-leverage gap. Where verification can be *mechanical* and the scars from decades of sysadmin/devops/SRE work become encoded:
+
+### Core Verifiers
+
+- **Runbook compliance** - Actions must follow documented procedures
+- **Change windows / approvals** - Enforce when changes can happen, who approved
+- **Precondition enforcement** - "This action required these preconditions"
+- **Evidence capture** - Diffs, rollouts, smoke checks as receipts
+
+### Incident Response
+
+- **Timeline integrity** - Events must be temporally consistent
+- **Claim verification** - "Service restored" requires proof
+- **Escalation tracking** - Who was notified, when, what was the response
+
+### Change Management
+
+- **Rollback requirements** - Can't deploy without verified rollback plan
+- **Blast radius limits** - Scope constraints on what can change
+- **Dependency verification** - Upstream/downstream impact checks
+
+### Why This Matters
+
+- Immediately differentiating from "AI memory" tools
+- Produces artifacts real orgs recognize (receipts, approvals, audit trails)
+- Domain where governor stops being "nice" and becomes *obviously necessary*
+- Encodes hard-won operational knowledge
+
+### Anti-pattern to Avoid
+
+"Code review layer" as "agent judges architecture" = vibes-based linting.
+Instead: **policy-as-tests** (interfaces, invariants, dependency rules, forbidden patterns).
+
+---
+
 ## Other Future Features
 
 ### Claude Code Hooks
@@ -106,7 +146,7 @@ Sync governor state to an Obsidian vault for knowledge management:
 
 - [x] Core governor (receipts, claims, FSM)
 - [x] Multi-agent coordination
-- [x] Fiction governor
+- [x] Fiction governor (bible, canon, narrative state)
 - [x] Non-fiction governor (academic writing)
 - [x] Task management system
 - [x] Session handoffs
@@ -114,3 +154,4 @@ Sync governor state to an Obsidian vault for knowledge management:
 - [x] MCP server
 - [x] Git hooks
 - [x] Audit graph with Maltego-style transforms
+- [x] Collapse transform (stable summary objects)

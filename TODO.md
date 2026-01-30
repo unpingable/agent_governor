@@ -466,7 +466,11 @@ Based on `ingest/direction.md` - artificial landmarks that impose orientation co
 
 - [ ] **Web UI** - Simple dashboard showing claim history, rejection rates, regime status
 - [ ] **VS Code Integration** - add governor support as method to VS Code
-- [ ] **Config profiles** - `governor profile use strict` vs `governor profile use permissive`
+- [x] **Config profiles** - `governor profile use strict` vs `governor profile use permissive` ✓ COMPLETE
+  - 5 builtins: strict, permissive, research, production, audit
+  - Custom profile creation/deletion, activation/deactivation
+  - Applies envelope, boil, jurisdiction, and strict mode in one command
+  - Module: `src/governor/profiles.py` (45 tests)
 - [ ] **Telemetry dashboard** - Real-time regime visualization (reference: `ingest/epistemic_governor/src/epistemic_governor/observability/trace_tui.py`)
 
 ## Multi-Agent Routing & Task Sizing ✓ COMPLETE

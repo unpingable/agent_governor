@@ -27,7 +27,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Ops Governor**: Runbook verification, time window enforcement, blast radius limits, precondition chains.
 **Claim Diff**: Epistemic state change detection, confidence drift, provenance laundering, evidence erosion, silent retraction.
 **Claim Signals**: Implicit claim extraction from text, date/entity/quantity/assertive detection, assertiveness scoring, ledger integration.
-**Total: 2257 tests**
+**Config Profiles**: Named governance presets (strict, permissive, research, production, audit), custom profiles, one-command switching.
+**Total: 2302 tests**
 
 ## Key Documents
 
@@ -219,6 +220,14 @@ governor signals extract <text>       # Extract signals from provided text
 governor signals scan <path>          # Scan a file for claim signals
 governor signals register <text>      # Extract signals AND register as ASSUMED claims
 governor signals score <text>         # Show assertiveness score only
+
+# Config Profiles (named governance presets)
+governor profile list                 # List available profiles (builtin + custom)
+governor profile use <name>           # Activate profile and apply settings
+governor profile status               # Show active profile
+governor profile off                  # Deactivate current profile
+governor profile create <name>        # Create custom profile
+governor profile delete <name>        # Delete custom profile
 ```
 
 ## Architecture Rules (Non-Negotiable)
@@ -302,6 +311,7 @@ src/governor/
 ├── drift.py          # DriftDetector, PremiseQuarantine, temporal asymmetry defense
 ├── claim_diff.py     # ClaimDiffer, ClaimSnapshot, LedgerSnapshot, confidence drift, provenance laundering
 ├── claim_signals.py  # SignalExtractor, SignalMatch, ExtractionResult, implicit claim detection
+├── profiles.py       # ProfileManager, ProfileSettings, named governance presets
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -513,6 +523,13 @@ src/ops_governor/
 
 **Claim Signal Extraction tests: 75**
 
+### Config Profiles (Named Governance Presets)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| profiles.py | ProfileManager, ProfileSettings, 5 builtins (strict/permissive/research/production/audit), apply_profile | 45 |
+
+**Config Profiles tests: 45**
+
 ### Fiction Governor (Complete)
 | Module | Description | Tests |
 |--------|-------------|-------|
@@ -536,7 +553,7 @@ src/ops_governor/
 
 **Non-Fiction Governor tests: 91**
 
-**Total: 2166 tests**
+**Total: 2211 tests**
 
 ## Common Mistakes to Avoid
 

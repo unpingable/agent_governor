@@ -310,6 +310,15 @@ from .claim_signals import (
     register_signals,
 )
 
+# Config profiles
+from .profiles import (
+    ProfileSettings,
+    ProfileManager,
+    BUILTIN_PROFILES,
+    apply_profile,
+    get_profile_manager,
+)
+
 # Claim diff (epistemic state change detection)
 from .claim_diff import (
     MutationType,
@@ -581,6 +590,12 @@ __all__ = [
     "has_implicit_claims",
     "assertiveness_score",
     "register_signals",
+    # Config profiles
+    "ProfileSettings",
+    "ProfileManager",
+    "BUILTIN_PROFILES",
+    "apply_profile",
+    "get_profile_manager",
     # Claim diff (epistemic state change detection)
     "MutationType",
     "ViolationType",

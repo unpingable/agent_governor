@@ -6986,6 +6986,147 @@ def signals_score(ctx, text):
         click.echo("  High assertiveness — review for unsupported claims.")
 
 
+# =============================================================================
+# Config Profiles
+# =============================================================================
+
+
+@cli.group("profile")
+@click.pass_context
+def profile_cmd(ctx):
+    """Config profiles — named governance presets."""
+    pass
+
+
+@profile_cmd.command("list")
+@click.pass_context
+def profile_list(ctx):
+    """List available profiles."""
+    from .profiles import get_profile_manager, BUILTIN_PROFILES
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = get_profile_manager(gov_dir)
+    active_name, _ = mgr.get_active()
+
+    for name, p in mgr.list_profiles().items():
+        marker = " *" if name == active_name else ""
+        builtin = " (builtin)" if name in BUILTIN_PROFILES else " (custom)"
+        click.echo(f"  {name}{marker}{builtin}")
+        click.echo(f"    {p.description}" if p.description else "")
+
+
+@profile_cmd.command("use")
+@click.argument("name")
+@click.pass_context
+def profile_use(ctx, name):
+    """Activate a profile and apply its settings."""
+    from .profiles import get_profile_manager, apply_profile
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = get_profile_manager(gov_dir)
+
+    try:
+        settings = mgr.activate(name)
+    except KeyError:
+        click.echo(f"Error: Profile '{name}' not found.", err=True)
+        ctx.exit(1)
+        return
+
+    applied = apply_profile(gov_dir, settings)
+
+    click.echo(f"Profile '{name}' activated.")
+    for key, val in applied.items():
+        click.echo(f"  {key}: {val}")
+
+
+@profile_cmd.command("status")
+@click.pass_context
+def profile_status(ctx):
+    """Show the active profile."""
+    from .profiles import get_profile_manager
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = get_profile_manager(gov_dir)
+    name, settings = mgr.get_active()
+
+    if name is None:
+        click.echo("No active profile.")
+        return
+
+    click.echo(f"Active profile: {name}")
+    click.echo(f"  Envelope:     {settings.envelope_mode}")
+    click.echo(f"  Boil preset:  {settings.boil_preset}")
+    click.echo(f"  Jurisdiction: {settings.jurisdiction}")
+    click.echo(f"  Strict mode:  {'enabled' if settings.strict_mode else 'disabled'}")
+    if settings.description:
+        click.echo(f"  Description:  {settings.description}")
+
+
+@profile_cmd.command("off")
+@click.pass_context
+def profile_off(ctx):
+    """Deactivate the current profile."""
+    from .profiles import get_profile_manager
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = get_profile_manager(gov_dir)
+    mgr.deactivate()
+    click.echo("Profile deactivated.")
+
+
+@profile_cmd.command("create")
+@click.argument("name")
+@click.option("--envelope", type=click.Choice(["strict", "exploratory"]), required=True)
+@click.option("--boil", required=True, help="Boil preset (GREEN_TEA, OOLONG, DARJEELING, CHAI, BOIL)")
+@click.option("--jurisdiction", required=True, help="Jurisdiction name")
+@click.option("--strict/--no-strict", default=True, help="Enable strict mode")
+@click.option("--description", "-d", default="", help="Profile description")
+@click.pass_context
+def profile_create(ctx, name, envelope, boil, jurisdiction, strict, description):
+    """Create a custom profile."""
+    from .profiles import get_profile_manager, ProfileSettings
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = get_profile_manager(gov_dir)
+
+    settings = ProfileSettings(
+        envelope_mode=envelope,
+        boil_preset=boil.upper(),
+        jurisdiction=jurisdiction.upper(),
+        strict_mode=strict,
+        description=description,
+    )
+
+    try:
+        mgr.create(name, settings)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Profile '{name}' created.")
+
+
+@profile_cmd.command("delete")
+@click.argument("name")
+@click.pass_context
+def profile_delete(ctx, name):
+    """Delete a custom profile."""
+    from .profiles import get_profile_manager
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = get_profile_manager(gov_dir)
+
+    try:
+        mgr.delete(name)
+    except (ValueError, KeyError) as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Profile '{name}' deleted.")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

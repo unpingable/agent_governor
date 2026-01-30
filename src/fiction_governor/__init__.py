@@ -30,6 +30,11 @@ from .types import (
     Belief,
     BehavioralConstraint,
     NarrativeWarning,
+    # Plot threads
+    ThreadType,
+    ThreadStatus,
+    PlotThread,
+    SceneProposal,
 )
 from .bible import Bible
 from .canon import Canon
@@ -42,6 +47,28 @@ from .verifiers import (
     FictionVerifier,
     NarrativeVerifier,
     VerificationResult,
+)
+from .manuscript import (
+    ManuscriptScanner,
+    ScanResult,
+    ExtractedCharacter,
+    ExtractedLocation,
+    ExtractedEvent,
+    ExtractedThread,
+    scan_manuscript_to_canon,
+    scan_single_chapter,
+)
+from .similarity import (
+    SimilarityMatch,
+    VoiceAnalysis,
+    ToneAnalysis,
+    EmbeddingProvider,
+    TFIDFProvider,
+    SimilarityAnalyzer,
+    create_analyzer,
+    quick_trope_check,
+    quick_voice_check,
+    compute_text_similarity,
 )
 
 __all__ = [
@@ -65,6 +92,11 @@ __all__ = [
     "Belief",
     "BehavioralConstraint",
     "NarrativeWarning",
+    # Types - Plot threads
+    "ThreadType",
+    "ThreadStatus",
+    "PlotThread",
+    "SceneProposal",
     # Ledgers
     "Bible",
     "Canon",
@@ -77,4 +109,24 @@ __all__ = [
     "FictionVerifier",
     "NarrativeVerifier",
     "VerificationResult",
+    # Manuscript scanner
+    "ManuscriptScanner",
+    "ScanResult",
+    "ExtractedCharacter",
+    "ExtractedLocation",
+    "ExtractedEvent",
+    "ExtractedThread",
+    "scan_manuscript_to_canon",
+    "scan_single_chapter",
+    # Similarity matching
+    "SimilarityMatch",
+    "VoiceAnalysis",
+    "ToneAnalysis",
+    "EmbeddingProvider",
+    "TFIDFProvider",
+    "SimilarityAnalyzer",
+    "create_analyzer",
+    "quick_trope_check",
+    "quick_voice_check",
+    "compute_text_similarity",
 ]

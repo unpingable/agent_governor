@@ -754,3 +754,281 @@ class NarrativeWarning:
 
     suggestion: str | None = None
     """How to resolve this (e.g., 'Add a scene where X learns Y')."""
+
+
+# ============================================================================
+# PLOT THREAD TYPES
+# Track narrative threads: Chekhov's guns, foreshadowing, mysteries, arcs
+# ============================================================================
+
+
+class ThreadType(Enum):
+    """Types of narrative threads."""
+
+    CHEKHOV_GUN = "chekhov_gun"
+    """Setup that must pay off (gun on wall in Act 1 must fire in Act 3)."""
+
+    FORESHADOWING = "foreshadowing"
+    """Hint at future events (subtle, may not be explicit payoff)."""
+
+    MYSTERY = "mystery"
+    """Question raised that needs answering."""
+
+    CHARACTER_ARC = "character_arc"
+    """Character growth/change trajectory."""
+
+    SUBPLOT = "subplot"
+    """Secondary story thread."""
+
+    PROMISE = "promise"
+    """Implicit promise to reader (genre expectations, etc.)."""
+
+    SETUP = "setup"
+    """General setup that needs payoff."""
+
+
+class ThreadStatus(Enum):
+    """Status of a plot thread."""
+
+    PLANTED = "planted"
+    """Thread has been introduced."""
+
+    DEVELOPING = "developing"
+    """Thread is being built upon."""
+
+    RESOLVED = "resolved"
+    """Thread has paid off / been resolved."""
+
+    ABANDONED = "abandoned"
+    """Thread was dropped (may be intentional or a plot hole)."""
+
+    OVERDUE = "overdue"
+    """Thread should have paid off by now."""
+
+
+@dataclass
+class PlotThread:
+    """
+    A narrative thread that needs tracking.
+
+    Chekhov's principle: if you show a gun in Act 1, it must fire by Act 3.
+    This tracks setups and their payoffs to catch dangling threads.
+    """
+
+    id: UUID = field(default_factory=uuid4)
+    name: str = ""
+    """Short name for the thread (e.g., 'mysterious letter', 'Elena's past')."""
+
+    thread_type: ThreadType = ThreadType.SETUP
+    """What kind of thread this is."""
+
+    status: ThreadStatus = ThreadStatus.PLANTED
+    """Current status of the thread."""
+
+    description: str = ""
+    """What the thread is about."""
+
+    planted_chapter: int = 0
+    """Chapter where this thread was introduced."""
+
+    planted_text: str | None = None
+    """Quote or reference to where it was planted."""
+
+    characters: list[str] = field(default_factory=list)
+    """Characters involved in this thread."""
+
+    expected_payoff_by: int | None = None
+    """Chapter by which this should resolve (None = no deadline)."""
+
+    importance: int = 5
+    """How important this thread is (1-10, affects overdue urgency)."""
+
+    developments: list[dict[str, Any]] = field(default_factory=list)
+    """List of {chapter, description} for thread developments."""
+
+    resolved_chapter: int | None = None
+    """Chapter where this was resolved (None if unresolved)."""
+
+    resolution: str | None = None
+    """How it was resolved."""
+
+    notes: str | None = None
+    """Author notes about this thread."""
+
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def is_active(self) -> bool:
+        """Whether this thread is still open."""
+        return self.status in (ThreadStatus.PLANTED, ThreadStatus.DEVELOPING)
+
+    @property
+    def is_overdue(self) -> bool:
+        """Whether this thread has passed its expected payoff."""
+        if self.expected_payoff_by is None:
+            return False
+        return self.is_active and self.status != ThreadStatus.RESOLVED
+
+    def add_development(self, chapter: int, description: str) -> None:
+        """Add a development to this thread."""
+        self.developments.append({
+            "chapter": chapter,
+            "description": description,
+            "added_at": datetime.now(timezone.utc).isoformat(),
+        })
+        self.status = ThreadStatus.DEVELOPING
+
+    def resolve(self, chapter: int, resolution: str) -> None:
+        """Mark this thread as resolved."""
+        self.resolved_chapter = chapter
+        self.resolution = resolution
+        self.status = ThreadStatus.RESOLVED
+
+    def check_overdue(self, current_chapter: int) -> bool:
+        """Check if thread is overdue and update status."""
+        if self.expected_payoff_by and current_chapter > self.expected_payoff_by:
+            if self.is_active:
+                self.status = ThreadStatus.OVERDUE
+                return True
+        return False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": str(self.id),
+            "name": self.name,
+            "thread_type": self.thread_type.value,
+            "status": self.status.value,
+            "description": self.description,
+            "planted_chapter": self.planted_chapter,
+            "planted_text": self.planted_text,
+            "characters": self.characters,
+            "expected_payoff_by": self.expected_payoff_by,
+            "importance": self.importance,
+            "developments": self.developments,
+            "resolved_chapter": self.resolved_chapter,
+            "resolution": self.resolution,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "PlotThread":
+        return cls(
+            id=UUID(data["id"]),
+            name=data["name"],
+            thread_type=ThreadType(data["thread_type"]),
+            status=ThreadStatus(data["status"]),
+            description=data["description"],
+            planted_chapter=data.get("planted_chapter", 0),
+            planted_text=data.get("planted_text"),
+            characters=data.get("characters", []),
+            expected_payoff_by=data.get("expected_payoff_by"),
+            importance=data.get("importance", 5),
+            developments=data.get("developments", []),
+            resolved_chapter=data.get("resolved_chapter"),
+            resolution=data.get("resolution"),
+            notes=data.get("notes"),
+            created_at=datetime.fromisoformat(data["created_at"]),
+        )
+
+    def format_for_prompt(self) -> str:
+        """Format thread for LLM prompt context."""
+        lines = [f"- {self.name} ({self.thread_type.value})"]
+        lines.append(f"  Status: {self.status.value}")
+        lines.append(f"  {self.description}")
+        if self.expected_payoff_by:
+            lines.append(f"  Expected payoff by chapter {self.expected_payoff_by}")
+        if self.developments:
+            latest = self.developments[-1]
+            lines.append(f"  Latest: Ch{latest['chapter']} - {latest['description']}")
+        return "\n".join(lines)
+
+
+@dataclass
+class SceneProposal:
+    """
+    A proposed scene awaiting approval.
+
+    Part of the fiction-gov workflow: propose -> verify -> approve/reject.
+    """
+
+    id: UUID = field(default_factory=uuid4)
+    chapter: int = 0
+    scene_number: int | None = None
+
+    title: str = ""
+    """Brief title for the scene."""
+
+    summary: str = ""
+    """What happens in this scene."""
+
+    characters: list[str] = field(default_factory=list)
+    """Characters in this scene."""
+
+    location: str | None = None
+    """Where the scene takes place."""
+
+    content: str | None = None
+    """The actual prose content (if written)."""
+
+    threads_advanced: list[str] = field(default_factory=list)
+    """IDs of plot threads this scene advances."""
+
+    threads_resolved: list[str] = field(default_factory=list)
+    """IDs of plot threads this scene resolves."""
+
+    canon_events: list[str] = field(default_factory=list)
+    """Events this scene would establish."""
+
+    status: str = "pending"
+    """Status: 'pending', 'approved', 'rejected', 'revised'."""
+
+    verification_result: dict[str, Any] | None = None
+    """Result of fiction-gov verification."""
+
+    rejection_reason: str | None = None
+    """Why this was rejected (if rejected)."""
+
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    reviewed_at: datetime | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": str(self.id),
+            "chapter": self.chapter,
+            "scene_number": self.scene_number,
+            "title": self.title,
+            "summary": self.summary,
+            "characters": self.characters,
+            "location": self.location,
+            "content": self.content,
+            "threads_advanced": self.threads_advanced,
+            "threads_resolved": self.threads_resolved,
+            "canon_events": self.canon_events,
+            "status": self.status,
+            "verification_result": self.verification_result,
+            "rejection_reason": self.rejection_reason,
+            "created_at": self.created_at.isoformat(),
+            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SceneProposal":
+        return cls(
+            id=UUID(data["id"]),
+            chapter=data["chapter"],
+            scene_number=data.get("scene_number"),
+            title=data["title"],
+            summary=data["summary"],
+            characters=data.get("characters", []),
+            location=data.get("location"),
+            content=data.get("content"),
+            threads_advanced=data.get("threads_advanced", []),
+            threads_resolved=data.get("threads_resolved", []),
+            canon_events=data.get("canon_events", []),
+            status=data.get("status", "pending"),
+            verification_result=data.get("verification_result"),
+            rejection_reason=data.get("rejection_reason"),
+            created_at=datetime.fromisoformat(data["created_at"]),
+            reviewed_at=datetime.fromisoformat(data["reviewed_at"]) if data.get("reviewed_at") else None,
+        )

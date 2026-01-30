@@ -22,6 +22,11 @@ from fiction_governor import (
     CanonVerifier,
     ToneVerifier,
     FictionVerifier,
+    # Plot threads
+    ThreadType,
+    ThreadStatus,
+    PlotThread,
+    SceneProposal,
 )
 from fiction_governor.bible import COMMON_TROPES
 
@@ -1283,3 +1288,527 @@ class TestNarrativeWarning:
         assert warning.character == "Elena"
         assert warning.warning_type == "motivation_conflict"
         assert warning.severity == "warning"
+
+
+# ============================================================================
+# Plot Thread Tests
+# ============================================================================
+
+class TestPlotThread:
+    """Tests for PlotThread type."""
+
+    def test_create_thread(self):
+        """Test creating a plot thread."""
+        thread = PlotThread(
+            name="mysterious letter",
+            thread_type=ThreadType.CHEKHOV_GUN,
+            description="Elena finds a sealed letter in her father's study",
+            planted_chapter=3,
+        )
+
+        assert thread.name == "mysterious letter"
+        assert thread.thread_type == ThreadType.CHEKHOV_GUN
+        assert thread.status == ThreadStatus.PLANTED
+        assert thread.planted_chapter == 3
+        assert thread.is_active
+
+    def test_thread_development(self):
+        """Test adding developments to a thread."""
+        thread = PlotThread(
+            name="mystery",
+            thread_type=ThreadType.MYSTERY,
+            description="Who killed the duke?",
+            planted_chapter=1,
+        )
+
+        thread.add_development(3, "Elena finds a clue")
+        thread.add_development(5, "The clue points to Marcus")
+
+        assert thread.status == ThreadStatus.DEVELOPING
+        assert len(thread.developments) == 2
+        assert thread.developments[0]["chapter"] == 3
+
+    def test_thread_resolution(self):
+        """Test resolving a thread."""
+        thread = PlotThread(
+            name="Elena's arc",
+            thread_type=ThreadType.CHARACTER_ARC,
+            description="Elena learns to trust again",
+            planted_chapter=1,
+        )
+
+        thread.resolve(10, "Elena finally trusts Marcus")
+
+        assert thread.status == ThreadStatus.RESOLVED
+        assert thread.resolved_chapter == 10
+        assert thread.resolution == "Elena finally trusts Marcus"
+        assert not thread.is_active
+
+    def test_thread_overdue(self):
+        """Test thread overdue detection."""
+        thread = PlotThread(
+            name="the gun",
+            thread_type=ThreadType.CHEKHOV_GUN,
+            description="Gun on the wall",
+            planted_chapter=1,
+            expected_payoff_by=5,
+        )
+
+        # Not overdue at chapter 4
+        assert not thread.check_overdue(4)
+        assert thread.status == ThreadStatus.PLANTED
+
+        # Overdue at chapter 6
+        assert thread.check_overdue(6)
+        assert thread.status == ThreadStatus.OVERDUE
+
+    def test_thread_serialization(self):
+        """Test thread serialization."""
+        thread = PlotThread(
+            name="test",
+            thread_type=ThreadType.FORESHADOWING,
+            description="A hint of things to come",
+            planted_chapter=2,
+            characters=["Elena", "Marcus"],
+            expected_payoff_by=10,
+            importance=8,
+        )
+        thread.add_development(5, "The hint becomes clearer")
+
+        data = thread.to_dict()
+        restored = PlotThread.from_dict(data)
+
+        assert restored.name == thread.name
+        assert restored.thread_type == thread.thread_type
+        assert restored.status == ThreadStatus.DEVELOPING
+        assert restored.characters == ["Elena", "Marcus"]
+        assert len(restored.developments) == 1
+
+    def test_format_for_prompt(self):
+        """Test thread formatting for prompts."""
+        thread = PlotThread(
+            name="sealed letter",
+            thread_type=ThreadType.CHEKHOV_GUN,
+            description="Unopened letter from father",
+            planted_chapter=1,
+            expected_payoff_by=10,
+        )
+
+        formatted = thread.format_for_prompt()
+        assert "sealed letter" in formatted
+        assert "chekhov_gun" in formatted
+        assert "chapter 10" in formatted
+
+
+class TestSceneProposal:
+    """Tests for SceneProposal type."""
+
+    def test_create_proposal(self):
+        """Test creating a scene proposal."""
+        proposal = SceneProposal(
+            chapter=5,
+            title="The Confrontation",
+            summary="Elena confronts Marcus about the letter",
+            characters=["Elena", "Marcus"],
+            location="The garden",
+        )
+
+        assert proposal.chapter == 5
+        assert proposal.title == "The Confrontation"
+        assert proposal.status == "pending"
+        assert "Elena" in proposal.characters
+
+    def test_proposal_serialization(self):
+        """Test proposal serialization."""
+        proposal = SceneProposal(
+            chapter=5,
+            scene_number=2,
+            title="Test Scene",
+            summary="Something happens",
+            characters=["Elena"],
+            threads_advanced=["abc-123"],
+            canon_events=["Elena discovers the truth"],
+        )
+
+        data = proposal.to_dict()
+        restored = SceneProposal.from_dict(data)
+
+        assert restored.chapter == 5
+        assert restored.scene_number == 2
+        assert restored.threads_advanced == ["abc-123"]
+        assert "Elena discovers" in restored.canon_events[0]
+
+
+class TestCanonThreads:
+    """Tests for plot thread management in Canon."""
+
+    @pytest.fixture
+    def setup(self, tmp_path):
+        """Setup a canon with some threads."""
+        canon = Canon(tmp_path)
+
+        # Add some threads
+        canon.add_thread(
+            name="mysterious letter",
+            thread_type=ThreadType.CHEKHOV_GUN,
+            description="Sealed letter from father",
+            planted_chapter=1,
+            characters=["Elena"],
+            expected_payoff_by=10,
+            importance=8,
+        )
+
+        canon.add_thread(
+            name="Marcus's secret",
+            thread_type=ThreadType.MYSTERY,
+            description="What is Marcus hiding?",
+            planted_chapter=2,
+            characters=["Marcus"],
+        )
+
+        canon.add_thread(
+            name="Elena's arc",
+            thread_type=ThreadType.CHARACTER_ARC,
+            description="Elena learns to trust",
+            planted_chapter=1,
+            characters=["Elena"],
+        )
+
+        return canon
+
+    def test_add_thread(self, tmp_path):
+        """Test adding a thread."""
+        canon = Canon(tmp_path)
+
+        thread = canon.add_thread(
+            name="the prophecy",
+            thread_type=ThreadType.FORESHADOWING,
+            description="The oracle's words",
+            planted_chapter=1,
+        )
+
+        assert thread.name == "the prophecy"
+        assert str(thread.id) in canon._threads
+
+    def test_get_thread_by_id(self, setup):
+        """Test getting thread by ID."""
+        canon = setup
+        threads = canon.all_threads()
+        thread_id = str(threads[0].id)
+
+        found = canon.get_thread(thread_id)
+        assert found is not None
+        assert found.name == threads[0].name
+
+    def test_get_thread_by_name(self, setup):
+        """Test getting thread by name."""
+        canon = setup
+
+        found = canon.get_thread_by_name("mysterious letter")
+        assert found is not None
+        assert found.thread_type == ThreadType.CHEKHOV_GUN
+
+        # Case insensitive
+        found2 = canon.get_thread_by_name("MYSTERIOUS LETTER")
+        assert found2 is not None
+
+    def test_develop_thread(self, setup):
+        """Test developing a thread."""
+        canon = setup
+        thread = canon.get_thread_by_name("mysterious letter")
+
+        updated = canon.develop_thread(str(thread.id), 5, "Elena almost opens it")
+
+        assert updated.status == ThreadStatus.DEVELOPING
+        assert len(updated.developments) == 1
+
+    def test_resolve_thread(self, setup):
+        """Test resolving a thread."""
+        canon = setup
+        thread = canon.get_thread_by_name("Marcus's secret")
+
+        resolved = canon.resolve_thread(str(thread.id), 8, "Marcus reveals his past")
+
+        assert resolved.status == ThreadStatus.RESOLVED
+        assert resolved.resolved_chapter == 8
+
+    def test_abandon_thread(self, setup):
+        """Test abandoning a thread."""
+        canon = setup
+        thread = canon.get_thread_by_name("Elena's arc")
+
+        abandoned = canon.abandon_thread(str(thread.id), reason="Changed direction")
+
+        assert abandoned.status == ThreadStatus.ABANDONED
+        assert "Changed direction" in abandoned.notes
+
+    def test_active_threads(self, setup):
+        """Test getting active threads."""
+        canon = setup
+        active = canon.active_threads()
+
+        assert len(active) == 3  # All three are active
+
+        # Resolve one
+        thread = canon.get_thread_by_name("Marcus's secret")
+        canon.resolve_thread(str(thread.id), 5, "Revealed")
+
+        active = canon.active_threads()
+        assert len(active) == 2
+
+    def test_threads_by_type(self, setup):
+        """Test filtering threads by type."""
+        canon = setup
+
+        chekhov = canon.threads_by_type(ThreadType.CHEKHOV_GUN)
+        assert len(chekhov) == 1
+        assert chekhov[0].name == "mysterious letter"
+
+        arcs = canon.threads_by_type(ThreadType.CHARACTER_ARC)
+        assert len(arcs) == 1
+
+    def test_threads_for_character(self, setup):
+        """Test getting threads for a character."""
+        canon = setup
+
+        elena_threads = canon.threads_for_character("Elena")
+        assert len(elena_threads) == 2  # letter and arc
+
+        marcus_threads = canon.threads_for_character("Marcus")
+        assert len(marcus_threads) == 1
+
+    def test_overdue_threads(self, setup):
+        """Test detecting overdue threads."""
+        canon = setup
+
+        # At chapter 5, nothing overdue
+        overdue = canon.overdue_threads(5)
+        assert len(overdue) == 0
+
+        # At chapter 12, the letter should be overdue
+        overdue = canon.overdue_threads(12)
+        assert len(overdue) == 1
+        assert overdue[0].name == "mysterious letter"
+
+    def test_chekhov_audit(self, setup):
+        """Test the Chekhov audit."""
+        canon = setup
+
+        # Add development to one thread
+        letter = canon.get_thread_by_name("mysterious letter")
+        canon.develop_thread(str(letter.id), 5, "Elena glances at it")
+
+        audit = canon.chekhov_audit(8)
+
+        assert len(audit["planted"]) == 2  # mystery and arc
+        assert len(audit["developing"]) == 1  # letter
+
+        # At chapter 9, mystery approaches deadline (expected_payoff_by=10, none set)
+        # Only the letter has a deadline, but it's already developing
+        # Let's check for planted threads nearing deadline by adding one
+        canon.add_thread(
+            name="ticking clock",
+            thread_type=ThreadType.SETUP,
+            description="Time is running out",
+            planted_chapter=1,
+            expected_payoff_by=10,
+        )
+
+        audit = canon.chekhov_audit(9)
+        assert len(audit["approaching"]) == 1  # ticking clock (planted, near deadline)
+
+    def test_format_threads_for_prompt(self, setup):
+        """Test formatting threads for prompts."""
+        canon = setup
+
+        formatted = canon.format_threads_for_prompt(current_chapter=5)
+
+        assert "mysterious letter" in formatted
+        assert "Marcus's secret" in formatted
+        assert "Elena's arc" in formatted
+
+    def test_thread_persistence(self, tmp_path):
+        """Test that threads persist across Canon instances."""
+        canon1 = Canon(tmp_path)
+        canon1.add_thread(
+            name="test thread",
+            thread_type=ThreadType.SETUP,
+            description="Testing persistence",
+            planted_chapter=1,
+        )
+
+        # Create new instance
+        canon2 = Canon(tmp_path)
+        thread = canon2.get_thread_by_name("test thread")
+
+        assert thread is not None
+        assert thread.description == "Testing persistence"
+
+
+class TestCanonProposals:
+    """Tests for scene proposal management in Canon."""
+
+    @pytest.fixture
+    def setup(self, tmp_path):
+        """Setup canon with threads for proposals."""
+        canon = Canon(tmp_path)
+
+        # Add a thread to advance
+        canon.add_thread(
+            name="mystery",
+            thread_type=ThreadType.MYSTERY,
+            description="The central mystery",
+            planted_chapter=1,
+        )
+
+        return canon
+
+    def test_create_proposal(self, setup):
+        """Test creating a proposal."""
+        canon = setup
+
+        proposal = canon.create_proposal(
+            chapter=5,
+            title="The Discovery",
+            summary="Elena finds a clue",
+            characters=["Elena"],
+            location="Library",
+        )
+
+        assert proposal.title == "The Discovery"
+        assert proposal.status == "pending"
+        assert str(proposal.id) in canon._proposals
+
+    def test_get_proposal(self, setup):
+        """Test getting a proposal by ID."""
+        canon = setup
+
+        proposal = canon.create_proposal(
+            chapter=5,
+            title="Test",
+            summary="Test scene",
+        )
+
+        found = canon.get_proposal(str(proposal.id))
+        assert found is not None
+        assert found.title == "Test"
+
+    def test_approve_proposal(self, setup):
+        """Test approving a proposal."""
+        canon = setup
+        thread = canon.get_thread_by_name("mystery")
+
+        proposal = canon.create_proposal(
+            chapter=5,
+            title="Clue Found",
+            summary="Elena finds evidence",
+            characters=["Elena"],
+            threads_advanced=[str(thread.id)],
+            canon_events=["Elena discovers a hidden message"],
+        )
+
+        approved = canon.approve_proposal(str(proposal.id))
+
+        assert approved.status == "approved"
+        assert approved.reviewed_at is not None
+
+        # Check thread was developed
+        updated_thread = canon.get_thread(str(thread.id))
+        assert len(updated_thread.developments) == 1
+
+        # Check canon event was added
+        events = canon.events_by_chapter(5)
+        assert len(events) == 1
+        assert "hidden message" in events[0].summary
+
+    def test_approve_proposal_resolves_thread(self, setup):
+        """Test that approving can resolve threads."""
+        canon = setup
+        thread = canon.get_thread_by_name("mystery")
+
+        proposal = canon.create_proposal(
+            chapter=10,
+            title="Mystery Solved",
+            summary="The truth is revealed",
+            threads_resolved=[str(thread.id)],
+        )
+
+        canon.approve_proposal(str(proposal.id))
+
+        resolved_thread = canon.get_thread(str(thread.id))
+        assert resolved_thread.status == ThreadStatus.RESOLVED
+
+    def test_reject_proposal(self, setup):
+        """Test rejecting a proposal."""
+        canon = setup
+
+        proposal = canon.create_proposal(
+            chapter=5,
+            title="Bad Scene",
+            summary="This doesn't work",
+        )
+
+        rejected = canon.reject_proposal(str(proposal.id), "Out of character")
+
+        assert rejected.status == "rejected"
+        assert rejected.rejection_reason == "Out of character"
+
+    def test_revise_proposal(self, setup):
+        """Test revising a rejected proposal."""
+        canon = setup
+
+        proposal = canon.create_proposal(
+            chapter=5,
+            title="Scene",
+            summary="Original summary",
+        )
+
+        canon.reject_proposal(str(proposal.id), "Needs work")
+
+        revised = canon.revise_proposal(
+            str(proposal.id),
+            summary="Improved summary",
+        )
+
+        assert revised.status == "revised"
+        assert revised.summary == "Improved summary"
+        assert revised.rejection_reason is None
+
+    def test_pending_proposals(self, setup):
+        """Test getting pending proposals."""
+        canon = setup
+
+        canon.create_proposal(chapter=1, title="A", summary="A")
+        canon.create_proposal(chapter=2, title="B", summary="B")
+        p3 = canon.create_proposal(chapter=3, title="C", summary="C")
+
+        canon.approve_proposal(str(p3.id))
+
+        pending = canon.pending_proposals()
+        assert len(pending) == 2
+
+    def test_proposals_by_chapter(self, setup):
+        """Test getting proposals by chapter."""
+        canon = setup
+
+        canon.create_proposal(chapter=5, title="A", summary="A")
+        canon.create_proposal(chapter=5, title="B", summary="B")
+        canon.create_proposal(chapter=6, title="C", summary="C")
+
+        ch5 = canon.proposals_by_chapter(5)
+        assert len(ch5) == 2
+
+    def test_proposal_persistence(self, tmp_path):
+        """Test that proposals persist across Canon instances."""
+        canon1 = Canon(tmp_path)
+        canon1.create_proposal(
+            chapter=1,
+            title="Test Proposal",
+            summary="Testing persistence",
+        )
+
+        canon2 = Canon(tmp_path)
+        proposals = canon2.all_proposals()
+
+        assert len(proposals) == 1
+        assert proposals[0].title == "Test Proposal"

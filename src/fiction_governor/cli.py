@@ -13,7 +13,7 @@ from typing import Any
 from .bible import Bible, COMMON_TROPES
 from .canon import Canon
 from .state import CharacterState
-from .types import FictionClaim, FictionClaimType, MotivationType
+from .types import FictionClaim, FictionClaimType, MotivationType, ThreadType, ThreadStatus
 from .verifiers import FictionVerifier, NarrativeVerifier, VerificationResult
 
 
@@ -770,6 +770,614 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0 if passed else 1
 
 
+# ============================================================================
+# PLOT THREAD COMMANDS
+# ============================================================================
+
+def cmd_thread_add(args: argparse.Namespace) -> int:
+    """Add a plot thread."""
+    canon = Canon(get_project_dir())
+
+    # Parse thread type
+    try:
+        thread_type = ThreadType(args.type.lower())
+    except ValueError:
+        print(f"Invalid thread type: {args.type}")
+        print(f"Valid types: {', '.join(t.value for t in ThreadType)}")
+        return 1
+
+    characters = args.characters.split(",") if args.characters else None
+
+    thread = canon.add_thread(
+        name=args.name,
+        thread_type=thread_type,
+        description=args.description,
+        planted_chapter=args.chapter,
+        planted_text=args.quote,
+        characters=characters,
+        expected_payoff_by=args.payoff_by,
+        importance=args.importance or 5,
+        notes=args.notes,
+    )
+
+    print(f"Added plot thread: {thread.name}")
+    print(f"  Type: {thread.thread_type.value}")
+    print(f"  Planted: chapter {thread.planted_chapter}")
+    if thread.expected_payoff_by:
+        print(f"  Expected payoff by: chapter {thread.expected_payoff_by}")
+    print(f"  ID: {thread.id}")
+
+    return 0
+
+
+def cmd_thread_list(args: argparse.Namespace) -> int:
+    """List plot threads."""
+    canon = Canon(get_project_dir())
+
+    if args.active:
+        threads = canon.active_threads()
+    elif args.type:
+        try:
+            thread_type = ThreadType(args.type.lower())
+            threads = canon.threads_by_type(thread_type)
+        except ValueError:
+            print(f"Invalid thread type: {args.type}")
+            return 1
+    elif args.character:
+        threads = canon.threads_for_character(args.character)
+    else:
+        threads = canon.all_threads()
+
+    if not threads:
+        print("No plot threads found.")
+        return 0
+
+    # Group by status
+    by_status: dict[str, list] = {}
+    for t in threads:
+        status = t.status.value
+        if status not in by_status:
+            by_status[status] = []
+        by_status[status].append(t)
+
+    for status, status_threads in by_status.items():
+        status_icon = {
+            "planted": "🌱",
+            "developing": "🔄",
+            "resolved": "✓",
+            "abandoned": "✗",
+            "overdue": "⚠️",
+        }.get(status, "•")
+
+        print(f"\n{status_icon} {status.upper()} ({len(status_threads)})")
+        for t in status_threads:
+            print(f"  [{t.thread_type.value}] {t.name}")
+            print(f"      {t.description[:60]}...")
+            print(f"      Planted: ch{t.planted_chapter}, Importance: {t.importance}/10")
+            if t.expected_payoff_by:
+                print(f"      Payoff by: ch{t.expected_payoff_by}")
+            print(f"      ID: {t.id}")
+
+    return 0
+
+
+def cmd_thread_develop(args: argparse.Namespace) -> int:
+    """Add a development to a thread."""
+    canon = Canon(get_project_dir())
+
+    # Try to find by ID or name
+    thread = canon.get_thread(args.id) or canon.get_thread_by_name(args.id)
+    if not thread:
+        print(f"Thread not found: {args.id}")
+        return 1
+
+    thread = canon.develop_thread(str(thread.id), args.chapter, args.description)
+
+    print(f"Added development to: {thread.name}")
+    print(f"  Ch{args.chapter}: {args.description}")
+    print(f"  Status: {thread.status.value}")
+
+    return 0
+
+
+def cmd_thread_resolve(args: argparse.Namespace) -> int:
+    """Resolve a plot thread."""
+    canon = Canon(get_project_dir())
+
+    # Try to find by ID or name
+    thread = canon.get_thread(args.id) or canon.get_thread_by_name(args.id)
+    if not thread:
+        print(f"Thread not found: {args.id}")
+        return 1
+
+    thread = canon.resolve_thread(str(thread.id), args.chapter, args.resolution)
+
+    print(f"Resolved thread: {thread.name}")
+    print(f"  Resolution: {thread.resolution}")
+    print(f"  Resolved in: chapter {thread.resolved_chapter}")
+
+    return 0
+
+
+def cmd_thread_abandon(args: argparse.Namespace) -> int:
+    """Abandon a plot thread."""
+    canon = Canon(get_project_dir())
+
+    # Try to find by ID or name
+    thread = canon.get_thread(args.id) or canon.get_thread_by_name(args.id)
+    if not thread:
+        print(f"Thread not found: {args.id}")
+        return 1
+
+    thread = canon.abandon_thread(str(thread.id), reason=args.reason)
+
+    print(f"Abandoned thread: {thread.name}")
+    if args.reason:
+        print(f"  Reason: {args.reason}")
+
+    return 0
+
+
+def cmd_thread_audit(args: argparse.Namespace) -> int:
+    """Audit all Chekhov's guns and setups."""
+    canon = Canon(get_project_dir())
+
+    current_chapter = args.chapter or 1
+    audit = canon.chekhov_audit(current_chapter)
+
+    total = sum(len(v) for v in audit.values())
+    print(f"Chekhov Audit (as of chapter {current_chapter})")
+    print(f"Total active threads: {total}\n")
+
+    if audit["overdue"]:
+        print("⚠️  OVERDUE - Need immediate attention:")
+        for t in audit["overdue"]:
+            print(f"    [{t.thread_type.value}] {t.name}")
+            print(f"        Expected by ch{t.expected_payoff_by}, now ch{current_chapter}")
+            print(f"        {t.description}")
+        print()
+
+    if audit["approaching"]:
+        print("📌 APPROACHING DEADLINE:")
+        for t in audit["approaching"]:
+            print(f"    [{t.thread_type.value}] {t.name}")
+            print(f"        Due by ch{t.expected_payoff_by}")
+        print()
+
+    if audit["developing"]:
+        print("🔄 DEVELOPING:")
+        for t in audit["developing"]:
+            if t.developments:
+                latest = t.developments[-1]
+                print(f"    [{t.thread_type.value}] {t.name}")
+                print(f"        Latest: ch{latest['chapter']} - {latest['description'][:40]}...")
+        print()
+
+    if audit["planted"]:
+        print("🌱 PLANTED (not yet developed):")
+        for t in audit["planted"]:
+            print(f"    [{t.thread_type.value}] {t.name} (ch{t.planted_chapter})")
+
+    return 0
+
+
+def cmd_thread_show(args: argparse.Namespace) -> int:
+    """Show thread details."""
+    canon = Canon(get_project_dir())
+
+    # Try to find by ID or name
+    thread = canon.get_thread(args.id) or canon.get_thread_by_name(args.id)
+    if not thread:
+        print(f"Thread not found: {args.id}")
+        return 1
+
+    print(f"# {thread.name}")
+    print(f"Type: {thread.thread_type.value}")
+    print(f"Status: {thread.status.value}")
+    print(f"Importance: {thread.importance}/10")
+    print()
+    print(f"## Description")
+    print(thread.description)
+    print()
+    print(f"## Timeline")
+    print(f"Planted: chapter {thread.planted_chapter}")
+    if thread.planted_text:
+        print(f"  > {thread.planted_text}")
+    if thread.expected_payoff_by:
+        print(f"Expected payoff by: chapter {thread.expected_payoff_by}")
+    if thread.resolved_chapter:
+        print(f"Resolved: chapter {thread.resolved_chapter}")
+        print(f"Resolution: {thread.resolution}")
+
+    if thread.developments:
+        print()
+        print("## Developments")
+        for dev in thread.developments:
+            print(f"  Ch{dev['chapter']}: {dev['description']}")
+
+    if thread.characters:
+        print()
+        print(f"Characters: {', '.join(thread.characters)}")
+
+    if thread.notes:
+        print()
+        print(f"## Notes")
+        print(thread.notes)
+
+    print()
+    print(f"ID: {thread.id}")
+
+    return 0
+
+
+# ============================================================================
+# SCENE PROPOSAL COMMANDS
+# ============================================================================
+
+def cmd_proposal_create(args: argparse.Namespace) -> int:
+    """Create a scene proposal."""
+    canon = Canon(get_project_dir())
+
+    characters = args.characters.split(",") if args.characters else None
+    threads_advanced = args.advances.split(",") if args.advances else None
+    threads_resolved = args.resolves.split(",") if args.resolves else None
+    canon_events = args.establishes.split(";") if args.establishes else None
+
+    proposal = canon.create_proposal(
+        chapter=args.chapter,
+        title=args.title,
+        summary=args.summary,
+        characters=characters,
+        location=args.location,
+        scene_number=args.scene,
+        threads_advanced=threads_advanced,
+        threads_resolved=threads_resolved,
+        canon_events=canon_events,
+    )
+
+    print(f"Created scene proposal: {proposal.title}")
+    print(f"  Chapter: {proposal.chapter}")
+    if proposal.scene_number:
+        print(f"  Scene: {proposal.scene_number}")
+    print(f"  Status: {proposal.status}")
+    print(f"  ID: {proposal.id}")
+
+    return 0
+
+
+def cmd_proposal_list(args: argparse.Namespace) -> int:
+    """List scene proposals."""
+    canon = Canon(get_project_dir())
+
+    if args.pending:
+        proposals = canon.pending_proposals()
+    elif args.chapter:
+        proposals = canon.proposals_by_chapter(args.chapter)
+    else:
+        proposals = canon.all_proposals()
+
+    if not proposals:
+        print("No proposals found.")
+        return 0
+
+    # Group by status
+    by_status: dict[str, list] = {}
+    for p in proposals:
+        if p.status not in by_status:
+            by_status[p.status] = []
+        by_status[p.status].append(p)
+
+    for status, status_proposals in by_status.items():
+        status_icon = {
+            "pending": "⏳",
+            "revised": "🔄",
+            "approved": "✓",
+            "rejected": "✗",
+        }.get(status, "•")
+
+        print(f"\n{status_icon} {status.upper()} ({len(status_proposals)})")
+        for p in status_proposals:
+            print(f"  Ch{p.chapter}: {p.title}")
+            print(f"      {p.summary[:60]}...")
+            if p.characters:
+                print(f"      Characters: {', '.join(p.characters)}")
+            if p.rejection_reason:
+                print(f"      Rejected: {p.rejection_reason}")
+            print(f"      ID: {p.id}")
+
+    return 0
+
+
+def cmd_proposal_show(args: argparse.Namespace) -> int:
+    """Show proposal details."""
+    canon = Canon(get_project_dir())
+
+    proposal = canon.get_proposal(args.id)
+    if not proposal:
+        print(f"Proposal not found: {args.id}")
+        return 1
+
+    print(f"# {proposal.title}")
+    print(f"Chapter: {proposal.chapter}")
+    if proposal.scene_number:
+        print(f"Scene: {proposal.scene_number}")
+    print(f"Status: {proposal.status}")
+    if proposal.location:
+        print(f"Location: {proposal.location}")
+    if proposal.characters:
+        print(f"Characters: {', '.join(proposal.characters)}")
+    print()
+    print("## Summary")
+    print(proposal.summary)
+
+    if proposal.content:
+        print()
+        print("## Content")
+        print(proposal.content[:500])
+        if len(proposal.content) > 500:
+            print("...")
+
+    if proposal.threads_advanced:
+        print()
+        print(f"Advances threads: {', '.join(proposal.threads_advanced)}")
+
+    if proposal.threads_resolved:
+        print(f"Resolves threads: {', '.join(proposal.threads_resolved)}")
+
+    if proposal.canon_events:
+        print()
+        print("## Establishes")
+        for event in proposal.canon_events:
+            print(f"  - {event}")
+
+    if proposal.verification_result:
+        print()
+        print("## Verification")
+        print(json.dumps(proposal.verification_result, indent=2))
+
+    if proposal.rejection_reason:
+        print()
+        print(f"## Rejection Reason")
+        print(proposal.rejection_reason)
+
+    print()
+    print(f"ID: {proposal.id}")
+    print(f"Created: {proposal.created_at}")
+    if proposal.reviewed_at:
+        print(f"Reviewed: {proposal.reviewed_at}")
+
+    return 0
+
+
+def cmd_proposal_approve(args: argparse.Namespace) -> int:
+    """Approve a scene proposal."""
+    canon = Canon(get_project_dir())
+
+    proposal = canon.approve_proposal(args.id)
+    if not proposal:
+        print(f"Proposal not found: {args.id}")
+        return 1
+
+    print(f"Approved proposal: {proposal.title}")
+    print(f"  Status: {proposal.status}")
+
+    if proposal.threads_advanced:
+        print(f"  Advanced threads: {len(proposal.threads_advanced)}")
+    if proposal.threads_resolved:
+        print(f"  Resolved threads: {len(proposal.threads_resolved)}")
+    if proposal.canon_events:
+        print(f"  Canon events added: {len(proposal.canon_events)}")
+
+    return 0
+
+
+def cmd_proposal_reject(args: argparse.Namespace) -> int:
+    """Reject a scene proposal."""
+    canon = Canon(get_project_dir())
+
+    proposal = canon.reject_proposal(args.id, args.reason)
+    if not proposal:
+        print(f"Proposal not found: {args.id}")
+        return 1
+
+    print(f"Rejected proposal: {proposal.title}")
+    print(f"  Reason: {proposal.rejection_reason}")
+
+    return 0
+
+
+def cmd_proposal_verify(args: argparse.Namespace) -> int:
+    """Verify a scene proposal against bible and canon."""
+    project_dir = get_project_dir()
+    canon = Canon(project_dir)
+    verifier = FictionVerifier(project_dir)
+
+    proposal = canon.get_proposal(args.id)
+    if not proposal:
+        print(f"Proposal not found: {args.id}")
+        return 1
+
+    # Use proposal content or summary for verification
+    content = proposal.content or proposal.summary
+
+    results = verifier.verify_scene(
+        content,
+        characters=proposal.characters,
+        chapter=proposal.chapter,
+        location=proposal.location,
+    )
+
+    failures = [r for r in results if not r.success]
+    warnings = [r for r in failures if r.severity == "warning"]
+    errors = [r for r in failures if r.severity == "error"]
+    passed = [r for r in results if r.success]
+
+    print(f"Verification for: {proposal.title}")
+    print(f"Results: {len(passed)} passed, {len(errors)} errors, {len(warnings)} warnings\n")
+
+    if errors:
+        print("Errors:")
+        for r in errors:
+            print(f"  ✗ {r.claim.describe()}: {r.message}")
+            for s in r.suggestions:
+                print(f"      → {s}")
+
+    if warnings:
+        print("\nWarnings:")
+        for r in warnings:
+            print(f"  ⚠ {r.claim.describe()}: {r.message}")
+
+    # Store verification result
+    proposal.verification_result = {
+        "passed": len(passed),
+        "errors": len(errors),
+        "warnings": len(warnings),
+        "details": [
+            {"claim": r.claim.describe(), "message": r.message, "success": r.success}
+            for r in results
+        ],
+    }
+    canon._save()
+
+    return 1 if errors else 0
+
+
+# ============================================================================
+# PROMPT GENERATION COMMANDS
+# ============================================================================
+
+def cmd_prompt_scene(args: argparse.Namespace) -> int:
+    """Generate context prompt for writing a scene."""
+    project_dir = get_project_dir()
+    bible = Bible(project_dir)
+    canon = Canon(project_dir)
+    state = CharacterState(project_dir)
+
+    characters = args.characters.split(",") if args.characters else []
+
+    sections = []
+
+    # Header
+    sections.append(f"# Scene Context: Chapter {args.chapter}")
+    if args.location:
+        sections.append(f"Location: {args.location}")
+    sections.append("")
+
+    # Recent events
+    if args.chapter > 1:
+        sections.append("## Recent Events")
+        sections.append(canon.format_recent(num_chapters=min(2, args.chapter - 1)))
+        sections.append("")
+
+    # Active threads
+    sections.append("## Active Plot Threads")
+    sections.append(canon.format_threads_for_prompt(current_chapter=args.chapter))
+    sections.append("")
+
+    # Characters
+    if characters:
+        sections.append("## Characters in Scene")
+        for char_name in characters:
+            char = bible.get_character(char_name.strip())
+            if char:
+                sections.append(char.format_for_prompt())
+                sections.append("")
+
+                # Character state
+                char_state = state.format_character_state(char_name.strip(), at_chapter=args.chapter)
+                if char_state and "No state" not in char_state:
+                    sections.append(char_state)
+                    sections.append("")
+
+                # Relationships with other scene characters
+                for other_name in characters:
+                    if other_name.strip() != char_name.strip():
+                        rel = canon.get_relationship(char_name.strip(), other_name.strip())
+                        if rel:
+                            sections.append(f"  Relationship with {other_name}: {rel.status}")
+                            for dyn in rel.dynamics:
+                                sections.append(f"    - {dyn}")
+
+    # Tone
+    tone = bible.get_tone()
+    if tone:
+        sections.append("")
+        sections.append(tone.format_for_prompt())
+
+    # Banned tropes
+    tropes = bible.all_banned_tropes()
+    if tropes:
+        sections.append("")
+        sections.append("## Banned Tropes")
+        for trope in tropes:
+            sections.append(f"- {trope.name}: {trope.reason}")
+
+    prompt = "\n".join(sections)
+
+    if args.output:
+        Path(args.output).write_text(prompt)
+        print(f"Wrote prompt to: {args.output}")
+    else:
+        print(prompt)
+
+    return 0
+
+
+def cmd_prompt_character(args: argparse.Namespace) -> int:
+    """Generate context prompt for a specific character."""
+    project_dir = get_project_dir()
+    bible = Bible(project_dir)
+    canon = Canon(project_dir)
+    state = CharacterState(project_dir)
+    verifier = NarrativeVerifier(project_dir)
+
+    char = bible.get_character(args.character)
+    if not char:
+        print(f"Character not found: {args.character}")
+        return 1
+
+    sections = []
+
+    # Character bible
+    sections.append(char.format_for_prompt())
+    sections.append("")
+
+    # Character history
+    sections.append("## History")
+    sections.append(canon.format_character_history(args.character))
+    sections.append("")
+
+    # Character state
+    if args.chapter:
+        sections.append(f"## Current State (Chapter {args.chapter})")
+        sections.append(state.format_character_state(args.character, at_chapter=args.chapter))
+        sections.append("")
+
+        # Narrative context
+        context = verifier.get_character_context(args.character, args.chapter)
+        sections.append("## Narrative Context")
+        sections.append(context)
+
+    # Threads involving this character
+    threads = canon.threads_for_character(args.character)
+    active_threads = [t for t in threads if t.is_active]
+    if active_threads:
+        sections.append("")
+        sections.append("## Active Plot Threads")
+        for t in active_threads:
+            sections.append(t.format_for_prompt())
+
+    prompt = "\n".join(sections)
+
+    if args.output:
+        Path(args.output).write_text(prompt)
+        print(f"Wrote prompt to: {args.output}")
+    else:
+        print(prompt)
+
+    return 0
+
+
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -1028,6 +1636,111 @@ def main() -> int:
     check_parser.add_argument("--characters", help="Characters (comma-separated)")
     check_parser.add_argument("--json", action="store_true", help="JSON output")
     check_parser.set_defaults(func=cmd_check)
+
+    # thread (plot thread management)
+    thread_parser = subparsers.add_parser("thread", help="Manage plot threads")
+    thread_subs = thread_parser.add_subparsers(dest="thread_cmd")
+
+    thread_add = thread_subs.add_parser("add", help="Add a plot thread")
+    thread_add.add_argument("name", help="Thread name")
+    thread_add.add_argument("description", help="Thread description")
+    thread_add.add_argument("--type", "-t", required=True,
+                           choices=["chekhov_gun", "foreshadowing", "mystery",
+                                   "character_arc", "subplot", "promise", "setup"],
+                           help="Thread type")
+    thread_add.add_argument("--chapter", "-c", type=int, required=True, help="Planted in chapter")
+    thread_add.add_argument("--quote", "-q", help="Planted text quote")
+    thread_add.add_argument("--characters", help="Characters involved (comma-separated)")
+    thread_add.add_argument("--payoff-by", "-p", type=int, help="Expected payoff by chapter")
+    thread_add.add_argument("--importance", "-i", type=int, help="Importance 1-10 (default 5)")
+    thread_add.add_argument("--notes", "-n", help="Author notes")
+    thread_add.set_defaults(func=cmd_thread_add)
+
+    thread_list = thread_subs.add_parser("list", help="List plot threads")
+    thread_list.add_argument("--active", "-a", action="store_true", help="Only active threads")
+    thread_list.add_argument("--type", "-t", help="Filter by type")
+    thread_list.add_argument("--character", "-n", help="Filter by character")
+    thread_list.set_defaults(func=cmd_thread_list)
+
+    thread_show = thread_subs.add_parser("show", help="Show thread details")
+    thread_show.add_argument("id", help="Thread ID or name")
+    thread_show.set_defaults(func=cmd_thread_show)
+
+    thread_develop = thread_subs.add_parser("develop", help="Add development to thread")
+    thread_develop.add_argument("id", help="Thread ID or name")
+    thread_develop.add_argument("description", help="Development description")
+    thread_develop.add_argument("--chapter", "-c", type=int, required=True, help="Chapter")
+    thread_develop.set_defaults(func=cmd_thread_develop)
+
+    thread_resolve = thread_subs.add_parser("resolve", help="Resolve a thread")
+    thread_resolve.add_argument("id", help="Thread ID or name")
+    thread_resolve.add_argument("resolution", help="How it was resolved")
+    thread_resolve.add_argument("--chapter", "-c", type=int, required=True, help="Resolution chapter")
+    thread_resolve.set_defaults(func=cmd_thread_resolve)
+
+    thread_abandon = thread_subs.add_parser("abandon", help="Abandon a thread")
+    thread_abandon.add_argument("id", help="Thread ID or name")
+    thread_abandon.add_argument("--reason", "-r", help="Why abandoned")
+    thread_abandon.set_defaults(func=cmd_thread_abandon)
+
+    thread_audit = thread_subs.add_parser("audit", help="Chekhov audit - check all threads")
+    thread_audit.add_argument("--chapter", "-c", type=int, help="Current chapter (default 1)")
+    thread_audit.set_defaults(func=cmd_thread_audit)
+
+    # proposal (scene proposal management)
+    proposal_parser = subparsers.add_parser("proposal", help="Manage scene proposals")
+    proposal_subs = proposal_parser.add_subparsers(dest="proposal_cmd")
+
+    proposal_create = proposal_subs.add_parser("create", help="Create a scene proposal")
+    proposal_create.add_argument("title", help="Scene title")
+    proposal_create.add_argument("summary", help="Scene summary")
+    proposal_create.add_argument("--chapter", "-c", type=int, required=True, help="Chapter")
+    proposal_create.add_argument("--scene", "-s", type=int, help="Scene number in chapter")
+    proposal_create.add_argument("--characters", help="Characters (comma-separated)")
+    proposal_create.add_argument("--location", "-l", help="Location")
+    proposal_create.add_argument("--advances", "-a", help="Thread IDs to advance (comma-separated)")
+    proposal_create.add_argument("--resolves", "-r", help="Thread IDs to resolve (comma-separated)")
+    proposal_create.add_argument("--establishes", "-e", help="Canon events (semicolon-separated)")
+    proposal_create.set_defaults(func=cmd_proposal_create)
+
+    proposal_list = proposal_subs.add_parser("list", help="List proposals")
+    proposal_list.add_argument("--pending", "-p", action="store_true", help="Only pending/revised")
+    proposal_list.add_argument("--chapter", "-c", type=int, help="Filter by chapter")
+    proposal_list.set_defaults(func=cmd_proposal_list)
+
+    proposal_show = proposal_subs.add_parser("show", help="Show proposal details")
+    proposal_show.add_argument("id", help="Proposal ID")
+    proposal_show.set_defaults(func=cmd_proposal_show)
+
+    proposal_verify = proposal_subs.add_parser("verify", help="Verify proposal against bible/canon")
+    proposal_verify.add_argument("id", help="Proposal ID")
+    proposal_verify.set_defaults(func=cmd_proposal_verify)
+
+    proposal_approve = proposal_subs.add_parser("approve", help="Approve a proposal")
+    proposal_approve.add_argument("id", help="Proposal ID")
+    proposal_approve.set_defaults(func=cmd_proposal_approve)
+
+    proposal_reject = proposal_subs.add_parser("reject", help="Reject a proposal")
+    proposal_reject.add_argument("id", help="Proposal ID")
+    proposal_reject.add_argument("reason", help="Rejection reason")
+    proposal_reject.set_defaults(func=cmd_proposal_reject)
+
+    # prompt (context generation for LLM)
+    prompt_parser = subparsers.add_parser("prompt", help="Generate context prompts")
+    prompt_subs = prompt_parser.add_subparsers(dest="prompt_cmd")
+
+    prompt_scene = prompt_subs.add_parser("scene", help="Generate scene context")
+    prompt_scene.add_argument("--chapter", "-c", type=int, required=True, help="Chapter number")
+    prompt_scene.add_argument("--characters", help="Characters in scene (comma-separated)")
+    prompt_scene.add_argument("--location", "-l", help="Scene location")
+    prompt_scene.add_argument("--output", "-o", help="Output file (default: stdout)")
+    prompt_scene.set_defaults(func=cmd_prompt_scene)
+
+    prompt_char = prompt_subs.add_parser("character", help="Generate character context")
+    prompt_char.add_argument("character", help="Character name")
+    prompt_char.add_argument("--chapter", "-c", type=int, help="At chapter")
+    prompt_char.add_argument("--output", "-o", help="Output file (default: stdout)")
+    prompt_char.set_defaults(func=cmd_prompt_character)
 
     # Parse and dispatch
     args = parser.parse_args()

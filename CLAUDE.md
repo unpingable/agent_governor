@@ -26,7 +26,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Drift Detection**: Temporal asymmetry defense, premise quarantine, attention skew, coherence gradient.
 **Ops Governor**: Runbook verification, time window enforcement, blast radius limits, precondition chains.
 **Claim Diff**: Epistemic state change detection, confidence drift, provenance laundering, evidence erosion, silent retraction.
-**Total: 2182 tests**
+**Claim Signals**: Implicit claim extraction from text, date/entity/quantity/assertive detection, assertiveness scoring, ledger integration.
+**Total: 2257 tests**
 
 ## Key Documents
 
@@ -212,6 +213,12 @@ governor claim-diff history           # Show diff history
 governor claim-diff trend             # Show trend analysis
 governor claim-diff laundering        # Shortcut: run + show only laundering
 governor claim-diff reset --confirm   # Clear history and snapshots
+
+# Claim Signal Extraction (implicit claim detection)
+governor signals extract <text>       # Extract signals from provided text
+governor signals scan <path>          # Scan a file for claim signals
+governor signals register <text>      # Extract signals AND register as ASSUMED claims
+governor signals score <text>         # Show assertiveness score only
 ```
 
 ## Architecture Rules (Non-Negotiable)
@@ -294,6 +301,7 @@ src/governor/
 ├── strict.py         # StrictModeGate, ClaimCategory, CommitLevel, fail-closed governance
 ├── drift.py          # DriftDetector, PremiseQuarantine, temporal asymmetry defense
 ├── claim_diff.py     # ClaimDiffer, ClaimSnapshot, LedgerSnapshot, confidence drift, provenance laundering
+├── claim_signals.py  # SignalExtractor, SignalMatch, ExtractionResult, implicit claim detection
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -498,6 +506,13 @@ src/ops_governor/
 
 **Claim Diff tests: 91**
 
+### Claim Signal Extraction (Implicit Claim Detection)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| claim_signals.py | SignalExtractor, SignalMatch, ExtractionResult, date/entity/quantity/assertive detection, assertiveness scoring, ledger integration | 75 |
+
+**Claim Signal Extraction tests: 75**
+
 ### Fiction Governor (Complete)
 | Module | Description | Tests |
 |--------|-------------|-------|
@@ -521,7 +536,7 @@ src/ops_governor/
 
 **Non-Fiction Governor tests: 91**
 
-**Total: 2091 tests**
+**Total: 2166 tests**
 
 ## Common Mistakes to Avoid
 

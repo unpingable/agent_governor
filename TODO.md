@@ -362,18 +362,20 @@ Based on `ingest/direction.md` - artificial landmarks that impose orientation co
 
 ### Phase E9: Claim Extraction & Detection
 
-- [ ] **Claim signal extraction** - Auto-detect claim-worthy content
+- [x] **Claim signal extraction** - Auto-detect claim-worthy content ✓ COMPLETE
   - Date patterns: `\b(18\d{2}|19\d{2}|20\d{2})\b`
   - Entity patterns: `[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+`
   - Quantity patterns: `\d+(?:\.\d+)?\s*(million|billion|percent|%)`
   - Assertiveness patterns: `definitely|certainly|clearly|was acquired|founded in`
   - Return `has_speculative_content`, `assertiveness_score`
+  - Module: `src/governor/claim_signals.py` (75 tests)
   - Reference: `ingest/epistemic_governor/src/epistemic_governor/claims.py:735-766`
 
-- [ ] **Auto-claim generation** - Create ASSUMED claims from signals
+- [x] **Auto-claim generation** - Create ASSUMED claims from signals ✓ COMPLETE
   - When text contains dates/entities/quantities, auto-create low-confidence claims
   - Flag for verification before confidence increase
-  - Useful for MCP integration: intercept agent output, extract implicit claims
+  - `register_signals()` function for ledger integration
+  - CLI: `governor signals extract/scan/register/score`
   - Reference: `ingest/epistemic_governor/src/epistemic_governor/claims.py:769-805`
 
 - [x] **Claim diff** - Track claim changes between turns ✓ COMPLETE

@@ -296,6 +296,20 @@ from .strict import (
     quick_evaluate,
 )
 
+# Claim signal extraction
+from .claim_signals import (
+    SignalCategory,
+    SignalMatch,
+    ExtractionResult,
+    ExtractionConfig,
+    SignalExtractor,
+    extract_signals,
+    scan_text,
+    has_implicit_claims,
+    assertiveness_score,
+    register_signals,
+)
+
 # Claim diff (epistemic state change detection)
 from .claim_diff import (
     MutationType,
@@ -556,6 +570,17 @@ __all__ = [
     "create_strict_s1_overrides",
     "create_strict_gate",
     "quick_evaluate",
+    # Claim signal extraction
+    "SignalCategory",
+    "SignalMatch",
+    "ExtractionResult",
+    "ExtractionConfig",
+    "SignalExtractor",
+    "extract_signals",
+    "scan_text",
+    "has_implicit_claims",
+    "assertiveness_score",
+    "register_signals",
     # Claim diff (epistemic state change detection)
     "MutationType",
     "ViolationType",

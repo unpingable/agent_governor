@@ -6857,6 +6857,135 @@ def claim_diff_reset(ctx, confirm):
     click.echo(f"Claim diff state reset. Removed {removed} file(s).")
 
 
+# =============================================================================
+# Claim Signal Extraction
+# =============================================================================
+
+
+@cli.group("signals")
+@click.pass_context
+def signals_cmd(ctx):
+    """Claim signal extraction — detect implicit claims from text."""
+    pass
+
+
+@signals_cmd.command("extract")
+@click.argument("text")
+@click.pass_context
+def signals_extract(ctx, text):
+    """Extract signals from provided text."""
+    from .claim_signals import SignalExtractor
+
+    extractor = SignalExtractor()
+    result = extractor.extract(text)
+
+    click.echo(f"Text hash: {result.text_hash}")
+    click.echo(f"Total signals: {result.total_signals}")
+    click.echo(f"Speculative content: {result.has_speculative_content}")
+    click.echo(f"Assertiveness score: {result.assertiveness_score:.2f}")
+    click.echo()
+
+    for cat_name, count in result.signals_by_category.items():
+        if count > 0:
+            click.echo(f"  {cat_name}: {count}")
+
+    if result.matches:
+        click.echo()
+        for m in result.matches:
+            click.echo(
+                f"  [{m.category.value}] {m.value}"
+                + (f"  (line {m.line_number})" if m.line_number else "")
+            )
+
+
+@signals_cmd.command("scan")
+@click.argument("path", type=click.Path(exists=True))
+@click.pass_context
+def signals_scan(ctx, path):
+    """Scan a file for claim signals."""
+    from .claim_signals import SignalExtractor
+
+    extractor = SignalExtractor()
+    result = extractor.scan_file(path)
+
+    click.echo(f"File: {path}")
+    click.echo(f"Total signals: {result.total_signals}")
+    click.echo(f"Speculative content: {result.has_speculative_content}")
+    click.echo(f"Assertiveness score: {result.assertiveness_score:.2f}")
+    click.echo()
+
+    for cat_name, count in result.signals_by_category.items():
+        if count > 0:
+            click.echo(f"  {cat_name}: {count}")
+
+    if result.matches:
+        click.echo()
+        for m in result.matches:
+            line_info = f":L{m.line_number}" if m.line_number else ""
+            click.echo(f"  [{m.category.value}] {m.value}{line_info}")
+
+
+@signals_cmd.command("register")
+@click.argument("text")
+@click.option("--agent-id", default=None, help="Source agent ID for registered claims")
+@click.option("--confidence", type=float, default=0.2, help="Confidence for registered claims")
+@click.pass_context
+def signals_register(ctx, text, agent_id, confidence):
+    """Extract signals AND register as ASSUMED claims in epistemic ledger."""
+    from .claim_signals import SignalExtractor, register_signals
+    from .epistemic import EpistemicLedger
+
+    gov_dir = ensure_initialized(ctx)
+
+    extractor = SignalExtractor()
+    result = extractor.extract(text)
+
+    ledger = EpistemicLedger()
+    # Load existing ledger state if available
+    ledger_path = gov_dir / "epistemic_ledger.json"
+    if ledger_path.exists():
+        import json as _json
+        data = _json.loads(ledger_path.read_text())
+        for cid, cdata in data.get("claims", {}).items():
+            from .epistemic import GroundedClaim
+            ledger.claims[cid] = GroundedClaim.from_dict(cdata)
+        ledger.step = data.get("step", 0)
+
+    claim_ids = register_signals(
+        ledger, result,
+        source_agent_id=agent_id,
+        confidence=confidence,
+    )
+
+    # Save updated ledger
+    ledger_path.write_text(ledger.to_json())
+
+    click.echo(f"Extracted {result.total_signals} signal(s), registered {len(claim_ids)} claim(s).")
+    for cid in claim_ids:
+        claim = ledger.get(cid)
+        click.echo(f"  {cid}: {claim.content} (conf={claim.confidence:.2f})")
+
+
+@signals_cmd.command("score")
+@click.argument("text")
+@click.pass_context
+def signals_score(ctx, text):
+    """Show assertiveness score only."""
+    from .claim_signals import assertiveness_score as compute_score
+
+    score = compute_score(text)
+    click.echo(f"Assertiveness score: {score:.2f}")
+
+    if score == 0.0:
+        click.echo("  No assertive language detected.")
+    elif score < 0.4:
+        click.echo("  Low assertiveness.")
+    elif score < 0.7:
+        click.echo("  Moderate assertiveness.")
+    else:
+        click.echo("  High assertiveness — review for unsupported claims.")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

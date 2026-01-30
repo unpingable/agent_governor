@@ -39,6 +39,8 @@ A VS Code extension that brings governor into the editor:
 - Communicate with governor CLI or expose a simple HTTP/JSON-RPC API
 - Could share MCP server infrastructure
 
+**Principle:** These are **views over state**, not additional sources of truth. UI is projection.
+
 ---
 
 ### Obsidian Plugin
@@ -82,7 +84,34 @@ Sync governor state to an Obsidian vault for knowledge management:
 **Status:** Not started
 **Priority:** HIGH - This is where "real tool" vs "toy" becomes unambiguous
 
-The highest-leverage gap. Where verification can be *mechanical* and the scars from decades of sysadmin/devops/SRE work become encoded:
+The highest-leverage gap. Where verification can be *mechanical* and the scars from decades of sysadmin/devops/SRE work become encoded.
+
+### Policy Packs (the key abstraction)
+
+Think in terms of **installable policy packs** per environment:
+
+```
+policy:change_mgmt/basic
+policy:incident/strict
+policy:deploy/safe_rollout
+policy:runbook/<service>
+```
+
+This turns "governor is a philosophy" into "governor is installable."
+
+### Keystone Verifier: Claim Gating with Proof Types
+
+**Build this first.** Example:
+
+```
+claim: service_restored
+requires:
+  - successful healthcheck evidence (URL/command + output hash)
+  - error rate below threshold (query + snapshot)
+  - rollback plan present OR explicitly waived with approver identity
+```
+
+This is where the system becomes non-toy instantly.
 
 ### Core Verifiers
 
@@ -105,10 +134,7 @@ The highest-leverage gap. Where verification can be *mechanical* and the scars f
 
 ### Why This Matters
 
-- Immediately differentiating from "AI memory" tools
-- Produces artifacts real orgs recognize (receipts, approvals, audit trails)
-- Domain where governor stops being "nice" and becomes *obviously necessary*
-- Encodes hard-won operational knowledge
+Choose between making it **pleasant** (extensions/UIs) or making it **inevitable** (ops verifiers). We chose inevitable.
 
 ### Anti-pattern to Avoid
 
@@ -136,9 +162,15 @@ Instead: **policy-as-tests** (interfaces, invariants, dependency rules, forbidde
 - Auto-close tasks when PR merges
 
 ### Slack/Discord Bot
-- Session handoff notifications
-- Task assignment alerts
-- Daily digest of decisions made
+
+**Warning:** Slack/Discord is where tools go to die as "notifications."
+
+If implemented, **high-signal only**:
+- Session handoffs
+- Incidents
+- Approvals
+
+No daily digests unless genuinely compressive. Noise kills adoption.
 
 ---
 

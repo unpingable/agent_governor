@@ -2972,6 +2972,3891 @@ def generate_viewer_html(graph) -> str:
 </html>'''
 
 
+# Ops (SRE/Operations) command group
+@cli.group()
+@click.pass_context
+def ops(ctx: click.Context) -> None:
+    """
+    SRE/Operations constraint system.
+
+    Mechanical verification for operational claims:
+    - Policy packs (installable constraints per environment)
+    - Claim gating with proof types
+    - Incident timeline integrity
+    - Change management enforcement
+
+    The keystone: No claim without proof.
+    """
+    pass
+
+
+@ops.command("init")
+@click.option("--pack", "-p", multiple=True, help="Built-in policy pack to install")
+@click.pass_context
+def ops_init(ctx: click.Context, pack: tuple[str, ...]) -> None:
+    """
+    Initialize ops governor in the current directory.
+
+    Creates .governor/ops/ directory structure and optionally
+    installs built-in policy packs.
+
+    Examples:
+        governor ops init
+        governor ops init -p deploy/safe_rollout
+        governor ops init -p incident/strict -p change_mgmt/basic
+    """
+    from ops_governor import PolicyRegistry, install_builtin_pack, BUILTIN_PACKS
+
+    root = Path(ctx.obj["root"])
+    gov_dir = root / ".governor"
+
+    if not gov_dir.exists():
+        click.echo("Error: Governor not initialized. Run 'governor init' first.", err=True)
+        ctx.exit(1)
+
+    ops_dir = gov_dir / "ops"
+    if ops_dir.exists():
+        click.echo(f"Ops governor already initialized at {ops_dir}")
+    else:
+        ops_dir.mkdir()
+        (ops_dir / "policies").mkdir()
+        (ops_dir / "claims").mkdir()
+        (ops_dir / "incidents").mkdir()
+        click.echo(f"Initialized ops governor at {ops_dir}")
+
+    # Install requested packs
+    registry = PolicyRegistry(ops_dir)
+    for pack_name in pack:
+        if pack_name in BUILTIN_PACKS:
+            result = install_builtin_pack(registry, pack_name)
+            if result:
+                click.echo(f"Installed policy pack: {pack_name}")
+            else:
+                click.echo(f"Failed to install: {pack_name}", err=True)
+        else:
+            click.echo(f"Unknown pack: {pack_name}. Available: {list(BUILTIN_PACKS.keys())}", err=True)
+
+
+@ops.command("policy")
+@click.argument("action", type=click.Choice(["list", "show"]))
+@click.argument("name", required=False)
+@click.pass_context
+def ops_policy(ctx: click.Context, action: str, name: str | None) -> None:
+    """
+    Manage policy packs.
+
+    Examples:
+        governor ops policy list
+        governor ops policy show deploy/safe_rollout
+    """
+    from ops_governor import PolicyRegistry, BUILTIN_PACKS
+
+    root = Path(ctx.obj["root"])
+    ops_dir = root / ".governor" / "ops"
+
+    if not ops_dir.exists():
+        click.echo("Error: Ops governor not initialized. Run 'governor ops init' first.", err=True)
+        ctx.exit(1)
+
+    registry = PolicyRegistry(ops_dir)
+
+    if action == "list":
+        installed = registry.list_installed()
+        click.echo(f"Installed policy packs ({len(installed)}):")
+        for pack in installed:
+            status = "enabled" if pack.enabled else "disabled"
+            click.echo(f"  [{status}] {pack.name}: {pack.description}")
+
+        click.echo(f"\nAvailable built-in packs:")
+        for pack_name in BUILTIN_PACKS:
+            click.echo(f"  {pack_name}")
+
+    elif action == "show":
+        if not name:
+            click.echo("Error: Pack name required for 'show'", err=True)
+            ctx.exit(1)
+
+        pack = registry.get_pack(name)
+        if not pack:
+            click.echo(f"Pack not found: {name}", err=True)
+            ctx.exit(1)
+
+        click.echo(f"Policy Pack: {pack.name}")
+        click.echo(f"  Version: {pack.version}")
+        click.echo(f"  Description: {pack.description}")
+        click.echo(f"  Enabled: {pack.enabled}")
+        click.echo(f"\n  Claims ({len(pack.claims)}):")
+        for claim in pack.claims:
+            click.echo(f"    - {claim.id}: {claim.description}")
+            click.echo(f"      Required proofs: {[r.proof_type.value for r in claim.requirements]}")
+
+
+@ops.command("claim")
+@click.argument("action", type=click.Choice(["verify", "list"]))
+@click.argument("claim_id", required=False)
+@click.option("--evidence", "-e", multiple=True, help="Evidence in type:value format")
+@click.pass_context
+def ops_claim(ctx: click.Context, action: str, claim_id: str | None, evidence: tuple[str, ...]) -> None:
+    """
+    Manage operational claims.
+
+    Examples:
+        governor ops claim list
+        governor ops claim verify deploy:pre_checks -e healthcheck:passed -e rollback_plan:exists
+    """
+    from ops_governor import PolicyRegistry, ClaimVerifier, ProofCollector, ProofType
+
+    root = Path(ctx.obj["root"])
+    ops_dir = root / ".governor" / "ops"
+
+    if not ops_dir.exists():
+        click.echo("Error: Ops governor not initialized. Run 'governor ops init' first.", err=True)
+        ctx.exit(1)
+
+    registry = PolicyRegistry(ops_dir)
+
+    if action == "list":
+        # List all available claims from installed packs
+        packs = registry.list_installed()
+        if not packs:
+            click.echo("No policy packs installed")
+            return
+
+        click.echo("Available claims:\n")
+        for pack in packs:
+            if not pack.enabled:
+                continue
+            click.echo(f"  {pack.name}:")
+            for claim in pack.claims:
+                click.echo(f"    {claim.id}: {claim.description}")
+
+    elif action == "verify":
+        if not claim_id:
+            click.echo("Error: claim_id required for 'verify'", err=True)
+            ctx.exit(1)
+
+        # Find the claim definition
+        claim_def = None
+        for pack in registry.list_installed():
+            if not pack.enabled:
+                continue
+            for claim in pack.claims:
+                if claim.id == claim_id:
+                    claim_def = claim
+                    break
+            if claim_def:
+                break
+
+        if not claim_def:
+            click.echo(f"Claim not found: {claim_id}", err=True)
+            ctx.exit(1)
+
+        # Parse evidence
+        collector = ProofCollector()
+        for ev in evidence:
+            if ":" not in ev:
+                click.echo(f"Invalid evidence format: {ev} (use type:value)", err=True)
+                ctx.exit(1)
+            proof_type_str, value = ev.split(":", 1)
+            try:
+                proof_type = ProofType(proof_type_str)
+            except ValueError:
+                click.echo(f"Unknown proof type: {proof_type_str}", err=True)
+                click.echo(f"Valid types: {[pt.value for pt in ProofType]}")
+                ctx.exit(1)
+            collector.add_evidence(proof_type, {"value": value})
+
+        # Verify
+        verifier = ClaimVerifier(registry)
+        result = verifier.verify_claim(claim_def, collector.get_evidence())
+
+        if result["verified"]:
+            click.echo(f"VERIFIED: {claim_id}")
+            click.echo(f"  All {len(claim_def.requirements)} requirement(s) satisfied")
+        else:
+            click.echo(f"FAILED: {claim_id}")
+            for failure in result.get("failures", []):
+                click.echo(f"  Missing: {failure}")
+
+
+@ops.command("incident")
+@click.argument("action", type=click.Choice(["create", "status", "list"]))
+@click.option("--id", "incident_id", help="Incident ID")
+@click.option("--severity", "-s", type=click.Choice(["sev1", "sev2", "sev3", "sev4", "sev5"]), default="sev3")
+@click.option("--title", "-t", help="Incident title")
+@click.option("--status", "new_status", type=click.Choice(["detected", "acknowledged", "investigating", "mitigating", "resolved", "closed"]))
+@click.option("--message", "-m", help="Status message")
+@click.pass_context
+def ops_incident(
+    ctx: click.Context,
+    action: str,
+    incident_id: str | None,
+    severity: str,
+    title: str | None,
+    new_status: str | None,
+    message: str | None,
+) -> None:
+    """
+    Manage incidents.
+
+    Examples:
+        governor ops incident create -s sev2 -t "Database latency spike"
+        governor ops incident status --id INC-001 --status investigating -m "Checking query patterns"
+        governor ops incident list
+    """
+    from ops_governor import Incident, IncidentSeverity, IncidentStatus, IncidentEvent
+    from datetime import datetime, timezone
+
+    root = Path(ctx.obj["root"])
+    ops_dir = root / ".governor" / "ops"
+    incidents_dir = ops_dir / "incidents"
+
+    if not ops_dir.exists():
+        click.echo("Error: Ops governor not initialized. Run 'governor ops init' first.", err=True)
+        ctx.exit(1)
+
+    if action == "create":
+        if not title:
+            click.echo("Error: --title required for create", err=True)
+            ctx.exit(1)
+
+        # Generate incident ID
+        existing = list(incidents_dir.glob("INC-*.json"))
+        next_num = len(existing) + 1
+        inc_id = f"INC-{next_num:03d}"
+
+        sev_map = {
+            "sev1": IncidentSeverity.SEV1,
+            "sev2": IncidentSeverity.SEV2,
+            "sev3": IncidentSeverity.SEV3,
+            "sev4": IncidentSeverity.SEV4,
+            "sev5": IncidentSeverity.SEV5,
+        }
+
+        now = datetime.now(timezone.utc)
+        incident = Incident(
+            id=inc_id,
+            title=title,
+            severity=sev_map[severity],
+            status=IncidentStatus.DETECTED,
+            detected_at=now,
+            timeline=[
+                IncidentEvent(
+                    timestamp=now,
+                    event_type="created",
+                    description=f"Incident created: {title}",
+                    actor="governor",
+                )
+            ],
+        )
+
+        # Save incident
+        incident_file = incidents_dir / f"{inc_id}.json"
+        incident_file.write_text(json.dumps({
+            "id": incident.id,
+            "title": incident.title,
+            "severity": incident.severity.value,
+            "status": incident.status.value,
+            "detected_at": incident.detected_at.isoformat(),
+            "timeline": [
+                {
+                    "timestamp": e.timestamp.isoformat(),
+                    "event_type": e.event_type,
+                    "description": e.description,
+                    "actor": e.actor,
+                }
+                for e in incident.timeline
+            ],
+        }, indent=2))
+
+        click.echo(f"Created incident: {inc_id}")
+        click.echo(f"  Title: {title}")
+        click.echo(f"  Severity: {severity}")
+
+    elif action == "status":
+        if not incident_id:
+            click.echo("Error: --id required for status", err=True)
+            ctx.exit(1)
+
+        incident_file = incidents_dir / f"{incident_id}.json"
+        if not incident_file.exists():
+            click.echo(f"Incident not found: {incident_id}", err=True)
+            ctx.exit(1)
+
+        data = json.loads(incident_file.read_text())
+
+        if new_status:
+            # Update status
+            now = datetime.now(timezone.utc)
+            data["status"] = new_status
+            data["timeline"].append({
+                "timestamp": now.isoformat(),
+                "event_type": "status_change",
+                "description": message or f"Status changed to {new_status}",
+                "actor": "governor",
+            })
+            incident_file.write_text(json.dumps(data, indent=2))
+            click.echo(f"Updated {incident_id} status to: {new_status}")
+        else:
+            # Show status
+            click.echo(f"Incident: {data['id']}")
+            click.echo(f"  Title: {data['title']}")
+            click.echo(f"  Severity: {data['severity']}")
+            click.echo(f"  Status: {data['status']}")
+            click.echo(f"\n  Timeline:")
+            for event in data["timeline"]:
+                click.echo(f"    [{event['timestamp']}] {event['event_type']}: {event['description']}")
+
+    elif action == "list":
+        incidents = list(incidents_dir.glob("INC-*.json"))
+        if not incidents:
+            click.echo("No incidents found")
+            return
+
+        click.echo(f"Incidents ({len(incidents)}):\n")
+        for inc_file in sorted(incidents, reverse=True):
+            data = json.loads(inc_file.read_text())
+            click.echo(f"  [{data['severity']}] {data['id']}: {data['title']}")
+            click.echo(f"    Status: {data['status']}")
+
+
+@ops.command("packs")
+@click.pass_context
+def ops_packs(ctx: click.Context) -> None:
+    """List available built-in policy packs."""
+    from ops_governor import BUILTIN_PACKS
+
+    click.echo("Built-in policy packs:\n")
+    for name, creator in BUILTIN_PACKS.items():
+        pack = creator()
+        click.echo(f"  {name}")
+        click.echo(f"    {pack.description}")
+        click.echo(f"    Claims: {len(pack.claims)}")
+        click.echo()
+
+
+# Runbook subgroup under ops
+@ops.group()
+@click.pass_context
+def runbook(ctx: click.Context) -> None:
+    """
+    Manage operational runbooks.
+
+    Runbooks are structured procedures for operational tasks.
+    They can be verified, converted to claims, and tracked.
+    """
+    pass
+
+
+@runbook.command("list")
+@click.pass_context
+def runbook_list(ctx: click.Context) -> None:
+    """List available runbooks."""
+    from ops_governor import RunbookVerifier
+
+    root = Path(ctx.obj["root"])
+    ops_dir = root / ".governor" / "ops"
+
+    if not ops_dir.exists():
+        click.echo("Error: Ops governor not initialized. Run 'governor ops init' first.", err=True)
+        ctx.exit(1)
+
+    verifier = RunbookVerifier(ops_dir)
+
+    if not verifier.runbooks_dir.exists():
+        click.echo("No runbooks found. Create one with: governor ops runbook create <name>")
+        return
+
+    runbooks = list(verifier.runbooks_dir.glob("*.json"))
+    if not runbooks:
+        click.echo("No runbooks found. Create one with: governor ops runbook create <name>")
+        return
+
+    click.echo(f"Runbooks ({len(runbooks)}):\n")
+    for rb_file in sorted(runbooks):
+        try:
+            data = json.loads(rb_file.read_text())
+            name = data.get("name", rb_file.stem)
+            desc = data.get("description", "")
+            steps = len(data.get("steps", []))
+
+            click.echo(f"  {name}: {desc}")
+            click.echo(f"    Steps: {steps}")
+        except json.JSONDecodeError:
+            click.echo(f"  {rb_file.stem}: (invalid JSON)")
+
+
+@runbook.command("create")
+@click.argument("name")
+@click.option("--description", "-d", help="Runbook description")
+@click.pass_context
+def runbook_create(ctx: click.Context, name: str, description: str | None) -> None:
+    """
+    Create a new runbook.
+
+    Examples:
+        governor ops runbook create deploy_api
+        governor ops runbook create incident_response -d "Standard incident response"
+    """
+    from ops_governor import RunbookVerifier
+
+    root = Path(ctx.obj["root"])
+    ops_dir = root / ".governor" / "ops"
+
+    if not ops_dir.exists():
+        click.echo("Error: Ops governor not initialized. Run 'governor ops init' first.", err=True)
+        ctx.exit(1)
+
+    verifier = RunbookVerifier(ops_dir)
+
+    # Create a minimal runbook
+    runbook = verifier.create_runbook(
+        name=name,
+        description=description or f"Runbook: {name}",
+        steps=[
+            {
+                "description": "Step 1 - Edit this runbook",
+                "command": "echo 'TODO: Add actual commands'",
+                "expected_exit_code": 0,
+            }
+        ],
+    )
+
+    click.echo(f"Created runbook: {name}")
+    click.echo(f"  Location: {verifier.runbooks_dir / f'{name}.json'}")
+    click.echo(f"\nEdit the JSON file to add your steps.")
+
+
+@runbook.command("show")
+@click.argument("name")
+@click.pass_context
+def runbook_show(ctx: click.Context, name: str) -> None:
+    """Show runbook details."""
+    from ops_governor import RunbookVerifier
+
+    root = Path(ctx.obj["root"])
+    ops_dir = root / ".governor" / "ops"
+
+    if not ops_dir.exists():
+        click.echo("Error: Ops governor not initialized.", err=True)
+        ctx.exit(1)
+
+    verifier = RunbookVerifier(ops_dir)
+    rb = verifier.load_runbook(name)
+
+    if not rb:
+        click.echo(f"Runbook not found: {name}", err=True)
+        ctx.exit(1)
+
+    click.echo(f"Runbook: {rb['name']}")
+    click.echo(f"Description: {rb.get('description', '')}")
+    click.echo(f"Version: {rb.get('version', '1.0')}")
+
+    click.echo(f"\nSteps ({len(rb.get('steps', []))}):")
+    for i, step in enumerate(rb.get("steps", [])):
+        click.echo(f"\n  [{i}] {step.get('description', f'Step {i}')}")
+        if step.get("command"):
+            click.echo(f"      Command: {step['command']}")
+
+    if rb.get("rollback_steps"):
+        click.echo(f"\nRollback Steps ({len(rb['rollback_steps'])}):")
+        for i, step in enumerate(rb["rollback_steps"]):
+            click.echo(f"  [{i}] {step.get('description', f'Rollback {i}')}")
+
+
+@runbook.command("generate-claims")
+@click.argument("name")
+@click.option("--install", "-i", is_flag=True, help="Install as policy pack")
+@click.pass_context
+def runbook_generate_claims(ctx: click.Context, name: str, install: bool) -> None:
+    """
+    Generate claim requirements from a runbook.
+
+    Each runbook step becomes a proof requirement that must be satisfied.
+
+    Examples:
+        governor ops runbook generate-claims deploy_api
+        governor ops runbook generate-claims deploy_api --install
+    """
+    from ops_governor import RunbookVerifier, PolicyRegistry, PolicyPack, ClaimDefinition
+
+    root = Path(ctx.obj["root"])
+    ops_dir = root / ".governor" / "ops"
+
+    if not ops_dir.exists():
+        click.echo("Error: Ops governor not initialized.", err=True)
+        ctx.exit(1)
+
+    verifier = RunbookVerifier(ops_dir)
+    rb = verifier.load_runbook(name)
+
+    if not rb:
+        click.echo(f"Runbook not found: {name}", err=True)
+        ctx.exit(1)
+
+    requirements = verifier.generate_claim_requirements(name)
+
+    if not requirements:
+        click.echo("No requirements generated (runbook may be empty)")
+        return
+
+    click.echo(f"Generated {len(requirements)} claim requirements:\n")
+    for i, req in enumerate(requirements):
+        click.echo(f"  [{i}] {req.description}")
+        click.echo(f"      Type: {req.proof_type.value}")
+
+    if install:
+        claim_name = f"runbook:{name}"
+        claim_def = ClaimDefinition(
+            name=claim_name,
+            description=f"Complete runbook: {rb.get('description', name)}",
+            requirements=requirements,
+        )
+
+        pack = PolicyPack(
+            name=f"runbook/{name}",
+            description=f"Generated from runbook: {name}",
+            claims=[claim_def],
+        )
+
+        registry = PolicyRegistry(ops_dir)
+        registry.register(pack)
+
+        click.echo(f"\nInstalled policy pack: runbook/{name}")
+        click.echo(f"  Claim: {claim_name}")
+        click.echo(f"\nVerify with: governor ops claim verify {claim_name}")
+
+
+# =============================================================================
+# Epistemic Commands
+# =============================================================================
+
+
+EPISTEMIC_LEDGER_FILE = "epistemic_ledger.json"
+
+
+def get_epistemic_ledger(gov_dir: Path):
+    """Get or create the epistemic ledger."""
+    from .epistemic import EpistemicLedger, GroundedClaim
+
+    ledger_path = gov_dir / EPISTEMIC_LEDGER_FILE
+
+    ledger = EpistemicLedger()
+
+    if ledger_path.exists():
+        data = json.loads(ledger_path.read_text())
+        ledger.step = data.get("step", 0)
+        for cid, cdata in data.get("claims", {}).items():
+            ledger.claims[cid] = GroundedClaim.from_dict(cdata)
+
+    return ledger
+
+
+def save_epistemic_ledger(gov_dir: Path, ledger) -> None:
+    """Save the epistemic ledger to disk."""
+    ledger_path = gov_dir / EPISTEMIC_LEDGER_FILE
+    ledger_path.write_text(ledger.to_json())
+
+
+@cli.group()
+@click.pass_context
+def epistemic(ctx: click.Context) -> None:
+    """
+    Epistemic governance: provenance, confidence, and evidence tracking.
+
+    Track how claims are established (provenance), confidence levels,
+    and detect dangerous claims (high confidence without evidence).
+    """
+    pass
+
+
+@epistemic.command("status")
+@click.pass_context
+def epistemic_status(ctx: click.Context) -> None:
+    """Show epistemic ledger status and metrics."""
+    gov_dir = ensure_initialized(ctx)
+    ledger = get_epistemic_ledger(gov_dir)
+
+    metrics = ledger.get_metrics()
+
+    click.echo("Epistemic Ledger Status:\n")
+    click.echo(f"  Step: {metrics['step']}")
+    click.echo(f"  Total claims: {metrics['total_claims']}")
+    click.echo(f"  Active: {metrics['active_claims']}")
+    click.echo(f"  Blocked: {metrics['blocked_claims']}")
+    click.echo(f"  Retracted: {metrics['retracted_claims']}")
+    click.echo()
+
+    # Highlight dangerous claims
+    dangerous = metrics['dangerous_claims']
+    if dangerous > 0:
+        click.echo(f"  ⚠️  DANGEROUS CLAIMS: {dangerous}")
+        click.echo("      (high confidence without evidence)")
+    else:
+        click.echo(f"  ✓ No dangerous claims")
+    click.echo()
+
+    click.echo("  Provenance distribution:")
+    for prov, count in metrics['provenance_distribution'].items():
+        if count > 0:
+            click.echo(f"    {prov}: {count}")
+
+    click.echo()
+    click.echo("  Confidence distribution:")
+    conf = metrics['confidence_distribution']
+    click.echo(f"    High (>=0.7): {conf['high']}")
+    click.echo(f"    Medium (0.3-0.7): {conf['medium']}")
+    click.echo(f"    Low (<0.3): {conf['low']}")
+
+    if metrics['total_promotions_attempted'] > 0:
+        click.echo()
+        click.echo("  Promotion stats:")
+        click.echo(f"    Attempted: {metrics['total_promotions_attempted']}")
+        click.echo(f"    Forbidden: {metrics['total_promotions_forbidden']}")
+        click.echo(f"    Rate: {metrics['forbidden_promotion_rate']:.1%}")
+
+
+@epistemic.command("claims")
+@click.option("--provenance", "-p", help="Filter by provenance type")
+@click.option("--agent", "-a", help="Filter by source agent")
+@click.option("--ungrounded", "-u", is_flag=True, help="Show only ungrounded claims")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def epistemic_claims(
+    ctx: click.Context,
+    provenance: str | None,
+    agent: str | None,
+    ungrounded: bool,
+    as_json: bool,
+) -> None:
+    """List grounded claims in the epistemic ledger."""
+    from .epistemic import Provenance
+
+    gov_dir = ensure_initialized(ctx)
+    ledger = get_epistemic_ledger(gov_dir)
+
+    claims = ledger.active_claims()
+
+    # Apply filters
+    if provenance:
+        try:
+            prov = Provenance(provenance)
+            claims = [c for c in claims if c.provenance == prov]
+        except ValueError:
+            click.echo(f"Invalid provenance: {provenance}", err=True)
+            click.echo(f"Valid: {', '.join(p.value for p in Provenance)}")
+            ctx.exit(1)
+
+    if agent:
+        claims = [c for c in claims if c.source_agent_id == agent]
+
+    if ungrounded:
+        claims = [c for c in claims if not c.is_grounded]
+
+    if as_json:
+        click.echo(json.dumps([c.to_dict() for c in claims], indent=2, default=str))
+        return
+
+    if not claims:
+        click.echo("No claims found")
+        return
+
+    click.echo(f"Grounded claims ({len(claims)}):\n")
+
+    for claim in claims:
+        danger_icon = "⚠️ " if claim.is_dangerous else ""
+        grounded_icon = "✓" if claim.is_grounded else "○"
+
+        click.echo(f"  {danger_icon}[{claim.claim_id}]")
+        click.echo(f"    {grounded_icon} {claim.content[:60]}{'...' if len(claim.content) > 60 else ''}")
+        click.echo(f"    Provenance: {claim.provenance.value}, Confidence: {claim.confidence:.2f}")
+
+        if claim.evidence_refs:
+            click.echo(f"    Evidence: {len(claim.evidence_refs)} ref(s)")
+
+        if claim.source_agent_id:
+            click.echo(f"    Source: {claim.source_agent_id}")
+
+        click.echo()
+
+
+@epistemic.command("dangerous")
+@click.option("--block", is_flag=True, help="Block all dangerous claims")
+@click.pass_context
+def epistemic_dangerous(ctx: click.Context, block: bool) -> None:
+    """List or block dangerous claims (high confidence + ungrounded)."""
+    gov_dir = ensure_initialized(ctx)
+    ledger = get_epistemic_ledger(gov_dir)
+
+    dangerous = ledger.dangerous_claims()
+
+    if not dangerous:
+        click.echo("✓ No dangerous claims found")
+        return
+
+    click.echo(f"⚠️  Found {len(dangerous)} dangerous claim(s):\n")
+    click.echo("(High confidence without evidence)\n")
+
+    for claim in dangerous:
+        click.echo(f"  [{claim.claim_id}]")
+        click.echo(f"    {claim.content[:70]}{'...' if len(claim.content) > 70 else ''}")
+        click.echo(f"    Provenance: {claim.provenance.value}")
+        click.echo(f"    Confidence: {claim.confidence:.2f} (threshold: 0.70)")
+        click.echo()
+
+    if block:
+        for claim in dangerous:
+            ledger.block(claim.claim_id, "Dangerous claim: high confidence without evidence")
+        save_epistemic_ledger(gov_dir, ledger)
+        click.echo(f"Blocked {len(dangerous)} dangerous claim(s)")
+
+
+@epistemic.command("create")
+@click.argument("content")
+@click.option("--provenance", "-p", default="assumed", help="Provenance type")
+@click.option("--confidence", "-c", type=float, help="Confidence level (0-1)")
+@click.option("--agent", "-a", help="Source agent ID")
+@click.pass_context
+def epistemic_create(
+    ctx: click.Context,
+    content: str,
+    provenance: str,
+    confidence: float | None,
+    agent: str | None,
+) -> None:
+    """Create a new grounded claim."""
+    from .epistemic import Provenance, DEFAULT_CONFIDENCE
+
+    gov_dir = ensure_initialized(ctx)
+    ledger = get_epistemic_ledger(gov_dir)
+
+    try:
+        prov = Provenance(provenance)
+    except ValueError:
+        click.echo(f"Invalid provenance: {provenance}", err=True)
+        click.echo(f"Valid: {', '.join(p.value for p in Provenance)}")
+        ctx.exit(1)
+
+    if confidence is None:
+        confidence = DEFAULT_CONFIDENCE.get(prov, 0.5)
+
+    claim = ledger.new_claim(content, prov, confidence, source_agent_id=agent)
+
+    save_epistemic_ledger(gov_dir, ledger)
+
+    click.echo(f"Created claim: {claim.claim_id}")
+    click.echo(f"  Content: {content[:60]}{'...' if len(content) > 60 else ''}")
+    click.echo(f"  Provenance: {claim.provenance.value}")
+    click.echo(f"  Confidence: {claim.confidence:.2f}")
+    click.echo(f"  Grounded: {'yes' if claim.is_grounded else 'no'}")
+
+    if claim.is_dangerous:
+        click.echo(f"  ⚠️  WARNING: This claim is dangerous (high confidence without evidence)")
+
+
+@epistemic.command("evidence")
+@click.argument("claim_id")
+@click.option("--type", "ev_type", required=True, help="Evidence type (tool_trace, url, document, human_input, receipt)")
+@click.option("--locator", "-l", required=True, help="Evidence locator (URL, hash, trace ID, etc.)")
+@click.option("--scope", "-s", required=True, help="What aspect of the claim this supports")
+@click.pass_context
+def epistemic_evidence(
+    ctx: click.Context,
+    claim_id: str,
+    ev_type: str,
+    locator: str,
+    scope: str,
+) -> None:
+    """Attach evidence to a claim."""
+    from .epistemic import EvidenceRef, EvidenceType
+
+    gov_dir = ensure_initialized(ctx)
+    ledger = get_epistemic_ledger(gov_dir)
+
+    if claim_id not in ledger.claims:
+        click.echo(f"Claim not found: {claim_id}", err=True)
+        ctx.exit(1)
+
+    try:
+        evidence_type = EvidenceType(ev_type)
+    except ValueError:
+        click.echo(f"Invalid evidence type: {ev_type}", err=True)
+        click.echo(f"Valid: {', '.join(e.value for e in EvidenceType)}")
+        ctx.exit(1)
+
+    ref = EvidenceRef(
+        ref_id=f"ev_{uuid4().hex[:8]}",
+        ref_type=evidence_type,
+        locator=locator,
+        scope=scope,
+        retrieved_at=datetime.now(),
+    )
+
+    ledger.attach_evidence(claim_id, ref)
+    save_epistemic_ledger(gov_dir, ledger)
+
+    claim = ledger.get(claim_id)
+    click.echo(f"Attached evidence to {claim_id}")
+    click.echo(f"  Type: {evidence_type.value}")
+    click.echo(f"  Locator: {locator}")
+    click.echo(f"  Scope: {scope}")
+    click.echo(f"  Claim is now grounded: {'yes' if claim.is_grounded else 'no'}")
+
+
+@epistemic.command("promote")
+@click.argument("claim_id")
+@click.argument("new_provenance")
+@click.pass_context
+def epistemic_promote(ctx: click.Context, claim_id: str, new_provenance: str) -> None:
+    """Promote a claim to a new provenance level."""
+    from .epistemic import Provenance, PromotionResult
+
+    gov_dir = ensure_initialized(ctx)
+    ledger = get_epistemic_ledger(gov_dir)
+
+    if claim_id not in ledger.claims:
+        click.echo(f"Claim not found: {claim_id}", err=True)
+        ctx.exit(1)
+
+    try:
+        new_prov = Provenance(new_provenance)
+    except ValueError:
+        click.echo(f"Invalid provenance: {new_provenance}", err=True)
+        click.echo(f"Valid: {', '.join(p.value for p in Provenance)}")
+        ctx.exit(1)
+
+    claim = ledger.get(claim_id)
+    old_prov = claim.provenance
+
+    # Check first
+    allowed, reason = ledger.can_promote(claim_id, new_prov)
+    if not allowed:
+        click.echo(f"Cannot promote: {reason}", err=True)
+        if "evidence" in reason.lower():
+            click.echo("Hint: Attach evidence first with 'governor epistemic evidence'")
+        ctx.exit(1)
+
+    result = ledger.promote(claim_id, new_prov)
+    save_epistemic_ledger(gov_dir, ledger)
+
+    if result == PromotionResult.SUCCESS:
+        click.echo(f"Promoted {claim_id}")
+        click.echo(f"  {old_prov.value} -> {new_prov.value}")
+    else:
+        click.echo(f"Promotion failed: {result.value}", err=True)
+        ctx.exit(1)
+
+
+@epistemic.command("retract")
+@click.argument("claim_id")
+@click.option("--reason", "-r", default="Manual retraction", help="Reason for retraction")
+@click.pass_context
+def epistemic_retract(ctx: click.Context, claim_id: str, reason: str) -> None:
+    """Retract a claim (successful recovery, not failure)."""
+    gov_dir = ensure_initialized(ctx)
+    ledger = get_epistemic_ledger(gov_dir)
+
+    if claim_id not in ledger.claims:
+        click.echo(f"Claim not found: {claim_id}", err=True)
+        ctx.exit(1)
+
+    ledger.retract(claim_id, reason)
+    save_epistemic_ledger(gov_dir, ledger)
+
+    click.echo(f"Retracted {claim_id}")
+    click.echo(f"  Reason: {reason}")
+    click.echo()
+    click.echo("Note: Retraction is success, not failure.")
+    click.echo("It means the claim was explicitly withdrawn.")
+
+
+@epistemic.command("decay")
+@click.option("--amount", "-a", type=float, default=0.1, help="Decay amount (default: 0.1)")
+@click.option("--dry-run", is_flag=True, help="Show what would be decayed without applying")
+@click.pass_context
+def epistemic_decay(ctx: click.Context, amount: float, dry_run: bool) -> None:
+    """Decay confidence on ungrounded claims."""
+    gov_dir = ensure_initialized(ctx)
+    ledger = get_epistemic_ledger(gov_dir)
+
+    ungrounded = ledger.ungrounded_claims()
+
+    if not ungrounded:
+        click.echo("No ungrounded claims to decay")
+        return
+
+    click.echo(f"{'Would decay' if dry_run else 'Decaying'} {len(ungrounded)} ungrounded claim(s) by {amount}:\n")
+
+    for claim in ungrounded:
+        old_conf = claim.confidence
+        new_conf = max(0.0, old_conf - amount)
+        click.echo(f"  [{claim.claim_id}] {old_conf:.2f} -> {new_conf:.2f}")
+
+    if not dry_run:
+        count = ledger.decay_ungrounded_confidence(amount)
+        save_epistemic_ledger(gov_dir, ledger)
+        click.echo(f"\nDecayed {count} claim(s)")
+    else:
+        click.echo("\n(dry run - no changes made)")
+
+
+@epistemic.command("tick")
+@click.pass_context
+def epistemic_tick(ctx: click.Context) -> None:
+    """Advance the epistemic ledger step counter."""
+    gov_dir = ensure_initialized(ctx)
+    ledger = get_epistemic_ledger(gov_dir)
+
+    old_step = ledger.step
+    ledger.tick()
+    save_epistemic_ledger(gov_dir, ledger)
+
+    click.echo(f"Step advanced: {old_step} -> {ledger.step}")
+
+
+# ============================================================================
+# Regime Detection Commands
+# ============================================================================
+
+REGIME_STATE_FILE = "regime_state.json"
+
+
+def get_regime_detector(gov_dir: Path):
+    """Get or create the regime detector."""
+    from .regime import RegimeDetector, RegimeSignals, OperationalRegime
+
+    state_path = gov_dir / REGIME_STATE_FILE
+
+    detector = RegimeDetector()
+
+    if state_path.exists():
+        data = json.loads(state_path.read_text())
+        detector = RegimeDetector.from_dict(data)
+
+    return detector
+
+
+def save_regime_detector(gov_dir: Path, detector) -> None:
+    """Save the regime detector state to disk."""
+    state_path = gov_dir / REGIME_STATE_FILE
+    state_path.write_text(json.dumps(detector.to_dict(), indent=2))
+
+
+@cli.group()
+@click.pass_context
+def regime(ctx: click.Context) -> None:
+    """
+    Regime detection: operational health monitoring.
+
+    Monitors system health signals and classifies operational regime:
+    - ELASTIC: Stable, normal operation
+    - WARM: Drifting but recoverable
+    - DUCTILE: Path-dependent, manual intervention may be needed
+    - UNSTABLE: Critical state, emergency stop recommended
+    """
+    pass
+
+
+@regime.command("status")
+@click.pass_context
+def regime_status(ctx: click.Context) -> None:
+    """Show current operational regime and signals."""
+    from .regime import OperationalRegime
+
+    gov_dir = ensure_initialized(ctx)
+    detector = get_regime_detector(gov_dir)
+
+    state = detector.get_state()
+    regime_val = state["current_regime"]
+    signals = state["current_signals"]
+
+    # Color-code the regime
+    regime_colors = {
+        "elastic": "green",
+        "warm": "yellow",
+        "ductile": "red",
+        "unstable": "bright_red",
+    }
+
+    color = regime_colors.get(regime_val, "white")
+    click.echo(f"Regime: {click.style(regime_val.upper(), fg=color, bold=True)}")
+
+    if state["warnings"]:
+        click.echo("\nWarnings:")
+        for warning in state["warnings"]:
+            click.echo(f"  - {warning}")
+
+    click.echo("\nSignals:")
+    click.echo(f"  hysteresis:             {signals['hysteresis']:.3f}")
+    click.echo(f"  relaxation_time:        {signals['relaxation_time']:.3f}")
+    click.echo(f"  tool_gain:              {signals['tool_gain']:.3f}")
+    click.echo(f"  anisotropy:             {signals['anisotropy']:.3f}")
+    click.echo(f"  provenance_deficit:     {signals['provenance_deficit']:.3f}")
+    click.echo(f"  budget_pressure:        {signals['budget_pressure']:.3f}")
+    click.echo(f"  contradiction_open:     {signals['contradiction_open_rate']:.3f}")
+    click.echo(f"  contradiction_close:    {signals['contradiction_close_rate']:.3f}")
+    click.echo(f"  rejection_rate:         {signals['rejection_rate']:.3f}")
+    click.echo(f"  dangerous_claim_rate:   {signals['dangerous_claim_rate']:.3f}")
+
+    # Show recommended actions
+    try:
+        from .regime import OperationalRegime as OR
+        current = OR(regime_val)
+        actions = current.recommended_actions
+        if actions:
+            click.echo(f"\nRecommended actions: {', '.join(actions)}")
+    except Exception:
+        pass
+
+
+@regime.command("history")
+@click.option("--limit", "-n", default=10, help="Number of transitions to show")
+@click.pass_context
+def regime_history(ctx: click.Context, limit: int) -> None:
+    """Show regime transition history."""
+    gov_dir = ensure_initialized(ctx)
+    detector = get_regime_detector(gov_dir)
+
+    history = detector.get_history()
+
+    if not history:
+        click.echo("No regime transitions recorded.")
+        return
+
+    click.echo(f"Regime Transitions (last {limit}):\n")
+
+    for entry in history[-limit:]:
+        ts = entry["timestamp"]
+        from_r = entry["from_regime"]
+        to_r = entry["to_regime"]
+        warnings = entry.get("warnings", [])
+
+        click.echo(f"  {ts}: {from_r} -> {to_r}")
+        if warnings:
+            for w in warnings:
+                click.echo(f"    warning: {w}")
+
+
+@regime.command("signals")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def regime_signals(ctx: click.Context, as_json: bool) -> None:
+    """Show current regime signals in detail."""
+    gov_dir = ensure_initialized(ctx)
+    detector = get_regime_detector(gov_dir)
+
+    signals = detector.current_signals.to_dict()
+
+    if as_json:
+        click.echo(json.dumps(signals, indent=2))
+    else:
+        click.echo("Current Signals:\n")
+        for key, value in sorted(signals.items()):
+            click.echo(f"  {key}: {value}")
+
+
+@regime.command("update")
+@click.option("--hysteresis", type=float, help="Set hysteresis value")
+@click.option("--relaxation", type=float, help="Set relaxation time value")
+@click.option("--tool-gain", type=float, help="Set tool gain value")
+@click.option("--anisotropy", type=float, help="Set anisotropy value")
+@click.option("--provenance-deficit", type=float, help="Set provenance deficit value")
+@click.option("--budget-pressure", type=float, help="Set budget pressure value")
+@click.pass_context
+def regime_update(
+    ctx: click.Context,
+    hysteresis: float | None,
+    relaxation: float | None,
+    tool_gain: float | None,
+    anisotropy: float | None,
+    provenance_deficit: float | None,
+    budget_pressure: float | None,
+) -> None:
+    """Update signals and check for regime transition."""
+    from .regime import RegimeSignals
+
+    gov_dir = ensure_initialized(ctx)
+    detector = get_regime_detector(gov_dir)
+
+    # Build updated signals
+    current = detector.current_signals
+    new_signals = RegimeSignals(
+        hysteresis=hysteresis if hysteresis is not None else current.hysteresis,
+        relaxation_time=relaxation if relaxation is not None else current.relaxation_time,
+        tool_gain=tool_gain if tool_gain is not None else current.tool_gain,
+        anisotropy=anisotropy if anisotropy is not None else current.anisotropy,
+        provenance_deficit=provenance_deficit if provenance_deficit is not None else current.provenance_deficit,
+        budget_pressure=budget_pressure if budget_pressure is not None else current.budget_pressure,
+        contradiction_open_rate=current.contradiction_open_rate,
+        contradiction_close_rate=current.contradiction_close_rate,
+        rejection_rate=current.rejection_rate,
+        dangerous_claim_rate=current.dangerous_claim_rate,
+    )
+
+    old_regime = detector.current_regime
+    new_regime, warnings = detector.update(new_signals)
+
+    save_regime_detector(gov_dir, detector)
+
+    if new_regime != old_regime:
+        click.echo(f"Regime transition: {old_regime.value} -> {new_regime.value}")
+        if warnings:
+            click.echo("Warnings:")
+            for w in warnings:
+                click.echo(f"  - {w}")
+    else:
+        click.echo(f"Regime unchanged: {new_regime.value}")
+
+
+@regime.command("thresholds")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def regime_thresholds(ctx: click.Context, as_json: bool) -> None:
+    """Show regime detection thresholds."""
+    gov_dir = ensure_initialized(ctx)
+    detector = get_regime_detector(gov_dir)
+
+    thresholds = detector.thresholds.to_dict()
+
+    if as_json:
+        click.echo(json.dumps(thresholds, indent=2))
+    else:
+        click.echo("Regime Detection Thresholds:\n")
+        click.echo("WARM thresholds (any indicator triggers WARM):")
+        click.echo(f"  hysteresis_warm:        {thresholds['hysteresis_warm']}")
+        click.echo(f"  relaxation_warm:        {thresholds['relaxation_warm']}")
+        click.echo(f"  rejection_rate_warm:    {thresholds['rejection_rate_warm']}")
+        click.echo(f"  contradiction_warm:     {thresholds['contradiction_warm']}")
+        click.echo(f"  dangerous_claim_warm:   {thresholds['dangerous_claim_warm']}")
+
+        click.echo("\nDUCTILE thresholds (multiple indicators trigger DUCTILE):")
+        click.echo(f"  hysteresis_ductile:     {thresholds['hysteresis_ductile']}")
+        click.echo(f"  anisotropy_ductile:     {thresholds['anisotropy_ductile']}")
+        click.echo(f"  ductile_indicator_count:{thresholds['ductile_indicator_count']}")
+
+        click.echo("\nUNSTABLE thresholds (critical - any triggers UNSTABLE):")
+        click.echo(f"  tool_gain_unstable:     {thresholds['tool_gain_unstable']}")
+        click.echo(f"  budget_pressure_unstable:{thresholds['budget_pressure_unstable']}")
+        click.echo(f"  dangerous_claim_unstable:{thresholds['dangerous_claim_unstable']}")
+
+
+@regime.command("reset")
+@click.option("--confirm", is_flag=True, help="Confirm reset")
+@click.pass_context
+def regime_reset(ctx: click.Context, confirm: bool) -> None:
+    """Reset regime detector to default state."""
+    from .regime import RegimeDetector
+
+    gov_dir = ensure_initialized(ctx)
+
+    if not confirm:
+        click.echo("Use --confirm to reset regime detector state.")
+        return
+
+    detector = RegimeDetector()
+    save_regime_detector(gov_dir, detector)
+    click.echo("Regime detector reset to default state (ELASTIC).")
+
+
+# =============================================================================
+# Boil Control Commands
+# =============================================================================
+
+BOIL_STATE_FILE = "boil_state.json"
+
+
+def get_boil_controller(gov_dir: Path):
+    """Get the boil controller, loading from disk if available."""
+    from .boil import BoilController, ControlMode
+
+    state_path = gov_dir / BOIL_STATE_FILE
+    controller = BoilController()
+
+    if state_path.exists():
+        data = json.loads(state_path.read_text())
+        controller = BoilController.from_dict(data)
+
+    return controller
+
+
+def save_boil_controller(gov_dir: Path, controller) -> None:
+    """Save the boil controller state to disk."""
+    state_path = gov_dir / BOIL_STATE_FILE
+    state_path.write_text(json.dumps(controller.to_dict(), indent=2))
+
+
+@cli.group()
+@click.pass_context
+def boil(ctx: click.Context) -> None:
+    """
+    Boil control: named presets with dwell time enforcement.
+
+    Control modes (like kettle temperature settings):
+    - GREEN_TEA: Delicate - tight bounds, strict authority
+    - WHITE_TEA: Light - slightly more tolerance
+    - OOLONG: Balanced - standard bounds (default)
+    - BLACK_TEA: Robust - higher tolerance
+    - FRENCH_PRESS: Aggressive - near limits but bounded
+    - BOIL: Sentinel - tripwires only, no gradual control
+    """
+    pass
+
+
+@boil.command("status")
+@click.pass_context
+def boil_status(ctx: click.Context) -> None:
+    """Show current boil control status."""
+    from .boil import ControlMode
+
+    gov_dir = ensure_initialized(ctx)
+    controller = get_boil_controller(gov_dir)
+
+    state = controller.get_state()
+    preset_info = controller.get_preset_info()
+
+    # Mode name with description
+    mode = ControlMode(state["mode"])
+    click.echo(f"Mode: {click.style(mode.value.upper(), fg='cyan')} - {mode.description}")
+    click.echo()
+
+    # Current regime with color
+    regime_colors = {
+        "elastic": "green",
+        "warm": "yellow",
+        "ductile": "red",
+        "unstable": "bright_red",
+    }
+    regime = state["regime"]
+    click.echo(f"Regime: {click.style(regime.upper(), fg=regime_colors.get(regime, 'white'))}")
+    click.echo(f"Turn: {state['turn']}")
+    click.echo(f"Turns in regime: {state['turns_in_regime']}")
+
+    if state.get("pending_transition"):
+        click.echo(f"Pending transition: {click.style(state['pending_transition'].upper(), fg='yellow')} (blocked by dwell)")
+
+    click.echo()
+    click.echo("Preset configuration:")
+    click.echo(f"  Claim budget: {preset_info['claim_budget']}")
+    click.echo(f"  Novelty tolerance: {preset_info['novelty_tolerance']}")
+    click.echo(f"  Authority posture: {preset_info['authority_posture']}")
+    click.echo(f"  Min dwell turns: {preset_info['min_dwell']}")
+
+    click.echo()
+    click.echo("Active tripwires:")
+    for name, active in preset_info["tripwires"].items():
+        status = click.style("ON", fg="green") if active else click.style("off", fg="red")
+        click.echo(f"  {name}: {status}")
+
+    click.echo()
+    click.echo(f"Events logged: {state['events_count']}")
+
+
+@boil.command("set")
+@click.argument("mode", type=click.Choice([
+    "green_tea", "white_tea", "oolong", "black_tea", "french_press", "boil"
+], case_sensitive=False))
+@click.pass_context
+def boil_set(ctx: click.Context, mode: str) -> None:
+    """Change to a different control mode (preset)."""
+    from .boil import ControlMode
+
+    gov_dir = ensure_initialized(ctx)
+    controller = get_boil_controller(gov_dir)
+
+    old_mode = controller.preset.mode
+    new_mode = ControlMode(mode.lower())
+    controller.set_mode(new_mode)
+    save_boil_controller(gov_dir, controller)
+
+    click.echo(f"Mode changed: {old_mode.value} -> {click.style(new_mode.value.upper(), fg='cyan')}")
+    click.echo(f"Description: {new_mode.description}")
+
+
+@boil.command("presets")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def boil_presets(ctx: click.Context, as_json: bool) -> None:
+    """List all available presets."""
+    from .boil import list_presets
+
+    presets = list_presets()
+
+    if as_json:
+        click.echo(json.dumps(presets, indent=2))
+        return
+
+    click.echo("Available control modes:\n")
+    for p in presets:
+        click.echo(f"{click.style(p['mode'].upper(), fg='cyan')}")
+        click.echo(f"  {p['description']}")
+        click.echo(f"  Claim budget: {p['claim_budget']}, Novelty: {p['novelty_tolerance']}")
+        click.echo(f"  Authority: {p['authority_posture']}, Tripwires: {p['tripwires_active']}/4")
+        click.echo()
+
+
+@boil.command("events")
+@click.option("--limit", "-n", default=10, help="Number of events to show")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def boil_events(ctx: click.Context, limit: int, as_json: bool) -> None:
+    """Show recent boil control events."""
+    gov_dir = ensure_initialized(ctx)
+    controller = get_boil_controller(gov_dir)
+
+    events = controller.get_events(limit=limit)
+
+    if as_json:
+        click.echo(json.dumps(events, indent=2))
+        return
+
+    if not events:
+        click.echo("No events recorded.")
+        return
+
+    click.echo(f"Recent events (last {len(events)}):\n")
+    for e in events:
+        timestamp = e["timestamp"][:19]  # Truncate for readability
+        event_type = e["event_type"]
+        details = e["details"]
+
+        # Color by event type
+        type_colors = {
+            "tripwire": "red",
+            "mode_change": "cyan",
+            "dwell_hold": "yellow",
+            "transition_allowed": "green",
+        }
+        colored_type = click.style(event_type, fg=type_colors.get(event_type, "white"))
+
+        click.echo(f"[{timestamp}] {colored_type}")
+        for key, value in details.items():
+            click.echo(f"  {key}: {value}")
+        click.echo()
+
+
+@boil.command("process")
+@click.option("--hysteresis", type=float, default=0.1, help="Hysteresis signal")
+@click.option("--tool-gain", type=float, default=0.3, help="Tool gain signal")
+@click.option("--provenance-deficit", type=float, default=0.0, help="Provenance deficit")
+@click.option("--rejection-rate", type=float, default=0.0, help="Rejection rate")
+@click.option("--dangerous-rate", type=float, default=0.0, help="Dangerous claim rate")
+@click.option("--contradiction-open", type=float, default=0.0, help="Contradiction open rate")
+@click.option("--contradiction-close", type=float, default=0.0, help="Contradiction close rate")
+@click.pass_context
+def boil_process(
+    ctx: click.Context,
+    hysteresis: float,
+    tool_gain: float,
+    provenance_deficit: float,
+    rejection_rate: float,
+    dangerous_rate: float,
+    contradiction_open: float,
+    contradiction_close: float,
+) -> None:
+    """Process a turn through boil control with given signals."""
+    from .regime import RegimeSignals
+
+    gov_dir = ensure_initialized(ctx)
+    controller = get_boil_controller(gov_dir)
+
+    signals = RegimeSignals(
+        hysteresis=hysteresis,
+        tool_gain=tool_gain,
+        provenance_deficit=provenance_deficit,
+        rejection_rate=rejection_rate,
+        dangerous_claim_rate=dangerous_rate,
+        contradiction_open_rate=contradiction_open,
+        contradiction_close_rate=contradiction_close,
+    )
+
+    response = controller.process_turn(signals)
+    save_boil_controller(gov_dir, controller)
+
+    # Display response
+    regime_colors = {
+        "elastic": "green",
+        "warm": "yellow",
+        "ductile": "red",
+        "unstable": "bright_red",
+    }
+
+    regime = response["regime"]
+    action = response["action"]
+    click.echo(f"Turn {response['turn']} processed")
+    click.echo(f"Regime: {click.style(regime.upper(), fg=regime_colors.get(regime, 'white'))}")
+    click.echo(f"Action: {action}")
+
+    if response.get("tripwire"):
+        click.echo(click.style(f"TRIPWIRE: {response['tripwire']}", fg="red", bold=True))
+
+    if response.get("dwell_blocked"):
+        click.echo(click.style(f"Transition to {response['pending_transition']} blocked by dwell", fg="yellow"))
+
+
+@boil.command("reset")
+@click.option("--confirm", is_flag=True, help="Confirm reset")
+@click.option("--mode", type=click.Choice([
+    "green_tea", "white_tea", "oolong", "black_tea", "french_press", "boil"
+], case_sensitive=False), default="oolong", help="Mode to reset to")
+@click.pass_context
+def boil_reset(ctx: click.Context, confirm: bool, mode: str) -> None:
+    """Reset boil controller to default state."""
+    from .boil import BoilController, ControlMode
+
+    gov_dir = ensure_initialized(ctx)
+
+    if not confirm:
+        click.echo("Use --confirm to reset boil controller state.")
+        click.echo(f"This will reset to {mode.upper()} mode with ELASTIC regime.")
+        return
+
+    new_mode = ControlMode(mode.lower())
+    controller = BoilController(new_mode)
+    save_boil_controller(gov_dir, controller)
+    click.echo(f"Boil controller reset to {click.style(mode.upper(), fg='cyan')} mode (ELASTIC regime).")
+
+
+# =============================================================================
+# Jurisdiction Commands
+# =============================================================================
+
+JURISDICTION_STATE_FILE = "jurisdiction_state.json"
+
+
+def get_jurisdiction_manager(gov_dir: Path):
+    """Get the jurisdiction manager, loading from disk if available."""
+    from .jurisdictions import JurisdictionManager
+
+    state_path = gov_dir / JURISDICTION_STATE_FILE
+    manager = JurisdictionManager()
+
+    if state_path.exists():
+        data = json.loads(state_path.read_text())
+        manager = JurisdictionManager.from_dict(data)
+
+    return manager
+
+
+def save_jurisdiction_manager(gov_dir: Path, manager) -> None:
+    """Save the jurisdiction manager state to disk."""
+    state_path = gov_dir / JURISDICTION_STATE_FILE
+    state_path.write_text(json.dumps(manager.to_dict(), indent=2))
+
+
+@cli.group()
+@click.pass_context
+def jurisdiction(ctx: click.Context) -> None:
+    """
+    Jurisdiction: context-aware epistemic governance.
+
+    Different reasoning contexts have different rules:
+    - FACTUAL: Strict evidence, contradictions block
+    - SPECULATIVE: Provisional claims, no closure, exploration
+    - ADVERSARIAL: Devil's advocate, contradictions expected
+    - NARRATIVE: Fiction mode, story-internal consistency
+    - And more...
+    """
+    pass
+
+
+@jurisdiction.command("status")
+@click.pass_context
+def jurisdiction_status(ctx: click.Context) -> None:
+    """Show current jurisdiction status."""
+    gov_dir = ensure_initialized(ctx)
+    manager = get_jurisdiction_manager(gov_dir)
+    status = manager.get_status()
+
+    j = manager.current_jurisdiction
+    click.echo(f"Jurisdiction: {click.style(j.name.upper(), fg='cyan')}")
+    if j.output_label:
+        click.echo(f"Output label: {j.output_label}")
+    click.echo(f"Description: {j.description}")
+    click.echo()
+
+    click.echo(f"Budget: {status['budget']:.1f}")
+    click.echo(f"Refill rate: {status['refill_rate']:.1f} per turn")
+    click.echo()
+
+    click.echo("Policies:")
+    click.echo(f"  Contradiction: {status['contradiction_policy']}")
+    click.echo(f"  Closure allowed: {status['closure_allowed']}")
+    click.echo(f"  Export to factual: {status['export_allowed']}")
+    click.echo()
+
+    stats = status["stats"]
+    click.echo("Statistics:")
+    click.echo(f"  Claims made: {stats['claims_made']}")
+    click.echo(f"  Contradictions opened: {stats['contradictions_opened']}")
+    click.echo(f"  Contradictions resolved: {stats['contradictions_resolved']}")
+    click.echo(f"  Exports made: {stats['exports_made']}")
+
+
+@jurisdiction.command("list")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def jurisdiction_list(ctx: click.Context, as_json: bool) -> None:
+    """List all available jurisdictions."""
+    from .jurisdictions import get_all_jurisdictions
+
+    jurisdictions = get_all_jurisdictions()
+
+    if as_json:
+        data = {name: j.to_dict() for name, j in jurisdictions.items()}
+        click.echo(json.dumps(data, indent=2))
+        return
+
+    click.echo("Available jurisdictions:\n")
+    for name, j in jurisdictions.items():
+        click.echo(f"{click.style(name.upper(), fg='cyan')}")
+        click.echo(f"  {j.description}")
+        if j.output_label:
+            click.echo(f"  Label: {j.output_label}")
+        click.echo(f"  Contradiction policy: {j.contradiction_policy.value}")
+        click.echo(f"  Closure allowed: {j.closure_allowed}")
+        click.echo()
+
+
+@jurisdiction.command("set")
+@click.argument("name", type=click.Choice([
+    "factual", "speculative", "counterfactual", "adversarial",
+    "narrative", "forensic", "pedagogical", "audit"
+], case_sensitive=False))
+@click.pass_context
+def jurisdiction_set(ctx: click.Context, name: str) -> None:
+    """Switch to a different jurisdiction."""
+    gov_dir = ensure_initialized(ctx)
+    manager = get_jurisdiction_manager(gov_dir)
+
+    old_name = manager.current_jurisdiction.name
+    success, msg = manager.switch_jurisdiction(name.lower())
+
+    if success:
+        save_jurisdiction_manager(gov_dir, manager)
+        j = manager.current_jurisdiction
+        click.echo(f"Switched: {old_name} -> {click.style(j.name.upper(), fg='cyan')}")
+        click.echo(f"Description: {j.description}")
+        if j.output_label:
+            click.echo(f"Output label: {j.output_label}")
+        click.echo(f"Budget: {manager.current_budget:.1f}")
+    else:
+        click.echo(click.style(f"Error: {msg}", fg="red"))
+
+
+@jurisdiction.command("tick")
+@click.pass_context
+def jurisdiction_tick(ctx: click.Context) -> None:
+    """Advance turn, refilling budget."""
+    gov_dir = ensure_initialized(ctx)
+    manager = get_jurisdiction_manager(gov_dir)
+
+    old_budget = manager.current_budget
+    new_budget = manager.tick()
+    save_jurisdiction_manager(gov_dir, manager)
+
+    click.echo(f"Budget refilled: {old_budget:.1f} -> {new_budget:.1f}")
+    click.echo(f"Refill rate: {manager.current_jurisdiction.budget.refill_rate:.1f}")
+
+
+@jurisdiction.command("claim")
+@click.option("--speculative", is_flag=True, help="Mark as speculative claim")
+@click.option("--adversarial", is_flag=True, help="Mark as adversarial claim")
+@click.pass_context
+def jurisdiction_claim(ctx: click.Context, speculative: bool, adversarial: bool) -> None:
+    """Make a claim (consumes budget)."""
+    gov_dir = ensure_initialized(ctx)
+    manager = get_jurisdiction_manager(gov_dir)
+
+    success, msg = manager.make_claim(is_speculative=speculative, is_adversarial=adversarial)
+
+    if success:
+        save_jurisdiction_manager(gov_dir, manager)
+        click.echo(click.style(msg, fg="green"))
+    else:
+        click.echo(click.style(f"Failed: {msg}", fg="red"))
+
+
+@jurisdiction.command("export")
+@click.option("--has-evidence", is_flag=True, help="Claim has promotion evidence")
+@click.pass_context
+def jurisdiction_export(ctx: click.Context, has_evidence: bool) -> None:
+    """Export a claim to factual jurisdiction."""
+    gov_dir = ensure_initialized(ctx)
+    manager = get_jurisdiction_manager(gov_dir)
+
+    success, msg = manager.export_to_factual(has_evidence=has_evidence)
+
+    if success:
+        save_jurisdiction_manager(gov_dir, manager)
+        click.echo(click.style(msg, fg="green"))
+    else:
+        click.echo(click.style(f"Failed: {msg}", fg="red"))
+
+
+@jurisdiction.command("info")
+@click.argument("name", type=click.Choice([
+    "factual", "speculative", "counterfactual", "adversarial",
+    "narrative", "forensic", "pedagogical", "audit"
+], case_sensitive=False))
+@click.pass_context
+def jurisdiction_info(ctx: click.Context, name: str) -> None:
+    """Show detailed info about a jurisdiction."""
+    from .jurisdictions import get_jurisdiction
+
+    j = get_jurisdiction(name.lower())
+    if j is None:
+        click.echo(click.style(f"Unknown jurisdiction: {name}", fg="red"))
+        return
+
+    click.echo(f"Jurisdiction: {click.style(j.name.upper(), fg='cyan')}")
+    click.echo(f"Description: {j.description}")
+    if j.output_label:
+        click.echo(f"Output label: {j.output_label}")
+    click.echo()
+
+    click.echo("Evidence admissibility:")
+    for e in sorted(j.admissible_evidence, key=lambda x: x.value):
+        click.echo(f"  - {e.value}")
+    click.echo()
+
+    click.echo("Budget profile:")
+    b = j.budget
+    click.echo(f"  Claim cost: {b.claim_cost}")
+    click.echo(f"  Contradiction cost: {b.contradiction_cost}")
+    click.echo(f"  Resolution cost: {b.resolution_cost}")
+    click.echo(f"  Export cost: {b.export_cost}")
+    click.echo(f"  Refill rate: {b.refill_rate}")
+    if b.speculative_discount != 1.0:
+        click.echo(f"  Speculative discount: {b.speculative_discount}")
+    if b.adversarial_discount != 1.0:
+        click.echo(f"  Adversarial discount: {b.adversarial_discount}")
+    click.echo()
+
+    click.echo("Policies:")
+    click.echo(f"  Spillover: {j.spillover.value}")
+    click.echo(f"  Contradiction: {j.contradiction_policy.value}")
+    click.echo(f"  Contradiction tolerance: {j.contradiction_tolerance}")
+    click.echo(f"  Closure allowed: {j.closure_allowed}")
+    click.echo(f"  Closure requires evidence: {j.closure_requires_evidence}")
+    click.echo(f"  Export to factual allowed: {j.export_to_factual_allowed}")
+    click.echo(f"  Export requires promotion: {j.export_requires_promotion}")
+
+
+@jurisdiction.command("reset")
+@click.option("--confirm", is_flag=True, help="Confirm reset")
+@click.option("--to", "to_jurisdiction", type=click.Choice([
+    "factual", "speculative", "counterfactual", "adversarial",
+    "narrative", "forensic", "pedagogical", "audit"
+], case_sensitive=False), default="factual", help="Jurisdiction to reset to")
+@click.pass_context
+def jurisdiction_reset(ctx: click.Context, confirm: bool, to_jurisdiction: str) -> None:
+    """Reset jurisdiction manager to default state."""
+    from .jurisdictions import JurisdictionManager
+
+    gov_dir = ensure_initialized(ctx)
+
+    if not confirm:
+        click.echo("Use --confirm to reset jurisdiction manager state.")
+        click.echo(f"This will reset to {to_jurisdiction.upper()} jurisdiction with full budget.")
+        return
+
+    manager = JurisdictionManager(to_jurisdiction.lower())
+    save_jurisdiction_manager(gov_dir, manager)
+    click.echo(f"Jurisdiction manager reset to {click.style(to_jurisdiction.upper(), fg='cyan')}.")
+
+
+# ============================================================================
+# Security Commands
+# ============================================================================
+
+@cli.group()
+def security() -> None:
+    """Security scanning and vulnerability detection."""
+    pass
+
+
+@security.command("scan")
+@click.option("--path", "-p", default=".", help="Path to scan (file or directory)")
+@click.option("--severity", "-s", type=click.Choice(["critical", "high", "medium", "low"]), default="low", help="Minimum severity to report")
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def security_scan(ctx: click.Context, path: str, severity: str, json_output: bool) -> None:
+    """Scan files for security vulnerabilities."""
+    from .security import SecurityVerifier, SecurityConfig, Severity
+
+    config = SecurityConfig(min_severity=Severity(severity))
+    verifier = SecurityVerifier(config)
+
+    scan_path = Path(path).resolve()
+
+    if scan_path.is_file():
+        findings = verifier.scan_file(scan_path)
+    else:
+        findings = verifier.scan_directory(scan_path)
+
+    if json_output:
+        click.echo(json.dumps([f.to_dict() for f in findings], indent=2))
+        return
+
+    if not findings:
+        click.echo(click.style("No security issues found.", fg="green"))
+        return
+
+    # Group by severity
+    by_severity: dict[str, list] = {}
+    for f in findings:
+        sev = f.severity.value
+        if sev not in by_severity:
+            by_severity[sev] = []
+        by_severity[sev].append(f)
+
+    click.echo(f"Found {len(findings)} security issue(s):\n")
+
+    severity_order = ["critical", "high", "medium", "low"]
+    severity_colors = {"critical": "red", "high": "yellow", "medium": "blue", "low": "white"}
+
+    for sev in severity_order:
+        if sev not in by_severity:
+            continue
+        findings_list = by_severity[sev]
+        color = severity_colors[sev]
+
+        click.echo(click.style(f"{sev.upper()} ({len(findings_list)})", fg=color, bold=True))
+        for f in findings_list:
+            click.echo(f"  {f.file_path}:{f.line_number}")
+            click.echo(f"    [{f.vuln_type.value}] {f.message}")
+            if f.suggestion:
+                click.echo(f"    Suggestion: {f.suggestion}")
+        click.echo()
+
+
+@security.command("diff")
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def security_diff(ctx: click.Context, json_output: bool) -> None:
+    """Scan staged git changes for security vulnerabilities."""
+    from .security import SecurityVerifier
+    import subprocess
+
+    # Get staged diff
+    result = subprocess.run(
+        ["git", "diff", "--cached"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        click.echo(click.style("Failed to get git diff.", fg="red"))
+        return
+
+    if not result.stdout.strip():
+        click.echo("No staged changes.")
+        return
+
+    verifier = SecurityVerifier()
+    findings = verifier.scan_diff(result.stdout)
+
+    if json_output:
+        click.echo(json.dumps([f.to_dict() for f in findings], indent=2))
+        return
+
+    if not findings:
+        click.echo(click.style("No security issues in staged changes.", fg="green"))
+        return
+
+    click.echo(f"Found {len(findings)} security issue(s) in staged changes:\n")
+
+    for f in findings:
+        color = {"critical": "red", "high": "yellow", "medium": "blue", "low": "white"}[f.severity.value]
+        click.echo(click.style(f"  [{f.severity.value.upper()}] {f.vuln_type.value}", fg=color))
+        click.echo(f"    {f.file_path}:{f.line_number}")
+        click.echo(f"    {f.message}")
+        if f.suggestion:
+            click.echo(f"    Suggestion: {f.suggestion}")
+        click.echo()
+
+
+# ============================================================================
+# Watch Commands
+# ============================================================================
+
+@cli.group()
+def watch() -> None:
+    """Watch mode for continuous file monitoring."""
+    pass
+
+
+@watch.command("start")
+@click.option("--path", "-p", default=".", help="Path to watch")
+@click.option("--interval", "-i", type=float, default=1.0, help="Poll interval in seconds")
+@click.option("--no-security", is_flag=True, help="Disable security scanning")
+@click.pass_context
+def watch_start(ctx: click.Context, path: str, interval: float, no_security: bool) -> None:
+    """Start watching for file changes."""
+    from .watch import FileWatcher, WatchConfig, WatchEvent
+
+    watch_path = Path(path).resolve()
+
+    def on_event(event: WatchEvent) -> None:
+        timestamp = event.timestamp.strftime("%H:%M:%S")
+
+        if event.event_type == "change":
+            change_type = event.data.get("change_type", "unknown")
+            colors = {"created": "green", "modified": "yellow", "deleted": "red"}
+            color = colors.get(change_type, "white")
+            click.echo(f"[{timestamp}] {click.style(change_type.upper(), fg=color)} {event.data.get('path', '')}")
+
+        elif event.event_type == "security":
+            sev = event.data.get("severity", "low")
+            color = {"critical": "red", "high": "yellow", "medium": "blue", "low": "white"}[sev]
+            click.echo(f"[{timestamp}] {click.style('SECURITY', fg=color)} {event.message}")
+
+        elif event.event_type == "status":
+            click.echo(f"[{timestamp}] {click.style('STATUS', fg='cyan')} {event.message}")
+
+        elif event.event_type == "error":
+            click.echo(f"[{timestamp}] {click.style('ERROR', fg='red')} {event.message}")
+
+    config = WatchConfig(
+        poll_interval=interval,
+        security_scan=not no_security,
+        on_event=on_event,
+    )
+
+    watcher = FileWatcher(watch_path, config)
+
+    click.echo(f"Watching {watch_path} (Ctrl+C to stop)...")
+    watcher.initialize()
+    watcher.run()
+
+
+@watch.command("check")
+@click.option("--path", "-p", default=".", help="Path to check")
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def watch_check(ctx: click.Context, path: str, json_output: bool) -> None:
+    """Check for changes once (non-blocking)."""
+    from .watch import WatchSession
+
+    watch_path = Path(path).resolve()
+    session = WatchSession(watch_path)
+    session.start()
+    changes, findings = session.check()
+
+    if json_output:
+        click.echo(json.dumps({
+            "changes": [c.to_dict() for c in changes],
+            "findings": [f.to_dict() for f in findings],
+        }, indent=2))
+        return
+
+    if not changes and not findings:
+        click.echo("No changes detected.")
+        return
+
+    if changes:
+        click.echo(f"Changes ({len(changes)}):")
+        for c in changes:
+            colors = {"created": "green", "modified": "yellow", "deleted": "red"}
+            color = colors.get(c.change_type, "white")
+            click.echo(f"  {click.style(c.change_type.upper(), fg=color)} {c.path}")
+
+    if findings:
+        click.echo(f"\nSecurity findings ({len(findings)}):")
+        for f in findings:
+            click.echo(f"  [{f.severity.value}] {f.file_path}:{f.line_number} - {f.message}")
+
+
+# ============================================================================
+# Claude Code Hooks Commands
+# ============================================================================
+
+@cli.group("claude-hooks")
+def claude_hooks() -> None:
+    """Claude Code integration hooks."""
+    pass
+
+
+@claude_hooks.command("install")
+@click.option("--no-pre", is_flag=True, help="Don't install pre-tool hook")
+@click.option("--no-post", is_flag=True, help="Don't install post-tool hook")
+@click.option("--no-notify", is_flag=True, help="Don't install notification hook")
+@click.pass_context
+def claude_hooks_install(ctx: click.Context, no_pre: bool, no_post: bool, no_notify: bool) -> None:
+    """Install Claude Code hooks for governor integration."""
+    from .claude_hooks import install_claude_hooks, HookConfig, create_blocked_commands_file
+
+    root = Path(ctx.obj["root"])
+
+    config = HookConfig(
+        pre_tool_use=not no_pre,
+        post_tool_use=not no_post,
+        notification=not no_notify,
+    )
+
+    success, message = install_claude_hooks(root, config)
+
+    if success:
+        click.echo(click.style("Claude Code hooks installed.", fg="green"))
+        click.echo(f"  {message}")
+
+        # Create blocked commands file
+        blocked_file = create_blocked_commands_file(root)
+        click.echo(f"  Created: {blocked_file}")
+
+        click.echo()
+        click.echo("Hooks will intercept file/command operations.")
+        click.echo("Configure approved files: .governor/approved_files.json")
+        click.echo("Configure blocked commands: .governor/blocked_commands.json")
+    else:
+        click.echo(click.style(f"Failed: {message}", fg="red"))
+
+
+@claude_hooks.command("uninstall")
+@click.pass_context
+def claude_hooks_uninstall(ctx: click.Context) -> None:
+    """Uninstall Claude Code hooks."""
+    from .claude_hooks import uninstall_claude_hooks
+
+    root = Path(ctx.obj["root"])
+    success, message = uninstall_claude_hooks(root)
+
+    if success:
+        click.echo(click.style("Claude Code hooks uninstalled.", fg="green"))
+        click.echo(f"  {message}")
+    else:
+        click.echo(click.style(f"Failed: {message}", fg="red"))
+
+
+@claude_hooks.command("status")
+@click.pass_context
+def claude_hooks_status(ctx: click.Context) -> None:
+    """Show Claude Code hooks status."""
+    from .claude_hooks import get_hook_status
+
+    root = Path(ctx.obj["root"])
+    status = get_hook_status(root)
+
+    click.echo("Claude Code Hooks Status:")
+    click.echo(f"  Hooks directory exists: {'yes' if status['hooks_dir_exists'] else 'no'}")
+
+    if status["scripts_installed"]:
+        click.echo(f"  Scripts installed: {', '.join(status['scripts_installed'])}")
+    else:
+        click.echo("  Scripts installed: none")
+
+    click.echo(f"  Claude settings exists: {'yes' if status['claude_settings_exists'] else 'no'}")
+
+    if status["hooks_configured"]:
+        click.echo(f"  Hooks configured: {', '.join(status['hooks_configured'])}")
+    else:
+        click.echo("  Hooks configured: none")
+
+
+@claude_hooks.command("approve")
+@click.argument("files", nargs=-1)
+@click.pass_context
+def claude_hooks_approve(ctx: click.Context, files: tuple[str, ...]) -> None:
+    """Add files to the approved list."""
+    from .claude_hooks import create_approved_files_file
+
+    root = Path(ctx.obj["root"])
+    gov_dir = root / ".governor"
+
+    # Load existing approved files
+    approved_file = gov_dir / "approved_files.json"
+    if approved_file.exists():
+        approved = set(json.loads(approved_file.read_text()))
+    else:
+        approved = set()
+
+    # Add new files
+    for f in files:
+        approved.add(f)
+
+    create_approved_files_file(root, list(approved))
+    click.echo(f"Approved {len(files)} file(s). Total approved: {len(approved)}")
+
+
+@claude_hooks.command("block")
+@click.argument("pattern")
+@click.pass_context
+def claude_hooks_block(ctx: click.Context, pattern: str) -> None:
+    """Add a command pattern to the blocked list."""
+    root = Path(ctx.obj["root"])
+    gov_dir = root / ".governor"
+
+    # Load existing blocked patterns
+    blocked_file = gov_dir / "blocked_commands.json"
+    if blocked_file.exists():
+        blocked = json.loads(blocked_file.read_text())
+    else:
+        blocked = []
+
+    if pattern not in blocked:
+        blocked.append(pattern)
+        blocked_file.write_text(json.dumps(blocked, indent=2))
+        click.echo(f"Added blocked pattern: {pattern}")
+    else:
+        click.echo(f"Pattern already blocked: {pattern}")
+
+
+# ============================================================================
+# Routing Commands
+# ============================================================================
+
+@cli.group()
+def routing() -> None:
+    """Multi-agent routing: route tasks to appropriate model tiers."""
+    pass
+
+
+@routing.command("status")
+@click.pass_context
+def routing_status(ctx: click.Context) -> None:
+    """Show routing configuration and model registry status."""
+    from .routing import Router
+
+    gov_dir = ensure_initialized(ctx)
+    router = Router()
+
+    click.echo("Routing Configuration:")
+    click.echo(f"  Enabled: {router.config.enabled}")
+    click.echo(f"  Default tier: {router.config.default_tier.value}")
+    click.echo(f"  Adaptive routing: {router.config.adaptive_enabled}")
+    click.echo()
+
+    click.echo("Tier Thresholds:")
+    click.echo(f"  LOCAL max complexity: {router.config.local_max_complexity}")
+    click.echo(f"  FAST max complexity: {router.config.fast_max_complexity}")
+    click.echo(f"  STANDARD max complexity: {router.config.standard_max_complexity}")
+    click.echo()
+
+    click.echo("Model Registry:")
+    registry_data = router.registry.to_dict()
+    for name, model in registry_data["models"].items():
+        status = registry_data["status"].get(name, {})
+        available = "✓" if status.get("available", True) else "✗"
+        tier = model["tier"]
+        in_flight = status.get("tasks_in_flight", 0)
+        success = status.get("success_rate", 1.0)
+        click.echo(f"  [{available}] {name} ({tier}) - {in_flight} in flight, {success:.0%} success")
+
+
+@routing.command("models")
+@click.option("--tier", "-t", type=click.Choice(["local", "fast", "standard", "heavy"]), help="Filter by tier")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def routing_models(tier: str | None, as_json: bool) -> None:
+    """List registered models and their capabilities."""
+    import json
+    from .routing import Router, ModelTier
+
+    router = Router()
+    data = router.registry.to_dict()
+
+    if tier:
+        tier_filter = ModelTier(tier)
+        filtered = {
+            name: model
+            for name, model in data["models"].items()
+            if ModelTier(model["tier"]) == tier_filter
+        }
+        data["models"] = filtered
+
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+    else:
+        for name, model in data["models"].items():
+            status = data["status"].get(name, {})
+            click.echo(f"\n{name}:")
+            click.echo(f"  Tier: {model['tier']}")
+            click.echo(f"  Context window: {model['context_window']:,}")
+            click.echo(f"  Code quality: {model['code_quality']:.0%}")
+            click.echo(f"  Available: {status.get('available', True)}")
+            if status.get("tasks_in_flight", 0) > 0:
+                click.echo(f"  Tasks in flight: {status['tasks_in_flight']}")
+
+
+@routing.command("estimate")
+@click.argument("description")
+@click.option("--files", "-f", multiple=True, help="Files involved")
+@click.option("--claim-type", "-c", type=click.Choice([
+    "file_exists", "symbol_defined", "api_surface",
+    "tests_pass", "decision", "changeset"
+]), help="Claim type")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def routing_estimate(
+    description: str,
+    files: tuple[str, ...],
+    claim_type: str | None,
+    as_json: bool
+) -> None:
+    """Estimate complexity and recommended tier for a task."""
+    import json
+    from .routing import estimate_complexity
+    from .claims import Claim, ClaimType
+
+    claims = []
+    if claim_type:
+        ct = ClaimType(claim_type)
+        if ct == ClaimType.FILE_EXISTS and files:
+            claims = [Claim(type=ct, path=f) for f in files]
+        elif ct == ClaimType.TESTS_PASS:
+            claims = [Claim(type=ct, command=("pytest",))]
+
+    estimate = estimate_complexity(claims, description, list(files))
+
+    if as_json:
+        output = {
+            "score": estimate.score,
+            "recommended_tier": estimate.recommended_tier.value,
+            "is_simple": estimate.is_simple,
+            "is_moderate": estimate.is_moderate,
+            "is_complex": estimate.is_complex,
+            "factors": estimate.factors,
+            "reasoning": estimate.reasoning,
+        }
+        click.echo(json.dumps(output, indent=2))
+    else:
+        click.echo(f"Complexity Score: {estimate.score:.2f}")
+        click.echo(f"Recommended Tier: {estimate.recommended_tier.value.upper()}")
+        click.echo(f"Reasoning: {estimate.reasoning}")
+        click.echo()
+        click.echo("Factors:")
+        for factor, value in estimate.factors.items():
+            click.echo(f"  {factor}: {value:.2f}")
+
+
+@routing.command("route")
+@click.argument("description")
+@click.option("--files", "-f", multiple=True, help="Files involved")
+@click.option("--force-tier", "-t", type=click.Choice(["local", "fast", "standard", "heavy"]), help="Force specific tier")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def routing_route(
+    description: str,
+    files: tuple[str, ...],
+    force_tier: str | None,
+    as_json: bool
+) -> None:
+    """Route a task to a model and show the decision."""
+    import json
+    from .routing import Router, ModelTier
+
+    router = Router()
+
+    tier = ModelTier(force_tier) if force_tier else None
+    decision = router.route(
+        claims=[],
+        description=description,
+        files=list(files),
+        force_tier=tier,
+    )
+
+    if as_json:
+        output = {
+            "task_id": str(decision.task_id),
+            "selected_model": decision.selected_model,
+            "selected_tier": decision.selected_tier.value,
+            "complexity_score": decision.complexity.score,
+            "fallback_models": decision.fallback_models,
+            "reasoning": decision.reasoning,
+        }
+        click.echo(json.dumps(output, indent=2))
+    else:
+        click.echo(f"Task ID: {decision.task_id}")
+        click.echo(f"Selected Model: {decision.selected_model}")
+        click.echo(f"Selected Tier: {decision.selected_tier.value.upper()}")
+        click.echo(f"Complexity: {decision.complexity.score:.2f}")
+        click.echo(f"Reasoning: {decision.reasoning}")
+        if decision.fallback_models:
+            click.echo(f"Fallbacks: {', '.join(decision.fallback_models[:3])}")
+
+
+@routing.command("register")
+@click.argument("name")
+@click.option("--tier", "-t", required=True, type=click.Choice(["local", "fast", "standard", "heavy"]), help="Model tier")
+@click.option("--context-window", "-c", default=8192, help="Context window size")
+@click.option("--code-quality", "-q", default=0.5, help="Code quality score (0-1)")
+def routing_register(
+    name: str,
+    tier: str,
+    context_window: int,
+    code_quality: float
+) -> None:
+    """Register a custom model in the registry."""
+    from .routing import Router, ModelTier, ModelCapabilities
+
+    router = Router()
+    caps = ModelCapabilities(
+        name=name,
+        tier=ModelTier(tier),
+        context_window=context_window,
+        code_quality=code_quality,
+    )
+    router.registry.register(caps)
+    click.echo(f"Registered model: {name} (tier: {tier})")
+
+
+@routing.command("available")
+@click.argument("name")
+@click.option("--set/--unset", "available", default=True, help="Set availability")
+def routing_available(name: str, available: bool) -> None:
+    """Set model availability status."""
+    from .routing import Router
+
+    router = Router()
+    if router.registry.get_capabilities(name) is None:
+        click.echo(f"Model not found: {name}", err=True)
+        raise SystemExit(1)
+
+    router.registry.mark_available(name, available)
+    status = "available" if available else "unavailable"
+    click.echo(f"Marked {name} as {status}")
+
+
+# =============================================================================
+# Scar Commands (Failure Provenance & Constraint Hysteresis)
+# =============================================================================
+
+
+@cli.group()
+def scar():
+    """Failure provenance & constraint hysteresis (scars and shields)."""
+    pass
+
+
+@scar.command("list")
+@click.option("--hard", is_flag=True, help="Show only hard scars (full veto)")
+@click.option("--soft", is_flag=True, help="Show only soft scars (relaxed)")
+@click.pass_context
+def scar_list(ctx, hard, soft):
+    """List all scars (action restrictions from internal failures)."""
+    from .scars import ScarLedger
+
+    gov_dir = ensure_initialized(ctx)
+    scar_path = gov_dir / "scars.json"
+
+    if not scar_path.exists():
+        click.echo("No scar ledger found. No failures recorded yet.")
+        return
+
+    ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
+
+    if hard:
+        scars = ledger.get_hard_scars()
+        label = "hard"
+    elif soft:
+        scars = ledger.get_soft_scars()
+        label = "soft"
+    else:
+        scars = ledger.get_active_scars()
+        label = "all"
+
+    if not scars:
+        click.echo(f"No {label} scars found.")
+        return
+
+    click.echo(f"\n{label.upper()} SCARS ({len(scars)}):")
+    click.echo("-" * 60)
+    for s in scars:
+        status = "HARD" if s.is_hard else f"soft ({s.stiffness:.2f})"
+        click.echo(f"  {s.scar_id}: {s.region}")
+        click.echo(f"    stiffness: {s.stiffness:.3f} [{status}]  cost: {s.effective_cost:.1f}x")
+        click.echo(f"    evidence: {s.evidence_count}/{s.required_evidence}  provenance: {s.provenance.value}")
+        if s.description:
+            click.echo(f"    desc: {s.description}")
+        click.echo()
+
+
+@scar.command("shields")
+@click.pass_context
+def scar_shields(ctx):
+    """List all shields (input restrictions from external failures)."""
+    from .scars import ScarLedger
+
+    gov_dir = ensure_initialized(ctx)
+    scar_path = gov_dir / "scars.json"
+
+    if not scar_path.exists():
+        click.echo("No scar ledger found.")
+        return
+
+    ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
+    shields = ledger.get_active_shields()
+
+    if not shields:
+        click.echo("No active shields.")
+        return
+
+    click.echo(f"\nACTIVE SHIELDS ({len(shields)}):")
+    click.echo("-" * 60)
+    for s in shields:
+        blocked = "BLOCKED" if s.is_fully_blocked else f"{s.permeability:.0%} open"
+        click.echo(f"  {s.shield_id}: {s.source}")
+        click.echo(f"    permeability: {blocked}  severity: {s.severity:.2f}")
+        click.echo(f"    stable cycles: {s.stable_cycles_observed}/{s.stable_cycles_required}")
+        click.echo()
+
+
+@scar.command("history")
+@click.option("--limit", "-n", default=20, help="Number of events to show")
+@click.option("--region", "-r", default=None, help="Filter by region")
+@click.pass_context
+def scar_history(ctx, limit, region):
+    """Show failure history with provenance classification."""
+    from .scars import ScarLedger
+
+    gov_dir = ensure_initialized(ctx)
+    scar_path = gov_dir / "scars.json"
+
+    if not scar_path.exists():
+        click.echo("No scar ledger found.")
+        return
+
+    ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
+
+    if region:
+        events = ledger.get_failures_by_region(region)
+    else:
+        events = ledger.get_failure_history(limit=limit)
+
+    if not events:
+        click.echo("No failure events recorded.")
+        return
+
+    click.echo(f"\nFAILURE HISTORY ({len(events)} events):")
+    click.echo("-" * 70)
+    for e in events:
+        prov = e.provenance.value if e.provenance else "unknown"
+        click.echo(f"  [{e.timestamp.strftime('%Y-%m-%d %H:%M')}] {e.region}")
+        click.echo(f"    provenance: {prov}  rho: {e.surprise_ratio:.3f}  response: {e.response_type}")
+        if e.description:
+            click.echo(f"    desc: {e.description}")
+        click.echo()
+
+
+@scar.command("anneal")
+@click.option("--region", "-r", default=None, help="Record evidence for specific region")
+@click.option("--dry-run", is_flag=True, help="Show what would be annealed without doing it")
+@click.pass_context
+def scar_anneal(ctx, region, dry_run):
+    """Anneal scars (relax stiffness under evidence of stability)."""
+    from .scars import ScarLedger
+
+    gov_dir = ensure_initialized(ctx)
+    scar_path = gov_dir / "scars.json"
+
+    if not scar_path.exists():
+        click.echo("No scar ledger found.")
+        return
+
+    ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
+
+    if region:
+        # Record evidence for a specific region
+        if ledger.record_stability_evidence(region):
+            click.echo(f"Recorded stability evidence for: {region}")
+        else:
+            click.echo(f"No scar found for region: {region}")
+            return
+
+    # Show what can be annealed
+    annealable = [s for s in ledger.get_active_scars() if s.can_anneal()]
+    if not annealable:
+        click.echo("No scars ready for annealing (need more evidence).")
+        for s in ledger.get_active_scars():
+            click.echo(f"  {s.region}: {s.evidence_count}/{s.required_evidence} evidence")
+        return
+
+    if dry_run:
+        click.echo(f"\nWould anneal {len(annealable)} scars:")
+        for s in annealable:
+            click.echo(f"  {s.region}: {s.stiffness:.3f} -> ~{max(s.anneal_floor, s.stiffness * 0.9):.3f}")
+        return
+
+    results = ledger.anneal_scars()
+
+    if results:
+        click.echo(f"\nAnnealed {len(results)} scars:")
+        for scar_id, amount in results.items():
+            scar = ledger.get_scar(scar_id)
+            click.echo(f"  {scar.region}: relaxed by {amount:.3f} -> {scar.stiffness:.3f}")
+
+        # Save
+        scar_path.write_text(json.dumps(ledger.to_dict(), indent=2, default=str))
+        click.echo("Saved.")
+    else:
+        click.echo("No scars were annealed.")
+
+
+@scar.command("stats")
+@click.pass_context
+def scar_stats(ctx):
+    """Show scar/shield statistics and system health."""
+    from .scars import ScarLedger
+
+    gov_dir = ensure_initialized(ctx)
+    scar_path = gov_dir / "scars.json"
+
+    if not scar_path.exists():
+        click.echo("No scar ledger found. System is unscarred.")
+        return
+
+    ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
+    metrics = ledger.get_metrics()
+    summary = ledger.get_summary()
+
+    click.echo(f"\nSCAR SYSTEM STATUS: {summary['health']}")
+    click.echo("=" * 50)
+    click.echo(f"  Failures: {summary['failures']}")
+    click.echo(f"  Scars:    {summary['scars']}")
+    click.echo(f"  Shields:  {summary['shields']}")
+    click.echo()
+    click.echo("Metrics:")
+    click.echo(f"  avg stiffness:    {metrics['avg_stiffness']:.3f}")
+    click.echo(f"  avg permeability: {metrics['avg_permeability']:.3f}")
+    click.echo(f"  total anneals:    {metrics['total_anneals']}")
+    click.echo(f"  shield releases:  {metrics['total_shield_releases']}")
+    click.echo()
+    click.echo("Config:")
+    click.echo(f"  rho_lo: {ledger.config.rho_lo}  rho_hi: {ledger.config.rho_hi}")
+    click.echo(f"  regularity_bound: {ledger.config.regularity_bound}")
+
+
+@scar.command("record")
+@click.argument("region")
+@click.option("--obs-shift", type=float, default=0.0, help="Observation shift (delta_y)")
+@click.option("--pred-error", type=float, default=1.0, help="Prediction error")
+@click.option("--magnitude", type=float, default=1.0, help="Error magnitude")
+@click.option("--source", type=str, default=None, help="Input source (for shields)")
+@click.option("--description", "-d", type=str, default="", help="Description")
+@click.pass_context
+def scar_record(ctx, region, obs_shift, pred_error, magnitude, source, description):
+    """Record a failure event and classify provenance."""
+    from .scars import ScarLedger, ScarConfig
+
+    gov_dir = ensure_initialized(ctx)
+    scar_path = gov_dir / "scars.json"
+
+    if scar_path.exists():
+        ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
+    else:
+        ledger = ScarLedger()
+
+    event = ledger.record_failure(
+        region=region,
+        observation_shift=obs_shift,
+        prediction_error=pred_error,
+        error_magnitude=magnitude,
+        description=description,
+        source=source,
+    )
+
+    prov = event.provenance.value if event.provenance else "unknown"
+    click.echo(f"Failure recorded: {event.event_id}")
+    click.echo(f"  provenance: {prov}  rho: {event.surprise_ratio:.3f}")
+    click.echo(f"  response: {event.response_type}")
+
+    if event.scar_id:
+        scar = ledger.get_scar(event.scar_id)
+        click.echo(f"  scar: {event.scar_id} (stiffness: {scar.stiffness:.3f})")
+    if event.shield_id:
+        shield = ledger.get_shield(event.shield_id)
+        click.echo(f"  shield: {event.shield_id} (permeability: {shield.permeability:.3f})")
+
+    # Save
+    scar_path.write_text(json.dumps(ledger.to_dict(), indent=2, default=str))
+
+
+@scar.command("check")
+@click.argument("region")
+@click.pass_context
+def scar_check(ctx, region):
+    """Check if an action in a region is admissible."""
+    from .scars import ScarLedger
+
+    gov_dir = ensure_initialized(ctx)
+    scar_path = gov_dir / "scars.json"
+
+    if not scar_path.exists():
+        click.echo(f"ADMISSIBLE: {region} (no scar ledger)")
+        return
+
+    ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
+    admissible, cost, scar = ledger.check_admissible(region)
+
+    if admissible:
+        if scar:
+            click.echo(f"ADMISSIBLE (with cost): {region}")
+            click.echo(f"  cost multiplier: {cost:.1f}x")
+            click.echo(f"  scar stiffness: {scar.stiffness:.3f}")
+        else:
+            click.echo(f"ADMISSIBLE: {region} (no scar)")
+    else:
+        click.echo(f"BLOCKED: {region}")
+        click.echo(f"  scar: {scar.scar_id} (stiffness: {scar.stiffness:.3f})")
+        click.echo(f"  cost: {cost:.1f}x")
+        click.echo("  Action requires annealing or explicit override.")
+
+
+# =============================================================================
+# Ultrastability (S₁ Adaptive Control)
+# =============================================================================
+
+
+@cli.group("adapt")
+@click.pass_context
+def adapt_cmd(ctx):
+    """Ultrastability controller — S₁ adaptive parameter tuning."""
+    pass
+
+
+@adapt_cmd.command("status")
+@click.pass_context
+def adapt_status(ctx):
+    """Show current ultrastability state."""
+    from .ultrastability import UltrastabilityController
+
+    gov_dir = ensure_initialized(ctx)
+    adapt_path = gov_dir / "ultrastability.json"
+
+    if not adapt_path.exists():
+        ctrl = UltrastabilityController()
+        click.echo("Ultrastability: not initialized (showing defaults)")
+    else:
+        ctrl = UltrastabilityController.from_dict(json.loads(adapt_path.read_text()))
+
+    state = ctrl.get_state()
+    click.echo(f"Epoch: {state['epoch']}")
+    frozen_status = click.style("FROZEN", fg="red") if state["frozen"] else click.style("active", fg="green")
+    click.echo(f"Status: {frozen_status}")
+    if state["freeze_reason"]:
+        click.echo(f"Freeze reason: {state['freeze_reason']}")
+    if state["freeze_pathologies"]:
+        click.echo(f"Pathologies: {', '.join(state['freeze_pathologies'])}")
+    click.echo(f"Recent epochs: {state['recent_epochs']}")
+    click.echo(f"Total adaptations: {state['total_adaptations']}")
+
+
+@adapt_cmd.command("params")
+@click.pass_context
+def adapt_params(ctx):
+    """Show current S₁ regulatory parameters."""
+    from .ultrastability import UltrastabilityController
+
+    gov_dir = ensure_initialized(ctx)
+    adapt_path = gov_dir / "ultrastability.json"
+
+    if adapt_path.exists():
+        ctrl = UltrastabilityController.from_dict(json.loads(adapt_path.read_text()))
+    else:
+        ctrl = UltrastabilityController()
+
+    click.echo("S₁ Regulatory Parameters:")
+    for spec in ctrl.parameters.all_specs:
+        bar_len = int(spec.normalized * 20)
+        bar = "#" * bar_len + "." * (20 - bar_len)
+        click.echo(f"  {spec.name:25s} {spec.current:>10.1f}  [{spec.floor:.0f}-{spec.ceiling:.0f}]  [{bar}]")
+        if spec.description:
+            click.echo(f"  {'':25s} {spec.description}")
+
+
+@adapt_cmd.command("history")
+@click.option("-n", "--limit", type=int, default=20, help="Number of records")
+@click.pass_context
+def adapt_history(ctx, limit):
+    """Show adaptation history."""
+    from .ultrastability import UltrastabilityController
+
+    gov_dir = ensure_initialized(ctx)
+    adapt_path = gov_dir / "ultrastability.json"
+
+    if not adapt_path.exists():
+        click.echo("No adaptation history.")
+        return
+
+    ctrl = UltrastabilityController.from_dict(json.loads(adapt_path.read_text()))
+    records = ctrl.history.records[-limit:]
+
+    if not records:
+        click.echo("No adaptations recorded.")
+        return
+
+    click.echo(f"Adaptation history (last {limit}):")
+    for r in records:
+        direction = "+" if r.direction.value == "increase" else "-"
+        clamped = " [CLAMPED]" if r.was_clamped else ""
+        click.echo(f"  epoch {r.epoch_id}: {r.parameter} {r.old_value:.1f} → {r.new_value:.1f} ({direction}{abs(r.delta):.1f}){clamped}")
+        click.echo(f"    reason: {r.reason}")
+
+
+@adapt_cmd.command("consider")
+@click.option("--turns", type=int, default=100, help="Turns in epoch")
+@click.option("--blocks", type=int, default=0, help="Budget blocks")
+@click.option("--c-open", type=int, default=0, help="Open contradictions")
+@click.option("--violations", type=int, default=0, help="Violations")
+@click.option("--dangerous", type=int, default=0, help="Dangerous claims")
+@click.option("--regime", type=str, default="ELASTIC", help="Current regime")
+@click.option("--apply", "apply_decision", is_flag=True, help="Apply if ADAPT")
+@click.pass_context
+def adapt_consider(ctx, turns, blocks, c_open, violations, dangerous, regime, apply_decision):
+    """Observe an epoch and consider adaptation."""
+    from .ultrastability import UltrastabilityController, EpochObservation
+
+    gov_dir = ensure_initialized(ctx)
+    adapt_path = gov_dir / "ultrastability.json"
+
+    if adapt_path.exists():
+        ctrl = UltrastabilityController.from_dict(json.loads(adapt_path.read_text()))
+    else:
+        ctrl = UltrastabilityController()
+
+    obs = EpochObservation(
+        turns=turns,
+        budget_blocks=blocks,
+        c_open=c_open,
+        violations=violations,
+        dangerous_claims=dangerous,
+        regime=regime,
+    )
+    ctrl.observe_epoch(obs)
+
+    decision = ctrl.consider_adaptation()
+
+    verdict_colors = {
+        "hold": "green", "adapt": "yellow", "freeze": "red", "alert": "red",
+    }
+    click.secho(f"Verdict: {decision.verdict.value}", fg=verdict_colors.get(decision.verdict.value, "white"))
+    click.echo(f"Reason: {decision.reason}")
+
+    if decision.parameter:
+        click.echo(f"Parameter: {decision.parameter}")
+        click.echo(f"  {decision.current_value:.1f} → {decision.proposed_value:.1f} (Δ{decision.delta:+.1f})")
+
+    if decision.pathologies:
+        click.echo(f"Pathologies: {', '.join(p.value for p in decision.pathologies)}")
+
+    if apply_decision and decision.verdict.value == "adapt":
+        ctrl.apply_adaptation(decision)
+        click.echo("Applied.")
+
+    ctrl.advance_epoch()
+    adapt_path.write_text(json.dumps(ctrl.to_dict(), indent=2, default=str))
+    click.echo("State saved.")
+
+
+@adapt_cmd.command("unfreeze")
+@click.argument("reason")
+@click.pass_context
+def adapt_unfreeze(ctx, reason):
+    """Unfreeze adaptation after human review."""
+    from .ultrastability import UltrastabilityController
+
+    gov_dir = ensure_initialized(ctx)
+    adapt_path = gov_dir / "ultrastability.json"
+
+    if not adapt_path.exists():
+        click.echo("No ultrastability state.")
+        return
+
+    ctrl = UltrastabilityController.from_dict(json.loads(adapt_path.read_text()))
+
+    if not ctrl.frozen:
+        click.echo("Controller is not frozen.")
+        return
+
+    ctrl.unfreeze(reason)
+    adapt_path.write_text(json.dumps(ctrl.to_dict(), indent=2, default=str))
+    click.secho("Unfrozen.", fg="green")
+    click.echo(f"Reason: {reason}")
+
+
+@adapt_cmd.command("metrics")
+@click.pass_context
+def adapt_metrics(ctx):
+    """Show adaptation metrics."""
+    from .ultrastability import UltrastabilityController
+
+    gov_dir = ensure_initialized(ctx)
+    adapt_path = gov_dir / "ultrastability.json"
+
+    if not adapt_path.exists():
+        click.echo("No adaptation data.")
+        return
+
+    ctrl = UltrastabilityController.from_dict(json.loads(adapt_path.read_text()))
+    m = ctrl.get_metrics()
+
+    click.echo("Ultrastability Metrics")
+    click.echo(f"  total epochs:      {m['total_epochs']}")
+    click.echo(f"  total adaptations: {m['total_adaptations']}")
+    click.echo(f"  clamped:           {m['clamped_count']}")
+    frozen_status = click.style("YES", fg="red") if m["frozen"] else "no"
+    click.echo(f"  frozen:            {frozen_status}")
+
+    if m["adaptations_by_parameter"]:
+        click.echo()
+        click.echo("  By parameter:")
+        for param, count in sorted(m["adaptations_by_parameter"].items(), key=lambda x: x[1], reverse=True):
+            click.echo(f"    {param}: {count}")
+
+    click.echo()
+    click.echo("  By direction:")
+    click.echo(f"    increase: {m['adaptations_by_direction']['increase']}")
+    click.echo(f"    decrease: {m['adaptations_by_direction']['decrease']}")
+
+
+# =============================================================================
+# Grounding Audit Pipeline
+# =============================================================================
+
+
+@cli.group("audit")
+@click.pass_context
+def audit_cmd(ctx):
+    """Grounding audit pipeline — hallucination detection and prevention."""
+    pass
+
+
+@audit_cmd.command("run")
+@click.argument("assertion_id")
+@click.option("--evidence-count", "-e", type=int, default=0, help="Number of evidence items")
+@click.option("--evidence-strength", "-s", type=float, default=0.0, help="Sum of evidence strengths")
+@click.option("--novel-numbers", "-n", type=int, default=0, help="Novel numbers in claim")
+@click.option("--claim-type", "-t", type=click.Choice(["static_fact", "volatile_fact", "code", "math", "procedure", "judgment"]), default="static_fact")
+@click.option("--risk", "-r", type=click.Choice(["low", "medium", "high"]), default="low")
+@click.option("--scope", type=click.Choice(["internal_premise", "user_output", "action_trigger"]), default="user_output")
+@click.option("--stage", type=click.Choice(["pre_commit", "post_commit", "periodic", "incident"]), default="pre_commit")
+@click.option("--counterevidence", is_flag=True, help="Flag that counter-evidence exists")
+@click.pass_context
+def audit_run(ctx, assertion_id, evidence_count, evidence_strength, novel_numbers,
+              claim_type, risk, scope, stage, counterevidence):
+    """Run a grounding audit on an assertion."""
+    from .audit import (
+        AuditPipeline, AuditStage, ClaimRisk, AssertionScope,
+        DetectionSignals,
+    )
+
+    gov_dir = ensure_initialized(ctx)
+    audit_path = gov_dir / "audit_pipeline.json"
+
+    if audit_path.exists():
+        pipeline = AuditPipeline.from_dict(json.loads(audit_path.read_text()))
+    else:
+        pipeline = AuditPipeline()
+
+    signals = DetectionSignals(
+        evidence_count=evidence_count,
+        evidence_strength_sum=evidence_strength,
+        novel_number_count=novel_numbers,
+    )
+
+    result = pipeline.audit(
+        assertion_id=assertion_id,
+        signals=signals,
+        claim_type=claim_type,
+        risk=ClaimRisk(risk),
+        scope=AssertionScope(scope),
+        stage=AuditStage(stage),
+        has_counterevidence=counterevidence,
+    )
+
+    audit_path.write_text(json.dumps(pipeline.to_dict(), indent=2, default=str))
+
+    # Display result
+    status_colors = {
+        "grounded": "green",
+        "weak": "yellow",
+        "ungrounded": "red",
+        "contradicted": "red",
+        "unknown": "yellow",
+    }
+    decision_colors = {
+        "allow_hard": "green",
+        "downgrade_soft": "yellow",
+        "block": "red",
+        "needs_more_work": "yellow",
+    }
+
+    click.echo(f"Audit: {result.audit_id}")
+    click.echo(f"  assertion: {result.assertion_id}")
+    click.echo(f"  stage:     {result.stage.value}")
+    click.secho(f"  status:    {result.status.value}", fg=status_colors.get(result.status.value, "white"))
+    click.secho(f"  decision:  {result.decision.value}", fg=decision_colors.get(result.decision.value, "white"))
+    click.echo(f"  severity:  {result.severity.value}")
+
+    if result.failure_modes:
+        modes = ", ".join(m.value for m in result.failure_modes)
+        click.echo(f"  failures:  {modes}")
+
+    if result.leak_score > 0:
+        click.echo(f"  leak_score: {result.leak_score:.1f}")
+
+
+@audit_cmd.command("history")
+@click.option("-n", "--limit", type=int, default=20, help="Number of recent audits")
+@click.option("--problematic", is_flag=True, help="Show only problematic audits")
+@click.pass_context
+def audit_history(ctx, limit, problematic):
+    """Show recent audit history."""
+    from .audit import AuditPipeline
+
+    gov_dir = ensure_initialized(ctx)
+    audit_path = gov_dir / "audit_pipeline.json"
+
+    if not audit_path.exists():
+        click.echo("No audit history. Run 'governor audit run' first.")
+        return
+
+    pipeline = AuditPipeline.from_dict(json.loads(audit_path.read_text()))
+
+    if problematic:
+        audits = pipeline.get_problematic_audits(limit)
+        click.echo(f"Problematic audits (last {limit}):")
+    else:
+        audits = pipeline.get_recent_audits(limit)
+        click.echo(f"Recent audits (last {limit}):")
+
+    if not audits:
+        click.echo("  (none)")
+        return
+
+    for a in audits:
+        status_icon = {"grounded": "+", "weak": "~", "ungrounded": "!", "contradicted": "X", "unknown": "?"}
+        icon = status_icon.get(a.status.value, "?")
+        modes = ", ".join(m.value for m in a.failure_modes) if a.failure_modes else "-"
+        click.echo(f"  [{icon}] {a.audit_id} | {a.assertion_id} | {a.stage.value} | {a.status.value} | {a.decision.value} | {modes}")
+
+
+@audit_cmd.command("policy")
+@click.option("--claim-type", "-t", type=str, default=None, help="Filter by claim type")
+@click.option("--risk", "-r", type=click.Choice(["low", "medium", "high"]), default=None)
+@click.pass_context
+def audit_policy(ctx, claim_type, risk):
+    """Show current policy thresholds."""
+    from .audit import AuditPipeline, ClaimRisk
+
+    gov_dir = ensure_initialized(ctx)
+    audit_path = gov_dir / "audit_pipeline.json"
+
+    if audit_path.exists():
+        pipeline = AuditPipeline.from_dict(json.loads(audit_path.read_text()))
+    else:
+        pipeline = AuditPipeline()
+
+    click.echo(f"Policy entries: {len(pipeline.policy_store.policies)}")
+    click.echo(f"Adjustments made: {len(pipeline.policy_store.adjustment_history)}")
+    click.echo()
+
+    for key, entry in sorted(pipeline.policy_store.policies.items()):
+        if claim_type and entry.claim_type != claim_type:
+            continue
+        if risk and entry.risk != ClaimRisk(risk):
+            continue
+
+        click.echo(f"  {key}:")
+        click.echo(f"    k_required={entry.k_required}  independence={entry.independence_threshold:.2f}  "
+                    f"min_strength={entry.min_evidence_strength:.2f}")
+        click.echo(f"    max_novel_numbers={entry.max_novel_numbers}  max_specious={entry.max_specious_precision:.2f}  "
+                    f"ttl={entry.ttl_seconds:.0f}s  stabilization={entry.stabilization_rounds}")
+
+
+@audit_cmd.command("stats")
+@click.pass_context
+def audit_stats(ctx):
+    """Show audit pipeline statistics."""
+    from .audit import AuditPipeline
+
+    gov_dir = ensure_initialized(ctx)
+    audit_path = gov_dir / "audit_pipeline.json"
+
+    if not audit_path.exists():
+        click.echo("No audit data. Run 'governor audit run' first.")
+        return
+
+    pipeline = AuditPipeline.from_dict(json.loads(audit_path.read_text()))
+    m = pipeline.get_metrics()
+
+    click.echo("Audit Pipeline Statistics")
+    click.echo(f"  total audits:      {m['total_audits']}")
+    click.echo(f"  clean:             {m['total_clean']} ({m['clean_rate']:.1%})")
+    click.echo(f"  problematic:       {m['total_problematic']} ({m['problematic_rate']:.1%})")
+    click.echo(f"  policy adjustments: {m['policy_adjustments']}")
+
+    if m["top_failure_modes"]:
+        click.echo()
+        click.echo("  Top failure modes:")
+        for mode, count in m["top_failure_modes"]:
+            click.echo(f"    {mode}: {count}")
+
+
+@audit_cmd.command("adapt")
+@click.option("--window", "-w", type=int, default=50, help="Window size for rate calculation")
+@click.option("--dry-run", is_flag=True, help="Show what would change without applying")
+@click.pass_context
+def audit_adapt(ctx, window, dry_run):
+    """Run adaptive threshold tuning based on recent audit outcomes."""
+    from .audit import AuditPipeline
+
+    gov_dir = ensure_initialized(ctx)
+    audit_path = gov_dir / "audit_pipeline.json"
+
+    if not audit_path.exists():
+        click.echo("No audit data. Run audits first.")
+        return
+
+    pipeline = AuditPipeline.from_dict(json.loads(audit_path.read_text()))
+
+    if dry_run:
+        # Compute but don't save
+        adjustments = pipeline.adapt_thresholds(window)
+        if not adjustments:
+            click.echo("No adjustments needed (rates below thresholds or insufficient data).")
+        else:
+            click.echo(f"Would make {len(adjustments)} adjustment(s):")
+            for adj in adjustments:
+                click.echo(f"  {adj['key']}: {adj['field']} by {adj['amount']} ({adj['reason']})")
+    else:
+        adjustments = pipeline.adapt_thresholds(window)
+        if not adjustments:
+            click.echo("No adjustments needed.")
+        else:
+            click.echo(f"Applied {len(adjustments)} adjustment(s):")
+            for adj in adjustments:
+                click.echo(f"  {adj['key']}: {adj['field']} by {adj['amount']} ({adj['reason']})")
+            audit_path.write_text(json.dumps(pipeline.to_dict(), indent=2, default=str))
+            click.echo("Pipeline state saved.")
+
+
+@audit_cmd.command("rates")
+@click.option("--window", "-w", type=int, default=100, help="Window size")
+@click.pass_context
+def audit_rates(ctx, window):
+    """Show failure mode rates over recent window."""
+    from .audit import AuditPipeline
+
+    gov_dir = ensure_initialized(ctx)
+    audit_path = gov_dir / "audit_pipeline.json"
+
+    if not audit_path.exists():
+        click.echo("No audit data.")
+        return
+
+    pipeline = AuditPipeline.from_dict(json.loads(audit_path.read_text()))
+    rates = pipeline.get_failure_mode_rates(window)
+
+    if not rates:
+        click.echo("No failure modes recorded.")
+        return
+
+    click.echo(f"Failure mode rates (window={window}):")
+    for mode, rate in sorted(rates.items(), key=lambda x: x[1], reverse=True):
+        bar = "#" * int(rate * 40)
+        click.echo(f"  {mode:30s} {rate:5.1%} {bar}")
+
+
+# ── Homeostat (exploration budgets, adaptive gain scheduling) ─────────────────
+
+@cli.group("explore")
+@click.pass_context
+def explore_cmd(ctx):
+    """Homeostat — exploration budgets and adaptive gain scheduling."""
+    pass
+
+
+@explore_cmd.command("status")
+@click.pass_context
+def explore_status(ctx):
+    """Show homeostat state: mode, context, budget, urgency."""
+    from .homeostat import Homeostat
+
+    gov_dir = ensure_initialized(ctx)
+    homeo_path = gov_dir / "homeostat.json"
+
+    if not homeo_path.exists():
+        click.echo("Homeostat not initialised. Run 'governor explore observe' first.")
+        return
+
+    h = Homeostat.from_dict(json.loads(homeo_path.read_text()))
+    diag = h.get_diagnostics()
+
+    click.echo(f"Mode:             {diag['mode']}")
+    click.echo(f"Context:          {diag['context']}")
+    click.echo(f"Description:      {diag['context_description']}")
+    click.echo(f"EMA urgency:      {diag['ema_urgency']:.4f}")
+    click.echo(f"Effective urgency: {diag['effective_urgency']:.4f}")
+    click.echo(f"Urgency trend:    {diag['urgency_trend']:+.6f}")
+    click.echo(f"Observations:     {diag['observations']}")
+    click.echo(f"Transitions:      {diag['transitions']}")
+    budget = diag["budget"]
+    click.echo(f"Budget:           {budget['remaining']:.2f} / {budget['max_budget']:.1f}"
+               f"  (can_explore={budget['can_explore']})")
+
+
+@explore_cmd.command("enter")
+@click.argument("context")
+@click.pass_context
+def explore_enter(ctx, context):
+    """Enter an exploration context (research, brainstorm, hypothesis, synthesis, devils_advocate, calibration)."""
+    from .homeostat import Homeostat, ExplorationContext
+
+    gov_dir = ensure_initialized(ctx)
+    homeo_path = gov_dir / "homeostat.json"
+
+    if not homeo_path.exists():
+        click.echo("Homeostat not initialised. Run 'governor explore observe' first.")
+        return
+
+    try:
+        ec = ExplorationContext(context)
+    except ValueError:
+        click.echo(f"Unknown context: {context}")
+        click.echo(f"Available: {', '.join(c.value for c in ExplorationContext)}")
+        return
+
+    h = Homeostat.from_dict(json.loads(homeo_path.read_text()))
+    ok = h.enter_exploration(ec)
+    if ok:
+        homeo_path.write_text(json.dumps(h.to_dict(), indent=2, default=str))
+        p = h.get_profile()
+        click.echo(f"Entered: {ec.value}")
+        click.echo(f"  {p.description}")
+        click.echo(f"  Budget cost/turn: {p.budget_cost:.2f}")
+        click.echo(f"  Urgency dampening: {p.urgency_dampening:.1%}")
+        click.echo(f"  Commitment tentativeness: {p.commitment_tentativeness:.1%}")
+    else:
+        click.echo(f"Cannot enter {ec.value}: insufficient exploration budget "
+                    f"({h.budget.remaining:.2f} < {h.budget.min_to_explore:.2f})")
+
+
+@explore_cmd.command("exit")
+@click.pass_context
+def explore_exit(ctx):
+    """Return to standard context."""
+    from .homeostat import Homeostat
+
+    gov_dir = ensure_initialized(ctx)
+    homeo_path = gov_dir / "homeostat.json"
+
+    if not homeo_path.exists():
+        click.echo("Homeostat not initialised.")
+        return
+
+    h = Homeostat.from_dict(json.loads(homeo_path.read_text()))
+    h.exit_exploration()
+    homeo_path.write_text(json.dumps(h.to_dict(), indent=2, default=str))
+    click.echo(f"Returned to standard. Budget: {h.budget.remaining:.2f}")
+
+
+@explore_cmd.command("budget")
+@click.pass_context
+def explore_budget(ctx):
+    """Show exploration budget status."""
+    from .homeostat import Homeostat
+
+    gov_dir = ensure_initialized(ctx)
+    homeo_path = gov_dir / "homeostat.json"
+
+    if not homeo_path.exists():
+        click.echo("Homeostat not initialised.")
+        return
+
+    h = Homeostat.from_dict(json.loads(homeo_path.read_text()))
+    b = h.budget
+    bar_len = int(b.remaining / b.max_budget * 30)
+    bar = "#" * bar_len + "." * (30 - bar_len)
+    click.echo(f"Budget: [{bar}] {b.remaining:.2f} / {b.max_budget:.1f}")
+    click.echo(f"Can explore: {b.can_explore()}")
+    click.echo(f"Regen rate:  {b.regen_rate}/turn (standard)")
+    click.echo(f"Min to explore: {b.min_to_explore}")
+
+
+@explore_cmd.command("profiles")
+@click.pass_context
+def explore_profiles(ctx):
+    """List all available exploration profiles."""
+    from .homeostat import list_profiles
+
+    for p in list_profiles():
+        click.echo(f"  {p.context.value:18s} cost={p.budget_cost:.2f}  "
+                    f"dampening={p.urgency_dampening:.0%}  "
+                    f"tentative={p.commitment_tentativeness:.0%}")
+        click.echo(f"    {p.description}")
+
+
+@explore_cmd.command("observe")
+@click.option("--revision-rate", type=float, default=0.0, help="Revision rate")
+@click.option("--contradiction-rate", type=float, default=0.0, help="Contradiction rate")
+@click.option("--hedge-rate", type=float, default=0.0, help="Hedge rate")
+@click.option("--refusal-rate", type=float, default=0.0, help="Refusal rate")
+@click.option("--support-deficit", type=float, default=0.0, help="Support deficit rate")
+@click.option("--retrieval-coverage", type=float, default=1.0, help="Retrieval coverage")
+@click.option("--instability", type=float, default=0.0, help="Thermal instability")
+@click.option("--domain", type=str, default="general", help="Domain for setpoints")
+@click.pass_context
+def explore_observe(ctx, revision_rate, contradiction_rate, hedge_rate,
+                    refusal_rate, support_deficit, retrieval_coverage,
+                    instability, domain):
+    """Observe vitals and compute tuning deltas."""
+    from .homeostat import Homeostat, EpistemicVitals, create_homeostat
+
+    gov_dir = ensure_initialized(ctx)
+    homeo_path = gov_dir / "homeostat.json"
+
+    if homeo_path.exists():
+        h = Homeostat.from_dict(json.loads(homeo_path.read_text()))
+    else:
+        h = create_homeostat(domain=domain)
+
+    vitals = EpistemicVitals(
+        revision_rate=revision_rate,
+        contradiction_rate=contradiction_rate,
+        hedge_rate=hedge_rate,
+        refusal_rate=refusal_rate,
+        support_deficit_rate=support_deficit,
+        retrieval_coverage=retrieval_coverage,
+        thermal_instability=instability,
+    )
+
+    tuning = h.observe(vitals)
+    homeo_path.write_text(json.dumps(h.to_dict(), indent=2, default=str))
+
+    click.echo(f"Context:    {h.context.value}")
+    click.echo(f"EMA urgency: {h.ema_urgency:.4f}")
+    click.echo(f"Tuning deltas:")
+    click.echo(f"  confidence_mult:  {tuning.confidence_ceiling_mult:.3f}")
+    click.echo(f"  support_bias:     {tuning.require_support_bias:+.3f}")
+    click.echo(f"  retrieval_bias:   {tuning.retrieval_force_bias:+.3f}")
+    click.echo(f"  hedge_preference: {tuning.hedge_preference:+.3f}")
+    click.echo(f"  refuse_preference:{tuning.refuse_preference:+.3f}")
+    click.echo(f"  revision_cost:    {tuning.revision_cost_mult:.3f}")
+    click.echo(f"  horizon_mult:     {tuning.horizon_mult:.3f}")
+
+
+@cli.command("vitals")
+@click.pass_context
+def vitals_cmd(ctx):
+    """Show current vitals and setpoint deviations."""
+    from .homeostat import Homeostat
+
+    gov_dir = ensure_initialized(ctx)
+    homeo_path = gov_dir / "homeostat.json"
+
+    if not homeo_path.exists():
+        click.echo("No homeostat data. Run 'governor explore observe' first.")
+        return
+
+    h = Homeostat.from_dict(json.loads(homeo_path.read_text()))
+    if not h.history:
+        click.echo("No observations recorded yet.")
+        return
+
+    last = h.history[-1]
+    v = last.vitals
+    errors = h.setpoints.compute_error(v)
+
+    click.echo(f"Turn: {v.turn}  Commits: {v.total_commits}  Proposals: {v.total_proposals}")
+    click.echo(f"Thermal regime: {v.thermal_regime}")
+    click.echo(f"EMA urgency: {h.ema_urgency:.4f}")
+    click.echo()
+    click.echo(f"{'Metric':<24s} {'Value':>7s} {'Target':>7s} {'Error':>7s}")
+    click.echo("-" * 50)
+
+    rows = [
+        ("revision_rate", v.revision_rate, h.setpoints.revision_target, errors["revision"]),
+        ("contradiction_rate", v.contradiction_rate, h.setpoints.contradiction_target, errors["contradiction"]),
+        ("hedge_rate", v.hedge_rate, h.setpoints.hedge_target, errors["hedge"]),
+        ("refusal_rate", v.refusal_rate, h.setpoints.refusal_target, errors["refusal"]),
+        ("support_deficit", v.support_deficit_rate, h.setpoints.support_deficit_target, errors["support_deficit"]),
+        ("retrieval_coverage", v.retrieval_coverage, h.setpoints.retrieval_coverage_target, errors["retrieval_coverage"]),
+        ("thermal_instability", v.thermal_instability, h.setpoints.instability_target, errors["instability"]),
+    ]
+    for name, val, target, err in rows:
+        flag = "!" if err > 0.1 else " "
+        click.echo(f"{flag} {name:<22s} {val:7.3f} {target:7.3f} {err:7.3f}")
+
+
+# =====================================================================
+# Strict Programmer Mode
+# =====================================================================
+
+def get_strict_gate(gov_dir: Path):
+    """Load or create a StrictModeGate."""
+    from .strict import StrictModeGate
+    gate_path = gov_dir / "strict_gate.json"
+    if gate_path.exists():
+        return StrictModeGate.from_dict(json.loads(gate_path.read_text()))
+    return StrictModeGate()
+
+
+def save_strict_gate(gov_dir: Path, gate) -> None:
+    gate_path = gov_dir / "strict_gate.json"
+    gate_path.write_text(json.dumps(gate.to_dict(), indent=2))
+
+
+@cli.group("strict")
+@click.pass_context
+def strict_cmd(ctx):
+    """Strict programmer mode — fail-closed governance for production contexts."""
+    pass
+
+
+@strict_cmd.command("status")
+@click.pass_context
+def strict_status(ctx):
+    """Show strict mode gate status and statistics."""
+    from .strict import StrictModeGate
+
+    gov_dir = ensure_initialized(ctx)
+    gate = get_strict_gate(gov_dir)
+    s = gate.stats()
+
+    click.echo("=== Strict Programmer Mode ===")
+    click.echo(f"Policy: hard_threshold={gate.policy.hard_threshold}  "
+               f"soft_threshold={gate.policy.soft_threshold}")
+    click.echo(f"Risk adjustment: k_increase={gate.policy.k_increase}  "
+               f"independence_boost={gate.policy.independence_boost}")
+    click.echo(f"Speculative facts: {'allowed' if gate.policy.speculative_facts_allowed else 'blocked'}")
+    click.echo()
+
+    if s["total"] == 0:
+        click.echo("No evaluations recorded.")
+        return
+
+    click.echo(f"Total evaluations: {s['total']}")
+    click.echo(f"  HARD:    {s['hard']} ({s['hard_rate']:.1%})")
+    click.echo(f"  SOFT:    {s['soft']} ({s['soft_rate']:.1%})")
+    click.echo(f"  REFUSED: {s['refused']} ({s['refusal_rate']:.1%})")
+
+
+@strict_cmd.command("evaluate")
+@click.argument("category", type=click.Choice([
+    "static_fact", "volatile_fact", "code", "procedure", "judgment", "plan",
+]))
+@click.option("--risk", type=click.Choice(["low", "medium", "high"]), default="low")
+@click.option("--evidence-count", type=int, default=0)
+@click.option("--independence", type=float, default=0.0)
+@click.option("--has-source", is_flag=True)
+@click.option("--has-version", is_flag=True)
+@click.option("--has-verification-date", is_flag=True)
+@click.option("--has-ttl", is_flag=True)
+@click.option("--ttl-hours", type=float, default=None)
+@click.option("--has-prerequisites", is_flag=True)
+@click.option("--has-failure-modes", is_flag=True)
+@click.option("--has-rollback", is_flag=True)
+@click.option("--is-runnable", is_flag=True)
+@click.option("--is-pseudocode", is_flag=True)
+@click.option("--falsifier-ran", is_flag=True)
+@click.option("--has-platform-context", is_flag=True)
+@click.pass_context
+def strict_evaluate(ctx, category, risk, evidence_count, independence,
+                    has_source, has_version, has_verification_date,
+                    has_ttl, ttl_hours, has_prerequisites, has_failure_modes,
+                    has_rollback, is_runnable, is_pseudocode, falsifier_ran,
+                    has_platform_context):
+    """Evaluate a claim under strict mode."""
+    from .strict import ClaimCategory, RiskLevel
+
+    gov_dir = ensure_initialized(ctx)
+    gate = get_strict_gate(gov_dir)
+
+    result = gate.evaluate(
+        ClaimCategory(category),
+        RiskLevel(risk),
+        evidence_count=evidence_count,
+        independence_score=independence,
+        has_source=has_source,
+        has_version=has_version,
+        has_verification_date=has_verification_date,
+        has_ttl=has_ttl,
+        ttl_hours=ttl_hours,
+        has_prerequisites=has_prerequisites,
+        has_failure_modes=has_failure_modes,
+        has_rollback=has_rollback,
+        is_runnable=is_runnable,
+        is_labeled_pseudocode=is_pseudocode,
+        falsifier_ran=falsifier_ran,
+        has_platform_context=has_platform_context,
+    )
+
+    save_strict_gate(gov_dir, gate)
+
+    click.echo(f"Category: {result.category.value}  Risk: {result.risk.value}")
+    click.echo(f"Commit level: {result.commit_level.value}")
+    click.echo(f"Satisfaction: {result.satisfaction_ratio:.1%}")
+    if result.satisfied:
+        click.echo(f"  Satisfied: {', '.join(result.satisfied)}")
+    if result.unsatisfied:
+        click.echo(f"  Unsatisfied: {', '.join(result.unsatisfied)}")
+    click.echo(f"Recommendation: {result.recommendation}")
+    if result.refusal_message:
+        click.echo(f"Refusal: {result.refusal_message}")
+
+
+@strict_cmd.command("requirements")
+@click.argument("category", type=click.Choice([
+    "static_fact", "volatile_fact", "code", "procedure", "judgment", "plan",
+]))
+@click.option("--risk", type=click.Choice(["low", "medium", "high"]), default="low")
+@click.pass_context
+def strict_requirements(ctx, category, risk):
+    """Show requirements for a claim category."""
+    from .strict import ClaimCategory, RiskLevel, StrictPolicy
+
+    policy = StrictPolicy()
+    cat = ClaimCategory(category)
+    r = RiskLevel(risk)
+
+    if cat in policy.soft_only:
+        click.echo(f"{cat.value} is always SOFT — no hard requirements.")
+        return
+
+    req = policy.get_risk_adjusted(cat, r)
+    click.echo(f"Requirements for {cat.value} at {r.value} risk:")
+    click.echo(f"  min_evidence_count: {req.min_evidence_count}")
+    click.echo(f"  min_independence: {req.min_independence}")
+    for field_name in [
+        "requires_source", "requires_version", "requires_verification_date",
+        "requires_ttl", "requires_prerequisites", "requires_failure_modes",
+        "requires_rollback", "requires_runnable", "falsifier_required",
+        "requires_platform_context",
+    ]:
+        val = getattr(req, field_name)
+        if val:
+            click.echo(f"  {field_name}: {val}")
+    if req.max_ttl_hours is not None:
+        click.echo(f"  max_ttl_hours: {req.max_ttl_hours}")
+
+
+@strict_cmd.command("history")
+@click.option("--limit", default=20)
+@click.pass_context
+def strict_history(ctx, limit):
+    """Show recent evaluation history."""
+    gov_dir = ensure_initialized(ctx)
+    gate = get_strict_gate(gov_dir)
+
+    history = gate.history[-limit:]
+    if not history:
+        click.echo("No evaluations recorded.")
+        return
+
+    click.echo(f"{'Category':<16s} {'Risk':<8s} {'Level':<10s} {'Ratio':>6s}")
+    click.echo("-" * 44)
+    for ev in history:
+        click.echo(f"{ev.category.value:<16s} {ev.risk.value:<8s} "
+                    f"{ev.commit_level.value:<10s} {ev.satisfaction_ratio:5.1%}")
+
+
+@strict_cmd.command("reset")
+@click.option("--confirm", is_flag=True, required=True,
+              help="Confirm reset of evaluation history")
+@click.pass_context
+def strict_reset(ctx, confirm):
+    """Reset strict mode evaluation history."""
+    gov_dir = ensure_initialized(ctx)
+    gate = get_strict_gate(gov_dir)
+    old_count = gate.total_evaluations
+    gate.reset()
+    save_strict_gate(gov_dir, gate)
+    click.echo(f"Reset strict mode gate. Cleared {old_count} evaluations.")
+
+
+def get_drift_detector(gov_dir: Path):
+    """Load or create a DriftDetector."""
+    from .drift import DriftDetector
+    drift_path = gov_dir / "drift_detector.json"
+    if drift_path.exists():
+        return DriftDetector.from_dict(json.loads(drift_path.read_text()))
+    return DriftDetector()
+
+
+def save_drift_detector(gov_dir: Path, detector) -> None:
+    drift_path = gov_dir / "drift_detector.json"
+    drift_path.write_text(json.dumps(detector.to_dict(), indent=2))
+
+
+@cli.group("drift")
+@click.pass_context
+def drift_cmd(ctx):
+    """Drift detection — defense against temporal asymmetry attacks."""
+    pass
+
+
+@drift_cmd.command("status")
+@click.pass_context
+def drift_status(ctx):
+    """Show drift detector status and alert level."""
+    gov_dir = ensure_initialized(ctx)
+    detector = get_drift_detector(gov_dir)
+
+    click.echo("=== Drift Detector ===")
+    click.echo(f"Turn: {detector.turn}")
+    click.echo(f"Alert level: {detector.current_alert}")
+    click.echo(f"Tracked premises: {len(detector.quarantine.premises)}")
+    click.echo(f"Tracked agents: {len(detector.agents)}")
+    click.echo(f"Unresolved contradictions: {len(detector.unresolved_contradictions)}")
+
+    metrics = detector.quarantine.get_metrics()
+    click.echo()
+    click.echo(f"Quarantine: {metrics['quarantined_premises']} quarantined, "
+               f"{metrics['total_quarantined_ever']} total ever, "
+               f"{metrics['total_released']} released")
+
+    if detector.last_signals:
+        s = detector.last_signals
+        click.echo()
+        click.echo("Last signals:")
+        click.echo(f"  premise_recurrence_rate: {s.premise_recurrence_rate:.3f}")
+        click.echo(f"  attention_skew: {s.attention_skew:.3f}")
+        click.echo(f"  temporal_coherence_gradient: {s.temporal_coherence_gradient:.3f}")
+        click.echo(f"  max_contradiction_age: {s.max_contradiction_age}")
+        click.echo(f"  single_source_rate: {s.single_source_rate:.3f}")
+
+
+@drift_cmd.command("update")
+@click.pass_context
+def drift_update(ctx):
+    """Compute signals and update alert level."""
+    gov_dir = ensure_initialized(ctx)
+    detector = get_drift_detector(gov_dir)
+
+    alert, signals, reasons = detector.update()
+    save_drift_detector(gov_dir, detector)
+
+    click.echo(f"Alert: {alert}")
+    click.echo(f"Reasons: {', '.join(reasons)}")
+    click.echo()
+    click.echo("Signals:")
+    for k, v in signals.to_dict().items():
+        click.echo(f"  {k}: {v}")
+
+
+@drift_cmd.command("record")
+@click.argument("content")
+@click.option("--agent-id", default=None, help="Source agent ID")
+@click.option("--has-evidence", is_flag=True, help="Premise has evidence")
+@click.option("--contested", is_flag=True, help="Premise is contested")
+@click.option("--topic", default=None, help="Topic tag")
+@click.pass_context
+def drift_record(ctx, content, agent_id, has_evidence, contested, topic):
+    """Record an assertion for drift tracking."""
+    gov_dir = ensure_initialized(ctx)
+    detector = get_drift_detector(gov_dir)
+
+    rec = detector.record_assertion(
+        content, agent_id=agent_id, has_evidence=has_evidence,
+        contested=contested, topic=topic,
+    )
+    save_drift_detector(gov_dir, detector)
+
+    click.echo(f"Recorded premise: {rec.content_summary}")
+    click.echo(f"  occurrences: {rec.occurrences}  weight: {rec.weight:.2f}")
+    if rec.quarantined:
+        click.echo("  STATUS: QUARANTINED")
+
+
+@drift_cmd.command("quarantined")
+@click.pass_context
+def drift_quarantined(ctx):
+    """List quarantined premises."""
+    gov_dir = ensure_initialized(ctx)
+    detector = get_drift_detector(gov_dir)
+
+    quarantined = detector.quarantine.quarantined_premises()
+    if not quarantined:
+        click.echo("No quarantined premises.")
+        return
+
+    click.echo(f"{'Summary':<40s} {'Occ':>4s} {'Weight':>7s} {'Stale':>6s}")
+    click.echo("-" * 60)
+    for rec in quarantined:
+        click.echo(f"{rec.content_summary[:40]:<40s} {rec.occurrences:>4d} "
+                   f"{rec.weight:>7.2f} {rec.turns_without_evidence:>6d}")
+
+
+@drift_cmd.command("agents")
+@click.pass_context
+def drift_agents(ctx):
+    """Show agent activity tracking."""
+    gov_dir = ensure_initialized(ctx)
+    detector = get_drift_detector(gov_dir)
+
+    if not detector.agents:
+        click.echo("No agents tracked.")
+        return
+
+    click.echo(f"{'Agent':<20s} {'Assert':>7s} {'Contest':>8s} {'Ratio':>7s} {'Coher':>7s}")
+    click.echo("-" * 52)
+    for agent in detector.agents.values():
+        click.echo(f"{agent.agent_id[:20]:<20s} {agent.total_assertions:>7d} "
+                   f"{agent.contested_assertions:>8d} "
+                   f"{agent.contested_ratio:>7.2f} {agent.temporal_coherence:>7.2f}")
+
+
+@drift_cmd.command("history")
+@click.option("--limit", default=20)
+@click.pass_context
+def drift_history(ctx, limit):
+    """Show alert transition history."""
+    gov_dir = ensure_initialized(ctx)
+    detector = get_drift_detector(gov_dir)
+
+    history = detector.alert_history[-limit:]
+    if not history:
+        click.echo("No alert transitions recorded.")
+        return
+
+    click.echo(f"{'Turn':>6s} {'Alert':<12s} {'Reasons'}")
+    click.echo("-" * 60)
+    for turn, alert, reasons in history:
+        click.echo(f"{turn:>6d} {alert:<12s} {', '.join(reasons)}")
+
+
+@drift_cmd.command("tick")
+@click.pass_context
+def drift_tick(ctx):
+    """Advance drift detector turn counter."""
+    gov_dir = ensure_initialized(ctx)
+    detector = get_drift_detector(gov_dir)
+    detector.tick()
+    save_drift_detector(gov_dir, detector)
+    click.echo(f"Advanced to turn {detector.turn}")
+
+
+@drift_cmd.command("reset")
+@click.option("--confirm", is_flag=True, required=True,
+              help="Confirm reset of drift detector state")
+@click.pass_context
+def drift_reset(ctx, confirm):
+    """Reset drift detector state."""
+    from .drift import DriftDetector
+    gov_dir = ensure_initialized(ctx)
+    detector = DriftDetector()
+    save_drift_detector(gov_dir, detector)
+    click.echo("Drift detector reset to initial state.")
+
+
+# ============================================================================
+# Claim Diff Commands
+# ============================================================================
+
+CLAIM_DIFF_SNAPSHOT_FILE = "claim_diff_snapshot.json"
+CLAIM_DIFF_HISTORY_FILE = "claim_diff_history.json"
+
+
+def get_claim_diff_snapshot(gov_dir: Path):
+    """Load the last saved ledger snapshot for diffing."""
+    from .claim_diff import LedgerSnapshot
+    path = gov_dir / CLAIM_DIFF_SNAPSHOT_FILE
+    if path.exists():
+        data = json.loads(path.read_text())
+        # Reconstruct from dict
+        from .claim_diff import ClaimSnapshot
+        claims = {}
+        claims_by_hash: dict[str, list[str]] = {}
+        for cid, cd in data.get("claims", {}).items():
+            snap = ClaimSnapshot(
+                claim_id=cd["claim_id"],
+                content=cd["content"],
+                content_hash=cd["content_hash"],
+                provenance=cd["provenance"],
+                confidence=cd["confidence"],
+                evidence_count=cd["evidence_count"],
+                evidence_ref_ids=tuple(cd.get("evidence_ref_ids", [])),
+                status=cd["status"],
+                is_grounded=cd["is_grounded"],
+                is_dangerous=cd["is_dangerous"],
+                source_agent_id=cd.get("source_agent_id"),
+            )
+            claims[cid] = snap
+            if snap.content_hash not in claims_by_hash:
+                claims_by_hash[snap.content_hash] = []
+            claims_by_hash[snap.content_hash].append(cid)
+        return LedgerSnapshot(
+            step=data["step"],
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+            claims=claims,
+            claims_by_hash=claims_by_hash,
+            total_claims=data["total_claims"],
+            active_count=data["active_count"],
+            dangerous_count=data["dangerous_count"],
+        )
+    return None
+
+
+def save_claim_diff_snapshot(gov_dir: Path, snapshot) -> None:
+    """Save a ledger snapshot for future diffing."""
+    path = gov_dir / CLAIM_DIFF_SNAPSHOT_FILE
+    path.write_text(json.dumps(snapshot.to_dict(), indent=2, default=str))
+
+
+def get_claim_diff_history(gov_dir: Path):
+    """Load diff history."""
+    from .claim_diff import DiffHistory
+    path = gov_dir / CLAIM_DIFF_HISTORY_FILE
+    if path.exists():
+        data = json.loads(path.read_text())
+        history = DiffHistory(max_history=data.get("max_history", 100))
+        # We store summaries, not full results — enough for trend analysis
+        return history, data.get("diffs", [])
+    return DiffHistory(), []
+
+
+def save_claim_diff_history(gov_dir: Path, history, raw_diffs: list) -> None:
+    """Save diff history."""
+    path = gov_dir / CLAIM_DIFF_HISTORY_FILE
+    output = {
+        "max_history": history.max_history,
+        "count": len(history.diffs),
+        "diffs": [d.to_dict() for d in history.diffs],
+    }
+    path.write_text(json.dumps(output, indent=2, default=str))
+
+
+@cli.group("claim-diff")
+@click.pass_context
+def claim_diff_cmd(ctx):
+    """Claim diff — detect epistemic state changes between turns.
+
+    Catches confidence drift, provenance laundering,
+    evidence erosion, and silent retraction.
+    """
+    pass
+
+
+@claim_diff_cmd.command("status")
+@click.pass_context
+def claim_diff_status(ctx):
+    """Show diff tracking state and violation counts."""
+    gov_dir = ensure_initialized(ctx)
+    snapshot = get_claim_diff_snapshot(gov_dir)
+    history, raw = get_claim_diff_history(gov_dir)
+
+    click.echo("=== Claim Diff ===")
+    if snapshot:
+        click.echo(f"Last snapshot: step {snapshot.step} ({snapshot.total_claims} claims)")
+    else:
+        click.echo("Last snapshot: none (run 'governor claim-diff snapshot' first)")
+
+    click.echo(f"History entries: {len(history.diffs)}")
+
+    if history.diffs:
+        total_violations = sum(len(d.violations) for d in history.diffs)
+        total_drift = sum(d.confidence_drift_count for d in history.diffs)
+        total_launder = sum(d.provenance_laundering_count for d in history.diffs)
+        click.echo(f"Total violations: {total_violations}")
+        click.echo(f"  Confidence drift: {total_drift}")
+        click.echo(f"  Provenance laundering: {total_launder}")
+
+
+@claim_diff_cmd.command("snapshot")
+@click.pass_context
+def claim_diff_snapshot(ctx):
+    """Take snapshot of current epistemic ledger."""
+    from .claim_diff import snapshot_ledger
+
+    gov_dir = ensure_initialized(ctx)
+    ledger = get_epistemic_ledger(gov_dir)
+    snap = snapshot_ledger(ledger)
+    save_claim_diff_snapshot(gov_dir, snap)
+
+    click.echo(f"Snapshot taken at step {snap.step}")
+    click.echo(f"  Total claims: {snap.total_claims}")
+    click.echo(f"  Active: {snap.active_count}")
+    click.echo(f"  Dangerous: {snap.dangerous_count}")
+
+
+@claim_diff_cmd.command("run")
+@click.pass_context
+def claim_diff_run(ctx):
+    """Diff current ledger vs last snapshot, append to history."""
+    from .claim_diff import snapshot_ledger, ClaimDiffer, DiffHistory
+
+    gov_dir = ensure_initialized(ctx)
+    old_snapshot = get_claim_diff_snapshot(gov_dir)
+
+    if old_snapshot is None:
+        click.echo("No previous snapshot. Run 'governor claim-diff snapshot' first.", err=True)
+        ctx.exit(1)
+        return
+
+    ledger = get_epistemic_ledger(gov_dir)
+    new_snapshot = snapshot_ledger(ledger)
+
+    differ = ClaimDiffer()
+    result = differ.diff(old_snapshot, new_snapshot)
+
+    # Update history
+    history, _ = get_claim_diff_history(gov_dir)
+    history.add(result)
+    save_claim_diff_history(gov_dir, history, [])
+
+    # Save new snapshot as baseline
+    save_claim_diff_snapshot(gov_dir, new_snapshot)
+
+    s = result.summary
+    click.echo(f"Diff: step {s['steps']}")
+    click.echo(f"  Preserved: {s['preserved']}")
+    click.echo(f"  Mutated: {s['mutated']}")
+    click.echo(f"  Added: {s['added']}")
+    click.echo(f"  Dropped: {s['dropped']}")
+    click.echo(f"  Violations: {s['violations']}")
+
+    if result.has_violations:
+        click.echo()
+        for v in result.violations:
+            color = "red" if v.severity >= 0.8 else "yellow"
+            click.echo(click.style(
+                f"  [{v.violation_type.value}] {v.content_summary[:60]}",
+                fg=color,
+            ))
+            click.echo(f"    Severity: {v.severity:.2f} — {v.details}")
+
+
+@claim_diff_cmd.command("violations")
+@click.option("--all", "show_all", is_flag=True, help="Show all violations from history")
+@click.option("--type", "vtype", default=None, help="Filter by violation type")
+@click.pass_context
+def claim_diff_violations(ctx, show_all, vtype):
+    """List violations from most recent diff (or all history)."""
+    gov_dir = ensure_initialized(ctx)
+    history, _ = get_claim_diff_history(gov_dir)
+
+    if not history.diffs:
+        click.echo("No diff history. Run 'governor claim-diff run' first.")
+        return
+
+    diffs = history.diffs if show_all else [history.diffs[-1]]
+    all_violations = []
+    for d in diffs:
+        for v in d.violations:
+            if vtype is None or v.violation_type.value == vtype:
+                all_violations.append((d, v))
+
+    if not all_violations:
+        click.echo("No violations found.")
+        return
+
+    click.echo(f"{'Type':<25s} {'Severity':>8s}  {'Claim'}")
+    click.echo("-" * 70)
+    for d, v in all_violations:
+        click.echo(f"{v.violation_type.value:<25s} {v.severity:>8.2f}  {v.content_summary[:35]}")
+
+
+@claim_diff_cmd.command("history")
+@click.option("--limit", default=20, help="Max entries to show")
+@click.pass_context
+def claim_diff_history(ctx, limit):
+    """Show diff history (step ranges, mutation/violation counts)."""
+    gov_dir = ensure_initialized(ctx)
+    history, _ = get_claim_diff_history(gov_dir)
+
+    if not history.diffs:
+        click.echo("No diff history.")
+        return
+
+    recent = history.diffs[-limit:]
+    click.echo(f"{'Steps':<14s} {'Mut':>4s} {'Viol':>5s} {'Sev':>6s} {'Drift':>6s} {'Laund':>6s}")
+    click.echo("-" * 45)
+    for d in recent:
+        steps = f"{d.before_step}->{d.after_step}"
+        click.echo(f"{steps:<14s} {d.total_mutations:>4d} {len(d.violations):>5d} "
+                   f"{d.total_severity:>6.2f} {d.confidence_drift_count:>6d} "
+                   f"{d.provenance_laundering_count:>6d}")
+
+
+@claim_diff_cmd.command("trend")
+@click.pass_context
+def claim_diff_trend(ctx):
+    """Show trend analysis (drift/laundering/severity per diff)."""
+    gov_dir = ensure_initialized(ctx)
+    history, _ = get_claim_diff_history(gov_dir)
+
+    if not history.diffs:
+        click.echo("No diff history for trend analysis.")
+        return
+
+    drift = history.confidence_drift_trend()
+    launder = history.laundering_trend()
+    severity = history.severity_trend()
+    violations = history.violation_trend()
+
+    click.echo(f"{'#':>3s}  {'Drift':>6s} {'Laund':>6s} {'Viol':>5s} {'Sev':>7s}")
+    click.echo("-" * 32)
+    for i in range(len(drift)):
+        click.echo(f"{i+1:>3d}  {drift[i]:>6d} {launder[i]:>6d} "
+                   f"{violations[i]:>5d} {severity[i]:>7.2f}")
+
+    # Summary
+    click.echo()
+    if any(d > 0 for d in drift):
+        click.echo(click.style("Confidence drift detected in history.", fg="yellow"))
+    if any(l > 0 for l in launder):
+        click.echo(click.style("Provenance laundering detected in history.", fg="red"))
+
+
+@claim_diff_cmd.command("laundering")
+@click.pass_context
+def claim_diff_laundering(ctx):
+    """Shortcut: run diff and show only laundering violations."""
+    from .claim_diff import snapshot_ledger, ClaimDiffer, DiffHistory
+
+    gov_dir = ensure_initialized(ctx)
+    old_snapshot = get_claim_diff_snapshot(gov_dir)
+
+    if old_snapshot is None:
+        click.echo("No previous snapshot. Run 'governor claim-diff snapshot' first.", err=True)
+        ctx.exit(1)
+        return
+
+    ledger = get_epistemic_ledger(gov_dir)
+    new_snapshot = snapshot_ledger(ledger)
+
+    differ = ClaimDiffer(
+        detect_confidence_drift=False,
+        detect_evidence_erosion=False,
+        detect_silent_retraction=False,
+    )
+    result = differ.diff(old_snapshot, new_snapshot)
+
+    laundering = [
+        v for v in result.violations
+        if v.violation_type.value == "provenance_laundering"
+    ]
+
+    if not laundering:
+        click.echo("No provenance laundering detected.")
+        return
+
+    click.echo(f"Provenance laundering: {len(laundering)} violation(s)\n")
+    for v in laundering:
+        click.echo(click.style(f"  [{v.claim_id}] {v.content_summary[:60]}", fg="red"))
+        click.echo(f"    {v.details}")
+
+
+@claim_diff_cmd.command("reset")
+@click.option("--confirm", is_flag=True, required=True,
+              help="Confirm reset of diff history and snapshots")
+@click.pass_context
+def claim_diff_reset(ctx, confirm):
+    """Clear history and snapshots."""
+    gov_dir = ensure_initialized(ctx)
+
+    snapshot_path = gov_dir / CLAIM_DIFF_SNAPSHOT_FILE
+    history_path = gov_dir / CLAIM_DIFF_HISTORY_FILE
+
+    removed = 0
+    if snapshot_path.exists():
+        snapshot_path.unlink()
+        removed += 1
+    if history_path.exists():
+        history_path.unlink()
+        removed += 1
+
+    click.echo(f"Claim diff state reset. Removed {removed} file(s).")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

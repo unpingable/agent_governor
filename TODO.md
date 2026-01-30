@@ -612,7 +612,7 @@ Module: `src/governor/drift.py` (107 tests)
 Multi-agent temporal coherence system. Proposals must remain stable across Δt windows.
 Extends existing multi-agent dispatcher + Δt tracking from direction.py.
 
-- [ ] **Temporal quorum protocol** - Stability over time, not majority vote
+- [x] **Temporal quorum protocol** - Stability over time, not majority vote
   - Proposals must remain stable across Δt windows (seconds, minutes, hours/days)
   - Different claim types get different Δt budgets
   - Low-stakes reversible claims commit fast; high-stakes irreversible require longer Δt + stronger evidence
@@ -624,7 +624,7 @@ Extends existing multi-agent dispatcher + Δt tracking from direction.py.
   - Corroboration from identical methods doesn't count
   - Agent Run Provenance: track tools_used, sources_consulted, prompt_hash
 
-- [ ] **Δt budgets per claim type** - Policy matrix
+- [x] **Δt budgets per claim type** - Policy matrix
   - `MATH`: Δt=1s (low), k=2, tooling=calculator. Reversible.
   - `CODE`: Δt=10s (low), k=1-2, tooling=linter/compiler. Mostly reversible.
   - `STATIC_FACT`: Δt=30-120s (med), k=2-3, tooling=retrieval. Usually irreversible.
@@ -646,7 +646,7 @@ Extends existing multi-agent dispatcher + Δt tracking from direction.py.
   - Revalidation scheduler with urgency-sorted schedule
   - Module: `src/governor/ttl.py` (45 tests)
 
-- [ ] **Quorum state machine** - Proposal lifecycle
+- [x] **Quorum state machine** - Proposal lifecycle
   - PROPOSED → UNDER_REVIEW → {COMMITTED | CONTESTED | EXPIRED}
   - CONTESTED → {RESOLVED_COMMIT | RESOLVED_REJECT | ESCALATED}
   - Commit criteria: stability across Δt, minimum k agents, no unresolved HIGH objections

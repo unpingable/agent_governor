@@ -30,7 +30,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Config Profiles**: Named governance presets (strict, permissive, research, production, audit), custom profiles, one-command switching.
 **Dissent Ledger**: Contradiction persistence, first-class objections, commit gating, confidence trajectories.
 **TTL Enforcement**: Recency decay, volatility classes (PERMANENT→EPHEMERAL), revalidation scheduling.
-**Total: 2406 tests**
+**Quorum State Machine**: Multi-agent consensus protocol, Δt stability windows, claim-type policies, dissent/TTL integration.
+**Total: 2491 tests**
 
 ## Key Documents
 
@@ -230,6 +231,13 @@ governor profile status               # Show active profile
 governor profile off                  # Deactivate current profile
 governor profile create <name>        # Create custom profile
 governor profile delete <name>        # Delete custom profile
+
+# Quorum State Machine (multi-agent consensus)
+governor quorum status <proposal_id>  # Show quorum state for a proposal
+governor quorum vote <proposal_id>    # Cast a vote on a proposal
+governor quorum policy <claim_type>   # Show policy for a claim type
+governor quorum policies              # List all quorum policies
+governor quorum history               # Show recent quorum activity
 ```
 
 ## Architecture Rules (Non-Negotiable)
@@ -316,6 +324,7 @@ src/governor/
 ├── profiles.py       # ProfileManager, ProfileSettings, named governance presets
 ├── dissent.py        # DissentLedger, Objection, commit gating, confidence trajectories
 ├── ttl.py            # TTLManager, VolatilityClass, recency decay, revalidation scheduling
+├── quorum.py         # QuorumManager, QuorumState, multi-agent consensus, Δt stability, dissent/TTL integration
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -547,6 +556,13 @@ src/ops_governor/
 | ttl.py | TTLManager, VolatilityClass (PERMANENT→EPHEMERAL), TTLPolicy, decay enforcement, revalidation scheduling | 45 |
 
 **TTL Enforcement tests: 45**
+
+### Quorum State Machine (Multi-Agent Consensus)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| quorum.py | QuorumManager, QuorumState, ClaimType (6 types with Δt budgets), VoteVerdict, QuorumStatus, stability windows, dissent/TTL integration | 85 |
+
+**Quorum State Machine tests: 85**
 
 ### Fiction Governor (Complete)
 | Module | Description | Tests |

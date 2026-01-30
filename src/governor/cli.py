@@ -7127,6 +7127,145 @@ def profile_delete(ctx, name):
     click.echo(f"Profile '{name}' deleted.")
 
 
+# =============================================================================
+# Quorum commands
+# =============================================================================
+
+
+@cli.group("quorum")
+@click.pass_context
+def quorum_cmd(ctx):
+    """Quorum state machine — multi-agent consensus protocol for claim commitment."""
+    pass
+
+
+@quorum_cmd.command("status")
+@click.argument("proposal_id")
+@click.pass_context
+def quorum_status(ctx, proposal_id):
+    """Show quorum state for a proposal."""
+    from .quorum import QuorumManager, QuorumStatus
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = QuorumManager()
+    qs = mgr.get_quorum(proposal_id)
+    if qs is None:
+        click.echo(f"No quorum found for proposal '{proposal_id}'", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Proposal: {qs.proposal_id}")
+    click.echo(f"Claim type: {qs.claim_type.value}")
+    click.echo(f"Status: {qs.status.value}")
+    click.echo(f"Votes: {qs.total_votes} (approve={qs.approval_count}, reject={qs.rejection_count}, abstain={qs.abstain_count})")
+    click.echo(f"Approval ratio: {qs.approval_ratio:.2f}")
+    click.echo(f"Threshold: {qs.policy.approval_threshold}")
+    click.echo(f"Min voters (k): {qs.policy.min_voters}")
+    click.echo(f"Δt window: {qs.policy.delta_t.total_seconds()}s")
+    click.echo(f"Requires human: {qs.policy.requires_human}")
+    if qs.stabilized_at:
+        click.echo(f"Stabilized at: {qs.stabilized_at.isoformat()}")
+    if qs.reached_at:
+        click.echo(f"Reached at: {qs.reached_at.isoformat()}")
+    if qs.failed_reason:
+        click.echo(f"Failed reason: {qs.failed_reason}")
+
+
+@quorum_cmd.command("vote")
+@click.argument("proposal_id")
+@click.option("--agent-id", required=True, help="Voting agent ID")
+@click.option("--verdict", type=click.Choice(["approve", "reject", "abstain"]), required=True)
+@click.option("--reason", "-r", required=True, help="Reason for vote")
+@click.pass_context
+def quorum_vote(ctx, proposal_id, agent_id, verdict, reason):
+    """Cast a vote on a proposal."""
+    from .quorum import QuorumManager, VoteVerdict
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = QuorumManager()
+    vote = mgr.cast_vote(
+        proposal_id,
+        agent_id,
+        VoteVerdict(verdict),
+        reason,
+    )
+    if vote is None:
+        click.echo("Vote rejected (proposal not found, already voted, or quorum not accepting votes).", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Vote cast: {vote.vote_id}")
+    click.echo(f"Verdict: {vote.verdict.value}")
+    qs = mgr.get_quorum(proposal_id)
+    if qs:
+        click.echo(f"Quorum status: {qs.status.value}")
+
+
+@quorum_cmd.command("policy")
+@click.argument("claim_type")
+@click.pass_context
+def quorum_policy(ctx, claim_type):
+    """Show quorum policy for a claim type."""
+    from .quorum import ClaimType, DEFAULT_POLICIES
+
+    try:
+        ct = ClaimType(claim_type)
+    except ValueError:
+        click.echo(f"Unknown claim type: {claim_type}", err=True)
+        click.echo(f"Valid types: {', '.join(c.value for c in ClaimType)}")
+        ctx.exit(1)
+        return
+
+    p = DEFAULT_POLICIES[ct]
+    click.echo(f"Claim type: {p.claim_type.value}")
+    click.echo(f"Min voters (k): {p.min_voters}")
+    click.echo(f"Approval threshold: {p.approval_threshold}")
+    click.echo(f"Δt stability window: {p.delta_t.total_seconds()}s")
+    click.echo(f"Volatility class: {p.volatility.value}")
+    click.echo(f"Requires human: {p.requires_human}")
+    click.echo(f"Timeout: {p.timeout.total_seconds()}s")
+
+
+@quorum_cmd.command("policies")
+@click.pass_context
+def quorum_policies(ctx):
+    """List all quorum policies."""
+    from .quorum import ClaimType, DEFAULT_POLICIES
+
+    click.echo(f"{'Type':<16} {'k':>3} {'Threshold':>10} {'Δt':>8} {'Volatility':<12} {'Human':>6}")
+    click.echo("-" * 60)
+    for ct in ClaimType:
+        p = DEFAULT_POLICIES[ct]
+        dt = f"{p.delta_t.total_seconds():.0f}s"
+        click.echo(
+            f"{ct.value:<16} {p.min_voters:>3} {p.approval_threshold:>10.2f} {dt:>8} "
+            f"{p.volatility.value:<12} {'yes' if p.requires_human else 'no':>6}"
+        )
+
+
+@quorum_cmd.command("history")
+@click.option("--limit", "-n", default=20, help="Number of entries to show")
+@click.pass_context
+def quorum_history(ctx, limit):
+    """Show recent quorum activity."""
+    from .quorum import QuorumManager
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = QuorumManager()
+    entries = mgr.history[-limit:]
+    if not entries:
+        click.echo("No quorum activity recorded.")
+        return
+
+    for entry in entries:
+        ts = entry.get("timestamp", "?")
+        event = entry.get("event", "?")
+        pid = entry.get("proposal_id", "?")
+        extra = {k: v for k, v in entry.items() if k not in {"timestamp", "event", "proposal_id"}}
+        extra_str = f" {extra}" if extra else ""
+        click.echo(f"[{ts}] {event} proposal={pid}{extra_str}")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

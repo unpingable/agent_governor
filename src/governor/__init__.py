@@ -364,6 +364,20 @@ from .claim_diff import (
     detect_confidence_drift,
 )
 
+# Quorum state machine (multi-agent consensus)
+from .quorum import (
+    ClaimType as QuorumClaimType,
+    VoteVerdict,
+    QuorumStatus,
+    QuorumPolicy,
+    Vote,
+    QuorumState,
+    QuorumManager,
+    DEFAULT_POLICIES as DEFAULT_QUORUM_POLICIES,
+    create_quorum_manager,
+    get_default_policy,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -658,6 +672,17 @@ __all__ = [
     "diff_snapshots",
     "detect_laundering",
     "detect_confidence_drift",
+    # Quorum state machine (multi-agent consensus)
+    "QuorumClaimType",
+    "VoteVerdict",
+    "QuorumStatus",
+    "QuorumPolicy",
+    "Vote",
+    "QuorumState",
+    "QuorumManager",
+    "DEFAULT_QUORUM_POLICIES",
+    "create_quorum_manager",
+    "get_default_policy",
 ]
 
 __version__ = "0.6.0"

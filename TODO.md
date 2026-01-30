@@ -640,10 +640,11 @@ Extends existing multi-agent dispatcher + Δt tracking from direction.py.
   - Never silently discard dissent — dismiss requires stated reason
   - Module: `src/governor/dissent.py` (59 tests)
 
-- [ ] **Recency decay / TTL enforcement**
-  - Committed assertions get TTL based on volatility class
-  - Stale claims auto-degrade to SOFT or retracted
-  - Revalidation scheduler for periodic re-check
+- [x] **Recency decay / TTL enforcement** ✓ COMPLETE
+  - Committed assertions get TTL based on volatility class (PERMANENT→EPHEMERAL)
+  - Stale claims auto-degrade confidence or are retracted
+  - Revalidation scheduler with urgency-sorted schedule
+  - Module: `src/governor/ttl.py` (45 tests)
 
 - [ ] **Quorum state machine** - Proposal lifecycle
   - PROPOSED → UNDER_REVIEW → {COMMITTED | CONTESTED | EXPIRED}

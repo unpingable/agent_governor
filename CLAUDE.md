@@ -29,7 +29,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Claim Signals**: Implicit claim extraction from text, date/entity/quantity/assertive detection, assertiveness scoring, ledger integration.
 **Config Profiles**: Named governance presets (strict, permissive, research, production, audit), custom profiles, one-command switching.
 **Dissent Ledger**: Contradiction persistence, first-class objections, commit gating, confidence trajectories.
-**Total: 2361 tests**
+**TTL Enforcement**: Recency decay, volatility classes (PERMANENT→EPHEMERAL), revalidation scheduling.
+**Total: 2406 tests**
 
 ## Key Documents
 
@@ -314,6 +315,7 @@ src/governor/
 ├── claim_signals.py  # SignalExtractor, SignalMatch, ExtractionResult, implicit claim detection
 ├── profiles.py       # ProfileManager, ProfileSettings, named governance presets
 ├── dissent.py        # DissentLedger, Objection, commit gating, confidence trajectories
+├── ttl.py            # TTLManager, VolatilityClass, recency decay, revalidation scheduling
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -539,6 +541,13 @@ src/ops_governor/
 
 **Dissent Ledger tests: 59**
 
+### TTL Enforcement (Recency Decay)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| ttl.py | TTLManager, VolatilityClass (PERMANENT→EPHEMERAL), TTLPolicy, decay enforcement, revalidation scheduling | 45 |
+
+**TTL Enforcement tests: 45**
+
 ### Fiction Governor (Complete)
 | Module | Description | Tests |
 |--------|-------------|-------|
@@ -562,7 +571,7 @@ src/ops_governor/
 
 **Non-Fiction Governor tests: 91**
 
-**Total: 2270 tests**
+**Total: 2315 tests**
 
 ## Common Mistakes to Avoid
 

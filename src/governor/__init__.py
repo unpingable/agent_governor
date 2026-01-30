@@ -310,6 +310,19 @@ from .claim_signals import (
     register_signals,
 )
 
+# TTL enforcement (recency decay)
+from .ttl import (
+    VolatilityClass,
+    DecayAction,
+    TTLPolicy,
+    TrackedClaim,
+    DecayEvent,
+    RevalidationEntry,
+    TTLManager,
+    DEFAULT_POLICIES as DEFAULT_TTL_POLICIES,
+    create_ttl_manager,
+)
+
 # Dissent ledger (contradiction persistence)
 from .dissent import (
     ObjectionSeverity,
@@ -603,6 +616,16 @@ __all__ = [
     "has_implicit_claims",
     "assertiveness_score",
     "register_signals",
+    # TTL enforcement (recency decay)
+    "VolatilityClass",
+    "DecayAction",
+    "TTLPolicy",
+    "TrackedClaim",
+    "DecayEvent",
+    "RevalidationEntry",
+    "TTLManager",
+    "DEFAULT_TTL_POLICIES",
+    "create_ttl_manager",
     # Dissent ledger (contradiction persistence)
     "ObjectionSeverity",
     "ObjectionStatus",

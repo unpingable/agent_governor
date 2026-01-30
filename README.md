@@ -1,10 +1,11 @@
 # Agent Governor
 
-**Production-safe constraints for AI coding agents**
+**Production-oriented constraints for AI coding agents.**
+Agents can *propose*. Only the governor can *commit*.
+**Agent provides pointers. Governor produces receipts.**
+No write hits disk unless verification succeeds.
 
-Stop hallucinations. Enforce architectural coherence. Require evidence before writes.
-
-When your AI agent says "I verified the tests pass" or "this API exists" - make it prove it.
+Block unverified writes. Catch contradictions. Persist decisions.
 
 ---
 
@@ -41,7 +42,7 @@ Agent Governor enforces the **Non-Linguistic Authority Invariant (NLAI)**:
 ## Key Features
 
 - **Write gate**: No file mutations without verified evidence
-- **Cryptographic receipts**: Governor-produced proof, agent can't fake it
+- **Cryptographic receipts**: SHA-256 hashes of file state, command output, and diffs at verification time — stored in the ledger, not producible by agents
 - **Contradiction detection**: Catch when today's agent contradicts yesterday's decisions
 - **Commitment ledger**: Full provenance for every architectural decision
 - **Facts vs Decisions**: Empirical claims decay, normative decisions persist
@@ -132,92 +133,66 @@ Agent Governor is **epistemic security** - it doesn't trust the agent's memory a
 └─────────────────┘
 ```
 
-**Key insight:** The agent can't provide evidence - it can only provide *pointers* to where evidence might exist. The governor does the actual verification and produces cryptographically-hashed receipts.
+**Key insight:** The agent can't provide evidence — it can only provide *pointers* to where evidence might exist. The governor does the actual verification and produces cryptographically-hashed receipts.
 
 No hallucination can fake a receipt.
+
+### Threat Model
+
+- **Agents are untrusted.** They may hallucinate, contradict prior decisions, or drift from architectural constraints.
+- **The host is trusted.** Governor runs locally with direct filesystem access.
+- **Governor defends against:** fabricated claims, unverified writes, temporal drift, epistemic amplification across agents.
+- **Governor does NOT defend against:** malicious dependencies, compromised host, adversarial model weights.
 
 ---
 
 ## Current Status
 
-**737 tests passing** - Core system complete, multi-agent support, fiction/non-fiction governors, task management, audit graph.
+**2,000+ tests passing** — Core system, multi-agent coordination, epistemic governance, fiction/non-fiction governors, ops governor, drift detection, ultrastability.
 
 ### What Works Now
 
-- Commitment ledger with full provenance
-- File existence validation
-- Command execution verification (tests pass, builds succeed)
-- Contradiction detection
-- Rejection logging for debugging
-- Multi-agent coordination (SQLite with WAL mode)
-- Agent permissions and blast radius limits
-- MCP server for Claude Desktop integration
-- Git pre-commit hook enforcement
-- **Issue/task tracking with subtasks, dependencies, and milestones**
-- **Session management with handoff notes**
-- **Time tracking with start/stop timers**
-- **Smart recommendations for what to work on next**
-- **Audit graph with Maltego-style transforms** (claims→evidence, drift detection, rejection patterns)
+- Commitment ledger with full provenance (facts vs decisions)
+- File existence validation, command execution verification
+- Contradiction detection with rejection logging
+- Multi-agent coordination (SQLite WAL, leases, permissions)
+- Epistemic governance (provenance tracking, confidence modeling, evidence requirements)
+- Regime detection (ELASTIC/WARM/DUCTILE/UNSTABLE health monitoring)
+- Drift detection (temporal asymmetry defense, premise quarantine)
+- Ultrastability (Ashby-style S₁ adaptation with pathology detection)
+- MCP server for Claude Desktop, git pre-commit hook enforcement
+- Audit graph with Maltego-style transforms
+- Task management with dependencies, milestones, session handoffs
 
-### CLI Commands
+### CLI Commands (Highlights)
 
 ```bash
-# Initialize
-governor init
-
-# Propose/verify/apply workflow
-governor propose --claim "type=file_exists,path=src/main.py"
-governor verify <proposal-id>
-governor apply <proposal-id>
+# Core workflow
+governor init                   # Initialize .governor/ directory
+governor propose --claim "..."  # Create proposal with claims
+governor verify <id>            # Verify proposal, produce receipts
+governor apply <id>             # Apply verified proposal
 
 # Query state
-governor facts
-governor decisions
-governor status
+governor facts                  # List recorded facts
+governor decisions              # List recorded decisions
+governor status                 # Show proposal statuses
 
 # Multi-agent coordination
-governor agent register --id worker-1 --class implementer
-governor task claim --agent-id worker-1 --task "implement feature" --scope "src/api.py"
+governor agent register --id X  # Register agent with governor
+governor task claim --agent-id X --task "..." --scope "..."
 
-# Issue/task management
-governor issue add "Implement feature" -p high -l feature
-governor issue list --tree
-governor issue start <task-id>
-governor issue done <task-id>
-governor issue block <task-id> <blocked-by-id>
-governor issue next  # Get recommendations
-
-# Milestones and labels
-governor issue milestone add "v1.0" --due 2024-03-01
-governor issue label add "bug" --color "#ff0000"
-
-# Time tracking
-governor issue timer start <task-id>
-governor issue timer stop <task-id>
-
-# Session handoffs
-governor issue session start
-governor issue session end --summary "Did X" --next "Do Y" --blocker "Waiting on Z"
-governor issue session handoff  # Show last session's notes
-
-# Export/import
-governor issue export -o backup.json
-governor issue import backup.json
-
-# Audit graph (Maltego-style)
-governor graph export -f json -o audit.json
-governor graph export -f graphviz | dot -Tpng -o graph.png
-governor graph stats           # Node/edge counts by type
-governor graph unverified      # Claims lacking evidence
-governor graph weak            # Proposals with weak grounding
-governor graph rejections      # Rejection patterns
-governor graph drift           # Session drift analysis
-governor graph view            # Interactive browser viewer
+# Epistemic & regime
+governor epistemic status       # Provenance, confidence, evidence
+governor regime status          # Operational health (ELASTIC → UNSTABLE)
+governor drift status           # Temporal asymmetry defense
 
 # Integration
-governor hook install
-governor mcp serve
+governor hook install           # Git pre-commit enforcement
+governor mcp serve              # MCP server for Claude integration
 ```
+
+See **CLAUDE.md** for the full CLI reference (~50 commands across 15 subsystems).
 
 ---
 
@@ -264,29 +239,11 @@ context = governor.get_context(topics=["architecture", "api"])
 
 ### Task Management
 ```bash
-# Break work into trackable pieces
+# Track work with dependencies, milestones, and session handoffs
 governor issue add "Implement auth" -p high -m "v1.0"
-governor issue add "Add login endpoint" --parent <auth-task-id>
-governor issue add "Add logout endpoint" --parent <auth-task-id>
-
-# Track dependencies
-governor issue block <logout-id> <login-id>  # logout depends on login
-
-# Get smart recommendations
-governor issue next
-# > 1. Add login endpoint [HIGH] (unblocks 1)
-# > 2. Implement auth [HIGH] (milestone due in 5d)
-
-# Preserve context across sessions
-governor issue session start
-# ... do work ...
-governor issue session end \
-  --summary "Implemented login, tests passing" \
-  --next "Add logout endpoint" \
-  --blocker "Need API docs for OAuth"
-
-# Next session picks up where you left off
-governor issue session handoff
+governor issue block <logout-id> <login-id>
+governor issue next                          # Prioritized recommendations
+governor issue session handoff               # Resume context across sessions
 ```
 
 ---
@@ -391,9 +348,9 @@ pip install -e .
 
 | Feature | Memory Tools | Agent Governor |
 |---------|-------------|----------------|
-| **Purpose** | Help agent remember | Prevent agent from lying |
+| **Purpose** | Help agent remember | Prevent ungrounded commits |
 | **Trust model** | Agent is helpful but forgetful | Agent is unreliable, require proof |
-| **Verification** | None - agent's word is trusted | Cryptographic receipts required |
+| **Verification** | Optional / out of band | Cryptographic receipts required |
 | **Write control** | No blocking | Write gate enforced |
 | **Architecture** | Memory prosthetic | Epistemic security system |
 | **Use case** | Task continuity | Production safety |
@@ -401,7 +358,7 @@ pip install -e .
 **Both are useful. They solve different problems.**
 
 Use memory tools when you want continuity across sessions.
-Use Agent Governor when you need production-safe AI development.
+Use Agent Governor when you need production-oriented AI development with verification guarantees.
 
 ---
 

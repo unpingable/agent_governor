@@ -39,11 +39,19 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
 ]
+webui = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+    "httpx>=0.24.0",
+    "pydantic>=2.0",
+]
 
 [project.scripts]
 governor = "governor.cli:main"
 fiction-gov = "fiction_governor.cli:main"
 nonfiction-gov = "nonfiction_governor.cli:main"
+ops-gov = "ops_governor.cli:main"
+governor-webui = "webui.adapter:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/agent-governor"
@@ -56,7 +64,7 @@ include = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/governor", "src/fiction_governor", "src/nonfiction_governor"]
+packages = ["src/governor", "src/fiction_governor", "src/nonfiction_governor", "src/ops_governor", "src/webui"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest:*)",
+      "Bash(pip install:*)",
+      "Bash(pip show:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(python3:*)",
+      "Bash(ollama:*)",
+      "Bash(curl http://localhost:*)"
+    ]
+  },
+  "preferences": {
+    "autoApproveReads": true,
+    "autoApproveWrites": false
+  },
+  "_comments": {
+    "localDev": "Copy this to settings.local.json for local development",
+    "ollama": "Ollama commands allowed for model management",
+    "testing": "Pytest commands pre-approved for faster iteration"
+  }
+}

@@ -1,0 +1,72 @@
+# Agent Governor WebUI Stack
+#
+# Run: docker-compose up -d
+# Access: http://localhost:3000
+#
+# Components:
+#   - Ollama: Local LLM backend (port 11434)
+#   - Governor Adapter: OpenAI-compatible API with hooks (port 8000)
+#   - Open WebUI: Chat interface (port 3000)
+
+version: "3.8"
+
+services:
+  # Ollama - Local LLM backend
+  ollama:
+    image: ollama/ollama:latest
+    container_name: governor-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # GPU support (uncomment for NVIDIA)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # Governor Adapter - OpenAI-compatible API with Governor hooks
+  adapter:
+    build:
+      context: .
+      dockerfile: Dockerfile.adapter
+    container_name: governor-adapter
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - ./:/app
+      - fiction_data:/app/.fiction-gov
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # Open WebUI - Chat interface
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: governor-webui
+    ports:
+      - "3000:8080"
+    environment:
+      # Point to our adapter instead of Ollama directly
+      - OPENAI_API_BASE_URL=http://adapter:8000/v1
+      - OPENAI_API_KEY=not-needed
+      # Also allow direct Ollama access for model management
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_AUTH=false  # Disable auth for local use
+    volumes:
+      - webui_data:/app/backend/data
+    depends_on:
+      - adapter
+      - ollama
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+  webui_data:
+  fiction_data:

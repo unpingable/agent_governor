@@ -27,3 +27,6 @@ venv/
 # Project
 baselines/
 *.tar.gz
+
+# Misc
+ingest/

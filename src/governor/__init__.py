@@ -310,6 +310,19 @@ from .claim_signals import (
     register_signals,
 )
 
+# Dissent ledger (contradiction persistence)
+from .dissent import (
+    ObjectionSeverity,
+    ObjectionStatus,
+    BlockVerdict,
+    EvidencePointer,
+    Objection,
+    ConfidenceSnapshot,
+    ClaimDissentSummary,
+    DissentLedger,
+    create_dissent_ledger,
+)
+
 # Config profiles
 from .profiles import (
     ProfileSettings,
@@ -590,6 +603,16 @@ __all__ = [
     "has_implicit_claims",
     "assertiveness_score",
     "register_signals",
+    # Dissent ledger (contradiction persistence)
+    "ObjectionSeverity",
+    "ObjectionStatus",
+    "BlockVerdict",
+    "EvidencePointer",
+    "Objection",
+    "ConfidenceSnapshot",
+    "ClaimDissentSummary",
+    "DissentLedger",
+    "create_dissent_ledger",
     # Config profiles
     "ProfileSettings",
     "ProfileManager",

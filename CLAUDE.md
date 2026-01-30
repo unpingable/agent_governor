@@ -28,7 +28,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Claim Diff**: Epistemic state change detection, confidence drift, provenance laundering, evidence erosion, silent retraction.
 **Claim Signals**: Implicit claim extraction from text, date/entity/quantity/assertive detection, assertiveness scoring, ledger integration.
 **Config Profiles**: Named governance presets (strict, permissive, research, production, audit), custom profiles, one-command switching.
-**Total: 2302 tests**
+**Dissent Ledger**: Contradiction persistence, first-class objections, commit gating, confidence trajectories.
+**Total: 2361 tests**
 
 ## Key Documents
 
@@ -312,6 +313,7 @@ src/governor/
 ├── claim_diff.py     # ClaimDiffer, ClaimSnapshot, LedgerSnapshot, confidence drift, provenance laundering
 ├── claim_signals.py  # SignalExtractor, SignalMatch, ExtractionResult, implicit claim detection
 ├── profiles.py       # ProfileManager, ProfileSettings, named governance presets
+├── dissent.py        # DissentLedger, Objection, commit gating, confidence trajectories
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -530,6 +532,13 @@ src/ops_governor/
 
 **Config Profiles tests: 45**
 
+### Dissent Ledger (Contradiction Persistence)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| dissent.py | DissentLedger, Objection, EvidencePointer, commit gating, confidence trajectories, severity/verdict logic | 59 |
+
+**Dissent Ledger tests: 59**
+
 ### Fiction Governor (Complete)
 | Module | Description | Tests |
 |--------|-------------|-------|
@@ -553,7 +562,7 @@ src/ops_governor/
 
 **Non-Fiction Governor tests: 91**
 
-**Total: 2211 tests**
+**Total: 2270 tests**
 
 ## Common Mistakes to Avoid
 

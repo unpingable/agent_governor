@@ -633,11 +633,12 @@ Extends existing multi-agent dispatcher + Δt tracking from direction.py.
   - `JUDGMENT/PLAN`: Δt=600s+ (highest), k=3+, human-in-loop. Strategic.
   - Risk levels: LOW/MEDIUM/HIGH multiply the base Δt
 
-- [ ] **Contradiction persistence ledger** - Track dissent
+- [x] **Contradiction persistence ledger** - Track dissent ✓ COMPLETE
   - Maintain: claim, evidence references, dissenting arguments, confidence trajectory
   - Objections are first-class: `Objection(claim_id, agent_id, reason, severity, evidence)`
   - Objections with evidence block commit; objections without evidence flag for review
-  - Never silently discard dissent
+  - Never silently discard dissent — dismiss requires stated reason
+  - Module: `src/governor/dissent.py` (59 tests)
 
 - [ ] **Recency decay / TTL enforcement**
   - Committed assertions get TTL based on volatility class

@@ -407,6 +407,31 @@ from .semvar import (
     extract_invariants,
 )
 
+# Auto-tuning (threshold learning, reset tracking, setpoint calibration, budget sweep)
+from .auto_tuning import (
+    ResetType,
+    TuningSuggestionKind,
+    SweepMetric,
+    CalibrationPhase,
+    SignalDistribution,
+    RegimeDistributions,
+    ThresholdSuggestion,
+    ThresholdAnalysis,
+    ThresholdTuner,
+    ResetRecord,
+    ResetReport,
+    ResetTracker,
+    BaselineProfile,
+    CalibrationResult,
+    SetpointCalibrator,
+    SweepPoint,
+    SweepResult,
+    BudgetSweeper,
+    AutoTuner,
+    create_auto_tuner,
+    analyze_thresholds_from_metrics,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -735,6 +760,28 @@ __all__ = [
     "SemanticDiffGuard",
     "SemVarEngine",
     "extract_invariants",
+    # Auto-tuning (threshold learning, reset tracking, calibration, sweep)
+    "ResetType",
+    "TuningSuggestionKind",
+    "SweepMetric",
+    "CalibrationPhase",
+    "SignalDistribution",
+    "RegimeDistributions",
+    "ThresholdSuggestion",
+    "ThresholdAnalysis",
+    "ThresholdTuner",
+    "ResetRecord",
+    "ResetReport",
+    "ResetTracker",
+    "BaselineProfile",
+    "CalibrationResult",
+    "SetpointCalibrator",
+    "SweepPoint",
+    "SweepResult",
+    "BudgetSweeper",
+    "AutoTuner",
+    "create_auto_tuner",
+    "analyze_thresholds_from_metrics",
 ]
 
 __version__ = "0.6.0"

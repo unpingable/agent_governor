@@ -33,7 +33,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Quorum State Machine**: Multi-agent consensus protocol, Δt stability windows, claim-type policies, dissent/TTL integration, risk levels, fingerprint gating, escalation/resolution states.
 **Cooperative Redundancy**: Independence scoring, method signatures, Jaccard similarity, anti-cheat (source URL overlap), quorum integration.
 **Semantic Variety**: Post-commit text transform, phrase bank with meaning tags, cooldown tracking, semantic diff guard, no-rewrite zones, burst repetition detection.
-**Total: 2619 tests**
+**Auto-Tuning**: Threshold learning from signal distributions, reset effectiveness tracking, setpoint calibration from baselines, budget sweep with Pareto analysis.
+**Total: 2736 tests**
 
 ## Key Documents
 
@@ -249,6 +250,18 @@ governor independence check <id>      # Check if proposal meets independence thr
 governor semvar transform <text>      # Transform text with variety substitutions
 governor semvar phrases               # List phrases in the phrase bank
 governor semvar config                # Show semantic variety configuration
+
+# Auto-Tuning (threshold learning, reset tracking, calibration, sweep)
+governor tune status                           # Show tuning state
+governor tune thresholds --analyze             # Report threshold suggestions
+governor tune thresholds --apply               # Apply confident suggestions
+governor tune resets --report                  # Reset effectiveness stats
+governor tune resets --pending                 # Show pending reset tracking
+governor tune calibrate --begin-baseline       # Start baseline collection
+governor tune calibrate --end-baseline         # End baseline, compute profile
+governor tune calibrate --run                  # Compute calibrated setpoints
+governor tune budget --parameter <name>        # Show sweep results
+governor tune reset --confirm                  # Clear all tuning state
 ```
 
 ## Architecture Rules (Non-Negotiable)
@@ -338,6 +351,7 @@ src/governor/
 ├── quorum.py         # QuorumManager, QuorumState, multi-agent consensus, Δt stability, dissent/TTL integration, risk levels, fingerprint gating
 ├── independence.py   # IndependenceScorer, MethodSignature, Jaccard similarity, anti-cheat, quorum integration
 ├── semvar.py         # SemVarEngine, PhraseBank, CooldownTracker, SemanticDiffGuard, no-rewrite zones, burst detection
+├── auto_tuning.py    # ThresholdTuner, ResetTracker, SetpointCalibrator, BudgetSweeper, AutoTuner, Pareto analysis
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -590,6 +604,13 @@ src/ops_governor/
 | semvar.py | SemVarEngine, PhraseBank (12 seed phrases), CooldownTracker, SemanticDiffGuard, TextInvariants, no-rewrite zones, burst repetition detection | 56 |
 
 **Semantic Variety tests: 56**
+
+### Auto-Tuning (Phase E8)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| auto_tuning.py | ThresholdTuner, ResetTracker, SetpointCalibrator, BudgetSweeper, AutoTuner, Pareto frontier, percentile analysis | 117 |
+
+**Auto-Tuning tests: 117**
 
 ### Fiction Governor (Complete)
 | Module | Description | Tests |

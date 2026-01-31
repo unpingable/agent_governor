@@ -329,36 +329,39 @@ Based on `ingest/direction.md` - artificial landmarks that impose orientation co
 
 **114 tests in tests/test_homeostat.py**
 
-### Phase E8: Automated Tuning
+### Phase E8: Automated Tuning ✓ COMPLETE
 
-- [ ] **Threshold auto-tuning** - Learn optimal regime thresholds
+- [x] **Threshold auto-tuning** - Learn optimal regime thresholds
   - Collect signal distributions by actual regime (ground truth from outcomes)
   - Use percentile analysis to find natural boundaries
   - Suggest threshold updates based on false positive/negative rates
+  - `ThresholdTuner` class with record/analyze/suggest/apply workflow
   - CLI: `governor tune thresholds --analyze`, `governor tune thresholds --apply`
-  - Reference: `ingest/epistemic_governor/src/epistemic_governor/control/regime.py:244-285`
+  - Module: `src/governor/auto_tuning.py`
 
-- [ ] **Reset effectiveness tracking** - Did the reset actually help?
+- [x] **Reset effectiveness tracking** - Did the reset actually help?
   - Track regime at reset, then 1/3/5 turns later
   - `restored_elastic`: Did it get back to ELASTIC?
   - `turns_to_restore`: How long did recovery take?
-  - Aggregate by reset type (CONTEXT, MODE, CHAIN)
-  - CLI: `governor tune resets --report`
-  - Reference: `ingest/epistemic_governor/src/epistemic_governor/control/regime.py:120-130`
+  - Aggregate by reset type (CONTEXT, MODE, CHAIN, MANUAL, EMERGENCY)
+  - `ResetTracker` class with record_reset/advance_turn/report workflow
+  - CLI: `governor tune resets --report`, `governor tune resets --pending`
 
-- [ ] **Setpoint calibration** - Learn healthy operating ranges
-  - Baseline characterization: Run without governance, observe natural rates
-  - Hallucination detection: Track revision/retraction correlation
-  - Domain-specific profiles from observation
-  - CLI: `governor calibrate baseline`, `governor calibrate domain <name>`
-  - Reference: `ingest/epistemic_governor/src/epistemic_governor/calibrate.py`
+- [x] **Setpoint calibration** - Learn healthy operating ranges
+  - Baseline characterization: Observe natural rates, compute mean/stddev
+  - Hallucination detection: Track revision/retraction correlation (Pearson r)
+  - Domain-specific profiles from observation with safety margin
+  - `SetpointCalibrator` with begin_baseline/record/end_baseline/calibrate workflow
+  - CLI: `governor tune calibrate --begin-baseline/--end-baseline/--run`
 
-- [ ] **Budget sweep experiments** - Find optimal budget levels
-  - Vary budgets systematically
+- [x] **Budget sweep experiments** - Find optimal budget levels
+  - Vary budgets systematically, record outcomes
   - Measure outcome quality vs constraint tightness
-  - Find Pareto frontier
-  - CLI: `governor tune budget --sweep`
-  - Reference: `ingest/epistemic_governor/src/epistemic_governor/budget_sweep.py`
+  - Compute Pareto frontier via non-dominated sort
+  - `BudgetSweeper` with record_point/analyze workflow
+  - CLI: `governor tune budget --parameter <name>`
+
+**117 tests in tests/test_auto_tuning.py**
 
 ### Phase E9: Claim Extraction & Detection
 

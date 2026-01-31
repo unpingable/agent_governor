@@ -7420,6 +7420,243 @@ def semvar_config(ctx):
     click.echo(f"User-echo exception: {cfg.user_echo_exception}")
 
 
+# =============================================================================
+# Auto-tuning commands
+# =============================================================================
+
+
+@cli.group("tune")
+@click.pass_context
+def tune_cmd(ctx):
+    """Automated tuning — threshold learning, reset tracking, calibration, budget sweep."""
+    pass
+
+
+@tune_cmd.command("status")
+@click.pass_context
+def tune_status(ctx):
+    """Show tuning state."""
+    from .auto_tuning import AutoTuner
+
+    gov_dir = ensure_initialized(ctx)
+    tuner_path = gov_dir / "auto_tuner.json"
+    if tuner_path.exists():
+        import json
+        data = json.loads(tuner_path.read_text())
+        at = AutoTuner.from_dict(data)
+    else:
+        at = AutoTuner()
+
+    status = at.get_status()
+    click.echo("Threshold Tuner:")
+    click.echo(f"  Observations: {status['threshold_tuner']['observations']}")
+    click.echo(f"  Min samples/regime: {status['threshold_tuner']['min_samples_per_regime']}")
+    click.echo("Reset Tracker:")
+    click.echo(f"  Total records: {status['reset_tracker']['total_records']}")
+    click.echo(f"  Pending: {status['reset_tracker']['pending']}")
+    click.echo(f"  Completed: {status['reset_tracker']['completed']}")
+    click.echo("Setpoint Calibrator:")
+    click.echo(f"  Domain: {status['setpoint_calibrator']['domain']}")
+    click.echo(f"  Phase: {status['setpoint_calibrator']['phase']}")
+    click.echo(f"  Baseline observations: {status['setpoint_calibrator']['baseline_observations']}")
+
+
+@tune_cmd.command("thresholds")
+@click.option("--analyze", "do_analyze", is_flag=True, help="Report threshold suggestions")
+@click.option("--apply", "do_apply", is_flag=True, help="Apply confident suggestions")
+@click.pass_context
+def tune_thresholds(ctx, do_analyze, do_apply):
+    """Analyze or apply threshold suggestions."""
+    import json
+    from .auto_tuning import AutoTuner
+    from .regime import RegimeThresholds
+
+    gov_dir = ensure_initialized(ctx)
+    tuner_path = gov_dir / "auto_tuner.json"
+    if tuner_path.exists():
+        data = json.loads(tuner_path.read_text())
+        at = AutoTuner.from_dict(data)
+    else:
+        at = AutoTuner()
+
+    thresholds = RegimeThresholds()
+    thresh_path = gov_dir / "regime_thresholds.json"
+    if thresh_path.exists():
+        thresholds = RegimeThresholds.from_dict(json.loads(thresh_path.read_text()))
+
+    analysis = at.analyze_thresholds(thresholds)
+    click.echo(f"Total samples: {analysis.total_samples}")
+    click.echo(f"Accuracy: {analysis.accuracy:.2%}")
+    click.echo(f"False positives: {analysis.fp_count}")
+    click.echo(f"False negatives: {analysis.fn_count}")
+
+    if analysis.suggestions:
+        click.echo(f"\nSuggestions ({len(analysis.suggestions)}):")
+        for s in analysis.suggestions:
+            click.echo(f"  {s.threshold_name}: {s.current_value:.4f} -> {s.suggested_value:.4f} "
+                       f"(confidence={s.confidence:.2f}, fp={s.fp_rate:.2%}, fn={s.fn_rate:.2%})")
+            click.echo(f"    Reason: {s.reason}")
+    else:
+        click.echo("\nNo suggestions (insufficient data or current thresholds are optimal)")
+
+    if do_apply and analysis.suggestions:
+        new_thresholds = at.threshold_tuner.apply_suggestions(thresholds, analysis.suggestions)
+        thresh_path.write_text(json.dumps(new_thresholds.to_dict(), indent=2))
+        click.echo("\nApplied confident suggestions to regime_thresholds.json")
+
+
+@tune_cmd.command("resets")
+@click.option("--report", "do_report", is_flag=True, help="Show reset effectiveness stats")
+@click.option("--pending", "do_pending", is_flag=True, help="Show pending reset tracking")
+@click.pass_context
+def tune_resets(ctx, do_report, do_pending):
+    """Reset effectiveness tracking."""
+    import json
+    from .auto_tuning import AutoTuner
+
+    gov_dir = ensure_initialized(ctx)
+    tuner_path = gov_dir / "auto_tuner.json"
+    if tuner_path.exists():
+        data = json.loads(tuner_path.read_text())
+        at = AutoTuner.from_dict(data)
+    else:
+        at = AutoTuner()
+
+    if do_pending:
+        click.echo(f"Pending resets: {at.reset_tracker.pending_count}")
+        click.echo(f"Completed resets: {at.reset_tracker.completed_count}")
+        return
+
+    report = at.reset_report()
+    click.echo(f"Total resets: {report.total_resets}")
+    click.echo(f"Completed: {report.total_completed}")
+    click.echo(f"Overall success rate: {report.overall_success_rate:.2%}")
+
+    if report.by_type:
+        click.echo("\nBy type:")
+        for type_name, summary in report.by_type.items():
+            click.echo(f"  {type_name}:")
+            click.echo(f"    Total: {summary.total}, Restored: {summary.restored_count}")
+            click.echo(f"    Success rate: {summary.success_rate:.2%}")
+            if summary.avg_turns_to_restore is not None:
+                click.echo(f"    Avg turns to restore: {summary.avg_turns_to_restore:.1f}")
+            if summary.regime_distribution_after_5:
+                click.echo(f"    Regime dist @5: {summary.regime_distribution_after_5}")
+
+
+@tune_cmd.command("calibrate")
+@click.option("--begin-baseline", "do_begin", is_flag=True, help="Start baseline collection")
+@click.option("--end-baseline", "do_end", is_flag=True, help="End baseline, compute profile")
+@click.option("--run", "do_run", is_flag=True, help="Compute calibrated setpoints")
+@click.pass_context
+def tune_calibrate(ctx, do_begin, do_end, do_run):
+    """Setpoint calibration."""
+    import json
+    from .auto_tuning import AutoTuner
+
+    gov_dir = ensure_initialized(ctx)
+    tuner_path = gov_dir / "auto_tuner.json"
+    if tuner_path.exists():
+        data = json.loads(tuner_path.read_text())
+        at = AutoTuner.from_dict(data)
+    else:
+        at = AutoTuner()
+
+    cal = at.setpoint_calibrator
+
+    if do_begin:
+        cal.begin_baseline()
+        tuner_path.write_text(json.dumps(at.to_dict(), indent=2))
+        click.echo("Baseline collection started. Record observations with governor explore observe.")
+        return
+
+    if do_end:
+        profile = cal.end_baseline()
+        if profile is None:
+            click.echo(f"Insufficient data ({len(cal._baseline_observations)} < {cal.MIN_BASELINE_SAMPLES})", err=True)
+            ctx.exit(1)
+            return
+        tuner_path.write_text(json.dumps(at.to_dict(), indent=2))
+        click.echo(f"Baseline computed from {profile.observation_count} observations")
+        click.echo(f"  Domain: {profile.domain}")
+        click.echo(f"  Revision rate: {profile.natural_revision_rate:.4f} (sd={profile.revision_stddev:.4f})")
+        click.echo(f"  Contradiction rate: {profile.natural_contradiction_rate:.4f} (sd={profile.contradiction_stddev:.4f})")
+        click.echo(f"  Hedge rate: {profile.natural_hedge_rate:.4f} (sd={profile.hedge_stddev:.4f})")
+        click.echo(f"  Refusal rate: {profile.natural_refusal_rate:.4f} (sd={profile.refusal_stddev:.4f})")
+        click.echo(f"  Rev-retraction correlation: {profile.revision_retraction_correlation:.3f}")
+        return
+
+    if do_run:
+        result = cal.calibrate()
+        if result.calibrated_setpoints is None:
+            click.echo("No baseline profile. Run --begin-baseline first.", err=True)
+            ctx.exit(1)
+            return
+        tuner_path.write_text(json.dumps(at.to_dict(), indent=2))
+        sp = result.calibrated_setpoints
+        click.echo(f"Calibration complete (confidence={result.confidence:.2f})")
+        click.echo(f"  Revision target: {sp.revision_target:.4f}")
+        click.echo(f"  Contradiction target: {sp.contradiction_target:.4f}")
+        click.echo(f"  Hedge target: {sp.hedge_target:.4f}")
+        click.echo(f"  Refusal target: {sp.refusal_target:.4f}")
+        click.echo(f"  Support deficit target: {sp.support_deficit_target:.4f}")
+        click.echo(f"  Retrieval coverage target: {sp.retrieval_coverage_target:.4f}")
+        return
+
+    click.echo(f"Phase: {cal.phase.value}")
+    click.echo(f"Domain: {cal.domain}")
+    click.echo(f"Baseline observations: {len(cal._baseline_observations)}")
+    if cal._baseline_profile:
+        click.echo("Baseline profile: computed")
+    else:
+        click.echo("Baseline profile: not yet computed")
+
+
+@tune_cmd.command("budget")
+@click.option("--parameter", "-p", required=True, help="Parameter name to show sweep results for")
+@click.pass_context
+def tune_budget(ctx, parameter):
+    """Show budget sweep results for a parameter."""
+    import json
+    from .auto_tuning import BudgetSweeper
+
+    gov_dir = ensure_initialized(ctx)
+    sweep_path = gov_dir / f"sweep_{parameter}.json"
+    if not sweep_path.exists():
+        click.echo(f"No sweep data for parameter '{parameter}'", err=True)
+        ctx.exit(1)
+        return
+
+    data = json.loads(sweep_path.read_text())
+    sweeper = BudgetSweeper.from_dict(data)
+    result = sweeper.analyze()
+
+    click.echo(f"Parameter: {result.parameter_name}")
+    click.echo(f"Points: {len(result.points)}")
+    click.echo(f"Safety invariant held: {result.safety_invariant_held}")
+    click.echo(f"Recommended value: {result.recommended_value}")
+
+    if result.pareto_frontier:
+        click.echo(f"\nPareto frontier ({len(result.pareto_frontier)} points):")
+        for p in result.pareto_frontier:
+            click.echo(f"  value={p.parameter_value:.2f}  quality={p.quality_score:.3f}  tightness={p.constraint_tightness:.3f}")
+
+
+@tune_cmd.command("reset")
+@click.option("--confirm", is_flag=True, required=True, help="Confirm clearing all tuning state")
+@click.pass_context
+def tune_reset(ctx, confirm):
+    """Clear all tuning state."""
+    import json
+    from .auto_tuning import AutoTuner
+
+    gov_dir = ensure_initialized(ctx)
+    tuner_path = gov_dir / "auto_tuner.json"
+    at = AutoTuner()
+    tuner_path.write_text(json.dumps(at.to_dict(), indent=2))
+    click.echo("Tuning state cleared.")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

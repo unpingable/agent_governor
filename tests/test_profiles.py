@@ -44,13 +44,13 @@ class TestProfileSettings:
     def test_creation(self):
         p = ProfileSettings(
             envelope_mode="strict",
-            boil_preset="DARJEELING",
+            boil_preset="BLACK_TEA",
             jurisdiction="FACTUAL",
             strict_mode=True,
             description="Test profile",
         )
         assert p.envelope_mode == "strict"
-        assert p.boil_preset == "DARJEELING"
+        assert p.boil_preset == "BLACK_TEA"
         assert p.jurisdiction == "FACTUAL"
         assert p.strict_mode is True
         assert p.description == "Test profile"
@@ -85,7 +85,7 @@ class TestProfileSettings:
     def test_from_dict_no_description(self):
         data = {
             "envelope_mode": "strict",
-            "boil_preset": "CHAI",
+            "boil_preset": "FRENCH_PRESS",
             "jurisdiction": "FACTUAL",
             "strict_mode": True,
         }
@@ -144,7 +144,7 @@ class TestBuiltinProfiles:
         p = BUILTIN_PROFILES["production"]
         assert p.envelope_mode == "strict"
         assert p.strict_mode is True
-        assert p.boil_preset == "CHAI"
+        assert p.boil_preset == "FRENCH_PRESS"
 
     def test_audit_profile(self):
         p = BUILTIN_PROFILES["audit"]
@@ -269,7 +269,7 @@ class TestCustomProfiles:
         mgr1 = ProfileManager(governor_dir=gov_dir)
         mgr1.create("persisted", ProfileSettings(
             envelope_mode="strict",
-            boil_preset="CHAI",
+            boil_preset="FRENCH_PRESS",
             jurisdiction="FACTUAL",
             strict_mode=True,
             description="Should persist",
@@ -346,7 +346,7 @@ class TestApplyProfile:
         settings = BUILTIN_PROFILES["strict"]
         applied = apply_profile(gov_dir, settings)
         assert applied["envelope"] == "strict"
-        assert applied["boil"] == "DARJEELING"
+        assert applied["boil"] == "BLACK_TEA"
         assert applied["jurisdiction"] == "FACTUAL"
         assert applied["strict_mode"] == "enabled"
 

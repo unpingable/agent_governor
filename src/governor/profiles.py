@@ -31,7 +31,7 @@ class ProfileSettings:
     """Bundled governance settings for a named profile."""
 
     envelope_mode: str  # "strict" or "exploratory"
-    boil_preset: str  # GREEN_TEA, OOLONG, DARJEELING, CHAI, BOIL
+    boil_preset: str  # GREEN_TEA, WHITE_TEA, OOLONG, BLACK_TEA, FRENCH_PRESS, BOIL
     jurisdiction: str  # FACTUAL, SPECULATIVE, ADVERSARIAL, etc.
     strict_mode: bool  # Whether strict programmer mode gate is active
     description: str = ""
@@ -63,7 +63,7 @@ class ProfileSettings:
 BUILTIN_PROFILES: dict[str, ProfileSettings] = {
     "strict": ProfileSettings(
         envelope_mode="strict",
-        boil_preset="DARJEELING",
+        boil_preset="BLACK_TEA",
         jurisdiction="FACTUAL",
         strict_mode=True,
         description="Full enforcement, fail-closed, factual jurisdiction.",
@@ -84,7 +84,7 @@ BUILTIN_PROFILES: dict[str, ProfileSettings] = {
     ),
     "production": ProfileSettings(
         envelope_mode="strict",
-        boil_preset="CHAI",
+        boil_preset="FRENCH_PRESS",
         jurisdiction="FACTUAL",
         strict_mode=True,
         description="Production deployment: strict mode, high heat, tight controls.",

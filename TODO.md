@@ -1077,5 +1077,5 @@ Human authority needed for definitions, thresholds, and hard/soft classification
 - [ ] **Web UI** - Dashboard showing claim history, rejection rates, regime status
 - [ ] **VS Code Integration** - Governor support in VS Code (spec: `ingest/vscode.md`)
 - [ ] **Telemetry dashboard** - Real-time regime visualization
-- [ ] **Minor: CLI bug** - `src/governor/cli.py` line 7388: `bank.seed_defaults()` doesn't exist on PhraseBank
-- [ ] **Minor: Profile boil presets** - `profiles.py` references DARJEELING/CHAI which don't exist in ControlMode enum
+- [x] **Minor: CLI bug** - `src/governor/cli.py` line 7388: `bank.seed_defaults()` doesn't exist on PhraseBank
+- [x] **Minor: Profile boil presets** - `profiles.py` references DARJEELING/CHAI which don't exist in ControlMode enum

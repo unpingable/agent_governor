@@ -7077,7 +7077,7 @@ def profile_off(ctx):
 @profile_cmd.command("create")
 @click.argument("name")
 @click.option("--envelope", type=click.Choice(["strict", "exploratory"]), required=True)
-@click.option("--boil", required=True, help="Boil preset (GREEN_TEA, OOLONG, DARJEELING, CHAI, BOIL)")
+@click.option("--boil", required=True, help="Boil preset (GREEN_TEA, WHITE_TEA, OOLONG, BLACK_TEA, FRENCH_PRESS, BOIL)")
 @click.option("--jurisdiction", required=True, help="Jurisdiction name")
 @click.option("--strict/--no-strict", default=True, help="Enable strict mode")
 @click.option("--description", "-d", default="", help="Profile description")
@@ -7385,7 +7385,6 @@ def semvar_phrases(ctx, tag):
     from .semvar import PhraseBank, MeaningTag
 
     bank = PhraseBank()
-    bank.seed_defaults()
     entries = bank.entries
 
     if tag:

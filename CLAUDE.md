@@ -30,8 +30,10 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Config Profiles**: Named governance presets (strict, permissive, research, production, audit), custom profiles, one-command switching.
 **Dissent Ledger**: Contradiction persistence, first-class objections, commit gating, confidence trajectories.
 **TTL Enforcement**: Recency decay, volatility classes (PERMANENT→EPHEMERAL), revalidation scheduling.
-**Quorum State Machine**: Multi-agent consensus protocol, Δt stability windows, claim-type policies, dissent/TTL integration.
-**Total: 2491 tests**
+**Quorum State Machine**: Multi-agent consensus protocol, Δt stability windows, claim-type policies, dissent/TTL integration, risk levels, fingerprint gating, escalation/resolution states.
+**Cooperative Redundancy**: Independence scoring, method signatures, Jaccard similarity, anti-cheat (source URL overlap), quorum integration.
+**Semantic Variety**: Post-commit text transform, phrase bank with meaning tags, cooldown tracking, semantic diff guard, no-rewrite zones, burst repetition detection.
+**Total: 2619 tests**
 
 ## Key Documents
 
@@ -238,6 +240,15 @@ governor quorum vote <proposal_id>    # Cast a vote on a proposal
 governor quorum policy <claim_type>   # Show policy for a claim type
 governor quorum policies              # List all quorum policies
 governor quorum history               # Show recent quorum activity
+
+# Independence Scoring (cooperative redundancy)
+governor independence score <id>      # Score independence of votes on a proposal
+governor independence check <id>      # Check if proposal meets independence threshold
+
+# Semantic Variety (post-commit text transform)
+governor semvar transform <text>      # Transform text with variety substitutions
+governor semvar phrases               # List phrases in the phrase bank
+governor semvar config                # Show semantic variety configuration
 ```
 
 ## Architecture Rules (Non-Negotiable)
@@ -324,7 +335,9 @@ src/governor/
 ├── profiles.py       # ProfileManager, ProfileSettings, named governance presets
 ├── dissent.py        # DissentLedger, Objection, commit gating, confidence trajectories
 ├── ttl.py            # TTLManager, VolatilityClass, recency decay, revalidation scheduling
-├── quorum.py         # QuorumManager, QuorumState, multi-agent consensus, Δt stability, dissent/TTL integration
+├── quorum.py         # QuorumManager, QuorumState, multi-agent consensus, Δt stability, dissent/TTL integration, risk levels, fingerprint gating
+├── independence.py   # IndependenceScorer, MethodSignature, Jaccard similarity, anti-cheat, quorum integration
+├── semvar.py         # SemVarEngine, PhraseBank, CooldownTracker, SemanticDiffGuard, no-rewrite zones, burst detection
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -560,9 +573,23 @@ src/ops_governor/
 ### Quorum State Machine (Multi-Agent Consensus)
 | Module | Description | Tests |
 |--------|-------------|-------|
-| quorum.py | QuorumManager, QuorumState, ClaimType (6 types with Δt budgets), VoteVerdict, QuorumStatus, stability windows, dissent/TTL integration | 85 |
+| quorum.py | QuorumManager, QuorumState, ClaimType (6 types with Δt budgets), VoteVerdict, QuorumStatus (9 states), stability windows, dissent/TTL integration, risk levels, fingerprint gating, escalation/resolution | 119 |
 
-**Quorum State Machine tests: 85**
+**Quorum State Machine tests: 119**
+
+### Cooperative Redundancy (Independence Scoring)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| independence.py | MethodSignature, IndependenceScorer, pairwise Jaccard similarity, anti-cheat (source URL overlap), quorum integration | 38 |
+
+**Cooperative Redundancy tests: 38**
+
+### Semantic Variety (Post-Commit Text Transform)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| semvar.py | SemVarEngine, PhraseBank (12 seed phrases), CooldownTracker, SemanticDiffGuard, TextInvariants, no-rewrite zones, burst repetition detection | 56 |
+
+**Semantic Variety tests: 56**
 
 ### Fiction Governor (Complete)
 | Module | Description | Tests |
@@ -587,7 +614,7 @@ src/ops_governor/
 
 **Non-Fiction Governor tests: 91**
 
-**Total: 2315 tests**
+**Total: 2619 tests**
 
 ## Common Mistakes to Avoid
 

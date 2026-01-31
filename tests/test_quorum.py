@@ -3,7 +3,8 @@ Tests for multi-agent quorum protocol.
 
 Covers: ClaimType, VoteVerdict, QuorumStatus, QuorumPolicy, Vote,
 QuorumState, QuorumManager, stability windows, dissent integration,
-TTL integration, default policies, and edge cases.
+TTL integration, default policies, edge cases, risk levels, fingerprinting,
+new states (ESCALATED, RESOLVED_COMMIT, RESOLVED_REJECT), and auto-contest.
 """
 
 from datetime import datetime, timedelta
@@ -12,13 +13,16 @@ import pytest
 
 from governor.quorum import (
     DEFAULT_POLICIES,
+    TERMINAL_STATES,
     ClaimType,
     QuorumManager,
     QuorumPolicy,
     QuorumState,
     QuorumStatus,
+    RiskLevel,
     Vote,
     VoteVerdict,
+    compute_fingerprint,
     create_quorum_manager,
     get_default_policy,
 )
@@ -76,8 +80,8 @@ class TestVoteVerdict:
 
 class TestQuorumStatus:
 
-    def test_six_statuses(self):
-        assert len(QuorumStatus) == 6
+    def test_nine_statuses(self):
+        assert len(QuorumStatus) == 9
 
     def test_values(self):
         assert QuorumStatus.COLLECTING == "collecting"
@@ -86,6 +90,9 @@ class TestQuorumStatus:
         assert QuorumStatus.FAILED == "failed"
         assert QuorumStatus.EXPIRED == "expired"
         assert QuorumStatus.CONTESTED == "contested"
+        assert QuorumStatus.ESCALATED == "escalated"
+        assert QuorumStatus.RESOLVED_COMMIT == "resolved_commit"
+        assert QuorumStatus.RESOLVED_REJECT == "resolved_reject"
 
 
 # =============================================================================
@@ -924,3 +931,364 @@ class TestEdgeCases:
         # Can proceed
         can, reasons = mgr.can_proceed("p1", now=now + timedelta(seconds=125))
         assert can
+
+
+# =============================================================================
+# TestRiskLevel
+# =============================================================================
+
+
+class TestRiskLevel:
+
+    def test_three_levels(self):
+        assert len(RiskLevel) == 3
+
+    def test_string_values(self):
+        assert RiskLevel.LOW == "low"
+        assert RiskLevel.MEDIUM == "medium"
+        assert RiskLevel.HIGH == "high"
+
+    def test_multipliers(self):
+        assert RiskLevel.LOW.multiplier == 1.0
+        assert RiskLevel.MEDIUM.multiplier == 1.5
+        assert RiskLevel.HIGH.multiplier == 2.0
+
+
+# =============================================================================
+# TestVoteWithHashes
+# =============================================================================
+
+
+class TestVoteWithHashes:
+
+    def test_hash_fields_default_none(self):
+        v = Vote(
+            vote_id="v1", proposal_id="p1", agent_id="a1",
+            verdict=VoteVerdict.APPROVE, reason="ok",
+        )
+        assert v.tool_path_hash is None
+        assert v.sources_hash is None
+        assert v.prompt_hash is None
+
+    def test_hash_fields_set(self):
+        v = Vote(
+            vote_id="v1", proposal_id="p1", agent_id="a1",
+            verdict=VoteVerdict.APPROVE, reason="ok",
+            tool_path_hash="abc123", sources_hash="def456", prompt_hash="ghi789",
+        )
+        assert v.tool_path_hash == "abc123"
+        assert v.sources_hash == "def456"
+        assert v.prompt_hash == "ghi789"
+
+    def test_to_dict_includes_hashes_when_set(self):
+        v = Vote(
+            vote_id="v1", proposal_id="p1", agent_id="a1",
+            verdict=VoteVerdict.APPROVE, reason="ok",
+            tool_path_hash="abc123",
+        )
+        d = v.to_dict()
+        assert d["tool_path_hash"] == "abc123"
+        assert "sources_hash" not in d  # None → omitted
+
+    def test_to_dict_omits_hashes_when_none(self):
+        v = Vote(
+            vote_id="v1", proposal_id="p1", agent_id="a1",
+            verdict=VoteVerdict.APPROVE, reason="ok",
+        )
+        d = v.to_dict()
+        assert "tool_path_hash" not in d
+        assert "sources_hash" not in d
+        assert "prompt_hash" not in d
+
+    def test_from_dict_with_hashes(self):
+        now = datetime.now()
+        d = {
+            "vote_id": "v1", "proposal_id": "p1", "agent_id": "a1",
+            "verdict": "approve", "reason": "ok", "evidence": [],
+            "timestamp": now.isoformat(),
+            "tool_path_hash": "abc", "sources_hash": "def",
+        }
+        v = Vote.from_dict(d)
+        assert v.tool_path_hash == "abc"
+        assert v.sources_hash == "def"
+        assert v.prompt_hash is None  # Not in dict
+
+
+# =============================================================================
+# TestFingerprint
+# =============================================================================
+
+
+class TestFingerprint:
+
+    def test_compute_fingerprint_returns_hex(self):
+        fp = compute_fingerprint("p1", ClaimType.CODE, "content")
+        assert len(fp) == 16
+        assert all(c in "0123456789abcdef" for c in fp)
+
+    def test_compute_fingerprint_deterministic(self):
+        fp1 = compute_fingerprint("p1", ClaimType.CODE, "content")
+        fp2 = compute_fingerprint("p1", ClaimType.CODE, "content")
+        assert fp1 == fp2
+
+    def test_compute_fingerprint_varies_by_content(self):
+        fp1 = compute_fingerprint("p1", ClaimType.CODE, "content-a")
+        fp2 = compute_fingerprint("p1", ClaimType.CODE, "content-b")
+        assert fp1 != fp2
+
+    def test_fingerprint_set_on_create(self):
+        mgr = QuorumManager()
+        qs = mgr.create_quorum("p1", ClaimType.CODE, content="test content")
+        assert qs.fingerprint is not None
+        assert len(qs.fingerprint) == 16
+
+    def test_fingerprint_locked_on_stabilizing(self):
+        mgr = QuorumManager()
+        now = datetime(2024, 6, 1)
+        qs = mgr.create_quorum("p1", ClaimType.CODE, created_at=now, content="test")
+        assert not qs.fingerprint_locked
+
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        assert qs.status == QuorumStatus.STABILIZING
+        assert qs.fingerprint_locked
+
+    def test_fingerprint_change_after_lock_contests(self):
+        mgr = QuorumManager()
+        now = datetime(2024, 6, 1)
+        qs = mgr.create_quorum("p1", ClaimType.CODE, created_at=now, content="original")
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.update("p1", now=now + timedelta(seconds=15))
+        assert qs.status == QuorumStatus.REACHED
+
+        # Validate with different content → auto-contest
+        result = mgr.validate_fingerprint("p1", "changed content")
+        assert result is False
+        assert qs.status == QuorumStatus.CONTESTED
+
+    def test_validate_fingerprint_match_returns_true(self):
+        mgr = QuorumManager()
+        now = datetime(2024, 6, 1)
+        qs = mgr.create_quorum("p1", ClaimType.CODE, created_at=now, content="same")
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.update("p1", now=now + timedelta(seconds=15))
+
+        result = mgr.validate_fingerprint("p1", "same")
+        assert result is True
+        assert qs.status == QuorumStatus.REACHED  # Unchanged
+
+
+# =============================================================================
+# TestRiskMultiplier
+# =============================================================================
+
+
+class TestRiskMultiplier:
+
+    def test_default_risk_multiplier(self):
+        p = QuorumPolicy(
+            claim_type=ClaimType.CODE, min_voters=1,
+            approval_threshold=0.5, delta_t=timedelta(seconds=10),
+            volatility=VolatilityClass.STABLE,
+        )
+        assert p.risk_multiplier == 1.0
+        assert p.effective_delta_t == timedelta(seconds=10)
+
+    def test_medium_risk_multiplier(self):
+        p = QuorumPolicy(
+            claim_type=ClaimType.CODE, min_voters=1,
+            approval_threshold=0.5, delta_t=timedelta(seconds=10),
+            volatility=VolatilityClass.STABLE, risk_multiplier=1.5,
+        )
+        assert p.effective_delta_t == timedelta(seconds=15)
+
+    def test_high_risk_multiplier(self):
+        p = QuorumPolicy(
+            claim_type=ClaimType.CODE, min_voters=1,
+            approval_threshold=0.5, delta_t=timedelta(seconds=10),
+            volatility=VolatilityClass.STABLE, risk_multiplier=2.0,
+        )
+        assert p.effective_delta_t == timedelta(seconds=20)
+
+    def test_create_quorum_with_risk_level(self):
+        mgr = QuorumManager()
+        qs = mgr.create_quorum("p1", ClaimType.CODE, risk_level=RiskLevel.HIGH)
+        assert qs.risk_level == RiskLevel.HIGH
+        assert qs.policy.risk_multiplier == 2.0
+
+    def test_commit_after_effective_dt(self):
+        """HIGH risk doubles Δt: must wait 20s instead of 10s for CODE."""
+        mgr = QuorumManager()
+        now = datetime(2024, 6, 1)
+        qs = mgr.create_quorum("p1", ClaimType.CODE, created_at=now,
+                                risk_level=RiskLevel.HIGH)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        assert qs.status == QuorumStatus.STABILIZING
+
+        # 15s: still stabilizing (need 20s for HIGH risk)
+        mgr.update("p1", now=now + timedelta(seconds=15))
+        assert qs.status == QuorumStatus.STABILIZING
+
+        # 21s: reached
+        mgr.update("p1", now=now + timedelta(seconds=21))
+        assert qs.status == QuorumStatus.REACHED
+
+
+# =============================================================================
+# TestNewStates (ESCALATED, RESOLVED_COMMIT, RESOLVED_REJECT)
+# =============================================================================
+
+
+class TestNewStates:
+
+    def _reach_quorum(self, mgr, pid="p1"):
+        now = datetime(2024, 6, 1)
+        mgr.create_quorum(pid, ClaimType.CODE, created_at=now)
+        mgr.cast_vote(pid, "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.update(pid, now=now + timedelta(seconds=15))
+        assert mgr.check_status(pid) == QuorumStatus.REACHED
+        return now
+
+    def test_escalate_from_contested(self):
+        mgr = QuorumManager()
+        self._reach_quorum(mgr)
+        mgr.contest("p1")
+        assert mgr.check_status("p1") == QuorumStatus.CONTESTED
+
+        assert mgr.escalate("p1", "Stuck too long")
+        assert mgr.check_status("p1") == QuorumStatus.ESCALATED
+
+    def test_escalate_wrong_status(self):
+        mgr = QuorumManager()
+        self._reach_quorum(mgr)
+        assert not mgr.escalate("p1", "Not contested")
+
+    def test_resolve_commit_from_contested(self):
+        mgr = QuorumManager()
+        self._reach_quorum(mgr)
+        mgr.contest("p1")
+
+        assert mgr.resolve_commit("p1")
+        assert mgr.check_status("p1") == QuorumStatus.RESOLVED_COMMIT
+        qs = mgr.get_quorum("p1")
+        assert qs.resolution == "commit"
+        assert qs.resolved_at is not None
+
+    def test_resolve_reject_from_contested(self):
+        mgr = QuorumManager()
+        self._reach_quorum(mgr)
+        mgr.contest("p1")
+
+        assert mgr.resolve_reject("p1", "Evidence stands")
+        assert mgr.check_status("p1") == QuorumStatus.RESOLVED_REJECT
+        qs = mgr.get_quorum("p1")
+        assert qs.resolution == "reject"
+
+    def test_resolve_commit_wrong_status(self):
+        mgr = QuorumManager()
+        self._reach_quorum(mgr)
+        assert not mgr.resolve_commit("p1")  # REACHED, not CONTESTED
+
+    def test_resolve_reject_wrong_status(self):
+        mgr = QuorumManager()
+        mgr.create_quorum("p1", ClaimType.CODE)
+        assert not mgr.resolve_reject("p1", "Not contested")
+
+    def test_escalated_is_terminal(self):
+        mgr = QuorumManager()
+        self._reach_quorum(mgr)
+        mgr.contest("p1")
+        mgr.escalate("p1", "stuck")
+        assert not mgr.fail("p1", "can't fail terminal")
+
+    def test_resolved_commit_is_terminal(self):
+        mgr = QuorumManager()
+        self._reach_quorum(mgr)
+        mgr.contest("p1")
+        mgr.resolve_commit("p1")
+        assert not mgr.fail("p1", "can't fail terminal")
+
+
+# =============================================================================
+# TestAutoContest
+# =============================================================================
+
+
+class TestAutoContest:
+
+    def test_contested_auto_rejects_after_decision_deadline(self):
+        """CONTESTED auto-resolves to RESOLVED_REJECT after timeout * 2."""
+        mgr = QuorumManager()
+        now = datetime(2024, 6, 1)
+        mgr.create_quorum("p1", ClaimType.CODE, created_at=now)  # timeout=30m
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.update("p1", now=now + timedelta(seconds=15))
+        assert mgr.check_status("p1") == QuorumStatus.REACHED
+
+        mgr.contest("p1")
+        qs = mgr.get_quorum("p1")
+        qs.contested_at = now  # Fix contest time for determinism
+
+        # 30 minutes: still contested (deadline = 60m)
+        mgr.update("p1", now=now + timedelta(minutes=30))
+        assert qs.status == QuorumStatus.CONTESTED
+
+        # 61 minutes: auto-rejected
+        mgr.update("p1", now=now + timedelta(minutes=61))
+        assert qs.status == QuorumStatus.RESOLVED_REJECT
+        assert qs.resolution == "reject"
+
+    def test_escalation_is_terminal(self):
+        mgr = QuorumManager()
+        now = datetime(2024, 6, 1)
+        mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.update("p1", now=now + timedelta(seconds=15))
+        mgr.contest("p1")
+        mgr.escalate("p1", "stuck")
+
+        # Cannot vote on escalated
+        v = mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "late")
+        assert v is None
+
+    def test_terminal_states_set(self):
+        """All 5 terminal states are in TERMINAL_STATES."""
+        assert QuorumStatus.FAILED in TERMINAL_STATES
+        assert QuorumStatus.EXPIRED in TERMINAL_STATES
+        assert QuorumStatus.ESCALATED in TERMINAL_STATES
+        assert QuorumStatus.RESOLVED_COMMIT in TERMINAL_STATES
+        assert QuorumStatus.RESOLVED_REJECT in TERMINAL_STATES
+        assert len(TERMINAL_STATES) == 5
+
+    def test_contest_sets_metadata(self):
+        mgr = QuorumManager()
+        now = datetime(2024, 6, 1)
+        mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.update("p1", now=now + timedelta(seconds=15))
+
+        mgr.contest("p1", reason="Evidence found")
+        qs = mgr.get_quorum("p1")
+        assert qs.contested_at is not None
+        assert qs.contest_reason == "Evidence found"
+
+
+# =============================================================================
+# TestUpdatedEnum
+# =============================================================================
+
+
+class TestUpdatedEnum:
+
+    def test_nine_statuses_complete(self):
+        expected = {
+            "collecting", "stabilizing", "reached", "failed",
+            "expired", "contested", "escalated",
+            "resolved_commit", "resolved_reject",
+        }
+        actual = {s.value for s in QuorumStatus}
+        assert actual == expected
+
+    def test_new_string_values(self):
+        assert QuorumStatus("escalated") == QuorumStatus.ESCALATED
+        assert QuorumStatus("resolved_commit") == QuorumStatus.RESOLVED_COMMIT
+        assert QuorumStatus("resolved_reject") == QuorumStatus.RESOLVED_REJECT

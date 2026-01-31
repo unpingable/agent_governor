@@ -7266,6 +7266,160 @@ def quorum_history(ctx, limit):
         click.echo(f"[{ts}] {event} proposal={pid}{extra_str}")
 
 
+# =============================================================================
+# Independence scoring commands
+# =============================================================================
+
+
+@cli.group("independence")
+@click.pass_context
+def independence_cmd(ctx):
+    """Cooperative redundancy — independence scoring for quorum votes."""
+    pass
+
+
+@independence_cmd.command("score")
+@click.argument("proposal_id")
+@click.pass_context
+def independence_score_cmd(ctx, proposal_id):
+    """Score independence of votes on a proposal."""
+    from .independence import IndependenceScorer
+    from .quorum import QuorumManager
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = QuorumManager()
+    qs = mgr.get_quorum(proposal_id)
+    if qs is None:
+        click.echo(f"No quorum found for proposal '{proposal_id}'", err=True)
+        ctx.exit(1)
+        return
+
+    scorer = IndependenceScorer()
+    result = scorer.score_votes(qs.votes)
+    click.echo(f"Proposal: {proposal_id}")
+    click.echo(f"Independence score: {result.score:.3f}")
+    click.echo(f"Independent count: {result.independent_count}/{result.total_signatures}")
+    click.echo(f"Passes threshold (≥{scorer.threshold}): {'yes' if result.passes_threshold else 'no'}")
+
+    if result.violations:
+        click.echo("\nViolations:")
+        for v in result.violations:
+            click.echo(f"  - {v}")
+
+    if result.pairwise_scores:
+        click.echo(f"\n{'Agent A':<20} {'Agent B':<20} {'Jaccard':>8}")
+        click.echo("-" * 50)
+        for a, b, s in result.pairwise_scores:
+            click.echo(f"{a:<20} {b:<20} {s:>8.3f}")
+
+
+@independence_cmd.command("check")
+@click.argument("proposal_id")
+@click.option("--threshold", "-t", default=0.3, type=float, help="Independence threshold")
+@click.pass_context
+def independence_check(ctx, proposal_id, threshold):
+    """Check if a proposal meets independence requirements."""
+    from .independence import IndependenceScorer
+    from .quorum import QuorumManager
+
+    gov_dir = ensure_initialized(ctx)
+    mgr = QuorumManager()
+    qs = mgr.get_quorum(proposal_id)
+    if qs is None:
+        click.echo(f"No quorum found for proposal '{proposal_id}'", err=True)
+        ctx.exit(1)
+        return
+
+    scorer = IndependenceScorer(threshold=threshold)
+    result = scorer.score_votes(qs.votes)
+
+    if result.passes_threshold:
+        click.echo(f"PASS: Independence score {result.score:.3f} ≥ {threshold}")
+    else:
+        click.echo(f"FAIL: Independence score {result.score:.3f} < {threshold}")
+        if result.violations:
+            for v in result.violations:
+                click.echo(f"  Violation: {v}")
+        ctx.exit(1)
+
+
+# =============================================================================
+# Semantic variety commands
+# =============================================================================
+
+
+@cli.group("semvar")
+@click.pass_context
+def semvar_cmd(ctx):
+    """Semantic variety — post-commit text transform to break repetition."""
+    pass
+
+
+@semvar_cmd.command("transform")
+@click.argument("text")
+@click.option("--turn", "-t", default=0, type=int, help="Current turn number")
+@click.option("--user-text", "-u", default="", help="User's text for echo exception")
+@click.pass_context
+def semvar_transform(ctx, text, turn, user_text):
+    """Transform text with semantic variety substitutions."""
+    from .semvar import SemVarEngine, SemVarConfig
+
+    engine = SemVarEngine(SemVarConfig())
+    result = engine.transform(text, turn=turn, user_text=user_text)
+    click.echo(result.transformed)
+    if result.substitutions:
+        click.echo(f"\n--- {result.rewrites_applied} substitution(s) applied ---")
+        for orig, repl in result.substitutions:
+            click.echo(f'  "{orig}" → "{repl}"')
+    if result.burst_fixes > 0:
+        click.echo(f"Burst fixes: {result.burst_fixes}")
+    if result.used_original:
+        click.echo("(guard blocked transform, used original)")
+
+
+@semvar_cmd.command("phrases")
+@click.option("--tag", "-t", default=None, help="Filter by meaning tag")
+@click.pass_context
+def semvar_phrases(ctx, tag):
+    """List phrases in the phrase bank."""
+    from .semvar import PhraseBank, MeaningTag
+
+    bank = PhraseBank()
+    bank.seed_defaults()
+    entries = bank.entries
+
+    if tag:
+        try:
+            mt = MeaningTag(tag)
+        except ValueError:
+            click.echo(f"Unknown tag: {tag}", err=True)
+            click.echo(f"Valid tags: {', '.join(t.value for t in MeaningTag)}")
+            ctx.exit(1)
+            return
+        entries = [e for e in entries if e.tag == mt]
+
+    click.echo(f"{'Phrase':<35} {'Tag':<20} {'Register':<10} {'Alternatives':>5}")
+    click.echo("-" * 75)
+    for e in entries:
+        click.echo(
+            f"{e.phrase:<35} {e.tag.value:<20} {e.register.value:<10} {len(e.alternatives):>5}"
+        )
+
+
+@semvar_cmd.command("config")
+@click.pass_context
+def semvar_config(ctx):
+    """Show semantic variety configuration."""
+    from .semvar import SemVarConfig
+
+    cfg = SemVarConfig()
+    click.echo(f"Enabled: {cfg.enabled}")
+    click.echo(f"Cooldown turns: {cfg.cooldown_turns}")
+    click.echo(f"Max rewrites per transform: {cfg.max_rewrites}")
+    click.echo(f"N-gram size: {cfg.ngram_size}")
+    click.echo(f"User-echo exception: {cfg.user_echo_exception}")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

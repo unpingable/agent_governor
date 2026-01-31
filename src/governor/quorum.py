@@ -12,6 +12,9 @@ Key invariants:
 4. A REJECT vote during stabilization resets the stability clock
 5. Old consensus expires via TTL integration
 6. Both gates must pass: no blocking dissent AND quorum reached
+7. Risk multiplier scales effective Δt window
+8. Fingerprint immutability prevents semantic laundering
+9. Independence scoring ensures diverse method signatures
 
 State transitions:
     COLLECTING ──(threshold met)──→ STABILIZING
@@ -19,10 +22,16 @@ State transitions:
     STABILIZING ──(new REJECT)──→ COLLECTING  (reset clock)
     REACHED ──(dissent filed)──→ CONTESTED
     CONTESTED ──(dissent resolved)──→ REACHED
+    CONTESTED ──(decision: commit)──→ RESOLVED_COMMIT
+    CONTESTED ──(decision: reject)──→ RESOLVED_REJECT
+    CONTESTED ──(stuck/oscillation)──→ ESCALATED
     COLLECTING ──(timeout)──→ FAILED
     REACHED ──(TTL expired)──→ EXPIRED
+
+Terminal states: FAILED, EXPIRED, ESCALATED, RESOLVED_COMMIT, RESOLVED_REJECT
 """
 
+import hashlib
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -89,6 +98,60 @@ class QuorumStatus(str, Enum):
     CONTESTED = "contested"
     """Was reached, then dissent objection filed."""
 
+    ESCALATED = "escalated"
+    """Stuck contested beyond TTL×risk, or oscillation detected."""
+
+    RESOLVED_COMMIT = "resolved_commit"
+    """Contested → resolved in favor of commit."""
+
+    RESOLVED_REJECT = "resolved_reject"
+    """Contested → rejected."""
+
+
+class RiskLevel(str, Enum):
+    """Risk level for quorum proposals, scales effective Δt."""
+
+    LOW = "low"
+    """×1.0 multiplier."""
+
+    MEDIUM = "medium"
+    """×1.5 multiplier."""
+
+    HIGH = "high"
+    """×2.0 multiplier."""
+
+    @property
+    def multiplier(self) -> float:
+        return _RISK_MULTIPLIERS[self]
+
+
+_RISK_MULTIPLIERS: dict["RiskLevel", float] = {
+    RiskLevel.LOW: 1.0,
+    RiskLevel.MEDIUM: 1.5,
+    RiskLevel.HIGH: 2.0,
+}
+
+
+# Terminal states — no further transitions allowed
+TERMINAL_STATES: frozenset[QuorumStatus] = frozenset({
+    QuorumStatus.FAILED,
+    QuorumStatus.EXPIRED,
+    QuorumStatus.ESCALATED,
+    QuorumStatus.RESOLVED_COMMIT,
+    QuorumStatus.RESOLVED_REJECT,
+})
+
+
+# =============================================================================
+# Fingerprint
+# =============================================================================
+
+
+def compute_fingerprint(proposal_id: str, claim_type: ClaimType, content: str = "") -> str:
+    """Compute a proposal fingerprint (SHA-256 truncated to 16 hex chars)."""
+    data = f"{proposal_id}:{claim_type.value}:{content}"
+    return hashlib.sha256(data.encode()).hexdigest()[:16]
+
 
 # =============================================================================
 # Policy
@@ -106,6 +169,13 @@ class QuorumPolicy:
     volatility: VolatilityClass  # TTL class for consensus result
     requires_human: bool = False
     timeout: timedelta = field(default_factory=lambda: timedelta(hours=1))
+    risk_multiplier: float = 1.0
+    independence_threshold: float = 0.3
+
+    @property
+    def effective_delta_t(self) -> timedelta:
+        """Δt scaled by risk multiplier."""
+        return self.delta_t * self.risk_multiplier
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -113,9 +183,12 @@ class QuorumPolicy:
             "min_voters": self.min_voters,
             "approval_threshold": self.approval_threshold,
             "delta_t_seconds": self.delta_t.total_seconds(),
+            "effective_delta_t_seconds": self.effective_delta_t.total_seconds(),
             "volatility": self.volatility.value,
             "requires_human": self.requires_human,
             "timeout_seconds": self.timeout.total_seconds(),
+            "risk_multiplier": self.risk_multiplier,
+            "independence_threshold": self.independence_threshold,
         }
 
 
@@ -189,9 +262,13 @@ class Vote:
     reason: str
     evidence: list[EvidencePointer] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)
+    # Optional method-signature hashes for independence scoring
+    tool_path_hash: str | None = None
+    sources_hash: str | None = None
+    prompt_hash: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "vote_id": self.vote_id,
             "proposal_id": self.proposal_id,
             "agent_id": self.agent_id,
@@ -200,6 +277,13 @@ class Vote:
             "evidence": [e.to_dict() for e in self.evidence],
             "timestamp": self.timestamp.isoformat(),
         }
+        if self.tool_path_hash is not None:
+            d["tool_path_hash"] = self.tool_path_hash
+        if self.sources_hash is not None:
+            d["sources_hash"] = self.sources_hash
+        if self.prompt_hash is not None:
+            d["prompt_hash"] = self.prompt_hash
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Vote":
@@ -211,6 +295,9 @@ class Vote:
             reason=data["reason"],
             evidence=[EvidencePointer.from_dict(e) for e in data.get("evidence", [])],
             timestamp=datetime.fromisoformat(data["timestamp"]),
+            tool_path_hash=data.get("tool_path_hash"),
+            sources_hash=data.get("sources_hash"),
+            prompt_hash=data.get("prompt_hash"),
         )
 
 
@@ -237,6 +324,16 @@ class QuorumState:
     reached_at: datetime | None = None     # when Δt window elapsed
     failed_at: datetime | None = None
     failed_reason: str | None = None
+    # Fingerprint fields
+    fingerprint: str | None = None
+    fingerprint_locked: bool = False
+    # Risk and resolution fields
+    risk_level: RiskLevel = RiskLevel.LOW
+    contested_at: datetime | None = None
+    contest_reason: str | None = None
+    escalated_at: datetime | None = None
+    resolved_at: datetime | None = None
+    resolution: str | None = None  # "commit" or "reject"
 
     # Counts
 
@@ -279,11 +376,11 @@ class QuorumState:
         return self.has_enough_voters and self.approval_ratio >= self.policy.approval_threshold
 
     def is_stable(self, now: datetime | None = None) -> bool:
-        """Whether Δt stability window has elapsed since threshold was met."""
+        """Whether effective Δt stability window has elapsed since threshold was met."""
         if self.stabilized_at is None:
             return False
         now = now or datetime.now()
-        return (now - self.stabilized_at) >= self.policy.delta_t
+        return (now - self.stabilized_at) >= self.policy.effective_delta_t
 
     def is_timed_out(self, now: datetime | None = None) -> bool:
         """Whether the quorum has exceeded its timeout."""
@@ -307,6 +404,14 @@ class QuorumState:
             "reached_at": self.reached_at.isoformat() if self.reached_at else None,
             "failed_at": self.failed_at.isoformat() if self.failed_at else None,
             "failed_reason": self.failed_reason,
+            "fingerprint": self.fingerprint,
+            "fingerprint_locked": self.fingerprint_locked,
+            "risk_level": self.risk_level.value,
+            "contested_at": self.contested_at.isoformat() if self.contested_at else None,
+            "contest_reason": self.contest_reason,
+            "escalated_at": self.escalated_at.isoformat() if self.escalated_at else None,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "resolution": self.resolution,
         }
 
 
@@ -323,10 +428,17 @@ class QuorumManager:
     dissent and TTL subsystems.
     """
 
-    def __init__(self, policies: dict[ClaimType, QuorumPolicy] | None = None):
+    def __init__(
+        self,
+        policies: dict[ClaimType, QuorumPolicy] | None = None,
+        dissent_ledger: DissentLedger | None = None,
+        independence_scorer: Any | None = None,
+    ):
         self.policies = policies or dict(DEFAULT_POLICIES)
         self.quorums: dict[str, QuorumState] = {}  # proposal_id → QuorumState
         self.history: list[dict[str, Any]] = []     # transition log
+        self.dissent_ledger = dissent_ledger
+        self.independence_scorer = independence_scorer
 
     def get_policy(self, claim_type: ClaimType) -> QuorumPolicy:
         """Get the quorum policy for a claim type."""
@@ -337,21 +449,40 @@ class QuorumManager:
         proposal_id: str,
         claim_type: ClaimType,
         created_at: datetime | None = None,
+        content: str = "",
+        risk_level: RiskLevel = RiskLevel.LOW,
     ) -> QuorumState:
         """
         Create a new quorum for a proposal.
 
         Returns the QuorumState in COLLECTING status.
+        Computes and sets the fingerprint at creation time.
         """
         policy = self.get_policy(claim_type)
         now = created_at or datetime.now()
+        fp = compute_fingerprint(proposal_id, claim_type, content)
         qs = QuorumState(
             proposal_id=proposal_id,
             claim_type=claim_type,
             policy=policy,
             status=QuorumStatus.COLLECTING,
             created_at=now,
+            fingerprint=fp,
+            risk_level=risk_level,
         )
+        # Apply risk multiplier to policy
+        if risk_level != RiskLevel.LOW:
+            qs.policy = QuorumPolicy(
+                claim_type=policy.claim_type,
+                min_voters=policy.min_voters,
+                approval_threshold=policy.approval_threshold,
+                delta_t=policy.delta_t,
+                volatility=policy.volatility,
+                requires_human=policy.requires_human,
+                timeout=policy.timeout,
+                risk_multiplier=risk_level.multiplier,
+                independence_threshold=policy.independence_threshold,
+            )
         self.quorums[proposal_id] = qs
         self._log("created", proposal_id, claim_type=claim_type.value)
         return qs
@@ -364,6 +495,9 @@ class QuorumManager:
         reason: str,
         evidence: list[EvidencePointer] | None = None,
         timestamp: datetime | None = None,
+        tool_path_hash: str | None = None,
+        sources_hash: str | None = None,
+        prompt_hash: str | None = None,
     ) -> Vote | None:
         """
         Cast a vote on a proposal.
@@ -392,6 +526,9 @@ class QuorumManager:
             reason=reason,
             evidence=evidence or [],
             timestamp=now,
+            tool_path_hash=tool_path_hash,
+            sources_hash=sources_hash,
+            prompt_hash=prompt_hash,
         )
         qs.votes[agent_id] = vote
         self._log("vote_cast", proposal_id, agent_id=agent_id, verdict=verdict.value)
@@ -434,9 +571,10 @@ class QuorumManager:
         """
         Check if a proposal can proceed to the next FSM state.
 
-        Both gates must pass:
+        All gates must pass:
         1. Quorum must be REACHED
         2. No blocking dissent (if dissent_ledger provided)
+        3. Independence threshold met (if independence_scorer set)
 
         Returns (can_proceed, list of blocking reasons).
         """
@@ -465,15 +603,29 @@ class QuorumManager:
                 reasons.append("Requires human approval (agent_id starting with 'human:')")
 
         # Gate 3: Dissent check
-        if dissent_ledger is not None:
-            can_commit, blockers = dissent_ledger.can_commit(proposal_id)
+        dl = dissent_ledger or self.dissent_ledger
+        if dl is not None:
+            can_commit, blockers = dl.can_commit(proposal_id)
             if not can_commit:
                 for b in blockers:
                     reasons.append(f"Dissent blocks: {b.reason}")
 
+        # Gate 4: Independence check
+        if self.independence_scorer is not None:
+            approve_votes = [
+                v for v in qs.votes.values()
+                if v.verdict == VoteVerdict.APPROVE
+            ]
+            result = self.independence_scorer.score_votes(approve_votes)
+            if not result.passes_threshold:
+                reasons.append(
+                    f"Independence score {result.score:.2f} below threshold "
+                    f"{qs.policy.independence_threshold:.2f}"
+                )
+
         return len(reasons) == 0, reasons
 
-    def contest(self, proposal_id: str) -> bool:
+    def contest(self, proposal_id: str, reason: str = "") -> bool:
         """
         Mark a REACHED quorum as CONTESTED (dissent was filed).
 
@@ -483,7 +635,9 @@ class QuorumManager:
         if qs is None or qs.status != QuorumStatus.REACHED:
             return False
         qs.status = QuorumStatus.CONTESTED
-        self._log("contested", proposal_id)
+        qs.contested_at = datetime.now()
+        qs.contest_reason = reason or "Dissent filed"
+        self._log("contested", proposal_id, reason=reason)
         return True
 
     def resolve_contest(self, proposal_id: str) -> bool:
@@ -499,6 +653,78 @@ class QuorumManager:
         self._log("contest_resolved", proposal_id)
         return True
 
+    def escalate(self, proposal_id: str, reason: str) -> bool:
+        """
+        Escalate a CONTESTED quorum (stuck beyond TTL×risk, or oscillation).
+
+        CONTESTED → ESCALATED. Returns True if the transition was made.
+        """
+        qs = self.quorums.get(proposal_id)
+        if qs is None or qs.status != QuorumStatus.CONTESTED:
+            return False
+        qs.status = QuorumStatus.ESCALATED
+        qs.escalated_at = datetime.now()
+        self._log("escalated", proposal_id, reason=reason)
+        return True
+
+    def resolve_commit(self, proposal_id: str) -> bool:
+        """
+        Resolve a CONTESTED quorum in favor of commit.
+
+        CONTESTED → RESOLVED_COMMIT. Returns True if the transition was made.
+        """
+        qs = self.quorums.get(proposal_id)
+        if qs is None or qs.status != QuorumStatus.CONTESTED:
+            return False
+        qs.status = QuorumStatus.RESOLVED_COMMIT
+        qs.resolved_at = datetime.now()
+        qs.resolution = "commit"
+        self._log("resolved_commit", proposal_id)
+        return True
+
+    def resolve_reject(self, proposal_id: str, reason: str = "") -> bool:
+        """
+        Resolve a CONTESTED quorum as rejected.
+
+        CONTESTED → RESOLVED_REJECT. Returns True if the transition was made.
+        """
+        qs = self.quorums.get(proposal_id)
+        if qs is None or qs.status != QuorumStatus.CONTESTED:
+            return False
+        qs.status = QuorumStatus.RESOLVED_REJECT
+        qs.resolved_at = datetime.now()
+        qs.resolution = "reject"
+        self._log("resolved_reject", proposal_id, reason=reason)
+        return True
+
+    def validate_fingerprint(self, proposal_id: str, content: str) -> bool:
+        """
+        Validate that proposal content matches its fingerprint.
+
+        If the fingerprint is locked and doesn't match, auto-contests the quorum.
+        Returns True if the fingerprint matches, False if mismatch (and auto-contested).
+        """
+        qs = self.quorums.get(proposal_id)
+        if qs is None or qs.fingerprint is None:
+            return True  # No fingerprint to validate
+
+        new_fp = compute_fingerprint(proposal_id, qs.claim_type, content)
+        if new_fp == qs.fingerprint:
+            return True
+
+        # Fingerprint mismatch
+        if qs.fingerprint_locked:
+            # Auto-contest if in REACHED state, otherwise log warning
+            if qs.status == QuorumStatus.REACHED:
+                self.contest(proposal_id, reason="Fingerprint mismatch detected")
+            self._log("fingerprint_mismatch", proposal_id, locked=True)
+            return False
+
+        # Not locked yet — update fingerprint
+        qs.fingerprint = new_fp
+        self._log("fingerprint_updated", proposal_id)
+        return True
+
     def fail(self, proposal_id: str, reason: str) -> bool:
         """
         Manually fail a quorum.
@@ -508,7 +734,7 @@ class QuorumManager:
         qs = self.quorums.get(proposal_id)
         if qs is None:
             return False
-        if qs.status in {QuorumStatus.FAILED, QuorumStatus.EXPIRED}:
+        if qs.status in TERMINAL_STATES:
             return False
         qs.status = QuorumStatus.FAILED
         qs.failed_at = datetime.now()
@@ -598,7 +824,7 @@ class QuorumManager:
         """Evaluate and apply state transitions for a quorum."""
 
         # Terminal states: no transitions
-        if qs.status in {QuorumStatus.FAILED, QuorumStatus.EXPIRED}:
+        if qs.status in TERMINAL_STATES:
             return
 
         # COLLECTING → check for timeout or threshold
@@ -613,6 +839,8 @@ class QuorumManager:
             if qs.threshold_met:
                 qs.status = QuorumStatus.STABILIZING
                 qs.stabilized_at = now
+                # Lock fingerprint on entering STABILIZING
+                qs.fingerprint_locked = True
                 self._log("stabilizing", qs.proposal_id)
                 return
 
@@ -633,14 +861,26 @@ class QuorumManager:
                 self._log("destabilized", qs.proposal_id)
                 return
 
-            # Check if Δt has elapsed
+            # Check if Δt has elapsed (uses effective_delta_t via is_stable)
             if qs.is_stable(now):
                 qs.status = QuorumStatus.REACHED
                 qs.reached_at = now
                 self._log("reached", qs.proposal_id)
                 return
 
-        # CONTESTED → no automatic transitions (needs explicit resolve_contest)
+        # CONTESTED → check for auto-resolution
+        if qs.status == QuorumStatus.CONTESTED:
+            if qs.contested_at is not None:
+                # Auto-reject if contested beyond decision deadline (timeout * 2)
+                contest_duration = now - qs.contested_at
+                decision_deadline = qs.policy.timeout * 2
+                if contest_duration >= decision_deadline:
+                    qs.status = QuorumStatus.RESOLVED_REJECT
+                    qs.resolved_at = now
+                    qs.resolution = "reject"
+                    self._log("auto_resolved_reject", qs.proposal_id,
+                              reason="Decision deadline exceeded")
+                    return
 
     def _log(self, event: str, proposal_id: str, **kwargs: Any) -> None:
         """Log a quorum event."""
@@ -660,9 +900,11 @@ class QuorumManager:
 
 def create_quorum_manager(
     policies: dict[ClaimType, QuorumPolicy] | None = None,
+    dissent_ledger: DissentLedger | None = None,
+    independence_scorer: Any | None = None,
 ) -> QuorumManager:
     """Create a QuorumManager with optional custom policies."""
-    return QuorumManager(policies)
+    return QuorumManager(policies, dissent_ledger, independence_scorer)
 
 
 def get_default_policy(claim_type: ClaimType) -> QuorumPolicy:

@@ -618,11 +618,12 @@ Extends existing multi-agent dispatcher + Δt tracking from direction.py.
   - Low-stakes reversible claims commit fast; high-stakes irreversible require longer Δt + stronger evidence
   - Reference: `ingest/multi2.md`
 
-- [ ] **Cooperative redundancy with independence constraints**
+- [x] **Cooperative redundancy with independence constraints** ✓ COMPLETE
   - Agents must use different tool paths, prompting styles, retrieval sources
   - Independence score: quantify how different the verification paths were
   - Corroboration from identical methods doesn't count
   - Agent Run Provenance: track tools_used, sources_consulted, prompt_hash
+  - Module: `src/governor/independence.py` (38 tests)
 
 - [x] **Δt budgets per claim type** - Policy matrix
   - `MATH`: Δt=1s (low), k=2, tooling=calculator. Reversible.
@@ -721,31 +722,31 @@ Implemented in `src/governor/scars.py` (89 tests).
 Prevents repetitive phrasing across responses without mutating factual content.
 Runs after commit gating and puppet rendering, before semantic-diff guard.
 
-- [ ] **PhraseBank** - Registry of high-gravity phrases
+- [x] **PhraseBank** - Registry of high-gravity phrases ✓ COMPLETE
   - Each phrase: meaning tag, register (formal/wry/etc.), risk level, alternatives
   - Cooldown rules per phrase (block reuse for T turns)
-  - Domain-specific phrase banks (technical, narrative, legal)
+  - 12 seed phrases with meaning tags and register-matched alternatives
   - Reference: `ingest/semvar.md`
 
-- [ ] **SessionStyleState** - Track repetition within session
+- [x] **SessionStyleState / CooldownTracker** - Track repetition within session ✓ COMPLETE
   - Recent n-gram tracking (configurable n, default 3)
-  - Recent phrase usage with timestamps
-  - Current register tracking
+  - Recent phrase usage with turn tracking
   - Cooldown enforcement per phrase
+  - User-echo exception
 
-- [ ] **Variety rules** - Repetition prevention
+- [x] **Variety rules** - Repetition prevention ✓ COMPLETE
   - Cooldown: Block phrase reuse for T turns (configurable)
   - Burst repetition: No trigram repeated twice in single response
   - Register-aware substitution: Alternatives must match current register
   - User-echo exception: If user used a phrase, echoing it is allowed
-  - Decay half-life: Older usage decays, eventually allows reuse
+  - Semantic diff guard: blocks transforms that alter meaning
 
-- [ ] **Pipeline placement** - Where SVM runs in output pipeline
-  - AFTER commit gating (factual content is finalized)
-  - AFTER puppet rendering (voice is applied)
-  - BEFORE semantic-diff guard (variety changes must pass diff check)
-  - SVM changes must NOT introduce new claims or alter certainty
-  - CLI: `governor semvar status/config/phrases/cooldowns`
+- [x] **Pipeline placement / SemVarEngine** ✓ COMPLETE
+  - No-rewrite zones (code blocks, code spans, quotes, blockquotes)
+  - SemanticDiffGuard: entity, number, negation, modal, causal invariants
+  - Fail-closed: guard rejection uses original text
+  - CLI: `governor semvar transform/phrases/config`
+  - Module: `src/governor/semvar.py` (56 tests)
 
 ---
 

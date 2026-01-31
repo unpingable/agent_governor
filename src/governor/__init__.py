@@ -376,6 +376,35 @@ from .quorum import (
     DEFAULT_POLICIES as DEFAULT_QUORUM_POLICIES,
     create_quorum_manager,
     get_default_policy,
+    RiskLevel as QuorumRiskLevel,
+    TERMINAL_STATES,
+    compute_fingerprint,
+)
+
+# Cooperative redundancy (independence scoring)
+from .independence import (
+    MethodSignature,
+    IndependenceResult,
+    IndependenceScorer,
+    pairwise_jaccard,
+    independence_score,
+    is_independent_support,
+)
+
+# Semantic variety (post-commit text transform)
+from .semvar import (
+    MeaningTag,
+    Register,
+    PhraseEntry,
+    SemVarConfig,
+    PhraseMatch,
+    TextInvariants,
+    SemVarResult,
+    PhraseBank,
+    CooldownTracker,
+    SemanticDiffGuard,
+    SemVarEngine,
+    extract_invariants,
 )
 
 __all__ = [
@@ -683,6 +712,29 @@ __all__ = [
     "DEFAULT_QUORUM_POLICIES",
     "create_quorum_manager",
     "get_default_policy",
+    "QuorumRiskLevel",
+    "TERMINAL_STATES",
+    "compute_fingerprint",
+    # Cooperative redundancy (independence scoring)
+    "MethodSignature",
+    "IndependenceResult",
+    "IndependenceScorer",
+    "pairwise_jaccard",
+    "independence_score",
+    "is_independent_support",
+    # Semantic variety (post-commit text transform)
+    "MeaningTag",
+    "Register",
+    "PhraseEntry",
+    "SemVarConfig",
+    "PhraseMatch",
+    "TextInvariants",
+    "SemVarResult",
+    "PhraseBank",
+    "CooldownTracker",
+    "SemanticDiffGuard",
+    "SemVarEngine",
+    "extract_invariants",
 ]
 
 __version__ = "0.6.0"

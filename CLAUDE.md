@@ -34,7 +34,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Cooperative Redundancy**: Independence scoring, method signatures, Jaccard similarity, anti-cheat (source URL overlap), quorum integration.
 **Semantic Variety**: Post-commit text transform, phrase bank with meaning tags, cooldown tracking, semantic diff guard, no-rewrite zones, burst repetition detection.
 **Auto-Tuning**: Threshold learning from signal distributions, reset effectiveness tracking, setpoint calibration from baselines, budget sweep with Pareto analysis.
-**Total: 2736 tests**
+**Puppet Mode**: Persona pinning, voice constraints, epistemic posture, semantic diff guard (7 rules + 2 warnings), answer skeleton, 3 builtin profiles, registry.
+**Total: 2864 tests**
 
 ## Key Documents
 
@@ -262,6 +263,17 @@ governor tune calibrate --end-baseline         # End baseline, compute profile
 governor tune calibrate --run                  # Compute calibrated setpoints
 governor tune budget --parameter <name>        # Show sweep results
 governor tune reset --confirm                  # Clear all tuning state
+
+# Puppet Mode (persona pinning, semantic safety)
+governor puppet list                    # List available puppet profiles
+governor puppet show <puppet_id>        # Show profile details
+governor puppet activate <puppet_id>    # Activate a puppet
+governor puppet deactivate              # Deactivate current puppet
+governor puppet status                  # Show active puppet status
+governor puppet create <puppet_id>      # Create custom profile (from JSON stdin or --file)
+governor puppet delete <puppet_id>      # Delete custom profile
+governor puppet test <puppet_id>        # Test profile with sample text
+governor puppet render <text>           # Render text through active puppet
 ```
 
 ## Architecture Rules (Non-Negotiable)
@@ -352,6 +364,7 @@ src/governor/
 ├── independence.py   # IndependenceScorer, MethodSignature, Jaccard similarity, anti-cheat, quorum integration
 ├── semvar.py         # SemVarEngine, PhraseBank, CooldownTracker, SemanticDiffGuard, no-rewrite zones, burst detection
 ├── auto_tuning.py    # ThresholdTuner, ResetTracker, SetpointCalibrator, BudgetSweeper, AutoTuner, Pareto analysis
+├── puppet.py         # PuppetProfile, PuppetRenderer, PuppetDiffGuard, PuppetRegistry, persona pinning, semantic diff guard
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -612,6 +625,13 @@ src/ops_governor/
 
 **Auto-Tuning tests: 117**
 
+### Puppet Mode (Persona Pinning)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| puppet.py | PuppetProfile, PuppetRenderer, PuppetDiffGuard (7 rules + 2 warnings), PuppetRegistry, 3 builtins, AnswerSkeleton, certainty helpers | 128 |
+
+**Puppet Mode tests: 128**
+
 ### Fiction Governor (Complete)
 | Module | Description | Tests |
 |--------|-------------|-------|
@@ -635,7 +655,7 @@ src/ops_governor/
 
 **Non-Fiction Governor tests: 91**
 
-**Total: 2619 tests**
+**Total: 2864 tests**
 
 ## Common Mistakes to Avoid
 

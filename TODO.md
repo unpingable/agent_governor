@@ -655,43 +655,36 @@ Extends existing multi-agent dispatcher + Δt tracking from direction.py.
   - CONTESTED → {RESOLVED_COMMIT | RESOLVED_REJECT | ESCALATED}
   - Commit criteria: stability across Δt, minimum k agents, no unresolved HIGH objections
 
-## Puppet Mode (from ingest/puppet.md)
+## ~~Puppet Mode~~ ✓ COMPLETE (from ingest/puppet.md)
 
-Runtime wrapper that pins a character policy (voice + allowed moves) while forcing outputs
-through commit/ledger gates. Separates stance from commitment.
+Implemented in `src/governor/puppet.py` (128 tests).
 
-- [ ] **PuppetProfile** - Declarative persona definition
+- [x] **PuppetProfile** - Declarative persona definition ✓ COMPLETE
   - Voice constraints: vocabulary, register (formal/wry/clinical), forbidden phrases
   - Epistemic posture: how the persona handles uncertainty
   - Behavioral constraints: what the persona can/cannot do
   - Role disclaimer mode: how the persona identifies itself
-  - Example profiles: "Ops Postmortem Scribe", "Procurement Lawyer"
-  - YAML schema for profile definition
-  - Reference: `ingest/puppet.md`
+  - 3 builtin profiles: ops_scribe, procurement_lawyer, daria_mirror
 
-- [ ] **Output channel split** - Separate content from rendering
-  - Generate content draft first (plain claims + evidence)
-  - Apply puppet rendering second (voice, register, framing)
-  - Commit decisions happen on the draft, not the rendered output
+- [x] **Output channel split** - Separate content from rendering ✓ COMPLETE
+  - AnswerSkeleton + SkeletonAtom for structured pre-puppet output
+  - PuppetRenderer applies voice, register, framing
+  - Commit decisions happen on the skeleton, not the rendered output
   - Puppet layer is cosmetic—cannot introduce new claims
 
-- [ ] **Semantic diff guard** - Prevent claim smuggling through rewrite
-  - Compare pre-puppet and post-puppet content for semantic equivalence
-  - Block if puppet rendering introduces:
-    - New entities or numbers not in draft
-    - Certainty escalation (SOFT → HARD through wording)
-    - Scope escalation (broader claims than draft)
-    - Citation removal
-    - Polarity flips (negation changes)
-    - Actionable instructions not in draft
-  - Module: semantic diffing with configurable sensitivity
+- [x] **Semantic diff guard** - Prevent claim smuggling through rewrite ✓ COMPLETE
+  - PuppetDiffGuard with 7 hard rules (R1-R7) and 2 soft warnings (W1-W2)
+  - Blocks: new entities, new numbers, certainty escalation, scope escalation
+  - Blocks: citation removal, polarity flips, new imperative instructions
+  - Warns: compression risk, tone drift
 
-- [ ] **Puppet registry** - Manage available personas
+- [x] **Puppet registry** - Manage available personas ✓ COMPLETE
   - `governor puppet list` - Show available profiles
   - `governor puppet activate <name>` - Enable puppet mode
   - `governor puppet deactivate` - Return to default voice
-  - `governor puppet create <name>` - Create new profile from YAML
+  - `governor puppet create <name>` - Create new profile from JSON
   - `governor puppet test <name>` - Verify profile constraints work
+  - `governor puppet render <text>` - Render through active puppet
 
 ## ~~Grounding Audit Pipeline~~ ✓ COMPLETE (from ingest/regime.md)
 

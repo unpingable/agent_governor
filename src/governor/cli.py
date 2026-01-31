@@ -7657,6 +7657,242 @@ def tune_reset(ctx, confirm):
     click.echo("Tuning state cleared.")
 
 
+# =============================================================================
+# Puppet Mode
+# =============================================================================
+
+
+@cli.group("puppet")
+@click.pass_context
+def puppet_cmd(ctx):
+    """Puppet mode — persona pinning with semantic safety."""
+    pass
+
+
+@puppet_cmd.command("list")
+@click.pass_context
+def puppet_list(ctx):
+    """List available puppet profiles."""
+    from .puppet import PuppetRegistry, _BUILTIN_PROFILES
+
+    gov_dir = ensure_initialized(ctx)
+    reg = PuppetRegistry(governor_dir=gov_dir)
+
+    for pid in reg.list_profiles():
+        profile = reg.get(pid)
+        marker = " *" if reg._active == pid else ""
+        builtin = " (builtin)" if pid in _BUILTIN_PROFILES else " (custom)"
+        click.echo(f"  {pid}{marker}{builtin}")
+        if profile and profile.description:
+            click.echo(f"    {profile.description}")
+
+
+@puppet_cmd.command("show")
+@click.argument("puppet_id")
+@click.pass_context
+def puppet_show(ctx, puppet_id):
+    """Show details of a puppet profile."""
+    import json
+    from .puppet import PuppetRegistry
+
+    gov_dir = ensure_initialized(ctx)
+    reg = PuppetRegistry(governor_dir=gov_dir)
+    profile = reg.get(puppet_id)
+
+    if profile is None:
+        click.echo(f"Error: Puppet profile '{puppet_id}' not found.", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Puppet: {profile.puppet_id}")
+    click.echo(f"Version: {profile.version}")
+    click.echo(f"Description: {profile.description}")
+    click.echo(f"Register: {profile.voice.register.value}")
+    click.echo(f"Tone: {', '.join(profile.voice.tone_tags)}")
+    click.echo(f"Verbosity cap: {profile.voice.verbosity_cap_tokens}")
+    click.echo(f"Forbidden phrases: {', '.join(profile.voice.forbidden_phrases)}")
+    click.echo(f"Disclaimer: {profile.disclaimer.tag_format.value} '{profile.disclaimer.tag_text}'")
+    click.echo(f"Safety: spice={profile.safety.allow_spice}, insults_forbidden={profile.safety.forbid_insults}")
+
+
+@puppet_cmd.command("activate")
+@click.argument("puppet_id")
+@click.pass_context
+def puppet_activate(ctx, puppet_id):
+    """Activate a puppet profile."""
+    from .puppet import PuppetRegistry
+
+    gov_dir = ensure_initialized(ctx)
+    reg = PuppetRegistry(governor_dir=gov_dir)
+
+    try:
+        profile = reg.activate(puppet_id)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Puppet '{puppet_id}' activated.")
+    click.echo(f"  Register: {profile.voice.register.value}")
+    click.echo(f"  Disclaimer: {profile.disclaimer.tag_text or '(none)'}")
+
+
+@puppet_cmd.command("deactivate")
+@click.pass_context
+def puppet_deactivate(ctx):
+    """Deactivate the current puppet."""
+    from .puppet import PuppetRegistry
+
+    gov_dir = ensure_initialized(ctx)
+    reg = PuppetRegistry(governor_dir=gov_dir)
+    reg.deactivate()
+    click.echo("Puppet deactivated.")
+
+
+@puppet_cmd.command("status")
+@click.pass_context
+def puppet_status(ctx):
+    """Show active puppet status."""
+    from .puppet import PuppetRegistry
+
+    gov_dir = ensure_initialized(ctx)
+    reg = PuppetRegistry(governor_dir=gov_dir)
+
+    if not reg.is_active():
+        click.echo("No puppet active.")
+        return
+
+    profile = reg.active_profile()
+    click.echo(f"Active puppet: {profile.puppet_id}")
+    click.echo(f"  Description: {profile.description}")
+    click.echo(f"  Register: {profile.voice.register.value}")
+    click.echo(f"  Tone: {', '.join(profile.voice.tone_tags)}")
+    click.echo(f"  Verbosity cap: {profile.voice.verbosity_cap_tokens}")
+    click.echo(f"  Disclaimer: {profile.disclaimer.tag_text or '(none)'}")
+
+
+@puppet_cmd.command("create")
+@click.argument("puppet_id")
+@click.option("--file", "filepath", type=click.Path(exists=True), help="JSON file with profile definition")
+@click.pass_context
+def puppet_create(ctx, puppet_id, filepath):
+    """Create a custom puppet profile from JSON (stdin or --file)."""
+    import json
+    from .puppet import PuppetProfile, PuppetRegistry
+
+    gov_dir = ensure_initialized(ctx)
+    reg = PuppetRegistry(governor_dir=gov_dir)
+
+    if filepath:
+        data = json.loads(Path(filepath).read_text())
+    else:
+        raw = click.get_text_stream("stdin").read()
+        if not raw.strip():
+            click.echo("Error: Provide JSON via stdin or --file.", err=True)
+            ctx.exit(1)
+            return
+        data = json.loads(raw)
+
+    data["puppet_id"] = puppet_id
+    profile = PuppetProfile.from_dict(data)
+
+    try:
+        reg.create(profile)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Puppet profile '{puppet_id}' created.")
+
+
+@puppet_cmd.command("delete")
+@click.argument("puppet_id")
+@click.pass_context
+def puppet_delete(ctx, puppet_id):
+    """Delete a custom puppet profile."""
+    from .puppet import PuppetRegistry
+
+    gov_dir = ensure_initialized(ctx)
+    reg = PuppetRegistry(governor_dir=gov_dir)
+
+    try:
+        reg.delete(puppet_id)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Puppet profile '{puppet_id}' deleted.")
+
+
+@puppet_cmd.command("test")
+@click.argument("puppet_id")
+@click.pass_context
+def puppet_test(ctx, puppet_id):
+    """Test a puppet profile with sample text."""
+    from .puppet import PuppetRegistry, PuppetRenderer, create_skeleton
+
+    gov_dir = ensure_initialized(ctx)
+    reg = PuppetRegistry(governor_dir=gov_dir)
+    profile = reg.get(puppet_id)
+
+    if profile is None:
+        click.echo(f"Error: Puppet profile '{puppet_id}' not found.", err=True)
+        ctx.exit(1)
+        return
+
+    sample = "The system is likely experiencing latency issues. There are approximately 42 pending requests. According to [1], this might be related to the database connection pool."
+    skeleton = create_skeleton(sample)
+    renderer = PuppetRenderer()
+    result = renderer.render(skeleton, profile)
+
+    click.echo(f"Profile: {puppet_id}")
+    click.echo(f"Verdict: {result.verdict.value}")
+    click.echo(f"Attempts: {result.attempts}")
+    click.echo(f"Disclaimer: {result.disclaimer_applied}")
+    click.echo(f"Forbidden removed: {result.forbidden_phrases_removed}")
+    click.echo(f"\n--- Original ---\n{result.original}")
+    click.echo(f"\n--- Rendered ---\n{result.rendered}")
+
+    if result.guard_result.violations:
+        click.echo(f"\nViolations: {len(result.guard_result.violations)}")
+        for v in result.guard_result.violations:
+            click.echo(f"  [{v.rule_id.value}] {v.description}")
+
+    if result.guard_result.warnings:
+        click.echo(f"\nWarnings: {len(result.guard_result.warnings)}")
+        for w in result.guard_result.warnings:
+            click.echo(f"  [{w.warn_id.value}] {w.description}")
+
+
+@puppet_cmd.command("render")
+@click.argument("text")
+@click.pass_context
+def puppet_render(ctx, text):
+    """Render text through the active puppet."""
+    from .puppet import PuppetRegistry, PuppetRenderer, create_skeleton
+
+    gov_dir = ensure_initialized(ctx)
+    reg = PuppetRegistry(governor_dir=gov_dir)
+
+    if not reg.is_active():
+        click.echo("Error: No puppet active. Use 'governor puppet activate <id>' first.", err=True)
+        ctx.exit(1)
+        return
+
+    profile = reg.active_profile()
+    skeleton = create_skeleton(text)
+    renderer = PuppetRenderer()
+    result = renderer.render(skeleton, profile)
+
+    click.echo(result.rendered)
+
+    if result.guard_result.warnings:
+        for w in result.guard_result.warnings:
+            click.echo(click.style(f"  warning: [{w.warn_id.value}] {w.description}", fg="yellow"), err=True)
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

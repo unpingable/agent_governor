@@ -427,7 +427,51 @@ Based on `ingest/direction.md` - artificial landmarks that impose orientation co
   - `fiction-gov proposal reject` - Reject with reason
   - `fiction-gov proposal list --pending` - Show pending proposals
 
-**189 total fiction tests (36 manuscript + 41 similarity + 112 existing)**
+**376 total fiction tests (36 manuscript + 41 similarity + 112 existing + 64 context drift + 123 guardrails)**
+
+### Context Drift Detection ✓ COMPLETE
+
+- [x] **Narrative mode tracking** - Hysteresis-based mode transitions with genre escalation gating
+  - 10 narrative modes: LITERARY, CONTEMPORARY, FANFIC, ROMANCE, EROTIC, GRIMDARK, YA, COMEDIC, TECHNICAL, HISTORICAL
+  - Risk tier mapping (LOW/MEDIUM/HIGH) with explicit user opt-in for escalation
+  - Hysteresis: θ_up/θ_down thresholds prevent mode-chatter
+  - DriftFaultType: UNSIGNALED_REGISTER_SHIFT, GENRE_ESCALATION, MODE_CHATTER
+  - Key insight: unsignaled transition is the violation, not the content
+  - Module: `src/fiction_governor/context_drift.py`
+
+**64 tests in tests/test_context_drift.py**
+
+### Fiction Guardrails (Consent, DSI, AII) ✓ COMPLETE
+
+- [x] **Consent tracking** - Pairwise consent state between characters
+  - Scopes: FLIRT, TOUCH, SEX, KINK_COERCIVE_PLAY
+  - Levels: UNKNOWN → NO → YES → YES_EXPLICIT
+  - ConsentLedger with escalation checking and global opt-in state
+
+- [x] **Hard constraints (C1-C3)** - Veto/block checks
+  - C1: Consent gate — coercive dynamics without opt-in
+  - C2: Mode escalation — high risk content without user enablement
+  - C3: Anachronistic causal identity — "because he's Italian" in medieval setting
+
+- [x] **Soft penalties (P1-P4)** - Steer/penalize checks
+  - P1: DSI (demographic salience intrusion) — identity-correlated topics without narrative causality
+  - P2: Unearned facts — sensitive topics (addiction, mental health) without character KB support
+  - P3: Register drift — drift score from ContextDriftDetector
+  - P4: Proxy dominance — population-level rationale in fiction
+
+- [x] **DSI detector** - Demographic marker + correlated bundle co-occurrence detection
+  - 7 demographic categories with marker patterns and correlated bundles
+  - Local trigger checking against character facts
+
+- [x] **AII detector** - Temporal validity gates for identity terms used causally
+  - 4 builtin profiles: medieval_europe, renaissance_europe, ancient_world, colonial_era
+  - Custom profiles with priority over builtins
+  - Causal identity pattern extraction (regex-based)
+
+- [x] **CLI** - `fiction-gov drift` and `fiction-gov guardrails` command groups
+  - Module: `src/fiction_governor/guardrails.py`
+
+**123 tests in tests/test_guardrails.py**
 
 ## Main Governor (Existing) ✓ COMPLETE
 
@@ -839,6 +883,14 @@ enabled = false
 active_profile = ""  # Name of active puppet profile
 semantic_diff_guard = true
 certainty_escalation_block = true
+
+[fiction_guardrails]
+context_drift = true
+consent_tracking = true
+dsi_detection = true
+aii_detection = true
+hard_constraints = true  # C1-C3
+soft_penalties = true     # P1-P4
 
 [grounding_audit]
 enabled = false

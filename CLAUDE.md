@@ -14,7 +14,7 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Watch Mode**: Continuous file monitoring with automatic security scanning.
 **Claude Code Hooks**: Integration with Claude CLI via pre/post tool hooks.
 **Direction Tracking**: Commitments, anchors, Δt measurement, belief graph triangulation.
-**Fiction Governor**: Plot threads, scene proposals, prompt generation, narrative constraints, manuscript scanning, similarity matching.
+**Fiction Governor**: Plot threads, scene proposals, prompt generation, narrative constraints, manuscript scanning, similarity matching, context drift detection, fiction guardrails (consent tracking, DSI, AII).
 **Non-Fiction Governor**: Corpus management, DOI fetching, citation verification.
 **Multi-Agent Routing**: Task complexity estimation, model tiers, adaptive routing.
 **Failure Provenance**: Scars (constraint hysteresis), shields (input gating), surprise ratio classification.
@@ -36,7 +36,9 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Auto-Tuning**: Threshold learning from signal distributions, reset effectiveness tracking, setpoint calibration from baselines, budget sweep with Pareto analysis.
 **Puppet Mode**: Persona pinning, voice constraints, epistemic posture, semantic diff guard (7 rules + 2 warnings), answer skeleton, 3 builtin profiles, registry.
 **Tainted Claim Similarity**: Token-set Jaccard fingerprinting, inverted index candidate retrieval, exact/near-duplicate detection, audit events, configurable thresholds.
-**Total: 2945 tests**
+**Context Drift Detection**: Narrative mode tracking with hysteresis, genre escalation gating, register shift detection, mode chatter warnings.
+**Fiction Guardrails**: Consent tracking (pairwise, scoped), DSI detection, AII with validity profiles, hard constraints (C1-C3), soft penalties (P1-P4).
+**Total: 3132 tests**
 
 ## Key Documents
 
@@ -285,6 +287,21 @@ governor puppet create <puppet_id>      # Create custom profile (from JSON stdin
 governor puppet delete <puppet_id>      # Delete custom profile
 governor puppet test <puppet_id>        # Test profile with sample text
 governor puppet render <text>           # Render text through active puppet
+
+# Fiction Governor - Context Drift Detection
+fiction-gov drift status               # Show drift detector state
+fiction-gov drift classify <text>      # Classify text register/mode
+fiction-gov drift set <mode>           # Force narrative mode
+fiction-gov drift check <text>         # Check text for drift
+fiction-gov drift reset --confirm      # Reset drift detector
+
+# Fiction Governor - Guardrails (consent, DSI, AII)
+fiction-gov guardrails check <text>    # Check text against all guardrails
+fiction-gov guardrails consent <a> <b> <scope> <level>  # Update consent state
+fiction-gov guardrails profiles        # List validity profiles
+fiction-gov guardrails dsi <text>      # Check text for DSI
+fiction-gov guardrails aii <text>      # Check text for AII
+fiction-gov guardrails config          # Show guardrail config
 ```
 
 ## Architecture Rules (Non-Negotiable)
@@ -393,7 +410,9 @@ src/fiction_governor/
 ├── verifiers.py      # InCharacterVerifier, TropeVerifier, ToneVerifier, NarrativeVerifier
 ├── manuscript.py     # ManuscriptScanner for auto-populating canon from text
 ├── similarity.py     # TF-IDF/embedding similarity for trope, voice, tone matching
-└── cli.py            # fiction-gov CLI (thread, proposal, prompt commands)
+├── context_drift.py  # Context drift detection with hysteresis-based mode transitions
+├── guardrails.py     # Consent tracking, DSI, AII, hard constraints, soft penalties
+└── cli.py            # fiction-gov CLI (thread, proposal, prompt, drift, guardrails commands)
 
 src/nonfiction_governor/
 ├── __init__.py       # Public API exports
@@ -661,8 +680,10 @@ src/ops_governor/
 | state.py | Character state (motivations, beliefs, constraints) | 18 |
 | manuscript.py | Manuscript scanner, character/location/event/thread extraction | 36 |
 | similarity.py | TF-IDF similarity, trope detection, voice/tone analysis | 41 |
+| context_drift.py | Context drift detection, hysteresis-based mode transitions, genre escalation | 64 |
+| guardrails.py | Consent tracking, DSI, AII, hard constraints (C1-C3), soft penalties (P1-P4) | 123 |
 
-**Fiction Governor tests: 189**
+**Fiction Governor tests: 376**
 
 ### Non-Fiction Governor (Academic Writing)
 | Module | Description | Tests |
@@ -674,7 +695,7 @@ src/ops_governor/
 
 **Non-Fiction Governor tests: 91**
 
-**Total: 2945 tests**
+**Total: 3132 tests**
 
 ## Common Mistakes to Avoid
 

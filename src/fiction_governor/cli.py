@@ -1378,6 +1378,312 @@ def cmd_prompt_character(args: argparse.Namespace) -> int:
     return 0
 
 
+# Context drift commands
+
+def _load_drift_detector(project_dir: Path | None = None) -> "ContextDriftDetector":
+    """Load or create drift detector from project state."""
+    from .context_drift import ContextDriftDetector, create_context_drift_detector
+
+    pdir = Path(project_dir) if project_dir else get_project_dir()
+    state_file = pdir / ".fiction-gov" / "drift_state.json"
+
+    if state_file.exists():
+        data = json.loads(state_file.read_text())
+        return ContextDriftDetector.from_dict(data)
+    return create_context_drift_detector()
+
+
+def _save_drift_detector(detector: "ContextDriftDetector", project_dir: Path | None = None) -> None:
+    """Save drift detector state to project."""
+    pdir = Path(project_dir) if project_dir else get_project_dir()
+    state_file = pdir / ".fiction-gov" / "drift_state.json"
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(json.dumps(detector.to_dict(), indent=2))
+
+
+def cmd_drift_status(args: argparse.Namespace) -> int:
+    """Show drift detector state."""
+    detector = _load_drift_detector(getattr(args, "path", None))
+    state = detector.state
+
+    print(f"Current mode:    {state.current_mode.value}")
+    print(f"Risk tier:       {state.risk_tier.value}")
+    print(f"Confidence:      {state.mode_conf:.2f}")
+    print(f"Last switch:     token {state.last_switch_token}")
+    print(f"Transitions:     {len(state.transitions)}")
+    if state.transitions:
+        last = state.transitions[-1]
+        print(f"  Last: {last.from_mode.value} → {last.to_mode.value} "
+              f"(conf={last.confidence:.2f}, signaled={last.user_signaled})")
+    print(f"\nHysteresis:")
+    print(f"  θ_up:          {state.hysteresis.theta_up:.2f}")
+    print(f"  θ_down:        {state.hysteresis.theta_down:.2f}")
+    print(f"  min_dwell:     {state.hysteresis.min_dwell_tokens}")
+
+    return 0
+
+
+def cmd_drift_classify(args: argparse.Namespace) -> int:
+    """Classify text register/mode."""
+    from .context_drift import classify_register
+
+    signals = classify_register(args.text)
+
+    if not signals:
+        print("No clear mode signal detected.")
+        return 0
+
+    print("Mode signals (ranked by confidence):")
+    for sig in signals:
+        print(f"  {sig.mode.value:15s}  conf={sig.confidence:.3f}")
+
+    return 0
+
+
+def cmd_drift_set(args: argparse.Namespace) -> int:
+    """Force narrative mode."""
+    from .context_drift import NarrativeMode
+
+    mode_str = args.mode.upper()
+    try:
+        mode = NarrativeMode(args.mode.lower())
+    except ValueError:
+        try:
+            mode = NarrativeMode[mode_str]
+        except KeyError:
+            print(f"Unknown mode: {args.mode}")
+            print(f"Valid modes: {', '.join(m.value for m in NarrativeMode)}")
+            return 1
+
+    detector = _load_drift_detector()
+    detector.force_mode(mode)
+    _save_drift_detector(detector)
+
+    print(f"Forced mode: {mode.value}")
+    print(f"Risk tier:   {detector.risk_tier.value}")
+
+    return 0
+
+
+def cmd_drift_check(args: argparse.Namespace) -> int:
+    """Check text for drift."""
+    detector = _load_drift_detector()
+
+    state, fault = detector.update(
+        args.text,
+        user_signaled=getattr(args, "signaled", False),
+    )
+    _save_drift_detector(detector)
+
+    print(f"Mode:        {state.current_mode.value}")
+    print(f"Risk tier:   {state.risk_tier.value}")
+    print(f"Confidence:  {state.mode_conf:.2f}")
+
+    if fault:
+        print(f"\n{'ERROR' if fault.severity == 'error' else 'WARNING'}: {fault.fault_type.value}")
+        print(f"  {fault.detail}")
+    else:
+        print("\nNo drift fault detected.")
+
+    return 0
+
+
+def cmd_drift_reset(args: argparse.Namespace) -> int:
+    """Reset drift detector."""
+    from .context_drift import create_context_drift_detector
+
+    detector = create_context_drift_detector()
+    _save_drift_detector(detector)
+    print("Drift detector reset to default (LITERARY, LOW risk).")
+
+    return 0
+
+
+# Guardrails commands
+
+def _load_guardrails(project_dir: Path | None = None) -> "FictionGuardrails":
+    """Load or create guardrails from project state."""
+    from .guardrails import FictionGuardrails, create_fiction_guardrails
+
+    pdir = Path(project_dir) if project_dir else get_project_dir()
+    state_file = pdir / ".fiction-gov" / "guardrails_state.json"
+
+    if state_file.exists():
+        data = json.loads(state_file.read_text())
+        return FictionGuardrails.from_dict(data)
+    return create_fiction_guardrails()
+
+
+def _save_guardrails(guardrails: "FictionGuardrails", project_dir: Path | None = None) -> None:
+    """Save guardrails state to project."""
+    pdir = Path(project_dir) if project_dir else get_project_dir()
+    state_file = pdir / ".fiction-gov" / "guardrails_state.json"
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(json.dumps(guardrails.to_dict(), indent=2))
+
+
+def cmd_guardrails_check(args: argparse.Namespace) -> int:
+    """Check text against all guardrails."""
+    from .guardrails import StateContext
+
+    guardrails = _load_guardrails()
+    ctx = StateContext(
+        world_year=getattr(args, "year", None),
+        era_tags=[args.era] if getattr(args, "era", None) else [],
+        erotic_allowed=getattr(args, "erotic", False),
+        coercive_play_allowed=getattr(args, "coercive", False),
+    )
+
+    result = guardrails.check(args.text, ctx)
+
+    if result.passed:
+        print("PASSED — no hard constraint violations.")
+    else:
+        print("BLOCKED — hard constraint violation(s):")
+        for v in result.violations:
+            print(f"  [{v.constraint_id.value}] {v.description}")
+
+    if result.penalties:
+        active = [p for p in result.penalties if p.score > 0]
+        if active:
+            print(f"\nSoft penalties (total={result.total_penalty:.2f}):")
+            for p in active:
+                print(f"  [{p.penalty_id.value}] score={p.score:.2f}: {p.description}")
+        else:
+            print("\nNo soft penalties triggered.")
+
+    return 0 if result.passed else 1
+
+
+def cmd_guardrails_consent(args: argparse.Namespace) -> int:
+    """Update consent state between characters."""
+    from .guardrails import ConsentLevel, ConsentScope
+
+    try:
+        scope = ConsentScope(args.scope.lower())
+    except ValueError:
+        print(f"Unknown scope: {args.scope}")
+        print(f"Valid scopes: {', '.join(s.value for s in ConsentScope)}")
+        return 1
+
+    try:
+        level = ConsentLevel(args.level.lower())
+    except ValueError:
+        print(f"Unknown level: {args.level}")
+        print(f"Valid levels: {', '.join(l.value for l in ConsentLevel)}")
+        return 1
+
+    guardrails = _load_guardrails()
+    guardrails.consent.update_consent(args.char_a, args.char_b, scope, level)
+    _save_guardrails(guardrails)
+
+    print(f"Updated consent: {args.char_a} ↔ {args.char_b}")
+    print(f"  Scope: {scope.value}  Level: {level.value}")
+
+    return 0
+
+
+def cmd_guardrails_profiles(args: argparse.Namespace) -> int:
+    """List validity profiles."""
+    from .guardrails import get_builtin_profiles
+
+    profiles = get_builtin_profiles()
+
+    print(f"Builtin validity profiles ({len(profiles)}):\n")
+    for name, profile in profiles.items():
+        era = f"{profile.era_start} – {profile.era_end}" if profile.era_start is not None else "any"
+        print(f"  {name}")
+        print(f"    Era:     {era}")
+        print(f"    Valid:   {', '.join(profile.valid_terms[:5])}" +
+              (f" (+{len(profile.valid_terms) - 5} more)" if len(profile.valid_terms) > 5 else ""))
+        if profile.invalid_terms:
+            print(f"    Invalid: {', '.join(profile.invalid_terms[:5])}" +
+                  (f" (+{len(profile.invalid_terms) - 5} more)" if len(profile.invalid_terms) > 5 else ""))
+        print()
+
+    return 0
+
+
+def cmd_guardrails_dsi(args: argparse.Namespace) -> int:
+    """Check text for DSI (Demographic Salience Intrusion)."""
+    from .guardrails import DSIDetector
+
+    detector = DSIDetector()
+    signals = detector.detect(args.text)
+
+    if not signals:
+        print("No DSI signals detected.")
+        return 0
+
+    print(f"DSI signals ({len(signals)}):")
+    for sig in signals:
+        local = "locally triggered" if sig.locally_triggered else "NOT locally triggered"
+        print(f"  Category: {sig.demographic_category}")
+        print(f"  Markers:  {', '.join(sig.markers_found)}")
+        print(f"  Bundles:  {', '.join(sig.bundles_matched)}")
+        print(f"  {local}")
+        print()
+
+    return 0
+
+
+def cmd_guardrails_aii(args: argparse.Namespace) -> int:
+    """Check text for AII (Anachronistic Identity Injection)."""
+    from .guardrails import AIIDetector
+
+    detector = AIIDetector()
+
+    world_year = getattr(args, "year", None)
+    era_tags = [args.era] if getattr(args, "era", None) else []
+
+    signals = detector.detect(args.text, world_year=world_year, era_tags=era_tags)
+
+    if not signals:
+        print("No AII signals detected.")
+        return 0
+
+    print(f"AII signals ({len(signals)}):")
+    for sig in signals:
+        print(f"  Term:     {sig.identity_term}")
+        print(f"  Context:  {sig.causal_context}")
+        print(f"  Profile:  {sig.profile_name or 'none'}")
+        print(f"  Valid:    {sig.valid}")
+        print()
+
+    return 0 if all(s.valid for s in signals) else 1
+
+
+def cmd_guardrails_config(args: argparse.Namespace) -> int:
+    """Show guardrail config."""
+    guardrails = _load_guardrails()
+    config = guardrails.config
+
+    print("Guardrail Configuration:")
+    print(f"\nHard constraints:")
+    print(f"  C1 (consent gate):        {'ON' if config.block_coercive_without_opt_in else 'OFF'}")
+    print(f"  C2 (mode escalation):     {'ON' if config.block_high_risk_without_enable else 'OFF'}")
+    print(f"  C3 (anachronism causal):  {'ON' if config.block_anachronistic_causal else 'OFF'}")
+    print(f"\nSoft penalty weights (λ):")
+    print(f"  P1 (DSI):                 {config.lambda_dsi}")
+    print(f"  P2 (unearned fact):       {config.lambda_unearned}")
+    print(f"  P3 (register drift):      {config.lambda_drift}")
+    print(f"  P4 (proxy dominance):     {config.lambda_proxy}")
+
+    # Show consent state summary
+    consent = guardrails.consent
+    pairs = consent.to_dict().get("pairs", {})
+    if pairs:
+        print(f"\nConsent pairs tracked: {len(pairs)}")
+    else:
+        print(f"\nNo consent pairs tracked.")
+
+    gs = consent.global_state
+    print(f"Global opt-in: erotic={'yes' if gs.erotic_allowed else 'no'}, "
+          f"coercive={'yes' if gs.coercive_play_allowed else 'no'}")
+
+    return 0
+
+
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -1741,6 +2047,66 @@ def main() -> int:
     prompt_char.add_argument("--chapter", "-c", type=int, help="At chapter")
     prompt_char.add_argument("--output", "-o", help="Output file (default: stdout)")
     prompt_char.set_defaults(func=cmd_prompt_character)
+
+    # drift - Context drift detection
+    drift_parser = subparsers.add_parser("drift", help="Context drift detection")
+    drift_subs = drift_parser.add_subparsers(dest="drift_cmd")
+
+    drift_status = drift_subs.add_parser("status", help="Show drift detector state")
+    drift_status.add_argument("--path", help="Project path")
+    drift_status.set_defaults(func=cmd_drift_status)
+
+    drift_classify = drift_subs.add_parser("classify", help="Classify text register/mode")
+    drift_classify.add_argument("text", help="Text to classify")
+    drift_classify.set_defaults(func=cmd_drift_classify)
+
+    drift_set_mode = drift_subs.add_parser("set", help="Force narrative mode")
+    drift_set_mode.add_argument("mode", help="Mode (literary, romance, erotic, etc.)")
+    drift_set_mode.set_defaults(func=cmd_drift_set)
+
+    drift_check = drift_subs.add_parser("check", help="Check text for drift")
+    drift_check.add_argument("text", help="Text to check")
+    drift_check.add_argument("--signaled", action="store_true", help="User signaled change")
+    drift_check.set_defaults(func=cmd_drift_check)
+
+    drift_reset_p = drift_subs.add_parser("reset", help="Reset drift detector")
+    drift_reset_p.add_argument("--confirm", action="store_true", required=True)
+    drift_reset_p.set_defaults(func=cmd_drift_reset)
+
+    # guardrails - Fiction guardrails (consent, DSI, AII)
+    guard_parser = subparsers.add_parser("guardrails", help="Fiction guardrails")
+    guard_subs = guard_parser.add_subparsers(dest="guard_cmd")
+
+    guard_check = guard_subs.add_parser("check", help="Check text against all guardrails")
+    guard_check.add_argument("text", help="Text to check")
+    guard_check.add_argument("--year", type=int, help="World year for anachronism checks")
+    guard_check.add_argument("--era", help="Era tag (medieval, renaissance, ancient)")
+    guard_check.add_argument("--erotic", action="store_true", help="Erotic content allowed")
+    guard_check.add_argument("--coercive", action="store_true", help="Coercive play allowed")
+    guard_check.set_defaults(func=cmd_guardrails_check)
+
+    guard_consent = guard_subs.add_parser("consent", help="Update consent state")
+    guard_consent.add_argument("char_a", help="Character A")
+    guard_consent.add_argument("char_b", help="Character B")
+    guard_consent.add_argument("scope", help="Scope (flirt, touch, sex, kink_coercive_play)")
+    guard_consent.add_argument("level", help="Level (unknown, no, yes, yes_explicit)")
+    guard_consent.set_defaults(func=cmd_guardrails_consent)
+
+    guard_profiles = guard_subs.add_parser("profiles", help="List validity profiles")
+    guard_profiles.set_defaults(func=cmd_guardrails_profiles)
+
+    guard_dsi = guard_subs.add_parser("dsi", help="Check text for DSI")
+    guard_dsi.add_argument("text", help="Text to check")
+    guard_dsi.set_defaults(func=cmd_guardrails_dsi)
+
+    guard_aii = guard_subs.add_parser("aii", help="Check text for AII")
+    guard_aii.add_argument("text", help="Text to check")
+    guard_aii.add_argument("--year", type=int, help="World year")
+    guard_aii.add_argument("--era", help="Era tag")
+    guard_aii.set_defaults(func=cmd_guardrails_aii)
+
+    guard_config = guard_subs.add_parser("config", help="Show guardrail config")
+    guard_config.set_defaults(func=cmd_guardrails_config)
 
     # Parse and dispatch
     args = parser.parse_args()

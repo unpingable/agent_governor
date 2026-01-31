@@ -266,6 +266,9 @@ class Vote:
     tool_path_hash: str | None = None
     sources_hash: str | None = None
     prompt_hash: str | None = None
+    # Evidence persistence fields
+    model_id: str | None = None
+    source_urls: frozenset[str] = field(default_factory=frozenset)
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -283,6 +286,10 @@ class Vote:
             d["sources_hash"] = self.sources_hash
         if self.prompt_hash is not None:
             d["prompt_hash"] = self.prompt_hash
+        if self.model_id is not None:
+            d["model_id"] = self.model_id
+        if self.source_urls:
+            d["source_urls"] = sorted(self.source_urls)
         return d
 
     @classmethod
@@ -298,6 +305,8 @@ class Vote:
             tool_path_hash=data.get("tool_path_hash"),
             sources_hash=data.get("sources_hash"),
             prompt_hash=data.get("prompt_hash"),
+            model_id=data.get("model_id"),
+            source_urls=frozenset(data.get("source_urls", [])),
         )
 
 
@@ -498,6 +507,8 @@ class QuorumManager:
         tool_path_hash: str | None = None,
         sources_hash: str | None = None,
         prompt_hash: str | None = None,
+        model_id: str | None = None,
+        source_urls: frozenset[str] | None = None,
     ) -> Vote | None:
         """
         Cast a vote on a proposal.
@@ -529,6 +540,8 @@ class QuorumManager:
             tool_path_hash=tool_path_hash,
             sources_hash=sources_hash,
             prompt_hash=prompt_hash,
+            model_id=model_id,
+            source_urls=source_urls or frozenset(),
         )
         qs.votes[agent_id] = vote
         self._log("vote_cast", proposal_id, agent_id=agent_id, verdict=verdict.value)

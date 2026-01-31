@@ -931,11 +931,151 @@ All reference implementations are in `ingest/epistemic_governor/src/epistemic_go
 - `homeostat.py` - Vitals, setpoints, exploration
 - `jurisdictions/` - Context-specific governance rules
 
-Design specifications in `ingest/`:
-- `coder.md` - Strict programmer mode (fail-closed, no speculation)
-- `multi2.md` - Δt quorum governor (temporal coherence, independence)
-- `puppet.md` - Puppet mode (persona pinning, semantic diff guard)
-- `regime.md` - Grounding audit pipeline (hallucination detection, adaptive thresholds)
-- `risk-molt.md` - Drift detection (temporal asymmetry defense, premise quarantine)
-- `scars.md` - Failure provenance & constraint hysteresis (scars, annealing)
-- `semvar.md` - Semantic variety module (anti-repetition, phrase cooldowns)
+Remaining design specifications in `ingest/`:
+- `multi2.md` - Δt quorum governor (semantic enforcement gaps, ~75% done)
+- `regime.md` - Grounding audit pipeline (assertion/cascade/roles gaps, ~85% done)
+- `next.md` - Semantic entropy (conceptual, fiction guardrails portion complete)
+- `next2.md` - Nonfiction CFI (not started, requires human authority decisions)
+- `vscode.md` - VS Code integration (deferred, UI last)
+
+---
+
+## Unfinished Work: Semantic Enforcement Layer
+
+These items close the gaps identified in `multi2.md` and `regime.md`. Ordered by
+dependency — each step unblocks the ones below it. Design constraint: **extend
+existing types, don't create parallel structures**. We already have Claim,
+GroundedClaim, EvidenceRef, CommitLevel, etc. Wire them through, don't duplicate.
+
+### Layer 1: Evidence Persistence (foundation — everything else reads from this)
+
+- [ ] **Evidence table in SQLite** — `storage.py`
+  - Promote `EvidenceRef` from in-memory pointer to persistent record
+  - Schema: evidence_id, claim_id, kind (EvidenceType), content_hash, locator, scope,
+    confidence, collected_by (agent_id), timestamp
+  - Append-only invariant (immutable once written)
+  - Query: by claim_id, by kind, by agent_id
+  - **Do not** create a new Evidence dataclass — extend `EvidenceRef` with persistence methods
+  - Spec ref: `multi2.md` §1.2
+
+- [ ] **Run provenance table** — `storage.py`
+  - Schema: run_id, agent_id, model_id, prompt_hash, tool_path_hash, source_urls, timestamp
+  - Links to evidence (run_id on evidence rows)
+  - Enables audit query: "what tools did agent X use for claim Y?"
+  - Currently tracked ad-hoc via Vote fields — consolidate, don't duplicate
+  - Spec ref: `multi2.md` §1.4
+
+### Layer 2: Commit Level on Claims (wiring — connects strict.py to the ledger)
+
+- [ ] **Add `commit_level` field to `GroundedClaim`** — `epistemic.py`
+  - Use existing `CommitLevel` enum from `strict.py` (HARD/SOFT/REFUSED)
+  - Default: None (unclassified, for backward compat)
+  - Set during verification or strict-mode evaluation
+  - Persisted to ledger (fact/decision tables need column)
+  - **Do not** create a separate Assertion type — `GroundedClaim` already carries
+    provenance, confidence, evidence, status. Adding commit_level completes it.
+  - Spec ref: `multi2.md` §6.1
+
+- [ ] **Add `assumptions` field to `GroundedClaim`** — `epistemic.py`
+  - `assumptions: list[str]` — explicit ungrounded dependencies
+  - Populated when claim depends on SOFT/unverified premises
+  - Surfaced in CLI and audit output
+  - Spec ref: `multi2.md` §1.1
+
+### Layer 3: Evidence Type Validation (enforcement — gates on Layer 1 data)
+
+- [ ] **Evidence kind requirements per claim type** — `audit.py` / `quorum.py`
+  - MATH claims require CALC_RESULT evidence
+  - CODE claims require TEST_RESULT evidence
+  - STATIC_FACT claims require WEB_SOURCE or DOCUMENT evidence
+  - VOLATILE_FACT claims require live retrieval evidence
+  - Enforce before STABILIZING transition in quorum
+  - Wire into `PolicyStore` (already has claim-type policies)
+  - Spec ref: `regime.md` §5.1, `multi2.md` §5.1
+
+### Layer 4: Premise Rule & Dependency Tracking
+
+- [ ] **Premise rule enforcement** — `epistemic.py` or `quorum.py`
+  - SOFT/STALE claims cannot serve as premises for HARD claims
+  - If a HARD claim's dependency is SOFT → downgrade to SOFT or block
+  - Requires dependency graph (which claims depend on which)
+  - Can use `BeliefGraph` from `direction.py` (REQUIRES/IMPLIES edges) — don't rebuild
+  - Spec ref: `multi2.md` §6.2
+
+- [ ] **Dependency invalidation cascade** — `audit.py`
+  - When POST_COMMIT audit marks claim UNGROUNDED/CONTRADICTED:
+    force dependent HARD claims to re-enter review
+  - Traverse dependency edges, downgrade or flag
+  - Log cascade events for audit trail
+  - Spec ref: `regime.md` §6.2
+
+### Layer 5: Roles & Scheduling (higher-level policy)
+
+- [ ] **Agent role assignment** — `quorum.py` or new thin layer
+  - Roles: proposer, retriever, falsifier, synthesizer
+  - Per-proposal role tracking (which agent filled which role)
+  - Policy: HIGH-risk claims require at least one falsifier attempt
+  - Budget per role (max_tool_calls, max_rounds)
+  - Consider whether this extends `Vote` (add role field) vs separate table
+  - Spec ref: `multi2.md` §2
+
+- [ ] **Periodic revalidation scheduling** — `ttl.py` integration
+  - TTL expiry triggers PERIODIC_REVALIDATION audit automatically
+  - Currently: TTLManager has policies and schedules but no automation hook
+  - Wire: TTLManager.get_revalidation_schedule() → AuditPipeline.periodic_audit()
+  - Spec ref: `regime.md` §2.3
+
+### Layer 6: Claim Status on GroundedClaim (optional — evaluate need)
+
+- [ ] **Claim-level status field** — evaluate before building
+  - multi2.md spec wants: PROPOSED → IN_REVIEW → STABILIZING → COMMITTED → STALE
+  - QuorumState already tracks proposal lifecycle (9 states)
+  - Question: is claim-level status redundant with quorum status?
+  - If claims can exist outside quorum (single-agent mode), they need their own status
+  - If quorum is always the authority, claim status = projection of quorum state
+  - **Decision needed**: separate FSM or derived view?
+
+---
+
+## Unfinished Work: Nonfiction CFI (Separate Workstream)
+
+From `ingest/next2.md`. This is the nonfiction analogue of fiction's DSI/context-drift
+detection. The spec explicitly warns: **do not delegate value choices to code**.
+Human authority needed for definitions, thresholds, and hard/soft classification.
+
+- [ ] **Frame taxonomy** — human-authored, not generated
+  - Define nonfiction frames: foundational, theoretical, applied, controversial,
+    pedagogical, etc.
+  - These are the bins. Whoever defines the bins defines the system behavior.
+  - This is product philosophy, not engineering.
+
+- [ ] **Contextual Frame Intrusion (CFI) detector** — `nonfiction_governor/`
+  - Nonfiction analogue of fiction DSI
+  - Detect when model introduces frames not demanded by the text
+  - Examples: uninvited "capitalism", "trauma", "experts say", "both sides"
+  - Same architecture as fiction context_drift.py: hysteresis, risk tiers, transition validation
+
+- [ ] **Nonfiction state vector** — `[D_t, F_t, E_t, P_t, N_t]`
+  - Domain, active frames, evidentiary grounding, perspective, narrative load
+  - Most nonfiction bugs are unconstrained drift in F_t or P_t
+
+- [ ] **Nonfiction hard constraints**
+  - Epistemic mismatch: don't answer normative as descriptive (or vice versa) unless asked
+  - Δt violations: no confident claims about time-sensitive facts without retrieval
+  - Scope violations: don't generalize case → population unless asked
+
+- [ ] **Nonfiction soft penalties**
+  - Frame overuse (uninvited interpretive frames)
+  - Moral coloration when mechanism was asked for
+  - "Both sides" balancing when no dispute was specified
+  - Excess metaphor/narrative when precision was requested
+
+---
+
+## Cross-Cutting (Deferred)
+
+- [ ] **Web UI** - Dashboard showing claim history, rejection rates, regime status
+- [ ] **VS Code Integration** - Governor support in VS Code (spec: `ingest/vscode.md`)
+- [ ] **Telemetry dashboard** - Real-time regime visualization
+- [ ] **Minor: CLI bug** - `src/governor/cli.py` line 7388: `bank.seed_defaults()` doesn't exist on PhraseBank
+- [ ] **Minor: Profile boil presets** - `profiles.py` references DARJEELING/CHAI which don't exist in ControlMode enum

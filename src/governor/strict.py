@@ -559,6 +559,40 @@ class StrictModeGate:
         self._history.append(evaluation)
         return evaluation
 
+    def evaluate_claim(
+        self,
+        claim: Any,
+        category: ClaimCategory,
+        risk: RiskLevel = RiskLevel.LOW,
+        **kwargs: Any,
+    ) -> ClaimEvaluation:
+        """
+        Evaluate a GroundedClaim and set its commit_level.
+
+        Accepts a GroundedClaim (or any object with commit_level attribute)
+        and sets commit_level based on strict mode evaluation.
+        Also populates assumptions from unsatisfied requirements.
+
+        Returns the ClaimEvaluation result.
+        """
+        # Auto-populate evidence_count from claim if not provided
+        if "evidence_count" not in kwargs:
+            evidence_refs = getattr(claim, "evidence_refs", [])
+            kwargs["evidence_count"] = len(evidence_refs)
+
+        evaluation = self.evaluate(category, risk, **kwargs)
+
+        # Set commit_level on the claim
+        claim.commit_level = evaluation.commit_level.value
+
+        # Populate assumptions from unsatisfied requirements
+        if hasattr(claim, "assumptions") and evaluation.unsatisfied:
+            for req in evaluation.unsatisfied:
+                if req not in claim.assumptions:
+                    claim.assumptions.append(req)
+
+        return evaluation
+
     def format_refusal(self, evaluation: ClaimEvaluation) -> str:
         """Format a refusal message for output."""
         if evaluation.commit_level == CommitLevel.HARD:

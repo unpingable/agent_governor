@@ -68,6 +68,7 @@ class MethodSignature:
         Create a MethodSignature from a Vote object.
 
         Returns None if the vote lacks the required hash fields.
+        Populates model_tier from vote.model_id and source_urls from vote.source_urls.
         """
         if (vote.tool_path_hash is None
                 or vote.sources_hash is None
@@ -78,6 +79,8 @@ class MethodSignature:
             tool_path_hash=vote.tool_path_hash,
             sources_hash=vote.sources_hash,
             prompt_hash=vote.prompt_hash,
+            model_tier=getattr(vote, "model_id", None) or "standard",
+            source_urls=frozenset(getattr(vote, "source_urls", frozenset())),
         )
 
 

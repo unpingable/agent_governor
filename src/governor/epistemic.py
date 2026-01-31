@@ -24,6 +24,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 import hashlib
+import sqlite3
 import uuid
 
 
@@ -172,8 +173,16 @@ class EvidenceRef:
     retrieved_at: datetime | None = None
     confidence: float = 1.0  # How reliable is this evidence? [0, 1]
 
+    # Persistence fields (populated when stored in SQLite)
+    evidence_id: str | None = None       # SQLite PK
+    claim_id: str | None = None          # Which claim this evidence supports
+    collected_by: str | None = None      # Agent that collected this evidence
+    run_id: str | None = None            # FK to run_provenance
+    content_hash: str | None = None      # SHA-256 of ref_type:locator:scope
+    persisted_at: datetime | None = None # When written to DB
+
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "ref_id": self.ref_id,
             "ref_type": self.ref_type.value,
             "locator": self.locator,
@@ -181,6 +190,20 @@ class EvidenceRef:
             "confidence": self.confidence,
             "retrieved_at": self.retrieved_at.isoformat() if self.retrieved_at else None,
         }
+        # Include persistence fields only when set (no JSON bloat on existing data)
+        if self.evidence_id is not None:
+            d["evidence_id"] = self.evidence_id
+        if self.claim_id is not None:
+            d["claim_id"] = self.claim_id
+        if self.collected_by is not None:
+            d["collected_by"] = self.collected_by
+        if self.run_id is not None:
+            d["run_id"] = self.run_id
+        if self.content_hash is not None:
+            d["content_hash"] = self.content_hash
+        if self.persisted_at is not None:
+            d["persisted_at"] = self.persisted_at.isoformat()
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "EvidenceRef":
@@ -193,6 +216,16 @@ class EvidenceRef:
             retrieved_at=(
                 datetime.fromisoformat(data["retrieved_at"])
                 if data.get("retrieved_at")
+                else None
+            ),
+            evidence_id=data.get("evidence_id"),
+            claim_id=data.get("claim_id"),
+            collected_by=data.get("collected_by"),
+            run_id=data.get("run_id"),
+            content_hash=data.get("content_hash"),
+            persisted_at=(
+                datetime.fromisoformat(data["persisted_at"])
+                if data.get("persisted_at")
                 else None
             ),
         )
@@ -239,6 +272,29 @@ class EvidenceRef:
             locator=description,
             scope=scope,
             retrieved_at=datetime.now(),
+        )
+
+    def compute_content_hash(self) -> str:
+        """SHA-256 of ref_type:locator:scope, first 16 chars."""
+        data = f"{self.ref_type.value}:{self.locator}:{self.scope}"
+        return hashlib.sha256(data.encode()).hexdigest()[:16]
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> "EvidenceRef":
+        """Create from SQLite row. Maps evidence_id and kind→ref_type."""
+        return cls(
+            ref_id=row["evidence_id"],
+            ref_type=EvidenceType(row["kind"]),
+            locator=row["locator"],
+            scope=row["scope"],
+            confidence=row["confidence"],
+            retrieved_at=None,
+            evidence_id=row["evidence_id"],
+            claim_id=row["claim_id"],
+            collected_by=row["collected_by"],
+            run_id=row["run_id"],
+            content_hash=row["content_hash"],
+            persisted_at=datetime.fromisoformat(row["created_at"]),
         )
 
 
@@ -329,6 +385,12 @@ class GroundedClaim:
     # Source tracking (for multi-agent)
     source_agent_id: str | None = None
 
+    # Commit level (from strict mode evaluation, Layer 2)
+    commit_level: str | None = None  # "hard", "soft", "refused", or None (unclassified)
+
+    # Explicit assumptions (ungrounded dependencies, Layer 2)
+    assumptions: list[str] = field(default_factory=list)
+
     def __post_init__(self):
         """Clamp confidence to valid range."""
         self.confidence = max(0.0, min(1.0, self.confidence))
@@ -365,8 +427,28 @@ class GroundedClaim:
         """
         return self.is_high_confidence and not self.is_grounded
 
+    @property
+    def is_hard(self) -> bool:
+        """Is this claim committed at HARD level?"""
+        return self.commit_level == "hard"
+
+    @property
+    def is_soft(self) -> bool:
+        """Is this claim committed at SOFT level?"""
+        return self.commit_level == "soft"
+
+    @property
+    def is_refused(self) -> bool:
+        """Was this claim refused by strict mode?"""
+        return self.commit_level == "refused"
+
+    @property
+    def has_assumptions(self) -> bool:
+        """Does this claim have explicit ungrounded assumptions?"""
+        return len(self.assumptions) > 0
+
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "claim_id": self.claim_id,
             "content": self.content,
             "provenance": self.provenance.value,
@@ -381,6 +463,11 @@ class GroundedClaim:
             "is_dangerous": self.is_dangerous,
             "source_agent_id": self.source_agent_id,
         }
+        if self.commit_level is not None:
+            d["commit_level"] = self.commit_level
+        if self.assumptions:
+            d["assumptions"] = list(self.assumptions)
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "GroundedClaim":
@@ -396,6 +483,8 @@ class GroundedClaim:
             last_updated_at=datetime.fromisoformat(data.get("last_updated_at", data["created_at"])),
             last_updated_step=data.get("last_updated_step", 0),
             source_agent_id=data.get("source_agent_id"),
+            commit_level=data.get("commit_level"),
+            assumptions=data.get("assumptions", []),
         )
 
 
@@ -757,6 +846,61 @@ class EpistemicLedger:
         return True
 
     # =========================================================================
+    # Commit Level (Layer 2 — wiring to strict.py)
+    # =========================================================================
+
+    def set_commit_level(self, claim_id: str, level: str) -> bool:
+        """
+        Set the commit level on a claim.
+
+        Level must be one of: "hard", "soft", "refused".
+        Returns True if set, False if claim not found or invalid level.
+        """
+        if level not in {"hard", "soft", "refused"}:
+            return False
+        if claim_id not in self.claims:
+            return False
+
+        claim = self.claims[claim_id]
+        claim.commit_level = level
+        claim.last_updated_at = datetime.now()
+        claim.last_updated_step = self.step
+        return True
+
+    def add_assumption(self, claim_id: str, assumption: str) -> bool:
+        """
+        Add an explicit assumption to a claim.
+
+        Assumptions are ungrounded dependencies that the claim relies on.
+        Returns True if added, False if claim not found.
+        """
+        if claim_id not in self.claims:
+            return False
+
+        claim = self.claims[claim_id]
+        if assumption not in claim.assumptions:
+            claim.assumptions.append(assumption)
+            claim.last_updated_at = datetime.now()
+            claim.last_updated_step = self.step
+        return True
+
+    def hard_claims(self) -> list[GroundedClaim]:
+        """Get all active claims with HARD commit level."""
+        return [c for c in self.active_claims() if c.is_hard]
+
+    def soft_claims(self) -> list[GroundedClaim]:
+        """Get all active claims with SOFT commit level."""
+        return [c for c in self.active_claims() if c.is_soft]
+
+    def refused_claims(self) -> list[GroundedClaim]:
+        """Get all claims with REFUSED commit level."""
+        return [c for c in self.claims.values() if c.is_refused]
+
+    def claims_with_assumptions(self) -> list[GroundedClaim]:
+        """Get all active claims that have explicit assumptions."""
+        return [c for c in self.active_claims() if c.has_assumptions]
+
+    # =========================================================================
     # Queries
     # =========================================================================
 
@@ -833,6 +977,13 @@ class EpistemicLedger:
                 "medium": med_conf,
                 "low": low_conf,
             },
+            "commit_level_distribution": {
+                "hard": len(self.hard_claims()),
+                "soft": len(self.soft_claims()),
+                "refused": len(self.refused_claims()),
+                "unclassified": len([c for c in active if c.commit_level is None]),
+            },
+            "claims_with_assumptions": len(self.claims_with_assumptions()),
             "total_promotions_attempted": self.total_promotions_attempted,
             "total_promotions_forbidden": self.total_promotions_forbidden,
             "total_retractions": self.total_retractions,

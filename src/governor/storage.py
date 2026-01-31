@@ -20,7 +20,7 @@ from uuid import UUID
 
 
 # Schema version for migrations
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 
 
 SCHEMA = """
@@ -134,6 +134,56 @@ CREATE INDEX IF NOT EXISTS idx_rejections_created ON rejections(created_at);
 """
 
 
+SCHEMA_V2 = """
+-- Evidence persistence (Layer 1)
+CREATE TABLE IF NOT EXISTS evidence (
+    evidence_id TEXT PRIMARY KEY,
+    claim_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    content_hash TEXT,
+    locator TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 1.0,
+    collected_by TEXT,
+    run_id TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_evidence_claim ON evidence(claim_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_kind ON evidence(kind);
+CREATE INDEX IF NOT EXISTS idx_evidence_collected_by ON evidence(collected_by);
+CREATE INDEX IF NOT EXISTS idx_evidence_run ON evidence(run_id);
+
+-- Run provenance (Layer 1)
+CREATE TABLE IF NOT EXISTS run_provenance (
+    run_id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    model_id TEXT,
+    prompt_hash TEXT,
+    tool_path_hash TEXT,
+    source_urls_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_run_agent ON run_provenance(agent_id);
+"""
+
+
+SCHEMA_V3 = """
+-- Layer 2: Commit level and assumptions on facts/decisions
+ALTER TABLE facts ADD COLUMN commit_level TEXT;
+ALTER TABLE facts ADD COLUMN assumptions_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE decisions ADD COLUMN commit_level TEXT;
+ALTER TABLE decisions ADD COLUMN assumptions_json TEXT NOT NULL DEFAULT '[]';
+"""
+
+# Individual ALTER statements for migration (executescript can't mix ALTER with IF NOT EXISTS)
+_SCHEMA_V3_STMTS = [
+    "ALTER TABLE facts ADD COLUMN commit_level TEXT",
+    "ALTER TABLE facts ADD COLUMN assumptions_json TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE decisions ADD COLUMN commit_level TEXT",
+    "ALTER TABLE decisions ADD COLUMN assumptions_json TEXT NOT NULL DEFAULT '[]'",
+]
+
+
 @dataclass
 class Lease:
     """A resource lease for coordination."""
@@ -200,6 +250,9 @@ class Storage:
             if not cursor.fetchone():
                 # Fresh database - create schema
                 cursor.executescript(SCHEMA)
+                cursor.executescript(SCHEMA_V2)
+                for stmt in _SCHEMA_V3_STMTS:
+                    cursor.execute(stmt)
                 cursor.execute(
                     "INSERT INTO schema_version (version) VALUES (?)",
                     (SCHEMA_VERSION,)
@@ -220,7 +273,14 @@ class Storage:
         self, cursor: sqlite3.Cursor, from_version: int, to_version: int
     ) -> None:
         """Run schema migrations."""
-        # Future migrations go here
+        if from_version < 2:
+            cursor.executescript(SCHEMA_V2)
+        if from_version < 3:
+            for stmt in _SCHEMA_V3_STMTS:
+                try:
+                    cursor.execute(stmt)
+                except sqlite3.OperationalError:
+                    pass  # Column already exists (idempotent)
         cursor.execute(
             "UPDATE schema_version SET version = ?", (to_version,)
         )

@@ -438,6 +438,13 @@ from .puppet import (
     render_with_puppet,
 )
 
+# Evidence persistence (Layer 1)
+from .evidence_store import (
+    RunProvenance,
+    EvidenceStore,
+    create_evidence_store,
+)
+
 # Tainted claim similarity (recurrence detection)
 from .taint import (
     TaintType,
@@ -839,6 +846,10 @@ __all__ = [
     "create_puppet_registry",
     "create_puppet_renderer",
     "render_with_puppet",
+    # Evidence persistence (Layer 1)
+    "RunProvenance",
+    "EvidenceStore",
+    "create_evidence_store",
     # Tainted claim similarity (recurrence detection)
     "TaintType",
     "FingerprintMethod",

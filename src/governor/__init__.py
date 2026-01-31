@@ -438,6 +438,26 @@ from .puppet import (
     render_with_puppet,
 )
 
+# Tainted claim similarity (recurrence detection)
+from .taint import (
+    TaintType,
+    FingerprintMethod,
+    TaintVerdict,
+    Fingerprint,
+    TaintedClaim,
+    TaintMatch,
+    TaintCheckResult,
+    TaintEvent,
+    TaintConfig,
+    TaintIndex,
+    normalize as taint_normalize,
+    fingerprint as taint_fingerprint,
+    score as taint_score,
+    create_taint_index,
+    check_claim,
+    taint_claim,
+)
+
 # Auto-tuning (threshold learning, reset tracking, setpoint calibration, budget sweep)
 from .auto_tuning import (
     ResetType,
@@ -819,6 +839,23 @@ __all__ = [
     "create_puppet_registry",
     "create_puppet_renderer",
     "render_with_puppet",
+    # Tainted claim similarity (recurrence detection)
+    "TaintType",
+    "FingerprintMethod",
+    "TaintVerdict",
+    "Fingerprint",
+    "TaintedClaim",
+    "TaintMatch",
+    "TaintCheckResult",
+    "TaintEvent",
+    "TaintConfig",
+    "TaintIndex",
+    "taint_normalize",
+    "taint_fingerprint",
+    "taint_score",
+    "create_taint_index",
+    "check_claim",
+    "taint_claim",
     # Auto-tuning (threshold learning, reset tracking, calibration, sweep)
     "ResetType",
     "TuningSuggestionKind",

@@ -7658,6 +7658,165 @@ def tune_reset(ctx, confirm):
 
 
 # =============================================================================
+# Tainted Claim Similarity
+# =============================================================================
+
+
+@cli.group("taint")
+@click.pass_context
+def taint_cmd(ctx):
+    """Tainted claim similarity — recurrence detection for bad claims."""
+    pass
+
+
+@taint_cmd.command("status")
+@click.pass_context
+def taint_status(ctx):
+    """Show taint index status and statistics."""
+    from .taint import TaintIndex
+
+    gov_dir = ensure_initialized(ctx)
+    idx = TaintIndex(governor_dir=gov_dir)
+    s = idx.stats()
+
+    click.echo(f"Tainted claims: {s['total_tainted']}")
+    for ttype, count in s.get("by_type", {}).items():
+        click.echo(f"  {ttype}: {count}")
+    click.echo(f"Index tokens: {s['index_tokens']}")
+    click.echo(f"Total events: {s['total_events']}")
+    click.echo(f"Flagged events: {s['flagged_events']}")
+
+
+@taint_cmd.command("list")
+@click.pass_context
+def taint_list(ctx):
+    """List all tainted claims in the index."""
+    from .taint import TaintIndex
+
+    gov_dir = ensure_initialized(ctx)
+    idx = TaintIndex(governor_dir=gov_dir)
+    claims = idx.list_tainted()
+
+    if not claims:
+        click.echo("No tainted claims.")
+        return
+
+    for tc in claims:
+        click.echo(f"  [{tc.taint_type.value}] {tc.claim_id}")
+        click.echo(f"    text: {tc.normalized_text[:80]}{'...' if len(tc.normalized_text) > 80 else ''}")
+        click.echo(f"    time: {tc.timestamp}")
+
+
+@taint_cmd.command("add")
+@click.argument("claim_id")
+@click.argument("text")
+@click.option("--type", "taint_type", type=click.Choice(["contradicted", "retracted"]),
+              default="contradicted", help="Why the claim is tainted")
+@click.pass_context
+def taint_add(ctx, claim_id, text, taint_type):
+    """Add a claim to the taint index."""
+    from .taint import TaintIndex, TaintType
+
+    gov_dir = ensure_initialized(ctx)
+    idx = TaintIndex(governor_dir=gov_dir)
+    tt = TaintType(taint_type)
+    tc = idx.add_tainted(claim_id, text, tt)
+
+    click.echo(f"Added tainted claim: {tc.claim_id} ({tt.value})")
+    click.echo(f"  Tokens: {len(tc.fingerprint.tokens)}")
+
+
+@taint_cmd.command("remove")
+@click.argument("claim_id")
+@click.pass_context
+def taint_remove(ctx, claim_id):
+    """Remove a claim from the taint index."""
+    from .taint import TaintIndex
+
+    gov_dir = ensure_initialized(ctx)
+    idx = TaintIndex(governor_dir=gov_dir)
+
+    if idx.remove_tainted(claim_id):
+        click.echo(f"Removed: {claim_id}")
+    else:
+        click.echo(f"Not found: {claim_id}", err=True)
+        ctx.exit(1)
+
+
+@taint_cmd.command("check")
+@click.argument("text")
+@click.option("--claim-id", default="", help="ID for the new claim being checked")
+@click.pass_context
+def taint_check(ctx, text, claim_id):
+    """Check text against the taint index."""
+    from .taint import TaintIndex
+
+    gov_dir = ensure_initialized(ctx)
+    idx = TaintIndex(governor_dir=gov_dir)
+    result = idx.check(text, new_claim_id=claim_id)
+
+    click.echo(f"Verdict: {result.verdict.value}")
+    click.echo(f"Best score: {result.best_score:.3f}")
+    click.echo(f"Checked against: {result.checked_against} claims")
+    click.echo(f"Input tokens: {result.input_token_count}")
+
+    if result.matches:
+        click.echo(f"\nMatches ({len(result.matches)}):")
+        for m in result.matches:
+            flag = " *FLAGGED*" if m.similarity >= m.threshold else ""
+            exact = " [exact]" if m.exact else ""
+            click.echo(f"  {m.tainted_claim_id}: {m.similarity:.3f} ({m.taint_type.value}){exact}{flag}")
+
+
+@taint_cmd.command("events")
+@click.option("--clear", is_flag=True, help="Clear event history after display")
+@click.pass_context
+def taint_events(ctx, clear):
+    """Show taint similarity events."""
+    from .taint import TaintIndex
+
+    gov_dir = ensure_initialized(ctx)
+    idx = TaintIndex(governor_dir=gov_dir)
+    events = idx.events()
+
+    if not events:
+        click.echo("No taint events.")
+        return
+
+    for e in events:
+        flag = "EXACT" if e.exact else f"{e.similarity:.3f}"
+        click.echo(f"  {e.new_claim_id} ~ {e.matched_claim_id}: {flag} ({e.taint_type.value})")
+
+    if clear:
+        count = idx.clear_events()
+        click.echo(f"\nCleared {count} events.")
+
+
+@taint_cmd.command("reset")
+@click.option("--confirm", is_flag=True, required=True, help="Confirm clearing taint index")
+@click.pass_context
+def taint_reset(ctx, confirm):
+    """Clear the taint index and event history."""
+    from .taint import TaintIndex
+
+    gov_dir = ensure_initialized(ctx)
+
+    # Overwrite with empty state
+    idx = TaintIndex(governor_dir=gov_dir)
+    old_count = idx.count()
+    old_events = len(idx.events())
+
+    idx._claims.clear()
+    idx._inverted.clear()
+    idx._hash_index.clear()
+    idx._events.clear()
+    idx._save()
+    idx._save_events()
+
+    click.echo(f"Taint index cleared. Removed {old_count} claims and {old_events} events.")
+
+
+# =============================================================================
 # Puppet Mode
 # =============================================================================
 

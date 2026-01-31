@@ -695,11 +695,12 @@ Implemented in `src/governor/audit.py` (164 tests).
 - [x] **Failure mode taxonomy** - 11 learnable categories (NO_EVIDENCE, WEAK_EVIDENCE, CITE_DRIFT, SOURCE_ALIASING, TEMPORAL_STALENESS, ENTAILMENT_OVERREACH, SPECIOUS_PRECISION, ENTITY_CONFLATION, COUNTEREVIDENCE_IGNORED, TOOL_MISREAD, PROMPT_INJECTION)
 - [x] **Adaptive thresholds** - PolicyStore with 54-entry default matrix (6 claim types × 3 risks × 3 scopes), deterministic tuning rules, adjustment history
 - [x] **Leak scoring** - Severity-weighted leak scores (status × stage × severity) for adaptive tuning
-- [ ] **Tainted claim similarity** - Detect near-duplicates of bad claims (deferred: requires semantic hashing)
-  - Hash strategy: semantic fingerprint of contradicted/retracted claims
-  - When new claim is similar to tainted claim, auto-flag for extra scrutiny
-  - Prevents "laundering" bad claims through rephrasing
-  - Similarity threshold configurable per failure type
+- [x] **Tainted claim similarity** - Detect near-duplicates of bad claims ✓ COMPLETE
+  - Token-set Jaccard fingerprinting (Option A from taint.md)
+  - Inverted index for candidate retrieval
+  - Exact match + near-duplicate detection with configurable thresholds
+  - Audit events on taint similarity hits
+  - Module: `src/governor/taint.py` (81 tests)
 
 ## ~~Failure Provenance & Constraint Hysteresis~~ ✓ COMPLETE (from ingest/scars.md)
 

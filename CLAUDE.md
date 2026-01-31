@@ -35,7 +35,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Semantic Variety**: Post-commit text transform, phrase bank with meaning tags, cooldown tracking, semantic diff guard, no-rewrite zones, burst repetition detection.
 **Auto-Tuning**: Threshold learning from signal distributions, reset effectiveness tracking, setpoint calibration from baselines, budget sweep with Pareto analysis.
 **Puppet Mode**: Persona pinning, voice constraints, epistemic posture, semantic diff guard (7 rules + 2 warnings), answer skeleton, 3 builtin profiles, registry.
-**Total: 2864 tests**
+**Tainted Claim Similarity**: Token-set Jaccard fingerprinting, inverted index candidate retrieval, exact/near-duplicate detection, audit events, configurable thresholds.
+**Total: 2945 tests**
 
 ## Key Documents
 
@@ -264,6 +265,16 @@ governor tune calibrate --run                  # Compute calibrated setpoints
 governor tune budget --parameter <name>        # Show sweep results
 governor tune reset --confirm                  # Clear all tuning state
 
+# Tainted Claim Similarity (recurrence detection)
+governor taint status                   # Show taint index stats
+governor taint list                     # List tainted claims
+governor taint add <id> <text>          # Add claim to taint index
+governor taint remove <id>              # Remove claim from taint index
+governor taint check <text>             # Check text against taint index
+governor taint events                   # Show taint similarity events
+governor taint events --clear           # Show and clear events
+governor taint reset --confirm          # Clear taint index
+
 # Puppet Mode (persona pinning, semantic safety)
 governor puppet list                    # List available puppet profiles
 governor puppet show <puppet_id>        # Show profile details
@@ -365,6 +376,7 @@ src/governor/
 ├── semvar.py         # SemVarEngine, PhraseBank, CooldownTracker, SemanticDiffGuard, no-rewrite zones, burst detection
 ├── auto_tuning.py    # ThresholdTuner, ResetTracker, SetpointCalibrator, BudgetSweeper, AutoTuner, Pareto analysis
 ├── puppet.py         # PuppetProfile, PuppetRenderer, PuppetDiffGuard, PuppetRegistry, persona pinning, semantic diff guard
+├── taint.py          # TaintIndex, Fingerprint, token-set Jaccard, inverted index, recurrence detection
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -632,6 +644,13 @@ src/ops_governor/
 
 **Puppet Mode tests: 128**
 
+### Tainted Claim Similarity (Recurrence Detection)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| taint.py | TaintIndex, Fingerprint, token-set Jaccard, inverted index candidate retrieval, normalization, audit events | 81 |
+
+**Tainted Claim Similarity tests: 81**
+
 ### Fiction Governor (Complete)
 | Module | Description | Tests |
 |--------|-------------|-------|
@@ -655,7 +674,7 @@ src/ops_governor/
 
 **Non-Fiction Governor tests: 91**
 
-**Total: 2864 tests**
+**Total: 2945 tests**
 
 ## Common Mistakes to Avoid
 

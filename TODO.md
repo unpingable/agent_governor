@@ -1399,22 +1399,23 @@ author's voice. **This is the last core feature before deferred cross-cutting wo
 
 **54 new tests (122 total tone tests in tests/test_tone.py)**
 
-### Phase T3: Style Enforcement as Invariant
+### Phase T3: Style Enforcement as Invariant ✓ MOSTLY COMPLETE
 
-- [ ] **StyleInvariant** — Mechanical verification of tone consistency
-  - Wraps ToneProfile with configurable tolerance (default 0.2)
-  - `verify(content)` → (bool, violations)
+- [x] **StyleInvariant** — Mechanical verification of tone consistency
+  - ToneChecker acts as StyleInvariant with configurable tolerance (default 0.2)
+  - `check(content)` → ToneCheckResult(valid, violations, metrics)
   - Checks: sentence length drift, fragment usage, contraction frequency,
-    technical density, voice patterns (second person, first person)
-  - Each violation includes: what's wrong, expected value, actual value, suggestion
-  - Integrates with autonomous executor invariant system
+    technical density, voice patterns (second person, first person),
+    em dashes, rhetorical questions, parentheticals
+  - Each violation includes: dimension, expected value, actual value, suggestion
+  - Integration with autonomous executor deferred (see Deferred 1)
 
-- [ ] **Tone checking CLI**
+- [x] **Tone checking CLI** (implemented in Phase T1)
   - `nonfiction-gov tone check <file>` — analyze file against profile, report violations
   - `nonfiction-gov tone lock` — lock current profile as enforcement invariant
   - `nonfiction-gov tone unlock --confirm` — disable tone enforcement
 
-- [ ] **Tone drift warnings** — Surface during autonomous execution
+- [ ] **Tone drift warnings** — Surface during autonomous execution (DEFERRED: needs autonomous executor)
   - Autonomous executor rejects proposals that fail style invariant
   - Violations include specific suggestions: "break up long sentences",
     "use more contractions", "add fragments for emphasis"

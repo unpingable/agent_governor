@@ -267,6 +267,54 @@ _RHETORICAL_Q_PATTERN = re.compile(r'[^?]*\?')
 _PARENTHETICAL_PATTERN = re.compile(r'\([^)]+\)')
 _COLON_EMPHASIS_PATTERN = re.compile(r':\s+[A-Z]')
 
+# Common stop words for vocabulary analysis
+_STOP_WORDS = frozenset({
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "by", "from", "is", "are", "was", "were", "be", "been",
+    "being", "have", "has", "had", "do", "does", "did", "will", "would",
+    "could", "should", "may", "might", "shall", "can", "this", "that",
+    "these", "those", "it", "its", "not", "no", "if", "then", "than",
+    "so", "as", "up", "out", "about", "into", "over", "after", "before",
+    "between", "under", "during", "through", "each", "every", "all",
+    "both", "few", "more", "most", "other", "some", "such", "only",
+    "very", "just", "also", "now", "here", "there", "when", "where",
+    "how", "what", "which", "who", "whom", "why",
+})
+
+
+def _count_syllables(word: str) -> int:
+    """Estimate syllable count using vowel group heuristic."""
+    word = word.lower().strip()
+    if not word:
+        return 0
+    count = 0
+    prev_vowel = False
+    for ch in word:
+        is_vowel = ch in "aeiouy"
+        if is_vowel and not prev_vowel:
+            count += 1
+        prev_vowel = is_vowel
+    # Silent e adjustment
+    if word.endswith("e") and count > 1:
+        count -= 1
+    return max(1, count)
+
+
+def _estimate_technical_density(words: list[str]) -> float:
+    """
+    Estimate technical density as proportion of complex words.
+
+    Complex = 3+ syllables and not a common stop word.
+    """
+    if not words:
+        return 0.0
+    content_words = [w.lower().strip(".,!?;:\"'()[]") for w in words]
+    content_words = [w for w in content_words if w and w not in _STOP_WORDS]
+    if not content_words:
+        return 0.0
+    complex_count = sum(1 for w in content_words if _count_syllables(w) >= 3)
+    return complex_count / len(content_words)
+
 
 def analyze_text(text: str) -> dict[str, Any]:
     """
@@ -342,6 +390,7 @@ def analyze_text(text: str) -> dict[str, Any]:
         "uses_parentheticals": uses_parentheticals,
         "uses_em_dashes": uses_em_dashes,
         "uses_ellipses": uses_ellipses,
+        "technical_density": round(_estimate_technical_density(words), 2),
         "sentence_count": len(sentences),
         "word_count": len(words),
         "paragraph_count": len(paragraphs),
@@ -464,6 +513,27 @@ class ToneChecker:
                 expected=True,
                 actual=False,
                 suggestion="Use parentheticals for asides (like this)",
+            ))
+
+        # Technical density
+        density_diff = abs(
+            metrics.get("technical_density", 0.3) - self.profile.technical_density
+        )
+        if density_diff > self.tolerance:
+            direction = (
+                "Use more precise technical vocabulary"
+                if metrics.get("technical_density", 0.3) < self.profile.technical_density
+                else "Simplify vocabulary; prefer plain language"
+            )
+            violations.append(ToneViolation(
+                dimension="technical_density",
+                message=(
+                    f"Technical density off: {metrics.get('technical_density', 0.3):.0%} "
+                    f"vs expected {self.profile.technical_density:.0%}"
+                ),
+                expected=self.profile.technical_density,
+                actual=metrics.get("technical_density", 0.3),
+                suggestion=direction,
             ))
 
         return ToneCheckResult(
@@ -732,57 +802,9 @@ class ProfileDeviation:
         }
 
 
-# Common stop words for vocabulary analysis
-_STOP_WORDS = frozenset({
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "with", "by", "from", "is", "are", "was", "were", "be", "been",
-    "being", "have", "has", "had", "do", "does", "did", "will", "would",
-    "could", "should", "may", "might", "shall", "can", "this", "that",
-    "these", "those", "it", "its", "not", "no", "if", "then", "than",
-    "so", "as", "up", "out", "about", "into", "over", "after", "before",
-    "between", "under", "during", "through", "each", "every", "all",
-    "both", "few", "more", "most", "other", "some", "such", "only",
-    "very", "just", "also", "now", "here", "there", "when", "where",
-    "how", "what", "which", "who", "whom", "why",
-})
-
 # Suffixes for heuristic word classification
 _ADJ_SUFFIXES = ("al", "ial", "ful", "ive", "ous", "ible", "able", "ic", "ical", "less", "ary")
 _VERB_SUFFIXES = ("ize", "ise", "ate", "ify", "en")
-
-
-def _count_syllables(word: str) -> int:
-    """Estimate syllable count using vowel group heuristic."""
-    word = word.lower().strip()
-    if not word:
-        return 0
-    count = 0
-    prev_vowel = False
-    for ch in word:
-        is_vowel = ch in "aeiouy"
-        if is_vowel and not prev_vowel:
-            count += 1
-        prev_vowel = is_vowel
-    # Silent e adjustment
-    if word.endswith("e") and count > 1:
-        count -= 1
-    return max(1, count)
-
-
-def _estimate_technical_density(words: list[str]) -> float:
-    """
-    Estimate technical density as proportion of complex words.
-
-    Complex = 3+ syllables and not a common stop word.
-    """
-    if not words:
-        return 0.0
-    content_words = [w.lower().strip(".,!?;:\"'()[]") for w in words]
-    content_words = [w for w in content_words if w and w not in _STOP_WORDS]
-    if not content_words:
-        return 0.0
-    complex_count = sum(1 for w in content_words if _count_syllables(w) >= 3)
-    return complex_count / len(content_words)
 
 
 def _extract_ngram_patterns(texts: list[str], n: int = 3, top_k: int = 5) -> list[str]:

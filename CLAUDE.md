@@ -41,7 +41,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Sybil Resistance**: Bloc detection, effective voter count (Neff), per-origin budget coupling, quorum Gate 5 integration, escalation triggers.
 **Research Mode**: Non-convergent epistemic control, hypothesis lifecycle (PROBE→TENTATIVE→SUPPORTED→ABANDONED), entropy bounds, dominance caps, evidence impulses with decay, Δt invariant, terminal states.
 **ClaimStatus + Epistemic Persistence**: ClaimStatus enum (PROPOSED→SUPPORTED→CONTESTED→…), QuorumStatus mapping, EpistemicLedger SQLite persistence (Schema V4), write-through on mutations, from_dict/from_json deserialization.
-**Total: 3529 tests**
+**Evidence Type Validation**: Layer 3 evidence kind gating, 4 new EvidenceType values (CALC_RESULT, TEST_RESULT, WEB_SOURCE, LIVE_RETRIEVAL), WRONG_EVIDENCE_TYPE audit failure mode, required_evidence_kinds on PolicyEntry, quorum Gate 6, COLLECTING→STABILIZING evidence gate.
+**Total: 3615 tests**
 
 ## Key Documents
 
@@ -722,7 +723,18 @@ src/ops_governor/
 
 **ClaimStatus + Epistemic Persistence tests: 75**
 
-**Total: 3529 tests**
+### Evidence Type Validation (Layer 3)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| epistemic.py | 4 new EvidenceType values (CALC_RESULT, TEST_RESULT, WEB_SOURCE, LIVE_RETRIEVAL), 4 factory methods | — |
+| audit.py | WRONG_EVIDENCE_TYPE failure mode, required_evidence_kinds on PolicyEntry, default matrix | — |
+| quorum.py | required_evidence_types on QuorumPolicy, _check_evidence_types helper, Gate 6 in can_proceed, COLLECTING→STABILIZING gate | — |
+| jurisdictions.py | New types in admissible_evidence sets (FACTUAL, SPECULATIVE, ADVERSARIAL, FORENSIC, AUDIT) | — |
+| test_evidence_types.py | Enum, factories, policy, audit, quorum, jurisdiction, backward compat | 86 |
+
+**Evidence Type Validation tests: 86**
+
+**Total: 3615 tests**
 
 ## Common Mistakes to Avoid
 

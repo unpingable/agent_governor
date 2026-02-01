@@ -932,6 +932,7 @@ class TestAuditPipeline:
             evidence_strength_sum=2.5,
             independence_score=0.9,
             citation_coverage=0.95,
+            evidence_kinds=["web_source", "document"],
         )
         result = p.audit("a1", signals)
         assert result.status == GroundingStatus.GROUNDED
@@ -956,6 +957,7 @@ class TestAuditPipeline:
             evidence_count=1,
             evidence_strength_sum=0.3,
             citation_coverage=0.8,
+            evidence_kinds=["document"],
         )
         result = p.audit("a3", signals, claim_type="static_fact")
         assert result.status == GroundingStatus.WEAK
@@ -1006,6 +1008,7 @@ class TestAuditPipelineStages:
             evidence_strength_sum=1.5,
             independence_score=0.8,
             citation_coverage=0.9,
+            evidence_kinds=["web_source"],
         )
         result = p.pre_commit_audit("a1", signals)
         assert result.stage == AuditStage.PRE_COMMIT
@@ -1119,6 +1122,7 @@ class TestAuditPipelineMetrics:
         p.audit("a1", DetectionSignals(
             evidence_count=3, evidence_strength_sum=2.5,
             independence_score=0.9, citation_coverage=0.95,
+            evidence_kinds=["web_source", "document"],
         ))
         # Problematic
         p.audit("a2", DetectionSignals(evidence_count=0))
@@ -1152,6 +1156,7 @@ class TestAuditPipelineMetrics:
         p.audit("a2", DetectionSignals(
             evidence_count=3, evidence_strength_sum=2.5,
             independence_score=0.9, citation_coverage=0.95,
+            evidence_kinds=["web_source", "document"],
         ))
         rates = p.get_failure_mode_rates()
         assert rates.get("no_evidence", 0) == 0.5
@@ -1267,6 +1272,7 @@ class TestAuditPipelineSerialization:
         p.audit("a2", DetectionSignals(
             evidence_count=3, evidence_strength_sum=2.5,
             independence_score=0.9, citation_coverage=0.95,
+            evidence_kinds=["web_source", "document"],
         ))
         d = p.to_dict()
         p2 = AuditPipeline.from_dict(d)
@@ -1377,6 +1383,7 @@ class TestAuditE2E:
             evidence_strength_sum=2.5,
             independence_score=0.9,
             citation_coverage=0.95,
+            evidence_kinds=["web_source", "document"],
         )
         result1 = pipeline.pre_commit_audit("claim_1", clean_signals)
         assert result1.decision == AuditDecision.ALLOW_HARD

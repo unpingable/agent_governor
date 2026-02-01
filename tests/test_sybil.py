@@ -666,6 +666,7 @@ class TestQuorumIntegration:
                 sources_hash=vc.get("sources_hash"),
                 prompt_hash=vc.get("prompt_hash"),
                 model_id=vc.get("model_id"),
+                evidence=[EvidencePointer(description="auto", evidence_type="calc_result")],
             )
 
         # Advance time past stability window

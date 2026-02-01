@@ -154,6 +154,19 @@ class EvidenceType(str, Enum):
     CROSS_SOURCE = "cross_source"
     """Corroboration from multiple independent sources (forensic mode)."""
 
+    # Layer 3: Specialized evidence types for type validation
+    CALC_RESULT = "calc_result"
+    """Calculator or formal derivation output."""
+
+    TEST_RESULT = "test_result"
+    """Test suite, compiler, or linter execution result."""
+
+    WEB_SOURCE = "web_source"
+    """Web page reference with fetch timestamp."""
+
+    LIVE_RETRIEVAL = "live_retrieval"
+    """Live API or data fetch with recency guarantee."""
+
 
 @dataclass
 class EvidenceRef:
@@ -270,6 +283,50 @@ class EvidenceRef:
             ref_id=f"ev_{uuid.uuid4().hex[:8]}",
             ref_type=EvidenceType.HUMAN_INPUT,
             locator=description,
+            scope=scope,
+            retrieved_at=datetime.now(),
+        )
+
+    @classmethod
+    def from_calc_result(cls, trace_id: str, scope: str) -> "EvidenceRef":
+        """Create evidence ref from a calculator or formal derivation output."""
+        return cls(
+            ref_id=f"ev_{uuid.uuid4().hex[:8]}",
+            ref_type=EvidenceType.CALC_RESULT,
+            locator=trace_id,
+            scope=scope,
+            retrieved_at=datetime.now(),
+        )
+
+    @classmethod
+    def from_test_result(cls, trace_id: str, scope: str) -> "EvidenceRef":
+        """Create evidence ref from a test suite, compiler, or linter result."""
+        return cls(
+            ref_id=f"ev_{uuid.uuid4().hex[:8]}",
+            ref_type=EvidenceType.TEST_RESULT,
+            locator=trace_id,
+            scope=scope,
+            retrieved_at=datetime.now(),
+        )
+
+    @classmethod
+    def from_web_source(cls, url: str, scope: str) -> "EvidenceRef":
+        """Create evidence ref from a web page reference."""
+        return cls(
+            ref_id=f"ev_{uuid.uuid4().hex[:8]}",
+            ref_type=EvidenceType.WEB_SOURCE,
+            locator=url,
+            scope=scope,
+            retrieved_at=datetime.now(),
+        )
+
+    @classmethod
+    def from_live_retrieval(cls, locator: str, scope: str) -> "EvidenceRef":
+        """Create evidence ref from a live API or data fetch."""
+        return cls(
+            ref_id=f"ev_{uuid.uuid4().hex[:8]}",
+            ref_type=EvidenceType.LIVE_RETRIEVAL,
+            locator=locator,
             scope=scope,
             retrieved_at=datetime.now(),
         )

@@ -136,6 +136,9 @@ class FailureMode(str, Enum):
     PROMPT_INJECTION = "prompt_injection"
     """Untrusted text was treated as instruction or fact."""
 
+    WRONG_EVIDENCE_TYPE = "wrong_evidence_type"
+    """Evidence exists but wrong kind for the claim type."""
+
     NONE = "none"
     """No failure detected (claim is grounded)."""
 
@@ -440,6 +443,9 @@ class PolicyEntry:
     # Rounds
     stabilization_rounds: int = 1  # Consecutive stable rounds required
 
+    # Evidence type requirements (Layer 3)
+    required_evidence_kinds: set[str] | None = None  # None = any type accepted
+
     @property
     def key(self) -> str:
         return f"{self.claim_type}:{self.risk.value}:{self.scope.value}"
@@ -457,6 +463,7 @@ class PolicyEntry:
             "freshness_max_seconds": self.freshness_max_seconds,
             "ttl_seconds": self.ttl_seconds,
             "stabilization_rounds": self.stabilization_rounds,
+            "required_evidence_kinds": sorted(self.required_evidence_kinds) if self.required_evidence_kinds else None,
         }
 
     @classmethod
@@ -473,6 +480,7 @@ class PolicyEntry:
             freshness_max_seconds=data.get("freshness_max_seconds", 0.0),
             ttl_seconds=data.get("ttl_seconds", 0.0),
             stabilization_rounds=data.get("stabilization_rounds", 1),
+            required_evidence_kinds=set(data["required_evidence_kinds"]) if data.get("required_evidence_kinds") else None,
         )
 
 
@@ -498,6 +506,7 @@ def _default_policies() -> dict[str, PolicyEntry]:
             max_specious_precision=0.7 - 0.1 * risk.k_required,
             ttl_seconds=180 * 86400 / (risk.k_required ** 2),  # 180d/45d/20d
             stabilization_rounds=risk.k_required,
+            required_evidence_kinds={"web_source", "document", "url"},
         )
         policies[entry.key] = entry
 
@@ -517,6 +526,7 @@ def _default_policies() -> dict[str, PolicyEntry]:
             freshness_max_seconds=fresh[risk],
             ttl_seconds=ttl[risk],
             stabilization_rounds=risk.k_required,
+            required_evidence_kinds={"live_retrieval", "web_source"},
         )
         policies[entry.key] = entry
 
@@ -533,6 +543,7 @@ def _default_policies() -> dict[str, PolicyEntry]:
             max_specious_precision=0.6 - 0.1 * risk.k_required,
             ttl_seconds={ClaimRisk.LOW: 30 * 86400, ClaimRisk.MEDIUM: 14 * 86400, ClaimRisk.HIGH: 7 * 86400}[risk],
             stabilization_rounds=min(2, risk.k_required),
+            required_evidence_kinds={"test_result", "receipt"},
         )
         policies[entry.key] = entry
 
@@ -548,6 +559,7 @@ def _default_policies() -> dict[str, PolicyEntry]:
             max_novel_numbers=0,
             max_specious_precision=0.5,
             stabilization_rounds=1,
+            required_evidence_kinds={"calc_result", "cryptographic_proof"},
         )
         policies[entry.key] = entry
 
@@ -564,6 +576,7 @@ def _default_policies() -> dict[str, PolicyEntry]:
             max_specious_precision=0.6 - 0.1 * risk.k_required,
             ttl_seconds={ClaimRisk.LOW: 30 * 86400, ClaimRisk.MEDIUM: 14 * 86400, ClaimRisk.HIGH: 7 * 86400}[risk],
             stabilization_rounds=risk.k_required,
+            required_evidence_kinds={"tool_trace", "test_result", "receipt"},
         )
         policies[entry.key] = entry
 
@@ -579,6 +592,7 @@ def _default_policies() -> dict[str, PolicyEntry]:
             max_novel_numbers=3,
             max_specious_precision=0.8,
             stabilization_rounds=risk.k_required,
+            required_evidence_kinds=None,  # Subjective — dissent gate suffices
         )
         policies[entry.key] = entry
 
@@ -755,6 +769,12 @@ def classify_failure_modes(signals: DetectionSignals, policy: PolicyEntry) -> li
         modes.append(FailureMode.NO_EVIDENCE)
         return modes  # If no evidence, skip other checks
 
+    # WRONG_EVIDENCE_TYPE: evidence exists but wrong kind for claim type
+    if policy.required_evidence_kinds is not None:
+        provided_kinds = set(signals.evidence_kinds)
+        if not provided_kinds.intersection(policy.required_evidence_kinds):
+            modes.append(FailureMode.WRONG_EVIDENCE_TYPE)
+
     # WEAK_EVIDENCE: evidence exists but insufficient
     if signals.evidence_strength_sum < policy.min_evidence_strength:
         modes.append(FailureMode.WEAK_EVIDENCE)
@@ -815,7 +835,7 @@ def determine_grounding_status(failure_modes: list[FailureMode]) -> GroundingSta
         return GroundingStatus.UNGROUNDED
 
     # Multiple failure modes or severe ones -> UNGROUNDED
-    severe = {FailureMode.SPECIOUS_PRECISION, FailureMode.TOOL_MISREAD, FailureMode.PROMPT_INJECTION}
+    severe = {FailureMode.SPECIOUS_PRECISION, FailureMode.TOOL_MISREAD, FailureMode.PROMPT_INJECTION, FailureMode.WRONG_EVIDENCE_TYPE}
     if any(m in severe for m in failure_modes):
         return GroundingStatus.UNGROUNDED
 

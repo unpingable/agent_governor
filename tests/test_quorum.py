@@ -34,6 +34,24 @@ from governor.dissent import (
 from governor.ttl import VolatilityClass
 
 
+# Maps ClaimType to an appropriate evidence_type string for test votes.
+_EVIDENCE_TYPE_FOR_CLAIM: dict[ClaimType, str] = {
+    ClaimType.MATH: "calc_result",
+    ClaimType.CODE: "test_result",
+    ClaimType.STATIC_FACT: "web_source",
+    ClaimType.VOLATILE_FACT: "live_retrieval",
+    ClaimType.PROCEDURE: "tool_trace",
+    ClaimType.JUDGMENT: "unspecified",  # No requirement -- any type accepted
+}
+
+
+def _evidence_for(claim_type: ClaimType) -> list[EvidencePointer]:
+    """Create minimal evidence list that satisfies evidence type gate."""
+    et = _EVIDENCE_TYPE_FOR_CLAIM.get(claim_type, "unspecified")
+    return [EvidencePointer(description="auto", evidence_type=et)]
+
+
+
 # =============================================================================
 # TestClaimTypeEnum
 # =============================================================================
@@ -394,20 +412,20 @@ class TestQuorumManagerBasic:
     def test_cast_vote(self):
         mgr = QuorumManager()
         mgr.create_quorum("p1", ClaimType.CODE)
-        vote = mgr.cast_vote("p1", "agent-a", VoteVerdict.APPROVE, "looks good")
+        vote = mgr.cast_vote("p1", "agent-a", VoteVerdict.APPROVE, "looks good", evidence=_evidence_for(ClaimType.CODE))
         assert vote is not None
         assert vote.verdict == VoteVerdict.APPROVE
         assert vote.agent_id == "agent-a"
 
     def test_cast_vote_nonexistent_proposal(self):
         mgr = QuorumManager()
-        vote = mgr.cast_vote("bad", "agent-a", VoteVerdict.APPROVE, "ok")
+        vote = mgr.cast_vote("bad", "agent-a", VoteVerdict.APPROVE, "ok", evidence=_evidence_for(ClaimType.CODE))
         assert vote is None
 
     def test_duplicate_vote_rejected(self):
         mgr = QuorumManager()
         mgr.create_quorum("p1", ClaimType.CODE)
-        v1 = mgr.cast_vote("p1", "agent-a", VoteVerdict.APPROVE, "first")
+        v1 = mgr.cast_vote("p1", "agent-a", VoteVerdict.APPROVE, "first", evidence=_evidence_for(ClaimType.CODE))
         v2 = mgr.cast_vote("p1", "agent-a", VoteVerdict.REJECT, "changed mind")
         assert v1 is not None
         assert v2 is None  # Duplicate rejected
@@ -437,7 +455,7 @@ class TestQuorumTransitions:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)  # k=1, threshold=0.5
-        mgr.cast_vote("p1", "agent-a", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "agent-a", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
 
     def test_stabilizing_to_reached(self):
@@ -445,7 +463,7 @@ class TestQuorumTransitions:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)  # Δt=10s
-        mgr.cast_vote("p1", "agent-a", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "agent-a", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
 
         # Advance past Δt
@@ -459,8 +477,8 @@ class TestQuorumTransitions:
         now = datetime(2024, 6, 1)
         # STATIC_FACT: k=2, threshold=0.67
         mgr.create_quorum("p1", ClaimType.STATIC_FACT, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.STATIC_FACT))
+        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.STATIC_FACT))
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
 
         # Third vote is a reject: ratio = 2/3 = 0.6667 < 0.67 threshold
@@ -474,9 +492,9 @@ class TestQuorumTransitions:
         now = datetime(2024, 6, 1)
         # PROCEDURE: k=3, threshold=0.75
         mgr.create_quorum("p1", ClaimType.PROCEDURE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a3", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.PROCEDURE))
+        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.PROCEDURE))
+        mgr.cast_vote("p1", "a3", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.PROCEDURE))
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
 
         # Fourth vote is a reject: 3/4 = 0.75, still meets threshold
@@ -501,7 +519,7 @@ class TestQuorumTransitions:
         now = datetime(2024, 6, 1)
         # CODE: k=1, timeout=30m
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
 
         # Advance past timeout
@@ -514,7 +532,7 @@ class TestQuorumTransitions:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
         assert mgr.check_status("p1") == QuorumStatus.REACHED
 
@@ -552,17 +570,17 @@ class TestQuorumTransitions:
         mgr = QuorumManager()
         mgr.create_quorum("p1", ClaimType.CODE)
         mgr.fail("p1", "done")
-        vote = mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok")
+        vote = mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", evidence=_evidence_for(ClaimType.CODE))
         assert vote is None
 
     def test_no_vote_on_reached(self):
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
         assert mgr.check_status("p1") == QuorumStatus.REACHED
-        vote = mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "late")
+        vote = mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "late", evidence=_evidence_for(ClaimType.CODE))
         assert vote is None
 
 
@@ -578,8 +596,8 @@ class TestStabilityWindow:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.MATH, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.MATH))
+        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.MATH))
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
 
         # 1s later: should be reached
@@ -591,9 +609,9 @@ class TestStabilityWindow:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.JUDGMENT, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a3", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
+        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
+        mgr.cast_vote("p1", "a3", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
 
         # 5 min later: still stabilizing (need 10 min)
@@ -609,7 +627,7 @@ class TestStabilityWindow:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)  # Δt=10s
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
 
         # Exactly at Δt
@@ -621,7 +639,7 @@ class TestStabilityWindow:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.MATH, created_at=now)  # k=2, threshold=0.5
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.MATH))
         mgr.cast_vote("p1", "a2", VoteVerdict.ABSTAIN, "no opinion", timestamp=now)
         # 1 approve / 1 non-abstain = 1.0, k=2 met
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
@@ -638,7 +656,7 @@ class TestDissentIntegration:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
         assert mgr.check_status("p1") == QuorumStatus.REACHED
 
@@ -651,7 +669,7 @@ class TestDissentIntegration:
         dl = DissentLedger()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
 
         can, reasons = mgr.can_proceed("p1", dissent_ledger=dl, now=now + timedelta(seconds=15))
@@ -662,7 +680,7 @@ class TestDissentIntegration:
         dl = DissentLedger()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
 
         # File a critical objection
@@ -694,9 +712,9 @@ class TestDissentIntegration:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.JUDGMENT, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a3", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
+        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
+        mgr.cast_vote("p1", "a3", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
         mgr.update("p1", now=now + timedelta(seconds=700))
 
         # No human vote
@@ -709,9 +727,9 @@ class TestDissentIntegration:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.JUDGMENT, created_at=now)
-        mgr.cast_vote("p1", "human:reviewer", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "human:reviewer", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
+        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
         mgr.update("p1", now=now + timedelta(seconds=700))
 
         can, reasons = mgr.can_proceed("p1", now=now + timedelta(seconds=700))
@@ -730,9 +748,9 @@ class TestTTLIntegration:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.VOLATILE_FACT, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a3", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.VOLATILE_FACT))
+        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.VOLATILE_FACT))
+        mgr.cast_vote("p1", "a3", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.VOLATILE_FACT))
         mgr.update("p1", now=now + timedelta(seconds=310))
         assert mgr.check_status("p1") == QuorumStatus.REACHED
 
@@ -746,8 +764,8 @@ class TestTTLIntegration:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.MATH, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.MATH))
+        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.MATH))
         mgr.update("p1", now=now + timedelta(seconds=5))
         assert mgr.check_status("p1") == QuorumStatus.REACHED
 
@@ -770,7 +788,7 @@ class TestTTLIntegration:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
         assert mgr.check_status("p1") == QuorumStatus.REACHED
 
@@ -795,8 +813,8 @@ class TestQueries:
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
         mgr.create_quorum("p2", ClaimType.MATH, created_at=now)
-        mgr.cast_vote("p2", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
-        mgr.cast_vote("p2", "a2", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p2", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.MATH))
+        mgr.cast_vote("p2", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.MATH))
         mgr.update("p2", now=now + timedelta(seconds=5))  # p2 → REACHED
 
         active = mgr.active_quorums()
@@ -807,7 +825,7 @@ class TestQueries:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
 
         reached = mgr.reached_quorums()
@@ -823,7 +841,7 @@ class TestQueries:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
         mgr.contest("p1")
         assert len(mgr.contested_quorums()) == 1
@@ -832,7 +850,7 @@ class TestQueries:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.create_quorum("p2", ClaimType.MATH, created_at=now)
         mgr.fail("p2", "nope")
 
@@ -854,7 +872,7 @@ class TestEdgeCases:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
 
     def test_all_abstain(self):
@@ -872,7 +890,7 @@ class TestEdgeCases:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.MATH, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.MATH))
         mgr.cast_vote("p1", "a2", VoteVerdict.ABSTAIN, "pass", timestamp=now)
         # 1 approve / 1 non-abstain = 1.0, k=2 met
         assert mgr.check_status("p1") == QuorumStatus.STABILIZING
@@ -885,7 +903,7 @@ class TestEdgeCases:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         assert len(mgr.history) >= 2  # create + vote
 
     def test_custom_policies(self):
@@ -916,9 +934,9 @@ class TestEdgeCases:
         assert qs.status == QuorumStatus.COLLECTING
 
         # Vote (k=2, threshold=0.67)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.STATIC_FACT))
         assert qs.status == QuorumStatus.COLLECTING  # k not met yet
-        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.STATIC_FACT))
         assert qs.status == QuorumStatus.STABILIZING  # threshold met
 
         # Wait for Δt (120s)
@@ -1048,7 +1066,7 @@ class TestFingerprint:
         qs = mgr.create_quorum("p1", ClaimType.CODE, created_at=now, content="test")
         assert not qs.fingerprint_locked
 
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         assert qs.status == QuorumStatus.STABILIZING
         assert qs.fingerprint_locked
 
@@ -1056,7 +1074,7 @@ class TestFingerprint:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         qs = mgr.create_quorum("p1", ClaimType.CODE, created_at=now, content="original")
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
         assert qs.status == QuorumStatus.REACHED
 
@@ -1069,7 +1087,7 @@ class TestFingerprint:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         qs = mgr.create_quorum("p1", ClaimType.CODE, created_at=now, content="same")
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
 
         result = mgr.validate_fingerprint("p1", "same")
@@ -1121,7 +1139,7 @@ class TestRiskMultiplier:
         now = datetime(2024, 6, 1)
         qs = mgr.create_quorum("p1", ClaimType.CODE, created_at=now,
                                 risk_level=RiskLevel.HIGH)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         assert qs.status == QuorumStatus.STABILIZING
 
         # 15s: still stabilizing (need 20s for HIGH risk)
@@ -1143,7 +1161,7 @@ class TestNewStates:
     def _reach_quorum(self, mgr, pid="p1"):
         now = datetime(2024, 6, 1)
         mgr.create_quorum(pid, ClaimType.CODE, created_at=now)
-        mgr.cast_vote(pid, "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote(pid, "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update(pid, now=now + timedelta(seconds=15))
         assert mgr.check_status(pid) == QuorumStatus.REACHED
         return now
@@ -1220,7 +1238,7 @@ class TestAutoContest:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)  # timeout=30m
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
         assert mgr.check_status("p1") == QuorumStatus.REACHED
 
@@ -1241,13 +1259,13 @@ class TestAutoContest:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
         mgr.contest("p1")
         mgr.escalate("p1", "stuck")
 
         # Cannot vote on escalated
-        v = mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "late")
+        v = mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "late", evidence=_evidence_for(ClaimType.CODE))
         assert v is None
 
     def test_terminal_states_set(self):
@@ -1263,7 +1281,7 @@ class TestAutoContest:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.CODE))
         mgr.update("p1", now=now + timedelta(seconds=15))
 
         mgr.contest("p1", reason="Evidence found")

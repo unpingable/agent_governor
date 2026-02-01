@@ -274,6 +274,10 @@ def create_factual_jurisdiction() -> Jurisdiction:
             EvidenceType.DOCUMENT,
             EvidenceType.RECEIPT,
             EvidenceType.CRYPTOGRAPHIC_PROOF,
+            EvidenceType.CALC_RESULT,
+            EvidenceType.TEST_RESULT,
+            EvidenceType.WEB_SOURCE,
+            EvidenceType.LIVE_RETRIEVAL,
         },
         budget=BudgetProfile(
             claim_cost=1.0,
@@ -310,6 +314,7 @@ def create_speculative_jurisdiction() -> Jurisdiction:
             EvidenceType.TOOL_TRACE,
             EvidenceType.HUMAN_INPUT,
             EvidenceType.URL,
+            EvidenceType.WEB_SOURCE,
             # Lower bar - even weak evidence can inform speculation
         },
         budget=BudgetProfile(
@@ -385,6 +390,9 @@ def create_adversarial_jurisdiction() -> Jurisdiction:
             EvidenceType.HUMAN_INPUT,
             EvidenceType.DOCUMENT,
             EvidenceType.URL,
+            EvidenceType.WEB_SOURCE,
+            EvidenceType.CALC_RESULT,
+            EvidenceType.TEST_RESULT,
         },
         budget=BudgetProfile(
             claim_cost=0.1,  # Nearly free to argue
@@ -460,6 +468,8 @@ def create_forensic_jurisdiction() -> Jurisdiction:
             EvidenceType.CROSS_SOURCE,
             EvidenceType.RECEIPT,
             EvidenceType.SENSOR_DATA,
+            EvidenceType.WEB_SOURCE,
+            EvidenceType.LIVE_RETRIEVAL,
         },
         budget=BudgetProfile(
             claim_cost=2.0,  # Claims are expensive - need evidence
@@ -538,6 +548,10 @@ def create_audit_jurisdiction() -> Jurisdiction:
             EvidenceType.CRYPTOGRAPHIC_PROOF,
             EvidenceType.URL,
             EvidenceType.CROSS_SOURCE,
+            EvidenceType.CALC_RESULT,
+            EvidenceType.TEST_RESULT,
+            EvidenceType.WEB_SOURCE,
+            EvidenceType.LIVE_RETRIEVAL,
         },
         budget=BudgetProfile(
             claim_cost=2.0,  # Everything costs - creates paper trail

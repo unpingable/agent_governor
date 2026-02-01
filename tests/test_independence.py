@@ -427,10 +427,11 @@ class TestQuorumIntegration:
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.MATH, created_at=now)
 
+        ev = [EvidencePointer(description="auto", evidence_type="calc_result")]
         mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now,
-                       tool_path_hash="grep", sources_hash="github", prompt_hash="tmpl1")
+                       tool_path_hash="grep", sources_hash="github", prompt_hash="tmpl1", evidence=ev)
         mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now,
-                       tool_path_hash="curl", sources_hash="arxiv", prompt_hash="tmpl2")
+                       tool_path_hash="curl", sources_hash="arxiv", prompt_hash="tmpl2", evidence=ev)
         mgr.update("p1", now=now + timedelta(seconds=5))
 
         can, reasons = mgr.can_proceed("p1", now=now + timedelta(seconds=5))
@@ -442,7 +443,8 @@ class TestQuorumIntegration:
         mgr = QuorumManager()  # No scorer
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.CODE, created_at=now)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now)
+        ev = [EvidencePointer(description="auto", evidence_type="test_result")]
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=ev)
         mgr.update("p1", now=now + timedelta(seconds=15))
 
         can, reasons = mgr.can_proceed("p1", now=now + timedelta(seconds=15))

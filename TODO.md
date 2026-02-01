@@ -1048,16 +1048,17 @@ GroundedClaim, EvidenceRef, CommitLevel, etc. Wire them through, don't duplicate
   - CLI `get_epistemic_ledger()` uses SQLite when DB exists, falls back to JSON
   - Module: tests/test_claim_status.py (40 tests) + tests/test_epistemic_persistence.py (35 tests)
 
-### Layer 3: Evidence Type Validation (enforcement — gates on Layer 1 data)
+### Layer 3: Evidence Type Validation (enforcement — gates on Layer 1 data) ✅
 
-- [ ] **Evidence kind requirements per claim type** — `audit.py` / `quorum.py`
-  - MATH claims require CALC_RESULT evidence
-  - CODE claims require TEST_RESULT evidence
-  - STATIC_FACT claims require WEB_SOURCE or DOCUMENT evidence
-  - VOLATILE_FACT claims require live retrieval evidence
-  - Enforce before STABILIZING transition in quorum
-  - Wire into `PolicyStore` (already has claim-type policies)
-  - Spec ref: `regime.md` §5.1, `multi2.md` §5.1
+- [x] **Evidence kind requirements per claim type** — `epistemic.py` / `audit.py` / `quorum.py` / `jurisdictions.py`
+  - 4 new EvidenceType values: CALC_RESULT, TEST_RESULT, WEB_SOURCE, LIVE_RETRIEVAL
+  - 4 new EvidenceRef factory methods: from_calc_result, from_test_result, from_web_source, from_live_retrieval
+  - WRONG_EVIDENCE_TYPE failure mode in audit pipeline (severe → UNGROUNDED → BLOCK)
+  - required_evidence_kinds on PolicyEntry with default matrix (6 claim types)
+  - required_evidence_types on QuorumPolicy with default policies
+  - Gate 6 in can_proceed() + COLLECTING→STABILIZING transition gate
+  - New jurisdiction admissibility: FACTUAL/AUDIT admit all 4; SPECULATIVE/ADVERSARIAL/FORENSIC admit subsets
+  - Module: tests/test_evidence_types.py (86 tests)
 
 ### Layer 4: Premise Rule & Dependency Tracking
 

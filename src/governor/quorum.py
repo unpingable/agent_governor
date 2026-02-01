@@ -171,6 +171,7 @@ class QuorumPolicy:
     timeout: timedelta = field(default_factory=lambda: timedelta(hours=1))
     risk_multiplier: float = 1.0
     independence_threshold: float = 0.3
+    required_evidence_types: set[str] | None = None  # None = any type accepted
 
     @property
     def effective_delta_t(self) -> timedelta:
@@ -189,6 +190,7 @@ class QuorumPolicy:
             "timeout_seconds": self.timeout.total_seconds(),
             "risk_multiplier": self.risk_multiplier,
             "independence_threshold": self.independence_threshold,
+            "required_evidence_types": sorted(self.required_evidence_types) if self.required_evidence_types else None,
         }
 
 
@@ -201,6 +203,7 @@ DEFAULT_POLICIES: dict[ClaimType, QuorumPolicy] = {
         delta_t=timedelta(seconds=1),
         volatility=VolatilityClass.PERMANENT,
         timeout=timedelta(minutes=5),
+        required_evidence_types={"calc_result", "cryptographic_proof"},
     ),
     ClaimType.CODE: QuorumPolicy(
         claim_type=ClaimType.CODE,
@@ -209,6 +212,7 @@ DEFAULT_POLICIES: dict[ClaimType, QuorumPolicy] = {
         delta_t=timedelta(seconds=10),
         volatility=VolatilityClass.STABLE,
         timeout=timedelta(minutes=30),
+        required_evidence_types={"test_result", "receipt"},
     ),
     ClaimType.STATIC_FACT: QuorumPolicy(
         claim_type=ClaimType.STATIC_FACT,
@@ -217,6 +221,7 @@ DEFAULT_POLICIES: dict[ClaimType, QuorumPolicy] = {
         delta_t=timedelta(seconds=120),
         volatility=VolatilityClass.MODERATE,
         timeout=timedelta(hours=1),
+        required_evidence_types={"web_source", "document", "url"},
     ),
     ClaimType.VOLATILE_FACT: QuorumPolicy(
         claim_type=ClaimType.VOLATILE_FACT,
@@ -225,6 +230,7 @@ DEFAULT_POLICIES: dict[ClaimType, QuorumPolicy] = {
         delta_t=timedelta(seconds=300),
         volatility=VolatilityClass.VOLATILE,
         timeout=timedelta(hours=2),
+        required_evidence_types={"live_retrieval", "web_source"},
     ),
     ClaimType.PROCEDURE: QuorumPolicy(
         claim_type=ClaimType.PROCEDURE,
@@ -233,6 +239,7 @@ DEFAULT_POLICIES: dict[ClaimType, QuorumPolicy] = {
         delta_t=timedelta(seconds=300),
         volatility=VolatilityClass.MODERATE,
         timeout=timedelta(hours=4),
+        required_evidence_types={"tool_trace", "test_result", "receipt"},
     ),
     ClaimType.JUDGMENT: QuorumPolicy(
         claim_type=ClaimType.JUDGMENT,
@@ -242,6 +249,7 @@ DEFAULT_POLICIES: dict[ClaimType, QuorumPolicy] = {
         volatility=VolatilityClass.STABLE,
         requires_human=True,
         timeout=timedelta(hours=24),
+        required_evidence_types=None,  # Subjective — dissent gate suffices
     ),
 }
 
@@ -670,6 +678,11 @@ class QuorumManager:
                 for r in sybil_reasons:
                     reasons.append(f"Sybil resistance: {r}")
 
+        # Gate 6: Evidence type requirements (Layer 3)
+        passes, reason = self._check_evidence_types(qs)
+        if not passes:
+            reasons.append(reason)
+
         return len(reasons) == 0, reasons
 
     def contest(self, proposal_id: str, reason: str = "") -> bool:
@@ -867,6 +880,30 @@ class QuorumManager:
     # Internal
     # =========================================================================
 
+    def _check_evidence_types(self, qs: QuorumState) -> tuple[bool, str]:
+        """Check if approve votes satisfy evidence type requirements.
+
+        Returns (passes, reason_if_not).
+        """
+        if qs.policy.required_evidence_types is None:
+            return True, ""
+
+        all_evidence_types: set[str] = set()
+        for v in qs.votes.values():
+            if v.verdict == VoteVerdict.APPROVE:
+                for ep in v.evidence:
+                    all_evidence_types.add(ep.evidence_type)
+
+        if all_evidence_types.intersection(qs.policy.required_evidence_types):
+            return True, ""
+
+        required_str = ", ".join(sorted(qs.policy.required_evidence_types))
+        provided_str = ", ".join(sorted(all_evidence_types)) if all_evidence_types else "none"
+        return False, (
+            f"Evidence type gate: requires one of [{required_str}], "
+            f"but votes provide [{provided_str}]"
+        )
+
     def _evaluate_transitions(self, qs: QuorumState, now: datetime) -> None:
         """Evaluate and apply state transitions for a quorum."""
 
@@ -884,6 +921,10 @@ class QuorumManager:
                 return
 
             if qs.threshold_met:
+                # Evidence type gate: check before entering STABILIZING
+                passes, _reason = self._check_evidence_types(qs)
+                if not passes:
+                    return  # Stay COLLECTING until correct evidence types provided
                 qs.status = QuorumStatus.STABILIZING
                 qs.stabilized_at = now
                 # Lock fingerprint on entering STABILIZING

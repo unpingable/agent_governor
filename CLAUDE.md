@@ -45,7 +45,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Premise Rule & Dependencies**: Layer 4 dependency tracking, `depends_on` field on GroundedClaim, cycle-checked DAG, premise rule (HARD claims cannot depend on SOFT/STALE/INVALIDATED), BFS invalidation cascade (HARD→SOFT downgrade), CascadeEvent audit trail, Schema V5, quorum Gate 7.
 **Agent Roles & Revalidation**: Layer 5 agent role assignment (PROPOSER/RETRIEVER/FALSIFIER/SYNTHESIZER), role budgets per risk level, quorum Gate 8, periodic revalidation orchestrator wiring TTL→AuditPipeline.
 **ClaimStatus FSM Enforcement**: Layer 6 transition table (PROPOSED→SUPPORTED↔CONTESTED→{INVALIDATED|EXPIRED|REFUSED}), 9 TransitionReasons, guard validation, transition history, cascade SUPPORTED→STALE, terminal state HUMAN-only recovery.
-**Total: 3876 tests**
+**Tone Profiling**: ToneProfile dataclass (28 dimensions), text analysis, ToneChecker with violation detection, tone guidance generation for system prompts, ToneManager persistence, CLI commands.
+**Total: 3944 tests**
 
 ## Key Documents
 
@@ -701,8 +702,9 @@ src/ops_governor/
 | corpus.py | Corpus ledger, conflict detection | 26 |
 | verifiers.py | Citation, terminology, consistency verification | 25 |
 | doi.py | DOI metadata fetching (CrossRef/DataCite) | -- |
+| tone.py | ToneProfile (28 dimensions), analyze_text, ToneChecker, ToneViolation, ToneManager, generate_tone_guidance, format_system_prompt, CLI (show/create/edit/check/guidance/lock/unlock/delete) | 68 |
 
-**Non-Fiction Governor tests: 91**
+**Non-Fiction Governor tests: 159**
 
 ### Sybil Resistance (Bloc Detection, Neff)
 | Module | Description | Tests |
@@ -765,7 +767,7 @@ src/ops_governor/
 
 **ClaimStatus FSM Enforcement tests: 106**
 
-**Total: 3876 tests**
+**Total: 3944 tests**
 
 ## Common Mistakes to Avoid
 

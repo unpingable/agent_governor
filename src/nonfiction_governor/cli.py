@@ -443,6 +443,229 @@ def export(ctx: click.Context) -> None:
     click.echo(corpus.format_for_prompt())
 
 
+# =============================================================================
+# Tone commands
+# =============================================================================
+
+
+@cli.group()
+@click.pass_context
+def tone(ctx: click.Context) -> None:
+    """Tone profile management (voice/style enforcement)."""
+    pass
+
+
+@tone.command("show")
+@click.pass_context
+def tone_show(ctx: click.Context) -> None:
+    """Display current tone profile."""
+    from .tone import ToneManager
+
+    root = Path(ctx.obj.get("root", "."))
+    manager = ToneManager(root)
+
+    if not manager.has_profile:
+        click.echo("No tone profile set. Create one with 'nonfiction-gov tone create'.")
+        return
+
+    profile = manager.profile
+    locked = manager.is_locked
+
+    click.echo(f"Tone Profile: {profile.name}")
+    if profile.description:
+        click.echo(f"  {profile.description}")
+    click.echo(f"  Locked: {'Yes' if locked else 'No'}")
+    click.echo()
+
+    click.echo("Sentence Structure:")
+    click.echo(f"  Average length: {profile.avg_sentence_length} words")
+    click.echo(f"  Variance: {profile.sentence_length_variance:.1f}")
+    click.echo(f"  Uses fragments: {'Yes' if profile.uses_fragments else 'No'}")
+    click.echo(f"  Uses colons: {'Yes' if profile.uses_colons_for_emphasis else 'No'}")
+    click.echo()
+
+    click.echo("Voice:")
+    click.echo(f"  Second person: {'Yes' if profile.uses_second_person else 'No'}")
+    click.echo(f"  First person: {'Yes' if profile.uses_first_person else 'No'}")
+    click.echo(f"  Contractions: {profile.contractions_frequency:.0%}")
+    click.echo()
+
+    click.echo("Rhetorical Devices:")
+    click.echo(f"  Em dashes: {'Yes' if profile.uses_em_dashes else 'No'}")
+    click.echo(f"  Parentheticals: {'Yes' if profile.uses_parentheticals else 'No'}")
+    click.echo(f"  Rhetorical questions: {'Yes' if profile.uses_rhetorical_questions else 'No'}")
+    click.echo(f"  Ellipses: {'Yes' if profile.uses_ellipses else 'No'}")
+    click.echo()
+
+    if profile.opening_patterns:
+        click.echo("Opening Patterns:")
+        for p in profile.opening_patterns:
+            click.echo(f"  - \"{p}\"")
+        click.echo()
+
+    click.echo(f"Technical Density: {profile.technical_density:.0%}")
+    click.echo(f"Sarcasm: {profile.sarcasm_frequency:.0%}")
+    click.echo(f"Profanity: {'Yes' if profile.uses_profanity else 'No'}")
+
+
+@tone.command("create")
+@click.option("--name", default="default", help="Profile name")
+@click.option("--file", "-f", type=click.Path(exists=True), help="Load from JSON file")
+@click.pass_context
+def tone_create(ctx: click.Context, name: str, file: str | None) -> None:
+    """Create or update tone profile."""
+    from .tone import ToneProfile, ToneManager
+
+    root = Path(ctx.obj.get("root", "."))
+    manager = ToneManager(root)
+
+    if file:
+        profile = ToneProfile.load(Path(file))
+        profile.name = name
+    else:
+        # Read JSON from stdin
+        click.echo("Paste tone profile JSON (Ctrl+D when done):")
+        try:
+            data = json.loads(sys.stdin.read())
+            profile = ToneProfile.from_dict(data)
+            profile.name = name
+        except (json.JSONDecodeError, KeyError) as e:
+            click.echo(f"Error parsing JSON: {e}", err=True)
+            ctx.exit(1)
+            return
+
+    manager.set_profile(profile)
+    click.echo(f"Tone profile '{profile.name}' saved to {manager.profile_path}")
+
+
+@tone.command("edit")
+@click.pass_context
+def tone_edit(ctx: click.Context) -> None:
+    """Show profile path for manual editing."""
+    from .tone import ToneManager
+
+    root = Path(ctx.obj.get("root", "."))
+    manager = ToneManager(root)
+
+    if not manager.has_profile:
+        click.echo("No tone profile set. Create one first with 'nonfiction-gov tone create'.")
+        return
+
+    click.echo(f"Edit the profile at: {manager.profile_path}")
+    click.echo("The file is JSON. Reload will pick up changes automatically.")
+
+
+@tone.command("check")
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--tolerance", "-t", default=0.2, help="Tolerance for deviations")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def tone_check(ctx: click.Context, file_path: str, tolerance: float, json_output: bool) -> None:
+    """Check a file against the tone profile."""
+    from .tone import ToneManager
+
+    root = Path(ctx.obj.get("root", "."))
+    manager = ToneManager(root)
+
+    if not manager.has_profile:
+        click.echo("No tone profile set.", err=True)
+        ctx.exit(1)
+        return
+
+    text = Path(file_path).read_text()
+    result = manager.check_text(text, tolerance=tolerance)
+
+    if json_output:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        return
+
+    click.echo(f"Style Analysis: {file_path}")
+    click.echo()
+
+    if result.valid:
+        click.echo("PASS: Text matches tone profile.")
+    else:
+        click.echo(f"VIOLATIONS DETECTED ({len(result.violations)})")
+        click.echo()
+        for v in result.violations:
+            click.echo(f"  - {v.message}")
+            if v.suggestion:
+                click.echo(f"    Suggestion: {v.suggestion}")
+
+    if result.metrics:
+        click.echo()
+        click.echo("Metrics:")
+        click.echo(f"  Sentences: {result.metrics.get('sentence_count', 0)}")
+        click.echo(f"  Words: {result.metrics.get('word_count', 0)}")
+        click.echo(f"  Avg sentence length: {result.metrics.get('avg_sentence_length', 0)}")
+        click.echo(f"  Contractions: {result.metrics.get('contractions_frequency', 0):.0%}")
+
+    if not result.valid:
+        ctx.exit(1)
+
+
+@tone.command("guidance")
+@click.pass_context
+def tone_guidance(ctx: click.Context) -> None:
+    """Show generated tone guidance (for system prompt injection)."""
+    from .tone import ToneManager
+
+    root = Path(ctx.obj.get("root", "."))
+    manager = ToneManager(root)
+
+    if not manager.has_profile:
+        click.echo("No tone profile set.", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(manager.get_system_prompt())
+
+
+@tone.command("lock")
+@click.pass_context
+def tone_lock(ctx: click.Context) -> None:
+    """Lock tone profile as enforcement invariant."""
+    from .tone import ToneManager
+
+    root = Path(ctx.obj.get("root", "."))
+    manager = ToneManager(root)
+
+    if not manager.has_profile:
+        click.echo("No tone profile to lock.", err=True)
+        ctx.exit(1)
+        return
+
+    manager.lock()
+    click.echo("Tone profile locked. Violations will block autonomous execution.")
+
+
+@tone.command("unlock")
+@click.option("--confirm", is_flag=True, required=True, help="Confirm unlock")
+@click.pass_context
+def tone_unlock(ctx: click.Context, confirm: bool) -> None:
+    """Unlock tone profile (disables enforcement)."""
+    from .tone import ToneManager
+
+    root = Path(ctx.obj.get("root", "."))
+    manager = ToneManager(root)
+    manager.unlock()
+    click.echo("Tone profile unlocked. Style violations will not block execution.")
+
+
+@tone.command("delete")
+@click.option("--confirm", is_flag=True, required=True, help="Confirm deletion")
+@click.pass_context
+def tone_delete(ctx: click.Context, confirm: bool) -> None:
+    """Delete the tone profile."""
+    from .tone import ToneManager
+
+    root = Path(ctx.obj.get("root", "."))
+    manager = ToneManager(root)
+    manager.unlock()
+    manager.clear_profile()
+    click.echo("Tone profile deleted.")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

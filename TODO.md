@@ -1333,33 +1333,46 @@ decisions — nonfiction needs enforceable style parameters extracted from the a
 corpus. Without this, autonomous writing produces generic AI prose instead of the
 author's voice. **This is the last core feature before deferred cross-cutting work.**
 
-### Phase T1: ToneProfile & Manual Authoring
+### Phase T1: ToneProfile & Manual Authoring ✅
 
-- [ ] **ToneProfile dataclass** — `src/nonfiction_governor/tone.py`
-  - Sentence structure: avg_sentence_length, sentence_length_variance, uses_fragments,
-    uses_colons_for_emphasis
-  - Paragraph structure: avg_paragraph_length, uses_single_sentence_paragraphs
-  - Voice patterns: uses_second_person, uses_first_person, contractions_frequency
-  - Rhetorical devices: uses_rhetorical_questions, uses_parentheticals, uses_em_dashes,
-    uses_ellipses
-  - Framing patterns: opening_patterns, transition_patterns, closing_patterns (lists of
-    characteristic phrases like "Here's the thing:", "But here's where it gets interesting:")
-  - Vocabulary: favorite_adjectives, favorite_verbs, technical_density
-  - Tone markers: uses_profanity, sarcasm_frequency, uses_pop_culture_refs
-  - Structure prefs: uses_headers, header_style (statement/question/provocative),
-    uses_lists (sparingly/moderate/frequent), uses_examples, example_placement
-  - Serialization: to_dict/from_dict, persistence to `.governor/tone_profile.json`
+- [x] **ToneProfile dataclass** — `src/nonfiction_governor/tone.py`
+  - 28 dimensions: sentence structure (avg length, variance, fragments, colons),
+    paragraph structure (avg length, single-sentence), voice (2nd/1st person, contractions),
+    rhetorical devices (questions, parentheticals, em dashes, ellipses),
+    framing patterns (opening/transition/closing), vocabulary (adjectives, verbs, density),
+    tone markers (profanity, sarcasm, pop culture), structure (headers, lists, examples),
+    custom guidance (free-form)
+  - to_dict/from_dict, save/load to `.governor/tone_profile.json`
+  - All fields have defaults; profiles can be partial
 
-- [ ] **Manual tone profile creation** — JSON authoring for immediate use
-  - Write profile by hand (the "quick version" before corpus analysis exists)
+- [x] **Text analysis** — `analyze_text(text)` mechanical metrics extraction
+  - Sentence length (avg, variance), paragraph count, fragment detection
+  - Contraction frequency (regex-based: it's/it is, don't/do not, etc.)
+  - Voice pattern detection (2nd/1st person, em dashes, ellipses, parentheticals)
+  - Colon emphasis, rhetorical questions, single-sentence paragraphs
+
+- [x] **ToneChecker** — Check text against ToneProfile with configurable tolerance
+  - ToneViolation dataclass (dimension, message, expected, actual, suggestion)
+  - ToneCheckResult dataclass (valid, violations, metrics)
+  - Checks: sentence length drift, fragment usage, voice patterns, contraction frequency,
+    em dashes, rhetorical questions, parentheticals
+  - All violations include actionable suggestions
+
+- [x] **Manual tone profile creation** — JSON authoring
+  - `nonfiction-gov tone create` (from stdin JSON or --file)
   - `nonfiction-gov tone show` — display current profile
-  - `nonfiction-gov tone edit` — open profile for manual editing
+  - `nonfiction-gov tone edit` — show path for manual editing
+  - `nonfiction-gov tone delete` — remove profile
 
-- [ ] **Tone guidance generation** — Convert ToneProfile to natural language system prompt
-  - `generate_tone_guidance(profile)` → structured prose instructions
+- [x] **Tone guidance generation** — `generate_tone_guidance(profile)` → natural language
+  - `format_system_prompt(profile)` → full system prompt fragment
   - Covers: sentence structure, voice, contractions, rhetorical devices, opening patterns,
-    technical density, tone markers
-  - Injected into system prompt via `augment_messages()` on nonfiction governor
+    technical density, tone markers, custom guidance, structure preferences
+  - ToneManager persistence + lifecycle (set/clear/lock/unlock/check/guidance)
+
+- [x] **Tone CLI commands** — `nonfiction-gov tone` group
+  - `show`, `create`, `edit`, `check <file>`, `guidance`, `lock`, `unlock`, `delete`
+  - Module: tests/test_tone.py (68 tests)
 
 ### Phase T2: Corpus Analysis & Automatic Extraction
 

@@ -43,6 +43,17 @@ from .verifiers import (
     VerificationResult,
 )
 
+from .tone import (
+    ToneProfile,
+    ToneViolation,
+    ToneCheckResult,
+    ToneChecker,
+    ToneManager,
+    analyze_text,
+    generate_tone_guidance,
+    format_system_prompt,
+)
+
 
 __all__ = [
     # Types
@@ -76,6 +87,15 @@ __all__ = [
     "ConsistencyVerifier",
     "NonfictionVerifier",
     "VerificationResult",
+    # Tone
+    "ToneProfile",
+    "ToneViolation",
+    "ToneCheckResult",
+    "ToneChecker",
+    "ToneManager",
+    "analyze_text",
+    "generate_tone_guidance",
+    "format_system_prompt",
 ]
 
 __version__ = "0.1.0"

@@ -514,10 +514,10 @@ Based on `ingest/direction.md` - artificial landmarks that impose orientation co
 - [ ] **Web UI** - Simple dashboard showing claim history, rejection rates, regime status
 - [ ] **VS Code Integration** - add governor support as method to VS Code
 - [x] **Config profiles** - `governor profile use strict` vs `governor profile use permissive` ✓ COMPLETE
-  - 5 builtins: strict, permissive, research, production, audit
+  - 6 builtins: strict, permissive, research, production, audit, research_mode
   - Custom profile creation/deletion, activation/deactivation
   - Applies envelope, boil, jurisdiction, and strict mode in one command
-  - Module: `src/governor/profiles.py` (45 tests)
+  - Module: `src/governor/profiles.py` (46 tests)
 - [ ] **Telemetry dashboard** - Real-time regime visualization (reference: `ingest/epistemic_governor/src/epistemic_governor/observability/trace_tui.py`)
 
 ## Multi-Agent Routing & Task Sizing ✓ COMPLETE
@@ -698,6 +698,54 @@ Extends existing multi-agent dispatcher + Δt tracking from direction.py.
   - PROPOSED → UNDER_REVIEW → {COMMITTED | CONTESTED | EXPIRED}
   - CONTESTED → {RESOLVED_COMMIT | RESOLVED_REJECT | ESCALATED}
   - Commit criteria: stability across Δt, minimum k agents, no unresolved HIGH objections
+
+## ~~Sybil Resistance~~ ✓ COMPLETE (from ingest/sybil.md)
+
+Implemented in `src/governor/sybil.py` (75 tests).
+
+- [x] **ProvenanceVector** — Extended MethodSignature superset (frozen dataclass)
+  - agent_id, tool_path_hash, sources_hash, prompt_hash, model_tier, source_urls,
+    provider_id, response_time_ms, error_hash
+  - `feature_set` property, `to_method_signature()` for backward compat
+- [x] **BlocDetector** — Connected-components clustering via union-find
+  - Extended Jaccard similarity: base + timing bonus (0.1 max) + error hash bonus (0.15 × weight)
+  - `detect_blocs(vectors)` → list[Bloc] (correlated agent clusters)
+  - `compute_neff(vectors)` → NeffResult (effective voter count: blocs + singletons)
+- [x] **OriginBudgetTracker** — Per-origin vote rate limiting
+  - Configurable votes_per_window, window_duration
+  - Auto-register on first vote, window expiry resets
+- [x] **SybilDetector** — Main detection orchestrator
+  - `check_votes(votes, proposal_id, required_k)` → (passes, NeffResult, reasons)
+  - Escalation when Neff drops below threshold
+  - Audit event logging (SybilEvent)
+- [x] **Quorum Gate 5** — Sybil resistance integrated into QuorumManager.can_proceed
+  - 3 new Vote fields: provider_id, response_time_ms, error_hash (backward compat)
+  - Gate 5 checks Neff >= k, not len(votes) >= k
+
+## ~~Research Mode~~ ✓ COMPLETE (from ingest/research.md)
+
+Implemented in `src/governor/research.py` (137 tests).
+
+- [x] **HypothesisState** — PROBE → TENTATIVE → SUPPORTED → ABANDONED
+  - Non-convergent epistemic control: optimizes for survivability, not convergence
+- [x] **ResearchLedger** — Main class with full hypothesis lifecycle
+  - create_hypothesis, spawn (from parent), mark_competitors
+  - attach_evidence (impulses with independence × novelty scoring)
+  - file_contradiction (severity-weighted)
+  - Promotion gates: PROBE→TENTATIVE (≥1 evidence), TENTATIVE→SUPPORTED (≥K independent, monitors pass)
+  - abandon, archive, tick (decay + maintenance cost + auto-archive)
+- [x] **EntropyMonitor** — Shannon entropy bounds (H_min ≤ H(t) ≤ H_max)
+  - Prevents dogma (too low) and sprawl (too high)
+  - Corrective actions when out of bounds
+- [x] **DominanceMonitor** — D_i = C_i / Σ C_j cap (D_max)
+  - Prevents winner-take-all premature convergence
+- [x] **TimescaleMonitor** — Δt invariant (τ_c ≥ k · τ_e)
+  - Claims must harden slower than evidence arrives
+- [x] **TerminalState** — Typed honest refusal with certificate
+  - ILL_POSED, INSUFFICIENT_EVIDENCE, MULTIPLE_LIVE_HYPOTHESES
+  - Minimal missing specification for each type
+- [x] **ResearchConfig** — 10 tunable parameters (lambda, H bounds, D_max, k_timescale, etc.)
+- [x] **research_mode builtin profile** — Added to profiles.py (6th builtin)
 
 ## ~~Puppet Mode~~ ✓ COMPLETE (from ingest/puppet.md)
 
@@ -947,40 +995,58 @@ dependency — each step unblocks the ones below it. Design constraint: **extend
 existing types, don't create parallel structures**. We already have Claim,
 GroundedClaim, EvidenceRef, CommitLevel, etc. Wire them through, don't duplicate.
 
-### Layer 1: Evidence Persistence (foundation — everything else reads from this)
+**Ordering notes (from `ingest/ordering.md`):**
+- L1 → L2 is load-bearing: can't enforce anything until evidence persists and claims carry payloads
+- **Decide L6 shape during L2** (even if implementing later) — ClaimStatus is epistemic
+  lifecycle (proposed→supported→contested→invalidated→expired), QuorumState is process
+  state. They map but aren't the same object. Define the enum early so L3-L5 have clean
+  semantics to land on. CFI/Tone will demand stable "units" with lifecycle status.
+- L3 before L4: evidence-kind requirements create clean failure signals for dependency work
+- Consider thin L5 slice (role assignment) after L3 if L4 scope expands beyond tight premises
+- **Boundary discipline**: L1-L5 emit structured signals (no prose). CFI/Tone consume
+  signals and emit diagnostics, not new semantics. Refusal stays as saturation behavior.
 
-- [ ] **Evidence table in SQLite** — `storage.py`
-  - Promote `EvidenceRef` from in-memory pointer to persistent record
-  - Schema: evidence_id, claim_id, kind (EvidenceType), content_hash, locator, scope,
-    confidence, collected_by (agent_id), timestamp
-  - Append-only invariant (immutable once written)
-  - Query: by claim_id, by kind, by agent_id
-  - **Do not** create a new Evidence dataclass — extend `EvidenceRef` with persistence methods
-  - Spec ref: `multi2.md` §1.2
+### Layer 1: Evidence Persistence (foundation — everything else reads from this) ✓ COMPLETE
 
-- [ ] **Run provenance table** — `storage.py`
-  - Schema: run_id, agent_id, model_id, prompt_hash, tool_path_hash, source_urls, timestamp
-  - Links to evidence (run_id on evidence rows)
-  - Enables audit query: "what tools did agent X use for claim Y?"
-  - Currently tracked ad-hoc via Vote fields — consolidate, don't duplicate
-  - Spec ref: `multi2.md` §1.4
+- [x] **Evidence table in SQLite** — `storage.py` Schema V2, `evidence_store.py`
+  - `EvidenceRef` extended with persistence fields (evidence_id, claim_id, run_id, content_hash, etc.)
+  - Append-only `EvidenceStore` class: persist_evidence, evidence_for_claim, evidence_by_kind/agent/run
+  - Schema: evidence_id, claim_id, kind, content_hash, locator, scope, confidence, collected_by, run_id
+  - Module: `src/governor/evidence_store.py` (75+ tests in tests/test_evidence_store.py)
 
-### Layer 2: Commit Level on Claims (wiring — connects strict.py to the ledger)
+- [x] **Run provenance table** — `storage.py` Schema V2, `evidence_store.py`
+  - `RunProvenance` dataclass: run_id, agent_id, model_id, prompt_hash, tool_path_hash, source_urls
+  - `EvidenceStore.record_run()`, `record_run_from_vote()`, runs_by_agent, run_count
+  - Audit trail: JOIN evidence + run_provenance for "what tools did agent X use for claim Y?"
 
-- [ ] **Add `commit_level` field to `GroundedClaim`** — `epistemic.py`
-  - Use existing `CommitLevel` enum from `strict.py` (HARD/SOFT/REFUSED)
-  - Default: None (unclassified, for backward compat)
-  - Set during verification or strict-mode evaluation
-  - Persisted to ledger (fact/decision tables need column)
-  - **Do not** create a separate Assertion type — `GroundedClaim` already carries
-    provenance, confidence, evidence, status. Adding commit_level completes it.
-  - Spec ref: `multi2.md` §6.1
+### Layer 2: Commit Level on Claims + ClaimStatus Shape ✓ COMPLETE
 
-- [ ] **Add `assumptions` field to `GroundedClaim`** — `epistemic.py`
+- [x] **`commit_level` field on `GroundedClaim`** — `epistemic.py`
+  - String field: "hard", "soft", "refused", or None (unclassified)
+  - `set_commit_level()` / `add_assumption()` on EpistemicLedger
+  - Schema V3: commit_level + assumptions_json columns on facts/decisions tables
+  - Module: `src/governor/epistemic.py` (30+ tests in tests/test_commit_level.py)
+
+- [x] **`assumptions` field on `GroundedClaim`** — `epistemic.py`
   - `assumptions: list[str]` — explicit ungrounded dependencies
   - Populated when claim depends on SOFT/unverified premises
   - Surfaced in CLI and audit output
-  - Spec ref: `multi2.md` §1.1
+
+- [x] **`ClaimStatus` enum shape** — `epistemic.py` (L6 decision, pulled forward)
+  - Enum: PROPOSED, SUPPORTED, CONTESTED, INVALIDATED, EXPIRED, REFUSED, STALE
+  - `epistemic_status: ClaimStatus | None = None` on GroundedClaim (None = legacy compat)
+  - `QUORUM_TO_CLAIM_STATUS` mapping: 9 QuorumStatus values → ClaimStatus
+  - `project_quorum_status()` helper function
+  - `set_epistemic_status()` / `claims_by_epistemic_status()` on EpistemicLedger
+  - Full FSM transitions + enforcement deferred to Layer 6
+
+- [x] **EpistemicLedger persistence** — `epistemic.py` + `storage.py` Schema V4
+  - `epistemic_claims` table + `epistemic_ledger_meta` table in SQLite
+  - Optional `storage` + `evidence_store` params on EpistemicLedger.__init__
+  - Write-through on all mutation methods (new_claim, promote, block, retract, etc.)
+  - `from_dict()` / `from_json()` class methods for deserialization
+  - CLI `get_epistemic_ledger()` uses SQLite when DB exists, falls back to JSON
+  - Module: tests/test_claim_status.py (40 tests) + tests/test_epistemic_persistence.py (35 tests)
 
 ### Layer 3: Evidence Type Validation (enforcement — gates on Layer 1 data)
 
@@ -1025,15 +1091,15 @@ GroundedClaim, EvidenceRef, CommitLevel, etc. Wire them through, don't duplicate
   - Wire: TTLManager.get_revalidation_schedule() → AuditPipeline.periodic_audit()
   - Spec ref: `regime.md` §2.3
 
-### Layer 6: Claim Status on GroundedClaim (optional — evaluate need)
+### Layer 6: ClaimStatus FSM Enforcement (shape defined in L2, transitions enforced here)
 
-- [ ] **Claim-level status field** — evaluate before building
-  - multi2.md spec wants: PROPOSED → IN_REVIEW → STABILIZING → COMMITTED → STALE
-  - QuorumState already tracks proposal lifecycle (9 states)
-  - Question: is claim-level status redundant with quorum status?
-  - If claims can exist outside quorum (single-agent mode), they need their own status
-  - If quorum is always the authority, claim status = projection of quorum state
-  - **Decision needed**: separate FSM or derived view?
+- [ ] **ClaimStatus transition enforcement** — `epistemic.py`
+  - Full FSM: PROPOSED → SUPPORTED ↔ CONTESTED → {INVALIDATED | EXPIRED | REFUSED}
+  - SUPPORTED → STALE (TTL expiry), STALE → SUPPORTED (revalidation)
+  - Guard: transitions must be justified (evidence, audit result, TTL event, cascade)
+  - QuorumState→ClaimStatus mapper: auto-project process state to epistemic state
+  - Integration with L4 dependency cascade: invalidation propagates ClaimStatus
+  - Integration with TTL: expiry transitions SUPPORTED → STALE automatically
 
 ---
 
@@ -1072,10 +1138,388 @@ Human authority needed for definitions, thresholds, and hard/soft classification
 
 ---
 
-## Cross-Cutting (Deferred)
+## Tone Profiling & Style Enforcement (from `ingest/tone.md`)
 
-- [ ] **Web UI** - Dashboard showing claim history, rejection rates, regime status
-- [ ] **VS Code Integration** - Governor support in VS Code (spec: `ingest/vscode.md`)
-- [ ] **Telemetry dashboard** - Real-time regime visualization
+Voice/tone as canon for nonfiction. Fiction has character canon, code has architecture
+decisions — nonfiction needs enforceable style parameters extracted from the author's
+corpus. Without this, autonomous writing produces generic AI prose instead of the
+author's voice. **This is the last core feature before deferred cross-cutting work.**
+
+### Phase T1: ToneProfile & Manual Authoring
+
+- [ ] **ToneProfile dataclass** — `src/nonfiction_governor/tone.py`
+  - Sentence structure: avg_sentence_length, sentence_length_variance, uses_fragments,
+    uses_colons_for_emphasis
+  - Paragraph structure: avg_paragraph_length, uses_single_sentence_paragraphs
+  - Voice patterns: uses_second_person, uses_first_person, contractions_frequency
+  - Rhetorical devices: uses_rhetorical_questions, uses_parentheticals, uses_em_dashes,
+    uses_ellipses
+  - Framing patterns: opening_patterns, transition_patterns, closing_patterns (lists of
+    characteristic phrases like "Here's the thing:", "But here's where it gets interesting:")
+  - Vocabulary: favorite_adjectives, favorite_verbs, technical_density
+  - Tone markers: uses_profanity, sarcasm_frequency, uses_pop_culture_refs
+  - Structure prefs: uses_headers, header_style (statement/question/provocative),
+    uses_lists (sparingly/moderate/frequent), uses_examples, example_placement
+  - Serialization: to_dict/from_dict, persistence to `.governor/tone_profile.json`
+
+- [ ] **Manual tone profile creation** — JSON authoring for immediate use
+  - Write profile by hand (the "quick version" before corpus analysis exists)
+  - `nonfiction-gov tone show` — display current profile
+  - `nonfiction-gov tone edit` — open profile for manual editing
+
+- [ ] **Tone guidance generation** — Convert ToneProfile to natural language system prompt
+  - `generate_tone_guidance(profile)` → structured prose instructions
+  - Covers: sentence structure, voice, contractions, rhetorical devices, opening patterns,
+    technical density, tone markers
+  - Injected into system prompt via `augment_messages()` on nonfiction governor
+
+### Phase T2: Corpus Analysis & Automatic Extraction
+
+- [ ] **Corpus ingestion** — Analyze reference writing to extract profile automatically
+  - `extract_tone_profile(corpus_files: list[Path])` → ToneProfile
+  - Sentence extraction + length statistics (mean, variance)
+  - Fragment detection (sentences without subject-verb structure)
+  - Colon-for-emphasis pattern detection
+  - Second/first person frequency analysis
+  - Contraction frequency (it's/it is, don't/do not, etc.)
+  - Rhetorical device frequency (em dashes, parentheticals, questions)
+  - Opening/transition/closing pattern extraction (n-gram frequency at paragraph boundaries)
+  - Technical density: jargon ratio via vocabulary analysis
+  - CLI: `nonfiction-gov tone ingest reference_writing/*.md`
+
+- [ ] **Profile comparison** — Diff two profiles or profile vs text
+  - `compare_profiles(baseline, new)` → list of deviations
+  - Per-dimension deviation with tolerance thresholds
+  - Useful for: "has my voice drifted since chapter 1?"
+
+### Phase T3: Style Enforcement as Invariant
+
+- [ ] **StyleInvariant** — Mechanical verification of tone consistency
+  - Wraps ToneProfile with configurable tolerance (default 0.2)
+  - `verify(content)` → (bool, violations)
+  - Checks: sentence length drift, fragment usage, contraction frequency,
+    technical density, voice patterns (second person, first person)
+  - Each violation includes: what's wrong, expected value, actual value, suggestion
+  - Integrates with autonomous executor invariant system
+
+- [ ] **Tone checking CLI**
+  - `nonfiction-gov tone check <file>` — analyze file against profile, report violations
+  - `nonfiction-gov tone lock` — lock current profile as enforcement invariant
+  - `nonfiction-gov tone unlock --confirm` — disable tone enforcement
+
+- [ ] **Tone drift warnings** — Surface during autonomous execution
+  - Autonomous executor rejects proposals that fail style invariant
+  - Violations include specific suggestions: "break up long sentences",
+    "use more contractions", "add fragments for emphasis"
+  - Iteration retries with tone guidance reinforced
+
+---
+
+## Cross-Cutting (Deferred — AFTER all core functionality)
+
+These items come LAST. All semantic enforcement layers (1-6), nonfiction CFI, and
+remaining core work must be complete before starting these. They are refinements,
+integrations, and delivery mechanisms — not core governance logic.
+
 - [x] **Minor: CLI bug** - `src/governor/cli.py` line 7388: `bank.seed_defaults()` doesn't exist on PhraseBank
 - [x] **Minor: Profile boil presets** - `profiles.py` references DARJEELING/CHAI which don't exist in ControlMode enum
+
+---
+
+### Deferred 1: Autonomous Execution (from `ingest/autorun.md`)
+
+Governor-constrained autonomous operation. Agent proposes, governor auto-approves
+when spine + invariants are satisfied. Human defines constraints, governor enforces
+mechanically. "CI/CD for AI agents."
+
+**Not contradictory:** Human still defines what "approved" means (spine, invariants,
+budgets). Governor auto-approves only within those bounds. Human can stop/resume/override
+at any time.
+
+#### Phase A1: Core Types & Spine Management
+
+- [ ] **Spine dataclass** — Locked project structure (immutable until explicit unlock)
+  - `id`, `structure` (dict), `locked_at`, `locked_by`, `unlock_requires`
+  - `verify_proposal(proposal)` → (bool, violation_message)
+  - Persistence: YAML files in `.governor/spines/`
+  - Lock requires explicit confirmation, unlock warns about disabling autonomous mode
+
+- [ ] **Invariant system** — Mechanically verifiable rules (no vibes)
+  - `InvariantType` enum: STRUCTURE, EVIDENCE, ARCHITECTURE, TEST, CONSISTENCY, FORBIDDEN
+  - `Invariant` dataclass: id, type, rule (human-readable), verify (callable), on_violation
+  - Key insight: if you can't verify it mechanically, it's a guideline, not an invariant
+  - Invariant library: book_structure, citation_required, no_direct_writes, tests_must_pass,
+    coverage_threshold, no_canon_violations, no_decision_contradictions, stateless_component,
+    no_external_dependencies
+
+- [ ] **ExecutionBudget** — Resource limits (tokens, time, iterations, cost USD)
+  - `is_exhausted(used)` — whichever limit hits first stops execution
+  - Combined budgets: `--budget tokens=100000 --timeout 30m`
+
+- [ ] **ExecutionState** — Persistent state for multi-session execution
+  - session_id, task, spine_id, invariants, budget, used, progress, violations, status
+  - Statuses: running, stopped, completed
+  - Stop reasons: agent_completion, constraint_violation, budget_exhausted
+
+- [ ] **SpineManager** — Lock/unlock/load/list spines
+  - `governor spine lock <file> --id <name> --confirm`
+  - `governor spine unlock <name> --confirm` (warns: disables autonomous mode)
+  - `governor spine list`, `governor spine show <name>`
+
+#### Phase A2: Autonomous Executor
+
+- [ ] **AutonomousExecutor** — Main loop: propose → verify → auto-apply/reject
+  - Constructor: governor, spine, invariants
+  - `execute(task, budget, stop_on_violation, checkpoint_interval)` → ExecutionState
+  - Verification: check spine compliance, then each invariant, then produce receipts
+  - On approval: auto-apply, update progress, continue
+  - On rejection: record violation, stop (if stop_on_violation), surface details
+  - Checkpointing: save state every N iterations + on violation/budget/completion
+  - Rate limiting: small delay between iterations to avoid API limits
+
+- [ ] **Invariant management CLI**
+  - `governor invariant add --spine <name> --type <type> --rule <text> --verify <func>`
+  - `governor invariant list --spine <name>`
+  - `governor invariant remove --spine <name> --id <id>`
+  - `governor invariant test --spine <name> --id <id>`
+
+- [ ] **Execution CLI**
+  - `governor execute --task <desc> --spine <name> --budget <spec> --stop-on-violation`
+  - `governor execute --resume <session_id> --budget <spec>`
+  - `governor execute --watch` (real-time output)
+
+#### Phase A3: Session Management & Multi-Day Execution
+
+- [ ] **Session persistence** — Save/resume execution state across days
+  - Checkpoint files: `.governor/autonomous/<session_id>.json`
+  - Resume from any checkpoint
+  - Progress tracking per task type (chapters/words for books, components/tests for code)
+
+- [ ] **Session CLI**
+  - `governor session list` — active/completed sessions with progress
+  - `governor session show <id>` — full state, violations, budget
+  - `governor session handoff <id>` — generate handoff report (progress, remaining, violations, next action)
+  - `governor session delete <id>`
+
+- [ ] **Handoff generation** — Everything needed to resume
+  - What was accomplished, what's left, current state, budget remaining, violations
+  - Recommended next action, resume command
+
+#### Phase A4: Integration with Existing Governors
+
+- [ ] **Fiction governor integration** — Canon checking in autonomous drafting
+  - Spine = story bible (characters, timeline, plot points)
+  - Invariants: canon consistency, character age/traits, timeline validation
+  - Use case: "Draft Act 1, Scene 3" with auto-approval when canon checks pass
+
+- [ ] **Code governor integration** — Architecture enforcement in autonomous builds
+  - Spine = architecture definition (components, responsibilities, forbidden ops)
+  - Invariants: tests pass, no forbidden operations, stateless components
+  - Use case: "Build MCP Bridge" with auto-commit when tests green + architecture satisfied
+
+---
+
+### Deferred 2: Web UI — Household Claude (from `ingest/webui.md`)
+
+ChatGPT-like web interface routing through governor with isolated contexts per
+user/project. One Claude account, multiple isolated governor contexts.
+
+#### Phase W1: MCP Bridge & Context Manager
+
+- [ ] **ClaudeBridge** — `src/governor/mcp_bridge.py`
+  - Single point of Claude API access with governor context injection
+  - `chat(messages, model, context_id, streaming)` — main routing with governor integration
+  - Streaming support (async generator), governor hooks for response validation
+  - `get_governor(context_id)` — access context-specific governor
+
+- [ ] **GovernorContextManager** — `src/governor/context_manager.py`
+  - Manage multiple isolated governor instances
+  - `get_or_create(context_id, mode)` — fiction/code/ops governor per context
+  - `list_contexts()`, `delete_context()`
+  - Directory structure: `~/.governor-contexts/<context_id>/.governor/`
+  - Complete isolation: no shared state, no cross-contamination
+
+#### Phase W2: Web Adapter (FastAPI)
+
+- [ ] **OpenAI-compatible API** — `src/governor/web_adapter.py`
+  - `POST /v1/chat/completions` — main chat (SSE streaming, OpenAI format)
+  - `GET /v1/models` — list available Claude models
+  - `GET /health` — status check with governor info (context, mode, stats)
+  - `GET /governor/canon` — fiction mode canon viewer
+  - CORS middleware for browser access
+  - Environment config: GOVERNOR_CONTEXT_ID, GOVERNOR_MODE, ANTHROPIC_API_KEY
+
+#### Phase W3: Docker Deployment
+
+- [ ] **Docker setup** — Multi-container deployment
+  - Dockerfile: Python 3.11 + governor + uvicorn
+  - docker-compose.yml: per-user stacks (webui + adapter)
+  - Each user gets: Open WebUI instance (port 3001/3002) + adapter instance (port 8001/8002)
+  - Shared: Claude API key via .env, governor contexts via volume mount
+  - No auth in MVP (port separation = user separation)
+
+#### Phase W4: Mode-Specific Integration
+
+- [ ] **Fiction mode for Erin** — Canon checking, character continuity, timeline validation
+  - Governor violations surface naturally in chat responses
+  - Canon violation → offer: fix instance, revise canon, proceed with inconsistency
+
+- [ ] **Code mode for James** — Architecture enforcement, decision tracking, proposal workflow
+  - Decision conflicts surface in chat
+  - Receipt-based verification in conversation flow
+
+---
+
+### Deferred 3: VS Code Extension (from `ingest/vscode.md`)
+
+Thin control surface for using the governor while coding. Extension shells out to
+governor CLI — no reimplementation of logic. Everything the extension does should
+be doable via CLI; extension just makes it faster with visual feedback.
+
+**Design principle:** Extension is stateless. All state lives in `.governor/`.
+Extension just queries and displays it.
+
+#### Phase V1: Core Commands & Diagnostics
+
+- [ ] **Governor CLI client wrapper** — TypeScript wrapper around `governor check --format json`
+  - Input: stdin JSON (content, filepath, context)
+  - Output: JSON (status, findings with code/message/severity/range/suggestion, summary)
+  - Configurable executable path via settings
+
+- [ ] **"Governor: Check Selection" / "Governor: Check File" commands**
+  - Shell out to governor binary, pass selected text/file via stdin
+  - Parse JSON response, create DiagnosticCollection
+  - Severity mapping: error → red squiggle, warning → yellow, info → blue
+
+- [ ] **Status bar item** — `[Governor] [Session: 1h23m] [Tasks: 2/5] [Budget: 47%]`
+  - Click behaviors for each section
+
+- [ ] **Output channel** — Raw governor output for debugging
+
+#### Phase V2: Side Panel & State Display
+
+- [ ] **TreeView** — Governor state panel
+  - Session info (active, duration, tasks)
+  - Decisions (active, conflicting proposals)
+  - Facts (fresh, stale)
+  - Tasks (claimed, available, blocked)
+  - Autonomous execution status (if running)
+  - Interactive: click → show context, claim/unclaim tasks
+
+#### Phase V3: Mode-Specific Features
+
+- [ ] **Code mode** — Pre-commit hook integration, task claiming workflow, real-time architecture violation detection (debounced on-type checking)
+
+- [ ] **Fiction mode** — Canon lookup panel (character details, timeline, relationships), real-time canon checking (squiggles for inconsistencies), timeline validation
+
+- [ ] **Non-fiction mode** — Citation checking, framework term consistency (hover shows definition + usage), quick reference panel for terms
+
+#### Phase V4: Advanced Features
+
+- [ ] **Hover tooltips** — Governor context on hover (decision records, framework terms)
+- [ ] **Code actions (quick fixes)** — Auto-fix suggestions from governor findings
+- [ ] **Peek definition for decisions** — F12/Alt+F12 on decision references
+- [ ] **Real-time checking** — Debounced on-type checking (off by default, 500ms)
+
+#### Phase V5: Autonomous Mode Monitor
+
+- [ ] **Execution monitor** — Real-time progress (iterations, budget, approval rate)
+- [ ] **Violation notifications** — Popup on constraint violation with fix/context/exception actions
+- [ ] **Pause/resume controls** — In-editor autonomous execution management
+- [ ] **Real-time diff viewer** — Shows what autonomous executor is writing as it works
+
+#### Extension File Structure
+
+```
+vscode-governor/
+├── package.json           # Extension manifest
+├── src/
+│   ├── extension.ts       # Entry point
+│   ├── commands/          # check, propose, session, autonomous, fiction
+│   ├── views/             # governor-tree, canon-panel, autonomous-monitor
+│   ├── diagnostics/       # provider.ts (squiggles)
+│   ├── hovers/            # provider.ts (tooltips)
+│   ├── code-actions/      # provider.ts (quick fixes)
+│   ├── governor/          # client.ts (CLI wrapper), types.ts, state.ts
+│   └── utils/             # git.ts, formatting.ts
+└── resources/icons/       # Tree view icons
+```
+
+---
+
+### Deferred 4: Task Balancing & Telemetry (from `ingest/balance-telemetry.md`)
+
+Two post-MVP features extending the governor's routing and observability.
+Task balancing extends existing `routing.py`. Telemetry is new infrastructure.
+
+#### Phase B1: Enhanced Task Balancing (extends `routing.py`)
+
+- [ ] **LLM capability profiles** — Cost/latency/strength per model
+  - `LLMProfile`: model_id, provider, max_complexity, strengths, context_window,
+    cost_input/output (per 1M tokens), latency p50/p95, rate limits
+  - Pre-defined profiles: claude-haiku-4, claude-sonnet-4, claude-opus-4,
+    gpt-4o-mini, gpt-4o, deepseek-coder
+  - This extends existing `ModelCapabilities` in routing.py with cost data
+
+- [ ] **Routing strategies** — Cost/speed/quality/balanced optimization
+  - `cost_optimal`: Cheapest model that can handle complexity
+  - `speed_optimal`: Fastest model that can handle complexity
+  - `quality_optimal`: Best model regardless of cost
+  - `balanced`: Weighted sum of cost/speed/quality scores
+  - Fallback chains: if primary fails, escalate to next tier
+  - `governor config set routing.strategy cost_optimal`
+
+- [ ] **Budget management** — Multi-scope cost tracking
+  - `Budget` dataclass: total_usd, spent_usd, model_limits
+  - `BudgetManager`: session/task/project scopes, all checked before routing
+  - `governor session start --budget 10.00`
+  - `governor task add "task" --budget 2.50`
+  - `governor budget status` — spending breakdown by model and operation
+
+- [ ] **Routing explainability** — `governor task route <id> --explain`
+  - Show complexity analysis, selected model, reason, alternatives with costs
+
+#### Phase B2: Structured Telemetry
+
+- [ ] **StructuredLogger** — JSON-line logging to `.governor/logs/governor-YYYYMMDD.jsonl`
+  - Event types: proposal, verification, llm_call, autonomous_iteration, error
+  - Each entry: timestamp, event_type, level, plus type-specific fields
+  - Log rotation: configurable max size, retention days
+
+- [ ] **TelemetryCollector** — Central event router to all configured backends
+  - `record_proposal()`, `record_verification()`, `record_llm_call()`
+  - Routes to StructuredLogger and/or PrometheusMetrics
+  - Integration: Governor constructor creates TelemetryCollector from config
+
+- [ ] **Telemetry CLI**
+  - `governor telemetry enable --logging --prometheus`
+  - `governor telemetry logs --last 100 --type llm_call`
+  - `governor telemetry analyze costs --since "2025-02-01"` (by model, by operation)
+  - `governor telemetry analyze performance` (verification latency p50/p95/p99, approval rate)
+  - `governor telemetry export --format csv --output report.csv`
+  - `governor telemetry rotate-logs`
+
+#### Phase B3: Prometheus & Grafana (optional)
+
+- [ ] **PrometheusMetrics** — Counters, histograms, gauges for governor operations
+  - Counters: proposals_total, verifications_total, llm_calls_total, tokens_total, cost_total, errors_total
+  - Histograms: verification_duration, llm_call_duration
+  - Gauges: active_sessions, autonomous_iterations, budget_remaining
+  - `start_http_server(port=9090)` — expose at `/metrics`
+
+- [ ] **Grafana dashboards** — Pre-built PromQL queries
+  - Proposal throughput, verification success rate, LLM cost rate, token consumption,
+    average latency, budget utilization, error rate
+
+#### Telemetry Configuration
+
+```toml
+[telemetry]
+logging = true
+log_dir = ".governor/logs"
+log_retention_days = 30
+prometheus = false
+prometheus_port = 9090
+redact_file_contents = true
+redact_prompts = false
+```

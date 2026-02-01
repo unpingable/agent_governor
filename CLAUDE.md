@@ -40,7 +40,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Fiction Guardrails**: Consent tracking (pairwise, scoped), DSI detection, AII with validity profiles, hard constraints (C1-C3), soft penalties (P1-P4).
 **Sybil Resistance**: Bloc detection, effective voter count (Neff), per-origin budget coupling, quorum Gate 5 integration, escalation triggers.
 **Research Mode**: Non-convergent epistemic control, hypothesis lifecycle (PROBE→TENTATIVE→SUPPORTED→ABANDONED), entropy bounds, dominance caps, evidence impulses with decay, Δt invariant, terminal states.
-**Total: 3454 tests**
+**ClaimStatus + Epistemic Persistence**: ClaimStatus enum (PROPOSED→SUPPORTED→CONTESTED→…), QuorumStatus mapping, EpistemicLedger SQLite persistence (Schema V4), write-through on mutations, from_dict/from_json deserialization.
+**Total: 3529 tests**
 
 ## Key Documents
 
@@ -713,7 +714,15 @@ src/ops_governor/
 
 **Research Mode tests: 137**
 
-**Total: 3454 tests**
+### ClaimStatus + Epistemic Persistence (L1/L2 Wiring)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| epistemic.py | ClaimStatus enum, QuorumStatus mapping, epistemic_status field, from_dict/from_json, storage wiring | 40 |
+| storage.py | Schema V4 (epistemic_claims + epistemic_ledger_meta), migration | 35 |
+
+**ClaimStatus + Epistemic Persistence tests: 75**
+
+**Total: 3529 tests**
 
 ## Common Mistakes to Avoid
 

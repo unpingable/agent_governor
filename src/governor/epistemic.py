@@ -319,6 +319,39 @@ class GroundedClaimStatus(str, Enum):
     """Promoted to commitment."""
 
 
+class ClaimStatus(str, Enum):
+    """Epistemic lifecycle status — separate from GroundedClaimStatus (governance)
+    and QuorumStatus (process). Shape defined in L2, FSM enforcement in L6."""
+
+    PROPOSED = "proposed"
+    SUPPORTED = "supported"
+    CONTESTED = "contested"
+    INVALIDATED = "invalidated"
+    EXPIRED = "expired"
+    REFUSED = "refused"
+    STALE = "stale"
+
+
+# QuorumStatus → ClaimStatus projection
+# QuorumStatus is process state, ClaimStatus is epistemic lifecycle.
+QUORUM_TO_CLAIM_STATUS: dict[str, ClaimStatus] = {
+    "collecting": ClaimStatus.PROPOSED,
+    "stabilizing": ClaimStatus.PROPOSED,
+    "reached": ClaimStatus.SUPPORTED,
+    "failed": ClaimStatus.REFUSED,
+    "expired": ClaimStatus.EXPIRED,
+    "contested": ClaimStatus.CONTESTED,
+    "escalated": ClaimStatus.CONTESTED,
+    "resolved_commit": ClaimStatus.SUPPORTED,
+    "resolved_reject": ClaimStatus.INVALIDATED,
+}
+
+
+def project_quorum_status(quorum_status_value: str) -> ClaimStatus | None:
+    """Project QuorumStatus to ClaimStatus. Returns None if unmapped."""
+    return QUORUM_TO_CLAIM_STATUS.get(quorum_status_value)
+
+
 class PromotionResult(str, Enum):
     """Result of a provenance promotion attempt."""
 
@@ -390,6 +423,10 @@ class GroundedClaim:
 
     # Explicit assumptions (ungrounded dependencies, Layer 2)
     assumptions: list[str] = field(default_factory=list)
+
+    # Epistemic lifecycle status (Layer 2 shape, Layer 6 enforcement)
+    # Separate from GroundedClaimStatus (governance) and QuorumStatus (process)
+    epistemic_status: ClaimStatus | None = None  # None = legacy/unclassified
 
     def __post_init__(self):
         """Clamp confidence to valid range."""
@@ -467,10 +504,14 @@ class GroundedClaim:
             d["commit_level"] = self.commit_level
         if self.assumptions:
             d["assumptions"] = list(self.assumptions)
+        if self.epistemic_status is not None:
+            d["epistemic_status"] = self.epistemic_status.value
         return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "GroundedClaim":
+        epistemic_status_raw = data.get("epistemic_status")
+        epistemic_status = ClaimStatus(epistemic_status_raw) if epistemic_status_raw else None
         return cls(
             claim_id=data["claim_id"],
             content=data["content"],
@@ -485,6 +526,7 @@ class GroundedClaim:
             source_agent_id=data.get("source_agent_id"),
             commit_level=data.get("commit_level"),
             assumptions=data.get("assumptions", []),
+            epistemic_status=epistemic_status,
         )
 
 
@@ -515,9 +557,14 @@ class EpistemicLedger:
     3. Tracks dangerous claims (high confidence + ungrounded)
 
     This is the instrumentation that makes epistemic governance real.
+
+    Optionally backed by SQLite storage (write-through on mutations).
+    When storage is None, operates purely in-memory (backward compatible).
     """
 
-    def __init__(self):
+    def __init__(self, storage=None, evidence_store=None):
+        self.storage = storage  # Optional Storage instance
+        self.evidence_store = evidence_store  # Optional EvidenceStore instance
         self.claims: dict[str, GroundedClaim] = {}
         self.step: int = 0
 
@@ -530,9 +577,141 @@ class EpistemicLedger:
         self.total_promotions_forbidden: int = 0
         self.total_retractions: int = 0
 
+        # Load from storage if available
+        if self.storage:
+            self._load_from_storage()
+
+    # =========================================================================
+    # Storage Helpers (write-through persistence)
+    # =========================================================================
+
+    def _load_from_storage(self) -> None:
+        """Load claims and meta from SQLite storage."""
+        if not self.storage:
+            return
+
+        cursor = self.storage.conn.cursor()
+
+        # Load meta
+        cursor.execute("SELECT * FROM epistemic_ledger_meta WHERE id = 1")
+        meta_row = cursor.fetchone()
+        if meta_row:
+            self.step = meta_row["step"]
+            self.total_claims_created = meta_row["total_claims_created"]
+            self.total_promotions_attempted = meta_row["total_promotions_attempted"]
+            self.total_promotions_forbidden = meta_row["total_promotions_forbidden"]
+            self.total_retractions = meta_row["total_retractions"]
+        else:
+            # Initialize meta row
+            with self.storage.transaction() as cur:
+                cur.execute(
+                    "INSERT INTO epistemic_ledger_meta "
+                    "(id, step, total_claims_created, total_promotions_attempted, "
+                    "total_promotions_forbidden, total_retractions) "
+                    "VALUES (1, 0, 0, 0, 0, 0)"
+                )
+
+        # Load claims
+        cursor.execute("SELECT * FROM epistemic_claims")
+        for row in cursor.fetchall():
+            claim = self._from_row(row)
+            self.claims[claim.claim_id] = claim
+
+    def _persist_claim(self, claim: GroundedClaim) -> None:
+        """UPSERT a claim into SQLite storage."""
+        if not self.storage:
+            return
+
+        row = self._to_row(claim)
+        columns = ", ".join(row.keys())
+        placeholders = ", ".join("?" for _ in row)
+        values = list(row.values())
+
+        with self.storage.transaction() as cursor:
+            cursor.execute(
+                f"INSERT OR REPLACE INTO epistemic_claims ({columns}) "
+                f"VALUES ({placeholders})",
+                values,
+            )
+
+    def _persist_meta(self) -> None:
+        """Update the ledger meta row in SQLite."""
+        if not self.storage:
+            return
+
+        with self.storage.transaction() as cursor:
+            cursor.execute(
+                "UPDATE epistemic_ledger_meta SET "
+                "step = ?, total_claims_created = ?, "
+                "total_promotions_attempted = ?, total_promotions_forbidden = ?, "
+                "total_retractions = ? WHERE id = 1",
+                (
+                    self.step,
+                    self.total_claims_created,
+                    self.total_promotions_attempted,
+                    self.total_promotions_forbidden,
+                    self.total_retractions,
+                ),
+            )
+
+    @staticmethod
+    def _to_row(claim: GroundedClaim) -> dict[str, Any]:
+        """Convert GroundedClaim to SQLite row dict."""
+        import json as _json
+
+        return {
+            "claim_id": claim.claim_id,
+            "content": claim.content,
+            "content_hash": claim.content_hash,
+            "provenance": claim.provenance.value,
+            "confidence": claim.confidence,
+            "governance_status": claim.status.value,
+            "epistemic_status": claim.epistemic_status.value if claim.epistemic_status else None,
+            "commit_level": claim.commit_level,
+            "assumptions_json": _json.dumps(claim.assumptions),
+            "source_agent_id": claim.source_agent_id,
+            "created_at": claim.created_at.isoformat(),
+            "created_at_step": claim.created_at_step,
+            "last_updated_at": claim.last_updated_at.isoformat(),
+            "last_updated_step": claim.last_updated_step,
+            "retracted_at_step": claim.retracted_at_step,
+            "retraction_reason": claim.retraction_reason,
+        }
+
+    @staticmethod
+    def _from_row(row: sqlite3.Row) -> GroundedClaim:
+        """Convert SQLite row to GroundedClaim."""
+        import json as _json
+
+        epistemic_status_raw = row["epistemic_status"]
+        epistemic_status = ClaimStatus(epistemic_status_raw) if epistemic_status_raw else None
+        assumptions_raw = row["assumptions_json"]
+        assumptions = _json.loads(assumptions_raw) if assumptions_raw else []
+
+        return GroundedClaim(
+            claim_id=row["claim_id"],
+            content=row["content"],
+            provenance=Provenance(row["provenance"]),
+            confidence=row["confidence"],
+            evidence_refs=[],  # Evidence loaded separately via EvidenceStore
+            status=GroundedClaimStatus(row["governance_status"]),
+            epistemic_status=epistemic_status,
+            commit_level=row["commit_level"],
+            assumptions=assumptions,
+            source_agent_id=row["source_agent_id"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+            created_at_step=row["created_at_step"],
+            last_updated_at=datetime.fromisoformat(row["last_updated_at"]),
+            last_updated_step=row["last_updated_step"],
+            retracted_at_step=row["retracted_at_step"],
+            retraction_reason=row["retraction_reason"],
+        )
+
     def tick(self) -> None:
         """Advance the step counter."""
         self.step += 1
+        if self.storage:
+            self._persist_meta()
 
     # =========================================================================
     # Claim Creation
@@ -565,6 +744,10 @@ class EpistemicLedger:
 
         self.claims[claim.claim_id] = claim
         self.total_claims_created += 1
+
+        if self.storage:
+            self._persist_claim(claim)
+            self._persist_meta()
 
         return claim
 
@@ -618,6 +801,7 @@ class EpistemicLedger:
         Attach evidence to a claim.
 
         Returns True if evidence was attached.
+        Also persists via EvidenceStore if available.
         """
         if claim_id not in self.claims:
             return False
@@ -626,6 +810,11 @@ class EpistemicLedger:
         claim.evidence_refs.append(ref)
         claim.last_updated_at = datetime.now()
         claim.last_updated_step = self.step
+
+        if self.evidence_store:
+            self.evidence_store.persist_evidence(claim_id, ref)
+        if self.storage:
+            self._persist_claim(claim)
 
         return True
 
@@ -727,6 +916,10 @@ class EpistemicLedger:
             )
         )
 
+        if self.storage:
+            self._persist_claim(claim)
+            self._persist_meta()
+
         return PromotionResult.SUCCESS
 
     # =========================================================================
@@ -773,6 +966,9 @@ class EpistemicLedger:
         claim.last_updated_at = datetime.now()
         claim.last_updated_step = self.step
 
+        if self.storage:
+            self._persist_claim(claim)
+
         return True
 
     def decay_ungrounded_confidence(self, decay: float = 0.1) -> int:
@@ -804,6 +1000,9 @@ class EpistemicLedger:
         claim.last_updated_at = datetime.now()
         claim.last_updated_step = self.step
 
+        if self.storage:
+            self._persist_claim(claim)
+
         return True
 
     def retract(self, claim_id: str, reason: str = "Explicit retraction") -> bool:
@@ -824,6 +1023,10 @@ class EpistemicLedger:
 
         self.total_retractions += 1
 
+        if self.storage:
+            self._persist_claim(claim)
+            self._persist_meta()
+
         return True
 
     def unblock(self, claim_id: str) -> bool:
@@ -842,6 +1045,9 @@ class EpistemicLedger:
         claim.status = GroundedClaimStatus.ACTIVE
         claim.last_updated_at = datetime.now()
         claim.last_updated_step = self.step
+
+        if self.storage:
+            self._persist_claim(claim)
 
         return True
 
@@ -865,6 +1071,10 @@ class EpistemicLedger:
         claim.commit_level = level
         claim.last_updated_at = datetime.now()
         claim.last_updated_step = self.step
+
+        if self.storage:
+            self._persist_claim(claim)
+
         return True
 
     def add_assumption(self, claim_id: str, assumption: str) -> bool:
@@ -882,6 +1092,10 @@ class EpistemicLedger:
             claim.assumptions.append(assumption)
             claim.last_updated_at = datetime.now()
             claim.last_updated_step = self.step
+
+            if self.storage:
+                self._persist_claim(claim)
+
         return True
 
     def hard_claims(self) -> list[GroundedClaim]:
@@ -899,6 +1113,34 @@ class EpistemicLedger:
     def claims_with_assumptions(self) -> list[GroundedClaim]:
         """Get all active claims that have explicit assumptions."""
         return [c for c in self.active_claims() if c.has_assumptions]
+
+    # =========================================================================
+    # Epistemic Status (Layer 2 shape, Layer 6 enforcement)
+    # =========================================================================
+
+    def set_epistemic_status(self, claim_id: str, status: ClaimStatus) -> bool:
+        """
+        Set the epistemic lifecycle status on a claim.
+
+        No FSM enforcement yet (that's Layer 6). For now, simple setter.
+        Returns True if set, False if claim not found.
+        """
+        if claim_id not in self.claims:
+            return False
+
+        claim = self.claims[claim_id]
+        claim.epistemic_status = status
+        claim.last_updated_at = datetime.now()
+        claim.last_updated_step = self.step
+
+        if self.storage:
+            self._persist_claim(claim)
+
+        return True
+
+    def claims_by_epistemic_status(self, status: ClaimStatus) -> list[GroundedClaim]:
+        """Get all claims with a specific epistemic lifecycle status."""
+        return [c for c in self.claims.values() if c.epistemic_status == status]
 
     # =========================================================================
     # Queries
@@ -1029,6 +1271,10 @@ class EpistemicLedger:
         return {
             "step": self.step,
             "claims": {cid: c.to_dict() for cid, c in self.claims.items()},
+            "total_claims_created": self.total_claims_created,
+            "total_promotions_attempted": self.total_promotions_attempted,
+            "total_promotions_forbidden": self.total_promotions_forbidden,
+            "total_retractions": self.total_retractions,
             "metrics": self.get_metrics(),
         }
 
@@ -1037,3 +1283,26 @@ class EpistemicLedger:
         import json
 
         return json.dumps(self.to_dict(), indent=2, default=str)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "EpistemicLedger":
+        """Deserialize ledger from dict. Round-trips with to_dict()."""
+        ledger = cls()
+        ledger.step = data.get("step", 0)
+        for cid, cdata in data.get("claims", {}).items():
+            ledger.claims[cid] = GroundedClaim.from_dict(cdata)
+        # Restore metric counters for round-trip fidelity
+        ledger.total_claims_created = data.get(
+            "total_claims_created", len(ledger.claims)
+        )
+        ledger.total_promotions_attempted = data.get("total_promotions_attempted", 0)
+        ledger.total_promotions_forbidden = data.get("total_promotions_forbidden", 0)
+        ledger.total_retractions = data.get("total_retractions", 0)
+        return ledger
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "EpistemicLedger":
+        """Deserialize ledger from JSON string. Round-trips with to_json()."""
+        import json
+
+        return cls.from_dict(json.loads(json_str))

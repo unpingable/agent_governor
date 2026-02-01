@@ -3536,24 +3536,31 @@ EPISTEMIC_LEDGER_FILE = "epistemic_ledger.json"
 
 
 def get_epistemic_ledger(gov_dir: Path):
-    """Get or create the epistemic ledger."""
-    from .epistemic import EpistemicLedger, GroundedClaim
+    """Get or create the epistemic ledger. Uses SQLite when available, falls back to JSON."""
+    from .epistemic import EpistemicLedger
+    from .storage import get_storage
+    from .evidence_store import EvidenceStore
 
+    db_path = gov_dir / "governor.db"
+    if db_path.exists():
+        storage = get_storage(gov_dir)
+        evidence_store = EvidenceStore(storage)
+        return EpistemicLedger(storage=storage, evidence_store=evidence_store)
+
+    # Fallback: JSON file (legacy)
     ledger_path = gov_dir / EPISTEMIC_LEDGER_FILE
-
-    ledger = EpistemicLedger()
-
     if ledger_path.exists():
         data = json.loads(ledger_path.read_text())
-        ledger.step = data.get("step", 0)
-        for cid, cdata in data.get("claims", {}).items():
-            ledger.claims[cid] = GroundedClaim.from_dict(cdata)
+        return EpistemicLedger.from_dict(data)
 
-    return ledger
+    return EpistemicLedger()
 
 
 def save_epistemic_ledger(gov_dir: Path, ledger) -> None:
-    """Save the epistemic ledger to disk."""
+    """Save the epistemic ledger to disk. Skips JSON when storage-backed."""
+    if ledger.storage is not None:
+        # Writes are already persisted through write-through; no JSON needed
+        return
     ledger_path = gov_dir / EPISTEMIC_LEDGER_FILE
     ledger_path.write_text(ledger.to_json())
 

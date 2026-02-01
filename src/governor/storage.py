@@ -20,7 +20,7 @@ from uuid import UUID
 
 
 # Schema version for migrations
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 SCHEMA = """
@@ -184,6 +184,45 @@ _SCHEMA_V3_STMTS = [
 ]
 
 
+SCHEMA_V4 = """
+-- Epistemic claims persistence (Layer 2)
+CREATE TABLE IF NOT EXISTS epistemic_claims (
+    claim_id TEXT PRIMARY KEY,
+    content TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    provenance TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    governance_status TEXT NOT NULL DEFAULT 'active',
+    epistemic_status TEXT,
+    commit_level TEXT,
+    assumptions_json TEXT NOT NULL DEFAULT '[]',
+    source_agent_id TEXT,
+    created_at TEXT NOT NULL,
+    created_at_step INTEGER NOT NULL DEFAULT 0,
+    last_updated_at TEXT NOT NULL,
+    last_updated_step INTEGER NOT NULL DEFAULT 0,
+    retracted_at_step INTEGER,
+    retraction_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_ec_provenance ON epistemic_claims(provenance);
+CREATE INDEX IF NOT EXISTS idx_ec_governance ON epistemic_claims(governance_status);
+CREATE INDEX IF NOT EXISTS idx_ec_epistemic ON epistemic_claims(epistemic_status);
+CREATE INDEX IF NOT EXISTS idx_ec_commit ON epistemic_claims(commit_level);
+CREATE INDEX IF NOT EXISTS idx_ec_agent ON epistemic_claims(source_agent_id);
+CREATE INDEX IF NOT EXISTS idx_ec_hash ON epistemic_claims(content_hash);
+
+-- Epistemic ledger metadata (singleton row)
+CREATE TABLE IF NOT EXISTS epistemic_ledger_meta (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    step INTEGER NOT NULL DEFAULT 0,
+    total_claims_created INTEGER NOT NULL DEFAULT 0,
+    total_promotions_attempted INTEGER NOT NULL DEFAULT 0,
+    total_promotions_forbidden INTEGER NOT NULL DEFAULT 0,
+    total_retractions INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+
 @dataclass
 class Lease:
     """A resource lease for coordination."""
@@ -253,6 +292,7 @@ class Storage:
                 cursor.executescript(SCHEMA_V2)
                 for stmt in _SCHEMA_V3_STMTS:
                     cursor.execute(stmt)
+                cursor.executescript(SCHEMA_V4)
                 cursor.execute(
                     "INSERT INTO schema_version (version) VALUES (?)",
                     (SCHEMA_VERSION,)
@@ -281,6 +321,8 @@ class Storage:
                     cursor.execute(stmt)
                 except sqlite3.OperationalError:
                     pass  # Column already exists (idempotent)
+        if from_version < 4:
+            cursor.executescript(SCHEMA_V4)
         cursor.execute(
             "UPDATE schema_version SET version = ?", (to_version,)
         )

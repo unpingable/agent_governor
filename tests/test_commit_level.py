@@ -421,7 +421,7 @@ class TestSchemaV3Migration:
         assert "assumptions_json" in columns
 
         cursor.execute("SELECT version FROM schema_version")
-        assert cursor.fetchone()["version"] == 3
+        assert cursor.fetchone()["version"] == 4
 
         storage.close()
 
@@ -452,7 +452,7 @@ class TestSchemaV3Migration:
         assert "commit_level" in columns
 
         cursor.execute("SELECT version FROM schema_version")
-        assert cursor.fetchone()["version"] == 3
+        assert cursor.fetchone()["version"] == 4
 
         storage.close()
 
@@ -485,10 +485,10 @@ class TestSchemaV3Migration:
         assert row["assumptions_json"] == "[]"
         storage.close()
 
-    def test_schema_version_is_3(self, storage):
+    def test_schema_version_is_4(self, storage):
         cursor = storage.conn.cursor()
         cursor.execute("SELECT version FROM schema_version")
-        assert cursor.fetchone()["version"] == 3
+        assert cursor.fetchone()["version"] == 4
 
     def test_idempotent_migration(self, tmp_dir):
         """Running migration twice should not fail."""
@@ -517,7 +517,7 @@ class TestSchemaV3Migration:
         s2 = Storage(db_path)
         cursor = s2.conn.cursor()
         cursor.execute("SELECT version FROM schema_version")
-        assert cursor.fetchone()["version"] == 3
+        assert cursor.fetchone()["version"] == 4
         s2.close()
 
 

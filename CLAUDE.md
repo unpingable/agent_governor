@@ -44,7 +44,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Evidence Type Validation**: Layer 3 evidence kind gating, 4 new EvidenceType values (CALC_RESULT, TEST_RESULT, WEB_SOURCE, LIVE_RETRIEVAL), WRONG_EVIDENCE_TYPE audit failure mode, required_evidence_kinds on PolicyEntry, quorum Gate 6, COLLECTING→STABILIZING evidence gate.
 **Premise Rule & Dependencies**: Layer 4 dependency tracking, `depends_on` field on GroundedClaim, cycle-checked DAG, premise rule (HARD claims cannot depend on SOFT/STALE/INVALIDATED), BFS invalidation cascade (HARD→SOFT downgrade), CascadeEvent audit trail, Schema V5, quorum Gate 7.
 **Agent Roles & Revalidation**: Layer 5 agent role assignment (PROPOSER/RETRIEVER/FALSIFIER/SYNTHESIZER), role budgets per risk level, quorum Gate 8, periodic revalidation orchestrator wiring TTL→AuditPipeline.
-**Total: 3770 tests**
+**ClaimStatus FSM Enforcement**: Layer 6 transition table (PROPOSED→SUPPORTED↔CONTESTED→{INVALIDATED|EXPIRED|REFUSED}), 9 TransitionReasons, guard validation, transition history, cascade SUPPORTED→STALE, terminal state HUMAN-only recovery.
+**Total: 3876 tests**
 
 ## Key Documents
 
@@ -755,7 +756,16 @@ src/ops_governor/
 
 **Agent Roles & Revalidation tests: 67**
 
-**Total: 3770 tests**
+### ClaimStatus FSM Enforcement (Layer 6)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| epistemic.py | TransitionReason enum (9 values), StatusTransition dataclass, TransitionResult dataclass, VALID_TRANSITIONS table (~25 legal edges), is_valid_transition() validator, transition_epistemic_status() with FSM enforcement, set_epistemic_status() backward-compat wrapper (HUMAN override), transition history tracking, fsm_enforced toggle, block()/retract() wired to epistemic transitions, invalidation cascade SUPPORTED→STALE | — |
+| ttl.py | RevalidationOrchestrator updated to use transition_epistemic_status() with proper TransitionReason (TTL_EXPIRY/REVALIDATION) | — |
+| test_claim_fsm.py | TransitionReason enum, StatusTransition serialization, TransitionResult, VALID_TRANSITIONS table, is_valid_transition, transition lifecycle, history, FSM toggle, block/retract integration, cascade integration, all valid paths, blocked transitions, backward compat | 106 |
+
+**ClaimStatus FSM Enforcement tests: 106**
+
+**Total: 3876 tests**
 
 ## Common Mistakes to Avoid
 

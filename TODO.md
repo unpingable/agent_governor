@@ -980,7 +980,7 @@ All reference implementations are in `ingest/epistemic_governor/src/epistemic_go
 - `jurisdictions/` - Context-specific governance rules
 
 Remaining design specifications in `ingest/`:
-- `multi2.md` - Δt quorum governor (semantic enforcement gaps, ~85% done — L1-L5 complete, L6 remaining)
+- `multi2.md` - Δt quorum governor (semantic enforcement layers L1-L6 COMPLETE)
 - `regime.md` - Grounding audit pipeline (assertion/cascade/roles gaps, ~85% done)
 - `next.md` - Semantic entropy (conceptual, fiction guardrails portion complete)
 - `next2.md` - Nonfiction CFI (not started, requires human authority decisions)
@@ -1270,15 +1270,24 @@ GroundedClaim, EvidenceRef, CommitLevel, etc. Wire them through, don't duplicate
   - Module: tests/test_roles_revalidation.py (67 tests)
   - Spec ref: `regime.md` §2.3
 
-### Layer 6: ClaimStatus FSM Enforcement (shape defined in L2, transitions enforced here)
+### Layer 6: ClaimStatus FSM Enforcement (shape defined in L2, transitions enforced here) ✅
 
-- [ ] **ClaimStatus transition enforcement** — `epistemic.py`
-  - Full FSM: PROPOSED → SUPPORTED ↔ CONTESTED → {INVALIDATED | EXPIRED | REFUSED}
-  - SUPPORTED → STALE (TTL expiry), STALE → SUPPORTED (revalidation)
-  - Guard: transitions must be justified (evidence, audit result, TTL event, cascade)
-  - QuorumState→ClaimStatus mapper: auto-project process state to epistemic state
-  - Integration with L4 dependency cascade: invalidation propagates ClaimStatus
-  - Integration with TTL: expiry transitions SUPPORTED → STALE automatically
+- [x] **ClaimStatus transition enforcement** — `epistemic.py`
+  - `TransitionReason` enum: EVIDENCE, AUDIT_RESULT, TTL_EXPIRY, CASCADE, QUORUM_PROJECTION, DISSENT, RETRACTION, REVALIDATION, HUMAN
+  - `StatusTransition` dataclass with full audit trail (from/to status, reason, justification, step, timestamp)
+  - `TransitionResult` dataclass (success/failure with error message)
+  - `VALID_TRANSITIONS` table: ~25 legal edges with allowed reason sets per edge
+  - `is_valid_transition()` standalone validator function
+  - `transition_epistemic_status()` — primary FSM-enforced method on EpistemicLedger
+  - `set_epistemic_status()` — backward-compatible wrapper using HUMAN override
+  - `get_transition_history()` — per-claim or global transition audit log
+  - `fsm_enforced` toggle on EpistemicLedger (True by default, False for legacy compat)
+  - Terminal states (INVALIDATED, EXPIRED, REFUSED) → PROPOSED only via HUMAN
+  - HUMAN reason always bypasses FSM (for manual override)
+  - Integration with L4 cascade: SUPPORTED dependents → STALE on cascade
+  - Integration with block()/retract(): auto-transitions epistemic status when set
+  - Integration with TTL revalidation: proper TransitionReason (TTL_EXPIRY/REVALIDATION)
+  - Module: tests/test_claim_fsm.py (106 tests)
 
 ---
 

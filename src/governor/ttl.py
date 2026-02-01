@@ -661,9 +661,18 @@ class RevalidationOrchestrator:
             return
 
         try:
-            from .epistemic import ClaimStatus
+            from .epistemic import ClaimStatus, TransitionReason
             status = ClaimStatus(status_name)
-            self.epistemic_ledger.set_epistemic_status(claim_id, status)
+            # Layer 6: use transition_epistemic_status with proper reason
+            if hasattr(self.epistemic_ledger, 'transition_epistemic_status'):
+                reason = TransitionReason.REVALIDATION
+                if status_name == "stale":
+                    reason = TransitionReason.TTL_EXPIRY
+                self.epistemic_ledger.transition_epistemic_status(
+                    claim_id, status, reason, "periodic revalidation",
+                )
+            else:
+                self.epistemic_ledger.set_epistemic_status(claim_id, status)
         except (ValueError, KeyError):
             pass  # Status not found or claim not in ledger
 

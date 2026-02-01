@@ -609,6 +609,263 @@ _BAD_EPISTEMIC_STATUSES: frozenset[ClaimStatus] = frozenset({
 })
 
 
+# =============================================================================
+# Layer 6: ClaimStatus FSM Enforcement
+# =============================================================================
+
+
+class TransitionReason(str, Enum):
+    """Why a ClaimStatus transition is happening. Guards enforce this."""
+
+    EVIDENCE = "evidence"
+    """New evidence attached (PROPOSED→SUPPORTED, STALE→SUPPORTED)."""
+
+    AUDIT_RESULT = "audit_result"
+    """Audit pipeline decision (PROPOSED→SUPPORTED, any→INVALIDATED)."""
+
+    TTL_EXPIRY = "ttl_expiry"
+    """TTL decay (SUPPORTED→STALE, any→EXPIRED)."""
+
+    CASCADE = "cascade"
+    """Dependency invalidation cascade (any→INVALIDATED, any→STALE)."""
+
+    QUORUM_PROJECTION = "quorum_projection"
+    """QuorumStatus→ClaimStatus mapping (various transitions)."""
+
+    DISSENT = "dissent"
+    """Dissent objection filed (SUPPORTED→CONTESTED)."""
+
+    RETRACTION = "retraction"
+    """Explicit retraction (any→INVALIDATED)."""
+
+    REVALIDATION = "revalidation"
+    """Periodic revalidation result (STALE→SUPPORTED, any→INVALIDATED)."""
+
+    HUMAN = "human"
+    """Human override (any→any, always permitted)."""
+
+
+@dataclass
+class StatusTransition:
+    """Record of a ClaimStatus FSM transition."""
+
+    claim_id: str
+    from_status: ClaimStatus | None  # None = first assignment
+    to_status: ClaimStatus
+    reason: TransitionReason
+    justification: str  # Human-readable description
+    step: int = 0
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+
+    def to_dict(self) -> dict:
+        return {
+            "claim_id": self.claim_id,
+            "from_status": self.from_status.value if self.from_status else None,
+            "to_status": self.to_status.value,
+            "reason": self.reason.value,
+            "justification": self.justification,
+            "step": self.step,
+            "timestamp": self.timestamp,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "StatusTransition":
+        return cls(
+            claim_id=d["claim_id"],
+            from_status=ClaimStatus(d["from_status"]) if d.get("from_status") else None,
+            to_status=ClaimStatus(d["to_status"]),
+            reason=TransitionReason(d["reason"]),
+            justification=d["justification"],
+            step=d.get("step", 0),
+            timestamp=d.get("timestamp", ""),
+        )
+
+
+@dataclass
+class TransitionResult:
+    """Result of attempting a ClaimStatus transition."""
+
+    success: bool
+    claim_id: str
+    from_status: ClaimStatus | None
+    to_status: ClaimStatus
+    reason: TransitionReason
+    error: str | None = None  # Set when success=False
+
+    def to_dict(self) -> dict:
+        d: dict = {
+            "success": self.success,
+            "claim_id": self.claim_id,
+            "from_status": self.from_status.value if self.from_status else None,
+            "to_status": self.to_status.value,
+            "reason": self.reason.value,
+        }
+        if self.error:
+            d["error"] = self.error
+        return d
+
+
+# Legal transitions: (from_status, to_status) → set of allowed reasons
+# None as from_status means "first assignment" (claim has no epistemic_status yet)
+VALID_TRANSITIONS: dict[tuple[ClaimStatus | None, ClaimStatus], frozenset[TransitionReason]] = {
+    # First assignment — any initial status is fine with appropriate reason
+    (None, ClaimStatus.PROPOSED): frozenset(TransitionReason),
+    (None, ClaimStatus.SUPPORTED): frozenset(TransitionReason),
+    (None, ClaimStatus.REFUSED): frozenset(TransitionReason),
+
+    # PROPOSED → SUPPORTED (evidence, audit pass, quorum reached)
+    (ClaimStatus.PROPOSED, ClaimStatus.SUPPORTED): frozenset({
+        TransitionReason.EVIDENCE,
+        TransitionReason.AUDIT_RESULT,
+        TransitionReason.QUORUM_PROJECTION,
+        TransitionReason.REVALIDATION,
+        TransitionReason.HUMAN,
+    }),
+
+    # PROPOSED → CONTESTED (dissent, quorum contested)
+    (ClaimStatus.PROPOSED, ClaimStatus.CONTESTED): frozenset({
+        TransitionReason.DISSENT,
+        TransitionReason.QUORUM_PROJECTION,
+        TransitionReason.HUMAN,
+    }),
+
+    # PROPOSED → REFUSED (quorum failed, audit block)
+    (ClaimStatus.PROPOSED, ClaimStatus.REFUSED): frozenset({
+        TransitionReason.AUDIT_RESULT,
+        TransitionReason.QUORUM_PROJECTION,
+        TransitionReason.HUMAN,
+    }),
+
+    # PROPOSED → INVALIDATED (retraction, cascade)
+    (ClaimStatus.PROPOSED, ClaimStatus.INVALIDATED): frozenset({
+        TransitionReason.RETRACTION,
+        TransitionReason.CASCADE,
+        TransitionReason.AUDIT_RESULT,
+        TransitionReason.HUMAN,
+    }),
+
+    # SUPPORTED → CONTESTED (dissent, quorum contested)
+    (ClaimStatus.SUPPORTED, ClaimStatus.CONTESTED): frozenset({
+        TransitionReason.DISSENT,
+        TransitionReason.QUORUM_PROJECTION,
+        TransitionReason.HUMAN,
+    }),
+
+    # SUPPORTED → STALE (TTL expiry, cascade)
+    (ClaimStatus.SUPPORTED, ClaimStatus.STALE): frozenset({
+        TransitionReason.TTL_EXPIRY,
+        TransitionReason.CASCADE,
+        TransitionReason.HUMAN,
+    }),
+
+    # SUPPORTED → INVALIDATED (retraction, cascade, audit)
+    (ClaimStatus.SUPPORTED, ClaimStatus.INVALIDATED): frozenset({
+        TransitionReason.RETRACTION,
+        TransitionReason.CASCADE,
+        TransitionReason.AUDIT_RESULT,
+        TransitionReason.HUMAN,
+    }),
+
+    # SUPPORTED → EXPIRED (TTL expiry beyond stale)
+    (ClaimStatus.SUPPORTED, ClaimStatus.EXPIRED): frozenset({
+        TransitionReason.TTL_EXPIRY,
+        TransitionReason.HUMAN,
+    }),
+
+    # CONTESTED → SUPPORTED (resolved in favor, new evidence)
+    (ClaimStatus.CONTESTED, ClaimStatus.SUPPORTED): frozenset({
+        TransitionReason.EVIDENCE,
+        TransitionReason.QUORUM_PROJECTION,
+        TransitionReason.REVALIDATION,
+        TransitionReason.HUMAN,
+    }),
+
+    # CONTESTED → INVALIDATED (resolved against, retraction, cascade)
+    (ClaimStatus.CONTESTED, ClaimStatus.INVALIDATED): frozenset({
+        TransitionReason.QUORUM_PROJECTION,
+        TransitionReason.RETRACTION,
+        TransitionReason.CASCADE,
+        TransitionReason.AUDIT_RESULT,
+        TransitionReason.HUMAN,
+    }),
+
+    # CONTESTED → REFUSED (quorum resolved reject)
+    (ClaimStatus.CONTESTED, ClaimStatus.REFUSED): frozenset({
+        TransitionReason.QUORUM_PROJECTION,
+        TransitionReason.HUMAN,
+    }),
+
+    # CONTESTED → STALE (TTL expiry during contest)
+    (ClaimStatus.CONTESTED, ClaimStatus.STALE): frozenset({
+        TransitionReason.TTL_EXPIRY,
+        TransitionReason.CASCADE,
+        TransitionReason.HUMAN,
+    }),
+
+    # STALE → SUPPORTED (revalidation success, fresh evidence)
+    (ClaimStatus.STALE, ClaimStatus.SUPPORTED): frozenset({
+        TransitionReason.EVIDENCE,
+        TransitionReason.REVALIDATION,
+        TransitionReason.HUMAN,
+    }),
+
+    # STALE → INVALIDATED (revalidation failure, cascade, retraction)
+    (ClaimStatus.STALE, ClaimStatus.INVALIDATED): frozenset({
+        TransitionReason.REVALIDATION,
+        TransitionReason.RETRACTION,
+        TransitionReason.CASCADE,
+        TransitionReason.AUDIT_RESULT,
+        TransitionReason.HUMAN,
+    }),
+
+    # STALE → EXPIRED (TTL fully expired)
+    (ClaimStatus.STALE, ClaimStatus.EXPIRED): frozenset({
+        TransitionReason.TTL_EXPIRY,
+        TransitionReason.HUMAN,
+    }),
+
+    # Terminal states: INVALIDATED, EXPIRED, REFUSED can only be overridden by HUMAN
+    (ClaimStatus.INVALIDATED, ClaimStatus.PROPOSED): frozenset({TransitionReason.HUMAN}),
+    (ClaimStatus.EXPIRED, ClaimStatus.PROPOSED): frozenset({TransitionReason.HUMAN}),
+    (ClaimStatus.REFUSED, ClaimStatus.PROPOSED): frozenset({TransitionReason.HUMAN}),
+}
+
+
+def is_valid_transition(
+    from_status: ClaimStatus | None,
+    to_status: ClaimStatus,
+    reason: TransitionReason,
+) -> tuple[bool, str]:
+    """Check if a ClaimStatus transition is valid.
+
+    Returns (is_valid, error_message). error_message is empty when valid.
+    """
+    # HUMAN can always override
+    if reason == TransitionReason.HUMAN:
+        return True, ""
+
+    # Same status → no-op, always valid
+    if from_status == to_status:
+        return True, ""
+
+    key = (from_status, to_status)
+    allowed = VALID_TRANSITIONS.get(key)
+
+    if allowed is None:
+        from_label = from_status.value if from_status else "None"
+        return False, f"Transition {from_label}→{to_status.value} is not defined in the FSM"
+
+    if reason not in allowed:
+        from_label = from_status.value if from_status else "None"
+        allowed_str = ", ".join(sorted(r.value for r in allowed))
+        return False, (
+            f"Transition {from_label}→{to_status.value} not allowed with reason "
+            f"'{reason.value}'; allowed reasons: {allowed_str}"
+        )
+
+    return True, ""
+
+
 @dataclass
 class CascadeEvent:
     """Record of a dependency invalidation cascade step."""
@@ -729,6 +986,12 @@ class EpistemicLedger:
         self.cascade_history: list[CascadeEvent] = []
         self.total_cascades: int = 0
         self.total_cascade_downgrades: int = 0
+
+        # Layer 6: ClaimStatus FSM enforcement
+        self.transition_history: list[StatusTransition] = []
+        self.total_transitions: int = 0
+        self.total_transitions_blocked: int = 0
+        self.fsm_enforced: bool = True  # Set False to disable FSM (legacy compat)
 
         # Load from storage if available
         if self.storage:
@@ -1173,6 +1436,13 @@ class EpistemicLedger:
         if self.storage:
             self._persist_claim(claim)
 
+        # Layer 6: also transition epistemic status if set
+        if claim.epistemic_status is not None:
+            self.transition_epistemic_status(
+                claim_id, ClaimStatus.INVALIDATED,
+                TransitionReason.AUDIT_RESULT, f"blocked: {reason}",
+            )
+
         # Layer 4: cascade invalidation to dependents
         self.invalidation_cascade(claim_id, "blocked")
 
@@ -1199,6 +1469,13 @@ class EpistemicLedger:
         if self.storage:
             self._persist_claim(claim)
             self._persist_meta()
+
+        # Layer 6: also transition epistemic status if set
+        if claim.epistemic_status is not None:
+            self.transition_epistemic_status(
+                claim_id, ClaimStatus.INVALIDATED,
+                TransitionReason.RETRACTION, f"retracted: {reason}",
+            )
 
         # Layer 4: cascade invalidation to dependents
         self.invalidation_cascade(claim_id, "retracted")
@@ -1291,36 +1568,119 @@ class EpistemicLedger:
         return [c for c in self.active_claims() if c.has_assumptions]
 
     # =========================================================================
-    # Epistemic Status (Layer 2 shape, Layer 6 enforcement)
+    # Epistemic Status (Layer 6: FSM enforcement)
     # =========================================================================
 
-    def set_epistemic_status(self, claim_id: str, status: ClaimStatus) -> bool:
+    def transition_epistemic_status(
+        self,
+        claim_id: str,
+        to_status: ClaimStatus,
+        reason: TransitionReason,
+        justification: str = "",
+    ) -> TransitionResult:
         """
-        Set the epistemic lifecycle status on a claim.
+        Transition a claim's epistemic status with FSM enforcement.
 
-        No FSM enforcement yet (that's Layer 6). For now, simple setter.
-        Returns True if set, False if claim not found.
+        This is the primary entry point for Layer 6. All status changes should
+        go through this method. It validates the transition against the FSM
+        table, records the transition in history, and triggers cascades.
+
+        Returns TransitionResult with success=False if the transition is illegal.
         """
         if claim_id not in self.claims:
-            return False
+            return TransitionResult(
+                success=False,
+                claim_id=claim_id,
+                from_status=None,
+                to_status=to_status,
+                reason=reason,
+                error=f"Claim {claim_id} not found",
+            )
 
         claim = self.claims[claim_id]
-        claim.epistemic_status = status
+        from_status = claim.epistemic_status
+
+        # No-op: same status
+        if from_status == to_status:
+            return TransitionResult(
+                success=True,
+                claim_id=claim_id,
+                from_status=from_status,
+                to_status=to_status,
+                reason=reason,
+            )
+
+        # FSM validation (skip if enforcement disabled for legacy compat)
+        if self.fsm_enforced:
+            valid, error = is_valid_transition(from_status, to_status, reason)
+            if not valid:
+                self.total_transitions_blocked += 1
+                return TransitionResult(
+                    success=False,
+                    claim_id=claim_id,
+                    from_status=from_status,
+                    to_status=to_status,
+                    reason=reason,
+                    error=error,
+                )
+
+        # Apply transition
+        claim.epistemic_status = to_status
         claim.last_updated_at = datetime.now()
         claim.last_updated_step = self.step
 
         if self.storage:
             self._persist_claim(claim)
 
-        # Layer 4: cascade when status goes to a bad state
-        if status in _BAD_EPISTEMIC_STATUSES:
-            self.invalidation_cascade(claim_id, f"status_{status.value}")
+        # Record transition
+        transition = StatusTransition(
+            claim_id=claim_id,
+            from_status=from_status,
+            to_status=to_status,
+            reason=reason,
+            justification=justification,
+            step=self.step,
+        )
+        self.transition_history.append(transition)
+        self.total_transitions += 1
 
-        return True
+        # Layer 4: cascade when status goes to a bad state
+        if to_status in _BAD_EPISTEMIC_STATUSES:
+            self.invalidation_cascade(claim_id, f"status_{to_status.value}")
+
+        return TransitionResult(
+            success=True,
+            claim_id=claim_id,
+            from_status=from_status,
+            to_status=to_status,
+            reason=reason,
+        )
+
+    def set_epistemic_status(self, claim_id: str, status: ClaimStatus) -> bool:
+        """
+        Set the epistemic lifecycle status on a claim (backward-compatible).
+
+        Delegates to transition_epistemic_status with HUMAN reason to bypass
+        FSM guards. Existing callers that don't provide a reason get HUMAN
+        override semantics. New code should use transition_epistemic_status()
+        directly with a proper reason.
+
+        Returns True if set, False if claim not found.
+        """
+        result = self.transition_epistemic_status(
+            claim_id, status, TransitionReason.HUMAN, "set_epistemic_status (legacy)"
+        )
+        return result.success
 
     def claims_by_epistemic_status(self, status: ClaimStatus) -> list[GroundedClaim]:
         """Get all claims with a specific epistemic lifecycle status."""
         return [c for c in self.claims.values() if c.epistemic_status == status]
+
+    def get_transition_history(self, claim_id: str | None = None) -> list[StatusTransition]:
+        """Get transition history, optionally filtered by claim_id."""
+        if claim_id is None:
+            return list(self.transition_history)
+        return [t for t in self.transition_history if t.claim_id == claim_id]
 
     # =========================================================================
     # Queries
@@ -1680,19 +2040,38 @@ class EpistemicLedger:
                 continue
 
             # Only downgrade HARD → SOFT
+            did_downgrade = False
+            old_level = claim.commit_level
+            old_estatus = claim.epistemic_status.value if claim.epistemic_status else None
+
             if claim.commit_level == "hard":
-                old_level = claim.commit_level
                 claim.commit_level = "soft"
                 claim.last_updated_at = datetime.now()
                 claim.last_updated_step = self.step
+                did_downgrade = True
 
+            # Layer 6: also cascade epistemic status (SUPPORTED → STALE)
+            new_estatus = old_estatus
+            if claim.epistemic_status == ClaimStatus.SUPPORTED:
+                result = self.transition_epistemic_status(
+                    affected_id, ClaimStatus.STALE,
+                    TransitionReason.CASCADE,
+                    f"cascade from {trigger_claim_id}: {reason}",
+                )
+                if result.success:
+                    new_estatus = ClaimStatus.STALE.value
+                    did_downgrade = True
+
+            if did_downgrade:
                 event = CascadeEvent(
                     event_id=f"ce_{uuid.uuid4().hex[:12]}",
                     trigger_claim_id=trigger_claim_id,
                     trigger_reason=reason,
                     affected_claim_id=affected_id,
                     old_commit_level=old_level,
-                    new_commit_level="soft",
+                    new_commit_level=claim.commit_level,
+                    old_epistemic_status=old_estatus,
+                    new_epistemic_status=new_estatus,
                     depth=depth,
                 )
                 events.append(event)

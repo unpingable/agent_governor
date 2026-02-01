@@ -68,6 +68,11 @@ from .epistemic import (
     HIGH_CONFIDENCE_THRESHOLD,
     CascadeEvent,
     PremiseCheckResult,
+    TransitionReason,
+    StatusTransition,
+    TransitionResult,
+    VALID_TRANSITIONS,
+    is_valid_transition,
 )
 
 # Regime detection
@@ -600,6 +605,11 @@ __all__ = [
     "HIGH_CONFIDENCE_THRESHOLD",
     "CascadeEvent",
     "PremiseCheckResult",
+    "TransitionReason",
+    "StatusTransition",
+    "TransitionResult",
+    "VALID_TRANSITIONS",
+    "is_valid_transition",
     # Regime detection
     "OperationalRegime",
     "RegimeSignals",

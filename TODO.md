@@ -988,6 +988,96 @@ Remaining design specifications in `ingest/`:
 
 ---
 
+## RATHOLES (DO NOT ENTER)
+
+Seductive ideas that will wreck momentum if pursued too early.
+Named here so they lose their power. See `ingest/ratholes.md` for full context.
+
+**Meta-signal: If an idea increases conceptual elegance but decreases observability, it's probably premature.**
+
+| # | Trap | Why Later | Right Now |
+|---|------|-----------|-----------|
+| 1 | Perfect Independence Modeling | Need empirical data, not theoretical vibes | Log metadata, optimize after real failures |
+| 2 | Probabilistic Confidence Scoring | False precision, calibration hell | Commit levels, evidence classes, refusal thresholds (ordinal > numeric) |
+| 3 | Learning / Adaptation Loops | Breaks auditability, blurs causation | Freeze behavior, YOU are the learner |
+| 4 | Formal Verification / Proofs | Invariants still operational, not axiomatic | Tests > proofs, counterexamples > theorems |
+| 5 | Universal Ontology / Claim Taxonomy | Ontologies calcify, real claims are messier | Ugly pragmatic enums, let taxonomy emerge from pain |
+| 6 | Explainability Theater | Explanations become narratives become persuasion | Emit structure, not stories |
+| 7 | Full Autonomy | Magnifies bugs, forces premature trust | Power tools, not self-driving |
+| 8 | Moral Philosophy Integration | Ellul's trap door — arbitrating meaning not admissibility | Enforce process, not outcomes |
+| 9 | Byzantine Fault Tolerance | No adversarial agents in current use case | Quorum + interferometry sufficient (spec frozen in `ingest/bft.md`) |
+| 10 | Auto-Publish Workflows | Removes human judgment on "should this exist?" | Quality automation, not quantity automation |
+
+**When to revisit:** Only when you have (1) real failure from NOT having it, (2) empirical data to validate the approach, (3) clear success metric. NOT when it "feels right" or "completes the theory."
+
+---
+
+## Future Features (Specced, NOT Scheduled)
+
+Design documents exist in `ingest/`. These are frozen specs — reference material for when
+the prerequisites are met. Do NOT implement until core layers (L4-L6) are complete.
+
+### BFT-EQ: Byzantine Fault Tolerance for Epistemic Quorums (from `ingest/bft.md`)
+
+**Status: SPEC FROZEN. Do not implement.**
+**Prerequisite: Real adversarial pressure + stable independence labeling + empirical fault domain data.**
+
+Full spec covers: fault domains, threat model (T1-T3), core invariants (I-BFT-1 through I-BFT-5),
+data model (FaultDomain, Vote, ClaimCommitRecord), decision procedure (6 steps), fault budget
+policies (fixed/risk-tiered/computed), independence mapping rules, failure modes (FM1-FM4),
+and 5 acceptance tests.
+
+One-line principle: "BFT-EQ ensures that any commitment is the output of an honest-majority
+across independent fault domains, and that the system fails closed (refuses) when independence
+or evidence is insufficient."
+
+### Meta-Interferometry & Unified Consensus (from `ingest/interfer2.md`)
+
+**Status: SPEC FROZEN. Do not implement.**
+**Prerequisite: Multi-model execution infrastructure + real ensemble generation pipeline.**
+
+Three concepts in one spec:
+
+1. **Self-Testing Interferometry** — Use ensemble to verify its own synthesis.
+   Generate → Synthesize → Self-test → Fix → Re-test → Approve.
+   One round of self-verification is plenty. More is diminishing returns.
+
+2. **Unified Consensus Engine** — Quorum (vote on actions) and interferometry (vote on content)
+   are the same pattern: multiple independent evaluators reaching consensus. Unify under one
+   ConsensusEngine with VotingStrategy (simple/supermajority/unanimous/weighted).
+
+3. **Hierarchical Task Delegation** — Route by complexity to model tiers:
+   Tech Lead (Opus) → Senior (Sonnet) → Mid (Haiku) → Junior (local/Qwen).
+   Junior does work, senior reviews. Escalation on failure. 3-4x more work for same budget.
+   Quality gate: tests_pass + lints_clean + types_valid + security_scan.
+
+### Control-Theoretic Validation & Epistemic CRC (from `ingest/valid.md`)
+
+**Status: SPEC FROZEN. Do not implement.**
+**Prerequisite: Nonfiction governor corpus analysis + tone profiling complete.**
+
+Five-layer research validation stack:
+
+1. **Control Theory Validator** — Validate stability claims, feedback loop claims, Δt framework
+   claims, equilibrium claims. Catches math errors in research output.
+
+2. **Second-Order Cybernetic Validation** — Reflexive consistency: does the system embody its
+   own principles? Ashby's Law of Requisite Variety check. Von Foerster eigenbehavior convergence.
+
+3. **Falsifiability Validator** — Popper's criterion: every empirical claim must specify its own
+   refutation criteria. Catches unfalsifiable AI slop ("generally improves", "tends to work").
+
+4. **Epistemic CRC** — Checksum for research integrity (evidence chain hash + consistency hash +
+   framework hash + reflexivity hash). Git-integrated, NOT auto-publish.
+
+5. **Unified Hallucination Detection** — Δr (semantic drift) + Δt (temporal lag) + falsifiability +
+   reflexivity = combined grounding signal. All measure the same thing: loss of grounding.
+
+**Key constraint from spec:** Human decides what gets published. Governor ensures quality.
+No auto-publish to Zenodo. Quality automation, not quantity automation.
+
+---
+
 ## Unfinished Work: Semantic Enforcement Layer
 
 These items close the gaps identified in `multi2.md` and `regime.md`. Ordered by
@@ -1060,21 +1150,26 @@ GroundedClaim, EvidenceRef, CommitLevel, etc. Wire them through, don't duplicate
   - New jurisdiction admissibility: FACTUAL/AUDIT admit all 4; SPECULATIVE/ADVERSARIAL/FORENSIC admit subsets
   - Module: tests/test_evidence_types.py (86 tests)
 
-### Layer 4: Premise Rule & Dependency Tracking
+### Layer 4: Premise Rule & Dependency Tracking ✅
 
-- [ ] **Premise rule enforcement** — `epistemic.py` or `quorum.py`
-  - SOFT/STALE claims cannot serve as premises for HARD claims
-  - If a HARD claim's dependency is SOFT → downgrade to SOFT or block
-  - Requires dependency graph (which claims depend on which)
-  - Can use `BeliefGraph` from `direction.py` (REQUIRES/IMPLIES edges) — don't rebuild
-  - Spec ref: `multi2.md` §6.2
+- [x] **Premise rule enforcement** — `epistemic.py` + `quorum.py`
+  - SOFT/STALE/INVALIDATED/CONTESTED/REFUSED claims cannot serve as premises for HARD claims
+  - If a HARD claim's dependency is SOFT → downgrade to SOFT
+  - `depends_on: list[str]` field on GroundedClaim for machine-traversable dependency edges
+  - `add_dependency()` / `remove_dependency()` with cycle detection and persistence
+  - `check_premise_rule()` / `enforce_premise_rule()` on EpistemicLedger
+  - In-memory reverse index (`_reverse_deps`) for O(1) dependent lookup
+  - Quorum Gate 7: scans all HARD claims for premise violations
+  - Schema V5: `depends_on_json` column, `claim_dependencies` table, `cascade_events` table
+  - Module: `src/governor/epistemic.py`, `src/governor/quorum.py`, `src/governor/storage.py`
 
-- [ ] **Dependency invalidation cascade** — `audit.py`
-  - When POST_COMMIT audit marks claim UNGROUNDED/CONTRADICTED:
-    force dependent HARD claims to re-enter review
-  - Traverse dependency edges, downgrade or flag
-  - Log cascade events for audit trail
-  - Spec ref: `regime.md` §6.2
+- [x] **Dependency invalidation cascade** — `epistemic.py`
+  - BFS cascade: retract/block/set_epistemic_status triggers HARD→SOFT downgrade on dependents
+  - Transitive: cascades through full dependency graph (diamond, chain)
+  - `CascadeEvent` dataclass with depth tracking and audit trail
+  - `invalidation_cascade()` method with persist to `cascade_events` table
+  - Hooked into `retract()`, `block()`, `set_epistemic_status()` (for INVALIDATED/STALE/CONTESTED/REFUSED/EXPIRED)
+  - Module: tests/test_premise_rules.py (88 tests)
 
 ### Layer 5: Roles & Scheduling (higher-level policy)
 

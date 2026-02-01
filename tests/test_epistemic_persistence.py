@@ -54,9 +54,9 @@ def full_ledger(tmp_storage, tmp_evidence_store):
 class TestSchemaV4Migration:
     """Tests for Schema V4 (epistemic_claims + epistemic_ledger_meta tables)."""
 
-    def test_schema_version_is_4(self):
-        """SCHEMA_VERSION constant should be 4."""
-        assert SCHEMA_VERSION == 4
+    def test_schema_version_is_current(self):
+        """SCHEMA_VERSION constant should be current."""
+        assert SCHEMA_VERSION >= 4
 
     def test_fresh_db_has_epistemic_claims_table(self, tmp_storage):
         """Fresh DB should have epistemic_claims table."""
@@ -203,9 +203,9 @@ class TestSchemaV4Migration:
         storage = Storage(db_path)
         cursor = storage.conn.cursor()
 
-        # Check version bumped
+        # Check version bumped to current
         cursor.execute("SELECT version FROM schema_version")
-        assert cursor.fetchone()["version"] == 4
+        assert cursor.fetchone()["version"] == SCHEMA_VERSION
 
         # Check new tables exist
         cursor.execute(

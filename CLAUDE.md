@@ -42,7 +42,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Research Mode**: Non-convergent epistemic control, hypothesis lifecycle (PROBE→TENTATIVE→SUPPORTED→ABANDONED), entropy bounds, dominance caps, evidence impulses with decay, Δt invariant, terminal states.
 **ClaimStatus + Epistemic Persistence**: ClaimStatus enum (PROPOSED→SUPPORTED→CONTESTED→…), QuorumStatus mapping, EpistemicLedger SQLite persistence (Schema V4), write-through on mutations, from_dict/from_json deserialization.
 **Evidence Type Validation**: Layer 3 evidence kind gating, 4 new EvidenceType values (CALC_RESULT, TEST_RESULT, WEB_SOURCE, LIVE_RETRIEVAL), WRONG_EVIDENCE_TYPE audit failure mode, required_evidence_kinds on PolicyEntry, quorum Gate 6, COLLECTING→STABILIZING evidence gate.
-**Total: 3615 tests**
+**Premise Rule & Dependencies**: Layer 4 dependency tracking, `depends_on` field on GroundedClaim, cycle-checked DAG, premise rule (HARD claims cannot depend on SOFT/STALE/INVALIDATED), BFS invalidation cascade (HARD→SOFT downgrade), CascadeEvent audit trail, Schema V5, quorum Gate 7.
+**Total: 3703 tests**
 
 ## Key Documents
 
@@ -734,7 +735,17 @@ src/ops_governor/
 
 **Evidence Type Validation tests: 86**
 
-**Total: 3615 tests**
+### Premise Rule & Dependency Tracking (Layer 4)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| epistemic.py | `depends_on` field, CascadeEvent, PremiseCheckResult, add/remove dependency, cycle detection, premise rule check/enforce, invalidation cascade, hooks in retract/block/set_epistemic_status | — |
+| storage.py | Schema V5: depends_on_json column, claim_dependencies table, cascade_events table, V4→V5 migration | — |
+| quorum.py | Gate 7 (premise rule), epistemic_ledger param on QuorumManager | — |
+| test_premise_rules.py | Field, dependency, dependents, premise check, enforce, cascade events, cascade triggers, schema migration, Gate 7, backward compat | 88 |
+
+**Premise Rule & Dependency Tracking tests: 88**
+
+**Total: 3703 tests**
 
 ## Common Mistakes to Avoid
 

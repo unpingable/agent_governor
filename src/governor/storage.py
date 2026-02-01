@@ -20,7 +20,7 @@ from uuid import UUID
 
 
 # Schema version for migrations
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 SCHEMA = """
@@ -223,6 +223,36 @@ CREATE TABLE IF NOT EXISTS epistemic_ledger_meta (
 """
 
 
+_SCHEMA_V5_ALTER = [
+    "ALTER TABLE epistemic_claims ADD COLUMN depends_on_json TEXT NOT NULL DEFAULT '[]'",
+]
+
+_SCHEMA_V5_TABLES = """
+CREATE TABLE IF NOT EXISTS claim_dependencies (
+    claim_id TEXT NOT NULL,
+    depends_on_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (claim_id, depends_on_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cd_depends_on ON claim_dependencies(depends_on_id);
+
+CREATE TABLE IF NOT EXISTS cascade_events (
+    event_id TEXT PRIMARY KEY,
+    trigger_claim_id TEXT NOT NULL,
+    trigger_reason TEXT NOT NULL,
+    affected_claim_id TEXT NOT NULL,
+    old_commit_level TEXT,
+    new_commit_level TEXT,
+    old_epistemic_status TEXT,
+    new_epistemic_status TEXT,
+    depth INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ce_trigger ON cascade_events(trigger_claim_id);
+CREATE INDEX IF NOT EXISTS idx_ce_affected ON cascade_events(affected_claim_id);
+"""
+
+
 @dataclass
 class Lease:
     """A resource lease for coordination."""
@@ -293,6 +323,9 @@ class Storage:
                 for stmt in _SCHEMA_V3_STMTS:
                     cursor.execute(stmt)
                 cursor.executescript(SCHEMA_V4)
+                for stmt in _SCHEMA_V5_ALTER:
+                    cursor.execute(stmt)
+                cursor.executescript(_SCHEMA_V5_TABLES)
                 cursor.execute(
                     "INSERT INTO schema_version (version) VALUES (?)",
                     (SCHEMA_VERSION,)
@@ -323,6 +356,13 @@ class Storage:
                     pass  # Column already exists (idempotent)
         if from_version < 4:
             cursor.executescript(SCHEMA_V4)
+        if from_version < 5:
+            for stmt in _SCHEMA_V5_ALTER:
+                try:
+                    cursor.execute(stmt)
+                except sqlite3.OperationalError:
+                    pass  # Column already exists (idempotent)
+            cursor.executescript(_SCHEMA_V5_TABLES)
         cursor.execute(
             "UPDATE schema_version SET version = ?", (to_version,)
         )

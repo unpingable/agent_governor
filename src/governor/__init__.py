@@ -66,6 +66,8 @@ from .epistemic import (
     DEFAULT_CONFIDENCE,
     MAX_PEER_CONFIDENCE,
     HIGH_CONFIDENCE_THRESHOLD,
+    CascadeEvent,
+    PremiseCheckResult,
 )
 
 # Regime detection
@@ -587,6 +589,8 @@ __all__ = [
     "DEFAULT_CONFIDENCE",
     "MAX_PEER_CONFIDENCE",
     "HIGH_CONFIDENCE_THRESHOLD",
+    "CascadeEvent",
+    "PremiseCheckResult",
     # Regime detection
     "OperationalRegime",
     "RegimeSignals",

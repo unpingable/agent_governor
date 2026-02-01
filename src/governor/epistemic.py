@@ -485,6 +485,10 @@ class GroundedClaim:
     # Separate from GroundedClaimStatus (governance) and QuorumStatus (process)
     epistemic_status: ClaimStatus | None = None  # None = legacy/unclassified
 
+    # Structural dependencies (Layer 4) — claim IDs this claim depends on
+    # Separate from `assumptions` (human-readable strings); these are machine-traversable edges.
+    depends_on: list[str] = field(default_factory=list)
+
     def __post_init__(self):
         """Clamp confidence to valid range."""
         self.confidence = max(0.0, min(1.0, self.confidence))
@@ -563,6 +567,8 @@ class GroundedClaim:
             d["assumptions"] = list(self.assumptions)
         if self.epistemic_status is not None:
             d["epistemic_status"] = self.epistemic_status.value
+        if self.depends_on:
+            d["depends_on"] = list(self.depends_on)
         return d
 
     @classmethod
@@ -584,7 +590,91 @@ class GroundedClaim:
             commit_level=data.get("commit_level"),
             assumptions=data.get("assumptions", []),
             epistemic_status=epistemic_status,
+            depends_on=data.get("depends_on", []),
         )
+
+
+# =============================================================================
+# Layer 4: Premise Rule & Dependency Tracking
+# =============================================================================
+
+
+# Statuses that invalidate a dependency for premise-rule purposes
+_BAD_EPISTEMIC_STATUSES: frozenset[ClaimStatus] = frozenset({
+    ClaimStatus.INVALIDATED,
+    ClaimStatus.STALE,
+    ClaimStatus.CONTESTED,
+    ClaimStatus.REFUSED,
+    ClaimStatus.EXPIRED,
+})
+
+
+@dataclass
+class CascadeEvent:
+    """Record of a dependency invalidation cascade step."""
+
+    event_id: str
+    trigger_claim_id: str
+    trigger_reason: str  # e.g. "retracted", "blocked", "status_invalidated"
+    affected_claim_id: str
+    old_commit_level: str | None = None
+    new_commit_level: str | None = None
+    old_epistemic_status: str | None = None
+    new_epistemic_status: str | None = None
+    depth: int = 1
+    created_at: datetime = field(default_factory=datetime.now)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "event_id": self.event_id,
+            "trigger_claim_id": self.trigger_claim_id,
+            "trigger_reason": self.trigger_reason,
+            "affected_claim_id": self.affected_claim_id,
+            "old_commit_level": self.old_commit_level,
+            "new_commit_level": self.new_commit_level,
+            "old_epistemic_status": self.old_epistemic_status,
+            "new_epistemic_status": self.new_epistemic_status,
+            "depth": self.depth,
+            "created_at": self.created_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "CascadeEvent":
+        return cls(
+            event_id=data["event_id"],
+            trigger_claim_id=data["trigger_claim_id"],
+            trigger_reason=data["trigger_reason"],
+            affected_claim_id=data["affected_claim_id"],
+            old_commit_level=data.get("old_commit_level"),
+            new_commit_level=data.get("new_commit_level"),
+            old_epistemic_status=data.get("old_epistemic_status"),
+            new_epistemic_status=data.get("new_epistemic_status"),
+            depth=data.get("depth", 1),
+            created_at=datetime.fromisoformat(data["created_at"]) if "created_at" in data else datetime.now(),
+        )
+
+
+@dataclass
+class PremiseCheckResult:
+    """Result of checking the premise rule for a claim."""
+
+    claim_id: str
+    passed: bool
+    violations: list[str] = field(default_factory=list)
+    # If enforce was called, whether a downgrade happened
+    downgraded: bool = False
+    old_commit_level: str | None = None
+    new_commit_level: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "claim_id": self.claim_id,
+            "passed": self.passed,
+            "violations": list(self.violations),
+            "downgraded": self.downgraded,
+            "old_commit_level": self.old_commit_level,
+            "new_commit_level": self.new_commit_level,
+        }
 
 
 # =============================================================================
@@ -634,6 +724,12 @@ class EpistemicLedger:
         self.total_promotions_forbidden: int = 0
         self.total_retractions: int = 0
 
+        # Layer 4: Dependency tracking
+        self._reverse_deps: dict[str, list[str]] = {}  # depends_on_id → [claim_id, ...]
+        self.cascade_history: list[CascadeEvent] = []
+        self.total_cascades: int = 0
+        self.total_cascade_downgrades: int = 0
+
         # Load from storage if available
         if self.storage:
             self._load_from_storage()
@@ -673,6 +769,14 @@ class EpistemicLedger:
         for row in cursor.fetchall():
             claim = self._from_row(row)
             self.claims[claim.claim_id] = claim
+
+        # Rebuild reverse dependency index from loaded claims
+        self._reverse_deps = {}
+        for claim in self.claims.values():
+            for dep_id in claim.depends_on:
+                self._reverse_deps.setdefault(dep_id, [])
+                if claim.claim_id not in self._reverse_deps[dep_id]:
+                    self._reverse_deps[dep_id].append(claim.claim_id)
 
     def _persist_claim(self, claim: GroundedClaim) -> None:
         """UPSERT a claim into SQLite storage."""
@@ -726,6 +830,7 @@ class EpistemicLedger:
             "epistemic_status": claim.epistemic_status.value if claim.epistemic_status else None,
             "commit_level": claim.commit_level,
             "assumptions_json": _json.dumps(claim.assumptions),
+            "depends_on_json": _json.dumps(claim.depends_on),
             "source_agent_id": claim.source_agent_id,
             "created_at": claim.created_at.isoformat(),
             "created_at_step": claim.created_at_step,
@@ -744,6 +849,13 @@ class EpistemicLedger:
         epistemic_status = ClaimStatus(epistemic_status_raw) if epistemic_status_raw else None
         assumptions_raw = row["assumptions_json"]
         assumptions = _json.loads(assumptions_raw) if assumptions_raw else []
+        # depends_on_json may not exist in older schemas — handle gracefully
+        depends_on_raw = None
+        try:
+            depends_on_raw = row["depends_on_json"]
+        except (IndexError, KeyError):
+            pass
+        depends_on = _json.loads(depends_on_raw) if depends_on_raw else []
 
         return GroundedClaim(
             claim_id=row["claim_id"],
@@ -755,6 +867,7 @@ class EpistemicLedger:
             epistemic_status=epistemic_status,
             commit_level=row["commit_level"],
             assumptions=assumptions,
+            depends_on=depends_on,
             source_agent_id=row["source_agent_id"],
             created_at=datetime.fromisoformat(row["created_at"]),
             created_at_step=row["created_at_step"],
@@ -1060,6 +1173,9 @@ class EpistemicLedger:
         if self.storage:
             self._persist_claim(claim)
 
+        # Layer 4: cascade invalidation to dependents
+        self.invalidation_cascade(claim_id, "blocked")
+
         return True
 
     def retract(self, claim_id: str, reason: str = "Explicit retraction") -> bool:
@@ -1083,6 +1199,9 @@ class EpistemicLedger:
         if self.storage:
             self._persist_claim(claim)
             self._persist_meta()
+
+        # Layer 4: cascade invalidation to dependents
+        self.invalidation_cascade(claim_id, "retracted")
 
         return True
 
@@ -1192,6 +1311,10 @@ class EpistemicLedger:
 
         if self.storage:
             self._persist_claim(claim)
+
+        # Layer 4: cascade when status goes to a bad state
+        if status in _BAD_EPISTEMIC_STATUSES:
+            self.invalidation_cascade(claim_id, f"status_{status.value}")
 
         return True
 
@@ -1320,6 +1443,302 @@ class EpistemicLedger:
         return entropy
 
     # =========================================================================
+    # Layer 4: Dependency Management
+    # =========================================================================
+
+    def add_dependency(self, claim_id: str, depends_on_id: str) -> bool:
+        """
+        Add a structural dependency: claim_id depends on depends_on_id.
+
+        Validates both claims exist, rejects self-loops and cycles.
+        Returns True if added, False on error. Idempotent for existing edges.
+        """
+        if claim_id not in self.claims or depends_on_id not in self.claims:
+            return False
+        if claim_id == depends_on_id:
+            return False
+
+        claim = self.claims[claim_id]
+
+        # Already exists — idempotent success
+        if depends_on_id in claim.depends_on:
+            return True
+
+        # Check for cycles before adding
+        if self._would_create_cycle(claim_id, depends_on_id):
+            return False
+
+        claim.depends_on.append(depends_on_id)
+        claim.last_updated_at = datetime.now()
+        claim.last_updated_step = self.step
+
+        # Update reverse index
+        self._reverse_deps.setdefault(depends_on_id, [])
+        if claim_id not in self._reverse_deps[depends_on_id]:
+            self._reverse_deps[depends_on_id].append(claim_id)
+
+        # Persist
+        if self.storage:
+            self._persist_claim(claim)
+            self._persist_dependency(claim_id, depends_on_id)
+
+        return True
+
+    def remove_dependency(self, claim_id: str, depends_on_id: str) -> bool:
+        """Remove a dependency edge. Returns True if removed."""
+        if claim_id not in self.claims:
+            return False
+
+        claim = self.claims[claim_id]
+        if depends_on_id not in claim.depends_on:
+            return False
+
+        claim.depends_on.remove(depends_on_id)
+        claim.last_updated_at = datetime.now()
+        claim.last_updated_step = self.step
+
+        # Update reverse index
+        if depends_on_id in self._reverse_deps:
+            deps = self._reverse_deps[depends_on_id]
+            if claim_id in deps:
+                deps.remove(claim_id)
+            if not deps:
+                del self._reverse_deps[depends_on_id]
+
+        # Persist
+        if self.storage:
+            self._persist_claim(claim)
+            self._remove_dependency_row(claim_id, depends_on_id)
+
+        return True
+
+    def get_dependents(self, claim_id: str) -> list[str]:
+        """Get direct dependents of a claim (who depends on this?)."""
+        return list(self._reverse_deps.get(claim_id, []))
+
+    def get_all_dependents(self, claim_id: str) -> list[str]:
+        """Get transitive closure of dependents via BFS."""
+        visited: set[str] = set()
+        queue = list(self._reverse_deps.get(claim_id, []))
+        result: list[str] = []
+
+        while queue:
+            dep = queue.pop(0)
+            if dep in visited:
+                continue
+            visited.add(dep)
+            result.append(dep)
+            queue.extend(self._reverse_deps.get(dep, []))
+
+        return result
+
+    def _would_create_cycle(self, claim_id: str, depends_on_id: str) -> bool:
+        """Check if adding claim_id→depends_on_id would create a cycle (DFS).
+
+        A cycle exists if, starting from depends_on_id and following existing
+        depends_on edges, we can reach claim_id.
+        """
+        visited: set[str] = set()
+        stack = [depends_on_id]
+
+        while stack:
+            node = stack.pop()
+            if node == claim_id:
+                return True
+            if node in visited:
+                continue
+            visited.add(node)
+            claim = self.claims.get(node)
+            if claim:
+                for dep in claim.depends_on:
+                    stack.append(dep)
+
+        return False
+
+    def _persist_dependency(self, claim_id: str, depends_on_id: str) -> None:
+        """Persist a dependency edge to SQLite."""
+        if not self.storage:
+            return
+        with self.storage.transaction() as cursor:
+            cursor.execute(
+                "INSERT OR IGNORE INTO claim_dependencies (claim_id, depends_on_id, created_at) "
+                "VALUES (?, ?, ?)",
+                (claim_id, depends_on_id, datetime.now().isoformat()),
+            )
+
+    def _remove_dependency_row(self, claim_id: str, depends_on_id: str) -> None:
+        """Remove a dependency edge from SQLite."""
+        if not self.storage:
+            return
+        with self.storage.transaction() as cursor:
+            cursor.execute(
+                "DELETE FROM claim_dependencies WHERE claim_id = ? AND depends_on_id = ?",
+                (claim_id, depends_on_id),
+            )
+
+    # =========================================================================
+    # Layer 4: Premise Rule Checking
+    # =========================================================================
+
+    def check_premise_rule(self, claim_id: str) -> PremiseCheckResult:
+        """
+        Check if a HARD claim's dependencies satisfy the premise rule.
+
+        Premise rule: HARD claims cannot depend on SOFT/STALE/INVALIDATED/CONTESTED/REFUSED claims.
+        Returns PremiseCheckResult with violations list.
+        """
+        claim = self.claims.get(claim_id)
+        if claim is None:
+            return PremiseCheckResult(claim_id=claim_id, passed=False, violations=["Claim not found"])
+
+        # Only HARD claims are subject to the premise rule
+        if claim.commit_level != "hard":
+            return PremiseCheckResult(claim_id=claim_id, passed=True)
+
+        violations: list[str] = []
+        for dep_id in claim.depends_on:
+            dep = self.claims.get(dep_id)
+            if dep is None:
+                violations.append(f"Dependency {dep_id} not found")
+                continue
+
+            # Check commit level: HARD deps must also be HARD
+            if dep.commit_level is not None and dep.commit_level != "hard":
+                violations.append(
+                    f"Dependency {dep_id} has commit_level={dep.commit_level} (not hard)"
+                )
+
+            # Check governance status: must be ACTIVE
+            if dep.status != GroundedClaimStatus.ACTIVE:
+                violations.append(
+                    f"Dependency {dep_id} has status={dep.status.value} (not active)"
+                )
+
+            # Check epistemic status: must not be in bad states
+            if dep.epistemic_status is not None and dep.epistemic_status in _BAD_EPISTEMIC_STATUSES:
+                violations.append(
+                    f"Dependency {dep_id} has epistemic_status={dep.epistemic_status.value}"
+                )
+
+        return PremiseCheckResult(
+            claim_id=claim_id,
+            passed=len(violations) == 0,
+            violations=violations,
+        )
+
+    def enforce_premise_rule(self, claim_id: str) -> PremiseCheckResult:
+        """
+        Check premise rule and downgrade HARD→SOFT on violation.
+
+        Returns PremiseCheckResult with downgrade info.
+        """
+        result = self.check_premise_rule(claim_id)
+
+        if not result.passed:
+            claim = self.claims.get(claim_id)
+            if claim is not None and claim.commit_level == "hard":
+                result.old_commit_level = "hard"
+                result.new_commit_level = "soft"
+                result.downgraded = True
+                claim.commit_level = "soft"
+                claim.last_updated_at = datetime.now()
+                claim.last_updated_step = self.step
+                if self.storage:
+                    self._persist_claim(claim)
+
+        return result
+
+    # =========================================================================
+    # Layer 4: Invalidation Cascade
+    # =========================================================================
+
+    def invalidation_cascade(
+        self, trigger_claim_id: str, reason: str
+    ) -> list[CascadeEvent]:
+        """
+        Cascade invalidation through dependents.
+
+        BFS through get_dependents(), downgrade HARD dependents to SOFT.
+        Returns list of CascadeEvents for audit trail.
+        """
+        events: list[CascadeEvent] = []
+        visited: set[str] = set()
+        queue: list[tuple[str, int]] = []  # (claim_id, depth)
+
+        # Seed the queue with direct dependents
+        for dep_id in self.get_dependents(trigger_claim_id):
+            queue.append((dep_id, 1))
+
+        while queue:
+            affected_id, depth = queue.pop(0)
+            if affected_id in visited:
+                continue
+            visited.add(affected_id)
+
+            claim = self.claims.get(affected_id)
+            if claim is None:
+                continue
+
+            # Only downgrade HARD → SOFT
+            if claim.commit_level == "hard":
+                old_level = claim.commit_level
+                claim.commit_level = "soft"
+                claim.last_updated_at = datetime.now()
+                claim.last_updated_step = self.step
+
+                event = CascadeEvent(
+                    event_id=f"ce_{uuid.uuid4().hex[:12]}",
+                    trigger_claim_id=trigger_claim_id,
+                    trigger_reason=reason,
+                    affected_claim_id=affected_id,
+                    old_commit_level=old_level,
+                    new_commit_level="soft",
+                    depth=depth,
+                )
+                events.append(event)
+                self.cascade_history.append(event)
+                self.total_cascade_downgrades += 1
+
+                if self.storage:
+                    self._persist_claim(claim)
+                    self._persist_cascade_event(event)
+
+            # Continue BFS to transitive dependents
+            for next_dep in self.get_dependents(affected_id):
+                if next_dep not in visited:
+                    queue.append((next_dep, depth + 1))
+
+        if events:
+            self.total_cascades += 1
+
+        return events
+
+    def _persist_cascade_event(self, event: CascadeEvent) -> None:
+        """Write a cascade event to SQLite."""
+        if not self.storage:
+            return
+        with self.storage.transaction() as cursor:
+            cursor.execute(
+                "INSERT INTO cascade_events "
+                "(event_id, trigger_claim_id, trigger_reason, affected_claim_id, "
+                "old_commit_level, new_commit_level, old_epistemic_status, new_epistemic_status, "
+                "depth, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    event.event_id,
+                    event.trigger_claim_id,
+                    event.trigger_reason,
+                    event.affected_claim_id,
+                    event.old_commit_level,
+                    event.new_commit_level,
+                    event.old_epistemic_status,
+                    event.new_epistemic_status,
+                    event.depth,
+                    event.created_at.isoformat(),
+                ),
+            )
+
+    # =========================================================================
     # Serialization
     # =========================================================================
 
@@ -1355,6 +1774,12 @@ class EpistemicLedger:
         ledger.total_promotions_attempted = data.get("total_promotions_attempted", 0)
         ledger.total_promotions_forbidden = data.get("total_promotions_forbidden", 0)
         ledger.total_retractions = data.get("total_retractions", 0)
+        # Rebuild reverse dependency index
+        for claim in ledger.claims.values():
+            for dep_id in claim.depends_on:
+                ledger._reverse_deps.setdefault(dep_id, [])
+                if claim.claim_id not in ledger._reverse_deps[dep_id]:
+                    ledger._reverse_deps[dep_id].append(claim.claim_id)
         return ledger
 
     @classmethod

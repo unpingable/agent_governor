@@ -464,6 +464,7 @@ class QuorumManager:
         dissent_ledger: DissentLedger | None = None,
         independence_scorer: Any | None = None,
         sybil_detector: Any | None = None,
+        epistemic_ledger: Any | None = None,
     ):
         self.policies = policies or dict(DEFAULT_POLICIES)
         self.quorums: dict[str, QuorumState] = {}  # proposal_id → QuorumState
@@ -471,6 +472,7 @@ class QuorumManager:
         self.dissent_ledger = dissent_ledger
         self.independence_scorer = independence_scorer
         self.sybil_detector = sybil_detector
+        self.epistemic_ledger = epistemic_ledger  # Layer 4: premise rule checking
 
     def get_policy(self, claim_type: ClaimType) -> QuorumPolicy:
         """Get the quorum policy for a claim type."""
@@ -683,6 +685,12 @@ class QuorumManager:
         if not passes:
             reasons.append(reason)
 
+        # Gate 7: Premise rule (Layer 4)
+        if self.epistemic_ledger is not None:
+            violations = self._check_premise_rule(qs)
+            for v in violations:
+                reasons.append(f"Premise rule: {v}")
+
         return len(reasons) == 0, reasons
 
     def contest(self, proposal_id: str, reason: str = "") -> bool:
@@ -880,6 +888,24 @@ class QuorumManager:
     # Internal
     # =========================================================================
 
+    def _check_premise_rule(self, qs: QuorumState) -> list[str]:
+        """Check premise rule for all HARD claims in the epistemic ledger.
+
+        Scans all active HARD claims and returns violation descriptions.
+        Gate 7: blocks proceed if any HARD claim has invalid dependencies.
+        """
+        violations: list[str] = []
+        if self.epistemic_ledger is None:
+            return violations
+
+        for claim in self.epistemic_ledger.hard_claims():
+            result = self.epistemic_ledger.check_premise_rule(claim.claim_id)
+            if not result.passed:
+                for v in result.violations:
+                    violations.append(f"claim {claim.claim_id}: {v}")
+
+        return violations
+
     def _check_evidence_types(self, qs: QuorumState) -> tuple[bool, str]:
         """Check if approve votes satisfy evidence type requirements.
 
@@ -991,9 +1017,10 @@ def create_quorum_manager(
     dissent_ledger: DissentLedger | None = None,
     independence_scorer: Any | None = None,
     sybil_detector: Any | None = None,
+    epistemic_ledger: Any | None = None,
 ) -> QuorumManager:
     """Create a QuorumManager with optional custom policies."""
-    return QuorumManager(policies, dissent_ledger, independence_scorer, sybil_detector)
+    return QuorumManager(policies, dissent_ledger, independence_scorer, sybil_detector, epistemic_ledger)
 
 
 def get_default_policy(claim_type: ClaimType) -> QuorumPolicy:

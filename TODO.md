@@ -1374,9 +1374,9 @@ author's voice. **This is the last core feature before deferred cross-cutting wo
   - `show`, `create`, `edit`, `check <file>`, `guidance`, `lock`, `unlock`, `delete`
   - Module: tests/test_tone.py (68 tests)
 
-### Phase T2: Corpus Analysis & Automatic Extraction
+### Phase T2: Corpus Analysis & Automatic Extraction ✓ COMPLETE
 
-- [ ] **Corpus ingestion** — Analyze reference writing to extract profile automatically
+- [x] **Corpus ingestion** — Analyze reference writing to extract profile automatically
   - `extract_tone_profile(corpus_files: list[Path])` → ToneProfile
   - Sentence extraction + length statistics (mean, variance)
   - Fragment detection (sentences without subject-verb structure)
@@ -1385,13 +1385,19 @@ author's voice. **This is the last core feature before deferred cross-cutting wo
   - Contraction frequency (it's/it is, don't/do not, etc.)
   - Rhetorical device frequency (em dashes, parentheticals, questions)
   - Opening/transition/closing pattern extraction (n-gram frequency at paragraph boundaries)
-  - Technical density: jargon ratio via vocabulary analysis
+  - Technical density: jargon ratio via vocabulary analysis (syllable-based complex word detection)
+  - Vocabulary extraction: frequent content words, adjective/verb classification by suffix heuristic
+  - Boolean aggregation: threshold-based (configurable, default 0.3)
   - CLI: `nonfiction-gov tone ingest reference_writing/*.md`
 
-- [ ] **Profile comparison** — Diff two profiles or profile vs text
-  - `compare_profiles(baseline, new)` → list of deviations
-  - Per-dimension deviation with tolerance thresholds
+- [x] **Profile comparison** — Diff two profiles or profile vs text
+  - `compare_profiles(baseline, new)` → list[ProfileDeviation]
+  - Per-dimension deviation with tolerance thresholds (numeric: per-dim, boolean: any change, string: any change)
+  - `ProfileDeviation` dataclass with dimension, values, deviation magnitude, significance flag
+  - CLI: `nonfiction-gov tone compare <file>` — extract + compare against active profile
   - Useful for: "has my voice drifted since chapter 1?"
+
+**54 new tests (122 total tone tests in tests/test_tone.py)**
 
 ### Phase T3: Style Enforcement as Invariant
 

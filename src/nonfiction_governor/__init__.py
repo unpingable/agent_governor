@@ -49,9 +49,12 @@ from .tone import (
     ToneCheckResult,
     ToneChecker,
     ToneManager,
+    ProfileDeviation,
     analyze_text,
     generate_tone_guidance,
     format_system_prompt,
+    extract_tone_profile,
+    compare_profiles,
 )
 
 
@@ -93,9 +96,12 @@ __all__ = [
     "ToneCheckResult",
     "ToneChecker",
     "ToneManager",
+    "ProfileDeviation",
     "analyze_text",
     "generate_tone_guidance",
     "format_system_prompt",
+    "extract_tone_profile",
+    "compare_profiles",
 ]
 
 __version__ = "0.1.0"

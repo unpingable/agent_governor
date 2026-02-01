@@ -666,6 +666,137 @@ def tone_delete(ctx: click.Context, confirm: bool) -> None:
     click.echo("Tone profile deleted.")
 
 
+@tone.command("ingest")
+@click.argument("files", nargs=-1, type=click.Path(exists=True))
+@click.option("--name", default="extracted", help="Profile name")
+@click.option("--threshold", default=0.3, help="Boolean feature threshold (0-1)")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def tone_ingest(
+    ctx: click.Context,
+    files: tuple[str, ...],
+    name: str,
+    threshold: float,
+    json_output: bool,
+) -> None:
+    """
+    Extract tone profile from reference writing files.
+
+    Analyzes one or more files and extracts a ToneProfile from the combined
+    writing style. Sets the result as the active profile.
+
+    Examples:
+        nonfiction-gov tone ingest reference_writing/*.md
+        nonfiction-gov tone ingest chapter1.md chapter2.md --name "my_voice"
+    """
+    from .tone import ToneManager, extract_tone_profile
+
+    if not files:
+        click.echo("Error: No files provided", err=True)
+        ctx.exit(1)
+        return
+
+    root = Path(ctx.obj.get("root", "."))
+    manager = ToneManager(root)
+
+    corpus_paths = [Path(f) for f in files]
+    profile = extract_tone_profile(
+        corpus_paths, name=name, bool_threshold=threshold,
+    )
+
+    manager.set_profile(profile)
+
+    if json_output:
+        click.echo(json.dumps(profile.to_dict(), indent=2))
+        return
+
+    click.echo(f"Extracted tone profile '{profile.name}' from {len(files)} file(s)")
+    click.echo(f"Saved to: {manager.profile_path}")
+    click.echo()
+    click.echo("Key dimensions:")
+    click.echo(f"  Avg sentence length: {profile.avg_sentence_length} words")
+    click.echo(f"  Sentence variance: {profile.sentence_length_variance:.1f}")
+    click.echo(f"  Contractions: {profile.contractions_frequency:.0%}")
+    click.echo(f"  Technical density: {profile.technical_density:.0%}")
+    click.echo(f"  Fragments: {'Yes' if profile.uses_fragments else 'No'}")
+    click.echo(f"  Second person: {'Yes' if profile.uses_second_person else 'No'}")
+    click.echo(f"  First person: {'Yes' if profile.uses_first_person else 'No'}")
+    click.echo(f"  Em dashes: {'Yes' if profile.uses_em_dashes else 'No'}")
+    click.echo(f"  Rhetorical questions: {'Yes' if profile.uses_rhetorical_questions else 'No'}")
+
+    if profile.opening_patterns:
+        click.echo(f"  Opening patterns: {profile.opening_patterns}")
+    if profile.favorite_adjectives:
+        click.echo(f"  Favorite adjectives: {profile.favorite_adjectives}")
+    if profile.favorite_verbs:
+        click.echo(f"  Favorite verbs: {profile.favorite_verbs}")
+
+
+@tone.command("compare")
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--tolerance", "-t", default=0.2, help="Tolerance for deviations")
+@click.option("--significant-only", is_flag=True, help="Show only significant deviations")
+@click.option("--json-output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def tone_compare(
+    ctx: click.Context,
+    file_path: str,
+    tolerance: float,
+    significant_only: bool,
+    json_output: bool,
+) -> None:
+    """
+    Compare a file's tone against the active profile.
+
+    Extracts a profile from the given file and compares it dimension-by-dimension
+    against the active tone profile. Useful for detecting voice drift.
+
+    Examples:
+        nonfiction-gov tone compare chapter5.md
+        nonfiction-gov tone compare draft.md --significant-only
+    """
+    from .tone import ToneManager, extract_tone_profile, compare_profiles
+
+    root = Path(ctx.obj.get("root", "."))
+    manager = ToneManager(root)
+
+    if not manager.has_profile:
+        click.echo("No active tone profile. Set one first with 'tone create' or 'tone ingest'.", err=True)
+        ctx.exit(1)
+        return
+
+    baseline = manager.profile
+    file_profile = extract_tone_profile([Path(file_path)], name="file")
+    deviations = compare_profiles(baseline, file_profile, tolerance=tolerance)
+
+    if significant_only:
+        deviations = [d for d in deviations if d.significant]
+
+    if json_output:
+        click.echo(json.dumps([d.to_dict() for d in deviations], indent=2))
+        return
+
+    click.echo(f"Comparing '{file_path}' against profile '{baseline.name}'")
+    click.echo()
+
+    if not deviations:
+        click.echo("No deviations detected.")
+        return
+
+    sig_count = sum(1 for d in deviations if d.significant)
+    click.echo(f"Deviations: {len(deviations)} total, {sig_count} significant")
+    click.echo()
+
+    for d in deviations:
+        marker = "[!]" if d.significant else "[ ]"
+        click.echo(f"  {marker} {d.message}")
+
+    if sig_count > 0:
+        click.echo()
+        click.echo(f"Voice drift detected: {sig_count} significant deviation(s)")
+        ctx.exit(1)
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

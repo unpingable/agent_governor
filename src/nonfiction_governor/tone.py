@@ -10,6 +10,7 @@ Phase T2: Corpus analysis and automatic extraction (future).
 Phase T3: StyleInvariant enforcement (future).
 """
 
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -702,3 +703,336 @@ class ToneManager:
         if self.profile is None:
             return ""
         return format_system_prompt(self.profile)
+
+
+# =============================================================================
+# Phase T2: Corpus Analysis & Automatic Extraction
+# =============================================================================
+
+
+@dataclass
+class ProfileDeviation:
+    """A deviation between two tone profiles on a single dimension."""
+
+    dimension: str
+    baseline_value: Any
+    other_value: Any
+    deviation: float  # Absolute diff for numeric, 1.0 for boolean/string changes
+    significant: bool  # Exceeds tolerance
+    message: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "dimension": self.dimension,
+            "baseline_value": self.baseline_value,
+            "other_value": self.other_value,
+            "deviation": self.deviation,
+            "significant": self.significant,
+            "message": self.message,
+        }
+
+
+# Common stop words for vocabulary analysis
+_STOP_WORDS = frozenset({
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "by", "from", "is", "are", "was", "were", "be", "been",
+    "being", "have", "has", "had", "do", "does", "did", "will", "would",
+    "could", "should", "may", "might", "shall", "can", "this", "that",
+    "these", "those", "it", "its", "not", "no", "if", "then", "than",
+    "so", "as", "up", "out", "about", "into", "over", "after", "before",
+    "between", "under", "during", "through", "each", "every", "all",
+    "both", "few", "more", "most", "other", "some", "such", "only",
+    "very", "just", "also", "now", "here", "there", "when", "where",
+    "how", "what", "which", "who", "whom", "why",
+})
+
+# Suffixes for heuristic word classification
+_ADJ_SUFFIXES = ("al", "ial", "ful", "ive", "ous", "ible", "able", "ic", "ical", "less", "ary")
+_VERB_SUFFIXES = ("ize", "ise", "ate", "ify", "en")
+
+
+def _count_syllables(word: str) -> int:
+    """Estimate syllable count using vowel group heuristic."""
+    word = word.lower().strip()
+    if not word:
+        return 0
+    count = 0
+    prev_vowel = False
+    for ch in word:
+        is_vowel = ch in "aeiouy"
+        if is_vowel and not prev_vowel:
+            count += 1
+        prev_vowel = is_vowel
+    # Silent e adjustment
+    if word.endswith("e") and count > 1:
+        count -= 1
+    return max(1, count)
+
+
+def _estimate_technical_density(words: list[str]) -> float:
+    """
+    Estimate technical density as proportion of complex words.
+
+    Complex = 3+ syllables and not a common stop word.
+    """
+    if not words:
+        return 0.0
+    content_words = [w.lower().strip(".,!?;:\"'()[]") for w in words]
+    content_words = [w for w in content_words if w and w not in _STOP_WORDS]
+    if not content_words:
+        return 0.0
+    complex_count = sum(1 for w in content_words if _count_syllables(w) >= 3)
+    return complex_count / len(content_words)
+
+
+def _extract_ngram_patterns(texts: list[str], n: int = 3, top_k: int = 5) -> list[str]:
+    """Extract the most frequent n-gram patterns from text snippets."""
+    patterns: Counter[str] = Counter()
+    for text in texts:
+        words = text.split()[:n]
+        if len(words) >= 2:
+            pattern = " ".join(words)
+            patterns[pattern] += 1
+    # Only return patterns seen more than once
+    return [p for p, c in patterns.most_common(top_k) if c > 1]
+
+
+def _extract_opening_patterns(paragraphs: list[str], top_n: int = 5) -> list[str]:
+    """Extract common opening patterns from first sentences of paragraphs."""
+    openings = []
+    for para in paragraphs:
+        sentences = _SENTENCE_PATTERN.findall(para)
+        if sentences:
+            openings.append(sentences[0].strip())
+    return _extract_ngram_patterns(openings, n=3, top_k=top_n)
+
+
+def _extract_transition_patterns(paragraphs: list[str], top_n: int = 5) -> list[str]:
+    """Extract transition patterns from non-first paragraphs."""
+    transitions = []
+    for para in paragraphs[1:]:  # Skip first paragraph
+        sentences = _SENTENCE_PATTERN.findall(para)
+        if sentences:
+            transitions.append(sentences[0].strip())
+    return _extract_ngram_patterns(transitions, n=3, top_k=top_n)
+
+
+def _extract_closing_patterns(paragraphs: list[str], top_n: int = 5) -> list[str]:
+    """Extract closing patterns from last sentences of paragraphs."""
+    closings = []
+    for para in paragraphs:
+        sentences = _SENTENCE_PATTERN.findall(para)
+        if sentences:
+            closings.append(sentences[-1].strip())
+    return _extract_ngram_patterns(closings, n=3, top_k=top_n)
+
+
+def _extract_frequent_content_words(
+    all_words: list[str],
+    stop_words: frozenset[str],
+    top_n: int = 20,
+) -> list[str]:
+    """Extract most frequent non-stop-word content words."""
+    cleaned = [w.lower().strip(".,!?;:\"'()[]") for w in all_words]
+    content = [w for w in cleaned if w and len(w) > 2 and w not in stop_words]
+    counts = Counter(content)
+    return [w for w, _ in counts.most_common(top_n)]
+
+
+def _classify_content_words(words: list[str]) -> tuple[list[str], list[str]]:
+    """Heuristically classify content words as adjectives or verbs by suffix."""
+    adjectives = []
+    verbs = []
+    for w in words:
+        lower = w.lower()
+        if any(lower.endswith(s) for s in _ADJ_SUFFIXES):
+            adjectives.append(lower)
+        elif any(lower.endswith(s) for s in _VERB_SUFFIXES):
+            verbs.append(lower)
+    return adjectives[:5], verbs[:5]
+
+
+def extract_tone_profile(
+    corpus_files: list[Path],
+    name: str = "extracted",
+    bool_threshold: float = 0.3,
+) -> ToneProfile:
+    """
+    Analyze reference writing files to automatically extract a ToneProfile.
+
+    Reads each file, runs analyze_text(), and aggregates metrics:
+    - Numeric dimensions: averaged across files
+    - Boolean dimensions: True if proportion of files >= bool_threshold
+    - Patterns: extracted from combined text via n-gram frequency
+    - Vocabulary: frequency analysis across all text
+    """
+    if not corpus_files:
+        return ToneProfile(name=name)
+
+    # Analyze each file
+    file_metrics: list[dict[str, Any]] = []
+    all_text_parts: list[str] = []
+
+    for path in corpus_files:
+        text = path.read_text()
+        if not text.strip():
+            continue
+        metrics = analyze_text(text)
+        if not metrics.get("empty"):
+            file_metrics.append(metrics)
+            all_text_parts.append(text)
+
+    if not file_metrics:
+        return ToneProfile(name=name)
+
+    n = len(file_metrics)
+
+    # Aggregate numeric dimensions (averages)
+    avg_sentence_length = round(
+        sum(m["avg_sentence_length"] for m in file_metrics) / n
+    )
+    sentence_length_variance = round(
+        sum(m["sentence_length_variance"] for m in file_metrics) / n, 1
+    )
+    avg_paragraph_length = round(
+        sum(m.get("avg_paragraph_length", 4) for m in file_metrics) / n
+    )
+    contractions_frequency = round(
+        sum(m["contractions_frequency"] for m in file_metrics) / n, 2
+    )
+
+    # Aggregate boolean dimensions (threshold-based)
+    def bool_agg(key: str) -> bool:
+        count = sum(1 for m in file_metrics if m.get(key, False))
+        return count / n >= bool_threshold
+
+    uses_fragments = bool_agg("uses_fragments")
+    uses_colons_for_emphasis = bool_agg("uses_colons_for_emphasis")
+    uses_single_sentence_paragraphs = bool_agg("uses_single_sentence_paragraphs")
+    uses_second_person = bool_agg("uses_second_person")
+    uses_first_person = bool_agg("uses_first_person")
+    uses_rhetorical_questions = bool_agg("uses_rhetorical_questions")
+    uses_parentheticals = bool_agg("uses_parentheticals")
+    uses_em_dashes = bool_agg("uses_em_dashes")
+    uses_ellipses = bool_agg("uses_ellipses")
+
+    # Combined text analysis for patterns and vocabulary
+    combined_text = "\n\n".join(all_text_parts)
+    all_paragraphs = [p.strip() for p in combined_text.split("\n\n") if p.strip()]
+    all_words = combined_text.split()
+
+    # Pattern extraction
+    opening_patterns = _extract_opening_patterns(all_paragraphs)
+    transition_patterns = _extract_transition_patterns(all_paragraphs)
+    closing_patterns = _extract_closing_patterns(all_paragraphs)
+
+    # Vocabulary analysis
+    technical_density = round(_estimate_technical_density(all_words), 2)
+    frequent_words = _extract_frequent_content_words(all_words, _STOP_WORDS, top_n=20)
+    adjectives, verbs = _classify_content_words(frequent_words)
+
+    return ToneProfile(
+        name=name,
+        description=f"Extracted from {n} reference file(s)",
+        avg_sentence_length=avg_sentence_length,
+        sentence_length_variance=sentence_length_variance,
+        uses_fragments=uses_fragments,
+        uses_colons_for_emphasis=uses_colons_for_emphasis,
+        avg_paragraph_length=avg_paragraph_length,
+        uses_single_sentence_paragraphs=uses_single_sentence_paragraphs,
+        uses_second_person=uses_second_person,
+        uses_first_person=uses_first_person,
+        contractions_frequency=contractions_frequency,
+        uses_rhetorical_questions=uses_rhetorical_questions,
+        uses_parentheticals=uses_parentheticals,
+        uses_em_dashes=uses_em_dashes,
+        uses_ellipses=uses_ellipses,
+        opening_patterns=opening_patterns,
+        transition_patterns=transition_patterns,
+        closing_patterns=closing_patterns,
+        favorite_adjectives=adjectives,
+        favorite_verbs=verbs,
+        technical_density=technical_density,
+    )
+
+
+def compare_profiles(
+    baseline: ToneProfile,
+    other: ToneProfile,
+    tolerance: float = 0.2,
+) -> list[ProfileDeviation]:
+    """
+    Compare two profiles dimension-by-dimension.
+
+    Returns a list of deviations. Each deviation indicates whether
+    it is significant (exceeds tolerance).
+    """
+    deviations: list[ProfileDeviation] = []
+
+    # Numeric comparisons with per-dimension tolerances
+    numeric_dims: list[tuple[str, float]] = [
+        ("avg_sentence_length", 5.0),           # 5-word tolerance
+        ("sentence_length_variance", 3.0),       # 3-word std deviation
+        ("avg_paragraph_length", 2.0),           # 2-sentence tolerance
+        ("contractions_frequency", tolerance),    # direct tolerance
+        ("technical_density", tolerance),         # direct tolerance
+        ("sarcasm_frequency", tolerance),         # direct tolerance
+    ]
+
+    for dim, tol in numeric_dims:
+        bv = getattr(baseline, dim)
+        ov = getattr(other, dim)
+        diff = abs(bv - ov)
+        sig = diff > tol
+        if diff > 0:
+            deviations.append(ProfileDeviation(
+                dimension=dim,
+                baseline_value=bv,
+                other_value=ov,
+                deviation=round(diff, 3),
+                significant=sig,
+                message=(
+                    f"{dim}: {bv} → {ov} (Δ={diff:.2f})"
+                    + (" [SIGNIFICANT]" if sig else "")
+                ),
+            ))
+
+    # Boolean comparisons
+    bool_dims = [
+        "uses_fragments", "uses_colons_for_emphasis",
+        "uses_single_sentence_paragraphs",
+        "uses_second_person", "uses_first_person",
+        "uses_rhetorical_questions", "uses_parentheticals",
+        "uses_em_dashes", "uses_ellipses",
+        "uses_profanity", "uses_pop_culture_refs",
+    ]
+
+    for dim in bool_dims:
+        bv = getattr(baseline, dim)
+        ov = getattr(other, dim)
+        if bv != ov:
+            deviations.append(ProfileDeviation(
+                dimension=dim,
+                baseline_value=bv,
+                other_value=ov,
+                deviation=1.0,
+                significant=True,
+                message=f"{dim}: {bv} → {ov} [SIGNIFICANT]",
+            ))
+
+    # String comparisons
+    string_dims = ["header_style", "uses_lists", "example_placement"]
+    for dim in string_dims:
+        bv = getattr(baseline, dim)
+        ov = getattr(other, dim)
+        if bv != ov:
+            deviations.append(ProfileDeviation(
+                dimension=dim,
+                baseline_value=bv,
+                other_value=ov,
+                deviation=1.0,
+                significant=True,
+                message=f"{dim}: '{bv}' → '{ov}' [SIGNIFICANT]",
+            ))
+
+    return deviations

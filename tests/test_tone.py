@@ -1,8 +1,10 @@
 """
-Tests for Phase T1: ToneProfile & Manual Authoring.
+Tests for Tone Profiling (Phase T1 + T2).
 
-Tests the ToneProfile dataclass, text analysis, tone checking,
+Phase T1: ToneProfile dataclass, text analysis, tone checking,
 guidance generation, and ToneManager persistence.
+
+Phase T2: Corpus analysis, automatic extraction, profile comparison.
 """
 
 import json
@@ -15,9 +17,19 @@ from nonfiction_governor.tone import (
     ToneCheckResult,
     ToneChecker,
     ToneManager,
+    ProfileDeviation,
     analyze_text,
     generate_tone_guidance,
     format_system_prompt,
+    extract_tone_profile,
+    compare_profiles,
+    _count_syllables,
+    _estimate_technical_density,
+    _extract_ngram_patterns,
+    _extract_opening_patterns,
+    _extract_frequent_content_words,
+    _classify_content_words,
+    _STOP_WORDS,
 )
 
 
@@ -616,3 +628,518 @@ class TestFullWorkflow:
         guidance = generate_tone_guidance(loaded)
         assert "profanity" in guidance.lower()
         assert "Always be direct." in guidance
+
+
+# =============================================================================
+# Phase T2: Corpus Analysis & Automatic Extraction
+# =============================================================================
+
+
+# Helper function tests
+# =============================================================================
+
+
+class TestCountSyllables:
+    def test_one_syllable(self):
+        assert _count_syllables("cat") == 1
+        assert _count_syllables("the") == 1
+        assert _count_syllables("dog") == 1
+
+    def test_two_syllables(self):
+        assert _count_syllables("happy") == 2
+        assert _count_syllables("running") == 2
+
+    def test_three_syllables(self):
+        assert _count_syllables("beautiful") == 3
+        assert _count_syllables("important") == 3
+
+    def test_silent_e(self):
+        assert _count_syllables("change") == 1
+        assert _count_syllables("produce") == 2
+
+    def test_empty(self):
+        assert _count_syllables("") == 0
+
+    def test_minimum_one(self):
+        assert _count_syllables("x") >= 1
+
+
+class TestEstimateTechnicalDensity:
+    def test_simple_text(self):
+        words = "the cat sat on the mat".split()
+        density = _estimate_technical_density(words)
+        assert density == 0.0  # No complex words
+
+    def test_technical_text(self):
+        words = "the implementation demonstrates architectural complexity in adversarial environments".split()
+        density = _estimate_technical_density(words)
+        assert density > 0.3  # Several complex words
+
+    def test_empty(self):
+        assert _estimate_technical_density([]) == 0.0
+
+    def test_all_stop_words(self):
+        words = "the and or but is are was were".split()
+        assert _estimate_technical_density(words) == 0.0
+
+
+class TestExtractNgramPatterns:
+    def test_repeated_patterns(self):
+        texts = [
+            "The problem is simple.",
+            "The problem is complex.",
+            "Something else entirely.",
+            "The problem is obvious.",
+        ]
+        patterns = _extract_ngram_patterns(texts, n=3, top_k=5)
+        assert len(patterns) >= 1
+        assert any("problem" in p.lower() for p in patterns)
+
+    def test_no_repeats(self):
+        texts = ["Alpha beta gamma.", "Delta epsilon zeta.", "Eta theta iota."]
+        patterns = _extract_ngram_patterns(texts, n=3, top_k=5)
+        assert len(patterns) == 0  # Nothing repeated more than once
+
+    def test_empty(self):
+        assert _extract_ngram_patterns([], n=3, top_k=5) == []
+
+
+class TestExtractOpeningPatterns:
+    def test_with_repeated_openings(self):
+        paragraphs = [
+            "The key insight here is important. More details follow.",
+            "The key insight here is subtle. Even more to say.",
+            "Something different entirely. No pattern.",
+            "The key insight here is profound. Final thoughts.",
+        ]
+        patterns = _extract_opening_patterns(paragraphs)
+        assert len(patterns) >= 1
+
+    def test_no_patterns(self):
+        paragraphs = ["Unique opening one.", "Different start two.", "Another thing three."]
+        patterns = _extract_opening_patterns(paragraphs)
+        assert len(patterns) == 0
+
+
+class TestExtractFrequentContentWords:
+    def test_basic(self):
+        words = "system system system design design test test test test".split()
+        frequent = _extract_frequent_content_words(words, _STOP_WORDS, top_n=5)
+        assert "test" in frequent
+        assert "system" in frequent
+        assert "design" in frequent
+
+    def test_filters_stop_words(self):
+        words = "the the the and and and system".split()
+        frequent = _extract_frequent_content_words(words, _STOP_WORDS, top_n=5)
+        assert "the" not in frequent
+        assert "and" not in frequent
+
+    def test_filters_short_words(self):
+        words = "is am on at it system design".split()
+        frequent = _extract_frequent_content_words(words, _STOP_WORDS, top_n=5)
+        for w in frequent:
+            assert len(w) > 2
+
+
+class TestClassifyContentWords:
+    def test_adjective_detection(self):
+        words = ["structural", "beautiful", "creative", "powerful", "system"]
+        adjectives, verbs = _classify_content_words(words)
+        assert "structural" in adjectives
+        assert "beautiful" in adjectives
+        assert "creative" in adjectives
+        assert "powerful" in adjectives
+
+    def test_verb_detection(self):
+        words = ["organize", "stabilize", "integrate", "simplify", "system"]
+        adjectives, verbs = _classify_content_words(words)
+        assert "organize" in verbs or "stabilize" in verbs
+        assert "simplify" in verbs
+
+    def test_max_five_each(self):
+        words = [
+            "structural", "beautiful", "creative", "powerful", "functional",
+            "logical", "additional", "organize", "stabilize", "integrate",
+            "simplify", "purify", "normalize",
+        ]
+        adjectives, verbs = _classify_content_words(words)
+        assert len(adjectives) <= 5
+        assert len(verbs) <= 5
+
+
+# extract_tone_profile tests
+# =============================================================================
+
+
+class TestExtractToneProfile:
+    def _write_file(self, tmp_path: Path, name: str, content: str) -> Path:
+        p = tmp_path / name
+        p.write_text(content)
+        return p
+
+    def test_empty_file_list(self):
+        profile = extract_tone_profile([])
+        assert profile.name == "extracted"
+
+    def test_single_file(self, tmp_path):
+        f = self._write_file(tmp_path, "sample.md", (
+            "This is a test sentence. Here is another one. "
+            "And a third sentence with more words.\n\n"
+            "Second paragraph here. It's got contractions. Don't you think?"
+        ))
+        profile = extract_tone_profile([f])
+        assert profile.name == "extracted"
+        assert profile.avg_sentence_length > 0
+        assert profile.description == "Extracted from 1 reference file(s)"
+
+    def test_multiple_files(self, tmp_path):
+        f1 = self._write_file(tmp_path, "a.md", (
+            "Short sentence. Another short one. Brief.\n\n"
+            "Second paragraph. Also brief."
+        ))
+        f2 = self._write_file(tmp_path, "b.md", (
+            "This is a much longer sentence with many more words in it. "
+            "Another long sentence that goes on and on.\n\n"
+            "Yet another paragraph. With somewhat longer sentences too."
+        ))
+        profile = extract_tone_profile([f1, f2])
+        assert profile.description == "Extracted from 2 reference file(s)"
+        # Average should be between the two files
+        assert profile.avg_sentence_length > 0
+
+    def test_empty_files_skipped(self, tmp_path):
+        f1 = self._write_file(tmp_path, "empty.md", "")
+        f2 = self._write_file(tmp_path, "good.md", "This has content. Real sentences here.")
+        profile = extract_tone_profile([f1, f2])
+        assert profile.description == "Extracted from 1 reference file(s)"
+
+    def test_boolean_threshold(self, tmp_path):
+        # 1 of 3 files uses fragments -- below 0.5 threshold, above 0.3 threshold
+        f1 = self._write_file(tmp_path, "a.md", "Just so. Brief. No.")
+        f2 = self._write_file(tmp_path, "b.md", "This is a complete sentence with many words. Here is another full sentence.")
+        f3 = self._write_file(tmp_path, "c.md", "This has several complete sentences in it. They are all nicely formed sentences.")
+
+        profile_low = extract_tone_profile([f1, f2, f3], bool_threshold=0.3)
+        assert profile_low.uses_fragments is True  # 1/3 >= 0.3
+
+        profile_high = extract_tone_profile([f1, f2, f3], bool_threshold=0.5)
+        assert profile_high.uses_fragments is False  # 1/3 < 0.5
+
+    def test_contractions_extracted(self, tmp_path):
+        f = self._write_file(tmp_path, "contractions.md", (
+            "It's a great system. Don't you think? We can't deny it."
+        ))
+        profile = extract_tone_profile([f])
+        assert profile.contractions_frequency > 0.5
+
+    def test_no_contractions_extracted(self, tmp_path):
+        f = self._write_file(tmp_path, "formal.md", (
+            "It is a great system. Do you not think so? We cannot deny it."
+        ))
+        profile = extract_tone_profile([f])
+        assert profile.contractions_frequency < 0.5
+
+    def test_em_dashes_detected(self, tmp_path):
+        f = self._write_file(tmp_path, "dashes.md", (
+            "The system\u2014when properly configured\u2014works well. "
+            "Another sentence with an em dash\u2014like this."
+        ))
+        profile = extract_tone_profile([f])
+        assert profile.uses_em_dashes is True
+
+    def test_second_person_detected(self, tmp_path):
+        f = self._write_file(tmp_path, "you.md", (
+            "You should consider this approach. Your workflow will improve."
+        ))
+        profile = extract_tone_profile([f])
+        assert profile.uses_second_person is True
+
+    def test_technical_density(self, tmp_path):
+        f = self._write_file(tmp_path, "technical.md", (
+            "The implementation demonstrates architectural complexity. "
+            "Adversarial environments require sophisticated countermeasures. "
+            "Institutional resilience depends on organizational preparedness."
+        ))
+        profile = extract_tone_profile([f])
+        assert profile.technical_density > 0.2
+
+    def test_custom_name(self, tmp_path):
+        f = self._write_file(tmp_path, "sample.md", "Some content here. More words.")
+        profile = extract_tone_profile([f], name="my_voice")
+        assert profile.name == "my_voice"
+
+    def test_vocabulary_extraction(self, tmp_path):
+        f = self._write_file(tmp_path, "vocab.md", (
+            "The structural analysis reveals fundamental problems. "
+            "Structural issues are often invisible. "
+            "The structural integrity of the system is questionable. "
+            "We must organize and stabilize the architecture."
+        ))
+        profile = extract_tone_profile([f])
+        # Should extract some adjectives/verbs from frequent words
+        assert isinstance(profile.favorite_adjectives, list)
+        assert isinstance(profile.favorite_verbs, list)
+
+    def test_all_empty_files(self, tmp_path):
+        f1 = self._write_file(tmp_path, "a.md", "")
+        f2 = self._write_file(tmp_path, "b.md", "   ")
+        profile = extract_tone_profile([f1, f2])
+        assert profile.name == "extracted"
+        assert profile.avg_sentence_length == 18  # default
+
+    def test_rhetorical_questions(self, tmp_path):
+        f = self._write_file(tmp_path, "questions.md", (
+            "Why do we build these systems? Because they matter. "
+            "What happens when they fail? Everything breaks."
+        ))
+        profile = extract_tone_profile([f])
+        assert profile.uses_rhetorical_questions is True
+
+    def test_parentheticals(self, tmp_path):
+        f = self._write_file(tmp_path, "parens.md", (
+            "The approach (while unconventional) proved effective. "
+            "Results (shown in Table 1) confirm this."
+        ))
+        profile = extract_tone_profile([f])
+        assert profile.uses_parentheticals is True
+
+    def test_colons_detected(self, tmp_path):
+        f = self._write_file(tmp_path, "colons.md", (
+            "The problem: Nobody pays attention. The solution: Automate everything."
+        ))
+        profile = extract_tone_profile([f])
+        assert profile.uses_colons_for_emphasis is True
+
+
+# ProfileDeviation tests
+# =============================================================================
+
+
+class TestProfileDeviation:
+    def test_basic(self):
+        d = ProfileDeviation(
+            dimension="sentence_length",
+            baseline_value=18,
+            other_value=25,
+            deviation=7.0,
+            significant=True,
+            message="sentence_length: 18 → 25 (Δ=7.00) [SIGNIFICANT]",
+        )
+        assert d.dimension == "sentence_length"
+        assert d.significant is True
+
+    def test_to_dict(self):
+        d = ProfileDeviation(
+            dimension="contractions",
+            baseline_value=0.7,
+            other_value=0.3,
+            deviation=0.4,
+            significant=True,
+            message="contractions: 0.7 → 0.3",
+        )
+        data = d.to_dict()
+        assert data["dimension"] == "contractions"
+        assert data["deviation"] == 0.4
+        assert data["significant"] is True
+
+
+# compare_profiles tests
+# =============================================================================
+
+
+class TestCompareProfiles:
+    def test_identical_profiles(self):
+        p1 = ToneProfile(name="a")
+        p2 = ToneProfile(name="b")
+        deviations = compare_profiles(p1, p2)
+        assert len(deviations) == 0
+
+    def test_sentence_length_deviation(self):
+        p1 = ToneProfile(avg_sentence_length=18)
+        p2 = ToneProfile(avg_sentence_length=25)
+        deviations = compare_profiles(p1, p2)
+        length_devs = [d for d in deviations if d.dimension == "avg_sentence_length"]
+        assert len(length_devs) == 1
+        assert length_devs[0].significant is True  # 7 > 5 tolerance
+        assert length_devs[0].deviation == 7.0
+
+    def test_sentence_length_within_tolerance(self):
+        p1 = ToneProfile(avg_sentence_length=18)
+        p2 = ToneProfile(avg_sentence_length=21)
+        deviations = compare_profiles(p1, p2)
+        length_devs = [d for d in deviations if d.dimension == "avg_sentence_length"]
+        assert len(length_devs) == 1
+        assert length_devs[0].significant is False  # 3 <= 5 tolerance
+
+    def test_contraction_deviation(self):
+        p1 = ToneProfile(contractions_frequency=0.8)
+        p2 = ToneProfile(contractions_frequency=0.3)
+        deviations = compare_profiles(p1, p2, tolerance=0.2)
+        contraction_devs = [d for d in deviations if d.dimension == "contractions_frequency"]
+        assert len(contraction_devs) == 1
+        assert contraction_devs[0].significant is True
+
+    def test_boolean_deviation(self):
+        p1 = ToneProfile(uses_fragments=True)
+        p2 = ToneProfile(uses_fragments=False)
+        deviations = compare_profiles(p1, p2)
+        frag_devs = [d for d in deviations if d.dimension == "uses_fragments"]
+        assert len(frag_devs) == 1
+        assert frag_devs[0].significant is True
+        assert frag_devs[0].deviation == 1.0
+
+    def test_boolean_same_no_deviation(self):
+        p1 = ToneProfile(uses_fragments=True)
+        p2 = ToneProfile(uses_fragments=True)
+        deviations = compare_profiles(p1, p2)
+        frag_devs = [d for d in deviations if d.dimension == "uses_fragments"]
+        assert len(frag_devs) == 0
+
+    def test_string_deviation(self):
+        p1 = ToneProfile(header_style="statement")
+        p2 = ToneProfile(header_style="provocative")
+        deviations = compare_profiles(p1, p2)
+        style_devs = [d for d in deviations if d.dimension == "header_style"]
+        assert len(style_devs) == 1
+        assert style_devs[0].significant is True
+
+    def test_multiple_deviations(self):
+        p1 = ToneProfile(
+            avg_sentence_length=18,
+            uses_fragments=True,
+            uses_em_dashes=True,
+            contractions_frequency=0.8,
+        )
+        p2 = ToneProfile(
+            avg_sentence_length=30,
+            uses_fragments=False,
+            uses_em_dashes=False,
+            contractions_frequency=0.2,
+        )
+        deviations = compare_profiles(p1, p2)
+        significant = [d for d in deviations if d.significant]
+        assert len(significant) >= 4
+
+    def test_tolerance_parameter(self):
+        p1 = ToneProfile(contractions_frequency=0.5)
+        p2 = ToneProfile(contractions_frequency=0.6)
+
+        # With tight tolerance, this is significant
+        devs_tight = compare_profiles(p1, p2, tolerance=0.05)
+        sig_tight = [d for d in devs_tight if d.dimension == "contractions_frequency" and d.significant]
+        assert len(sig_tight) == 1
+
+        # With loose tolerance, this is not significant
+        devs_loose = compare_profiles(p1, p2, tolerance=0.2)
+        sig_loose = [d for d in devs_loose if d.dimension == "contractions_frequency" and d.significant]
+        assert len(sig_loose) == 0
+
+    def test_all_deviations_have_messages(self):
+        p1 = ToneProfile(
+            avg_sentence_length=10,
+            uses_fragments=True,
+            header_style="question",
+        )
+        p2 = ToneProfile(
+            avg_sentence_length=20,
+            uses_fragments=False,
+            header_style="statement",
+        )
+        deviations = compare_profiles(p1, p2)
+        for d in deviations:
+            assert d.message
+            assert d.dimension
+
+    def test_technical_density_deviation(self):
+        p1 = ToneProfile(technical_density=0.1)
+        p2 = ToneProfile(technical_density=0.5)
+        deviations = compare_profiles(p1, p2)
+        td_devs = [d for d in deviations if d.dimension == "technical_density"]
+        assert len(td_devs) == 1
+        assert td_devs[0].significant is True  # 0.4 > 0.2
+
+    def test_sarcasm_deviation(self):
+        p1 = ToneProfile(sarcasm_frequency=0.0)
+        p2 = ToneProfile(sarcasm_frequency=0.5)
+        deviations = compare_profiles(p1, p2)
+        sarc_devs = [d for d in deviations if d.dimension == "sarcasm_frequency"]
+        assert len(sarc_devs) == 1
+        assert sarc_devs[0].significant is True
+
+
+# Integration: extract then compare
+# =============================================================================
+
+
+class TestExtractAndCompare:
+    def test_extract_then_compare_identical(self, tmp_path):
+        """Extracting a profile from text, then comparing the same text should yield few deviations."""
+        text = (
+            "You should always validate your assumptions. Don't skip this step. "
+            "It's the most important part of the process.\n\n"
+            "Why does this matter? Because unchecked assumptions lead to failures. "
+            "Your system\u2014no matter how well designed\u2014will break without validation."
+        )
+        f = tmp_path / "reference.md"
+        f.write_text(text)
+
+        # Extract profile from reference
+        baseline = extract_tone_profile([f], name="reference")
+
+        # Compare the same text against the extracted profile
+        checker = ToneChecker(baseline)
+        result = checker.check(text)
+        # Should mostly match since we extracted from the same text
+        assert len(result.violations) <= 2  # Allow minor rounding differences
+
+    def test_drift_detection(self, tmp_path):
+        """Detect voice drift between conversational reference and formal new writing."""
+        # Conversational reference
+        ref = tmp_path / "reference.md"
+        ref.write_text(
+            "Here's the thing: you can't trust AI outputs blindly. Don't do it. "
+            "It's a recipe for disaster\u2014and everyone knows it.\n\n"
+            "Why? Because they hallucinate. They confabulate. They make things up."
+        )
+
+        # Formal new writing (drifted)
+        new = tmp_path / "chapter5.md"
+        new.write_text(
+            "In this analysis, we examine the structural dynamics of information "
+            "operations in the context of temporal coherence frameworks. The primary "
+            "consideration is the relationship between adversarial persistence and "
+            "institutional memory deficits."
+        )
+
+        baseline = extract_tone_profile([ref], name="my_voice")
+        new_profile = extract_tone_profile([new], name="chapter5")
+        deviations = compare_profiles(baseline, new_profile)
+        significant = [d for d in deviations if d.significant]
+
+        # Should detect multiple significant deviations
+        assert len(significant) >= 2
+
+    def test_consistent_voice(self, tmp_path):
+        """Same-style writing should produce few significant deviations."""
+        ref = tmp_path / "reference.md"
+        ref.write_text(
+            "The system processes data efficiently. It validates inputs carefully. "
+            "Errors are logged and reported automatically.\n\n"
+            "Performance matters. Reliability matters more. Both are achievable."
+        )
+
+        new = tmp_path / "new.md"
+        new.write_text(
+            "The module handles authentication securely. It checks credentials carefully. "
+            "Failures are tracked and escalated automatically.\n\n"
+            "Security matters. Correctness matters more. Both are necessary."
+        )
+
+        baseline = extract_tone_profile([ref])
+        new_profile = extract_tone_profile([new])
+        deviations = compare_profiles(baseline, new_profile)
+        significant = [d for d in deviations if d.significant]
+
+        # Similar style should produce few significant deviations
+        assert len(significant) <= 3

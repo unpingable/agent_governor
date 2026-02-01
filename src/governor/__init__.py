@@ -490,6 +490,42 @@ from .auto_tuning import (
     analyze_thresholds_from_metrics,
 )
 
+# Sybil resistance (bloc detection, Neff, origin budgets)
+from .sybil import (
+    SybilEventType,
+    ProvenanceVector,
+    Bloc,
+    NeffResult,
+    OriginBudget,
+    SybilEvent,
+    SybilConfig,
+    BlocDetector,
+    OriginBudgetTracker,
+    SybilDetector,
+    create_sybil_detector,
+    compute_neff,
+)
+
+# Research mode (non-convergent epistemic control)
+from .research import (
+    HypothesisState,
+    TerminalStateType,
+    PromotionBlockReason,
+    ResearchConfig,
+    EvidenceImpulse,
+    Hypothesis,
+    TerminalState,
+    EntropyCheckResult,
+    DominanceCheckResult,
+    DeltaTCheckResult,
+    EntropyMonitor,
+    DominanceMonitor,
+    TimescaleMonitor,
+    ResearchLedger,
+    create_research_ledger,
+    create_research_config,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -889,6 +925,36 @@ __all__ = [
     "AutoTuner",
     "create_auto_tuner",
     "analyze_thresholds_from_metrics",
+    # Sybil resistance (bloc detection, Neff, origin budgets)
+    "SybilEventType",
+    "ProvenanceVector",
+    "Bloc",
+    "NeffResult",
+    "OriginBudget",
+    "SybilEvent",
+    "SybilConfig",
+    "BlocDetector",
+    "OriginBudgetTracker",
+    "SybilDetector",
+    "create_sybil_detector",
+    "compute_neff",
+    # Research mode (non-convergent epistemic control)
+    "HypothesisState",
+    "TerminalStateType",
+    "PromotionBlockReason",
+    "ResearchConfig",
+    "EvidenceImpulse",
+    "Hypothesis",
+    "TerminalState",
+    "EntropyCheckResult",
+    "DominanceCheckResult",
+    "DeltaTCheckResult",
+    "EntropyMonitor",
+    "DominanceMonitor",
+    "TimescaleMonitor",
+    "ResearchLedger",
+    "create_research_ledger",
+    "create_research_config",
 ]
 
 __version__ = "0.6.0"

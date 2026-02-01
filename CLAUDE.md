@@ -27,7 +27,7 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Ops Governor**: Runbook verification, time window enforcement, blast radius limits, precondition chains.
 **Claim Diff**: Epistemic state change detection, confidence drift, provenance laundering, evidence erosion, silent retraction.
 **Claim Signals**: Implicit claim extraction from text, date/entity/quantity/assertive detection, assertiveness scoring, ledger integration.
-**Config Profiles**: Named governance presets (strict, permissive, research, production, audit), custom profiles, one-command switching.
+**Config Profiles**: Named governance presets (strict, permissive, research, production, audit, research_mode), custom profiles, one-command switching.
 **Dissent Ledger**: Contradiction persistence, first-class objections, commit gating, confidence trajectories.
 **TTL Enforcement**: Recency decay, volatility classes (PERMANENT→EPHEMERAL), revalidation scheduling.
 **Quorum State Machine**: Multi-agent consensus protocol, Δt stability windows, claim-type policies, dissent/TTL integration, risk levels, fingerprint gating, escalation/resolution states.
@@ -38,7 +38,9 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Tainted Claim Similarity**: Token-set Jaccard fingerprinting, inverted index candidate retrieval, exact/near-duplicate detection, audit events, configurable thresholds.
 **Context Drift Detection**: Narrative mode tracking with hysteresis, genre escalation gating, register shift detection, mode chatter warnings.
 **Fiction Guardrails**: Consent tracking (pairwise, scoped), DSI detection, AII with validity profiles, hard constraints (C1-C3), soft penalties (P1-P4).
-**Total: 3132 tests**
+**Sybil Resistance**: Bloc detection, effective voter count (Neff), per-origin budget coupling, quorum Gate 5 integration, escalation triggers.
+**Research Mode**: Non-convergent epistemic control, hypothesis lifecycle (PROBE→TENTATIVE→SUPPORTED→ABANDONED), entropy bounds, dominance caps, evidence impulses with decay, Δt invariant, terminal states.
+**Total: 3454 tests**
 
 ## Key Documents
 
@@ -394,6 +396,8 @@ src/governor/
 ├── auto_tuning.py    # ThresholdTuner, ResetTracker, SetpointCalibrator, BudgetSweeper, AutoTuner, Pareto analysis
 ├── puppet.py         # PuppetProfile, PuppetRenderer, PuppetDiffGuard, PuppetRegistry, persona pinning, semantic diff guard
 ├── taint.py          # TaintIndex, Fingerprint, token-set Jaccard, inverted index, recurrence detection
+├── sybil.py          # BlocDetector, SybilDetector, NeffResult, ProvenanceVector, OriginBudgetTracker
+├── research.py       # ResearchLedger, Hypothesis, EntropyMonitor, DominanceMonitor, TimescaleMonitor
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -612,7 +616,7 @@ src/ops_governor/
 |--------|-------------|-------|
 | profiles.py | ProfileManager, ProfileSettings, 5 builtins (strict/permissive/research/production/audit), apply_profile | 45 |
 
-**Config Profiles tests: 45**
+**Config Profiles tests: 46**
 
 ### Dissent Ledger (Contradiction Persistence)
 | Module | Description | Tests |
@@ -695,7 +699,21 @@ src/ops_governor/
 
 **Non-Fiction Governor tests: 91**
 
-**Total: 3132 tests**
+### Sybil Resistance (Bloc Detection, Neff)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| sybil.py | ProvenanceVector, BlocDetector, NeffResult, OriginBudgetTracker, SybilDetector, quorum Gate 5 | 75 |
+
+**Sybil Resistance tests: 75**
+
+### Research Mode (Non-Convergent Epistemic Control)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| research.py | HypothesisState, ResearchConfig, EvidenceImpulse, Hypothesis, EntropyMonitor, DominanceMonitor, TimescaleMonitor, ResearchLedger, TerminalState | 137 |
+
+**Research Mode tests: 137**
+
+**Total: 3454 tests**
 
 ## Common Mistakes to Avoid
 

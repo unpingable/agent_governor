@@ -122,6 +122,7 @@ class TestBuiltinProfiles:
         assert "research" in BUILTIN_PROFILES
         assert "production" in BUILTIN_PROFILES
         assert "audit" in BUILTIN_PROFILES
+        assert "research_mode" in BUILTIN_PROFILES
 
     def test_strict_profile(self):
         p = BUILTIN_PROFILES["strict"]
@@ -156,8 +157,15 @@ class TestBuiltinProfiles:
         for name, p in BUILTIN_PROFILES.items():
             assert p.description, f"Profile {name} missing description"
 
+    def test_research_mode_profile(self):
+        p = BUILTIN_PROFILES["research_mode"]
+        assert p.envelope_mode == "exploratory"
+        assert p.strict_mode is False
+        assert p.boil_preset == "OOLONG"
+        assert p.jurisdiction == "SPECULATIVE"
+
     def test_count(self):
-        assert len(BUILTIN_PROFILES) == 5
+        assert len(BUILTIN_PROFILES) == 6
 
 
 # =============================================================================
@@ -331,7 +339,7 @@ class TestCustomProfiles:
         profiles = mgr.list_profiles()
         assert "a" in profiles
         assert "b" in profiles
-        assert len(profiles) == 7  # 5 builtin + 2 custom
+        assert len(profiles) == 8  # 6 builtin + 2 custom
 
 
 # =============================================================================
@@ -426,7 +434,7 @@ class TestEdgeCases:
         (gov_dir / "profiles.json").write_text("{}")
         mgr = ProfileManager(governor_dir=gov_dir)
         # Should still have builtins
-        assert len(mgr.list_profiles()) == 5
+        assert len(mgr.list_profiles()) == 6
 
     def test_switch_between_profiles(self, gov_dir):
         mgr = ProfileManager(governor_dir=gov_dir)

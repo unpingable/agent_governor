@@ -269,6 +269,10 @@ class Vote:
     # Evidence persistence fields
     model_id: str | None = None
     source_urls: frozenset[str] = field(default_factory=frozenset)
+    # Sybil resistance fields
+    provider_id: str | None = None
+    response_time_ms: float | None = None
+    error_hash: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -290,6 +294,12 @@ class Vote:
             d["model_id"] = self.model_id
         if self.source_urls:
             d["source_urls"] = sorted(self.source_urls)
+        if self.provider_id is not None:
+            d["provider_id"] = self.provider_id
+        if self.response_time_ms is not None:
+            d["response_time_ms"] = self.response_time_ms
+        if self.error_hash is not None:
+            d["error_hash"] = self.error_hash
         return d
 
     @classmethod
@@ -307,6 +317,9 @@ class Vote:
             prompt_hash=data.get("prompt_hash"),
             model_id=data.get("model_id"),
             source_urls=frozenset(data.get("source_urls", [])),
+            provider_id=data.get("provider_id"),
+            response_time_ms=data.get("response_time_ms"),
+            error_hash=data.get("error_hash"),
         )
 
 
@@ -442,12 +455,14 @@ class QuorumManager:
         policies: dict[ClaimType, QuorumPolicy] | None = None,
         dissent_ledger: DissentLedger | None = None,
         independence_scorer: Any | None = None,
+        sybil_detector: Any | None = None,
     ):
         self.policies = policies or dict(DEFAULT_POLICIES)
         self.quorums: dict[str, QuorumState] = {}  # proposal_id → QuorumState
         self.history: list[dict[str, Any]] = []     # transition log
         self.dissent_ledger = dissent_ledger
         self.independence_scorer = independence_scorer
+        self.sybil_detector = sybil_detector
 
     def get_policy(self, claim_type: ClaimType) -> QuorumPolicy:
         """Get the quorum policy for a claim type."""
@@ -509,6 +524,9 @@ class QuorumManager:
         prompt_hash: str | None = None,
         model_id: str | None = None,
         source_urls: frozenset[str] | None = None,
+        provider_id: str | None = None,
+        response_time_ms: float | None = None,
+        error_hash: str | None = None,
     ) -> Vote | None:
         """
         Cast a vote on a proposal.
@@ -542,6 +560,9 @@ class QuorumManager:
             prompt_hash=prompt_hash,
             model_id=model_id,
             source_urls=source_urls or frozenset(),
+            provider_id=provider_id,
+            response_time_ms=response_time_ms,
+            error_hash=error_hash,
         )
         qs.votes[agent_id] = vote
         self._log("vote_cast", proposal_id, agent_id=agent_id, verdict=verdict.value)
@@ -635,6 +656,19 @@ class QuorumManager:
                     f"Independence score {result.score:.2f} below threshold "
                     f"{qs.policy.independence_threshold:.2f}"
                 )
+
+        # Gate 5: Sybil resistance check
+        if self.sybil_detector is not None:
+            approve_votes = [
+                v for v in qs.votes.values()
+                if v.verdict == VoteVerdict.APPROVE
+            ]
+            passes, neff_result, sybil_reasons = self.sybil_detector.check_votes(
+                approve_votes, proposal_id, required_k=qs.policy.min_voters
+            )
+            if not passes:
+                for r in sybil_reasons:
+                    reasons.append(f"Sybil resistance: {r}")
 
         return len(reasons) == 0, reasons
 
@@ -915,9 +949,10 @@ def create_quorum_manager(
     policies: dict[ClaimType, QuorumPolicy] | None = None,
     dissent_ledger: DissentLedger | None = None,
     independence_scorer: Any | None = None,
+    sybil_detector: Any | None = None,
 ) -> QuorumManager:
     """Create a QuorumManager with optional custom policies."""
-    return QuorumManager(policies, dissent_ledger, independence_scorer)
+    return QuorumManager(policies, dissent_ledger, independence_scorer, sybil_detector)
 
 
 def get_default_policy(claim_type: ClaimType) -> QuorumPolicy:

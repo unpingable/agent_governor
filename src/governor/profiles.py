@@ -96,6 +96,14 @@ BUILTIN_PROFILES: dict[str, ProfileSettings] = {
         strict_mode=True,
         description="Maximum enforcement for audit/compliance review.",
     ),
+    "research_mode": ProfileSettings(
+        envelope_mode="exploratory",
+        boil_preset="OOLONG",
+        jurisdiction="SPECULATIVE",
+        strict_mode=False,
+        description="Non-convergent epistemic control: hypothesis lifecycle, "
+                    "entropy bounds, dominance caps, evidence impulses with decay.",
+    ),
 }
 
 

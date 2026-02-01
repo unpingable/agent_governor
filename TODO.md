@@ -980,7 +980,7 @@ All reference implementations are in `ingest/epistemic_governor/src/epistemic_go
 - `jurisdictions/` - Context-specific governance rules
 
 Remaining design specifications in `ingest/`:
-- `multi2.md` - Δt quorum governor (semantic enforcement gaps, ~75% done)
+- `multi2.md` - Δt quorum governor (semantic enforcement gaps, ~85% done — L1-L5 complete, L6 remaining)
 - `regime.md` - Grounding audit pipeline (assertion/cascade/roles gaps, ~85% done)
 - `next.md` - Semantic entropy (conceptual, fiction guardrails portion complete)
 - `next2.md` - Nonfiction CFI (not started, requires human authority decisions)
@@ -1009,6 +1009,81 @@ Named here so they lose their power. See `ingest/ratholes.md` for full context.
 | 10 | Auto-Publish Workflows | Removes human judgment on "should this exist?" | Quality automation, not quantity automation |
 
 **When to revisit:** Only when you have (1) real failure from NOT having it, (2) empirical data to validate the approach, (3) clear success metric. NOT when it "feels right" or "completes the theory."
+
+---
+
+## Design Principles (from ingest/)
+
+### Dogfooding Policy (from `ingest/ondogfooding.md`)
+
+**Core rule: The governor is NOT its own priest. It can be its own fuzzer.**
+
+Bad dogfooding (core-corrupting):
+- Governor writes governor rules
+- Governor evaluates governor behavior
+- Governor updates itself based on that loop
+- → closed epistemic circuit, self-sealing, drift invisible
+
+Good self-validation (corner-case discovery):
+- Governor enumerates edge cases and failure-inducing prompts
+- Runs them through the same deterministic checks
+- Does NOT auto-change invariants
+- Outputs a triage queue for human review
+- Any changes are manual, tracked, reversible
+
+Safety rails:
+- **No auto-patching.** Only propose diffs.
+- **No invariant mutation.** Only suggest.
+- **All changes require a signed human decision.**
+- **Record full reproduction bundle** (prompt hashes, model IDs, outputs, evidence table state).
+- **Prefer generating failing tests** over generating fixes. (Tests are truth; fixes are hope.)
+
+Where dogfooding IS appropriate: interface layers (Web UI, VS Code), workflow ergonomics,
+latency/friction, whether refusal feels legible or just annoying. Those are tooling problems,
+not epistemic ones.
+
+### MCP Integration Constitution (from `ingest/mcp.md`)
+
+Guidelines for when MCP tools are wired into the governor. Not for now — for future-you.
+
+1. **Default is sensor-only** — actuators disabled by policy until explicitly enabled
+2. **Actuators require explicit authority + scope** — commitment-mode only, idempotency key, rollback plan, HitL approval
+3. **Budgets are first-class** — rate/cost/time/retry/staleness budgets per tool (anti-windup)
+4. **Fail closed on uncertainty** — unknown outcome = do not assume success
+5. **No tool-output laundering** — tool results become evidence objects (L1/L3), not narrative
+6. **Separation of loops** — governor loop (admissibility) / tool loop (evidence) / human loop (irreversible) never all closed by system
+7. **Hysteresis on escalation** — local reasoning → cached → cheap tool → expensive tool → human. No oscillation.
+8. **Everything is replayable** — reproduction bundle per tool call (name/version, inputs hash, outputs hash, latency)
+
+Practical classification:
+- **Sensors** (read-only): filesystem read, URL fetch, citations lookup, calculator, corpus search
+- **Actuators** (state-mutating): require commitment-mode gates + human approval
+
+Fault model: assume MCP servers are flaky, slow, and occasionally wrong. Treat as hostile network I/O.
+
+### Multi-Model Voter Architecture (from `ingest/otherflavors.md`)
+
+When wiring non-Claude models as quorum voters, treat them as stateless opinion sources
+with different epistemic priors. Independence > intelligence.
+
+| Model | Role | Strength | Use As |
+|-------|------|----------|--------|
+| **Claude/Codex** | Operator & builder | Tool use, nuance, repo-aware edits | Primary agent |
+| **DeepSeek** | Cold logic & synthesis | Formal reasoning, consistency auditing, deductive | Reasoning witness (read-only, stateless, high-latency OK) |
+| **Gemini** | Conservative sanity | Summarization consistency, conventional interpretations | Style/tone canary, counterargument generator |
+| **Grok** | Discourse distortion sensor | Internet discourse patterns, activation detection | Cultural pressure sensor (quarantined, never tie-breaker) |
+
+Design principles:
+- **Role separation beats averaging** — ask orthogonal questions, not the same question
+- **Score on disagreement value** — a voter that always agrees is dead weight
+- **Some models should be allowed to be wrong** — if never wrong, probably redundant
+- **Latency diversity is a feature** — fast + slow models surface different failure modes
+- Wire through same permissions/provenance/prompt-hash plumbing for independence scoring
+- Grok is a wind tunnel for bad incentives, not a judge — always downstream simulation
+
+Implementation: each model becomes an adapter (`voter_<model>.py`) with strict JSON schema
+outputs, rate limiting, retry, and full provenance recording (model name, prompt hash,
+response hash, latency, token usage).
 
 ---
 
@@ -1171,20 +1246,28 @@ GroundedClaim, EvidenceRef, CommitLevel, etc. Wire them through, don't duplicate
   - Hooked into `retract()`, `block()`, `set_epistemic_status()` (for INVALIDATED/STALE/CONTESTED/REFUSED/EXPIRED)
   - Module: tests/test_premise_rules.py (88 tests)
 
-### Layer 5: Roles & Scheduling (higher-level policy)
+### Layer 5: Roles & Scheduling (higher-level policy) ✅
 
-- [ ] **Agent role assignment** — `quorum.py` or new thin layer
-  - Roles: proposer, retriever, falsifier, synthesizer
-  - Per-proposal role tracking (which agent filled which role)
-  - Policy: HIGH-risk claims require at least one falsifier attempt
-  - Budget per role (max_tool_calls, max_rounds)
-  - Consider whether this extends `Vote` (add role field) vs separate table
-  - Spec ref: `multi2.md` §2
+- [x] **Agent role assignment** — `quorum.py`
+  - `AgentRole` enum: PROPOSER, RETRIEVER, FALSIFIER, SYNTHESIZER
+  - `RoleBudget` dataclass with `DEFAULT_ROLE_BUDGETS` per RiskLevel (LOW/MEDIUM/HIGH)
+  - `required_roles` on `QuorumPolicy` — default policies require appropriate roles per claim type
+  - `agent_role` on `Vote` — tracks which role each voter fills
+  - `role_assignments` / `roles_filled` / `missing_roles` on `QuorumState`
+  - Gate 8 in `can_proceed()` — blocks if required roles not filled
+  - HIGH risk auto-adds FALSIFIER requirement regardless of claim type
+  - Full to_dict/from_dict serialization, backward compatible (role fields optional)
+  - Spec ref: `multi2.md` §2, §7
 
-- [ ] **Periodic revalidation scheduling** — `ttl.py` integration
-  - TTL expiry triggers PERIODIC_REVALIDATION audit automatically
-  - Currently: TTLManager has policies and schedules but no automation hook
-  - Wire: TTLManager.get_revalidation_schedule() → AuditPipeline.periodic_audit()
+- [x] **Periodic revalidation scheduling** — `ttl.py` integration
+  - `RevalidationOrchestrator`: wires TTLManager → AuditPipeline (stage=PERIODIC)
+  - `RevalidationResult` / `RevalidationRun` dataclasses for structured output
+  - Lifecycle: enforce decay → get schedule → audit each claim → update epistemic status
+  - `_build_signals()` enriches DetectionSignals from epistemic ledger evidence_refs
+  - `_update_epistemic_status()`: ALLOW_HARD=passed, DOWNGRADE_SOFT=STALE, BLOCK=INVALIDATED
+  - `create_revalidation_orchestrator()` convenience function
+  - Tracks metrics: claims_checked, passed, degraded, blocked, errors
+  - Module: tests/test_roles_revalidation.py (67 tests)
   - Spec ref: `regime.md` §2.3
 
 ### Layer 6: ClaimStatus FSM Enforcement (shape defined in L2, transitions enforced here)

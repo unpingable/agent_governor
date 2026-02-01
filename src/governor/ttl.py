@@ -407,3 +407,284 @@ def create_ttl_manager(
 ) -> TTLManager:
     """Create a TTL manager with optional custom policies."""
     return TTLManager(policies)
+
+
+# =============================================================================
+# Revalidation Orchestrator (Layer 5)
+# =============================================================================
+
+# Map volatility class to claim risk for audit
+_VOLATILITY_TO_RISK: dict[str, str] = {
+    "permanent": "low",
+    "stable": "low",
+    "moderate": "medium",
+    "volatile": "high",
+    "ephemeral": "high",
+}
+
+
+@dataclass
+class RevalidationResult:
+    """Result of a single claim revalidation."""
+
+    claim_id: str
+    urgency: float
+    audit_passed: bool
+    audit_decision: str  # "allow_hard", "downgrade_soft", "block", etc.
+    new_status: str | None = None  # Status update if any
+    error: str | None = None  # Error message if audit failed
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "claim_id": self.claim_id,
+            "urgency": self.urgency,
+            "audit_passed": self.audit_passed,
+            "audit_decision": self.audit_decision,
+        }
+        if self.new_status:
+            d["new_status"] = self.new_status
+        if self.error:
+            d["error"] = self.error
+        return d
+
+
+@dataclass
+class RevalidationRun:
+    """Result of a full revalidation orchestration run."""
+
+    timestamp: datetime
+    claims_checked: int
+    claims_passed: int
+    claims_degraded: int
+    claims_blocked: int
+    decay_events: list[DecayEvent]
+    results: list[RevalidationResult]
+    errors: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "timestamp": self.timestamp.isoformat(),
+            "claims_checked": self.claims_checked,
+            "claims_passed": self.claims_passed,
+            "claims_degraded": self.claims_degraded,
+            "claims_blocked": self.claims_blocked,
+            "decay_events": len(self.decay_events),
+            "errors": self.errors,
+            "results": [r.to_dict() for r in self.results],
+        }
+
+
+class RevalidationOrchestrator:
+    """
+    Orchestrates periodic revalidation of TTL-tracked claims.
+
+    Wires TTLManager.revalidation_schedule() → AuditPipeline.audit(stage=PERIODIC).
+    Updates claim status based on audit results.
+
+    Usage:
+        orch = RevalidationOrchestrator(ttl_manager, audit_pipeline)
+        run = orch.run()  # enforce decay, audit stale claims
+    """
+
+    def __init__(
+        self,
+        ttl_manager: TTLManager,
+        audit_pipeline: Any | None = None,
+        epistemic_ledger: Any | None = None,
+        max_per_run: int = 50,
+    ):
+        self.ttl_manager = ttl_manager
+        self.audit_pipeline = audit_pipeline
+        self.epistemic_ledger = epistemic_ledger
+        self.max_per_run = max_per_run
+        self.history: list[RevalidationRun] = []
+        self.total_runs: int = 0
+        self.total_revalidated: int = 0
+        self.total_degraded: int = 0
+        self.total_blocked: int = 0
+
+    def run(self, now: datetime | None = None) -> RevalidationRun:
+        """
+        Execute a revalidation run:
+        1. Enforce decay on all tracked claims
+        2. Get revalidation schedule (urgency-sorted)
+        3. For each claim needing revalidation, run periodic audit
+        4. Update claim status based on audit results
+        5. Revalidate claims that pass audit
+
+        Returns a RevalidationRun with full results.
+        """
+        now = now or datetime.now()
+
+        # Step 1: Enforce decay
+        decay_events = self.ttl_manager.enforce(now)
+
+        # Step 2: Get schedule (capped at max_per_run)
+        schedule = self.ttl_manager.revalidation_schedule(now)
+        schedule = schedule[:self.max_per_run]
+
+        results: list[RevalidationResult] = []
+        passed = 0
+        degraded = 0
+        blocked = 0
+        errors = 0
+
+        for entry in schedule:
+            result = self._revalidate_claim(entry, now)
+            results.append(result)
+
+            if result.error:
+                errors += 1
+            elif result.audit_passed:
+                passed += 1
+            elif result.audit_decision in ("downgrade_soft", "needs_more_work"):
+                degraded += 1
+            else:
+                blocked += 1
+
+        run_result = RevalidationRun(
+            timestamp=now,
+            claims_checked=len(schedule),
+            claims_passed=passed,
+            claims_degraded=degraded,
+            claims_blocked=blocked,
+            decay_events=decay_events,
+            results=results,
+            errors=errors,
+        )
+
+        self.history.append(run_result)
+        self.total_runs += 1
+        self.total_revalidated += passed
+        self.total_degraded += degraded
+        self.total_blocked += blocked
+
+        return run_result
+
+    def _revalidate_claim(
+        self, entry: RevalidationEntry, now: datetime
+    ) -> RevalidationResult:
+        """Revalidate a single claim via audit pipeline."""
+        claim_id = entry.claim_id
+
+        # If no audit pipeline, just mark as needing manual review
+        if self.audit_pipeline is None:
+            return RevalidationResult(
+                claim_id=claim_id,
+                urgency=entry.urgency,
+                audit_passed=False,
+                audit_decision="no_pipeline",
+                error="No audit pipeline configured",
+            )
+
+        try:
+            # Import here to avoid circular imports
+            from .audit import AuditStage, DetectionSignals, ClaimRisk, AuditDecision
+
+            # Build detection signals from available data
+            signals = self._build_signals(claim_id, entry)
+
+            # Map volatility to risk
+            risk_str = _VOLATILITY_TO_RISK.get(entry.volatility.value, "medium")
+            risk = ClaimRisk(risk_str)
+
+            # Run periodic audit
+            audit_result = self.audit_pipeline.audit(
+                assertion_id=claim_id,
+                signals=signals,
+                claim_type="static_fact",  # Default; could be enriched from ledger
+                risk=risk,
+                stage=AuditStage.PERIODIC,
+                notes=f"TTL revalidation (urgency={entry.urgency:.2f})",
+            )
+
+            audit_passed = audit_result.decision == AuditDecision.ALLOW_HARD
+            decision_str = audit_result.decision.value
+
+            # Update claim state based on result
+            new_status = None
+            if audit_result.decision == AuditDecision.ALLOW_HARD:
+                # Claim revalidated successfully
+                self.ttl_manager.revalidate(claim_id)
+                new_status = "revalidated"
+            elif audit_result.decision == AuditDecision.DOWNGRADE_SOFT:
+                new_status = "degraded"
+                self._update_epistemic_status(claim_id, "STALE")
+            elif audit_result.decision == AuditDecision.BLOCK:
+                new_status = "blocked"
+                self._update_epistemic_status(claim_id, "INVALIDATED")
+
+            return RevalidationResult(
+                claim_id=claim_id,
+                urgency=entry.urgency,
+                audit_passed=audit_passed,
+                audit_decision=decision_str,
+                new_status=new_status,
+            )
+
+        except Exception as e:
+            return RevalidationResult(
+                claim_id=claim_id,
+                urgency=entry.urgency,
+                audit_passed=False,
+                audit_decision="error",
+                error=str(e),
+            )
+
+    def _build_signals(
+        self, claim_id: str, entry: RevalidationEntry
+    ) -> Any:
+        """Build DetectionSignals for a claim being revalidated."""
+        from .audit import DetectionSignals
+
+        # Start with default signals
+        signals = DetectionSignals()
+
+        # Set confidence from TTL tracking
+        signals.confidence = entry.current_confidence
+
+        # If epistemic ledger available, enrich signals
+        if self.epistemic_ledger is not None:
+            claim = self.epistemic_ledger.claims.get(claim_id)
+            if claim is not None:
+                signals.confidence = claim.confidence
+                signals.evidence_count = len(claim.evidence_refs)
+                signals.evidence_strength = min(
+                    1.0, sum(e.confidence for e in claim.evidence_refs)
+                ) if claim.evidence_refs else 0.0
+
+        return signals
+
+    def _update_epistemic_status(self, claim_id: str, status_name: str) -> None:
+        """Update claim's epistemic status in the ledger if available."""
+        if self.epistemic_ledger is None:
+            return
+
+        try:
+            from .epistemic import ClaimStatus
+            status = ClaimStatus(status_name)
+            self.epistemic_ledger.set_epistemic_status(claim_id, status)
+        except (ValueError, KeyError):
+            pass  # Status not found or claim not in ledger
+
+    def get_metrics(self) -> dict[str, Any]:
+        return {
+            "total_runs": self.total_runs,
+            "total_revalidated": self.total_revalidated,
+            "total_degraded": self.total_degraded,
+            "total_blocked": self.total_blocked,
+            "max_per_run": self.max_per_run,
+            "history_entries": len(self.history),
+        }
+
+
+def create_revalidation_orchestrator(
+    ttl_manager: TTLManager,
+    audit_pipeline: Any | None = None,
+    epistemic_ledger: Any | None = None,
+    max_per_run: int = 50,
+) -> RevalidationOrchestrator:
+    """Create a RevalidationOrchestrator with the given dependencies."""
+    return RevalidationOrchestrator(
+        ttl_manager, audit_pipeline, epistemic_ledger, max_per_run
+    )

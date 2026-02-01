@@ -14,6 +14,7 @@ import pytest
 from governor.quorum import (
     DEFAULT_POLICIES,
     TERMINAL_STATES,
+    AgentRole,
     ClaimType,
     QuorumManager,
     QuorumPolicy,
@@ -727,9 +728,9 @@ class TestDissentIntegration:
         mgr = QuorumManager()
         now = datetime(2024, 6, 1)
         mgr.create_quorum("p1", ClaimType.JUDGMENT, created_at=now)
-        mgr.cast_vote("p1", "human:reviewer", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
-        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT))
+        mgr.cast_vote("p1", "human:reviewer", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT), agent_role=AgentRole.SYNTHESIZER)
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT), agent_role=AgentRole.RETRIEVER)
+        mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.JUDGMENT), agent_role=AgentRole.FALSIFIER)
         mgr.update("p1", now=now + timedelta(seconds=700))
 
         can, reasons = mgr.can_proceed("p1", now=now + timedelta(seconds=700))
@@ -934,7 +935,7 @@ class TestEdgeCases:
         assert qs.status == QuorumStatus.COLLECTING
 
         # Vote (k=2, threshold=0.67)
-        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.STATIC_FACT))
+        mgr.cast_vote("p1", "a1", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.STATIC_FACT), agent_role=AgentRole.RETRIEVER)
         assert qs.status == QuorumStatus.COLLECTING  # k not met yet
         mgr.cast_vote("p1", "a2", VoteVerdict.APPROVE, "ok", timestamp=now, evidence=_evidence_for(ClaimType.STATIC_FACT))
         assert qs.status == QuorumStatus.STABILIZING  # threshold met

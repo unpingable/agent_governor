@@ -132,6 +132,22 @@ _RISK_MULTIPLIERS: dict["RiskLevel", float] = {
 }
 
 
+class AgentRole(str, Enum):
+    """Roles agents play in the quorum process (Layer 5)."""
+
+    PROPOSER = "proposer"
+    """Creates claim + initial rationale. Must list dependencies/assumptions."""
+
+    RETRIEVER = "retriever"
+    """Gathers corroborating evidence via tools/sources. Must record evidence or 'no evidence found'."""
+
+    FALSIFIER = "falsifier"
+    """Attempts to disconfirm (counterexamples, alternatives, conflicting sources)."""
+
+    SYNTHESIZER = "synthesizer"
+    """Produces final candidate statement with uncertainty annotations and open objections."""
+
+
 # Terminal states — no further transitions allowed
 TERMINAL_STATES: frozenset[QuorumStatus] = frozenset({
     QuorumStatus.FAILED,
@@ -154,6 +170,40 @@ def compute_fingerprint(proposal_id: str, claim_type: ClaimType, content: str = 
 
 
 # =============================================================================
+# Role Budgets (Layer 5)
+# =============================================================================
+
+
+@dataclass
+class RoleBudget:
+    """Per-role resource limits for a claim evaluation."""
+
+    max_tool_calls: int = 4
+    max_rounds: int = 1
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "max_tool_calls": self.max_tool_calls,
+            "max_rounds": self.max_rounds,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "RoleBudget":
+        return cls(
+            max_tool_calls=data.get("max_tool_calls", 4),
+            max_rounds=data.get("max_rounds", 1),
+        )
+
+
+# Default role budgets by risk level (from multi2.md §7.1)
+DEFAULT_ROLE_BUDGETS: dict[RiskLevel, RoleBudget] = {
+    RiskLevel.LOW: RoleBudget(max_tool_calls=4, max_rounds=1),
+    RiskLevel.MEDIUM: RoleBudget(max_tool_calls=8, max_rounds=2),
+    RiskLevel.HIGH: RoleBudget(max_tool_calls=12, max_rounds=3),
+}
+
+
+# =============================================================================
 # Policy
 # =============================================================================
 
@@ -172,6 +222,9 @@ class QuorumPolicy:
     risk_multiplier: float = 1.0
     independence_threshold: float = 0.3
     required_evidence_types: set[str] | None = None  # None = any type accepted
+    # Layer 5: Role requirements
+    required_roles: set[AgentRole] | None = None  # None = no role requirements
+    role_budgets: dict[RiskLevel, RoleBudget] | None = None  # None = use defaults
 
     @property
     def effective_delta_t(self) -> timedelta:
@@ -191,6 +244,7 @@ class QuorumPolicy:
             "risk_multiplier": self.risk_multiplier,
             "independence_threshold": self.independence_threshold,
             "required_evidence_types": sorted(self.required_evidence_types) if self.required_evidence_types else None,
+            "required_roles": sorted(r.value for r in self.required_roles) if self.required_roles else None,
         }
 
 
@@ -222,6 +276,7 @@ DEFAULT_POLICIES: dict[ClaimType, QuorumPolicy] = {
         volatility=VolatilityClass.MODERATE,
         timeout=timedelta(hours=1),
         required_evidence_types={"web_source", "document", "url"},
+        required_roles={AgentRole.RETRIEVER},
     ),
     ClaimType.VOLATILE_FACT: QuorumPolicy(
         claim_type=ClaimType.VOLATILE_FACT,
@@ -231,6 +286,7 @@ DEFAULT_POLICIES: dict[ClaimType, QuorumPolicy] = {
         volatility=VolatilityClass.VOLATILE,
         timeout=timedelta(hours=2),
         required_evidence_types={"live_retrieval", "web_source"},
+        required_roles={AgentRole.RETRIEVER, AgentRole.FALSIFIER},
     ),
     ClaimType.PROCEDURE: QuorumPolicy(
         claim_type=ClaimType.PROCEDURE,
@@ -240,6 +296,7 @@ DEFAULT_POLICIES: dict[ClaimType, QuorumPolicy] = {
         volatility=VolatilityClass.MODERATE,
         timeout=timedelta(hours=4),
         required_evidence_types={"tool_trace", "test_result", "receipt"},
+        required_roles={AgentRole.RETRIEVER, AgentRole.FALSIFIER},
     ),
     ClaimType.JUDGMENT: QuorumPolicy(
         claim_type=ClaimType.JUDGMENT,
@@ -250,6 +307,7 @@ DEFAULT_POLICIES: dict[ClaimType, QuorumPolicy] = {
         requires_human=True,
         timeout=timedelta(hours=24),
         required_evidence_types=None,  # Subjective — dissent gate suffices
+        required_roles={AgentRole.RETRIEVER, AgentRole.FALSIFIER, AgentRole.SYNTHESIZER},
     ),
 }
 
@@ -281,6 +339,8 @@ class Vote:
     provider_id: str | None = None
     response_time_ms: float | None = None
     error_hash: str | None = None
+    # Layer 5: Agent role
+    agent_role: AgentRole | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -308,6 +368,8 @@ class Vote:
             d["response_time_ms"] = self.response_time_ms
         if self.error_hash is not None:
             d["error_hash"] = self.error_hash
+        if self.agent_role is not None:
+            d["agent_role"] = self.agent_role.value
         return d
 
     @classmethod
@@ -328,6 +390,7 @@ class Vote:
             provider_id=data.get("provider_id"),
             response_time_ms=data.get("response_time_ms"),
             error_hash=data.get("error_hash"),
+            agent_role=AgentRole(data["agent_role"]) if data.get("agent_role") else None,
         )
 
 
@@ -364,6 +427,8 @@ class QuorumState:
     escalated_at: datetime | None = None
     resolved_at: datetime | None = None
     resolution: str | None = None  # "commit" or "reject"
+    # Layer 5: Role tracking
+    role_assignments: dict[str, str] = field(default_factory=dict)  # agent_id → role value
 
     # Counts
 
@@ -394,6 +459,24 @@ class QuorumState:
         if non_abstain == 0:
             return 0.0
         return self.approval_count / non_abstain
+
+    @property
+    def roles_filled(self) -> set[AgentRole]:
+        """Set of roles that have been filled by votes."""
+        roles: set[AgentRole] = set()
+        for role_val in self.role_assignments.values():
+            try:
+                roles.add(AgentRole(role_val))
+            except ValueError:
+                pass
+        return roles
+
+    @property
+    def missing_roles(self) -> set[AgentRole]:
+        """Roles required by policy but not yet filled."""
+        if self.policy.required_roles is None:
+            return set()
+        return self.policy.required_roles - self.roles_filled
 
     @property
     def has_enough_voters(self) -> bool:
@@ -442,6 +525,9 @@ class QuorumState:
             "escalated_at": self.escalated_at.isoformat() if self.escalated_at else None,
             "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
             "resolution": self.resolution,
+            "role_assignments": dict(self.role_assignments),
+            "roles_filled": sorted(r.value for r in self.roles_filled),
+            "missing_roles": sorted(r.value for r in self.missing_roles),
         }
 
 
@@ -506,6 +592,10 @@ class QuorumManager:
         )
         # Apply risk multiplier to policy
         if risk_level != RiskLevel.LOW:
+            # HIGH risk always requires a falsifier (Layer 5 policy)
+            required_roles = set(policy.required_roles) if policy.required_roles else set()
+            if risk_level == RiskLevel.HIGH:
+                required_roles.add(AgentRole.FALSIFIER)
             qs.policy = QuorumPolicy(
                 claim_type=policy.claim_type,
                 min_voters=policy.min_voters,
@@ -516,6 +606,9 @@ class QuorumManager:
                 timeout=policy.timeout,
                 risk_multiplier=risk_level.multiplier,
                 independence_threshold=policy.independence_threshold,
+                required_evidence_types=policy.required_evidence_types,
+                required_roles=required_roles if required_roles else None,
+                role_budgets=policy.role_budgets,
             )
         self.quorums[proposal_id] = qs
         self._log("created", proposal_id, claim_type=claim_type.value)
@@ -537,6 +630,7 @@ class QuorumManager:
         provider_id: str | None = None,
         response_time_ms: float | None = None,
         error_hash: str | None = None,
+        agent_role: AgentRole | None = None,
     ) -> Vote | None:
         """
         Cast a vote on a proposal.
@@ -573,9 +667,16 @@ class QuorumManager:
             provider_id=provider_id,
             response_time_ms=response_time_ms,
             error_hash=error_hash,
+            agent_role=agent_role,
         )
         qs.votes[agent_id] = vote
-        self._log("vote_cast", proposal_id, agent_id=agent_id, verdict=verdict.value)
+
+        # Track role assignment (Layer 5)
+        if agent_role is not None:
+            qs.role_assignments[agent_id] = agent_role.value
+
+        self._log("vote_cast", proposal_id, agent_id=agent_id, verdict=verdict.value,
+                  role=agent_role.value if agent_role else None)
 
         # Check for state transitions after vote
         self._evaluate_transitions(qs, now)
@@ -690,6 +791,11 @@ class QuorumManager:
             violations = self._check_premise_rule(qs)
             for v in violations:
                 reasons.append(f"Premise rule: {v}")
+
+        # Gate 8: Role requirements (Layer 5)
+        role_reasons = self._check_role_requirements(qs)
+        for r in role_reasons:
+            reasons.append(r)
 
         return len(reasons) == 0, reasons
 
@@ -905,6 +1011,36 @@ class QuorumManager:
                     violations.append(f"claim {claim.claim_id}: {v}")
 
         return violations
+
+    def _check_role_requirements(self, qs: QuorumState) -> list[str]:
+        """Check if required roles are filled (Layer 5).
+
+        Returns list of blocking reasons (empty = passes).
+        """
+        if qs.policy.required_roles is None:
+            return []
+
+        missing = qs.missing_roles
+        if not missing:
+            return []
+
+        missing_str = ", ".join(sorted(r.value for r in missing))
+        return [f"Role requirement: missing roles [{missing_str}]"]
+
+    def get_role_budget(
+        self, proposal_id: str, agent_id: str
+    ) -> RoleBudget | None:
+        """Get the role budget for an agent on a proposal.
+
+        Returns the budget based on the proposal's risk level,
+        or None if the proposal doesn't exist.
+        """
+        qs = self.quorums.get(proposal_id)
+        if qs is None:
+            return None
+
+        budgets = qs.policy.role_budgets or DEFAULT_ROLE_BUDGETS
+        return budgets.get(qs.risk_level, DEFAULT_ROLE_BUDGETS[RiskLevel.LOW])
 
     def _check_evidence_types(self, qs: QuorumState) -> tuple[bool, str]:
         """Check if approve votes satisfy evidence type requirements.

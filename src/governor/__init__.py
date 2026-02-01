@@ -326,6 +326,11 @@ from .ttl import (
     TTLManager,
     DEFAULT_POLICIES as DEFAULT_TTL_POLICIES,
     create_ttl_manager,
+    # Layer 5: Revalidation orchestration
+    RevalidationResult,
+    RevalidationRun,
+    RevalidationOrchestrator,
+    create_revalidation_orchestrator,
 )
 
 # Dissent ledger (contradiction persistence)
@@ -384,6 +389,10 @@ from .quorum import (
     RiskLevel as QuorumRiskLevel,
     TERMINAL_STATES,
     compute_fingerprint,
+    # Layer 5: Roles & Scheduling
+    AgentRole,
+    RoleBudget,
+    DEFAULT_ROLE_BUDGETS,
 )
 
 # Cooperative redundancy (independence scoring)
@@ -798,6 +807,10 @@ __all__ = [
     "TTLManager",
     "DEFAULT_TTL_POLICIES",
     "create_ttl_manager",
+    "RevalidationResult",
+    "RevalidationRun",
+    "RevalidationOrchestrator",
+    "create_revalidation_orchestrator",
     # Dissent ledger (contradiction persistence)
     "ObjectionSeverity",
     "ObjectionStatus",
@@ -844,6 +857,9 @@ __all__ = [
     "QuorumRiskLevel",
     "TERMINAL_STATES",
     "compute_fingerprint",
+    "AgentRole",
+    "RoleBudget",
+    "DEFAULT_ROLE_BUDGETS",
     # Cooperative redundancy (independence scoring)
     "MethodSignature",
     "IndependenceResult",

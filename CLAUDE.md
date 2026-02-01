@@ -43,7 +43,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **ClaimStatus + Epistemic Persistence**: ClaimStatus enum (PROPOSED→SUPPORTED→CONTESTED→…), QuorumStatus mapping, EpistemicLedger SQLite persistence (Schema V4), write-through on mutations, from_dict/from_json deserialization.
 **Evidence Type Validation**: Layer 3 evidence kind gating, 4 new EvidenceType values (CALC_RESULT, TEST_RESULT, WEB_SOURCE, LIVE_RETRIEVAL), WRONG_EVIDENCE_TYPE audit failure mode, required_evidence_kinds on PolicyEntry, quorum Gate 6, COLLECTING→STABILIZING evidence gate.
 **Premise Rule & Dependencies**: Layer 4 dependency tracking, `depends_on` field on GroundedClaim, cycle-checked DAG, premise rule (HARD claims cannot depend on SOFT/STALE/INVALIDATED), BFS invalidation cascade (HARD→SOFT downgrade), CascadeEvent audit trail, Schema V5, quorum Gate 7.
-**Total: 3703 tests**
+**Agent Roles & Revalidation**: Layer 5 agent role assignment (PROPOSER/RETRIEVER/FALSIFIER/SYNTHESIZER), role budgets per risk level, quorum Gate 8, periodic revalidation orchestrator wiring TTL→AuditPipeline.
+**Total: 3770 tests**
 
 ## Key Documents
 
@@ -745,7 +746,16 @@ src/ops_governor/
 
 **Premise Rule & Dependency Tracking tests: 88**
 
-**Total: 3703 tests**
+### Agent Roles & Revalidation Scheduling (Layer 5)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| quorum.py | AgentRole enum (PROPOSER/RETRIEVER/FALSIFIER/SYNTHESIZER), RoleBudget dataclass, DEFAULT_ROLE_BUDGETS per RiskLevel, required_roles on QuorumPolicy, agent_role on Vote, role_assignments/roles_filled/missing_roles on QuorumState, Gate 8 (role requirements), HIGH risk auto-adds FALSIFIER | — |
+| ttl.py | RevalidationOrchestrator (TTL→AuditPipeline wiring), RevalidationResult, RevalidationRun, _build_signals from epistemic ledger, _update_epistemic_status on audit outcome, create_revalidation_orchestrator convenience | — |
+| test_roles_revalidation.py | AgentRole enum, RoleBudget, vote role field, policy roles, state roles, Gate 8, role budgets, revalidation result/run, orchestrator lifecycle, mock audit integration, backward compat | 67 |
+
+**Agent Roles & Revalidation tests: 67**
+
+**Total: 3770 tests**
 
 ## Common Mistakes to Avoid
 

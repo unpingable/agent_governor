@@ -1775,25 +1775,35 @@ Task balancing extends existing `routing.py`. Telemetry is new infrastructure.
 - [ ] **Routing explainability** — `governor task route <id> --explain`
   - Show complexity analysis, selected model, reason, alternatives with costs
 
-#### Phase B2: Structured Telemetry
+#### Phase B2: Structured Telemetry ✓ COMPLETE
 
-- [ ] **StructuredLogger** — JSON-line logging to `.governor/logs/governor-YYYYMMDD.jsonl`
-  - Event types: proposal, verification, llm_call, autonomous_iteration, error
-  - Each entry: timestamp, event_type, level, plus type-specific fields
-  - Log rotation: configurable max size, retention days
+- [x] **StructuredLogger** — JSON-line logging to `.governor/logs/governor-YYYYMMDD.jsonl`
+  - Event types: proposal, verification, llm_call, autonomous_iteration, error, security_scan, claim_registered, profile_change
+  - Each entry: timestamp, event_type, level, event_id, fields, agent_id, session_id, duration_ms
+  - Log rotation: configurable max size (rename with .N suffix), retention days (date-based deletion)
+  - Min-level filtering (debug/info/warn/error)
 
-- [ ] **TelemetryCollector** — Central event router to all configured backends
-  - `record_proposal()`, `record_verification()`, `record_llm_call()`
-  - Routes to StructuredLogger and/or PrometheusMetrics
-  - Integration: Governor constructor creates TelemetryCollector from config
+- [x] **TelemetryCollector** — Central event router to all configured backends
+  - `record_proposal()`, `record_verification()`, `record_llm_call()`, `record_autonomous_iteration()`, `record_error()`
+  - Pluggable `TelemetryBackend` abstract base, `LoggingBackend` wraps StructuredLogger
+  - Backend exceptions silently swallowed (telemetry never crashes governor)
+  - Field redaction (file_contents, prompts), privacy-preserving prompt hashing
+  - Executor integration: optional `collector` param on `AutonomousExecutor`
 
-- [ ] **Telemetry CLI**
-  - `governor telemetry enable --logging --prometheus`
-  - `governor telemetry logs --last 100 --type llm_call`
-  - `governor telemetry analyze costs --since "2025-02-01"` (by model, by operation)
-  - `governor telemetry analyze performance` (verification latency p50/p95/p99, approval rate)
-  - `governor telemetry export --format csv --output report.csv`
-  - `governor telemetry rotate-logs`
+- [x] **Telemetry CLI**
+  - `governor telemetry enable` (--logging/--no-logging, --retention-days, --redact-prompts, --redact-contents)
+  - `governor telemetry disable` (preserves existing logs)
+  - `governor telemetry status` (config + LogStats)
+  - `governor telemetry logs --last 100 --type llm_call --level warn --since ISO --json`
+  - `governor telemetry analyze costs --since ISO --json` (by model, by operation)
+  - `governor telemetry analyze performance --json` (verification latency p50/p95/p99, approval rate)
+  - `governor telemetry export --format csv|json --output path --since --type`
+  - `governor telemetry rotate-logs --dry-run`
+
+- [x] **Analysis functions** — `analyze_costs()` (CostReport), `analyze_performance()` (PerformanceReport)
+  - Percentiles via sorted index (no numpy), cost grouping by model/operation, approval rate, avg claims
+
+**91 tests in tests/test_telemetry.py**
 
 #### Phase B3: Prometheus & Grafana (optional)
 

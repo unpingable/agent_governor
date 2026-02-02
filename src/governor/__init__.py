@@ -589,6 +589,32 @@ try:
 except ImportError:
     pass
 
+# Telemetry (Deferred 4, B2)
+from .telemetry import (
+    TelemetryEventType,
+    TelemetryLevel,
+    TelemetryConfig,
+    TelemetryEvent,
+    ProposalFields,
+    VerificationFields,
+    LLMCallFields,
+    AutonomousIterationFields,
+    ErrorFields,
+    CostReport,
+    PerformanceReport,
+    LogStats,
+    StructuredLogger,
+    TelemetryBackend,
+    LoggingBackend,
+    TelemetryCollector,
+    analyze_costs,
+    analyze_performance,
+    export_events,
+    get_collector,
+    get_logger as get_telemetry_logger,
+    hash_prompt,
+)
+
 # Autonomous execution (Phase A1-A2)
 from .spine import (
     Spine,
@@ -1112,6 +1138,29 @@ __all__ = [
     "ExecutorConfig",
     "ExecutionEvent",
     "AutonomousExecutor",
+    # Telemetry (Deferred 4, B2)
+    "TelemetryEventType",
+    "TelemetryLevel",
+    "TelemetryConfig",
+    "TelemetryEvent",
+    "ProposalFields",
+    "VerificationFields",
+    "LLMCallFields",
+    "AutonomousIterationFields",
+    "ErrorFields",
+    "CostReport",
+    "PerformanceReport",
+    "LogStats",
+    "StructuredLogger",
+    "TelemetryBackend",
+    "LoggingBackend",
+    "TelemetryCollector",
+    "analyze_costs",
+    "analyze_performance",
+    "export_events",
+    "get_collector",
+    "get_telemetry_logger",
+    "hash_prompt",
 ]
 
 __version__ = "0.6.0"

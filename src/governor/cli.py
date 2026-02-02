@@ -8741,6 +8741,307 @@ def auto_run(ctx, task, budget_spec, spine_id, dry_run):
             click.echo(f"  [{v['invariant_id']}] {v['message']}")
 
 
+# =============================================================================
+# Telemetry (Deferred 4, B2)
+# =============================================================================
+
+
+@cli.group("telemetry")
+@click.pass_context
+def telemetry_group(ctx: click.Context) -> None:
+    """Structured telemetry: logging, analysis, export."""
+    pass
+
+
+@telemetry_group.command("enable")
+@click.option("--logging/--no-logging", default=True, help="Enable/disable JSONL logging")
+@click.option("--retention-days", type=int, default=None, help="Log retention in days")
+@click.option("--redact-prompts/--no-redact-prompts", default=None, help="Redact prompts in logs")
+@click.option("--redact-contents/--no-redact-contents", default=None, help="Redact file contents")
+@click.pass_context
+def telemetry_enable(
+    ctx: click.Context,
+    logging: bool,
+    retention_days: int | None,
+    redact_prompts: bool | None,
+    redact_contents: bool | None,
+) -> None:
+    """Enable telemetry and configure settings."""
+    from .telemetry import TelemetryConfig
+
+    gov_dir = ensure_initialized(ctx)
+    config = TelemetryConfig.load(gov_dir)
+
+    config.logging_enabled = logging
+    if retention_days is not None:
+        config.log_retention_days = retention_days
+    if redact_prompts is not None:
+        config.redact_prompts = redact_prompts
+    if redact_contents is not None:
+        config.redact_file_contents = redact_contents
+
+    config.save(gov_dir)
+
+    # Ensure logs directory exists
+    log_dir = gov_dir / config.log_dir
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    click.echo("Telemetry enabled.")
+    click.echo(f"  Logging: {config.logging_enabled}")
+    click.echo(f"  Log dir: {log_dir}")
+    click.echo(f"  Retention: {config.log_retention_days} days")
+    click.echo(f"  Redact prompts: {config.redact_prompts}")
+    click.echo(f"  Redact contents: {config.redact_file_contents}")
+
+
+@telemetry_group.command("disable")
+@click.pass_context
+def telemetry_disable(ctx: click.Context) -> None:
+    """Disable telemetry logging (preserves existing logs)."""
+    from .telemetry import TelemetryConfig
+
+    gov_dir = ensure_initialized(ctx)
+    config = TelemetryConfig.load(gov_dir)
+    config.logging_enabled = False
+    config.save(gov_dir)
+    click.echo("Telemetry logging disabled. Existing logs preserved.")
+
+
+@telemetry_group.command("status")
+@click.pass_context
+def telemetry_status(ctx: click.Context) -> None:
+    """Show telemetry configuration and log statistics."""
+    from .telemetry import TelemetryConfig, get_logger
+
+    gov_dir = ensure_initialized(ctx)
+    config = TelemetryConfig.load(gov_dir)
+
+    click.echo("Telemetry Configuration:")
+    click.echo(f"  Logging: {config.logging_enabled}")
+    click.echo(f"  Log dir: {config.log_dir}")
+    click.echo(f"  Retention: {config.log_retention_days} days")
+    click.echo(f"  Max size: {config.log_max_size_mb} MB")
+    click.echo(f"  Min level: {config.min_level}")
+    click.echo(f"  Redact prompts: {config.redact_prompts}")
+    click.echo(f"  Redact contents: {config.redact_file_contents}")
+
+    log_dir = gov_dir / config.log_dir
+    if log_dir.exists():
+        logger = get_logger(gov_dir)
+        stats = logger.stats()
+        click.echo(f"\nLog Statistics:")
+        click.echo(f"  Total events: {stats.total_events}")
+        click.echo(f"  Log files: {len(stats.log_files)}")
+        click.echo(f"  Total size: {stats.total_size_bytes:,} bytes")
+        if stats.oldest:
+            click.echo(f"  Oldest: {stats.oldest}")
+        if stats.newest:
+            click.echo(f"  Newest: {stats.newest}")
+        if stats.by_type:
+            click.echo(f"  By type:")
+            for t, c in sorted(stats.by_type.items()):
+                click.echo(f"    {t}: {c}")
+        if stats.by_level:
+            click.echo(f"  By level:")
+            for lv, c in sorted(stats.by_level.items()):
+                click.echo(f"    {lv}: {c}")
+    else:
+        click.echo("\nNo logs directory found.")
+
+
+@telemetry_group.command("logs")
+@click.option("--last", "last_n", type=int, default=None, help="Show last N events")
+@click.option("--type", "event_type", type=str, default=None, help="Filter by event type")
+@click.option("--level", "level", type=str, default=None, help="Filter by minimum level")
+@click.option("--since", type=str, default=None, help="Filter events since timestamp (ISO)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def telemetry_logs(
+    ctx: click.Context,
+    last_n: int | None,
+    event_type: str | None,
+    level: str | None,
+    since: str | None,
+    as_json: bool,
+) -> None:
+    """Query telemetry events."""
+    from .telemetry import TelemetryEventType, TelemetryLevel, LEVEL_ORDER, get_logger
+
+    gov_dir = ensure_initialized(ctx)
+    logger = get_logger(gov_dir)
+
+    et = None
+    if event_type:
+        try:
+            et = TelemetryEventType(event_type)
+        except ValueError:
+            click.echo(f"Unknown event type: {event_type}", err=True)
+            click.echo(f"Valid types: {', '.join(t.value for t in TelemetryEventType)}", err=True)
+            ctx.exit(1)
+            return
+
+    events = logger.read_events(last_n=last_n, event_type=et, since=since)
+
+    # Apply level filter
+    if level:
+        try:
+            min_lv = TelemetryLevel(level)
+        except ValueError:
+            click.echo(f"Unknown level: {level}", err=True)
+            ctx.exit(1)
+            return
+        min_order = LEVEL_ORDER.get(min_lv, 0)
+        events = [e for e in events if LEVEL_ORDER.get(e.level, 0) >= min_order]
+
+    if not events:
+        click.echo("No events found.")
+        return
+
+    if as_json:
+        click.echo(json.dumps([e.to_dict() for e in events], indent=2))
+    else:
+        for ev in events:
+            ts = ev.timestamp[:19] if len(ev.timestamp) > 19 else ev.timestamp
+            lv = ev.level.value if hasattr(ev.level, "value") else ev.level
+            et_val = ev.event_type.value if hasattr(ev.event_type, "value") else ev.event_type
+            line = f"[{ts}] {lv.upper():5s} {et_val}"
+            if ev.duration_ms is not None:
+                line += f" ({ev.duration_ms:.0f}ms)"
+            # Show key fields
+            f = ev.fields
+            if "proposal_id" in f:
+                line += f" proposal={f['proposal_id']}"
+            if "outcome" in f:
+                line += f" outcome={f['outcome']}"
+            if "model" in f:
+                line += f" model={f['model']}"
+            if "cost_usd" in f and f["cost_usd"]:
+                line += f" cost=${f['cost_usd']:.4f}"
+            if "success" in f:
+                line += f" success={f['success']}"
+            if "error_type" in f and f["error_type"]:
+                line += f" error={f['error_type']}"
+            if "message" in f and f["message"]:
+                line += f" msg={f['message'][:60]}"
+            click.echo(line)
+
+
+@telemetry_group.command("analyze")
+@click.argument("report_type", type=click.Choice(["costs", "performance"]))
+@click.option("--since", type=str, default=None, help="Analyze events since timestamp (ISO)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def telemetry_analyze(
+    ctx: click.Context,
+    report_type: str,
+    since: str | None,
+    as_json: bool,
+) -> None:
+    """Analyze telemetry data (costs or performance)."""
+    from .telemetry import analyze_costs, analyze_performance, get_logger
+
+    gov_dir = ensure_initialized(ctx)
+    logger = get_logger(gov_dir)
+    events = logger.read_events(since=since)
+
+    if report_type == "costs":
+        report = analyze_costs(events, since=since)
+        if as_json:
+            click.echo(json.dumps(report.to_dict(), indent=2))
+        else:
+            click.echo("Cost Analysis:")
+            click.echo(f"  Total cost: ${report.total_cost_usd:.4f}")
+            click.echo(f"  Total calls: {report.total_calls}")
+            click.echo(f"  Input tokens: {report.total_input_tokens:,}")
+            click.echo(f"  Output tokens: {report.total_output_tokens:,}")
+            if report.by_model:
+                click.echo("  By model:")
+                for m, c in sorted(report.by_model.items(), key=lambda x: -x[1]):
+                    click.echo(f"    {m}: ${c:.4f}")
+            if report.by_operation:
+                click.echo("  By operation:")
+                for op, c in sorted(report.by_operation.items(), key=lambda x: -x[1]):
+                    click.echo(f"    {op}: ${c:.4f}")
+            if report.period:
+                click.echo(f"  Period: {report.period}")
+    else:
+        report = analyze_performance(events)
+        if as_json:
+            click.echo(json.dumps(report.to_dict(), indent=2))
+        else:
+            click.echo("Performance Analysis:")
+            click.echo(f"  Verification latency p50: {report.verification_latency_p50:.1f}ms")
+            click.echo(f"  Verification latency p95: {report.verification_latency_p95:.1f}ms")
+            click.echo(f"  Verification latency p99: {report.verification_latency_p99:.1f}ms")
+            click.echo(f"  Approval rate: {report.approval_rate:.1%}")
+            click.echo(f"  Total proposals: {report.total_proposals}")
+            click.echo(f"  Verified: {report.total_verified}")
+            click.echo(f"  Rejected: {report.total_rejected}")
+            click.echo(f"  Avg claims/proposal: {report.avg_claims_per_proposal:.1f}")
+
+
+@telemetry_group.command("export")
+@click.option("--format", "fmt", type=click.Choice(["csv", "json"]), default="json", help="Export format")
+@click.option("--output", "output_path", type=click.Path(), required=True, help="Output file path")
+@click.option("--since", type=str, default=None, help="Export events since timestamp")
+@click.option("--type", "event_type", type=str, default=None, help="Filter by event type")
+@click.pass_context
+def telemetry_export(
+    ctx: click.Context,
+    fmt: str,
+    output_path: str,
+    since: str | None,
+    event_type: str | None,
+) -> None:
+    """Export telemetry events to a file."""
+    from .telemetry import TelemetryEventType, export_events, get_logger
+
+    gov_dir = ensure_initialized(ctx)
+    logger = get_logger(gov_dir)
+
+    et = None
+    if event_type:
+        try:
+            et = TelemetryEventType(event_type)
+        except ValueError:
+            click.echo(f"Unknown event type: {event_type}", err=True)
+            ctx.exit(1)
+            return
+
+    events = logger.read_events(event_type=et, since=since)
+    count = export_events(events, Path(output_path), fmt=fmt)
+    click.echo(f"Exported {count} events to {output_path} ({fmt})")
+
+
+@telemetry_group.command("rotate-logs")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
+@click.pass_context
+def telemetry_rotate(ctx: click.Context, dry_run: bool) -> None:
+    """Delete log files older than retention period."""
+    from .telemetry import TelemetryConfig, get_logger
+
+    gov_dir = ensure_initialized(ctx)
+    config = TelemetryConfig.load(gov_dir)
+    logger = get_logger(gov_dir)
+
+    if dry_run:
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(days=config.log_retention_days)
+        cutoff_str = cutoff.strftime("%Y%m%d")
+        click.echo(f"Retention: {config.log_retention_days} days (cutoff: {cutoff_str})")
+        for f in logger.list_log_files():
+            name = f.stem
+            parts = name.split("-", 1)
+            if len(parts) >= 2:
+                date_part = parts[1].split(".")[0]
+                if len(date_part) == 8 and date_part.isdigit() and date_part < cutoff_str:
+                    click.echo(f"  Would delete: {f.name}")
+        return
+
+    deleted = logger.rotate_logs()
+    click.echo(f"Deleted {deleted} old log file(s).")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

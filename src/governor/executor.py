@@ -92,12 +92,14 @@ class AutonomousExecutor:
         invariants: InvariantSet | None = None,
         session_manager: SessionManager | None = None,
         config: ExecutorConfig | None = None,
+        collector: Any | None = None,
     ):
         self.spine_manager = spine_manager or SpineManager()
         self.invariants = invariants or InvariantSet()
         self.session_manager = session_manager
         self.config = config or ExecutorConfig()
         self.events: list[ExecutionEvent] = []
+        self.collector = collector  # TelemetryCollector (optional)
 
     def execute(
         self,
@@ -185,6 +187,23 @@ class AutonomousExecutor:
                 iteration, "step",
                 step_result.message or f"Step {iteration} complete",
             )
+
+            # Telemetry
+            if self.collector is not None:
+                try:
+                    self.collector.record_autonomous_iteration(
+                        session_id=state.session_id,
+                        iteration=iteration,
+                        step_success=step_result.success,
+                        tokens_used=step_result.tokens_used,
+                        cost_usd=step_result.cost_usd,
+                        files_modified=step_result.files_modified,
+                        violations=[],
+                        done=step_result.done,
+                        duration_ms=iter_elapsed * 1000,
+                    )
+                except Exception:
+                    pass  # Telemetry never crashes executor
 
             # Check if step succeeded
             if not step_result.success:

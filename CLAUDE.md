@@ -50,7 +50,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Invariant Store (Deferred 1)**: InvariantSpec (serializable invariant definitions), InvariantStore (file-per-item persistence), VALID_KINDS (6 factory mappings), materialization to live Invariant objects, CLI (add/list/show/remove/check), autonomous run command (noop step execution shell).
 **Strategic Test Suites**: Golden-file tests (JSON schema locking for all serialized types), no-laundering regression tests (structural integrity invariants), failure-injection tests (executor fault tolerance), property-based invariant tests (combinatoric fuzzing), contract tests for adapters (interface locking).
 **Web UI (Deferred 2, W1-W3)**: GovernorContextManager (isolated per-user/project contexts), ChatBridge (Anthropic/Ollama backend abstraction), GovernorHooks (mode-specific system prompts), refactored FastAPI adapter (OpenAI-compatible API with governor endpoints), Docker multi-user deployment (Erin fiction + James code stacks).
-**Total: 4922 tests**
+**Structured Telemetry (Deferred 4, B2)**: TelemetryCollector (pluggable backends, fail-safe), StructuredLogger (JSONL, date-partitioned, size/retention rotation), TelemetryEvent with typed field helpers, cost/performance analysis, CSV/JSON export, CLI (enable/disable/status/logs/analyze/export/rotate-logs), executor integration.
+**Total: 5013 tests**
 
 ## Key Documents
 
@@ -323,6 +324,16 @@ governor autonomous delete <id> --confirm  # Delete a session
 governor autonomous handoff <id>        # Show handoff summary for human review
 governor autonomous run --task "..."    # Run execution session (noop step, --budget, --spine-id, --dry-run)
 
+# Structured Telemetry (Deferred 4, B2)
+governor telemetry enable              # Enable telemetry, create config + logs dir (--logging/--no-logging, --retention-days, --redact-prompts, --redact-contents)
+governor telemetry disable             # Disable logging (preserves existing logs)
+governor telemetry status              # Show config + log statistics
+governor telemetry logs                # Query events (--last N, --type, --level, --since, --json)
+governor telemetry analyze costs       # Cost breakdown by model/operation (--since, --json)
+governor telemetry analyze performance # Verification latency percentiles, approval rate (--since, --json)
+governor telemetry export              # Export events (--format csv|json, --output, --since, --type)
+governor telemetry rotate-logs         # Delete old logs (--dry-run)
+
 # Fiction Governor - Context Drift Detection
 fiction-gov drift status               # Show drift detector state
 fiction-gov drift classify <text>      # Classify text register/mode
@@ -441,6 +452,7 @@ src/governor/
 ├── invariant_store.py # InvariantSpec, InvariantStore, VALID_KINDS, persistent invariant management
 ├── context_manager.py # GovernorContext, GovernorContextManager, isolated per-user/project contexts
 ├── chat_bridge.py     # ChatBridge, OllamaBackend, AnthropicBackend, GovernorHooks, backend abstraction
+├── telemetry.py       # TelemetryCollector, StructuredLogger, TelemetryEvent, cost/performance analysis, JSONL export
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -846,7 +858,14 @@ src/ops_governor/
 
 **Web UI tests: 91**
 
-**Total: 4922 tests**
+### Structured Telemetry (Deferred 4, B2)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| telemetry.py | TelemetryEventType/Level enums, TelemetryConfig, TelemetryEvent, field helpers (Proposal/Verification/LLMCall/AutonomousIteration/Error), StructuredLogger (JSONL, date-partitioned, rotation), TelemetryBackend/LoggingBackend, TelemetryCollector (pluggable, fail-safe), analyze_costs/analyze_performance, CSV/JSON export | 91 |
+
+**Structured Telemetry tests: 91**
+
+**Total: 5013 tests**
 
 ## Common Mistakes to Avoid
 

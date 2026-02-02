@@ -1140,6 +1140,542 @@ class TestDiffResultShape:
 from governor.adapters import AdapterFinding
 
 
+# =============================================================================
+# Continuity types
+# =============================================================================
+
+from governor.continuity import (
+    Anchor, AnchorType, Severity, Violation, ContinuityReport,
+    RecommendedAction, AttemptLog, ConvergenceResult,
+)
+
+
+class TestAnchorShape:
+    """Anchor.to_dict() golden shape."""
+
+    def _make(self) -> Anchor:
+        return Anchor(
+            id="char_voice_001",
+            anchor_type=AnchorType.PERSONA,
+            description="Character must speak in first person",
+            required_patterns=["\\bI\\b"],
+            required_concepts=["first-person narration"],
+            forbidden_patterns=["\\bhe said\\b"],
+            forbidden_concepts=["third-person narration"],
+            severity=Severity.CORRECT,
+            source="fiction_bible",
+            established_at=5,
+        )
+
+    def test_keys(self):
+        d = self._make().to_dict()
+        assert set(d.keys()) == {
+            "id", "anchor_type", "description",
+            "required_patterns", "required_concepts",
+            "forbidden_patterns", "forbidden_concepts",
+            "severity", "source", "established_at",
+        }
+
+    def test_value_types(self):
+        d = self._make().to_dict()
+        assert isinstance(d["id"], str)
+        assert isinstance(d["anchor_type"], str)
+        assert isinstance(d["description"], str)
+        assert isinstance(d["required_patterns"], list)
+        assert isinstance(d["required_concepts"], list)
+        assert isinstance(d["forbidden_patterns"], list)
+        assert isinstance(d["forbidden_concepts"], list)
+        assert isinstance(d["severity"], str)
+        assert isinstance(d["source"], str)
+        assert isinstance(d["established_at"], int)
+
+    def test_enum_values_are_strings(self):
+        d = self._make().to_dict()
+        assert d["anchor_type"] == "persona"
+        assert d["severity"] == "correct"
+
+    def test_roundtrip(self):
+        orig = self._make()
+        d = orig.to_dict()
+        restored = Anchor.from_dict(d)
+        assert restored.id == orig.id
+        assert restored.anchor_type == orig.anchor_type
+        assert restored.required_patterns == orig.required_patterns
+        assert restored.forbidden_concepts == orig.forbidden_concepts
+        assert restored.severity == orig.severity
+
+    def test_json_serializable(self):
+        s = json.dumps(self._make().to_dict())
+        assert isinstance(s, str)
+
+
+class TestViolationShape:
+    """Violation.to_dict() golden shape (continuity)."""
+
+    def _make(self) -> Violation:
+        return Violation(
+            anchor_id="char_voice_001",
+            anchor_type=AnchorType.PERSONA,
+            severity=Severity.CORRECT,
+            description="Missing first-person pronoun",
+            evidence=["Line 5: 'He walked away'"],
+        )
+
+    def test_keys(self):
+        d = self._make().to_dict()
+        assert set(d.keys()) == {
+            "anchor_id", "anchor_type", "severity",
+            "description", "evidence",
+        }
+
+    def test_value_types(self):
+        d = self._make().to_dict()
+        assert isinstance(d["anchor_id"], str)
+        assert isinstance(d["anchor_type"], str)
+        assert isinstance(d["severity"], str)
+        assert isinstance(d["description"], str)
+        assert isinstance(d["evidence"], list)
+
+    def test_roundtrip(self):
+        orig = self._make()
+        d = orig.to_dict()
+        restored = Violation.from_dict(d)
+        assert restored.anchor_id == orig.anchor_id
+        assert restored.anchor_type == orig.anchor_type
+        assert restored.severity == orig.severity
+        assert restored.evidence == orig.evidence
+
+    def test_json_serializable(self):
+        s = json.dumps(self._make().to_dict())
+        assert isinstance(s, str)
+
+
+class TestContinuityReportShape:
+    """ContinuityReport.to_dict() golden shape."""
+
+    def _make(self) -> ContinuityReport:
+        return ContinuityReport(
+            passed=False,
+            score=0.75,
+            violations=[
+                Violation(
+                    anchor_id="a1", anchor_type=AnchorType.CANON,
+                    severity=Severity.CORRECT,
+                    description="Missing canon element",
+                ),
+            ],
+            recommended_action=RecommendedAction.SOFT_REPROMPT,
+            correction_context="Add canon element X",
+            checked_anchors=4,
+            check_time_ms=12.5,
+        )
+
+    def test_keys(self):
+        d = self._make().to_dict()
+        assert set(d.keys()) == {
+            "passed", "score", "violations",
+            "recommended_action", "correction_context",
+            "checked_anchors", "check_time_ms",
+        }
+
+    def test_value_types(self):
+        d = self._make().to_dict()
+        assert isinstance(d["passed"], bool)
+        assert isinstance(d["score"], float)
+        assert isinstance(d["violations"], list)
+        assert isinstance(d["recommended_action"], str)
+        assert isinstance(d["checked_anchors"], int)
+        assert isinstance(d["check_time_ms"], float)
+
+    def test_nested_violations(self):
+        d = self._make().to_dict()
+        assert len(d["violations"]) == 1
+        assert "anchor_id" in d["violations"][0]
+
+    def test_roundtrip(self):
+        orig = self._make()
+        d = orig.to_dict()
+        restored = ContinuityReport.from_dict(d)
+        assert restored.passed == orig.passed
+        assert restored.score == orig.score
+        assert restored.recommended_action == orig.recommended_action
+
+    def test_json_serializable(self):
+        s = json.dumps(self._make().to_dict())
+        assert isinstance(s, str)
+
+
+class TestConvergenceResultShape:
+    """ConvergenceResult.to_dict() golden shape."""
+
+    def _make(self) -> ConvergenceResult:
+        report = ContinuityReport(
+            passed=True, score=1.0, violations=[],
+            recommended_action=RecommendedAction.ACCEPT,
+            checked_anchors=2, check_time_ms=5.0,
+        )
+        return ConvergenceResult(
+            output="Generated text here.",
+            converged=True,
+            attempts=2,
+            final_report=report,
+            attempt_log=[
+                AttemptLog(
+                    attempt_number=0,
+                    prompt_hash="abc123",
+                    output_hash="def456",
+                    report=report,
+                    tokens_generated=100,
+                    latency_ms=50.0,
+                ),
+            ],
+            final_prompt="Write about X",
+            total_tokens=200,
+            total_latency_ms=100.0,
+        )
+
+    def test_keys(self):
+        d = self._make().to_dict()
+        assert set(d.keys()) == {
+            "output", "converged", "attempts",
+            "final_report", "attempt_log",
+            "final_prompt", "total_tokens", "total_latency_ms",
+        }
+
+    def test_value_types(self):
+        d = self._make().to_dict()
+        assert isinstance(d["output"], str)
+        assert isinstance(d["converged"], bool)
+        assert isinstance(d["attempts"], int)
+        assert isinstance(d["final_report"], dict)
+        assert isinstance(d["attempt_log"], list)
+        assert isinstance(d["total_tokens"], int)
+        assert isinstance(d["total_latency_ms"], float)
+
+    def test_nested_report(self):
+        d = self._make().to_dict()
+        assert "passed" in d["final_report"]
+        assert "score" in d["final_report"]
+
+    def test_nested_attempt_log(self):
+        d = self._make().to_dict()
+        assert len(d["attempt_log"]) == 1
+        log = d["attempt_log"][0]
+        assert set(log.keys()) == {
+            "attempt_number", "prompt_hash", "output_hash",
+            "report", "correction_applied",
+            "tokens_generated", "latency_ms",
+        }
+
+    def test_json_serializable(self):
+        s = json.dumps(self._make().to_dict())
+        assert isinstance(s, str)
+
+
+# =============================================================================
+# Telemetry report types
+# =============================================================================
+
+from governor.telemetry import (
+    ContinuityTraceFields, ContinuityResultFields,
+    AnchorStats as TelemetryAnchorStats,
+    ConvergenceReport as TelemetryConvergenceReport,
+    CostReport, PerformanceReport,
+)
+
+
+class TestContinuityTraceFieldsShape:
+    """ContinuityTraceFields.to_dict() golden shape."""
+
+    def _make(self) -> ContinuityTraceFields:
+        return ContinuityTraceFields(
+            run_id="abc123def456",
+            mode="fiction",
+            attempt=1,
+            error_total=0.25,
+            error_by_anchor={"a1": 0.5, "a2": 0.0},
+            violations=[{"anchor_id": "a1", "severity": "correct", "description": "Missing X"}],
+            action="soft_reprompt",
+            action_params={"temperature": 0.7},
+            delta_total=-0.1,
+            delta_by_anchor={"a1": -0.2},
+            tokens=150,
+            latency_ms=45.67,
+            prompt_hash="deadbeef01234567",
+            anchors_hash="cafebabe01234567",
+        )
+
+    def test_keys_with_delta(self):
+        d = self._make().to_dict()
+        assert set(d.keys()) == {
+            "run_id", "mode", "attempt",
+            "error_total", "error_by_anchor",
+            "violations", "action", "action_params",
+            "delta_total", "delta_by_anchor",
+            "tokens", "latency_ms",
+            "prompt_hash", "anchors_hash",
+        }
+
+    def test_keys_without_delta(self):
+        """attempt 0 has no delta fields."""
+        fields = ContinuityTraceFields(
+            run_id="abc", mode="code", attempt=0,
+        )
+        d = fields.to_dict()
+        assert "delta_total" not in d
+        assert "delta_by_anchor" not in d
+
+    def test_value_types(self):
+        d = self._make().to_dict()
+        assert isinstance(d["run_id"], str)
+        assert isinstance(d["attempt"], int)
+        assert isinstance(d["error_total"], float)
+        assert isinstance(d["error_by_anchor"], dict)
+        assert isinstance(d["violations"], list)
+        assert isinstance(d["action_params"], dict)
+        assert isinstance(d["tokens"], int)
+        assert isinstance(d["latency_ms"], float)
+
+    def test_float_rounding(self):
+        d = self._make().to_dict()
+        # error_total rounded to 6 decimal places
+        assert d["error_total"] == round(0.25, 6)
+        # latency_ms rounded to 2 decimal places
+        assert d["latency_ms"] == round(45.67, 2)
+
+    def test_roundtrip(self):
+        orig = self._make()
+        d = orig.to_dict()
+        restored = ContinuityTraceFields.from_dict(d)
+        assert restored.run_id == orig.run_id
+        assert restored.attempt == orig.attempt
+        assert restored.mode == orig.mode
+
+    def test_json_serializable(self):
+        s = json.dumps(self._make().to_dict())
+        assert isinstance(s, str)
+
+
+class TestContinuityResultFieldsShape:
+    """ContinuityResultFields.to_dict() golden shape."""
+
+    def _make(self) -> ContinuityResultFields:
+        return ContinuityResultFields(
+            run_id="abc123def456",
+            mode="fiction",
+            attempts=3,
+            final_status="ACCEPTED",
+            residual_error_total=0.05,
+            residual_error_by_anchor={"a1": 0.05},
+            action_path=["none", "soft_reprompt", "hard_reprompt"],
+            total_tokens=450,
+            total_latency_ms=150.75,
+            monotone=True,
+            oscillation_detected=False,
+            deadzone_actions=[],
+            interference_edges=[{"from_anchor": "a1", "to_anchor": "a2"}],
+            anchors_hash="cafebabe01234567",
+        )
+
+    def test_keys(self):
+        d = self._make().to_dict()
+        assert set(d.keys()) == {
+            "run_id", "mode", "attempts",
+            "final_status", "residual_error_total",
+            "residual_error_by_anchor",
+            "action_path", "total_tokens", "total_latency_ms",
+            "monotone", "oscillation_detected",
+            "deadzone_actions", "interference_edges",
+            "anchors_hash",
+        }
+
+    def test_value_types(self):
+        d = self._make().to_dict()
+        assert isinstance(d["final_status"], str)
+        assert isinstance(d["monotone"], bool)
+        assert isinstance(d["oscillation_detected"], bool)
+        assert isinstance(d["action_path"], list)
+        assert isinstance(d["interference_edges"], list)
+        assert isinstance(d["total_tokens"], int)
+
+    def test_roundtrip(self):
+        orig = self._make()
+        d = orig.to_dict()
+        restored = ContinuityResultFields.from_dict(d)
+        assert restored.run_id == orig.run_id
+        assert restored.final_status == orig.final_status
+        assert restored.monotone == orig.monotone
+
+    def test_json_serializable(self):
+        s = json.dumps(self._make().to_dict())
+        assert isinstance(s, str)
+
+
+class TestTelemetryAnchorStatsShape:
+    """AnchorStats (telemetry).to_dict() golden shape."""
+
+    def _make(self) -> TelemetryAnchorStats:
+        return TelemetryAnchorStats(
+            anchor_id="a1",
+            violation_count=5,
+            run_count=3,
+            action_success_rates={"soft_reprompt": 0.8, "hard_reprompt": 1.0},
+            deadzone_count=1,
+        )
+
+    def test_keys(self):
+        d = self._make().to_dict()
+        assert set(d.keys()) == {
+            "anchor_id", "violation_count", "run_count",
+            "action_success_rates", "deadzone_count",
+        }
+
+    def test_value_types(self):
+        d = self._make().to_dict()
+        assert isinstance(d["anchor_id"], str)
+        assert isinstance(d["violation_count"], int)
+        assert isinstance(d["run_count"], int)
+        assert isinstance(d["action_success_rates"], dict)
+        assert isinstance(d["deadzone_count"], int)
+
+    def test_roundtrip(self):
+        orig = self._make()
+        d = orig.to_dict()
+        restored = TelemetryAnchorStats.from_dict(d)
+        assert restored.anchor_id == orig.anchor_id
+        assert restored.violation_count == orig.violation_count
+
+    def test_json_serializable(self):
+        s = json.dumps(self._make().to_dict())
+        assert isinstance(s, str)
+
+
+class TestTelemetryConvergenceReportShape:
+    """ConvergenceReport (telemetry).to_dict() golden shape."""
+
+    def _make(self) -> TelemetryConvergenceReport:
+        return TelemetryConvergenceReport(
+            total_runs=10,
+            accepted=8,
+            refused=1,
+            escalated=1,
+            acceptance_rate=0.8,
+            avg_attempts=2.5,
+            avg_tokens_per_run=300.0,
+            avg_latency_per_run_ms=120.5,
+            efficiency=150.0,
+            monotone_rate=0.7,
+            oscillation_rate=0.1,
+            windup_count=1,
+            anchor_stats={
+                "a1": TelemetryAnchorStats(
+                    anchor_id="a1", violation_count=3, run_count=2,
+                ),
+            },
+            interference_graph={"a1→a2": 2},
+        )
+
+    def test_keys(self):
+        d = self._make().to_dict()
+        assert set(d.keys()) == {
+            "total_runs", "accepted", "refused", "escalated",
+            "acceptance_rate", "avg_attempts",
+            "avg_tokens_per_run", "avg_latency_per_run_ms",
+            "efficiency", "monotone_rate", "oscillation_rate",
+            "windup_count", "anchor_stats", "interference_graph",
+        }
+
+    def test_value_types(self):
+        d = self._make().to_dict()
+        assert isinstance(d["total_runs"], int)
+        assert isinstance(d["acceptance_rate"], float)
+        assert isinstance(d["anchor_stats"], dict)
+        assert isinstance(d["interference_graph"], dict)
+
+    def test_nested_anchor_stats(self):
+        d = self._make().to_dict()
+        assert "a1" in d["anchor_stats"]
+        assert "anchor_id" in d["anchor_stats"]["a1"]
+
+    def test_json_serializable(self):
+        s = json.dumps(self._make().to_dict())
+        assert isinstance(s, str)
+
+
+class TestCostReportShape:
+    """CostReport.to_dict() golden shape."""
+
+    def _make(self) -> CostReport:
+        return CostReport(
+            total_cost_usd=1.23,
+            by_model={"gpt-4": 0.80, "claude-3": 0.43},
+            by_operation={"verification": 0.50, "generation": 0.73},
+            total_calls=15,
+            total_input_tokens=5000,
+            total_output_tokens=3000,
+            period="2025-01-01 to 2025-01-31",
+        )
+
+    def test_keys(self):
+        d = self._make().to_dict()
+        assert set(d.keys()) == {
+            "total_cost_usd", "by_model", "by_operation",
+            "total_calls", "total_input_tokens",
+            "total_output_tokens", "period",
+        }
+
+    def test_value_types(self):
+        d = self._make().to_dict()
+        assert isinstance(d["total_cost_usd"], float)
+        assert isinstance(d["by_model"], dict)
+        assert isinstance(d["by_operation"], dict)
+        assert isinstance(d["total_calls"], int)
+        assert isinstance(d["total_input_tokens"], int)
+        assert isinstance(d["total_output_tokens"], int)
+        assert isinstance(d["period"], str)
+
+    def test_json_serializable(self):
+        s = json.dumps(self._make().to_dict())
+        assert isinstance(s, str)
+
+
+class TestPerformanceReportShape:
+    """PerformanceReport.to_dict() golden shape."""
+
+    def _make(self) -> PerformanceReport:
+        return PerformanceReport(
+            verification_latency_p50=25.0,
+            verification_latency_p95=120.0,
+            verification_latency_p99=350.0,
+            approval_rate=0.85,
+            total_proposals=20,
+            total_verified=17,
+            total_rejected=3,
+            avg_claims_per_proposal=3.5,
+        )
+
+    def test_keys(self):
+        d = self._make().to_dict()
+        assert set(d.keys()) == {
+            "verification_latency_p50", "verification_latency_p95",
+            "verification_latency_p99", "approval_rate",
+            "total_proposals", "total_verified",
+            "total_rejected", "avg_claims_per_proposal",
+        }
+
+    def test_value_types(self):
+        d = self._make().to_dict()
+        assert isinstance(d["verification_latency_p50"], float)
+        assert isinstance(d["verification_latency_p95"], float)
+        assert isinstance(d["approval_rate"], float)
+        assert isinstance(d["total_proposals"], int)
+        assert isinstance(d["total_verified"], int)
+
+    def test_json_serializable(self):
+        s = json.dumps(self._make().to_dict())
+        assert isinstance(s, str)
+
+
 class TestAdapterFindingShape:
     """AdapterFinding.to_dict() golden shape."""
 
@@ -1204,6 +1740,14 @@ class TestJsonStability:
             InvariantResult(passed=True, message="ok", invariant_id="x"),
             AdapterFinding(source="s", file_path="f", message="m"),
             PremiseCheckResult(claim_id="c", passed=True),
+            Anchor(id="a", anchor_type=AnchorType.CANON, description="d"),
+            Violation(anchor_id="a", anchor_type=AnchorType.CANON, severity=Severity.WARN, description="d"),
+            ContinuityReport(passed=True, score=1.0, violations=[], recommended_action=RecommendedAction.ACCEPT),
+            ContinuityTraceFields(run_id="r", mode="m"),
+            ContinuityResultFields(run_id="r", mode="m"),
+            TelemetryAnchorStats(anchor_id="a"),
+            CostReport(total_cost_usd=0.0),
+            PerformanceReport(approval_rate=1.0),
         ]
         for obj in objects:
             d = obj.to_dict()
@@ -1233,3 +1777,37 @@ class TestJsonStability:
         restored = Spine.from_dict(d)
         assert restored.id == "sp1"
         assert restored.structure == {"files": {"a.py": "required"}}
+
+    def test_anchor_full_roundtrip_through_json(self):
+        """Anchor survives JSON serialization + deserialization."""
+        anchor = Anchor(
+            id="a1", anchor_type=AnchorType.CANON, description="Rule X",
+            required_patterns=["\\bX\\b"], severity=Severity.REJECT,
+        )
+        s = json.dumps(anchor.to_dict())
+        d = json.loads(s)
+        restored = Anchor.from_dict(d)
+        assert restored.id == "a1"
+        assert restored.anchor_type == AnchorType.CANON
+        assert restored.severity == Severity.REJECT
+
+    def test_continuity_report_full_roundtrip_through_json(self):
+        """ContinuityReport survives JSON serialization + deserialization."""
+        report = ContinuityReport(
+            passed=False, score=0.5,
+            violations=[
+                Violation(
+                    anchor_id="a1", anchor_type=AnchorType.STYLE,
+                    severity=Severity.CORRECT, description="Style violation",
+                ),
+            ],
+            recommended_action=RecommendedAction.HARD_REPROMPT,
+            checked_anchors=3, check_time_ms=10.0,
+        )
+        s = json.dumps(report.to_dict())
+        d = json.loads(s)
+        restored = ContinuityReport.from_dict(d)
+        assert restored.passed is False
+        assert restored.score == 0.5
+        assert len(restored.violations) == 1
+        assert restored.recommended_action == RecommendedAction.HARD_REPROMPT

@@ -14,6 +14,7 @@ Categories:
 6. Envelope Mode Retrograde: strict→exploratory must not weaken committed claims
 7. Evidence Type Gating: HARD claims require specific evidence types
 8. ClaimStatus FSM: Transition graph cannot be bypassed
+9. Continuity Rule: converged=False results cannot be silently accepted
 """
 
 import pytest
@@ -549,3 +550,176 @@ class TestClaimStatusFSMInvariants:
             for to_s in ClaimStatus:
                 valid, _ = is_valid_transition(from_s, to_s, TransitionReason.HUMAN)
                 assert valid, f"HUMAN should allow {from_s}→{to_s}"
+
+
+# =============================================================================
+# 9. Continuity Rule: converged=False cannot be silently accepted
+# =============================================================================
+
+
+class TestContinuityRule:
+    """Convergence executor cannot silently accept a failed convergence run."""
+
+    def test_convergence_result_records_converged_flag(self):
+        """ConvergenceResult always records whether convergence was achieved."""
+        from governor.continuity import (
+            ConvergenceResult, ContinuityReport, RecommendedAction,
+        )
+
+        report = ContinuityReport(
+            passed=False, score=0.5, violations=[],
+            recommended_action=RecommendedAction.FAIL_CLOSED,
+        )
+        result = ConvergenceResult(
+            output="partial", converged=False,
+            attempts=5, final_report=report,
+        )
+        # converged=False must be visible in serialization
+        d = result.to_dict()
+        assert d["converged"] is False
+        assert d["final_report"]["passed"] is False
+
+    def test_convergence_result_failed_has_evidence(self):
+        """A non-converged result carries a final_report with violation evidence."""
+        from governor.continuity import (
+            ConvergenceResult, ContinuityReport, Violation,
+            AnchorType, Severity, RecommendedAction,
+        )
+
+        violations = [
+            Violation(
+                anchor_id="a1", anchor_type=AnchorType.CANON,
+                severity=Severity.REJECT, description="Canon violated",
+            ),
+        ]
+        report = ContinuityReport(
+            passed=False, score=0.3, violations=violations,
+            recommended_action=RecommendedAction.FAIL_CLOSED,
+            checked_anchors=3,
+        )
+        result = ConvergenceResult(
+            output="", converged=False,
+            attempts=5, final_report=report,
+        )
+        # The failure evidence must survive serialization
+        d = result.to_dict()
+        assert len(d["final_report"]["violations"]) == 1
+        assert d["final_report"]["violations"][0]["anchor_id"] == "a1"
+
+    def test_convergence_executor_returns_converged_false_on_budget(self):
+        """Executor returns converged=False when budget is exhausted."""
+        from governor.continuity import (
+            ConvergenceExecutor, ContinuityChecker,
+            CorrectionLadder, ConvergenceBudget, Anchor, AnchorType, Severity,
+        )
+
+        anchors = [Anchor(
+            id="always_fail",
+            anchor_type=AnchorType.REQUIREMENT,
+            description="Always violates",
+            required_patterns=["IMPOSSIBLE_PATTERN_XYZ_NEVER_MATCHES"],
+            severity=Severity.REJECT,
+        )]
+
+        class AlwaysSameProvider:
+            def generate(self, prompt, **kwargs):
+                return "This text will never contain the required pattern."
+
+        executor = ConvergenceExecutor(
+            provider=AlwaysSameProvider(),
+            checker=ContinuityChecker(),
+            ladder=CorrectionLadder(),
+            budget=ConvergenceBudget(max_attempts=2, max_tokens=10000),
+        )
+        result = executor.converge_generate(
+            prompt="Write something",
+            anchors=anchors,
+        )
+        # Must NOT silently accept — converged must be False
+        assert result.converged is False
+        assert result.attempts == 2
+        assert result.final_report.passed is False
+
+    def test_convergence_executor_accept_only_when_passed(self):
+        """Executor returns converged=True only when report.passed is True."""
+        from governor.continuity import (
+            ConvergenceExecutor, ContinuityChecker,
+            CorrectionLadder, ConvergenceBudget, Anchor, AnchorType, Severity,
+        )
+
+        anchors = [Anchor(
+            id="easy_anchor",
+            anchor_type=AnchorType.REQUIREMENT,
+            description="Requires 'hello'",
+            required_patterns=["hello"],
+            severity=Severity.CORRECT,
+        )]
+
+        class HelloProvider:
+            def generate(self, prompt, **kwargs):
+                return "hello world"
+
+        executor = ConvergenceExecutor(
+            provider=HelloProvider(),
+            checker=ContinuityChecker(),
+            ladder=CorrectionLadder(),
+            budget=ConvergenceBudget(max_attempts=3),
+        )
+        result = executor.converge_generate(
+            prompt="Say hello",
+            anchors=anchors,
+        )
+        assert result.converged is True
+        assert result.final_report.passed is True
+
+    def test_telemetry_result_status_matches_convergence(self):
+        """Telemetry final_status correctly reflects convergence outcome."""
+        from governor.telemetry import ContinuityResultFields
+
+        # ACCEPTED only when converged
+        accepted = ContinuityResultFields(
+            run_id="r1", mode="code", attempts=1,
+            final_status="ACCEPTED",
+        )
+        assert accepted.final_status == "ACCEPTED"
+
+        # REFUSED when not converged
+        refused = ContinuityResultFields(
+            run_id="r2", mode="code", attempts=5,
+            final_status="REFUSED",
+        )
+        assert refused.final_status == "REFUSED"
+
+        # ESCALATED when ladder hits REQUIRE_HITL
+        escalated = ContinuityResultFields(
+            run_id="r3", mode="fiction", attempts=5,
+            final_status="ESCALATED",
+        )
+        assert escalated.final_status == "ESCALATED"
+
+    def test_adapter_gates_on_violations(self):
+        """Continuity adapter blocks when violations are present (one-shot gate)."""
+        from governor.continuity import (
+            AnchorRegistry, ContinuityChecker,
+            Anchor, AnchorType, Severity,
+        )
+        from governor.adapters import continuity_invariant
+        import tempfile
+        from pathlib import Path
+
+        registry = AnchorRegistry()
+        registry.register(Anchor(
+            id="must_have_x",
+            anchor_type=AnchorType.REQUIREMENT,
+            description="Output must contain X",
+            required_patterns=["MUST_CONTAIN_THIS"],
+            severity=Severity.CORRECT,
+        ))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            p = Path(tmpdir) / "output.py"
+            p.write_text("This text does not have the required pattern.")
+
+            inv = continuity_invariant(registry, ContinuityChecker())
+            result = inv.check(root=Path(tmpdir), files_touched=["output.py"])
+            assert result.passed is False

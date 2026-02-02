@@ -16,7 +16,7 @@ in Y schema, never mutate state directly."
 import copy
 import os
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +30,7 @@ from governor.adapters import (
     build_adapter_set,
     cfi_invariant,
     content_invariant,
+    continuity_invariant,
     fiction_invariant,
     nonfiction_citation_invariant,
     security_invariant,
@@ -143,6 +144,48 @@ class MockToneChecker:
         return _MockToneResult(valid=self._valid, violations=self._violations)
 
 
+@dataclass
+class _MockContinuityViolation:
+    anchor_id: str
+    anchor_type: Any
+    severity: Any
+    description: str
+    evidence: list[str] = field(default_factory=list)
+
+
+@dataclass
+class _MockContinuityReport:
+    violations: list[_MockContinuityViolation]
+
+
+class MockAnchorRegistry:
+    """Stub AnchorRegistry — returns configurable anchors."""
+
+    def __init__(self, anchors: list[Any] | None = None):
+        self._anchors = anchors or []
+
+    def all(self) -> list[Any]:
+        return self._anchors
+
+
+class MockContinuityChecker:
+    """Stub ContinuityChecker — returns configurable report."""
+
+    def __init__(self, violations: list[_MockContinuityViolation] | None = None):
+        self._violations = violations or []
+
+    def check(self, content: str, anchors: list[Any]) -> _MockContinuityReport:
+        return _MockContinuityReport(violations=self._violations)
+
+
+@dataclass
+class _MockAnchor:
+    """Minimal anchor for continuity adapter tests."""
+    id: str = "test_anchor"
+    anchor_type: str = "canon"
+    description: str = "Test anchor"
+
+
 # =============================================================================
 # Contract: Invariant interface shape
 # =============================================================================
@@ -164,6 +207,7 @@ class TestInvariantContract:
         ("fiction", lambda: fiction_invariant(MockFictionVerifier())),
         ("citation", lambda: nonfiction_citation_invariant(MockCitationVerifier())),
         ("tone", lambda: tone_invariant(MockToneChecker())),
+        ("continuity", lambda: continuity_invariant(MockAnchorRegistry())),
         ("content", lambda: content_invariant(lambda c, p: (True, "ok"), "test", "test rule")),
     ]
 
@@ -216,6 +260,8 @@ class TestResultContract:
         ("fiction_empty", lambda: fiction_invariant(MockFictionVerifier()), {}),
         ("citation_empty", lambda: nonfiction_citation_invariant(MockCitationVerifier()), {}),
         ("tone_empty", lambda: tone_invariant(MockToneChecker()), {}),
+        ("continuity_empty", lambda: continuity_invariant(MockAnchorRegistry()), {}),
+        ("continuity_with_files", lambda: continuity_invariant(MockAnchorRegistry([_MockAnchor()]), MockContinuityChecker()), {"files_touched": ["test.py"]}),
         ("content_empty", lambda: content_invariant(lambda c, p: (True, "ok"), "test", "r"), {}),
     ]
 
@@ -280,9 +326,20 @@ class TestEmptyInputSafety:
         result = inv.check(root=Path("/nonexistent"), files_touched=[])
         assert result.passed is True
 
+    def test_continuity_no_files(self):
+        inv = continuity_invariant(MockAnchorRegistry())
+        result = inv.check(root=Path("/nonexistent"), files_touched=[])
+        assert result.passed is True
+
     def test_content_no_files(self):
         inv = content_invariant(lambda c, p: (True, "ok"), "test", "rule")
         result = inv.check(root=Path("/nonexistent"), files_touched=[])
+        assert result.passed is True
+
+    def test_continuity_no_kwargs(self):
+        """verify() with zero kwargs must not crash."""
+        inv = continuity_invariant(MockAnchorRegistry())
+        result = inv.check()
         assert result.passed is True
 
     def test_security_no_kwargs(self):
@@ -366,6 +423,20 @@ class TestFindingDetection:
         result = inv.check(root=tmp_path, files_touched=["essay.md"])
         assert result.passed is False
         assert "violations" in result.details
+
+    def test_continuity_violations_cause_failure(self, tmp_path):
+        from governor.continuity import AnchorType as RealAnchorType, Severity as RealSeverity
+        violation = _MockContinuityViolation(
+            anchor_id="a1", anchor_type=RealAnchorType.CANON,
+            severity=RealSeverity.CORRECT, description="Missing canon element",
+        )
+        checker = MockContinuityChecker(violations=[violation])
+        registry = MockAnchorRegistry([_MockAnchor()])
+        inv = continuity_invariant(registry, checker)
+        (tmp_path / "ch1.md").write_text("Some output text.")
+        result = inv.check(root=tmp_path, files_touched=["ch1.md"])
+        assert result.passed is False
+        assert "findings" in result.details
 
     def test_content_check_failure(self, tmp_path):
         def bad_check(content: str, path: str) -> tuple[bool, str]:
@@ -457,6 +528,11 @@ class TestOnViolationParameter:
         assert inv.on_violation == mode
 
     @pytest.mark.parametrize("mode", ["block", "warn"])
+    def test_continuity_on_violation(self, mode):
+        inv = continuity_invariant(MockAnchorRegistry(), on_violation=mode)
+        assert inv.on_violation == mode
+
+    @pytest.mark.parametrize("mode", ["block", "warn"])
     def test_content_on_violation(self, mode):
         inv = content_invariant(lambda c, p: (True, "ok"), "t", "r", on_violation=mode)
         assert inv.on_violation == mode
@@ -500,6 +576,12 @@ class TestInvariantIdParameter:
         result = inv.check(root=tmp_path, files_touched=[])
         assert result.invariant_id == "my_tone"
 
+    def test_continuity_custom_id(self, tmp_path):
+        inv = continuity_invariant(MockAnchorRegistry(), invariant_id="my_continuity")
+        assert inv.id == "my_continuity"
+        result = inv.check(root=tmp_path, files_touched=[])
+        assert result.invariant_id == "my_continuity"
+
     def test_content_custom_id(self, tmp_path):
         inv = content_invariant(
             lambda c, p: (True, "ok"), "t", "r", invariant_id="my_content"
@@ -538,6 +620,14 @@ class TestNoInputMutation:
         files = ["a.md"]
         files_copy = files.copy()
         inv = fiction_invariant(MockFictionVerifier())
+        inv.check(root=tmp_path, files_touched=files)
+        assert files == files_copy
+
+    def test_continuity_does_not_mutate_files_list(self, tmp_path):
+        (tmp_path / "a.py").write_text("x = 1")
+        files = ["a.py"]
+        files_copy = files.copy()
+        inv = continuity_invariant(MockAnchorRegistry([_MockAnchor()]), MockContinuityChecker())
         inv.check(root=tmp_path, files_touched=files)
         assert files == files_copy
 
@@ -618,6 +708,14 @@ class TestBuildAdapterSet:
         assert len(result) == 1
         assert result[0].id == "tone_check"
 
+    def test_continuity_only(self):
+        config = AdapterConfig(
+            continuity_registry=MockAnchorRegistry(),
+        )
+        result = build_adapter_set(config)
+        assert len(result) == 1
+        assert result[0].id == "continuity_check"
+
     def test_custom_checks(self):
         config = AdapterConfig(
             custom_checks=[
@@ -635,10 +733,11 @@ class TestBuildAdapterSet:
             fiction_verifier=MockFictionVerifier(),
             citation_verifier=MockCitationVerifier(),
             tone_checker=MockToneChecker(),
+            continuity_registry=MockAnchorRegistry(),
             custom_checks=[(lambda c, p: (True, "ok"), "x", "r")],
         )
         result = build_adapter_set(config)
-        assert len(result) == 6
+        assert len(result) == 7
 
     def test_all_are_invariant_instances(self):
         config = AdapterConfig(
@@ -953,3 +1052,13 @@ class TestVerifierExceptionHandling:
         (tmp_path / "f.md").write_text("text")
         result = inv.check(root=tmp_path, files_touched=["f.md"])
         assert result.passed is True
+
+    def test_continuity_checker_exception_skipped(self, tmp_path):
+        class CrashingChecker:
+            def check(self, content, anchors):
+                raise RuntimeError("Check failed")
+
+        inv = continuity_invariant(MockAnchorRegistry([_MockAnchor()]), CrashingChecker())
+        (tmp_path / "f.py").write_text("code")
+        result = inv.check(root=tmp_path, files_touched=["f.py"])
+        assert result.passed is True  # Gracefully skipped

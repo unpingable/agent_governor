@@ -52,7 +52,7 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Web UI (Deferred 2, W1-W3)**: GovernorContextManager (isolated per-user/project contexts), ChatBridge (Anthropic/Ollama backend abstraction), GovernorHooks (mode-specific system prompts), refactored FastAPI adapter (OpenAI-compatible API with governor endpoints), Docker multi-user deployment (Erin fiction + James code stacks).
 **Structured Telemetry (Deferred 4, B2)**: TelemetryCollector (pluggable backends, fail-safe), StructuredLogger (JSONL, date-partitioned, size/retention rotation), TelemetryEvent with typed field helpers, cost/performance/convergence analysis, CSV/JSON export, CLI (enable/disable/status/logs/analyze/export/rotate-logs), executor integration. Convergence telemetry: CONTINUITY_TRACE/CONTINUITY_RESULT events, ConvergenceExecutor + one-shot gate instrumentation, ConvergenceReport (acceptance rate, efficiency, monotone/oscillation rates, windup, per-anchor stats, interference graph).
 **Continuity Enforcement (Deferred 5)**: Closed-loop generation control. AnchorRegistry (semantic constraint setpoints), ContinuityChecker (lexical deviation measurement), CorrectionLadder (escalating interventions), ConvergenceExecutor (iterate-until-convergence with budget enforcement, telemetry instrumented), GenerationProvider Protocol, adapter integration, CLI (anchor CRUD, check, import). Continuity Bridges: mode-specific anchor factories (fiction bible, nonfiction corpus, puppet profile), GovernorHooks integration (one-shot gating with telemetry, system prompt enrichment).
-**Total: 5263 tests**
+**Total: 5330 tests**
 
 ## Key Documents
 
@@ -846,13 +846,13 @@ src/ops_governor/
 ### Strategic Test Suites (govtests)
 | Module | Description | Tests |
 |--------|-------------|-------|
-| test_golden_files.py | Golden-file tests for JSON artifact shapes: receipts, execution state, spine, invariants, ledger entries, epistemic claims, quorum types, claim diff, adapters. Locks serialization schemas. | 107 |
-| test_no_laundering.py | No-laundering regression tests: money rule, provenance rule, premise rule, silent retraction prevention, PEER_ASSERTED cap, envelope mode retrograde, evidence type gating, ClaimStatus FSM invariants | 40 |
+| test_golden_files.py | Golden-file tests for JSON artifact shapes: receipts, execution state, spine, invariants, ledger entries, epistemic claims, quorum types, claim diff, adapters, continuity types, telemetry reports. Locks serialization schemas. | 150 |
+| test_no_laundering.py | No-laundering regression tests: money rule, provenance rule, premise rule, silent retraction prevention, PEER_ASSERTED cap, envelope mode retrograde, evidence type gating, ClaimStatus FSM invariants, continuity rule (converged=False cannot be silently accepted) | 46 |
 | test_failure_injection.py | Failure-injection for executor: timeouts, checkpoint write failures, corrupted checkpoint resume, consecutive failure threshold, budget exhaustion, spine checks during recovery, state persistence under faults | 27 |
 | test_property_invariants.py | Property-based invariant tests: confidence bounds, provenance properties, ClaimStatus FSM properties, budget enforcement, execution state transitions, fail-closed patterns, InvariantSet blocking/warning partitioning, cascade termination, serialization roundtrips | 158 |
-| test_contract_adapters.py | Contract tests for adapters: Invariant interface shape, InvariantResult shape, empty input safety, finding detection, AdapterFinding schema, on_violation/invariant_id forwarding, no input mutation, disabled invariant bypass, build_adapter_set composition, content_invariant escape hatch, severity thresholds, fault tolerance, extension filtering, InvariantSet integration, verifier exception handling | 122 |
+| test_contract_adapters.py | Contract tests for adapters: Invariant interface shape, InvariantResult shape, empty input safety, finding detection, AdapterFinding schema, on_violation/invariant_id forwarding, no input mutation, disabled invariant bypass, build_adapter_set composition, content_invariant escape hatch, severity thresholds, fault tolerance, extension filtering, InvariantSet integration, verifier exception handling, continuity adapter | 140 |
 
-**Strategic Test Suite tests: 454**
+**Strategic Test Suite tests: 521**
 
 ### Invariant Store (Deferred 1: Invariant Management + Execution Shell)
 | Module | Description | Tests |
@@ -887,7 +887,7 @@ src/ops_governor/
 
 **Continuity Enforcement tests: 190**
 
-**Total: 5263 tests**
+**Total: 5330 tests**
 
 ## Common Mistakes to Avoid
 

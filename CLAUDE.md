@@ -52,7 +52,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Web UI (Deferred 2, W1-W3)**: GovernorContextManager (isolated per-user/project contexts), ChatBridge (Anthropic/Ollama backend abstraction), GovernorHooks (mode-specific system prompts), refactored FastAPI adapter (OpenAI-compatible API with governor endpoints), Docker multi-user deployment (Erin fiction + James code stacks).
 **Structured Telemetry (Deferred 4, B2)**: TelemetryCollector (pluggable backends, fail-safe), StructuredLogger (JSONL, date-partitioned, size/retention rotation), TelemetryEvent with typed field helpers, cost/performance/convergence analysis, CSV/JSON export, CLI (enable/disable/status/logs/analyze/export/rotate-logs), executor integration. Convergence telemetry: CONTINUITY_TRACE/CONTINUITY_RESULT events, ConvergenceExecutor + one-shot gate instrumentation, ConvergenceReport (acceptance rate, efficiency, monotone/oscillation rates, windup, per-anchor stats, interference graph).
 **Continuity Enforcement (Deferred 5)**: Closed-loop generation control. AnchorRegistry (semantic constraint setpoints), ContinuityChecker (lexical deviation measurement), CorrectionLadder (escalating interventions), ConvergenceExecutor (iterate-until-convergence with budget enforcement, telemetry instrumented), GenerationProvider Protocol, adapter integration, CLI (anchor CRUD, check, import). Continuity Bridges: mode-specific anchor factories (fiction bible, nonfiction corpus, puppet profile), GovernorHooks integration (one-shot gating with telemetry, system prompt enrichment).
-**Total: 5330 tests**
+**Convergence Auto-Tuning (Deferred 6)**: Offline system identification over convergence traces. ConvergenceAnalyzer (per-anchor decomposition, action effectiveness matrices, deadzone detection, interference tracking, opportunity identification). TuningProposal artifacts (28 dataclass types, HardGuards forced-True, Approval forced-requires_human). ProposalStore (file-per-item JSON persistence). 5 admissibility checks (regime match, strength non-regression, objective constraints, trial requirements, determinism hygiene). ConvergenceTuner orchestrator (propose/apply/rollback). 10 footgun guardrails. CLI (governor tune convergence {status,propose,apply,rollback,proposals,show}).
+**Total: 5475 tests**
 
 ## Key Documents
 
@@ -281,6 +282,16 @@ governor tune calibrate --run                  # Compute calibrated setpoints
 governor tune budget --parameter <name>        # Show sweep results
 governor tune reset --confirm                  # Clear all tuning state
 
+# Convergence Auto-Tuning (offline system identification + proposal engine)
+governor tune convergence status              # Store state: counts by proposal status
+governor tune convergence propose             # Generate proposals from telemetry
+    --window 30d --mode fiction --namespace fiction
+governor tune convergence apply <proposal_id> # Apply with admissibility checks
+    --by <user>
+governor tune convergence rollback <trial_id> # Mark trial as rolled back
+governor tune convergence proposals           # List proposals (--status filter)
+governor tune convergence show <proposal_id>  # Show proposal details (--json)
+
 # Tainted Claim Similarity (recurrence detection)
 governor taint status                   # Show taint index stats
 governor taint list                     # List tainted claims
@@ -466,6 +477,7 @@ src/governor/
 ├── telemetry.py       # TelemetryCollector, StructuredLogger, TelemetryEvent, cost/performance analysis, JSONL export
 ├── continuity.py      # AnchorRegistry, ContinuityChecker, CorrectionLadder, ConvergenceExecutor, closed-loop generation control
 ├── continuity_bridges.py # Mode-specific anchor factories: fiction bible, nonfiction corpus, puppet profile → Anchor lists
+├── convergence_tuning.py # ConvergenceAnalyzer, ConvergenceTuner, ProposalStore, TuningProposal, admissibility checks
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -887,7 +899,14 @@ src/ops_governor/
 
 **Continuity Enforcement tests: 190**
 
-**Total: 5330 tests**
+### Convergence Auto-Tuning (Deferred 6)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| convergence_tuning.py | TuningMode/TuningConfidence/ProposalStatus/ChangeSetType/RefactorSuggestionType/RollbackMetric/RollbackOperator enums, 28 dataclass types (Regime, Scope, TimeRange, EvidenceWindow, ChangeParameterUpdate, ChangePatternUpdate, ChangeRefactorSuggestion, ChangeSet, HardGuards, ObjectiveConstraints, Constraints, MetricsBlock, PredictedImpact, SummaryTable, ExampleEpisode, InterferenceEdge, SupportingEvidence, RollbackTrigger, TrialScope, EvaluationSet, TrialPlan, Approval, TuningProposal, TuningApply, ActionEffectiveness, PerAnchorAnalysis, TuningOpportunity, AdmissibilityResult), ProposalStore (file-per-item JSON), ConvergenceAnalyzer (per-anchor decomposition, action effectiveness, deadzone detection, interference, opportunities), 5 admissibility checks, ConvergenceTuner orchestrator | 145 |
+
+**Convergence Auto-Tuning tests: 145**
+
+**Total: 5475 tests**
 
 ## Common Mistakes to Avoid
 

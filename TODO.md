@@ -1912,3 +1912,21 @@ iterates until convergence or fails closed with evidence.
   - Direct JSON reads (no Bible/Corpus instantiation — avoids side effects)
 
 **190 tests in tests/test_continuity.py + tests/test_continuity_bridges.py + tests/test_chat_bridge.py (bridge integration)**
+
+### Deferred 6: Convergence Auto-Tuning (Offline System Identification) ✓ COMPLETE
+
+Offline system identification engine that reads convergence telemetry,
+computes per-anchor analysis, identifies tuning opportunities, and produces
+TuningProposal artifacts. Never mutates invariants or enforcement parameters
+without explicit human approval.
+
+- [x] **Enums** — TuningMode, TuningConfidence, ProposalStatus, ChangeSetType, RefactorSuggestionType, RollbackMetric, RollbackOperator
+- [x] **Dataclasses** — 28 types: Regime, Scope, TimeRange, EvidenceWindow, ChangeParameterUpdate, ChangePatternUpdate, ChangeRefactorSuggestion, ChangeSet, HardGuards, ObjectiveConstraints, Constraints, MetricsBlock, PredictedImpact, SummaryTable, ExampleEpisode, InterferenceEdge, SupportingEvidence, RollbackTrigger, TrialScope, EvaluationSet, TrialPlan, Approval, TuningProposal, TuningApply, ActionEffectiveness, PerAnchorAnalysis, TuningOpportunity, AdmissibilityResult
+- [x] **ProposalStore** — File-per-item JSON persistence in .governor/convergence_tuning/
+- [x] **ConvergenceAnalyzer** — Per-anchor decomposition from telemetry events, action effectiveness matrices, deadzone detection, interference tracking, opportunity identification, metrics block computation
+- [x] **Admissibility Checks** — 5 pure functions: regime match, strength non-regression, objective constraints, trial requirements, determinism hygiene
+- [x] **ConvergenceTuner** — Orchestrator: propose (analyze→identify→build→validate→save), apply (load→check→update→record), rollback, status
+- [x] **CLI** — `governor tune convergence {status,propose,apply,rollback,proposals,show}`
+- [x] **10 footgun guardrails** — Multi-term objective, no severity downgrades, proposals only, regime stratification, measurement refinement, interference tracking, rate-limiting, no auto-apply, namespace isolation, determinism hygiene
+
+**~145 tests in tests/test_convergence_tuning.py**

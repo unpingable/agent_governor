@@ -7664,6 +7664,233 @@ def tune_reset(ctx, confirm):
 
 
 # =============================================================================
+# Convergence Tuning (sub-group under tune)
+# =============================================================================
+
+
+@tune_cmd.group("convergence")
+@click.pass_context
+def tune_convergence_cmd(ctx):
+    """Convergence auto-tuning — offline system identification + proposal engine."""
+    pass
+
+
+@tune_convergence_cmd.command("status")
+@click.pass_context
+def tune_convergence_status(ctx):
+    """Show convergence tuning state."""
+    from .convergence_tuning import ConvergenceTuner, ProposalStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = ProposalStore(gov_dir.parent if gov_dir.name == ".governor" else gov_dir)
+    tuner = ConvergenceTuner(store=store, gov_dir=gov_dir)
+    status = tuner.get_status()
+
+    click.echo("Convergence Tuner Status:")
+    click.echo(f"  Store: {status['store_dir']}")
+    click.echo(f"  Total proposals: {status['total_proposals']}")
+    click.echo(f"  Total applies: {status['total_applies']}")
+    if status["proposal_counts"]:
+        click.echo("  By status:")
+        for s, c in sorted(status["proposal_counts"].items()):
+            click.echo(f"    {s}: {c}")
+    else:
+        click.echo("  No proposals yet.")
+
+
+@tune_convergence_cmd.command("propose")
+@click.option("--window", default="30d", help="Time window (e.g., 30d)")
+@click.option("--mode", default=None, help="Mode filter (fiction, nonfiction, puppet, code, ops)")
+@click.option("--namespace", default=None, help="Anchor namespace")
+@click.option("--max", "max_proposals", default=10, type=int, help="Max proposals to generate")
+@click.pass_context
+def tune_convergence_propose(ctx, window, mode, namespace, max_proposals):
+    """Generate tuning proposals from convergence telemetry."""
+    import json
+    from datetime import datetime, timedelta, timezone
+    from .convergence_tuning import ConvergenceTuner, ProposalStore, Regime
+    from .telemetry import TelemetryConfig, StructuredLogger
+
+    gov_dir = ensure_initialized(ctx)
+    root = gov_dir.parent if gov_dir.name == ".governor" else gov_dir
+    store = ProposalStore(root)
+    tuner = ConvergenceTuner(store=store, gov_dir=gov_dir)
+
+    # Parse window
+    since = None
+    if window.endswith("d"):
+        try:
+            days = int(window[:-1])
+            since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        except ValueError:
+            click.echo(f"Invalid window: {window}", err=True)
+            ctx.exit(1)
+            return
+
+    # Load telemetry events
+    config = TelemetryConfig.load(gov_dir)
+    log_dir = gov_dir / config.log_dir
+    logger = StructuredLogger(log_dir, config)
+    events = logger.query(since=since)
+
+    if not events:
+        click.echo("No telemetry events found.")
+        return
+
+    proposals = tuner.propose(
+        events, mode=mode, anchor_namespace=namespace,
+        since=since, max_proposals=max_proposals,
+    )
+
+    if not proposals:
+        click.echo("No tuning opportunities identified.")
+        return
+
+    click.echo(f"Generated {len(proposals)} proposal(s):")
+    for p in proposals:
+        targets = ", ".join(p.scope.targets)
+        click.echo(f"  {p.proposal_id}: {targets} ({p.change_set.type.value})")
+        if p.predicted_impact.rationale:
+            click.echo(f"    Rationale: {p.predicted_impact.rationale[0]}")
+
+
+@tune_convergence_cmd.command("apply")
+@click.argument("proposal_id")
+@click.option("--by", "applied_by", required=True, help="Who is applying")
+@click.option("--new-config-hash", default="", help="New config hash")
+@click.option("--previous-config-hash", default="", help="Previous config hash")
+@click.option("--model-id", default="", help="Current model ID for regime check")
+@click.option("--mode", default="", help="Current mode for regime check")
+@click.option("--notes", default="", help="Apply notes")
+@click.pass_context
+def tune_convergence_apply(ctx, proposal_id, applied_by, new_config_hash,
+                           previous_config_hash, model_id, mode, notes):
+    """Apply a proposal with admissibility checks."""
+    from .convergence_tuning import ConvergenceTuner, ProposalStore, TuningApply
+
+    gov_dir = ensure_initialized(ctx)
+    root = gov_dir.parent if gov_dir.name == ".governor" else gov_dir
+    store = ProposalStore(root)
+    tuner = ConvergenceTuner(store=store, gov_dir=gov_dir)
+
+    result = tuner.apply(
+        proposal_id, applied_by=applied_by,
+        new_config_hash=new_config_hash,
+        previous_config_hash=previous_config_hash,
+        current_model_id=model_id,
+        current_mode=mode,
+        notes=notes,
+    )
+
+    if isinstance(result, TuningApply):
+        click.echo(f"Applied: {result.trial_id}")
+        click.echo(f"  Proposal: {result.proposal_id}")
+        click.echo(f"  Applied by: {result.applied_by}")
+    else:
+        click.echo("Apply FAILED — admissibility check violations:", err=True)
+        for r in result:
+            if not r.passed:
+                click.echo(f"  [{r.check_name}]", err=True)
+                for v in r.violations:
+                    click.echo(f"    - {v}", err=True)
+        ctx.exit(1)
+
+
+@tune_convergence_cmd.command("rollback")
+@click.argument("trial_id")
+@click.pass_context
+def tune_convergence_rollback(ctx, trial_id):
+    """Roll back a trial."""
+    from .convergence_tuning import ConvergenceTuner, ProposalStore
+
+    gov_dir = ensure_initialized(ctx)
+    root = gov_dir.parent if gov_dir.name == ".governor" else gov_dir
+    store = ProposalStore(root)
+    tuner = ConvergenceTuner(store=store, gov_dir=gov_dir)
+
+    if tuner.rollback(trial_id):
+        click.echo(f"Rolled back trial: {trial_id}")
+    else:
+        click.echo(f"Trial not found: {trial_id}", err=True)
+        ctx.exit(1)
+
+
+@tune_convergence_cmd.command("proposals")
+@click.option("--status", default=None, help="Filter by status (proposed, approved, applied, etc.)")
+@click.pass_context
+def tune_convergence_proposals(ctx, status):
+    """List tuning proposals."""
+    from .convergence_tuning import ProposalStore, ProposalStatus
+
+    gov_dir = ensure_initialized(ctx)
+    root = gov_dir.parent if gov_dir.name == ".governor" else gov_dir
+    store = ProposalStore(root)
+
+    status_filter = None
+    if status:
+        try:
+            status_filter = ProposalStatus(status)
+        except ValueError:
+            click.echo(f"Invalid status: {status}. Valid: {[s.value for s in ProposalStatus]}", err=True)
+            ctx.exit(1)
+            return
+
+    proposals = store.list_proposals(status=status_filter)
+
+    if not proposals:
+        click.echo("No proposals found.")
+        return
+
+    click.echo(f"Proposals ({len(proposals)}):")
+    for p in proposals:
+        targets = ", ".join(p.scope.targets)
+        click.echo(f"  {p.proposal_id}  [{p.approval.status.value}]  {targets}")
+
+
+@tune_convergence_cmd.command("show")
+@click.argument("proposal_id")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def tune_convergence_show(ctx, proposal_id, as_json):
+    """Show proposal details."""
+    import json
+    from .convergence_tuning import ProposalStore
+
+    gov_dir = ensure_initialized(ctx)
+    root = gov_dir.parent if gov_dir.name == ".governor" else gov_dir
+    store = ProposalStore(root)
+
+    p = store.get_proposal(proposal_id)
+    if p is None:
+        click.echo(f"Proposal not found: {proposal_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(p.to_dict(), indent=2))
+        return
+
+    click.echo(f"Proposal: {p.proposal_id}")
+    click.echo(f"  Schema: {p.schema_version}")
+    click.echo(f"  Created: {p.created_at_utc}")
+    click.echo(f"  Status: {p.approval.status.value}")
+    click.echo(f"  Mode: {p.scope.mode.value}")
+    click.echo(f"  Namespace: {p.scope.anchor_namespace}")
+    click.echo(f"  Targets: {', '.join(p.scope.targets)}")
+    click.echo(f"  Change type: {p.change_set.type.value}")
+    click.echo(f"  Changes: {len(p.change_set.changes)}")
+    click.echo(f"  Episodes observed: {p.evidence_window.episodes_observed}")
+    click.echo(f"  Confidence: {p.predicted_impact.confidence.value}")
+    if p.predicted_impact.rationale:
+        click.echo(f"  Rationale: {p.predicted_impact.rationale[0]}")
+    click.echo(f"  Trial: {p.trial_plan.trial_id}")
+    click.echo(f"  Requires human: {p.approval.requires_human}")
+    if p.approval.applied_at_utc:
+        click.echo(f"  Applied at: {p.approval.applied_at_utc}")
+        click.echo(f"  Applied by: {p.approval.approved_by}")
+
+
+# =============================================================================
 # Tainted Claim Similarity
 # =============================================================================
 

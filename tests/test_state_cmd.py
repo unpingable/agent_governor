@@ -44,37 +44,46 @@ class TestStateCommand:
         data = json.loads(result.output)
         assert isinstance(data, dict)
 
-    def test_state_json_has_all_seven_keys(self, runner, initialized_v1):
+    def test_state_json_v2_default_has_schema_version(self, runner, initialized_v1):
+        """V2 is now the default schema."""
         result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json"])
+        data = json.loads(result.output)
+        assert data["schema_version"] == "v2"
+        expected_keys = {"schema_version", "generated_at", "session", "regime",
+                         "decisions", "claims", "evidence", "violations",
+                         "execution", "stability"}
+        assert set(data.keys()) == expected_keys
+
+    def test_state_json_v1_has_all_seven_keys(self, runner, initialized_v1):
+        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json", "--schema", "v1"])
         data = json.loads(result.output)
         expected_keys = {"proposals", "facts", "decisions", "tasks", "regime", "boil", "autonomous"}
         assert set(data.keys()) == expected_keys
 
-    def test_state_json_empty_returns_empty_arrays(self, runner, initialized_v1):
-        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json"])
+    def test_state_json_v1_empty_returns_empty_arrays(self, runner, initialized_v1):
+        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json", "--schema", "v1"])
         data = json.loads(result.output)
         assert data["proposals"] == []
         assert data["facts"] == []
         assert data["decisions"] == []
         assert data["autonomous"] == []
 
-    def test_state_json_tasks_graceful_no_sqlite(self, runner, initialized_v1):
+    def test_state_json_v1_tasks_graceful_no_sqlite(self, runner, initialized_v1):
         """Tasks section returns [] when no SQLite backend (v1 init)."""
-        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json"])
+        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json", "--schema", "v1"])
         data = json.loads(result.output)
         assert data["tasks"] == []
 
     def test_state_json_regime_not_none_default(self, runner, initialized_v1):
-        """Regime returns a dict with default ELASTIC state."""
-        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json"])
+        """V1: Regime returns a dict with default ELASTIC state."""
+        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json", "--schema", "v1"])
         data = json.loads(result.output)
-        # RegimeDetector always returns a state dict, even without prior state file
         if data["regime"] is not None:
             assert "current_regime" in data["regime"]
 
     def test_state_json_boil_not_none_default(self, runner, initialized_v1):
-        """Boil returns a dict with default OOLONG state."""
-        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json"])
+        """V1: Boil returns a dict with default OOLONG state."""
+        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json", "--schema", "v1"])
         data = json.loads(result.output)
         if data["boil"] is not None:
             assert "mode" in data["boil"]
@@ -84,16 +93,40 @@ class TestStateCommand:
         assert result.exit_code == 0
         assert "governor state --json" in result.output
 
-    def test_state_json_with_proposal(self, runner, initialized_v1):
-        """State includes proposals when they exist."""
+    def test_state_json_v1_with_proposal(self, runner, initialized_v1):
+        """V1: State includes proposals when they exist."""
         root = str(initialized_v1)
-        # Create a file and proposal
+        (initialized_v1 / "main.py").write_text("# main")
+        runner.invoke(cli, ["--root", root, "propose", "--claim", "type=file_exists,path=main.py"])
+
+        result = runner.invoke(cli, ["--root", root, "state", "--json", "--schema", "v1"])
+        data = json.loads(result.output)
+        assert len(data["proposals"]) >= 1
+
+    def test_state_json_v2_with_proposal(self, runner, initialized_v1):
+        """V2: State includes decisions derived from proposals."""
+        root = str(initialized_v1)
         (initialized_v1 / "main.py").write_text("# main")
         runner.invoke(cli, ["--root", root, "propose", "--claim", "type=file_exists,path=main.py"])
 
         result = runner.invoke(cli, ["--root", root, "state", "--json"])
         data = json.loads(result.output)
-        assert len(data["proposals"]) >= 1
+        assert data["schema_version"] == "v2"
+        assert len(data["decisions"]) >= 1
+
+    def test_state_json_v2_regime_section(self, runner, initialized_v1):
+        """V2: Regime section has name field."""
+        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json"])
+        data = json.loads(result.output)
+        if data["regime"] is not None:
+            assert "name" in data["regime"]
+
+    def test_state_json_v2_stability_section(self, runner, initialized_v1):
+        """V2: Stability section has drift_alert field."""
+        result = runner.invoke(cli, ["--root", str(initialized_v1), "state", "--json"])
+        data = json.loads(result.output)
+        if data["stability"] is not None:
+            assert "drift_alert" in data["stability"]
 
 
 # ===========================================================================

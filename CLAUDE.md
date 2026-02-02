@@ -55,7 +55,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Convergence Auto-Tuning (Deferred 6)**: Offline system identification over convergence traces. ConvergenceAnalyzer (per-anchor decomposition, action effectiveness matrices, deadzone detection, interference tracking, opportunity identification). TuningProposal artifacts (28 dataclass types, HardGuards forced-True, Approval forced-requires_human). ProposalStore (file-per-item JSON persistence). 5 admissibility checks (regime match, strength non-regression, objective constraints, trial requirements, determinism hygiene). ConvergenceTuner orchestrator (propose/apply/rollback). 10 footgun guardrails. CLI (governor tune convergence {status,propose,apply,rollback,proposals,show}).
 **VS Code Extension (Deferred 3, Phase V1)**: Unified check aggregation (check.py: Position, Range, CheckFinding, CheckResult, run_check). CLI `governor check` command (file/stdin, JSON/text output, security/continuity toggles). TypeScript VS Code extension (vscode-governor/: CLI client wrapper, diagnostic provider, Check File/Check Selection commands, status bar, on-save handler).
 **VS Code Extension (Deferred 3, Phase V2)**: TreeView side panel. `governor state --json` aggregation command, `--json` flags on 7 existing commands (status, facts, decisions, task list, regime status, boil status, autonomous list). GovernorTreeProvider (activity bar, state tree with regime/boil/proposals/decisions/facts/tasks/autonomous, refresh command, click-to-detail). GovernorState TypeScript types, generic CLI runner refactor, fetchState client method.
-**Total: 5569 tests**
+**VS Code Extension (Deferred 3, Phase V2-3)**: GovernorViewModel canonical schema v2. 8 top-level sections: Session, Regime, Decisions, Claims, Evidence, Violations, Execution, Stability. Read-only derivation from existing subsystems. `--schema v1|v2` backward compat on `governor state --json`. V2 TypeScript types (GovernorViewModelV2), TreeView rewrite with claim/decision/violation/evidence builders, icon mappings for claim states and violation severities.
+**Total: 5594 tests**
 
 ## Key Documents
 
@@ -89,7 +90,9 @@ governor apply <id>              # Apply verified proposal
 governor facts                   # List recorded facts (--json)
 governor decisions               # List recorded decisions (--json)
 governor status                  # Show proposal statuses (--json)
-governor state --json            # Aggregated state as single JSON blob
+governor state --json            # Aggregated state as JSON (schema v2 default)
+governor state --json --schema v1  # Legacy v1 format (proposals/facts/decisions/tasks/regime/boil/autonomous)
+governor state --json --schema v2  # Canonical ViewModel (session/regime/decisions/claims/evidence/violations/execution/stability)
 governor rejections              # Show rejection history
 
 # Configuration
@@ -489,6 +492,7 @@ src/governor/
 ├── continuity_bridges.py # Mode-specific anchor factories: fiction bible, nonfiction corpus, puppet profile → Anchor lists
 ├── convergence_tuning.py # ConvergenceAnalyzer, ConvergenceTuner, ProposalStore, TuningProposal, admissibility checks
 ├── check.py          # Position, Range, CheckFinding, CheckResult, run_check (unified check aggregation for VS Code)
+├── viewmodel.py      # GovernorViewModel (schema v2), 8 section builders, read-only state derivation, V1 compat
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -941,12 +945,13 @@ vscode-governor/
 | Module | Description | Tests |
 |--------|-------------|-------|
 | check.py | Position, Range, CheckFinding, CheckResult, security_finding_to_check, continuity_violation_to_check, run_check (unified aggregation) | 34 |
-| test_state_cmd.py | `governor state --json` aggregation, `--json` flags on 7 existing commands | 18 |
-| vscode-governor/ | VS Code extension: CLI client wrapper, diagnostic provider, GovernorTreeProvider (TreeView side panel), commands (Check File, Check Selection, Show Output, Refresh State, Show Detail), status bar, activity bar, on-save handler | 44 |
+| viewmodel.py | GovernorViewModel (schema v2), SessionView, RegimeView, DecisionView, ClaimView, EvidenceView, ViolationView, ExecutionView, StabilityView, 8 section builders, build_viewmodel, build_v1_state, claim state mapping | 65 |
+| test_state_cmd.py | `governor state --json` aggregation (v1+v2), `--json` flags on 7 existing commands | 22 |
+| vscode-governor/ | VS Code extension: CLI client wrapper, diagnostic provider, GovernorTreeProvider (TreeView side panel, V2 schema), commands (Check File, Check Selection, Show Output, Refresh State, Show Detail), status bar, activity bar, on-save handler | 53 |
 
-**VS Code Extension tests: 96 (52 Python + 44 TypeScript)**
+**VS Code Extension tests: 140 (87 Python + 53 TypeScript)**
 
-**Total: 5569 tests**
+**Total: 5594 tests**
 
 ## Common Mistakes to Avoid
 

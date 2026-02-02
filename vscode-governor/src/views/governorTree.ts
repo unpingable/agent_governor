@@ -1,13 +1,21 @@
 /**
  * TreeDataProvider for the Governor side panel.
  *
- * Shows live governor state: regime, boil, proposals, decisions, facts,
- * tasks, and autonomous sessions.
+ * Renders the V2 GovernorViewModel schema: session, regime, decisions, claims,
+ * evidence, violations, execution, stability.
  */
 
 import * as vscode from "vscode";
 import { fetchState, GovernorOptions } from "../governor/client";
-import type { GovernorState } from "../governor/types";
+import type {
+  GovernorViewModelV2,
+  DecisionView,
+  ClaimView,
+  EvidenceView,
+  ViolationView,
+  ExecutionView,
+  StabilityView,
+} from "../governor/types";
 
 // =========================================================================
 // Internal tree node type
@@ -36,12 +44,24 @@ const REGIME_ICONS: Record<string, string> = {
   unstable: "error",
 };
 
-const PROPOSAL_ICONS: Record<string, string> = {
-  draft: "edit",
-  proposed: "file-text",
-  verified: "check",
-  applied: "check-all",
+const DECISION_ICONS: Record<string, string> = {
+  accepted: "check-all",
   rejected: "close",
+  pending: "clock",
+};
+
+const CLAIM_ICONS: Record<string, string> = {
+  stabilized: "check",
+  proposed: "question",
+  stale: "clock",
+  contradicted: "close",
+};
+
+const VIOLATION_SEVERITY_ICONS: Record<string, string> = {
+  low: "info",
+  medium: "warning",
+  high: "error",
+  critical: "alert",
 };
 
 // =========================================================================
@@ -54,7 +74,7 @@ export class GovernorTreeProvider
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeNodeData | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private state: GovernorState | null = null;
+  private state: GovernorViewModelV2 | null = null;
   private error: string | null = null;
 
   constructor(
@@ -135,95 +155,141 @@ export class GovernorTreeProvider
     }
 
     const nodes: TreeNodeData[] = [];
-    nodes.push(this.buildStatusNode(this.state));
-    nodes.push(this.buildProposalsNode(this.state));
+    nodes.push(this.buildSessionNode(this.state));
+    nodes.push(this.buildRegimeNode(this.state));
     nodes.push(this.buildDecisionsNode(this.state));
-    nodes.push(this.buildFactsNode(this.state));
+    nodes.push(this.buildClaimsNode(this.state));
 
-    const tasksNode = this.buildTasksNode(this.state);
-    if (tasksNode) {
-      nodes.push(tasksNode);
+    const evidenceNode = this.buildEvidenceNode(this.state);
+    if (evidenceNode) {
+      nodes.push(evidenceNode);
     }
 
-    const autoNode = this.buildAutonomousNode(this.state);
-    if (autoNode) {
-      nodes.push(autoNode);
+    const violationsNode = this.buildViolationsNode(this.state);
+    if (violationsNode) {
+      nodes.push(violationsNode);
     }
+
+    const executionNode = this.buildExecutionNode(this.state);
+    if (executionNode) {
+      nodes.push(executionNode);
+    }
+
+    nodes.push(this.buildStabilityNode(this.state));
 
     return nodes;
   }
 
   // -----------------------------------------------------------------------
-  // Builder methods
+  // V2 Builder methods
   // -----------------------------------------------------------------------
 
-  buildStatusNode(s: GovernorState): TreeNodeData {
+  buildSessionNode(s: GovernorViewModelV2): TreeNodeData {
+    const children: TreeNodeData[] = [];
+
+    if (s.session) {
+      children.push({
+        kind: "session-mode",
+        label: `Mode: ${s.session.mode.toUpperCase()}`,
+        collapsible: false,
+        icon: s.session.mode === "strict" ? "lock" : "unlock",
+      });
+      children.push({
+        kind: "session-authority",
+        label: `Authority: ${s.session.authority_level}`,
+        collapsible: false,
+        icon: "shield",
+      });
+      if (s.session.jurisdiction) {
+        children.push({
+          kind: "session-jurisdiction",
+          label: `Jurisdiction: ${s.session.jurisdiction.toUpperCase()}`,
+          collapsible: false,
+          icon: "globe",
+        });
+      }
+      if (s.session.active_profile) {
+        children.push({
+          kind: "session-profile",
+          label: `Profile: ${s.session.active_profile}`,
+          collapsible: false,
+          icon: "account",
+        });
+      }
+      if (s.session.active_constraints.length > 0) {
+        children.push({
+          kind: "session-constraints",
+          label: `Constraints: ${s.session.active_constraints.join(", ")}`,
+          collapsible: false,
+          icon: "list-filter",
+        });
+      }
+    }
+
+    return {
+      kind: "session",
+      label: "Governor Session",
+      collapsible: true,
+      icon: "pulse",
+      children,
+      detail: s.session ? JSON.stringify(s.session, null, 2) : undefined,
+    };
+  }
+
+  buildRegimeNode(s: GovernorViewModelV2): TreeNodeData {
     const children: TreeNodeData[] = [];
 
     if (s.regime) {
-      const regime = s.regime.current_regime;
+      const regime = s.regime.name;
       children.push({
         kind: "regime",
         label: `Regime: ${regime.toUpperCase()}`,
         collapsible: false,
         icon: REGIME_ICONS[regime] ?? "shield",
-        detail: JSON.stringify(s.regime, null, 2),
       });
-    }
 
-    if (s.boil) {
-      const mode = s.boil.mode;
-      const presetDesc = s.boil.preset?.authority_posture ?? "";
-      children.push({
-        kind: "boil",
-        label: `Boil: ${mode.toUpperCase()}`,
-        description: presetDesc,
-        collapsible: false,
-        icon: "beaker",
-        detail: JSON.stringify(s.boil, null, 2),
-      });
+      if (s.regime.boil_mode) {
+        children.push({
+          kind: "boil",
+          label: `Boil: ${s.regime.boil_mode.toUpperCase()}`,
+          collapsible: false,
+          icon: "beaker",
+        });
+      }
+
+      const telemetryParts: string[] = [];
+      for (const [key, val] of Object.entries(s.regime.telemetry)) {
+        telemetryParts.push(`${key} ${val.toFixed(2)}`);
+      }
+      if (telemetryParts.length > 0) {
+        children.push({
+          kind: "telemetry",
+          label: `Telemetry: ${telemetryParts.join(", ")}`,
+          collapsible: false,
+          icon: "graph-line",
+        });
+      }
     }
 
     return {
-      kind: "status",
-      label: "Status",
+      kind: "regime-section",
+      label: s.regime ? `Regime: ${s.regime.name.toUpperCase()}` : "Regime",
       collapsible: true,
-      icon: "pulse",
+      icon: s.regime ? (REGIME_ICONS[s.regime.name] ?? "shield") : "shield",
       children,
+      detail: s.regime ? JSON.stringify(s.regime, null, 2) : undefined,
     };
   }
 
-  buildProposalsNode(s: GovernorState): TreeNodeData {
-    const children: TreeNodeData[] = s.proposals.map((p) => ({
-      kind: "proposal",
-      label: `[${p.state.toUpperCase()}] ${p.id.slice(0, 8)}...`,
-      description: `${p.claims.length} claim(s)`,
+  buildDecisionsNode(s: GovernorViewModelV2): TreeNodeData {
+    const children: TreeNodeData[] = s.decisions.map((d: DecisionView) => ({
+      kind: "decision",
+      label: `[${d.status.toUpperCase()}] ${d.id} — ${d.type}`,
+      description: d.rationale ? d.rationale.slice(0, 40) : undefined,
       collapsible: false,
-      icon: PROPOSAL_ICONS[p.state] ?? "file",
-      detail: JSON.stringify(p, null, 2),
+      icon: DECISION_ICONS[d.status] ?? "law",
+      detail: JSON.stringify(d, null, 2),
     }));
-
-    return {
-      kind: "proposals",
-      label: `Proposals (${s.proposals.length})`,
-      collapsible: true,
-      icon: "git-pull-request",
-      children,
-    };
-  }
-
-  buildDecisionsNode(s: GovernorState): TreeNodeData {
-    const children: TreeNodeData[] = s.decisions.map((d) => {
-      const topic = d.claim?.topic ?? "unknown";
-      const choice = d.claim?.choice ?? "";
-      return {
-        kind: "decision",
-        label: `[${topic}] ${choice}`,
-        collapsible: false,
-        icon: "law",
-        detail: JSON.stringify(d, null, 2),
-      };
-    });
 
     return {
       kind: "decisions",
@@ -234,76 +300,154 @@ export class GovernorTreeProvider
     };
   }
 
-  buildFactsNode(s: GovernorState): TreeNodeData {
-    const children: TreeNodeData[] = s.facts.map((f) => {
-      const claimType = f.claim?.type ?? "";
-      const desc = (f.claim as Record<string, unknown>)?.describe as string | undefined;
-      return {
-        kind: "fact",
-        label: desc ?? claimType,
-        collapsible: false,
-        icon: "database",
-        detail: JSON.stringify(f, null, 2),
-      };
-    });
-
-    return {
-      kind: "facts",
-      label: `Facts (${s.facts.length})`,
-      collapsible: true,
-      icon: "database",
-      children,
-    };
-  }
-
-  buildTasksNode(s: GovernorState): TreeNodeData | null {
-    if (s.tasks.length === 0) {
-      return null;
-    }
-
-    const children: TreeNodeData[] = s.tasks.map((t) => ({
-      kind: "task",
-      label: `[${t.status}] ${t.task}`,
-      description: `agent: ${t.agent_id}`,
+  buildClaimsNode(s: GovernorViewModelV2): TreeNodeData {
+    const children: TreeNodeData[] = s.claims.map((c: ClaimView) => ({
+      kind: "claim",
+      label: `[${c.state.toUpperCase()}] ${c.content}`,
+      description: `(${c.confidence.toFixed(2)})`,
       collapsible: false,
-      icon: t.status === "active" ? "play-circle" : t.status === "completed" ? "check" : "clock",
-      detail: JSON.stringify(t, null, 2),
+      icon: CLAIM_ICONS[c.state] ?? "question",
+      detail: JSON.stringify(c, null, 2),
     }));
 
     return {
-      kind: "tasks",
-      label: `Tasks (${s.tasks.length})`,
+      kind: "claims",
+      label: `Claims (${s.claims.length})`,
       collapsible: true,
-      icon: "tasklist",
+      icon: "symbol-string",
       children,
     };
   }
 
-  buildAutonomousNode(s: GovernorState): TreeNodeData | null {
-    if (s.autonomous.length === 0) {
+  buildEvidenceNode(s: GovernorViewModelV2): TreeNodeData | null {
+    if (s.evidence.length === 0) {
       return null;
     }
 
-    const children: TreeNodeData[] = s.autonomous.map((a) => {
-      const iter = a.used?.iterations ?? 0;
-      const tokens = a.used?.tokens ?? 0;
-      const tokensK = tokens >= 1000 ? `${(tokens / 1000).toFixed(0)}k` : `${tokens}`;
-      return {
-        kind: "autonomous",
-        label: `[${a.status}] iter=${iter} tokens=${tokensK}`,
-        description: a.task?.slice(0, 40),
-        collapsible: false,
-        icon: a.status === "running" ? "sync~spin" : "history",
-        detail: JSON.stringify(a, null, 2),
-      };
-    });
+    const children: TreeNodeData[] = s.evidence.map((e: EvidenceView) => ({
+      kind: "evidence",
+      label: `[${e.type}] ${e.source || e.scope}`,
+      description: `${e.linked_claims.length} claim(s)`,
+      collapsible: false,
+      icon: "file-symlink-file",
+      detail: JSON.stringify(e, null, 2),
+    }));
 
     return {
-      kind: "autonomous",
-      label: `Autonomous (${s.autonomous.length})`,
+      kind: "evidence-section",
+      label: `Evidence (${s.evidence.length})`,
       collapsible: true,
-      icon: "robot",
+      icon: "file-symlink-file",
       children,
+    };
+  }
+
+  buildViolationsNode(s: GovernorViewModelV2): TreeNodeData | null {
+    if (s.violations.length === 0) {
+      return null;
+    }
+
+    const children: TreeNodeData[] = s.violations.map((v: ViolationView) => ({
+      kind: "violation",
+      label: `[${v.severity.toUpperCase()}] ${v.rule_breached}`,
+      description: v.detail ? v.detail.slice(0, 40) : undefined,
+      collapsible: false,
+      icon: VIOLATION_SEVERITY_ICONS[v.severity] ?? "warning",
+      detail: JSON.stringify(v, null, 2),
+    }));
+
+    return {
+      kind: "violations",
+      label: `Violations (${s.violations.length})`,
+      collapsible: true,
+      icon: "alert",
+      children,
+    };
+  }
+
+  buildExecutionNode(s: GovernorViewModelV2): TreeNodeData | null {
+    if (!s.execution) {
+      return null;
+    }
+
+    const ex = s.execution;
+    const children: TreeNodeData[] = [];
+
+    if (ex.pending.length > 0) {
+      children.push({
+        kind: "exec-pending",
+        label: `Pending: ${ex.pending.length}`,
+        collapsible: false,
+        icon: "clock",
+      });
+    }
+    if (ex.blocked.length > 0) {
+      children.push({
+        kind: "exec-blocked",
+        label: `Blocked: ${ex.blocked.length}`,
+        collapsible: false,
+        icon: "close",
+      });
+    }
+    if (ex.running.length > 0) {
+      children.push({
+        kind: "exec-running",
+        label: `Running: ${ex.running.length}`,
+        collapsible: false,
+        icon: "sync~spin",
+      });
+    }
+    if (ex.completed.length > 0) {
+      children.push({
+        kind: "exec-completed",
+        label: `Completed: ${ex.completed.length}`,
+        collapsible: false,
+        icon: "check",
+      });
+    }
+
+    return {
+      kind: "execution",
+      label: "Execution",
+      collapsible: true,
+      icon: "play",
+      children,
+      detail: JSON.stringify(ex, null, 2),
+    };
+  }
+
+  buildStabilityNode(s: GovernorViewModelV2): TreeNodeData {
+    const children: TreeNodeData[] = [];
+
+    if (s.stability) {
+      const st = s.stability;
+      children.push({
+        kind: "stability-rejection",
+        label: `Rejection rate: ${st.rejection_rate.toFixed(2)}`,
+        collapsible: false,
+        icon: "graph-line",
+      });
+      children.push({
+        kind: "stability-churn",
+        label: `Claim churn: ${st.claim_churn.toFixed(2)}`,
+        collapsible: false,
+        icon: "graph-line",
+      });
+      children.push({
+        kind: "stability-drift",
+        label: `Drift: ${st.drift_alert}`,
+        collapsible: false,
+        icon: st.drift_alert === "NONE" ? "check" : "warning",
+      });
+    }
+
+    return {
+      kind: "stability",
+      label: "Stability",
+      collapsible: true,
+      icon: "graph-line",
+      children,
+      detail: s.stability ? JSON.stringify(s.stability, null, 2) : undefined,
     };
   }
 }

@@ -124,3 +124,111 @@ export interface GovernorState {
   boil: GovernorBoil | null;
   autonomous: GovernorAutonomous[];
 }
+
+// =========================================================================
+// Governor State V2 types (canonical ViewModel, `governor state --json --schema v2`)
+// =========================================================================
+
+export interface SessionView {
+  mode: string;
+  authority_level: string;
+  active_constraints: string[];
+  jurisdiction: string | null;
+  active_profile: string | null;
+}
+
+export interface RegimeViewV2 {
+  name: string;
+  setpoints: Record<string, number>;
+  telemetry: Record<string, number>;
+  boil_mode: string | null;
+  transitions: Array<{ from: string; to: string; turn?: number | null }>;
+}
+
+export interface DecisionView {
+  id: string;
+  status: "accepted" | "rejected" | "pending";
+  type: string;
+  rationale: string;
+  dependencies: string[];
+  violations: string[];
+  source: string;
+  created_at: string;
+  raw: Record<string, unknown>;
+}
+
+export interface ClaimView {
+  id: string;
+  state: "proposed" | "stabilized" | "stale" | "contradicted";
+  content: string;
+  confidence: number;
+  provenance: string;
+  evidence_links: string[];
+  conflicting_claims: string[];
+  stability: Record<string, unknown>;
+  created_at: string;
+  raw: Record<string, unknown>;
+}
+
+export interface EvidenceView {
+  id: string;
+  type: string;
+  source: string;
+  scope: string;
+  linked_claims: string[];
+  validity: number;
+  expiry: string | null;
+}
+
+export interface ViolationView {
+  id: string;
+  rule_breached: string;
+  triggering_decision: string;
+  severity: "low" | "medium" | "high" | "critical";
+  enforced_outcome: string;
+  resolution: string | null;
+  source_system: string;
+  detail: string;
+}
+
+export interface ExecutionActionView {
+  id: string;
+  description: string;
+  status: string;
+  detail: string;
+}
+
+export interface ExecutionView {
+  pending: ExecutionActionView[];
+  blocked: ExecutionActionView[];
+  running: ExecutionActionView[];
+  completed: ExecutionActionView[];
+}
+
+export interface StabilityView {
+  rejection_rate: number;
+  claim_churn: number;
+  contradiction_density: number;
+  drift_alert: string;
+  drift_signals: Record<string, number>;
+}
+
+export interface GovernorViewModelV2 {
+  schema_version: "v2";
+  generated_at: string;
+  session: SessionView | null;
+  regime: RegimeViewV2 | null;
+  decisions: DecisionView[];
+  claims: ClaimView[];
+  evidence: EvidenceView[];
+  violations: ViolationView[];
+  execution: ExecutionView | null;
+  stability: StabilityView | null;
+}
+
+/**
+ * Type guard: check if state response is V2 schema.
+ */
+export function isV2(state: GovernorState | GovernorViewModelV2): state is GovernorViewModelV2 {
+  return "schema_version" in state && (state as GovernorViewModelV2).schema_version === "v2";
+}

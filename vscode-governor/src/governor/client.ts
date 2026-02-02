@@ -3,7 +3,7 @@
  */
 
 import { spawn } from "child_process";
-import type { CheckResult, CheckInput, GovernorState } from "./types";
+import type { CheckResult, CheckInput, GovernorViewModelV2 } from "./types";
 
 const TIMEOUT_MS = 30_000;
 
@@ -96,12 +96,12 @@ export function checkStdin(
 }
 
 /**
- * Fetch aggregated governor state (calls `governor state --json`).
+ * Fetch aggregated governor state (calls `governor state --json --schema v2`).
  */
 export function fetchState(
   opts: GovernorOptions
-): Promise<GovernorState> {
-  return runGovernorGeneric<GovernorState>(opts, ["state", "--json"]);
+): Promise<GovernorViewModelV2> {
+  return runGovernorGeneric<GovernorViewModelV2>(opts, ["state", "--json", "--schema", "v2"]);
 }
 
 export { GovernorOptions };

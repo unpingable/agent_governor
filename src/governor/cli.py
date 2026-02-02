@@ -579,96 +579,35 @@ def status(ctx: click.Context, limit: int, as_json: bool) -> None:
 
 @cli.command()
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--schema", type=click.Choice(["v1", "v2"]), default="v2",
+              help="Schema version: v1 (legacy) or v2 (canonical ViewModel)")
 @click.pass_context
-def state(ctx: click.Context, as_json: bool) -> None:
+def state(ctx: click.Context, as_json: bool, schema: str) -> None:
     """Show aggregated governor state.
 
     Returns a single JSON object with all governor state sections.
     Requires --json flag (designed for tooling consumption).
+
+    Schema v2 (default) returns the canonical GovernorViewModel with 8 sections:
+    session, regime, decisions, claims, evidence, violations, execution, stability.
+
+    Schema v1 returns the legacy format for backward compatibility.
     """
     if not as_json:
-        click.echo("Usage: governor state --json")
+        click.echo("Usage: governor state --json [--schema v1|v2]")
         click.echo("This command outputs aggregated state as JSON for tooling.")
         return
 
     gov_dir = ensure_initialized(ctx)
     root = Path(ctx.obj["root"])
-    result: dict = {}
 
-    # Proposals
-    try:
-        from .fsm import Proposal
-        proposals = load_proposals(gov_dir)
-        result["proposals"] = [
-            Proposal.from_dict(data).to_dict()
-            for _pid, data in proposals.items()
-        ]
-    except Exception:
-        result["proposals"] = []
+    from .viewmodel import build_viewmodel, build_v1_state
 
-    # Facts
-    try:
-        ledger = FactLedger(gov_dir)
-        result["facts"] = [f.to_dict() for f in ledger.all()]
-    except Exception:
-        result["facts"] = []
-
-    # Decisions
-    try:
-        ledger = DecisionLedger(gov_dir)
-        result["decisions"] = [d.to_dict() for d in ledger.query()]
-    except Exception:
-        result["decisions"] = []
-
-    # Tasks (SQLite v2 only)
-    try:
-        storage = get_storage(gov_dir)
-        reservations = storage.query("reservations", order_by="started_at DESC")
-        now = datetime.now(timezone.utc)
-        tasks = []
-        for res in reservations:
-            completed = res["completed_at"] is not None
-            expires = datetime.fromisoformat(res["expires_at"])
-            expired = expires < now
-            task_status = "completed" if completed else ("expired" if expired else "active")
-            tasks.append({
-                "id": res["id"],
-                "task": res["task"],
-                "agent_id": res["agent_id"],
-                "scope": json.loads(res["scope_json"]),
-                "status": task_status,
-                "started_at": res["started_at"],
-                "expires_at": res["expires_at"],
-                "completed_at": res["completed_at"],
-            })
-        result["tasks"] = tasks
-    except Exception:
-        result["tasks"] = []
-
-    # Regime
-    try:
-        detector = get_regime_detector(gov_dir)
-        result["regime"] = detector.get_state()
-    except Exception:
-        result["regime"] = None
-
-    # Boil
-    try:
-        controller = get_boil_controller(gov_dir)
-        boil_state = controller.get_state()
-        preset_info = controller.get_preset_info()
-        result["boil"] = {**boil_state, "preset": preset_info}
-    except Exception:
-        result["boil"] = None
-
-    # Autonomous sessions
-    try:
-        from .execution import SessionManager
-        manager = SessionManager(root)
-        sessions = manager.list_sessions()
-        result["autonomous"] = [s.to_dict() for s in sessions]
-    except Exception:
-        result["autonomous"] = []
+    if schema == "v1":
+        result = build_v1_state(gov_dir, root)
+    else:
+        vm = build_viewmodel(gov_dir, root)
+        result = vm.to_dict()
 
     click.echo(json.dumps(result, indent=2))
 

@@ -47,8 +47,9 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **ClaimStatus FSM Enforcement**: Layer 6 transition table (PROPOSED→SUPPORTED↔CONTESTED→{INVALIDATED|EXPIRED|REFUSED}), 9 TransitionReasons, guard validation, transition history, cascade SUPPORTED→STALE, terminal state HUMAN-only recovery.
 **Tone Profiling**: ToneProfile dataclass (28 dimensions), text analysis, ToneChecker with violation detection, tone guidance generation for system prompts, ToneManager persistence, corpus analysis (extract_tone_profile), profile comparison (compare_profiles, ProfileDeviation), CLI commands.
 **Autonomous Execution (A1-A4)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence), AutonomousExecutor (step-function loop with spine+invariant enforcement, budget checking, checkpointing, resume), Spine CLI (lock/unlock/list/show/activate/check), Session CLI (list/show/delete/handoff), Governor adapters (security, CFI, fiction, nonfiction citation, tone, generic content → Invariant).
+**Invariant Store (Deferred 1)**: InvariantSpec (serializable invariant definitions), InvariantStore (file-per-item persistence), VALID_KINDS (6 factory mappings), materialization to live Invariant objects, CLI (add/list/show/remove/check), autonomous run command (noop step execution shell).
 **Strategic Test Suites**: Golden-file tests (JSON schema locking for all serialized types), no-laundering regression tests (structural integrity invariants), failure-injection tests (executor fault tolerance), property-based invariant tests (combinatoric fuzzing), contract tests for adapters (interface locking).
-**Total: 4752 tests**
+**Total: 4831 tests**
 
 ## Key Documents
 
@@ -307,11 +308,19 @@ governor spine activate <id>            # Set spine as active constraint
 governor spine deactivate               # Deactivate current spine
 governor spine check [-m file] [-c file] [-d file]  # Check proposal against active spine
 
+# Invariant Management (Deferred 1: persistent invariant specs)
+governor invariant add <kind>           # Add invariant (test, file-exists, dir-exists, forbidden, no-secrets, max-file-size)
+governor invariant list                 # List all invariant specs
+governor invariant show <id>            # Show invariant spec details
+governor invariant remove <id>          # Remove an invariant spec
+governor invariant check [--id X]       # Run invariant checks (all or specific)
+
 # Autonomous Execution Sessions (Phase A3: session lifecycle)
 governor autonomous list [--active]     # List execution sessions
 governor autonomous show <id>           # Show session details
 governor autonomous delete <id> --confirm  # Delete a session
 governor autonomous handoff <id>        # Show handoff summary for human review
+governor autonomous run --task "..."    # Run execution session (noop step, --budget, --spine-id, --dry-run)
 
 # Fiction Governor - Context Drift Detection
 fiction-gov drift status               # Show drift detector state
@@ -428,6 +437,7 @@ src/governor/
 ├── execution.py      # ExecutionBudget, ExecutionUsage, ExecutionState, SessionManager, checkpoint/resume
 ├── executor.py       # AutonomousExecutor, StepResult, ExecutorConfig, ExecutionEvent, step-function loop
 ├── adapters.py       # Governor adapter invariants, thin wrappers (security, CFI, fiction, nonfiction, custom)
+├── invariant_store.py # InvariantSpec, InvariantStore, VALID_KINDS, persistent invariant management
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -816,7 +826,15 @@ src/ops_governor/
 
 **Strategic Test Suite tests: 454**
 
-**Total: 4752 tests**
+### Invariant Store (Deferred 1: Invariant Management + Execution Shell)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| invariant_store.py | InvariantSpec, InvariantStore, VALID_KINDS (6 kinds), file-per-item persistence, materialization to live Invariant objects | 44 |
+| cli.py (invariant + autonomous run) | `governor invariant add/list/show/remove/check`, `governor autonomous run` (noop step execution shell, dry-run, budget, spine) | 35 |
+
+**Invariant Store tests: 79**
+
+**Total: 4831 tests**
 
 ## Common Mistakes to Avoid
 

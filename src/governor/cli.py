@@ -8231,6 +8231,241 @@ def spine_check(ctx, file_modified, file_created, file_deleted):
 
 
 # =============================================================================
+# Invariant management commands (Deferred 1: invariant lifecycle)
+# =============================================================================
+
+
+def _generate_invariant_id(kind: str, params: dict) -> str:
+    """Generate a default ID from kind and params."""
+    if kind == "test":
+        cmd = params.get("command", "pytest")
+        return f"test_{cmd.replace('/', '_').replace(' ', '_')}"
+    elif kind == "file-exists":
+        path = params.get("path", "unknown")
+        return f"file_{path.replace('/', '_').replace('.', '_')}"
+    elif kind == "dir-exists":
+        path = params.get("path", "unknown")
+        return f"dir_{path.replace('/', '_').replace('.', '_')}"
+    elif kind == "forbidden":
+        pat = params.get("pattern", "unknown")
+        return f"forbidden_{pat.replace('*', 'star').replace('/', '_').replace('.', '_')}"
+    elif kind == "no-secrets":
+        return "no_secrets"
+    elif kind == "max-file-size":
+        kb = params.get("max_kb", 500)
+        return f"max_file_size_{kb}kb"
+    return f"inv_{kind}"
+
+
+def _print_invariant_result(result, inv=None) -> None:
+    """Print a formatted invariant check result."""
+    status = click.style("PASS", fg="green") if result.passed else click.style("FAIL", fg="red")
+    msg = result.message
+    suffix = ""
+    if inv and inv.on_violation == "warn":
+        suffix = click.style(" (warn)", fg="yellow")
+    click.echo(f"  [{status}] {result.invariant_id}: {msg}{suffix}")
+
+
+@cli.group("invariant")
+@click.pass_context
+def invariant_cmd(ctx):
+    """Manage persistent invariant specs."""
+    pass
+
+
+@invariant_cmd.command("add")
+@click.argument("kind", type=click.Choice(["test", "file-exists", "dir-exists", "forbidden", "no-secrets", "max-file-size"]))
+@click.option("--id", "spec_id", default=None, help="Custom invariant ID")
+@click.option("--path", "path_param", default=None, help="Path (for file-exists, dir-exists)")
+@click.option("--pattern", default=None, help="Glob pattern (for forbidden)")
+@click.option("--command", default=None, help="Test command (for test)")
+@click.option("--args", default=None, help="Test args, space-separated (for test)")
+@click.option("--max-kb", type=int, default=None, help="Max file size in KB (for max-file-size)")
+@click.option("--description", default=None, help="Description (for forbidden)")
+@click.option("--on-violation", type=click.Choice(["block", "warn"]), default="block", help="Action on violation")
+@click.pass_context
+def invariant_add(ctx, kind, spec_id, path_param, pattern, command, args, max_kb, description, on_violation):
+    """Add a persistent invariant spec."""
+    from .invariant_store import InvariantSpec, InvariantStore, VALID_KINDS
+
+    ensure_initialized(ctx)
+    root = Path(ctx.obj["root"])
+    store = InvariantStore(root)
+
+    # Build params from options
+    params: dict = {}
+    if kind == "test":
+        if command is None:
+            command = "pytest"
+        params["command"] = command
+        if args:
+            params["args"] = args
+    elif kind in ("file-exists", "dir-exists"):
+        if path_param is None:
+            click.echo(f"Error: --path required for kind '{kind}'.", err=True)
+            ctx.exit(1)
+            return
+        params["path"] = path_param
+    elif kind == "forbidden":
+        if pattern is None:
+            click.echo("Error: --pattern required for kind 'forbidden'.", err=True)
+            ctx.exit(1)
+            return
+        params["pattern"] = pattern
+        if description:
+            params["description"] = description
+    elif kind == "no-secrets":
+        pass
+    elif kind == "max-file-size":
+        if max_kb is None:
+            max_kb = 500
+        params["max_kb"] = max_kb
+
+    # Generate or use provided ID
+    if spec_id is None:
+        spec_id = _generate_invariant_id(kind, params)
+
+    spec = InvariantSpec(
+        id=spec_id,
+        kind=kind,
+        params=params,
+        on_violation=on_violation,
+    )
+
+    # Validate
+    errors = spec.validate_params()
+    if errors:
+        for e in errors:
+            click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    store.add(spec)
+    violation_label = click.style("warn", fg="yellow") if on_violation == "warn" else "block"
+    click.echo(f"Invariant '{spec_id}' added (kind={kind}, on_violation={violation_label}).")
+    if params:
+        for k, v in params.items():
+            click.echo(f"  {k}: {v}")
+
+
+@invariant_cmd.command("list")
+@click.pass_context
+def invariant_list(ctx):
+    """List all invariant specs."""
+    from .invariant_store import InvariantStore
+
+    ensure_initialized(ctx)
+    root = Path(ctx.obj["root"])
+    store = InvariantStore(root)
+    specs = store.list_all()
+
+    if not specs:
+        click.echo("No invariants defined.")
+        return
+
+    for spec in specs:
+        status = "enabled" if spec.enabled else click.style("disabled", fg="yellow")
+        violation = click.style("warn", fg="yellow") if spec.on_violation == "warn" else "block"
+        click.echo(f"  {spec.id:30s}  kind={spec.kind:15s}  on_violation={violation:5s}  {status}")
+
+    click.echo(f"\nTotal: {len(specs)}")
+
+
+@invariant_cmd.command("show")
+@click.argument("spec_id")
+@click.pass_context
+def invariant_show(ctx, spec_id):
+    """Show details of an invariant spec."""
+    from .invariant_store import InvariantStore
+
+    ensure_initialized(ctx)
+    root = Path(ctx.obj["root"])
+    store = InvariantStore(root)
+    spec = store.get(spec_id)
+
+    if spec is None:
+        click.echo(f"Invariant '{spec_id}' not found.", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"ID: {spec.id}")
+    click.echo(f"Kind: {spec.kind}")
+    click.echo(f"On violation: {spec.on_violation}")
+    click.echo(f"Enabled: {spec.enabled}")
+    click.echo(f"Created: {spec.created_at}")
+    if spec.params:
+        click.echo("Params:")
+        for k, v in spec.params.items():
+            click.echo(f"  {k}: {v}")
+
+
+@invariant_cmd.command("remove")
+@click.argument("spec_id")
+@click.pass_context
+def invariant_remove(ctx, spec_id):
+    """Remove an invariant spec."""
+    from .invariant_store import InvariantStore
+
+    ensure_initialized(ctx)
+    root = Path(ctx.obj["root"])
+    store = InvariantStore(root)
+
+    if store.remove(spec_id):
+        click.echo(f"Invariant '{spec_id}' removed.")
+    else:
+        click.echo(f"Invariant '{spec_id}' not found.", err=True)
+        ctx.exit(1)
+
+
+@invariant_cmd.command("check")
+@click.option("--id", "spec_id", default=None, help="Check a specific invariant (default: all)")
+@click.pass_context
+def invariant_check(ctx, spec_id):
+    """Run invariant checks (materialize and verify)."""
+    from .invariant_store import InvariantStore
+
+    ensure_initialized(ctx)
+    root = Path(ctx.obj["root"])
+    store = InvariantStore(root)
+
+    if spec_id:
+        inv = store.materialize(spec_id)
+        if inv is None:
+            click.echo(f"Invariant '{spec_id}' not found or failed to materialize.", err=True)
+            ctx.exit(1)
+            return
+        result = inv.check(root=root, files_touched=[])
+        _print_invariant_result(result, inv)
+        if not result.passed:
+            ctx.exit(1)
+        return
+
+    inv_set = store.materialize_all()
+    if not inv_set.invariants:
+        click.echo("No invariants to check.")
+        return
+
+    results = inv_set.check_all(root=root, files_touched=[])
+    passed = 0
+    failed = 0
+    warned = 0
+    for result in results:
+        inv = inv_set.get(result.invariant_id)
+        _print_invariant_result(result, inv)
+        if result.passed:
+            passed += 1
+        elif inv and inv.on_violation == "warn":
+            warned += 1
+        else:
+            failed += 1
+
+    click.echo(f"\nSummary: {passed} passed, {failed} failed, {warned} warned")
+    if failed > 0:
+        ctx.exit(1)
+
+
+# =============================================================================
 # Autonomous session commands (Phase A3: session lifecycle)
 # =============================================================================
 
@@ -8391,6 +8626,119 @@ def auto_handoff(ctx, session_id):
                 click.echo(f"  {k}: {v}")
 
     click.echo("=" * 60)
+
+
+@autonomous_cmd.command("run")
+@click.option("--task", required=True, help="Task description for the execution")
+@click.option("--budget", "budget_spec", default=None, help="Budget spec (e.g. 'tokens=100000,iterations=50')")
+@click.option("--spine-id", default=None, help="Spine to enforce during execution")
+@click.option("--dry-run", is_flag=True, help="Validate config, create PAUSED session, report what would happen")
+@click.pass_context
+def auto_run(ctx, task, budget_spec, spine_id, dry_run):
+    """Run an autonomous execution session."""
+    from .execution import ExecutionBudget, ExecutionStatus, SessionManager
+    from .executor import AutonomousExecutor, ExecutorConfig, StepResult
+    from .invariant_store import InvariantStore
+    from .spine import SpineManager
+
+    ensure_initialized(ctx)
+    root = Path(ctx.obj["root"])
+
+    # Parse budget
+    if budget_spec:
+        budget = ExecutionBudget.from_spec(budget_spec)
+    else:
+        budget = ExecutionBudget(max_iterations=1)
+
+    # Validate spine if specified
+    spine_manager = SpineManager(root)
+    if spine_id:
+        spine = spine_manager.get(spine_id)
+        if spine is None:
+            click.echo(f"Spine '{spine_id}' not found.", err=True)
+            ctx.exit(1)
+            return
+
+    # Materialize invariants from store
+    store = InvariantStore(root)
+    inv_set = store.materialize_all()
+
+    # Session manager
+    session_manager = SessionManager(root)
+
+    if dry_run:
+        # Create PAUSED session and report
+        state = session_manager.create(
+            task=task,
+            spine_id=spine_id,
+            invariant_ids=[i.id for i in inv_set.invariants],
+            budget=budget,
+        )
+        state.pause()
+        session_manager.save(state)
+
+        click.echo("Dry run — session created in PAUSED state.")
+        click.echo(f"  Session ID: {state.session_id}")
+        click.echo(f"  Task: {task}")
+        click.echo(f"  Spine: {spine_id or '(none)'}")
+        click.echo(f"  Invariants: {len(inv_set.invariants)}")
+        for inv in inv_set.invariants:
+            click.echo(f"    - {inv.id} ({inv.on_violation})")
+        click.echo(f"  Budget:")
+        if budget.max_iterations is not None:
+            click.echo(f"    max_iterations: {budget.max_iterations}")
+        if budget.max_tokens is not None:
+            click.echo(f"    max_tokens: {budget.max_tokens}")
+        if budget.max_time_seconds is not None:
+            click.echo(f"    max_time: {budget.max_time_seconds}s")
+        if budget.max_cost_usd is not None:
+            click.echo(f"    max_cost: ${budget.max_cost_usd:.2f}")
+        return
+
+    # Normal mode: noop step that completes in 1 iteration
+    def noop_step(state, iteration):
+        return StepResult(
+            success=True,
+            message=f"Noop step {iteration} (no real agent)",
+            done=True,
+        )
+
+    executor = AutonomousExecutor(
+        spine_manager=spine_manager,
+        invariants=inv_set,
+        session_manager=session_manager,
+        config=ExecutorConfig(checkpoint_interval=1),
+    )
+
+    click.echo(f"Starting execution: {task}")
+    click.echo(f"  Spine: {spine_id or '(none)'}")
+    click.echo(f"  Invariants: {len(inv_set.invariants)}")
+
+    final_state = executor.execute(
+        step_fn=noop_step,
+        task=task,
+        budget=budget,
+        spine_id=spine_id,
+    )
+
+    # Report results
+    status_color = {
+        "running": "green",
+        "paused": "yellow",
+        "stopped": "red",
+        "completed": "blue",
+    }.get(final_state.status.value, "white")
+
+    click.echo(f"\nSession: {final_state.session_id}")
+    click.echo(f"Status: {click.style(final_state.status.value, fg=status_color)}")
+    if final_state.stop_reason:
+        click.echo(f"Stop reason: {final_state.stop_reason.value}")
+    click.echo(f"Iterations: {final_state.used.iterations}")
+
+    if final_state.violations:
+        click.echo(f"\nViolations ({len(final_state.violations)}):")
+        for v in final_state.violations:
+            click.echo(f"  [{v['invariant_id']}] {v['message']}")
 
 
 def main() -> None:

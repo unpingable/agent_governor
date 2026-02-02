@@ -559,6 +559,13 @@ from .adapters import (
     build_adapter_set,
 )
 
+# Invariant store (Deferred 1: invariant management)
+from .invariant_store import (
+    InvariantSpec,
+    InvariantStore,
+    VALID_KINDS,
+)
+
 # Autonomous execution (Phase A1-A2)
 from .spine import (
     Spine,
@@ -1045,6 +1052,10 @@ __all__ = [
     "tone_invariant",
     "content_invariant",
     "build_adapter_set",
+    # Invariant store (Deferred 1)
+    "InvariantSpec",
+    "InvariantStore",
+    "VALID_KINDS",
     # Autonomous execution (Phase A1-A2)
     "Spine",
     "SpineViolation",

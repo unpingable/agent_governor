@@ -1510,14 +1510,22 @@ at any time.
   - `ExecutionEvent`: iteration, event_type, message, timestamp, details (audit trail)
   - Module: `src/governor/executor.py` (45 tests)
 
-- [ ] **Invariant management CLI** (deferred)
-  - `governor invariant add --type <type> --rule <text>`
-  - `governor invariant list`
-  - `governor invariant remove --id <id>`
+- [x] **Invariant management CLI** ✅
+  - `InvariantSpec` dataclass (id, kind, params, on_violation, enabled, created_at)
+  - `InvariantStore` (file-per-item persistence at `.governor/invariants/<id>.json`)
+  - `VALID_KINDS`: test, file-exists, dir-exists, forbidden, no-secrets, max-file-size
+  - Materialization: spec → live `Invariant` via `InvariantLibrary` factories
+  - `governor invariant add <kind>` with per-kind options (--path, --pattern, --command, --args, --max-kb)
+  - `governor invariant list`, `governor invariant show <id>`, `governor invariant remove <id>`
+  - `governor invariant check [--id X]` — materialize and run, PASS/FAIL summary
+  - Module: `src/governor/invariant_store.py` (44 tests)
+  - CLI tests: `tests/test_cli_invariants.py` (35 tests)
 
-- [ ] **Execution CLI** (deferred — needs real agent integration)
-  - `governor execute --task <desc> --spine <name> --budget <spec>`
-  - `governor execute --resume <session_id>`
+- [x] **Execution CLI** ✅ (noop step shell — no real agent)
+  - `governor autonomous run --task "..." [--budget "tokens=N,iterations=N"] [--spine-id X] [--dry-run]`
+  - `--dry-run`: creates PAUSED session, reports config
+  - Normal mode: noop step_fn completing in 1 iteration (full loop: session, budget, spine, invariants, executor, checkpoint)
+  - Default budget: max_iterations=1
 
 #### Phase A3: Session Management & Multi-Day Execution ✅
 

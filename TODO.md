@@ -1576,6 +1576,34 @@ at any time.
   - Spine/invariant checks during recovery: violations stop execution, warnings don't block
   - State persistence under faults: saved after error/budget/completion stops, resume from saved state
 
+- [x] **Property-based invariant tests** — `tests/test_property_invariants.py` (158 tests)
+  - Confidence bounds: clamping across extreme values, PEER_ASSERTED cap, default confidence per provenance
+  - Provenance properties: grounding is boolean, grounded/ungrounded sets are known and disjoint
+  - ClaimStatus FSM: HUMAN reason always valid from any state, same-status always valid, terminal states block non-HUMAN, all valid transitions have at least one reason
+  - Budget enforcement: at/over limit = exhausted, under limit = not exhausted, None limits never exhaust, remaining never negative
+  - Execution state: stop/complete set correct status, pause/resume cycle, resume only from paused, active/inactive state partitioning
+  - Fail-closed: exceptions in steps counted as failures, blocking invariants stop execution
+  - InvariantSet: all-pass = no blocking, warning failures not in blocking, block failures in blocking, disabled invariants skipped, blocking count matches
+  - Cascade: terminates on chains, handles diamonds, soft claims unaffected
+  - Serialization roundtrip: GroundedClaim per provenance, ExecutionState per status/stop_reason, EvidenceRef per type
+
+- [x] **Contract tests for adapters** — `tests/test_contract_adapters.py` (122 tests)
+  - Invariant interface contract: all 6 adapter factories return Invariant with correct fields, to_dict shape locked
+  - InvariantResult contract: all verify() calls return InvariantResult with correct shape and to_dict
+  - Empty input safety: all adapters handle no files, no kwargs, nonexistent files without crashing
+  - Finding detection: security/CFI/fiction/citation/tone/content adapters surface violations correctly
+  - AdapterFinding contract: to_dict keys locked, default severity/details, findings in security details
+  - Parameter forwarding: on_violation and invariant_id respected for all 6 adapter types
+  - No input mutation: files_touched list never modified by adapters
+  - Disabled invariant bypass: enabled=False → passed=True without calling verify
+  - build_adapter_set: empty config → empty set, each verifier type individually, all together, config forwarding (min_severity, max_faults, characters)
+  - content_invariant: check_fn receives content+path, exceptions become findings, custom extensions filter, type forwarding, id derivation
+  - Severity threshold: low below high, high at high, critical at high, medium at medium
+  - CFI fault tolerance: within tolerance passes, exceeding tolerance fails
+  - File extension filtering: CFI/fiction skip non-prose files
+  - InvariantSet integration: adapter set works in InvariantSet, blocking vs warn separation
+  - Verifier exception handling: all 5 verifier types gracefully skip on exception
+
 ---
 
 ### Deferred 2: Web UI — Household Claude (from `ingest/webui.md`)

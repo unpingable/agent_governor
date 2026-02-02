@@ -46,8 +46,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Agent Roles & Revalidation**: Layer 5 agent role assignment (PROPOSER/RETRIEVER/FALSIFIER/SYNTHESIZER), role budgets per risk level, quorum Gate 8, periodic revalidation orchestrator wiring TTL→AuditPipeline.
 **ClaimStatus FSM Enforcement**: Layer 6 transition table (PROPOSED→SUPPORTED↔CONTESTED→{INVALIDATED|EXPIRED|REFUSED}), 9 TransitionReasons, guard validation, transition history, cascade SUPPORTED→STALE, terminal state HUMAN-only recovery.
 **Tone Profiling**: ToneProfile dataclass (28 dimensions), text analysis, ToneChecker with violation detection, tone guidance generation for system prompts, ToneManager persistence, corpus analysis (extract_tone_profile), profile comparison (compare_profiles, ProfileDeviation), CLI commands.
-**Autonomous Execution (A1-A2)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence), AutonomousExecutor (step-function loop with spine+invariant enforcement, budget checking, checkpointing, resume), Spine CLI (lock/unlock/list/show/activate/check), Session CLI (list/show/delete/handoff).
-**Total: 4222 tests**
+**Autonomous Execution (A1-A4)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence), AutonomousExecutor (step-function loop with spine+invariant enforcement, budget checking, checkpointing, resume), Spine CLI (lock/unlock/list/show/activate/check), Session CLI (list/show/delete/handoff), Governor adapters (security, CFI, fiction, nonfiction citation, generic content → Invariant).
+**Total: 4289 tests**
 
 ## Key Documents
 
@@ -421,11 +421,12 @@ src/governor/
 ├── sybil.py          # BlocDetector, SybilDetector, NeffResult, ProvenanceVector, OriginBudgetTracker
 ├── research.py       # ResearchLedger, Hypothesis, EntropyMonitor, DominanceMonitor, TimescaleMonitor
 │
-# Autonomous Execution (Phase A1-A2):
+# Autonomous Execution (Phase A1-A4):
 ├── spine.py          # Spine, SpineManager, locked project structure, proposal verification
 ├── invariants.py     # InvariantType, Invariant, InvariantSet, InvariantLibrary, mechanically verifiable rules
 ├── execution.py      # ExecutionBudget, ExecutionUsage, ExecutionState, SessionManager, checkpoint/resume
 ├── executor.py       # AutonomousExecutor, StepResult, ExecutorConfig, ExecutionEvent, step-function loop
+├── adapters.py       # Governor adapter invariants, thin wrappers (security, CFI, fiction, nonfiction, custom)
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -792,17 +793,18 @@ src/ops_governor/
 
 **ClaimStatus FSM Enforcement tests: 106**
 
-### Autonomous Execution (Phase A1-A2: Core Types + Executor)
+### Autonomous Execution (Phase A1-A4: Core Types + Executor + Adapters)
 | Module | Description | Tests |
 |--------|-------------|-------|
 | spine.py | Spine (locked project structure), SpineViolation, SpineCheckResult, SpineManager, glob pattern matching, proposal verification | 41 |
 | invariants.py | InvariantType (6 types), Invariant, InvariantResult, InvariantSet, InvariantLibrary (tests_must_pass, file/dir exists, forbidden patterns, no_secrets, max_file_size) | 36 |
 | execution.py | ExecutionBudget (tokens/iterations/time/cost), ExecutionUsage, ExecutionState, StopReason, ExecutionStatus, SessionManager, checkpoint/resume | 34 |
 | executor.py | AutonomousExecutor (step-function loop), StepResult, ExecutorConfig, ExecutionEvent, spine compliance, invariant verification, budget enforcement, checkpointing, resume | 45 |
+| adapters.py | Governor adapter invariants: security_invariant, cfi_invariant, fiction_invariant, nonfiction_citation_invariant, content_invariant, AdapterConfig, build_adapter_set | 67 |
 
-**Autonomous Execution tests: 156**
+**Autonomous Execution tests: 223**
 
-**Total: 4222 tests**
+**Total: 4289 tests**
 
 ## Common Mistakes to Avoid
 

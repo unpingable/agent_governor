@@ -545,6 +545,19 @@ from .research import (
     create_research_config,
 )
 
+# Governor adapters (Phase A4)
+from .adapters import (
+    AdapterFinding,
+    AdapterConfig,
+    ContentCheckFn,
+    security_invariant,
+    cfi_invariant,
+    fiction_invariant,
+    nonfiction_citation_invariant,
+    content_invariant,
+    build_adapter_set,
+)
+
 # Autonomous execution (Phase A1-A2)
 from .spine import (
     Spine,
@@ -1020,6 +1033,16 @@ __all__ = [
     "ResearchLedger",
     "create_research_ledger",
     "create_research_config",
+    # Governor adapters (Phase A4)
+    "AdapterFinding",
+    "AdapterConfig",
+    "ContentCheckFn",
+    "security_invariant",
+    "cfi_invariant",
+    "fiction_invariant",
+    "nonfiction_citation_invariant",
+    "content_invariant",
+    "build_adapter_set",
     # Autonomous execution (Phase A1-A2)
     "Spine",
     "SpineViolation",

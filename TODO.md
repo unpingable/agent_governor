@@ -1536,17 +1536,20 @@ at any time.
   - What was accomplished, what's left, current state, budget remaining, violations
   - Via `governor autonomous handoff <id>`
 
-#### Phase A4: Integration with Existing Governors
+#### Phase A4: Integration with Existing Governors ✅ COMPLETE
 
-- [ ] **Fiction governor integration** — Canon checking in autonomous drafting
-  - Spine = story bible (characters, timeline, plot points)
-  - Invariants: canon consistency, character age/traits, timeline validation
-  - Use case: "Draft Act 1, Scene 3" with auto-approval when canon checks pass
-
-- [ ] **Code governor integration** — Architecture enforcement in autonomous builds
-  - Spine = architecture definition (components, responsibilities, forbidden ops)
-  - Invariants: tests pass, no forbidden operations, stateless components
-  - Use case: "Build MCP Bridge" with auto-commit when tests green + architecture satisfied
+- [x] **Governor adapter invariants** — `src/governor/adapters.py` (67 tests)
+  - Thin factory functions wrapping domain governors as `Invariant` objects
+  - `security_invariant()` — wraps SecurityVerifier, scans touched files for vulnerabilities with severity threshold
+  - `cfi_invariant()` — wraps CFIDetector, checks prose files for contextual frame intrusion (default warn-only)
+  - `fiction_invariant()` — wraps fiction CombinedVerifier, runs quick_check on prose files
+  - `nonfiction_citation_invariant()` — wraps CitationVerifier, extracts and validates citations
+  - `content_invariant()` — generic adapter: any `(content, path) → (bool, message)` becomes an Invariant
+  - `AdapterConfig` + `build_adapter_set()` — convenience builder for multi-governor setups
+  - `AdapterFinding` — unified finding type across all adapters
+  - File extension filtering: TEXT_EXTENSIONS (code+prose), PROSE_EXTENSIONS (prose-only)
+  - No cross-imports between governor packages; governors stay dumb libraries
+  - Full integration with InvariantSet.blocking_violations() and executor loop
 
 ---
 

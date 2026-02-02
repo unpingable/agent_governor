@@ -39,6 +39,8 @@ class TelemetryEventType(str, Enum):
     SECURITY_SCAN = "security_scan"
     CLAIM_REGISTERED = "claim_registered"
     PROFILE_CHANGE = "profile_change"
+    CONTINUITY_TRACE = "continuity_trace"      # One per generation attempt
+    CONTINUITY_RESULT = "continuity_result"     # One per convergence run
 
 
 class TelemetryLevel(str, Enum):
@@ -364,6 +366,125 @@ class ErrorFields:
         )
 
 
+@dataclass
+class ContinuityTraceFields:
+    """Fields for a CONTINUITY_TRACE event (one per generation attempt)."""
+
+    run_id: str = ""
+    mode: str = ""
+    attempt: int = 0
+    error_total: float = 0.0
+    error_by_anchor: dict[str, float] = field(default_factory=dict)
+    violations: list[dict[str, str]] = field(default_factory=list)
+    action: str = "none"
+    action_params: dict[str, Any] = field(default_factory=dict)
+    delta_total: float | None = None
+    delta_by_anchor: dict[str, float] = field(default_factory=dict)
+    tokens: int = 0
+    latency_ms: float = 0.0
+    prompt_hash: str = ""
+    anchors_hash: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "run_id": self.run_id,
+            "mode": self.mode,
+            "attempt": self.attempt,
+            "error_total": round(self.error_total, 6),
+            "error_by_anchor": {k: round(v, 6) for k, v in self.error_by_anchor.items()},
+            "violations": self.violations,
+            "action": self.action,
+            "action_params": self.action_params,
+            "tokens": self.tokens,
+            "latency_ms": round(self.latency_ms, 2),
+            "prompt_hash": self.prompt_hash,
+            "anchors_hash": self.anchors_hash,
+        }
+        if self.delta_total is not None:
+            d["delta_total"] = round(self.delta_total, 6)
+        if self.delta_by_anchor:
+            d["delta_by_anchor"] = {k: round(v, 6) for k, v in self.delta_by_anchor.items()}
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ContinuityTraceFields:
+        return cls(
+            run_id=d.get("run_id", ""),
+            mode=d.get("mode", ""),
+            attempt=d.get("attempt", 0),
+            error_total=d.get("error_total", 0.0),
+            error_by_anchor=d.get("error_by_anchor", {}),
+            violations=d.get("violations", []),
+            action=d.get("action", "none"),
+            action_params=d.get("action_params", {}),
+            delta_total=d.get("delta_total"),
+            delta_by_anchor=d.get("delta_by_anchor", {}),
+            tokens=d.get("tokens", 0),
+            latency_ms=d.get("latency_ms", 0.0),
+            prompt_hash=d.get("prompt_hash", ""),
+            anchors_hash=d.get("anchors_hash", ""),
+        )
+
+
+@dataclass
+class ContinuityResultFields:
+    """Fields for a CONTINUITY_RESULT event (one per convergence run)."""
+
+    run_id: str = ""
+    mode: str = ""
+    attempts: int = 0
+    final_status: str = "REFUSED"
+    residual_error_total: float = 0.0
+    residual_error_by_anchor: dict[str, float] = field(default_factory=dict)
+    action_path: list[str] = field(default_factory=list)
+    total_tokens: int = 0
+    total_latency_ms: float = 0.0
+    monotone: bool = False
+    oscillation_detected: bool = False
+    deadzone_actions: list[str] = field(default_factory=list)
+    interference_edges: list[dict[str, str]] = field(default_factory=list)
+    anchors_hash: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "run_id": self.run_id,
+            "mode": self.mode,
+            "attempts": self.attempts,
+            "final_status": self.final_status,
+            "residual_error_total": round(self.residual_error_total, 6),
+            "residual_error_by_anchor": {
+                k: round(v, 6) for k, v in self.residual_error_by_anchor.items()
+            },
+            "action_path": self.action_path,
+            "total_tokens": self.total_tokens,
+            "total_latency_ms": round(self.total_latency_ms, 2),
+            "monotone": self.monotone,
+            "oscillation_detected": self.oscillation_detected,
+            "deadzone_actions": self.deadzone_actions,
+            "interference_edges": self.interference_edges,
+            "anchors_hash": self.anchors_hash,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ContinuityResultFields:
+        return cls(
+            run_id=d.get("run_id", ""),
+            mode=d.get("mode", ""),
+            attempts=d.get("attempts", 0),
+            final_status=d.get("final_status", "REFUSED"),
+            residual_error_total=d.get("residual_error_total", 0.0),
+            residual_error_by_anchor=d.get("residual_error_by_anchor", {}),
+            action_path=d.get("action_path", []),
+            total_tokens=d.get("total_tokens", 0),
+            total_latency_ms=d.get("total_latency_ms", 0.0),
+            monotone=d.get("monotone", False),
+            oscillation_detected=d.get("oscillation_detected", False),
+            deadzone_actions=d.get("deadzone_actions", []),
+            interference_edges=d.get("interference_edges", []),
+            anchors_hash=d.get("anchors_hash", ""),
+        )
+
+
 # =============================================================================
 # Report Dataclasses
 # =============================================================================
@@ -440,6 +561,74 @@ class LogStats:
             "newest": self.newest,
             "log_files": self.log_files,
             "total_size_bytes": self.total_size_bytes,
+        }
+
+
+@dataclass
+class AnchorStats:
+    """Per-anchor convergence statistics."""
+
+    anchor_id: str = ""
+    violation_count: int = 0
+    run_count: int = 0
+    action_success_rates: dict[str, float] = field(default_factory=dict)
+    deadzone_count: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "anchor_id": self.anchor_id,
+            "violation_count": self.violation_count,
+            "run_count": self.run_count,
+            "action_success_rates": self.action_success_rates,
+            "deadzone_count": self.deadzone_count,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> AnchorStats:
+        return cls(
+            anchor_id=d.get("anchor_id", ""),
+            violation_count=d.get("violation_count", 0),
+            run_count=d.get("run_count", 0),
+            action_success_rates=d.get("action_success_rates", {}),
+            deadzone_count=d.get("deadzone_count", 0),
+        )
+
+
+@dataclass
+class ConvergenceReport:
+    """Convergence analysis report from CONTINUITY_TRACE/RESULT events."""
+
+    total_runs: int = 0
+    accepted: int = 0
+    refused: int = 0
+    escalated: int = 0
+    acceptance_rate: float = 0.0
+    avg_attempts: float = 0.0
+    avg_tokens_per_run: float = 0.0
+    avg_latency_per_run_ms: float = 0.0
+    efficiency: float = 0.0
+    monotone_rate: float = 0.0
+    oscillation_rate: float = 0.0
+    windup_count: int = 0
+    anchor_stats: dict[str, AnchorStats] = field(default_factory=dict)
+    interference_graph: dict[str, int] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_runs": self.total_runs,
+            "accepted": self.accepted,
+            "refused": self.refused,
+            "escalated": self.escalated,
+            "acceptance_rate": round(self.acceptance_rate, 4),
+            "avg_attempts": round(self.avg_attempts, 2),
+            "avg_tokens_per_run": round(self.avg_tokens_per_run, 2),
+            "avg_latency_per_run_ms": round(self.avg_latency_per_run_ms, 2),
+            "efficiency": round(self.efficiency, 4),
+            "monotone_rate": round(self.monotone_rate, 4),
+            "oscillation_rate": round(self.oscillation_rate, 4),
+            "windup_count": self.windup_count,
+            "anchor_stats": {k: v.to_dict() for k, v in self.anchor_stats.items()},
+            "interference_graph": self.interference_graph,
         }
 
 
@@ -849,6 +1038,101 @@ class TelemetryCollector:
         )
         self._emit(event)
 
+    def record_continuity_trace(
+        self,
+        run_id: str = "",
+        mode: str = "",
+        attempt: int = 0,
+        error_total: float = 0.0,
+        error_by_anchor: dict[str, float] | None = None,
+        violations: list[dict[str, str]] | None = None,
+        action: str = "none",
+        action_params: dict[str, Any] | None = None,
+        delta_total: float | None = None,
+        delta_by_anchor: dict[str, float] | None = None,
+        tokens: int = 0,
+        latency_ms: float = 0.0,
+        prompt_hash: str = "",
+        anchors_hash: str = "",
+        agent_id: str | None = None,
+        session_id: str | None = None,
+    ) -> None:
+        """Record a continuity trace event (one per generation attempt)."""
+        tf = ContinuityTraceFields(
+            run_id=run_id,
+            mode=mode,
+            attempt=attempt,
+            error_total=error_total,
+            error_by_anchor=error_by_anchor or {},
+            violations=violations or [],
+            action=action,
+            action_params=action_params or {},
+            delta_total=delta_total,
+            delta_by_anchor=delta_by_anchor or {},
+            tokens=tokens,
+            latency_ms=latency_ms,
+            prompt_hash=prompt_hash,
+            anchors_hash=anchors_hash,
+        )
+        event = TelemetryEvent(
+            timestamp=self._now_iso(),
+            event_type=TelemetryEventType.CONTINUITY_TRACE,
+            level=TelemetryLevel.INFO,
+            fields=self._redact_fields(tf.to_dict()),
+            agent_id=agent_id,
+            session_id=session_id,
+            duration_ms=latency_ms,
+        )
+        self._emit(event)
+
+    def record_continuity_result(
+        self,
+        run_id: str = "",
+        mode: str = "",
+        attempts: int = 0,
+        final_status: str = "REFUSED",
+        residual_error_total: float = 0.0,
+        residual_error_by_anchor: dict[str, float] | None = None,
+        action_path: list[str] | None = None,
+        total_tokens: int = 0,
+        total_latency_ms: float = 0.0,
+        monotone: bool = False,
+        oscillation_detected: bool = False,
+        deadzone_actions: list[str] | None = None,
+        interference_edges: list[dict[str, str]] | None = None,
+        anchors_hash: str = "",
+        agent_id: str | None = None,
+        session_id: str | None = None,
+    ) -> None:
+        """Record a continuity result event (one per convergence run)."""
+        rf = ContinuityResultFields(
+            run_id=run_id,
+            mode=mode,
+            attempts=attempts,
+            final_status=final_status,
+            residual_error_total=residual_error_total,
+            residual_error_by_anchor=residual_error_by_anchor or {},
+            action_path=action_path or [],
+            total_tokens=total_tokens,
+            total_latency_ms=total_latency_ms,
+            monotone=monotone,
+            oscillation_detected=oscillation_detected,
+            deadzone_actions=deadzone_actions or [],
+            interference_edges=interference_edges or [],
+            anchors_hash=anchors_hash,
+        )
+        level = TelemetryLevel.INFO if final_status == "ACCEPTED" else TelemetryLevel.WARN
+        event = TelemetryEvent(
+            timestamp=self._now_iso(),
+            event_type=TelemetryEventType.CONTINUITY_RESULT,
+            level=level,
+            fields=self._redact_fields(rf.to_dict()),
+            agent_id=agent_id,
+            session_id=session_id,
+            duration_ms=total_latency_ms,
+        )
+        self._emit(event)
+
 
 # =============================================================================
 # Analysis Functions
@@ -936,6 +1220,159 @@ def analyze_performance(events: list[TelemetryEvent]) -> PerformanceReport:
 
     if claim_counts:
         report.avg_claims_per_proposal = sum(claim_counts) / len(claim_counts)
+
+    return report
+
+
+def analyze_convergence(
+    events: list[TelemetryEvent],
+    since: str | None = None,
+) -> ConvergenceReport:
+    """Analyze convergence from CONTINUITY_TRACE and CONTINUITY_RESULT events."""
+    report = ConvergenceReport()
+
+    # Separate result and trace events
+    results = [
+        e for e in events
+        if e.event_type == TelemetryEventType.CONTINUITY_RESULT
+        and (since is None or e.timestamp >= since)
+    ]
+    traces = [
+        e for e in events
+        if e.event_type == TelemetryEventType.CONTINUITY_TRACE
+        and (since is None or e.timestamp >= since)
+    ]
+
+    if not results:
+        return report
+
+    # Group traces by run_id
+    traces_by_run: dict[str, list[TelemetryEvent]] = {}
+    for t in traces:
+        rid = t.fields.get("run_id", "")
+        if rid:
+            traces_by_run.setdefault(rid, []).append(t)
+
+    # Sort each run's traces by attempt number
+    for rid in traces_by_run:
+        traces_by_run[rid].sort(key=lambda e: e.fields.get("attempt", 0))
+
+    # Count statuses, sum tokens/latency/attempts
+    total_attempts = 0
+    total_tokens = 0
+    total_latency = 0.0
+    monotone_count = 0
+    oscillation_count = 0
+    efficiency_values: list[float] = []
+
+    # Per-anchor tracking
+    anchor_violations: dict[str, int] = {}
+    anchor_runs: dict[str, set[str]] = {}
+    anchor_deadzones: dict[str, int] = {}
+    # action → {anchor_id → [success_bool]}
+    anchor_action_outcomes: dict[str, dict[str, list[bool]]] = {}
+
+    for ev in results:
+        f = ev.fields
+        report.total_runs += 1
+
+        status = f.get("final_status", "REFUSED")
+        if status == "ACCEPTED":
+            report.accepted += 1
+        elif status == "ESCALATED":
+            report.escalated += 1
+        else:
+            report.refused += 1
+
+        attempts = f.get("attempts", 0)
+        total_attempts += attempts
+        total_tokens += f.get("total_tokens", 0)
+        total_latency += f.get("total_latency_ms", 0.0)
+
+        if f.get("monotone", False):
+            monotone_count += 1
+        if f.get("oscillation_detected", False):
+            oscillation_count += 1
+
+        # Windup: attempts>2 and residual ~ initial (check via traces)
+        rid = f.get("run_id", "")
+        run_traces = traces_by_run.get(rid, [])
+        if attempts > 2 and run_traces:
+            initial_error = run_traces[0].fields.get("error_total", 0.0)
+            residual_error = f.get("residual_error_total", 0.0)
+            if abs(initial_error - residual_error) < 1e-6:
+                report.windup_count += 1
+
+        # Efficiency: tokens / (initial_error - residual_error)
+        if run_traces:
+            initial_error = run_traces[0].fields.get("error_total", 0.0)
+            residual_error = f.get("residual_error_total", 0.0)
+            error_reduction = initial_error - residual_error
+            run_tokens = f.get("total_tokens", 0)
+            if error_reduction > 1e-6 and run_tokens > 0:
+                efficiency_values.append(run_tokens / error_reduction)
+
+        # Interference graph
+        for edge in f.get("interference_edges", []):
+            from_a = edge.get("from_anchor", "")
+            to_a = edge.get("to_anchor", "")
+            key = f"{from_a}\u2192{to_a}"
+            report.interference_graph[key] = report.interference_graph.get(key, 0) + 1
+
+        # Deadzone actions per anchor from result
+        for dz_action in f.get("deadzone_actions", []):
+            anchor_deadzones[dz_action] = anchor_deadzones.get(dz_action, 0) + 1
+
+    # Compute anchor stats from traces
+    for rid, run_trace_list in traces_by_run.items():
+        for i, t in enumerate(run_trace_list):
+            tf = t.fields
+            eba = tf.get("error_by_anchor", {})
+            action = tf.get("action", "none")
+
+            for aid, vcount in eba.items():
+                if vcount > 0:
+                    anchor_violations[aid] = anchor_violations.get(aid, 0) + int(vcount)
+                    anchor_runs.setdefault(aid, set()).add(rid)
+
+            # Action success: did error_by_anchor[aid] decrease after this action?
+            if i > 0 and action != "none":
+                prev_eba = run_trace_list[i - 1].fields.get("error_by_anchor", {})
+                for aid in set(eba) | set(prev_eba):
+                    prev_v = prev_eba.get(aid, 0.0)
+                    curr_v = eba.get(aid, 0.0)
+                    anchor_action_outcomes.setdefault(action, {}).setdefault(aid, []).append(
+                        curr_v < prev_v
+                    )
+
+    # Build AnchorStats
+    all_aids = set(anchor_violations) | set(anchor_deadzones)
+    for aid in all_aids:
+        stats = AnchorStats(
+            anchor_id=aid,
+            violation_count=anchor_violations.get(aid, 0),
+            run_count=len(anchor_runs.get(aid, set())),
+            deadzone_count=anchor_deadzones.get(aid, 0),
+        )
+        # Compute action success rates for this anchor
+        for action, outcomes_by_anchor in anchor_action_outcomes.items():
+            if aid in outcomes_by_anchor:
+                outcomes = outcomes_by_anchor[aid]
+                if outcomes:
+                    stats.action_success_rates[action] = sum(outcomes) / len(outcomes)
+        report.anchor_stats[aid] = stats
+
+    # Aggregate rates
+    n = report.total_runs
+    report.acceptance_rate = report.accepted / n if n > 0 else 0.0
+    report.avg_attempts = total_attempts / n if n > 0 else 0.0
+    report.avg_tokens_per_run = total_tokens / n if n > 0 else 0.0
+    report.avg_latency_per_run_ms = total_latency / n if n > 0 else 0.0
+    report.monotone_rate = monotone_count / n if n > 0 else 0.0
+    report.oscillation_rate = oscillation_count / n if n > 0 else 0.0
+
+    if efficiency_values:
+        report.efficiency = sum(efficiency_values) / len(efficiency_values)
 
     return report
 

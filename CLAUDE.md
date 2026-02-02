@@ -50,8 +50,9 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Invariant Store (Deferred 1)**: InvariantSpec (serializable invariant definitions), InvariantStore (file-per-item persistence), VALID_KINDS (6 factory mappings), materialization to live Invariant objects, CLI (add/list/show/remove/check), autonomous run command (noop step execution shell).
 **Strategic Test Suites**: Golden-file tests (JSON schema locking for all serialized types), no-laundering regression tests (structural integrity invariants), failure-injection tests (executor fault tolerance), property-based invariant tests (combinatoric fuzzing), contract tests for adapters (interface locking).
 **Web UI (Deferred 2, W1-W3)**: GovernorContextManager (isolated per-user/project contexts), ChatBridge (Anthropic/Ollama backend abstraction), GovernorHooks (mode-specific system prompts), refactored FastAPI adapter (OpenAI-compatible API with governor endpoints), Docker multi-user deployment (Erin fiction + James code stacks).
-**Structured Telemetry (Deferred 4, B2)**: TelemetryCollector (pluggable backends, fail-safe), StructuredLogger (JSONL, date-partitioned, size/retention rotation), TelemetryEvent with typed field helpers, cost/performance analysis, CSV/JSON export, CLI (enable/disable/status/logs/analyze/export/rotate-logs), executor integration.
-**Total: 5013 tests**
+**Structured Telemetry (Deferred 4, B2)**: TelemetryCollector (pluggable backends, fail-safe), StructuredLogger (JSONL, date-partitioned, size/retention rotation), TelemetryEvent with typed field helpers, cost/performance/convergence analysis, CSV/JSON export, CLI (enable/disable/status/logs/analyze/export/rotate-logs), executor integration. Convergence telemetry: CONTINUITY_TRACE/CONTINUITY_RESULT events, ConvergenceExecutor + one-shot gate instrumentation, ConvergenceReport (acceptance rate, efficiency, monotone/oscillation rates, windup, per-anchor stats, interference graph).
+**Continuity Enforcement (Deferred 5)**: Closed-loop generation control. AnchorRegistry (semantic constraint setpoints), ContinuityChecker (lexical deviation measurement), CorrectionLadder (escalating interventions), ConvergenceExecutor (iterate-until-convergence with budget enforcement, telemetry instrumented), GenerationProvider Protocol, adapter integration, CLI (anchor CRUD, check, import). Continuity Bridges: mode-specific anchor factories (fiction bible, nonfiction corpus, puppet profile), GovernorHooks integration (one-shot gating with telemetry, system prompt enrichment).
+**Total: 5263 tests**
 
 ## Key Documents
 
@@ -331,8 +332,18 @@ governor telemetry status              # Show config + log statistics
 governor telemetry logs                # Query events (--last N, --type, --level, --since, --json)
 governor telemetry analyze costs       # Cost breakdown by model/operation (--since, --json)
 governor telemetry analyze performance # Verification latency percentiles, approval rate (--since, --json)
+governor telemetry analyze convergence # Convergence loop stats: acceptance rate, efficiency, oscillation, per-anchor (--since, --json)
 governor telemetry export              # Export events (--format csv|json, --output, --since, --type)
 governor telemetry rotate-logs         # Delete old logs (--dry-run)
+
+# Continuity Enforcement (Deferred 5: closed-loop generation control)
+governor continuity status              # Registry stats, anchor count by type
+governor continuity anchor add          # --id, --type, --description, --required, --forbidden, --severity
+governor continuity anchor list         # All anchors with type and severity
+governor continuity anchor show <id>    # Full anchor details (JSON)
+governor continuity anchor remove <id>  # Remove anchor
+governor continuity check <text>        # Check text against all anchors, show report
+governor continuity import <path>       # Import anchors from JSON file
 
 # Fiction Governor - Context Drift Detection
 fiction-gov drift status               # Show drift detector state
@@ -453,6 +464,8 @@ src/governor/
 ├── context_manager.py # GovernorContext, GovernorContextManager, isolated per-user/project contexts
 ├── chat_bridge.py     # ChatBridge, OllamaBackend, AnthropicBackend, GovernorHooks, backend abstraction
 ├── telemetry.py       # TelemetryCollector, StructuredLogger, TelemetryEvent, cost/performance analysis, JSONL export
+├── continuity.py      # AnchorRegistry, ContinuityChecker, CorrectionLadder, ConvergenceExecutor, closed-loop generation control
+├── continuity_bridges.py # Mode-specific anchor factories: fiction bible, nonfiction corpus, puppet profile → Anchor lists
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -861,11 +874,20 @@ src/ops_governor/
 ### Structured Telemetry (Deferred 4, B2)
 | Module | Description | Tests |
 |--------|-------------|-------|
-| telemetry.py | TelemetryEventType/Level enums, TelemetryConfig, TelemetryEvent, field helpers (Proposal/Verification/LLMCall/AutonomousIteration/Error), StructuredLogger (JSONL, date-partitioned, rotation), TelemetryBackend/LoggingBackend, TelemetryCollector (pluggable, fail-safe), analyze_costs/analyze_performance, CSV/JSON export | 91 |
+| telemetry.py | TelemetryEventType/Level enums (10 types), TelemetryConfig, TelemetryEvent, field helpers (Proposal/Verification/LLMCall/AutonomousIteration/Error/ContinuityTrace/ContinuityResult), StructuredLogger (JSONL, date-partitioned, rotation), TelemetryBackend/LoggingBackend, TelemetryCollector (pluggable, fail-safe), analyze_costs/analyze_performance/analyze_convergence, AnchorStats, ConvergenceReport, CSV/JSON export | 91 |
+| test_convergence_telemetry.py | ContinuityTraceFields/ResultFields, collector methods, ConvergenceExecutor instrumentation, one-shot gate telemetry, analyze_convergence, ConvergenceReport, enum update | 60 |
 
-**Structured Telemetry tests: 91**
+**Structured Telemetry tests: 151**
 
-**Total: 5013 tests**
+### Continuity Enforcement (Deferred 5)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| continuity.py | AnchorType/Severity/RecommendedAction/CorrectionLevel enums, Anchor, Violation, ContinuityReport, AttemptLog, CorrectionConfig, ConvergenceBudget, ConvergenceResult, AnchorRegistry (JSON persistence), ContinuityChecker (lexical pattern matching, custom checks, action recommendation), CorrectionLadder (escalating correction with DEFAULT_LADDER), ConvergenceExecutor (closed-loop generation with budget enforcement, telemetry instrumented), GenerationProvider Protocol, convenience factories | 107 |
+| continuity_bridges.py | Mode-specific anchor factories: fiction (characters, banned tropes, world rules, tone), nonfiction (concepts, positions), puppet (forbidden phrases, required ticks), GovernorHooks integration (check_response with telemetry, _load_mode_anchors, system prompt enrichment) | 83 |
+
+**Continuity Enforcement tests: 190**
+
+**Total: 5263 tests**
 
 ## Common Mistakes to Avoid
 

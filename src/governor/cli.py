@@ -8927,7 +8927,7 @@ def telemetry_logs(
 
 
 @telemetry_group.command("analyze")
-@click.argument("report_type", type=click.Choice(["costs", "performance"]))
+@click.argument("report_type", type=click.Choice(["costs", "performance", "convergence"]))
 @click.option("--since", type=str, default=None, help="Analyze events since timestamp (ISO)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
@@ -8937,8 +8937,8 @@ def telemetry_analyze(
     since: str | None,
     as_json: bool,
 ) -> None:
-    """Analyze telemetry data (costs or performance)."""
-    from .telemetry import analyze_costs, analyze_performance, get_logger
+    """Analyze telemetry data (costs, performance, or convergence)."""
+    from .telemetry import analyze_costs, analyze_convergence, analyze_performance, get_logger
 
     gov_dir = ensure_initialized(ctx)
     logger = get_logger(gov_dir)
@@ -8964,7 +8964,7 @@ def telemetry_analyze(
                     click.echo(f"    {op}: ${c:.4f}")
             if report.period:
                 click.echo(f"  Period: {report.period}")
-    else:
+    elif report_type == "performance":
         report = analyze_performance(events)
         if as_json:
             click.echo(json.dumps(report.to_dict(), indent=2))
@@ -8978,6 +8978,35 @@ def telemetry_analyze(
             click.echo(f"  Verified: {report.total_verified}")
             click.echo(f"  Rejected: {report.total_rejected}")
             click.echo(f"  Avg claims/proposal: {report.avg_claims_per_proposal:.1f}")
+    else:
+        conv_report = analyze_convergence(events, since=since)
+        if as_json:
+            click.echo(json.dumps(conv_report.to_dict(), indent=2))
+        else:
+            click.echo("Convergence Analysis:")
+            click.echo(f"  Total runs: {conv_report.total_runs}")
+            click.echo(f"  Accepted: {conv_report.accepted}")
+            click.echo(f"  Refused: {conv_report.refused}")
+            click.echo(f"  Escalated: {conv_report.escalated}")
+            click.echo(f"  Acceptance rate: {conv_report.acceptance_rate:.1%}")
+            click.echo(f"  Avg attempts/run: {conv_report.avg_attempts:.1f}")
+            click.echo(f"  Avg tokens/run: {conv_report.avg_tokens_per_run:.0f}")
+            click.echo(f"  Avg latency/run: {conv_report.avg_latency_per_run_ms:.1f}ms")
+            click.echo(f"  Efficiency (tokens/error_reduction): {conv_report.efficiency:.1f}")
+            click.echo(f"  Monotone rate: {conv_report.monotone_rate:.1%}")
+            click.echo(f"  Oscillation rate: {conv_report.oscillation_rate:.1%}")
+            click.echo(f"  Windup count: {conv_report.windup_count}")
+            if conv_report.anchor_stats:
+                click.echo("  Per-anchor stats:")
+                for aid, stats in sorted(conv_report.anchor_stats.items()):
+                    click.echo(f"    {aid}: violations={stats.violation_count}, runs={stats.run_count}, deadzones={stats.deadzone_count}")
+                    if stats.action_success_rates:
+                        for act, rate in stats.action_success_rates.items():
+                            click.echo(f"      {act}: {rate:.1%} success")
+            if conv_report.interference_graph:
+                click.echo("  Interference edges:")
+                for edge, count in sorted(conv_report.interference_graph.items(), key=lambda x: -x[1]):
+                    click.echo(f"    {edge}: {count}x")
 
 
 @telemetry_group.command("export")
@@ -9040,6 +9069,204 @@ def telemetry_rotate(ctx: click.Context, dry_run: bool) -> None:
 
     deleted = logger.rotate_logs()
     click.echo(f"Deleted {deleted} old log file(s).")
+
+
+# =============================================================================
+# Continuity Enforcement
+# =============================================================================
+
+
+@cli.group("continuity")
+@click.pass_context
+def continuity_group(ctx: click.Context) -> None:
+    """
+    Continuity enforcement: closed-loop generation control.
+
+    Anchors define semantic constraints (setpoints). Checker measures
+    deviation. Correction ladder applies escalating interventions.
+    """
+    pass
+
+
+@continuity_group.command("status")
+@click.pass_context
+def continuity_status(ctx: click.Context) -> None:
+    """Show continuity registry status and anchor counts by type."""
+    from .continuity import AnchorRegistry, AnchorType, create_registry
+
+    gov_dir = ensure_initialized(ctx)
+    registry = create_registry(gov_dir)
+
+    click.echo(f"Continuity Enforcement Status")
+    click.echo(f"  Total anchors: {len(registry)}")
+    for atype in AnchorType:
+        anchors = registry.get_by_type(atype)
+        if anchors:
+            click.echo(f"  {atype.value}: {len(anchors)}")
+
+    if len(registry) == 0:
+        click.echo("  (no anchors registered)")
+
+
+@continuity_group.group("anchor")
+def continuity_anchor() -> None:
+    """Manage continuity anchors."""
+    pass
+
+
+@continuity_anchor.command("add")
+@click.option("--id", "anchor_id", required=True, help="Anchor identifier")
+@click.option(
+    "--type", "anchor_type",
+    type=click.Choice(["definition", "canon", "style", "prohibition", "requirement", "persona"]),
+    required=True,
+    help="Anchor type",
+)
+@click.option("--description", "-d", required=True, help="Anchor description")
+@click.option("--required", "-r", multiple=True, help="Required pattern (repeatable)")
+@click.option("--forbidden", "-f", multiple=True, help="Forbidden pattern (repeatable)")
+@click.option(
+    "--severity", "-s",
+    type=click.Choice(["warn", "correct", "reject"]),
+    default="correct",
+    help="Violation severity",
+)
+@click.pass_context
+def continuity_anchor_add(
+    ctx: click.Context,
+    anchor_id: str,
+    anchor_type: str,
+    description: str,
+    required: tuple[str, ...],
+    forbidden: tuple[str, ...],
+    severity: str,
+) -> None:
+    """Add a continuity anchor."""
+    from .continuity import Anchor, AnchorType, Severity, create_registry
+
+    gov_dir = ensure_initialized(ctx)
+    registry = create_registry(gov_dir)
+
+    anchor = Anchor(
+        id=anchor_id,
+        anchor_type=AnchorType(anchor_type),
+        description=description,
+        required_patterns=list(required),
+        forbidden_patterns=list(forbidden),
+        severity=Severity(severity),
+    )
+    registry.register(anchor)
+
+    path = gov_dir / "continuity" / "anchors.json"
+    registry.save(path)
+    click.echo(f"Registered anchor: {anchor_id} ({anchor_type}, {severity})")
+
+
+@continuity_anchor.command("list")
+@click.pass_context
+def continuity_anchor_list(ctx: click.Context) -> None:
+    """List all continuity anchors."""
+    from .continuity import create_registry
+
+    gov_dir = ensure_initialized(ctx)
+    registry = create_registry(gov_dir)
+
+    anchors = registry.all()
+    if not anchors:
+        click.echo("No anchors registered.")
+        return
+
+    for a in anchors:
+        click.echo(f"  {a.id} [{a.anchor_type.value}] ({a.severity.value}): {a.description}")
+
+
+@continuity_anchor.command("show")
+@click.argument("anchor_id")
+@click.pass_context
+def continuity_anchor_show(ctx: click.Context, anchor_id: str) -> None:
+    """Show full details of a continuity anchor."""
+    from .continuity import create_registry
+
+    gov_dir = ensure_initialized(ctx)
+    registry = create_registry(gov_dir)
+
+    anchor = registry.get(anchor_id)
+    if anchor is None:
+        click.echo(f"Anchor not found: {anchor_id}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(json.dumps(anchor.to_dict(), indent=2))
+
+
+@continuity_anchor.command("remove")
+@click.argument("anchor_id")
+@click.pass_context
+def continuity_anchor_remove(ctx: click.Context, anchor_id: str) -> None:
+    """Remove a continuity anchor."""
+    from .continuity import create_registry
+
+    gov_dir = ensure_initialized(ctx)
+    registry = create_registry(gov_dir)
+
+    removed = registry.unregister(anchor_id)
+    if removed is None:
+        click.echo(f"Anchor not found: {anchor_id}", err=True)
+        ctx.exit(1)
+        return
+
+    path = gov_dir / "continuity" / "anchors.json"
+    registry.save(path)
+    click.echo(f"Removed anchor: {anchor_id}")
+
+
+@continuity_group.command("check")
+@click.argument("text")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def continuity_check(ctx: click.Context, text: str, as_json: bool) -> None:
+    """Check text against all registered anchors."""
+    from .continuity import ContinuityChecker, create_registry
+
+    gov_dir = ensure_initialized(ctx)
+    registry = create_registry(gov_dir)
+
+    anchors = registry.all()
+    if not anchors:
+        click.echo("No anchors registered.")
+        return
+
+    checker = ContinuityChecker()
+    report = checker.check(text, anchors)
+
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(report.summary())
+        if report.violations:
+            for v in report.violations:
+                click.echo(f"  {v}")
+
+
+@continuity_group.command("import")
+@click.argument("path", type=click.Path(exists=True))
+@click.pass_context
+def continuity_import(ctx: click.Context, path: str) -> None:
+    """Import anchors from a JSON file."""
+    from .continuity import AnchorRegistry, create_registry
+
+    gov_dir = ensure_initialized(ctx)
+    registry = create_registry(gov_dir)
+
+    import_data = json.loads(Path(path).read_text())
+    imported = AnchorRegistry.from_dict(import_data)
+
+    for anchor in imported.all():
+        registry.register(anchor)
+
+    save_path = gov_dir / "continuity" / "anchors.json"
+    registry.save(save_path)
+    click.echo(f"Imported {len(imported)} anchor(s).")
 
 
 def main() -> None:

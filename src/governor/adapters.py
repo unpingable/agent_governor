@@ -458,6 +458,101 @@ def tone_invariant(
 
 
 # =============================================================================
+# Continuity adapter (anchor enforcement)
+# =============================================================================
+
+
+def continuity_invariant(
+    registry: Any,
+    checker: Any | None = None,
+    min_severity: str = "correct",
+    file_extensions: set[str] | None = None,
+    invariant_id: str = "continuity_check",
+    on_violation: str = "block",
+) -> Invariant:
+    """
+    Wrap an AnchorRegistry + ContinuityChecker as an Invariant.
+
+    One-shot gate (no retry — that's ConvergenceExecutor's job).
+    Reads file contents, checks each against all anchors.
+    Blocks on violations at or above min_severity.
+
+    Args:
+        registry: AnchorRegistry instance (from governor.continuity)
+        checker: ContinuityChecker instance (default: creates one)
+        min_severity: Minimum severity to treat as violation ("warn", "correct", "reject")
+        file_extensions: Which file extensions to scan (default: text files)
+        invariant_id: Invariant identifier
+        on_violation: "block" or "warn"
+    """
+    severity_rank = {"reject": 3, "correct": 2, "warn": 1}
+    threshold = severity_rank.get(min_severity.lower(), 2)
+    exts = file_extensions or TEXT_EXTENSIONS
+
+    def verify(**kwargs: Any) -> InvariantResult:
+        from .continuity import ContinuityChecker, Severity
+
+        root = kwargs.get("root", Path("."))
+        files = kwargs.get("files_touched", [])
+        chk = checker
+        if chk is None:
+            chk = ContinuityChecker()
+
+        anchors = registry.all()
+        if not anchors:
+            return InvariantResult(
+                passed=True,
+                message="Continuity: no anchors registered",
+                invariant_id=invariant_id,
+            )
+
+        file_contents = _read_text_files(files, root, exts)
+        all_findings: list[AdapterFinding] = []
+
+        for rel_path, content in file_contents:
+            try:
+                report = chk.check(content, anchors)
+            except Exception:
+                continue
+            for v in report.violations:
+                sev_val = v.severity.value if hasattr(v.severity, "value") else str(v.severity)
+                rank = severity_rank.get(sev_val.lower(), 0)
+                if rank >= threshold:
+                    all_findings.append(AdapterFinding(
+                        source="continuity",
+                        file_path=rel_path,
+                        message=v.description,
+                        severity=sev_val,
+                        details={
+                            "anchor_id": v.anchor_id,
+                            "anchor_type": v.anchor_type.value if hasattr(v.anchor_type, "value") else str(v.anchor_type),
+                            "evidence": v.evidence,
+                        },
+                    ))
+
+        if all_findings:
+            return InvariantResult(
+                passed=False,
+                message=f"Continuity: {len(all_findings)} violation(s) at {min_severity}+ severity",
+                invariant_id=invariant_id,
+                details={"findings": [f.to_dict() for f in all_findings[:20]]},
+            )
+        return InvariantResult(
+            passed=True,
+            message="Continuity: all anchors satisfied",
+            invariant_id=invariant_id,
+        )
+
+    return Invariant(
+        id=invariant_id,
+        type=InvariantType.CONSISTENCY,
+        rule="Output must satisfy all registered continuity anchors",
+        verify=verify,
+        on_violation=on_violation,
+    )
+
+
+# =============================================================================
 # Generic content adapter
 # =============================================================================
 
@@ -564,6 +659,12 @@ class AdapterConfig:
 
     tone_checker: Any | None = None
 
+    continuity_registry: Any | None = None
+    """AnchorRegistry instance (from governor.continuity)."""
+
+    continuity_checker: Any | None = None
+    """ContinuityChecker instance (from governor.continuity). Uses default if None."""
+
     custom_checks: list[tuple[ContentCheckFn, str, str]] = field(default_factory=list)
     """List of (check_fn, name, rule) tuples."""
 
@@ -613,6 +714,12 @@ def build_adapter_set(config: AdapterConfig) -> list[Invariant]:
     if config.tone_checker is not None:
         result.append(tone_invariant(
             checker=config.tone_checker,
+        ))
+
+    if config.continuity_registry is not None:
+        result.append(continuity_invariant(
+            registry=config.continuity_registry,
+            checker=config.continuity_checker,
         ))
 
     for check_fn, name, rule in config.custom_checks:

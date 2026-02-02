@@ -1656,6 +1656,12 @@ user/project. One Claude account, multiple isolated governor contexts.
 
 #### Phase W4: Mode-Specific Integration
 
+- [x] **Continuity bridge integration** — Mode-specific anchors wired into GovernorHooks via `continuity_bridges.py`
+  - Fiction: bible (characters, tropes, world rules, tone) → anchors → check_response + system prompt
+  - Nonfiction: corpus (concepts, positions) → anchors → check_response + system prompt
+  - Puppet: voice constraints → anchors in all modes
+  - One-shot gating per response (ConvergenceExecutor retry loop is deferred)
+
 - [ ] **Fiction mode for Erin** — Canon checking, character continuity, timeline validation
   - Governor violations surface naturally in chat responses
   - Canon violation → offer: fix instance, revise canon, proceed with inconsistency
@@ -1803,7 +1809,18 @@ Task balancing extends existing `routing.py`. Telemetry is new infrastructure.
 - [x] **Analysis functions** — `analyze_costs()` (CostReport), `analyze_performance()` (PerformanceReport)
   - Percentiles via sorted index (no numpy), cost grouping by model/operation, approval rate, avg claims
 
-**91 tests in tests/test_telemetry.py**
+- [x] **Convergence Telemetry** — Control-loop instrumentation for continuity enforcement
+  - `CONTINUITY_TRACE` event (one per generation attempt): error_total, error_by_anchor, delta, action, latency
+  - `CONTINUITY_RESULT` event (one per convergence run): final_status, monotone, oscillation, deadzone, interference
+  - `ContinuityTraceFields`, `ContinuityResultFields` dataclasses with float rounding
+  - `record_continuity_trace()`, `record_continuity_result()` collector methods
+  - `ConvergenceExecutor` instrumented with per-attempt traces and per-run results
+  - One-shot gate (`GovernorHooks.check_response`) instrumented with trace+result
+  - `analyze_convergence()` — `ConvergenceReport` with acceptance rate, efficiency, monotone/oscillation rates, windup, per-anchor stats, interference graph
+  - `governor telemetry analyze convergence` CLI command (--since, --json)
+  - Core invariant: evaluates the controller, not the content
+
+**91 tests in tests/test_telemetry.py + 60 tests in tests/test_convergence_telemetry.py**
 
 #### Phase B3: Prometheus & Grafana (optional)
 
@@ -1829,3 +1846,69 @@ prometheus_port = 9090
 redact_file_contents = true
 redact_prompts = false
 ```
+
+---
+
+### Deferred 5: Continuity Enforcement (Closed-Loop Generation Control) ✓ COMPLETE
+
+Transforms the Governor from thermometer (observe and report) to thermostat
+(observe, compare to setpoint, correct). Anchors define semantic constraints
+(setpoints). Checker measures deviation (error signal). Correction ladder
+applies escalating interventions (control input). Convergence executor
+iterates until convergence or fails closed with evidence.
+
+- [x] **Enums & Data Structures**
+  - `AnchorType` (DEFINITION, CANON, STYLE, PROHIBITION, REQUIREMENT, PERSONA)
+  - `Severity` (WARN, CORRECT, REJECT)
+  - `RecommendedAction` (ACCEPT, SOFT_REPROMPT, HARD_REPROMPT, CONSTRAIN_DECODING, ESCALATE, FAIL_CLOSED)
+  - `CorrectionLevel` (NONE, SOFT_REPROMPT, HARD_REPROMPT, CONSTRAIN_DECODING, REQUIRE_HITL, FAIL_CLOSED)
+  - `Anchor`, `Violation`, `ContinuityReport`, `AttemptLog`, `CorrectionConfig`, `ConvergenceBudget`, `ConvergenceResult`
+
+- [x] **AnchorRegistry** — CRUD + persistence (.governor/continuity/anchors.json)
+  - `register()`, `unregister()`, `get()`, `get_by_type()`, `all()`, `to_prompt_context()`
+  - JSON save/load roundtrip, `to_dict()` / `from_dict()`
+
+- [x] **ContinuityChecker** — Lexical pattern matching (v0)
+  - Forbidden/required patterns and concepts via `re.escape()` search
+  - Custom check callables take precedence over pattern matching
+  - Score = fraction of anchors with zero violations
+  - Action recommendation: REJECT→HARD, >2 CORRECT→HARD, 1-2 CORRECT→SOFT, WARN→ACCEPT
+  - Correction context builder for violated anchor reminders
+
+- [x] **CorrectionLadder** — Escalating correction strategy
+  - DEFAULT_LADDER: SOFT→HARD→CONSTRAIN→HITL→FAIL_CLOSED
+  - Retry tracking per level, escalation on exhaustion
+  - `apply_correction()` always from ORIGINAL prompt (no bloat)
+  - `get_generation_params()` for temperature overrides etc.
+
+- [x] **ConvergenceExecutor** — Closed-loop generation control
+  - `GenerationProvider` Protocol (sync-only, no external deps)
+  - Budget enforcement (max_attempts, max_tokens, max_time_ms)
+  - Ladder resets per call (no stale state across calls)
+  - Every attempt logged (AttemptLog with sha256 hashes)
+  - Fail-closed: converged=False + best attempt + full violation report
+
+- [x] **Adapter integration** (adapters.py)
+  - `continuity_invariant()` factory (one-shot gate, no retry)
+  - `AdapterConfig.continuity_registry` and `continuity_checker` fields
+  - `build_adapter_set()` wires continuity if registry provided
+
+- [x] **CLI commands**
+  - `governor continuity status` — registry stats, anchor count by type
+  - `governor continuity anchor add/list/show/remove` — anchor CRUD
+  - `governor continuity check <text>` — check text against all anchors
+  - `governor continuity import <path>` — import anchors from JSON
+
+- [x] **Convenience functions** — `create_registry()`, `create_checker()`, `create_ladder()`, `create_convergence_executor(collector, mode)`, `check_output()`
+
+- [x] **Continuity Bridges** — Mode-specific anchor integration (`continuity_bridges.py`)
+  - `anchors_from_fiction_bible()` — characters (anti_patterns, voice.avoid), banned tropes, world rules, tone settings
+  - `anchors_from_nonfiction_corpus()` — concepts (anti_patterns), positions (current only)
+  - `anchors_from_puppet_profile()` — forbidden phrases, required ticks
+  - GovernorHooks integration: `check_response()` wired to ContinuityChecker, `_load_mode_anchors()` dispatches by mode
+  - System prompt enrichment: anchor context appended via `AnchorRegistry.to_prompt_context()`
+  - User-registered anchors (.governor/continuity/anchors.json) loaded in all modes
+  - Puppet anchors active in all modes (fiction, code, nonfiction, general)
+  - Direct JSON reads (no Bible/Corpus instantiation — avoids side effects)
+
+**190 tests in tests/test_continuity.py + tests/test_continuity_bridges.py + tests/test_chat_bridge.py (bridge integration)**

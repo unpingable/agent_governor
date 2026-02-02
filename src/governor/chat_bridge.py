@@ -13,7 +13,10 @@ Governor hooks inject system prompts and check responses based on context mode.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import time
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
@@ -331,24 +334,193 @@ class GovernorHooks:
 
         return [ChatMessage(role="system", content=system_prompt)] + messages
 
-    def check_response(self, content: str) -> list[dict[str, Any]]:
-        """Check response content and return any warnings."""
-        warnings: list[dict[str, Any]] = []
+    def check_response(
+        self, content: str, collector: Any | None = None
+    ) -> list[dict[str, Any]]:
+        """Check response content against mode-specific continuity anchors."""
+        anchors = self._load_mode_anchors()
+        if not anchors:
+            return []
 
+        from .continuity import ContinuityChecker
+
+        start_ms = time.monotonic()
+        checker = ContinuityChecker()
+        report = checker.check(content, anchors)
+        latency_ms = (time.monotonic() - start_ms) * 1000.0
+
+        # Emit telemetry for one-shot gate
+        if collector is not None:
+            try:
+                run_id = uuid.uuid4().hex[:12]
+                ids_str = ",".join(sorted(a.id for a in anchors))
+                anchors_hash = hashlib.sha256(ids_str.encode("utf-8")).hexdigest()[:16]
+                error_total = round(1.0 - report.score, 6)
+                error_by_anchor: dict[str, float] = {}
+                for v in report.violations:
+                    error_by_anchor[v.anchor_id] = error_by_anchor.get(v.anchor_id, 0.0) + 1.0
+                violations_dicts = [
+                    {"anchor_id": v.anchor_id, "severity": v.severity.value, "description": v.description}
+                    for v in report.violations
+                ]
+                prompt_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+                tokens_est = len(content.split())
+
+                collector.record_continuity_trace(
+                    run_id=run_id,
+                    mode=self.context.mode,
+                    attempt=0,
+                    error_total=error_total,
+                    error_by_anchor=error_by_anchor,
+                    violations=violations_dicts,
+                    action="none",
+                    action_params={},
+                    delta_total=None,
+                    delta_by_anchor={},
+                    tokens=tokens_est,
+                    latency_ms=latency_ms,
+                    prompt_hash=prompt_hash,
+                    anchors_hash=anchors_hash,
+                )
+                final_status = "ACCEPTED" if report.passed else "REFUSED"
+                collector.record_continuity_result(
+                    run_id=run_id,
+                    mode=self.context.mode,
+                    attempts=1,
+                    final_status=final_status,
+                    residual_error_total=error_total,
+                    residual_error_by_anchor=error_by_anchor,
+                    action_path=["none"],
+                    total_tokens=tokens_est,
+                    total_latency_ms=latency_ms,
+                    monotone=True,
+                    oscillation_detected=False,
+                    deadzone_actions=[],
+                    interference_edges=[],
+                    anchors_hash=anchors_hash,
+                )
+            except Exception:
+                pass
+
+        return [
+            {
+                "type": "continuity_violation",
+                "anchor_id": v.anchor_id,
+                "anchor_type": v.anchor_type.value,
+                "severity": v.severity.value,
+                "message": v.description,
+                "evidence": v.evidence,
+            }
+            for v in report.violations
+        ]
+
+    def _load_mode_anchors(self) -> list:
+        """Load continuity anchors for the current mode.
+
+        Dispatches by mode:
+        - fiction: reads .fiction-gov/bible/ JSON files
+        - nonfiction: reads .nonfiction/corpus.json
+        - code/general: no mode-specific anchors
+
+        All modes also check for active puppet and user-registered anchors.
+        """
+        from .continuity import Anchor, AnchorRegistry
+        from .continuity_bridges import (
+            anchors_from_fiction_bible,
+            anchors_from_nonfiction_corpus,
+            anchors_from_puppet_profile,
+        )
+
+        anchors: list[Anchor] = []
+
+        # Mode-specific anchors
         if self.context.mode == "fiction":
-            # Check for potential canon issues
-            fiction_dir = self.context.root / ".fiction-gov"
-            if fiction_dir.exists():
-                try:
-                    from fiction_governor import CanonRegistry
-                    # Future: integrate canon checking
-                except ImportError:
-                    pass
+            bible_data = self._load_fiction_bible_data()
+            if bible_data:
+                anchors.extend(anchors_from_fiction_bible(bible_data))
+        elif self.context.mode == "nonfiction":
+            corpus_data = self._load_nonfiction_corpus_data()
+            if corpus_data:
+                anchors.extend(anchors_from_nonfiction_corpus(corpus_data))
 
-        return warnings
+        # Puppet anchors (all modes)
+        puppet_data = self._load_active_puppet()
+        if puppet_data:
+            anchors.extend(anchors_from_puppet_profile(puppet_data))
+
+        # User-registered anchors from CLI (all modes)
+        anchors_path = self.context.root / ".governor" / "continuity" / "anchors.json"
+        if anchors_path.exists():
+            try:
+                registry = AnchorRegistry.load(anchors_path)
+                anchors.extend(registry.all())
+            except Exception:
+                pass
+
+        return anchors
+
+    def _load_fiction_bible_data(self) -> dict:
+        """Read fiction bible JSON files directly (no Bible() instantiation)."""
+        bible_dir = self.context.root / ".fiction-gov" / "bible"
+        if not bible_dir.exists():
+            return {}
+        data: dict[str, Any] = {}
+        for name in ("characters", "world_rules", "banned_tropes"):
+            f = bible_dir / f"{name}.json"
+            if f.exists():
+                try:
+                    data[name] = json.loads(f.read_text())
+                except (json.JSONDecodeError, OSError):
+                    pass
+        tone_f = bible_dir / "tone.json"
+        if tone_f.exists():
+            try:
+                data["tone"] = json.loads(tone_f.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        return data
+
+    def _load_nonfiction_corpus_data(self) -> dict:
+        """Read nonfiction corpus JSON directly (no Corpus() instantiation)."""
+        corpus_path = self.context.root / ".nonfiction" / "corpus.json"
+        if not corpus_path.exists():
+            return {}
+        try:
+            return json.loads(corpus_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    def _load_active_puppet(self) -> dict | None:
+        """Read active puppet profile if one exists."""
+        active_path = self.context.root / ".governor" / "puppet_active.json"
+        if not active_path.exists():
+            return None
+        try:
+            return json.loads(active_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return None
 
     def _build_system_prompt(self) -> str | None:
-        """Build mode-specific system prompt."""
+        """Build mode-specific system prompt with anchor context appended."""
+        base = self._build_mode_prompt()
+        if not base:
+            return None
+
+        anchors = self._load_mode_anchors()
+        if anchors:
+            from .continuity import AnchorRegistry
+
+            reg = AnchorRegistry()
+            for a in anchors:
+                reg.register(a)
+            ctx = reg.to_prompt_context()
+            if ctx:
+                base += "\n\n" + ctx
+
+        return base
+
+    def _build_mode_prompt(self) -> str | None:
+        """Build base mode-specific system prompt (without anchor context)."""
         if self.context.mode == "fiction":
             return self._build_fiction_prompt()
         elif self.context.mode == "code":
@@ -398,9 +570,11 @@ class ChatBridge:
         self,
         backend: ChatBackend,
         context_manager: GovernorContextManager,
+        collector: Any | None = None,
     ) -> None:
         self.backend = backend
         self.context_manager = context_manager
+        self._collector = collector
 
     async def chat(
         self,
@@ -422,7 +596,7 @@ class ChatBridge:
         else:
             response = await self.backend.chat(augmented, model, **kwargs)
             # Post-response: check for governor warnings
-            warnings = hooks.check_response(response.content)
+            warnings = hooks.check_response(response.content, collector=self._collector)
             if warnings:
                 warning_text = "\n\n---\n" + "\n".join(
                     f"[Governor] {w.get('message', str(w))}" for w in warnings

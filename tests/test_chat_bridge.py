@@ -369,6 +369,194 @@ class TestGovernorHooks:
 
 
 # ============================================================================
+# TestGovernorHooksContinuity
+# ============================================================================
+
+
+class TestGovernorHooksContinuity:
+    """Tests for GovernorHooks with continuity bridge integration."""
+
+    def _make_context(self, tmp_path: Path, mode: str = "general") -> GovernorContext:
+        gov_dir = tmp_path / ".governor"
+        gov_dir.mkdir(parents=True, exist_ok=True)
+        return GovernorContext(
+            context_id="test",
+            mode=mode,
+            root=tmp_path,
+            governor_dir=gov_dir,
+            created_at="2025-01-01",
+        )
+
+    def _setup_fiction_bible(self, tmp_path: Path) -> None:
+        bible_dir = tmp_path / ".fiction-gov" / "bible"
+        bible_dir.mkdir(parents=True, exist_ok=True)
+        (bible_dir / "banned_tropes.json").write_text(json.dumps([
+            {"name": "chosen_one", "patterns": ["the chosen one"], "severity": "error", "reason": "cliche"},
+        ]))
+        (bible_dir / "characters.json").write_text(json.dumps([
+            {"name": "Alice", "anti_patterns": ["betray her friends"], "voice": {"avoid": ["um"]}},
+        ]))
+
+    def _setup_nonfiction_corpus(self, tmp_path: Path) -> None:
+        nf_dir = tmp_path / ".nonfiction"
+        nf_dir.mkdir(parents=True, exist_ok=True)
+        (nf_dir / "corpus.json").write_text(json.dumps({
+            "concepts": [{"term": "entropy", "anti_patterns": ["randomness"]}],
+            "positions": [{"id": "p1", "claim": "X causes Y", "superseded_by": None}],
+        }))
+
+    def _setup_puppet(self, tmp_path: Path) -> None:
+        gov_dir = tmp_path / ".governor"
+        gov_dir.mkdir(parents=True, exist_ok=True)
+        (gov_dir / "puppet_active.json").write_text(json.dumps({
+            "puppet_id": "auditor",
+            "voice": {"forbidden_phrases": ["I think"], "required_ticks": ["Source:"]},
+        }))
+
+    def test_check_response_fiction_banned_trope(self, tmp_path: Path) -> None:
+        self._setup_fiction_bible(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("She was the chosen one, destined for greatness.")
+        assert len(warnings) > 0
+        assert any(w["anchor_id"] == "fiction_trope_chosen_one" for w in warnings)
+
+    def test_check_response_fiction_character_anti(self, tmp_path: Path) -> None:
+        self._setup_fiction_bible(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("Alice decided to betray her friends.")
+        assert any(w["anchor_id"] == "fiction_char_alice_anti" for w in warnings)
+
+    def test_check_response_fiction_no_bible(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("Some fiction text.")
+        assert warnings == []
+
+    def test_check_response_nonfiction_concept_anti(self, tmp_path: Path) -> None:
+        self._setup_nonfiction_corpus(tmp_path)
+        ctx = self._make_context(tmp_path, mode="nonfiction")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("The randomness of the system increased.")
+        assert any(w["anchor_id"] == "nf_concept_entropy" for w in warnings)
+
+    def test_check_response_nonfiction_no_corpus(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="nonfiction")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("Academic text.")
+        assert warnings == []
+
+    def test_check_response_puppet_forbidden(self, tmp_path: Path) -> None:
+        self._setup_puppet(tmp_path)
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("I think this is correct.")
+        assert any(w["anchor_id"] == "puppet_auditor_forbidden" for w in warnings)
+
+    def test_check_response_puppet_not_active(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("I think this is correct.")
+        assert warnings == []
+
+    def test_check_response_code_mode_empty(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("Some code output")
+        assert warnings == []
+
+    def test_check_response_general_mode_empty(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="general")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("Hello world")
+        assert warnings == []
+
+    def test_check_response_clean_passes(self, tmp_path: Path) -> None:
+        self._setup_fiction_bible(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("Alice walked through the garden peacefully.")
+        assert warnings == []
+
+    def test_check_response_multiple_violations(self, tmp_path: Path) -> None:
+        self._setup_fiction_bible(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("She was the chosen one and would betray her friends.")
+        assert len(warnings) >= 2
+
+    def test_check_response_warning_format(self, tmp_path: Path) -> None:
+        self._setup_fiction_bible(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("the chosen one spoke.")
+        assert len(warnings) > 0
+        w = warnings[0]
+        assert "type" in w
+        assert "anchor_id" in w
+        assert "anchor_type" in w
+        assert "severity" in w
+        assert "message" in w
+        assert "evidence" in w
+        assert w["type"] == "continuity_violation"
+
+    def test_augment_includes_anchor_context(self, tmp_path: Path) -> None:
+        self._setup_fiction_bible(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        messages = [ChatMessage(role="user", content="Write a scene")]
+        result = hooks.augment_messages(messages)
+        assert len(result) == 2
+        system = result[0].content
+        assert "ESTABLISHED DEFINITIONS AND CONSTRAINTS" in system
+
+    def test_augment_fiction_with_tropes(self, tmp_path: Path) -> None:
+        self._setup_fiction_bible(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        messages = [ChatMessage(role="user", content="Write a scene")]
+        result = hooks.augment_messages(messages)
+        system = result[0].content
+        assert "chosen_one" in system.lower() or "FORBIDDEN" in system
+
+    def test_augment_no_data_unchanged(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        messages = [ChatMessage(role="user", content="Write a scene")]
+        result = hooks.augment_messages(messages)
+        assert len(result) == 2
+        system = result[0].content
+        # Base fiction prompt present, no ESTABLISHED CONSTRAINTS
+        assert "fiction" in system.lower()
+        assert "ESTABLISHED DEFINITIONS" not in system
+
+    def test_user_registered_anchors_loaded(self, tmp_path: Path) -> None:
+        """User-registered anchors from CLI are loaded in all modes."""
+        from governor.continuity import Anchor, AnchorType, Severity, AnchorRegistry
+
+        gov_dir = tmp_path / ".governor"
+        gov_dir.mkdir(parents=True, exist_ok=True)
+        cont_dir = gov_dir / "continuity"
+        cont_dir.mkdir(parents=True, exist_ok=True)
+
+        reg = AnchorRegistry()
+        reg.register(Anchor(
+            id="user_test",
+            anchor_type=AnchorType.PROHIBITION,
+            description="Do not say hello",
+            forbidden_patterns=["hello"],
+            severity=Severity.CORRECT,
+        ))
+        reg.save(cont_dir / "anchors.json")
+
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        warnings = hooks.check_response("I said hello to the user.")
+        assert any(w["anchor_id"] == "user_test" for w in warnings)
+
+
+# ============================================================================
 # TestChatBridge
 # ============================================================================
 

@@ -545,6 +545,29 @@ from .research import (
     create_research_config,
 )
 
+# Autonomous execution (Phase A1)
+from .spine import (
+    Spine,
+    SpineViolation,
+    SpineCheckResult,
+    SpineManager,
+)
+from .invariants import (
+    InvariantType,
+    InvariantResult,
+    Invariant,
+    InvariantSet,
+    InvariantLibrary,
+)
+from .execution import (
+    StopReason,
+    ExecutionStatus,
+    ExecutionBudget,
+    ExecutionUsage,
+    ExecutionState,
+    SessionManager,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -991,6 +1014,22 @@ __all__ = [
     "ResearchLedger",
     "create_research_ledger",
     "create_research_config",
+    # Autonomous execution (Phase A1)
+    "Spine",
+    "SpineViolation",
+    "SpineCheckResult",
+    "SpineManager",
+    "InvariantType",
+    "InvariantResult",
+    "Invariant",
+    "InvariantSet",
+    "InvariantLibrary",
+    "StopReason",
+    "ExecutionStatus",
+    "ExecutionBudget",
+    "ExecutionUsage",
+    "ExecutionState",
+    "SessionManager",
 ]
 
 __version__ = "0.6.0"

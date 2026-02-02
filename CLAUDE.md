@@ -46,7 +46,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Agent Roles & Revalidation**: Layer 5 agent role assignment (PROPOSER/RETRIEVER/FALSIFIER/SYNTHESIZER), role budgets per risk level, quorum Gate 8, periodic revalidation orchestrator wiring TTL→AuditPipeline.
 **ClaimStatus FSM Enforcement**: Layer 6 transition table (PROPOSED→SUPPORTED↔CONTESTED→{INVALIDATED|EXPIRED|REFUSED}), 9 TransitionReasons, guard validation, transition history, cascade SUPPORTED→STALE, terminal state HUMAN-only recovery.
 **Tone Profiling**: ToneProfile dataclass (28 dimensions), text analysis, ToneChecker with violation detection, tone guidance generation for system prompts, ToneManager persistence, corpus analysis (extract_tone_profile), profile comparison (compare_profiles, ProfileDeviation), CLI commands.
-**Total: 3998 tests**
+**Autonomous Execution (A1)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence).
+**Total: 4109 tests**
 
 ## Key Documents
 
@@ -404,6 +405,11 @@ src/governor/
 ├── taint.py          # TaintIndex, Fingerprint, token-set Jaccard, inverted index, recurrence detection
 ├── sybil.py          # BlocDetector, SybilDetector, NeffResult, ProvenanceVector, OriginBudgetTracker
 ├── research.py       # ResearchLedger, Hypothesis, EntropyMonitor, DominanceMonitor, TimescaleMonitor
+│
+# Autonomous Execution (Phase A1):
+├── spine.py          # Spine, SpineManager, locked project structure, proposal verification
+├── invariants.py     # InvariantType, Invariant, InvariantSet, InvariantLibrary, mechanically verifiable rules
+├── execution.py      # ExecutionBudget, ExecutionUsage, ExecutionState, SessionManager, checkpoint/resume
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -767,7 +773,16 @@ src/ops_governor/
 
 **ClaimStatus FSM Enforcement tests: 106**
 
-**Total: 3998 tests**
+### Autonomous Execution (Phase A1: Core Types)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| spine.py | Spine (locked project structure), SpineViolation, SpineCheckResult, SpineManager, glob pattern matching, proposal verification | 41 |
+| invariants.py | InvariantType (6 types), Invariant, InvariantResult, InvariantSet, InvariantLibrary (tests_must_pass, file/dir exists, forbidden patterns, no_secrets, max_file_size) | 36 |
+| execution.py | ExecutionBudget (tokens/iterations/time/cost), ExecutionUsage, ExecutionState, StopReason, ExecutionStatus, SessionManager, checkpoint/resume | 34 |
+
+**Autonomous Execution tests: 111**
+
+**Total: 4109 tests**
 
 ## Common Mistakes to Avoid
 

@@ -981,7 +981,7 @@ All reference implementations are in `ingest/epistemic_governor/src/epistemic_go
 
 Remaining design specifications in `ingest/`:
 - `multi2.md` - Δt quorum governor (semantic enforcement layers L1-L6 COMPLETE)
-- `regime.md` - Grounding audit pipeline (assertion/cascade/roles gaps, ~85% done)
+- `regime.md` - Grounding audit pipeline (all assertion/cascade/roles gaps CLOSED, L1-L6 complete)
 - `next.md` - Semantic entropy (conceptual, fiction guardrails portion complete)
 - `next2.md` - Nonfiction CFI (not started, requires human authority decisions)
 - `vscode.md` - VS Code integration (deferred, UI last)
@@ -1444,35 +1444,46 @@ mechanically. "CI/CD for AI agents."
 budgets). Governor auto-approves only within those bounds. Human can stop/resume/override
 at any time.
 
-#### Phase A1: Core Types & Spine Management
+#### Phase A1: Core Types & Spine Management ✅
 
-- [ ] **Spine dataclass** — Locked project structure (immutable until explicit unlock)
+- [x] **Spine dataclass** — Locked project structure (immutable until explicit unlock)
   - `id`, `structure` (dict), `locked_at`, `locked_by`, `unlock_requires`
-  - `verify_proposal(proposal)` → (bool, violation_message)
-  - Persistence: YAML files in `.governor/spines/`
-  - Lock requires explicit confirmation, unlock warns about disabling autonomous mode
+  - `verify_proposal(proposal)` → SpineCheckResult with SpineViolation list
+  - Structure: required files, required directories, forbidden paths (glob patterns)
+  - SpineManager: lock/unlock/get/list/set_active/deactivate/verify_proposal
+  - Persistence: JSON files in `.governor/spines/`, active spine tracking
+  - Module: `src/governor/spine.py` (41 tests)
 
-- [ ] **Invariant system** — Mechanically verifiable rules (no vibes)
+- [x] **Invariant system** — Mechanically verifiable rules (no vibes)
   - `InvariantType` enum: STRUCTURE, EVIDENCE, ARCHITECTURE, TEST, CONSISTENCY, FORBIDDEN
-  - `Invariant` dataclass: id, type, rule (human-readable), verify (callable), on_violation
+  - `Invariant` dataclass: id, type, rule (human-readable), verify (callable), on_violation, enabled
+  - `InvariantSet`: collection with check_all(), blocking_violations(), add/remove/get
   - Key insight: if you can't verify it mechanically, it's a guideline, not an invariant
-  - Invariant library: book_structure, citation_required, no_direct_writes, tests_must_pass,
-    coverage_threshold, no_canon_violations, no_decision_contradictions, stateless_component,
-    no_external_dependencies
+  - `InvariantLibrary` factory methods: tests_must_pass, file_must_exist, directory_must_exist,
+    forbidden_pattern, no_secrets, max_file_size
+  - Module: `src/governor/invariants.py` (36 tests)
 
-- [ ] **ExecutionBudget** — Resource limits (tokens, time, iterations, cost USD)
-  - `is_exhausted(used)` — whichever limit hits first stops execution
-  - Combined budgets: `--budget tokens=100000 --timeout 30m`
+- [x] **ExecutionBudget** — Resource limits (tokens, time, iterations, cost USD)
+  - `is_exhausted(used)` → (bool, reason) — whichever limit hits first stops execution
+  - `remaining(used)` → per-dimension remaining budget
+  - `from_spec("tokens=100000,iterations=50,time=1800,cost=5.00")` parser
+  - `ExecutionUsage`: cumulative tracking with add_iteration()
+  - Module: `src/governor/execution.py`
 
-- [ ] **ExecutionState** — Persistent state for multi-session execution
-  - session_id, task, spine_id, invariants, budget, used, progress, violations, status
-  - Statuses: running, stopped, completed
-  - Stop reasons: agent_completion, constraint_violation, budget_exhausted
+- [x] **ExecutionState** — Persistent state for multi-session execution
+  - session_id, task, spine_id, invariant_ids, budget, used, progress, violations, status
+  - Statuses: RUNNING, PAUSED, STOPPED, COMPLETED
+  - Stop reasons: AGENT_COMPLETION, CONSTRAINT_VIOLATION, BUDGET_EXHAUSTED, HUMAN_STOP, ERROR
+  - checkpoint()/load() for disk persistence
+  - `SessionManager`: create/get/save/list/delete sessions in `.governor/autonomous/`
+  - Module: `src/governor/execution.py` (34 tests)
 
-- [ ] **SpineManager** — Lock/unlock/load/list spines
+- [ ] **Spine CLI** — Lock/unlock/load/list spines (CLI wiring deferred to Phase A2)
   - `governor spine lock <file> --id <name> --confirm`
   - `governor spine unlock <name> --confirm` (warns: disables autonomous mode)
   - `governor spine list`, `governor spine show <name>`
+
+**Phase A1 tests: 111**
 
 #### Phase A2: Autonomous Executor
 

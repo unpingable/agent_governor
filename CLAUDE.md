@@ -49,7 +49,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Autonomous Execution (A1-A4)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence), AutonomousExecutor (step-function loop with spine+invariant enforcement, budget checking, checkpointing, resume), Spine CLI (lock/unlock/list/show/activate/check), Session CLI (list/show/delete/handoff), Governor adapters (security, CFI, fiction, nonfiction citation, tone, generic content → Invariant).
 **Invariant Store (Deferred 1)**: InvariantSpec (serializable invariant definitions), InvariantStore (file-per-item persistence), VALID_KINDS (6 factory mappings), materialization to live Invariant objects, CLI (add/list/show/remove/check), autonomous run command (noop step execution shell).
 **Strategic Test Suites**: Golden-file tests (JSON schema locking for all serialized types), no-laundering regression tests (structural integrity invariants), failure-injection tests (executor fault tolerance), property-based invariant tests (combinatoric fuzzing), contract tests for adapters (interface locking).
-**Total: 4831 tests**
+**Web UI (Deferred 2, W1-W3)**: GovernorContextManager (isolated per-user/project contexts), ChatBridge (Anthropic/Ollama backend abstraction), GovernorHooks (mode-specific system prompts), refactored FastAPI adapter (OpenAI-compatible API with governor endpoints), Docker multi-user deployment (Erin fiction + James code stacks).
+**Total: 4922 tests**
 
 ## Key Documents
 
@@ -438,6 +439,8 @@ src/governor/
 ├── executor.py       # AutonomousExecutor, StepResult, ExecutorConfig, ExecutionEvent, step-function loop
 ├── adapters.py       # Governor adapter invariants, thin wrappers (security, CFI, fiction, nonfiction, custom)
 ├── invariant_store.py # InvariantSpec, InvariantStore, VALID_KINDS, persistent invariant management
+├── context_manager.py # GovernorContext, GovernorContextManager, isolated per-user/project contexts
+├── chat_bridge.py     # ChatBridge, OllamaBackend, AnthropicBackend, GovernorHooks, backend abstraction
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -834,7 +837,16 @@ src/ops_governor/
 
 **Invariant Store tests: 79**
 
-**Total: 4831 tests**
+### Web UI (Deferred 2: W1-W3)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| context_manager.py | GovernorContext, GovernorContextManager, isolated contexts, fiction/code/nonfiction modes | 30 |
+| chat_bridge.py | ChatBridge, OllamaBackend, AnthropicBackend, GovernorHooks, create_backend factory | 40 |
+| webui/adapter.py | Refactored FastAPI adapter with ChatBridge, governor endpoints, backend selection | 21 |
+
+**Web UI tests: 91**
+
+**Total: 4922 tests**
 
 ## Common Mistakes to Avoid
 

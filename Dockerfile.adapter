@@ -1,5 +1,5 @@
-# Governor WebUI Adapter
-# OpenAI-compatible API that wraps Ollama with Governor integration
+# Governor Chat Adapter
+# OpenAI-compatible API with switchable backends and Governor integration
 
 FROM python:3.11-slim
 

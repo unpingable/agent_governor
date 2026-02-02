@@ -1619,39 +1619,40 @@ at any time.
 ChatGPT-like web interface routing through governor with isolated contexts per
 user/project. One Claude account, multiple isolated governor contexts.
 
-#### Phase W1: MCP Bridge & Context Manager
+#### Phase W1: ChatBridge & Context Manager ✅
 
-- [ ] **ClaudeBridge** — `src/governor/mcp_bridge.py`
-  - Single point of Claude API access with governor context injection
+- [x] **ChatBridge** — `src/governor/chat_bridge.py`
+  - Backend abstraction over Anthropic API and Ollama (ChatBackend protocol)
   - `chat(messages, model, context_id, streaming)` — main routing with governor integration
   - Streaming support (async generator), governor hooks for response validation
-  - `get_governor(context_id)` — access context-specific governor
+  - OllamaBackend, AnthropicBackend, create_backend factory
 
-- [ ] **GovernorContextManager** — `src/governor/context_manager.py`
+- [x] **GovernorContextManager** — `src/governor/context_manager.py`
   - Manage multiple isolated governor instances
-  - `get_or_create(context_id, mode)` — fiction/code/ops governor per context
-  - `list_contexts()`, `delete_context()`
+  - `get_or_create(context_id, mode)` — fiction/code/nonfiction/general per context
+  - `list_contexts()`, `delete()`
   - Directory structure: `~/.governor-contexts/<context_id>/.governor/`
   - Complete isolation: no shared state, no cross-contamination
 
-#### Phase W2: Web Adapter (FastAPI)
+#### Phase W2: Web Adapter (FastAPI) ✅
 
-- [ ] **OpenAI-compatible API** — `src/governor/web_adapter.py`
-  - `POST /v1/chat/completions` — main chat (SSE streaming, OpenAI format)
-  - `GET /v1/models` — list available Claude models
-  - `GET /health` — status check with governor info (context, mode, stats)
-  - `GET /governor/canon` — fiction mode canon viewer
-  - CORS middleware for browser access
-  - Environment config: GOVERNOR_CONTEXT_ID, GOVERNOR_MODE, ANTHROPIC_API_KEY
+- [x] **OpenAI-compatible API** — `src/webui/adapter.py` (refactored)
+  - `POST /v1/chat/completions` — chat (SSE streaming + non-streaming, OpenAI format)
+  - `GET /v1/models` — list models from backend (Anthropic or Ollama)
+  - `GET /health` — status check with backend + governor info
+  - `GET /governor/contexts` — list all governor contexts
+  - `GET /governor/status` — active context governor state
+  - CORS middleware, BACKEND_TYPE/GOVERNOR_CONTEXT_ID/GOVERNOR_MODE env vars
 
-#### Phase W3: Docker Deployment
+#### Phase W3: Docker Deployment ✅
 
-- [ ] **Docker setup** — Multi-container deployment
-  - Dockerfile: Python 3.11 + governor + uvicorn
-  - docker-compose.yml: per-user stacks (webui + adapter)
-  - Each user gets: Open WebUI instance (port 3001/3002) + adapter instance (port 8001/8002)
-  - Shared: Claude API key via .env, governor contexts via volume mount
-  - No auth in MVP (port separation = user separation)
+- [x] **Docker setup** — Multi-container deployment
+  - docker-compose.yml: per-user stacks (Erin fiction + James code)
+  - docker-compose.ollama.yml: Ollama override for local usage
+  - Erin: Open WebUI (port 3001) + adapter (port 8001, fiction mode)
+  - James: Open WebUI (port 3002) + adapter (port 8002, code mode)
+  - Shared: API key via .env, governor contexts via volume mount
+  - anthropic>=0.30.0 added to webui optional deps
 
 #### Phase W4: Mode-Specific Integration
 

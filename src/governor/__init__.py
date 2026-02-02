@@ -566,6 +566,29 @@ from .invariant_store import (
     VALID_KINDS,
 )
 
+# Context manager (Deferred 2: Web UI) - no external deps
+from .context_manager import (
+    GovernorContext,
+    GovernorContextManager,
+    VALID_MODES as CONTEXT_VALID_MODES,
+)
+
+# Chat bridge (Deferred 2: Web UI) - requires httpx (webui optional dep)
+try:
+    from .chat_bridge import (
+        ChatMessage as BridgeChatMessage,
+        ChatResponse as BridgeChatResponse,
+        ChatChunk,
+        ChatBackend,
+        ChatBridge,
+        GovernorHooks as BridgeGovernorHooks,
+        OllamaBackend,
+        AnthropicBackend,
+        create_backend,
+    )
+except ImportError:
+    pass
+
 # Autonomous execution (Phase A1-A2)
 from .spine import (
     Spine,
@@ -1056,6 +1079,19 @@ __all__ = [
     "InvariantSpec",
     "InvariantStore",
     "VALID_KINDS",
+    # Context manager & chat bridge (Deferred 2: Web UI)
+    "GovernorContext",
+    "GovernorContextManager",
+    "CONTEXT_VALID_MODES",
+    "BridgeChatMessage",
+    "BridgeChatResponse",
+    "ChatChunk",
+    "ChatBackend",
+    "ChatBridge",
+    "BridgeGovernorHooks",
+    "OllamaBackend",
+    "AnthropicBackend",
+    "create_backend",
     # Autonomous execution (Phase A1-A2)
     "Spine",
     "SpineViolation",

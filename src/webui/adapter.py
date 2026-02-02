@@ -1,35 +1,67 @@
 """
-OpenAI-compatible API adapter for Ollama with Governor integration.
+OpenAI-compatible API adapter with Governor integration.
+
+Supports switchable backends (Anthropic Claude, Ollama) with isolated governor
+contexts per user/project. Designed for use with Open WebUI or any OpenAI-
+compatible client.
 
 Run with: uvicorn webui.adapter:app --host 0.0.0.0 --port 8000
 
-Then point Open WebUI at http://localhost:8000/v1
+Configuration via environment variables:
+    BACKEND_TYPE        - "anthropic" or "ollama" (default: "ollama")
+    ANTHROPIC_API_KEY   - Required when BACKEND_TYPE=anthropic
+    OLLAMA_HOST         - Ollama URL (default: http://localhost:11434)
+    GOVERNOR_CONTEXT_ID - Active context ID (default: "default")
+    GOVERNOR_MODE       - Context mode: fiction/code/nonfiction/general (default: "general")
+    GOVERNOR_CONTEXTS_DIR - Base dir for contexts (default: ~/.governor-contexts)
 """
+
+from __future__ import annotations
 
 import json
 import os
 import time
 import uuid
-import httpx
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import AsyncGenerator, Any
+from typing import Any, AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-# Ollama endpoint - read from environment variable
+from governor.chat_bridge import (
+    ChatBridge,
+    ChatChunk,
+    ChatMessage as BridgeChatMessage,
+    ChatResponse as BridgeChatResponse,
+    GovernorHooks,
+    OllamaBackend,
+    create_backend,
+)
+from governor.context_manager import GovernorContextManager
+
+# ============================================================================
+# Configuration from environment
+# ============================================================================
+
+BACKEND_TYPE = os.environ.get("BACKEND_TYPE", "ollama")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+GOVERNOR_CONTEXT_ID = os.environ.get("GOVERNOR_CONTEXT_ID", "default")
+GOVERNOR_MODE = os.environ.get("GOVERNOR_MODE", "general")
+GOVERNOR_CONTEXTS_DIR = os.environ.get("GOVERNOR_CONTEXTS_DIR", "")
+
+# ============================================================================
+# Application setup
+# ============================================================================
 
 app = FastAPI(
-    title="Governor-Ollama Adapter",
-    description="OpenAI-compatible API with Governor integration",
-    version="0.1.0",
+    title="Governor Chat Adapter",
+    description="OpenAI-compatible API with switchable backends and Governor integration",
+    version="0.2.0",
 )
 
-# CORS for Open WebUI
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -89,7 +121,7 @@ class ModelInfo(BaseModel):
     id: str
     object: str = "model"
     created: int = 0
-    owned_by: str = "ollama"
+    owned_by: str = "system"
 
 
 class ModelList(BaseModel):
@@ -98,91 +130,32 @@ class ModelList(BaseModel):
 
 
 # ============================================================================
-# Governor Integration Hooks
+# Bridge setup (lazy init on first request)
 # ============================================================================
 
-
-class GovernorHooks:
-    """
-    Hooks for integrating Governor constraints into the chat flow.
-
-    Override these methods to add fiction-governor or other constraints.
-    """
-
-    def __init__(self, project_dir: Path | None = None):
-        self.project_dir = project_dir or Path.cwd()
-        self.fiction_governor = None
-        self._try_load_fiction_governor()
-
-    def _try_load_fiction_governor(self) -> None:
-        """Try to load fiction governor if available."""
-        try:
-            from fiction_governor import CanonRegistry, ContinuityTracker
-            canon_dir = self.project_dir / ".fiction-gov"
-            if canon_dir.exists():
-                self.fiction_governor = {
-                    "canon": CanonRegistry(canon_dir),
-                    "continuity": ContinuityTracker(canon_dir),
-                }
-        except ImportError:
-            pass
-
-    async def pre_request(
-        self,
-        messages: list[ChatMessage],
-        model: str,
-        metadata: dict[str, Any],
-    ) -> list[ChatMessage]:
-        """
-        Hook called before sending request to Ollama.
-
-        Can modify messages, inject system prompts, etc.
-        """
-        # Example: Inject fiction writing system prompt if in creative mode
-        if metadata.get("mode") == "fiction":
-            system_prompt = self._build_fiction_system_prompt()
-            if system_prompt and (not messages or messages[0].role != "system"):
-                messages = [ChatMessage(role="system", content=system_prompt)] + messages
-
-        return messages
-
-    async def post_response(
-        self,
-        response_content: str,
-        messages: list[ChatMessage],
-        metadata: dict[str, Any],
-    ) -> tuple[str, list[dict[str, Any]]]:
-        """
-        Hook called after receiving response from Ollama.
-
-        Can validate against canon, check continuity, add warnings.
-        Returns (possibly modified content, list of warnings/annotations).
-        """
-        warnings = []
-
-        # Example: Check for potential canon violations
-        if self.fiction_governor and metadata.get("mode") == "fiction":
-            # This is where you'd integrate continuity checking
-            # For now, just a placeholder
-            pass
-
-        return response_content, warnings
-
-    def _build_fiction_system_prompt(self) -> str | None:
-        """Build system prompt with fiction writing guidance."""
-        if not self.fiction_governor:
-            return None
-
-        # Could pull active character states, canon facts, etc.
-        return """You are a fiction writing assistant. Help maintain consistency:
-- Track character motivations and beliefs
-- Note when actions might contradict established facts
-- Flag potential continuity issues
-"""
+_bridge: ChatBridge | None = None
+_context_manager: GovernorContextManager | None = None
 
 
-# Global hooks instance
-hooks = GovernorHooks()
+def _get_context_manager() -> GovernorContextManager:
+    global _context_manager
+    if _context_manager is None:
+        base_dir = Path(GOVERNOR_CONTEXTS_DIR) if GOVERNOR_CONTEXTS_DIR else None
+        _context_manager = GovernorContextManager(base_dir=base_dir)
+    return _context_manager
+
+
+def _get_bridge() -> ChatBridge:
+    global _bridge
+    if _bridge is None:
+        kwargs: dict[str, Any] = {}
+        if BACKEND_TYPE == "anthropic":
+            kwargs["api_key"] = ANTHROPIC_API_KEY
+        elif BACKEND_TYPE == "ollama":
+            kwargs["host"] = OLLAMA_HOST
+        backend = create_backend(BACKEND_TYPE, **kwargs)
+        _bridge = ChatBridge(backend=backend, context_manager=_get_context_manager())
+    return _bridge
 
 
 # ============================================================================
@@ -192,224 +165,258 @@ hooks = GovernorHooks()
 
 @app.get("/v1/models")
 async def list_models() -> ModelList:
-    """List available models from Ollama."""
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(f"{OLLAMA_HOST}/api/tags")
-            response.raise_for_status()
-            data = response.json()
-
-            models = [
-                ModelInfo(id=model["name"], created=0, owned_by="ollama")
-                for model in data.get("models", [])
+    """List available models from the backend."""
+    try:
+        bridge = _get_bridge()
+        models = await bridge.list_models()
+        return ModelList(
+            data=[
+                ModelInfo(id=m["id"], owned_by=m.get("owned_by", "system"))
+                for m in models
             ]
-
-            return ModelList(data=models)
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=502, detail=f"Ollama connection error: {e}")
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Backend error: {e}")
 
 
 @app.get("/v1/models/{model_id}")
 async def get_model(model_id: str) -> ModelInfo:
     """Get info about a specific model."""
-    return ModelInfo(id=model_id, owned_by="ollama")
+    return ModelInfo(id=model_id, owned_by=BACKEND_TYPE)
 
 
-@app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest) -> ChatCompletionResponse | StreamingResponse:
-    """
-    OpenAI-compatible chat completions endpoint.
+@app.post("/v1/chat/completions", response_model=None)
+async def chat_completions(
+    request: ChatCompletionRequest,
+) -> ChatCompletionResponse | StreamingResponse:
+    """OpenAI-compatible chat completions endpoint."""
+    bridge = _get_bridge()
 
-    Routes to Ollama with optional Governor integration.
-    """
-    # Build metadata for hooks
-    metadata = {
-        "mode": detect_mode(request.messages),
-        "user": request.user,
-        "model": request.model,
-    }
-
-    # Pre-request hook
-    messages = await hooks.pre_request(request.messages, request.model, metadata)
-
-    # Convert to Ollama format
-    ollama_messages = [
-        {"role": m.role, "content": m.content}
-        for m in messages
+    # Convert Pydantic models to bridge messages
+    bridge_messages = [
+        BridgeChatMessage(role=m.role, content=m.content) for m in request.messages
     ]
 
-    ollama_request = {
-        "model": request.model,
-        "messages": ollama_messages,
-        "stream": request.stream,
-        "options": {
-            "temperature": request.temperature,
-            "top_p": request.top_p,
-        },
+    kwargs: dict[str, Any] = {
+        "temperature": request.temperature,
+        "top_p": request.top_p,
     }
+    if request.max_tokens is not None:
+        kwargs["max_tokens"] = request.max_tokens
 
-    if request.max_tokens:
-        ollama_request["options"]["num_predict"] = request.max_tokens
+    context_id = GOVERNOR_CONTEXT_ID
 
     if request.stream:
         return StreamingResponse(
-            stream_ollama_response(ollama_request, metadata),
+            _stream_response(bridge, bridge_messages, request.model, context_id, kwargs),
             media_type="text/event-stream",
         )
     else:
-        return await non_streaming_response(ollama_request, metadata)
+        return await _non_streaming_response(
+            bridge, bridge_messages, request.model, context_id, kwargs
+        )
 
 
-async def non_streaming_response(
-    ollama_request: dict,
-    metadata: dict[str, Any],
+async def _non_streaming_response(
+    bridge: ChatBridge,
+    messages: list[BridgeChatMessage],
+    model: str,
+    context_id: str,
+    kwargs: dict[str, Any],
 ) -> ChatCompletionResponse:
-    """Handle non-streaming response."""
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        try:
-            response = await client.post(
-                f"{OLLAMA_HOST}/api/chat",
-                json=ollama_request,
-            )
-            response.raise_for_status()
-            data = response.json()
+    """Handle non-streaming chat response."""
+    try:
+        result = await bridge.chat(
+            messages=messages,
+            model=model,
+            context_id=context_id,
+            stream=False,
+            **kwargs,
+        )
+        # result is ChatResponse (not streaming)
+        assert isinstance(result, BridgeChatResponse)
 
-            content = data.get("message", {}).get("content", "")
-
-            # Post-response hook
-            content, warnings = await hooks.post_response(content, [], metadata)
-
-            # Add warnings as suffix if any
-            if warnings:
-                warning_text = "\n\n---\n" + "\n".join(f"⚠️ {w}" for w in warnings)
-                content += warning_text
-
-            return ChatCompletionResponse(
-                id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
-                created=int(time.time()),
-                model=ollama_request["model"],
-                choices=[
-                    ChatCompletionChoice(
-                        index=0,
-                        message=ChatMessage(role="assistant", content=content),
-                        finish_reason="stop",
-                    )
-                ],
-                usage=Usage(
-                    prompt_tokens=data.get("prompt_eval_count", 0),
-                    completion_tokens=data.get("eval_count", 0),
-                    total_tokens=data.get("prompt_eval_count", 0) + data.get("eval_count", 0),
-                ),
-            )
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=502, detail=f"Ollama error: {e}")
+        return ChatCompletionResponse(
+            id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
+            created=int(time.time()),
+            model=result.model,
+            choices=[
+                ChatCompletionChoice(
+                    index=0,
+                    message=ChatMessage(role="assistant", content=result.content),
+                    finish_reason=result.finish_reason,
+                )
+            ],
+            usage=Usage(
+                prompt_tokens=result.usage.get("prompt_tokens", 0),
+                completion_tokens=result.usage.get("completion_tokens", 0),
+                total_tokens=result.usage.get("total_tokens", 0),
+            ),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Backend error: {e}")
 
 
-async def stream_ollama_response(
-    ollama_request: dict,
-    metadata: dict[str, Any],
+async def _stream_response(
+    bridge: ChatBridge,
+    messages: list[BridgeChatMessage],
+    model: str,
+    context_id: str,
+    kwargs: dict[str, Any],
 ) -> AsyncGenerator[str, None]:
-    """Stream response from Ollama in OpenAI SSE format."""
+    """Stream response in OpenAI SSE format."""
     request_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        try:
-            async with client.stream(
-                "POST",
-                f"{OLLAMA_HOST}/api/chat",
-                json=ollama_request,
-            ) as response:
-                async for line in response.aiter_lines():
-                    if not line:
-                        continue
+    try:
+        stream = await bridge.chat(
+            messages=messages,
+            model=model,
+            context_id=context_id,
+            stream=True,
+            **kwargs,
+        )
 
-                    try:
-                        data = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-
-                    content = data.get("message", {}).get("content", "")
-                    done = data.get("done", False)
-
-                    # OpenAI SSE format
-                    chunk = {
-                        "id": request_id,
-                        "object": "chat.completion.chunk",
-                        "created": int(time.time()),
-                        "model": ollama_request["model"],
-                        "choices": [
-                            {
-                                "index": 0,
-                                "delta": {"content": content} if content else {},
-                                "finish_reason": "stop" if done else None,
-                            }
-                        ],
+        async for chunk in stream:
+            assert isinstance(chunk, ChatChunk)
+            sse_chunk = {
+                "id": request_id,
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"content": chunk.content} if chunk.content else {},
+                        "finish_reason": chunk.finish_reason,
                     }
-
-                    yield f"data: {json.dumps(chunk)}\n\n"
-
-                    if done:
-                        yield "data: [DONE]\n\n"
-                        break
-
-        except httpx.RequestError as e:
-            error_chunk = {
-                "error": {"message": str(e), "type": "server_error"}
+                ],
             }
-            yield f"data: {json.dumps(error_chunk)}\n\n"
+            yield f"data: {json.dumps(sse_chunk)}\n\n"
 
+            if chunk.finish_reason:
+                yield "data: [DONE]\n\n"
+                break
 
-def detect_mode(messages: list[ChatMessage]) -> str:
-    """
-    Detect the conversation mode based on content.
-
-    Used to determine which governor hooks to apply.
-    """
-    # Simple heuristic - could be made smarter
-    text = " ".join(m.content.lower() for m in messages)
-
-    fiction_keywords = ["story", "character", "novel", "chapter", "scene", "dialogue", "plot"]
-    if any(kw in text for kw in fiction_keywords):
-        return "fiction"
-
-    return "general"
+    except Exception as e:
+        error_chunk = {"error": {"message": str(e), "type": "server_error"}}
+        yield f"data: {json.dumps(error_chunk)}\n\n"
 
 
 # ============================================================================
-# Health/Status Endpoints
+# Governor Endpoints
+# ============================================================================
+
+
+@app.get("/governor/contexts")
+async def list_contexts() -> dict[str, Any]:
+    """List all governor contexts."""
+    cm = _get_context_manager()
+    contexts = cm.list_contexts()
+    return {
+        "active_context_id": GOVERNOR_CONTEXT_ID,
+        "contexts": [ctx.to_dict() for ctx in contexts],
+    }
+
+
+@app.get("/governor/status")
+async def governor_status() -> dict[str, Any]:
+    """Show governor state for the active context."""
+    cm = _get_context_manager()
+    ctx = cm.get(GOVERNOR_CONTEXT_ID)
+
+    if ctx is None:
+        return {
+            "context_id": GOVERNOR_CONTEXT_ID,
+            "initialized": False,
+            "mode": GOVERNOR_MODE,
+        }
+
+    gov_dir = ctx.governor_dir
+    has_governor = gov_dir.exists()
+    has_fiction = (ctx.root / ".fiction-gov").exists()
+
+    # Count facts and decisions
+    facts_count = 0
+    decisions_count = 0
+    if has_governor:
+        facts_index = gov_dir / "facts" / "index.json"
+        if facts_index.exists():
+            try:
+                facts_data = json.loads(facts_index.read_text())
+                facts_count = len(facts_data) if isinstance(facts_data, list) else 0
+            except (json.JSONDecodeError, OSError):
+                pass
+        decisions_index = gov_dir / "decisions" / "index.json"
+        if decisions_index.exists():
+            try:
+                dec_data = json.loads(decisions_index.read_text())
+                decisions_count = len(dec_data) if isinstance(dec_data, list) else 0
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    return {
+        "context_id": ctx.context_id,
+        "initialized": True,
+        "mode": ctx.mode,
+        "created_at": ctx.created_at,
+        "has_governor": has_governor,
+        "has_fiction_governor": has_fiction,
+        "facts_count": facts_count,
+        "decisions_count": decisions_count,
+        "metadata": ctx.metadata,
+    }
+
+
+# ============================================================================
+# Health / Root
 # ============================================================================
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, Any]:
     """Health check endpoint."""
-    # Check Ollama connection
-    ollama_ok = False
+    backend_ok = False
+    bridge = _get_bridge()
+
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{OLLAMA_HOST}/api/tags")
-            ollama_ok = response.status_code == 200
-    except:
+        await bridge.list_models()
+        backend_ok = True
+    except Exception:
         pass
 
+    cm = _get_context_manager()
+    ctx = cm.get(GOVERNOR_CONTEXT_ID)
+
     return {
-        "status": "healthy" if ollama_ok else "degraded",
-        "ollama": "connected" if ollama_ok else "disconnected",
-        "governor_hooks": hooks.fiction_governor is not None,
+        "status": "healthy" if backend_ok else "degraded",
+        "backend": {
+            "type": BACKEND_TYPE,
+            "connected": backend_ok,
+        },
+        "governor": {
+            "context_id": GOVERNOR_CONTEXT_ID,
+            "mode": GOVERNOR_MODE,
+            "initialized": ctx is not None,
+        },
     }
 
 
 @app.get("/")
-async def root():
+async def root() -> dict[str, Any]:
     """Root endpoint with basic info."""
     return {
-        "name": "Governor-Ollama Adapter",
-        "version": "0.1.0",
+        "name": "Governor Chat Adapter",
+        "version": "0.2.0",
+        "backend": BACKEND_TYPE,
         "openai_compatible": True,
+        "governor_context": GOVERNOR_CONTEXT_ID,
+        "governor_mode": GOVERNOR_MODE,
         "endpoints": {
             "models": "/v1/models",
             "chat": "/v1/chat/completions",
             "health": "/health",
+            "governor_contexts": "/governor/contexts",
+            "governor_status": "/governor/status",
         },
     }
 
@@ -419,9 +426,10 @@ async def root():
 # ============================================================================
 
 
-def main():
+def main() -> None:
     """Run the adapter server."""
     import uvicorn
+
     uvicorn.run(
         "webui.adapter:app",
         host="0.0.0.0",

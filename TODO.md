@@ -1297,32 +1297,38 @@ From `ingest/next2.md`. This is the nonfiction analogue of fiction's DSI/context
 detection. The spec explicitly warns: **do not delegate value choices to code**.
 Human authority needed for definitions, thresholds, and hard/soft classification.
 
-- [ ] **Frame taxonomy** — human-authored, not generated
-  - Define nonfiction frames: foundational, theoretical, applied, controversial,
-    pedagogical, etc.
-  - These are the bins. Whoever defines the bins defines the system behavior.
-  - This is product philosophy, not engineering.
+- [x] **Frame taxonomy** — human-authored v0 starter taxonomy (12 frames)
+  - NonfictionFrame enum: CAPITALISM, SOCIAL_JUSTICE, TRAUMA, BOTH_SIDES, EXPERTS_SAY,
+    PROGRESS, SAFETY, SYSTEMIC, INDIVIDUAL, NATURAL, TECHNOLOGICAL, MORAL
+  - Intentionally small, designed to expand by evidence (logged hit counts)
+  - Module: `src/nonfiction_governor/cfi.py`
 
-- [ ] **Contextual Frame Intrusion (CFI) detector** — `nonfiction_governor/`
-  - Nonfiction analogue of fiction DSI
-  - Detect when model introduces frames not demanded by the text
-  - Examples: uninvited "capitalism", "trauma", "experts say", "both sides"
-  - Same architecture as fiction context_drift.py: hysteresis, risk tiers, transition validation
+- [x] **Contextual Frame Intrusion (CFI) detector** — v0: detect + tag + warn, no blocking
+  - Same architecture as fiction context_drift.py: pattern-based, weighted regex matching
+  - classify_frames(text) → FrameSignal list with confidence + match counts
+  - classify_perspective(text) → PerspectiveSignal (DESCRIPTIVE/NORMATIVE/PRESCRIPTIVE/ANALYTICAL)
+  - check(text) → CFICheckResult with frames, perspective, faults, scope_risk
+  - record(text) → check + update state (frame counts, perspective history)
+  - CFIDetector: set_expected_frames(), set_expected_perspective(), stats(), reset()
+  - CLI: `nonfiction-gov cfi check/scan/frames/perspectives`
 
-- [ ] **Nonfiction state vector** — `[D_t, F_t, E_t, P_t, N_t]`
-  - Domain, active frames, evidentiary grounding, perspective, narrative load
-  - Most nonfiction bugs are unconstrained drift in F_t or P_t
+- [x] **Nonfiction state vector** — Perspective (P_t) + active frames (F_t) tracked
+  - CFIState: frame_counts, perspective_history, expected_frames, expected_perspective
+  - dominant_frame(), frame_ratio(), perspective distribution stats
+  - Windowed analysis for normative creep detection
 
-- [ ] **Nonfiction hard constraints**
-  - Epistemic mismatch: don't answer normative as descriptive (or vice versa) unless asked
-  - Δt violations: no confident claims about time-sensitive facts without retrieval
-  - Scope violations: don't generalize case → population unless asked
+- [x] **Nonfiction hard constraints** — v0 as warnings (no blocking)
+  - Normative creep: descriptive/analytical context drifting to normative
+  - Scope violations: case→population generalization detection (regex patterns)
+  - Epistemic mismatch covered by normative creep + perspective tracking
 
-- [ ] **Nonfiction soft penalties**
-  - Frame overuse (uninvited interpretive frames)
-  - Moral coloration when mechanism was asked for
-  - "Both sides" balancing when no dispute was specified
-  - Excess metaphor/narrative when precision was requested
+- [x] **Nonfiction soft penalties** — v0 as warnings
+  - Uninvited frame: frame detected but not in expected set
+  - Frame overuse: same frame in >60% of checks (configurable threshold)
+  - Normative creep: windowed history detection
+  - Scope violation: pattern-based generalization detection
+
+**CFI v0 tests: 68** (in tests/test_cfi.py)
 
 ---
 

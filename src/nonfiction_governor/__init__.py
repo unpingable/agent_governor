@@ -57,6 +57,22 @@ from .tone import (
     compare_profiles,
 )
 
+from .cfi import (
+    NonfictionFrame,
+    Perspective,
+    CFIFaultType,
+    FrameSignal,
+    PerspectiveSignal,
+    CFIFault,
+    CFICheckResult,
+    CFIState,
+    CFIConfig,
+    CFIDetector,
+    detect_frames,
+    detect_perspective,
+    check_cfi,
+)
+
 
 __all__ = [
     # Types
@@ -102,6 +118,20 @@ __all__ = [
     "format_system_prompt",
     "extract_tone_profile",
     "compare_profiles",
+    # CFI (Contextual Frame Intrusion)
+    "NonfictionFrame",
+    "Perspective",
+    "CFIFaultType",
+    "FrameSignal",
+    "PerspectiveSignal",
+    "CFIFault",
+    "CFICheckResult",
+    "CFIState",
+    "CFIConfig",
+    "CFIDetector",
+    "detect_frames",
+    "detect_perspective",
+    "check_cfi",
 ]
 
 __version__ = "0.1.0"

@@ -15,7 +15,7 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Claude Code Hooks**: Integration with Claude CLI via pre/post tool hooks.
 **Direction Tracking**: Commitments, anchors, Δt measurement, belief graph triangulation.
 **Fiction Governor**: Plot threads, scene proposals, prompt generation, narrative constraints, manuscript scanning, similarity matching, context drift detection, fiction guardrails (consent tracking, DSI, AII).
-**Non-Fiction Governor**: Corpus management, DOI fetching, citation verification.
+**Non-Fiction Governor**: Corpus management, DOI fetching, citation verification, CFI v0 (contextual frame intrusion detection, 12-frame taxonomy, perspective tracking, normative creep, scope violations).
 **Multi-Agent Routing**: Task complexity estimation, model tiers, adaptive routing.
 **Failure Provenance**: Scars (constraint hysteresis), shields (input gating), surprise ratio classification.
 **Grounding Audit**: Closed-loop hallucination detection, failure mode taxonomy, adaptive policy thresholds.
@@ -47,7 +47,7 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **ClaimStatus FSM Enforcement**: Layer 6 transition table (PROPOSED→SUPPORTED↔CONTESTED→{INVALIDATED|EXPIRED|REFUSED}), 9 TransitionReasons, guard validation, transition history, cascade SUPPORTED→STALE, terminal state HUMAN-only recovery.
 **Tone Profiling**: ToneProfile dataclass (28 dimensions), text analysis, ToneChecker with violation detection, tone guidance generation for system prompts, ToneManager persistence, corpus analysis (extract_tone_profile), profile comparison (compare_profiles, ProfileDeviation), CLI commands.
 **Autonomous Execution (A1-A2)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence), AutonomousExecutor (step-function loop with spine+invariant enforcement, budget checking, checkpointing, resume), Spine CLI (lock/unlock/list/show/activate/check), Session CLI (list/show/delete/handoff).
-**Total: 4154 tests**
+**Total: 4222 tests**
 
 ## Key Documents
 
@@ -452,7 +452,9 @@ src/nonfiction_governor/
 ├── doi.py            # DOI metadata fetching (CrossRef/DataCite)
 ├── corpus.py         # Corpus ledger (your papers, concepts, positions)
 ├── verifiers.py      # CitationVerifier, TerminologyVerifier, ConsistencyVerifier
-└── cli.py            # nonfiction-gov CLI
+├── tone.py           # ToneProfile, ToneChecker, ToneManager, corpus analysis, profile comparison
+├── cfi.py            # CFI v0: NonfictionFrame (12), Perspective, CFIDetector, frame intrusion detection
+└── cli.py            # nonfiction-gov CLI (source, concept, position, verify, tone, cfi commands)
 
 src/ops_governor/
 ├── __init__.py       # Public API exports
@@ -725,8 +727,9 @@ src/ops_governor/
 | verifiers.py | Citation, terminology, consistency verification | 25 |
 | doi.py | DOI metadata fetching (CrossRef/DataCite) | -- |
 | tone.py | ToneProfile (28 dimensions), analyze_text, ToneChecker, ToneViolation, ToneManager, generate_tone_guidance, format_system_prompt, extract_tone_profile (corpus analysis), compare_profiles (ProfileDeviation), CLI (show/create/edit/check/guidance/lock/unlock/delete/ingest/compare) | 122 |
+| cfi.py | CFI v0: NonfictionFrame (12 frames), Perspective (4 types), CFIFaultType (4 faults), CFIDetector (classify_frames, classify_perspective, check_scope, check, record, stats), pattern-based detection, frame overuse tracking, normative creep windowed detection, scope violation detection, CLI (check/scan/frames/perspectives) | 68 |
 
-**Non-Fiction Governor tests: 213**
+**Non-Fiction Governor tests: 281**
 
 ### Sybil Resistance (Bloc Detection, Neff)
 | Module | Description | Tests |
@@ -799,7 +802,7 @@ src/ops_governor/
 
 **Autonomous Execution tests: 156**
 
-**Total: 4154 tests**
+**Total: 4222 tests**
 
 ## Common Mistakes to Avoid
 

@@ -797,6 +797,135 @@ def tone_compare(
         ctx.exit(1)
 
 
+# =============================================================================
+# CFI commands (Contextual Frame Intrusion detection)
+# =============================================================================
+
+
+@cli.group("cfi")
+@click.pass_context
+def cfi_cmd(ctx):
+    """Contextual Frame Intrusion detection (nonfiction frame drift)."""
+    pass
+
+
+@cfi_cmd.command("check")
+@click.argument("text")
+@click.option("--expect-frame", "-f", multiple=True, help="Expected frame (e.g. capitalism, safety)")
+@click.option("--expect-perspective", "-p", type=click.Choice(["descriptive", "normative", "prescriptive", "analytical"]), help="Expected perspective")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def cfi_check(ctx, text, expect_frame, expect_perspective, as_json):
+    """Check text for contextual frame intrusion."""
+    from .cfi import CFIDetector, NonfictionFrame, Perspective
+
+    detector = CFIDetector()
+    if expect_frame:
+        detector.set_expected_frames([NonfictionFrame(f) for f in expect_frame])
+    if expect_perspective:
+        detector.set_expected_perspective(Perspective(expect_perspective))
+
+    result = detector.check(text)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        return
+
+    if result.frames_detected:
+        click.echo("Frames detected:")
+        for f in result.frames_detected:
+            click.echo(f"  {f.frame.value}: confidence={f.confidence:.2f} matches={f.matches}")
+    else:
+        click.echo("No frames detected.")
+
+    if result.perspective:
+        click.echo(f"\nPerspective: {result.perspective.perspective.value} "
+                    f"(confidence={result.perspective.confidence:.2f})")
+
+    if result.scope_risk > 0.1:
+        click.echo(f"Scope risk: {result.scope_risk:.2f}")
+
+    if result.faults:
+        click.echo(f"\nFaults ({len(result.faults)}):")
+        for f in result.faults:
+            frame_str = f" [{f.frame.value}]" if f.frame else ""
+            click.echo(click.style(
+                f"  [{f.fault_type.value}]{frame_str} {f.detail}",
+                fg="yellow",
+            ))
+    else:
+        click.echo("\nNo faults detected.")
+
+
+@cfi_cmd.command("scan")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--expect-frame", "-f", multiple=True, help="Expected frame")
+@click.option("--expect-perspective", "-p", type=click.Choice(["descriptive", "normative", "prescriptive", "analytical"]), help="Expected perspective")
+@click.pass_context
+def cfi_scan(ctx, path, expect_frame, expect_perspective):
+    """Scan a file for frame intrusion, paragraph by paragraph."""
+    from .cfi import CFIDetector, NonfictionFrame, Perspective
+
+    text = Path(path).read_text()
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+
+    detector = CFIDetector()
+    if expect_frame:
+        detector.set_expected_frames([NonfictionFrame(f) for f in expect_frame])
+    if expect_perspective:
+        detector.set_expected_perspective(Perspective(expect_perspective))
+
+    total_faults = 0
+    for i, para in enumerate(paragraphs, 1):
+        result = detector.record(para)
+        if result.faults:
+            total_faults += len(result.faults)
+            click.echo(f"\nParagraph {i}:")
+            click.echo(f"  {para[:80]}...")
+            for f in result.faults:
+                frame_str = f" [{f.frame.value}]" if f.frame else ""
+                click.echo(click.style(
+                    f"  [{f.fault_type.value}]{frame_str} {f.detail}",
+                    fg="yellow",
+                ))
+
+    click.echo(f"\n--- Summary ---")
+    click.echo(f"Paragraphs: {len(paragraphs)}")
+    click.echo(f"Faults: {total_faults}")
+    stats = detector.stats()
+    if stats["frame_counts"]:
+        click.echo(f"Frame hits: {stats['frame_counts']}")
+    if stats["dominant_frame"]:
+        click.echo(f"Dominant frame: {stats['dominant_frame']}")
+    if stats["perspective_distribution"]:
+        click.echo(f"Perspective distribution: {stats['perspective_distribution']}")
+
+
+@cfi_cmd.command("frames")
+def cfi_frames():
+    """List all recognized frames in the v0 taxonomy."""
+    from .cfi import NonfictionFrame, FRAME_FEATURES
+
+    for frame in NonfictionFrame:
+        pattern_count = len(FRAME_FEATURES.get(frame, []))
+        click.echo(f"  {frame.value:20s}  ({pattern_count} patterns)")
+
+
+@cfi_cmd.command("perspectives")
+def cfi_perspectives():
+    """List all recognized perspectives."""
+    from .cfi import Perspective
+
+    descs = {
+        "descriptive": "What is — observation, fact, data",
+        "normative": "What should be — values, ethics, judgment",
+        "prescriptive": "What to do — recommendations, instructions",
+        "analytical": "How it works — mechanism, causation",
+    }
+    for p in Perspective:
+        click.echo(f"  {p.value:15s}  {descs.get(p.value, '')}")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

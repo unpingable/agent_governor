@@ -2,12 +2,14 @@
  * Agent Governor VS Code Extension — entry point.
  *
  * Phase 1: commands, diagnostics, output channel, status bar.
+ * Phase 2: TreeView side panel with live governor state.
  */
 
 import * as vscode from "vscode";
-import { checkFile, checkStdin, GovernorOptions } from "./governor/client";
+import { checkFile, checkStdin, fetchState, GovernorOptions } from "./governor/client";
 import type { CheckResult } from "./governor/types";
 import { DiagnosticProvider } from "./diagnostics/provider";
+import { GovernorTreeProvider } from "./views/governorTree";
 
 let outputChannel: vscode.OutputChannel;
 let diagnosticProvider: DiagnosticProvider;
@@ -124,16 +126,32 @@ export function activate(context: vscode.ExtensionContext): void {
   statusBarItem.tooltip = "Agent Governor";
   statusBarItem.show();
 
+  // Tree view (Phase V2)
+  const treeProvider = new GovernorTreeProvider(outputChannel, getOptions);
+  const treeView = vscode.window.createTreeView("governorState", {
+    treeDataProvider: treeProvider,
+    showCollapseAll: true,
+  });
+
   context.subscriptions.push(
     outputChannel,
     diagnosticProvider,
     statusBarItem,
+    treeView,
+    treeProvider,
     vscode.commands.registerCommand("governor.checkFile", runCheckFile),
     vscode.commands.registerCommand(
       "governor.checkSelection",
       runCheckSelection
     ),
     vscode.commands.registerCommand("governor.showOutput", () => {
+      outputChannel.show();
+    }),
+    vscode.commands.registerCommand("governor.refreshState", () => {
+      treeProvider.refresh();
+    }),
+    vscode.commands.registerCommand("governor.showDetail", (detail: string) => {
+      outputChannel.appendLine(detail);
       outputChannel.show();
     })
   );
@@ -154,8 +172,13 @@ export function activate(context: vscode.ExtensionContext): void {
         const msg = err instanceof Error ? err.message : String(err);
         outputChannel.appendLine(`Auto-check error: ${msg}`);
       }
+      // Refresh tree view after check
+      treeProvider.refresh();
     })
   );
+
+  // Initial tree load
+  treeProvider.refresh();
 
   outputChannel.appendLine("Agent Governor extension activated.");
 }

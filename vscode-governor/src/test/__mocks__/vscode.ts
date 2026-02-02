@@ -34,6 +34,48 @@ export class Diagnostic {
   ) {}
 }
 
+// TreeView types
+export enum TreeItemCollapsibleState {
+  None = 0,
+  Collapsed = 1,
+  Expanded = 2,
+}
+
+export class TreeItem {
+  public description?: string;
+  public tooltip?: string;
+  public iconPath?: ThemeIcon;
+  public command?: { command: string; title: string; arguments?: unknown[] };
+
+  constructor(
+    public label: string,
+    public collapsibleState: TreeItemCollapsibleState = TreeItemCollapsibleState.None
+  ) {}
+}
+
+export class ThemeIcon {
+  constructor(public readonly id: string) {}
+}
+
+export class EventEmitter<T> {
+  private listeners: Array<(e: T) => void> = [];
+
+  event = (listener: (e: T) => void) => {
+    this.listeners.push(listener);
+    return { dispose: () => { this.listeners = this.listeners.filter(l => l !== listener); } };
+  };
+
+  fire(data: T): void {
+    for (const listener of this.listeners) {
+      listener(data);
+    }
+  }
+
+  dispose(): void {
+    this.listeners = [];
+  }
+}
+
 const diagnosticCollections = new Map<string, Map<string, Diagnostic[]>>();
 
 export const languages = {
@@ -76,6 +118,12 @@ export const window = {
       command: "",
       show() {},
       hide() {},
+      dispose() {},
+    };
+  },
+  createTreeView(_id: string, options: { treeDataProvider: unknown; showCollapseAll?: boolean }) {
+    return {
+      treeDataProvider: options.treeDataProvider,
       dispose() {},
     };
   },

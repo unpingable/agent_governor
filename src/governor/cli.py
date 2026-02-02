@@ -437,13 +437,18 @@ def apply(ctx: click.Context, proposal_id: str) -> None:
 
 @cli.command()
 @click.option("--topic", "-t", help="Filter by topic")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def facts(ctx: click.Context, topic: str | None) -> None:
+def facts(ctx: click.Context, topic: str | None, as_json: bool) -> None:
     """Query the facts ledger."""
     gov_dir = ensure_initialized(ctx)
 
     ledger = FactLedger(gov_dir)
     all_facts = ledger.all()
+
+    if as_json:
+        click.echo(json.dumps([f.to_dict() for f in all_facts], indent=2))
+        return
 
     if not all_facts:
         click.echo("No facts recorded")
@@ -460,13 +465,18 @@ def facts(ctx: click.Context, topic: str | None) -> None:
 
 @cli.command()
 @click.option("--topic", "-t", help="Filter by topic")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def decisions(ctx: click.Context, topic: str | None) -> None:
+def decisions(ctx: click.Context, topic: str | None, as_json: bool) -> None:
     """Query the decisions ledger."""
     gov_dir = ensure_initialized(ctx)
 
     ledger = DecisionLedger(gov_dir)
     active = ledger.query(topic)
+
+    if as_json:
+        click.echo(json.dumps([d.to_dict() for d in active], indent=2))
+        return
 
     if not active:
         click.echo("No decisions recorded" if not topic else f"No decisions for topic '{topic}'")
@@ -528,12 +538,20 @@ def decay(ctx: click.Context, auto_prune: bool) -> None:
 
 @cli.command()
 @click.option("--limit", "-n", default=20, help="Number of proposals to show")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def status(ctx: click.Context, limit: int) -> None:
+def status(ctx: click.Context, limit: int, as_json: bool) -> None:
     """Show proposal status."""
     gov_dir = ensure_initialized(ctx)
 
     proposals = load_proposals(gov_dir)
+
+    if as_json:
+        from .fsm import Proposal
+        items = list(proposals.items())[:limit]
+        result = [Proposal.from_dict(data).to_dict() for _pid, data in items]
+        click.echo(json.dumps(result, indent=2))
+        return
 
     if not proposals:
         click.echo("No proposals")
@@ -557,6 +575,102 @@ def status(ctx: click.Context, limit: int) -> None:
         click.echo(f"  {state_icon} [{proposal.state.value}] {pid[:8]}...")
         click.echo(f"     Claims: {len(proposal.claims)}")
         click.echo()
+
+
+@cli.command()
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def state(ctx: click.Context, as_json: bool) -> None:
+    """Show aggregated governor state.
+
+    Returns a single JSON object with all governor state sections.
+    Requires --json flag (designed for tooling consumption).
+    """
+    if not as_json:
+        click.echo("Usage: governor state --json")
+        click.echo("This command outputs aggregated state as JSON for tooling.")
+        return
+
+    gov_dir = ensure_initialized(ctx)
+    root = Path(ctx.obj["root"])
+    result: dict = {}
+
+    # Proposals
+    try:
+        from .fsm import Proposal
+        proposals = load_proposals(gov_dir)
+        result["proposals"] = [
+            Proposal.from_dict(data).to_dict()
+            for _pid, data in proposals.items()
+        ]
+    except Exception:
+        result["proposals"] = []
+
+    # Facts
+    try:
+        ledger = FactLedger(gov_dir)
+        result["facts"] = [f.to_dict() for f in ledger.all()]
+    except Exception:
+        result["facts"] = []
+
+    # Decisions
+    try:
+        ledger = DecisionLedger(gov_dir)
+        result["decisions"] = [d.to_dict() for d in ledger.query()]
+    except Exception:
+        result["decisions"] = []
+
+    # Tasks (SQLite v2 only)
+    try:
+        storage = get_storage(gov_dir)
+        reservations = storage.query("reservations", order_by="started_at DESC")
+        now = datetime.now(timezone.utc)
+        tasks = []
+        for res in reservations:
+            completed = res["completed_at"] is not None
+            expires = datetime.fromisoformat(res["expires_at"])
+            expired = expires < now
+            task_status = "completed" if completed else ("expired" if expired else "active")
+            tasks.append({
+                "id": res["id"],
+                "task": res["task"],
+                "agent_id": res["agent_id"],
+                "scope": json.loads(res["scope_json"]),
+                "status": task_status,
+                "started_at": res["started_at"],
+                "expires_at": res["expires_at"],
+                "completed_at": res["completed_at"],
+            })
+        result["tasks"] = tasks
+    except Exception:
+        result["tasks"] = []
+
+    # Regime
+    try:
+        detector = get_regime_detector(gov_dir)
+        result["regime"] = detector.get_state()
+    except Exception:
+        result["regime"] = None
+
+    # Boil
+    try:
+        controller = get_boil_controller(gov_dir)
+        boil_state = controller.get_state()
+        preset_info = controller.get_preset_info()
+        result["boil"] = {**boil_state, "preset": preset_info}
+    except Exception:
+        result["boil"] = None
+
+    # Autonomous sessions
+    try:
+        from .execution import SessionManager
+        manager = SessionManager(root)
+        sessions = manager.list_sessions()
+        result["autonomous"] = [s.to_dict() for s in sessions]
+    except Exception:
+        result["autonomous"] = []
+
+    click.echo(json.dumps(result, indent=2))
 
 
 @cli.command()
@@ -1479,8 +1593,9 @@ def task_complete(ctx: click.Context, agent_id: str, task_id: str, proposal_id: 
 @task.command("list")
 @click.option("--agent-id", help="Filter by agent")
 @click.option("--active-only", is_flag=True, help="Only show active (non-expired, non-completed) tasks")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def task_list(ctx: click.Context, agent_id: str | None, active_only: bool) -> None:
+def task_list(ctx: click.Context, agent_id: str | None, active_only: bool, as_json: bool) -> None:
     """List tasks/reservations."""
     gov_dir = ensure_initialized(ctx)
     storage = get_storage(gov_dir)
@@ -1489,7 +1604,10 @@ def task_list(ctx: click.Context, agent_id: str | None, active_only: bool) -> No
     reservations = storage.query("reservations", where=where, order_by="started_at DESC")
 
     if not reservations:
-        click.echo("No tasks found")
+        if as_json:
+            click.echo("[]")
+        else:
+            click.echo("No tasks found")
         return
 
     now = datetime.now(timezone.utc)
@@ -1506,7 +1624,27 @@ def task_list(ctx: click.Context, agent_id: str | None, active_only: bool) -> No
         displayed.append((res, completed, expired))
 
     if not displayed:
-        click.echo("No active tasks found")
+        if as_json:
+            click.echo("[]")
+        else:
+            click.echo("No active tasks found")
+        return
+
+    if as_json:
+        result = []
+        for res, completed, expired in displayed:
+            task_status = "completed" if completed else ("expired" if expired else "active")
+            result.append({
+                "id": res["id"],
+                "task": res["task"],
+                "agent_id": res["agent_id"],
+                "scope": json.loads(res["scope_json"]),
+                "status": task_status,
+                "started_at": res["started_at"],
+                "expires_at": res["expires_at"],
+                "completed_at": res["completed_at"],
+            })
+        click.echo(json.dumps(result, indent=2))
         return
 
     click.echo(f"Tasks ({len(displayed)}):\n")
@@ -3965,8 +4103,9 @@ def regime(ctx: click.Context) -> None:
 
 
 @regime.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def regime_status(ctx: click.Context) -> None:
+def regime_status(ctx: click.Context, as_json: bool) -> None:
     """Show current operational regime and signals."""
     from .regime import OperationalRegime
 
@@ -3974,6 +4113,11 @@ def regime_status(ctx: click.Context) -> None:
     detector = get_regime_detector(gov_dir)
 
     state = detector.get_state()
+
+    if as_json:
+        click.echo(json.dumps(state, indent=2))
+        return
+
     regime_val = state["current_regime"]
     signals = state["current_signals"]
 
@@ -4210,8 +4354,9 @@ def boil(ctx: click.Context) -> None:
 
 
 @boil.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def boil_status(ctx: click.Context) -> None:
+def boil_status(ctx: click.Context, as_json: bool) -> None:
     """Show current boil control status."""
     from .boil import ControlMode
 
@@ -4220,6 +4365,11 @@ def boil_status(ctx: click.Context) -> None:
 
     state = controller.get_state()
     preset_info = controller.get_preset_info()
+
+    if as_json:
+        combined = {**state, "preset": preset_info}
+        click.echo(json.dumps(combined, indent=2))
+        return
 
     # Mode name with description
     mode = ControlMode(state["mode"])
@@ -8706,14 +8856,19 @@ def autonomous_cmd(ctx):
 
 @autonomous_cmd.command("list")
 @click.option("--active", "active_only", is_flag=True, help="Show only active sessions")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def auto_list(ctx, active_only):
+def auto_list(ctx, active_only, as_json):
     """List autonomous execution sessions."""
     from .execution import SessionManager
 
     root = Path(ctx.obj["root"])
     manager = SessionManager(root)
     sessions = manager.list_sessions(active_only=active_only)
+
+    if as_json:
+        click.echo(json.dumps([s.to_dict() for s in sessions], indent=2))
+        return
 
     if not sessions:
         click.echo("No sessions found.")

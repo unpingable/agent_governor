@@ -2,7 +2,7 @@
   "name": "vscode-governor",
   "displayName": "Agent Governor",
   "description": "Security and continuity checking for agentic coding tools",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "agent-governor",
   "license": "MIT",
   "engines": {
@@ -16,6 +16,23 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "governor",
+          "title": "Governor",
+          "icon": "$(shield)"
+        }
+      ]
+    },
+    "views": {
+      "governor": [
+        {
+          "id": "governorState",
+          "name": "State"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "governor.checkFile",
@@ -28,8 +45,26 @@
       {
         "command": "governor.showOutput",
         "title": "Governor: Show Output"
+      },
+      {
+        "command": "governor.refreshState",
+        "title": "Governor: Refresh State",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "governor.showDetail",
+        "title": "Governor: Show Detail"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "governor.refreshState",
+          "when": "view == governorState",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "Agent Governor",
       "properties": {

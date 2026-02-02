@@ -1,9 +1,9 @@
 /**
- * CLI wrapper: spawns `governor check` and parses JSON output.
+ * CLI wrapper: spawns `governor` subcommands and parses JSON output.
  */
 
 import { spawn } from "child_process";
-import type { CheckResult, CheckInput } from "./types";
+import type { CheckResult, CheckInput, GovernorState } from "./types";
 
 const TIMEOUT_MS = 30_000;
 
@@ -12,11 +12,11 @@ interface GovernorOptions {
   cwd: string;
 }
 
-function runGovernor(
+function runGovernorGeneric<T>(
   opts: GovernorOptions,
   args: string[],
   stdinData?: string
-): Promise<CheckResult> {
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const proc = spawn(opts.executablePath, args, {
       cwd: opts.cwd,
@@ -50,7 +50,7 @@ function runGovernor(
       }
 
       try {
-        const result: CheckResult = JSON.parse(stdout);
+        const result: T = JSON.parse(stdout);
         resolve(result);
       } catch {
         reject(
@@ -77,7 +77,7 @@ export function checkFile(
   filePath: string,
   opts: GovernorOptions
 ): Promise<CheckResult> {
-  return runGovernor(opts, ["check", filePath, "--format", "json"]);
+  return runGovernorGeneric<CheckResult>(opts, ["check", filePath, "--format", "json"]);
 }
 
 /**
@@ -88,11 +88,20 @@ export function checkStdin(
   opts: GovernorOptions
 ): Promise<CheckResult> {
   const payload = JSON.stringify(input);
-  return runGovernor(
+  return runGovernorGeneric<CheckResult>(
     opts,
     ["check", "--stdin", "--format", "json"],
     payload
   );
+}
+
+/**
+ * Fetch aggregated governor state (calls `governor state --json`).
+ */
+export function fetchState(
+  opts: GovernorOptions
+): Promise<GovernorState> {
+  return runGovernorGeneric<GovernorState>(opts, ["state", "--json"]);
 }
 
 export { GovernorOptions };

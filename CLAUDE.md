@@ -54,7 +54,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Continuity Enforcement (Deferred 5)**: Closed-loop generation control. AnchorRegistry (semantic constraint setpoints), ContinuityChecker (lexical deviation measurement), CorrectionLadder (escalating interventions), ConvergenceExecutor (iterate-until-convergence with budget enforcement, telemetry instrumented), GenerationProvider Protocol, adapter integration, CLI (anchor CRUD, check, import). Continuity Bridges: mode-specific anchor factories (fiction bible, nonfiction corpus, puppet profile), GovernorHooks integration (one-shot gating with telemetry, system prompt enrichment).
 **Convergence Auto-Tuning (Deferred 6)**: Offline system identification over convergence traces. ConvergenceAnalyzer (per-anchor decomposition, action effectiveness matrices, deadzone detection, interference tracking, opportunity identification). TuningProposal artifacts (28 dataclass types, HardGuards forced-True, Approval forced-requires_human). ProposalStore (file-per-item JSON persistence). 5 admissibility checks (regime match, strength non-regression, objective constraints, trial requirements, determinism hygiene). ConvergenceTuner orchestrator (propose/apply/rollback). 10 footgun guardrails. CLI (governor tune convergence {status,propose,apply,rollback,proposals,show}).
 **VS Code Extension (Deferred 3, Phase V1)**: Unified check aggregation (check.py: Position, Range, CheckFinding, CheckResult, run_check). CLI `governor check` command (file/stdin, JSON/text output, security/continuity toggles). TypeScript VS Code extension (vscode-governor/: CLI client wrapper, diagnostic provider, Check File/Check Selection commands, status bar, on-save handler).
-**Total: 5507 tests**
+**VS Code Extension (Deferred 3, Phase V2)**: TreeView side panel. `governor state --json` aggregation command, `--json` flags on 7 existing commands (status, facts, decisions, task list, regime status, boil status, autonomous list). GovernorTreeProvider (activity bar, state tree with regime/boil/proposals/decisions/facts/tasks/autonomous, refresh command, click-to-detail). GovernorState TypeScript types, generic CLI runner refactor, fetchState client method.
+**Total: 5569 tests**
 
 ## Key Documents
 
@@ -85,9 +86,10 @@ governor verify <id>             # Verify proposal, produce receipts
 governor apply <id>              # Apply verified proposal
 
 # Query state
-governor facts                   # List recorded facts
-governor decisions               # List recorded decisions
-governor status                  # Show proposal statuses
+governor facts                   # List recorded facts (--json)
+governor decisions               # List recorded decisions (--json)
+governor status                  # Show proposal statuses (--json)
+governor state --json            # Aggregated state as single JSON blob
 governor rejections              # Show rejection history
 
 # Configuration
@@ -114,7 +116,7 @@ governor agent heartbeat --id X  # Keep agent registration active
 governor task claim --agent-id X --task "..." --scope "..."  # Claim task
 governor task heartbeat --agent-id X --task-id Y             # Extend task
 governor task complete --agent-id X --task-id Y              # Complete task
-governor task list               # List tasks/reservations
+governor task list               # List tasks/reservations (--json)
 governor task cancel --agent-id X --task-id Y                # Cancel task
 
 # Epistemic Governance (provenance, confidence, evidence)
@@ -125,7 +127,7 @@ governor epistemic create "claim" --provenance assumed       # Create a claim
 governor epistemic evidence <id> --type tool_trace -l X -s Y # Attach evidence
 
 # Regime Detection (operational health monitoring)
-governor regime status                # Show current regime and signals
+governor regime status                # Show current regime and signals (--json)
 governor regime history               # Show regime transition history
 governor regime signals               # Show current signal values
 governor regime update --tool-gain X  # Update signals and check regime
@@ -133,7 +135,7 @@ governor regime thresholds            # Show detection thresholds
 governor regime reset --confirm       # Reset to default ELASTIC state
 
 # Boil Control (named presets with dwell time)
-governor boil status                  # Show current mode, regime, dwell state
+governor boil status                  # Show current mode, regime, dwell state (--json)
 governor boil set <mode>              # Change preset (green_tea, oolong, boil, etc.)
 governor boil presets                 # List all presets with parameters
 governor boil events                  # Show recent boil control events
@@ -331,7 +333,7 @@ governor invariant remove <id>          # Remove an invariant spec
 governor invariant check [--id X]       # Run invariant checks (all or specific)
 
 # Autonomous Execution Sessions (Phase A3: session lifecycle)
-governor autonomous list [--active]     # List execution sessions
+governor autonomous list [--active]     # List execution sessions (--json)
 governor autonomous show <id>           # Show session details
 governor autonomous delete <id> --confirm  # Delete a session
 governor autonomous handoff <id>        # Show handoff summary for human review
@@ -525,21 +527,24 @@ src/ops_governor/
 └── cli.py            # ops-gov CLI
 
 vscode-governor/
-├── package.json              # Extension manifest, commands, settings
+├── package.json              # Extension manifest, commands, settings, TreeView contributions
 ├── tsconfig.json             # TypeScript config
 ├── esbuild.mjs               # Bundler (esbuild, not webpack)
 ├── .vscodeignore              # Publish ignore
 ├── src/
-│   ├── extension.ts           # Entry point: activate, commands, status bar, on-save
+│   ├── extension.ts           # Entry point: activate, commands, status bar, TreeView, on-save
 │   ├── governor/
-│   │   ├── client.ts          # CLI wrapper: spawn governor, parse JSON
-│   │   └── types.ts           # TypeScript interfaces for CheckResult/CheckFinding
+│   │   ├── client.ts          # CLI wrapper: spawn governor, parse JSON, fetchState
+│   │   └── types.ts           # TypeScript interfaces for CheckResult/CheckFinding/GovernorState
+│   ├── views/
+│   │   └── governorTree.ts    # GovernorTreeProvider: TreeDataProvider for state panel
 │   └── diagnostics/
 │       └── provider.ts        # DiagnosticCollection management
 └── src/test/
     └── suite/
         ├── client.test.ts     # Client unit tests (mock child_process)
-        └── provider.test.ts   # Provider unit tests (mock vscode API)
+        ├── provider.test.ts   # Provider unit tests (mock vscode API)
+        └── governorTree.test.ts # TreeDataProvider tests (mock fetchState)
 ```
 
 ## Implementation Summary
@@ -932,15 +937,16 @@ vscode-governor/
 
 **Convergence Auto-Tuning tests: 145**
 
-### VS Code Extension (Deferred 3, Phase V1)
+### VS Code Extension (Deferred 3, Phase V1+V2)
 | Module | Description | Tests |
 |--------|-------------|-------|
 | check.py | Position, Range, CheckFinding, CheckResult, security_finding_to_check, continuity_violation_to_check, run_check (unified aggregation) | 34 |
-| vscode-governor/ | VS Code extension: CLI client wrapper, diagnostic provider, commands (Check File, Check Selection, Show Output), status bar, on-save handler | 16 |
+| test_state_cmd.py | `governor state --json` aggregation, `--json` flags on 7 existing commands | 18 |
+| vscode-governor/ | VS Code extension: CLI client wrapper, diagnostic provider, GovernorTreeProvider (TreeView side panel), commands (Check File, Check Selection, Show Output, Refresh State, Show Detail), status bar, activity bar, on-save handler | 44 |
 
-**VS Code Extension tests: 50 (34 Python + 16 TypeScript)**
+**VS Code Extension tests: 96 (52 Python + 44 TypeScript)**
 
-**Total: 5507 tests**
+**Total: 5569 tests**
 
 ## Common Mistakes to Avoid
 

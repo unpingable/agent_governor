@@ -8058,6 +8058,341 @@ def puppet_render(ctx, text):
             click.echo(click.style(f"  warning: [{w.warn_id.value}] {w.description}", fg="yellow"), err=True)
 
 
+# =============================================================================
+# Spine commands (Phase A2: project structure locking)
+# =============================================================================
+
+
+@cli.group("spine")
+@click.pass_context
+def spine_cmd(ctx):
+    """Manage locked project spines (structural constraints)."""
+    pass
+
+
+@spine_cmd.command("lock")
+@click.argument("spine_id")
+@click.option("--description", "-d", default="", help="Spine description")
+@click.option("--file", "-f", "spec_file", type=click.Path(exists=True), help="JSON file with spine structure")
+@click.option("--required-file", "-rf", multiple=True, help="Add a required file")
+@click.option("--required-dir", "-rd", multiple=True, help="Add a required directory")
+@click.option("--forbid", multiple=True, help="Add a forbidden path pattern")
+@click.pass_context
+def spine_lock(ctx, spine_id, description, spec_file, required_file, required_dir, forbid):
+    """Lock a project spine (structural constraints)."""
+    from .spine import Spine, SpineManager
+
+    gov_dir = ensure_initialized(ctx)
+    root = Path(ctx.obj["root"])
+    manager = SpineManager(root)
+
+    structure = {}
+    if spec_file:
+        structure = json.loads(Path(spec_file).read_text())
+    else:
+        if required_file:
+            structure["files"] = {f: "required" for f in required_file}
+        if required_dir:
+            structure["directories"] = {d: "required" for d in required_dir}
+        if forbid:
+            structure["forbidden_paths"] = list(forbid)
+
+    spine = Spine(id=spine_id, structure=structure, description=description)
+    manager.lock(spine)
+    click.echo(f"Spine '{spine_id}' locked.")
+    if structure:
+        for key, val in structure.items():
+            click.echo(f"  {key}: {val}")
+
+
+@spine_cmd.command("unlock")
+@click.argument("spine_id")
+@click.option("--confirm", is_flag=True, required=True, help="Confirm unlock")
+@click.pass_context
+def spine_unlock(ctx, spine_id, confirm):
+    """Unlock (remove) a spine."""
+    from .spine import SpineManager
+
+    root = Path(ctx.obj["root"])
+    manager = SpineManager(root)
+    if manager.unlock(spine_id):
+        click.echo(f"Spine '{spine_id}' unlocked.")
+    else:
+        click.echo(f"Spine '{spine_id}' not found.", err=True)
+        ctx.exit(1)
+
+
+@spine_cmd.command("list")
+@click.pass_context
+def spine_list(ctx):
+    """List all locked spines."""
+    from .spine import SpineManager
+
+    root = Path(ctx.obj["root"])
+    manager = SpineManager(root)
+    spines = manager.list_spines()
+
+    if not spines:
+        click.echo("No spines locked.")
+        return
+
+    active = manager.active_spine()
+    for s in spines:
+        marker = " *" if active and active.id == s.id else ""
+        click.echo(f"  {s.id}{marker}: {s.description or '(no description)'}")
+        if s.structure.get("files"):
+            click.echo(f"    files: {list(s.structure['files'].keys())}")
+        if s.structure.get("forbidden_paths"):
+            click.echo(f"    forbidden: {s.structure['forbidden_paths']}")
+
+
+@spine_cmd.command("show")
+@click.argument("spine_id")
+@click.pass_context
+def spine_show(ctx, spine_id):
+    """Show details of a spine."""
+    from .spine import SpineManager
+
+    root = Path(ctx.obj["root"])
+    manager = SpineManager(root)
+    spine = manager.get(spine_id)
+
+    if not spine:
+        click.echo(f"Spine '{spine_id}' not found.", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Spine: {spine.id}")
+    click.echo(f"Description: {spine.description or '(none)'}")
+    click.echo(f"Locked at: {spine.locked_at}")
+    click.echo(f"Locked by: {spine.locked_by}")
+    click.echo(f"Unlock requires: {spine.unlock_requires}")
+    click.echo(f"\nStructure:")
+    click.echo(json.dumps(spine.structure, indent=2))
+
+
+@spine_cmd.command("activate")
+@click.argument("spine_id")
+@click.pass_context
+def spine_activate(ctx, spine_id):
+    """Set a spine as the active constraint."""
+    from .spine import SpineManager
+
+    root = Path(ctx.obj["root"])
+    manager = SpineManager(root)
+    if manager.set_active(spine_id):
+        click.echo(f"Spine '{spine_id}' activated.")
+    else:
+        click.echo(f"Spine '{spine_id}' not found.", err=True)
+        ctx.exit(1)
+
+
+@spine_cmd.command("deactivate")
+@click.pass_context
+def spine_deactivate(ctx):
+    """Deactivate the current spine."""
+    from .spine import SpineManager
+
+    root = Path(ctx.obj["root"])
+    manager = SpineManager(root)
+    manager.deactivate()
+    click.echo("Spine deactivated.")
+
+
+@spine_cmd.command("check")
+@click.option("--file-modified", "-m", multiple=True, help="Files being modified")
+@click.option("--file-created", "-c", multiple=True, help="Files being created")
+@click.option("--file-deleted", "-d", multiple=True, help="Files being deleted")
+@click.pass_context
+def spine_check(ctx, file_modified, file_created, file_deleted):
+    """Check a proposal against the active spine."""
+    from .spine import SpineManager
+
+    root = Path(ctx.obj["root"])
+    manager = SpineManager(root)
+
+    if manager.active_spine() is None:
+        click.echo("No active spine.")
+        return
+
+    proposal = {
+        "files_modified": list(file_modified),
+        "files_created": list(file_created),
+        "files_deleted": list(file_deleted),
+    }
+    result = manager.verify_proposal(proposal)
+
+    if result.valid:
+        click.echo("Proposal is spine-compliant.")
+    else:
+        click.echo(f"Spine violations ({len(result.violations)}):")
+        for v in result.violations:
+            click.echo(f"  [{v.path}] {v.message}")
+
+
+# =============================================================================
+# Autonomous session commands (Phase A3: session lifecycle)
+# =============================================================================
+
+
+@cli.group("autonomous")
+@click.pass_context
+def autonomous_cmd(ctx):
+    """Manage autonomous execution sessions."""
+    pass
+
+
+@autonomous_cmd.command("list")
+@click.option("--active", "active_only", is_flag=True, help="Show only active sessions")
+@click.pass_context
+def auto_list(ctx, active_only):
+    """List autonomous execution sessions."""
+    from .execution import SessionManager
+
+    root = Path(ctx.obj["root"])
+    manager = SessionManager(root)
+    sessions = manager.list_sessions(active_only=active_only)
+
+    if not sessions:
+        click.echo("No sessions found.")
+        return
+
+    for s in sessions:
+        status_color = {
+            "running": "green",
+            "paused": "yellow",
+            "stopped": "red",
+            "completed": "blue",
+        }.get(s.status.value, "white")
+
+        click.echo(
+            f"  {s.session_id}  "
+            f"{click.style(s.status.value, fg=status_color):12s}  "
+            f"iter={s.used.iterations}  "
+            f"tokens={s.used.tokens}  "
+            f"task={s.task[:50]}"
+        )
+    click.echo(f"\nTotal: {len(sessions)}")
+
+
+@autonomous_cmd.command("show")
+@click.argument("session_id")
+@click.pass_context
+def auto_show(ctx, session_id):
+    """Show details of an execution session."""
+    from .execution import SessionManager
+
+    root = Path(ctx.obj["root"])
+    manager = SessionManager(root)
+    state = manager.get(session_id)
+
+    if state is None:
+        click.echo(f"Session '{session_id}' not found.", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Session: {state.session_id}")
+    click.echo(f"Task: {state.task}")
+    click.echo(f"Status: {state.status.value}")
+    if state.stop_reason:
+        click.echo(f"Stop reason: {state.stop_reason.value}")
+    click.echo(f"Spine: {state.spine_id or '(none)'}")
+    click.echo(f"Invariants: {state.invariant_ids or '(none)'}")
+    click.echo(f"Started: {state.started_at}")
+    if state.last_checkpoint:
+        click.echo(f"Last checkpoint: {state.last_checkpoint}")
+    click.echo(f"\nUsage:")
+    click.echo(f"  Iterations: {state.used.iterations}")
+    click.echo(f"  Tokens: {state.used.tokens}")
+    click.echo(f"  Time: {state.used.elapsed_seconds:.1f}s")
+    click.echo(f"  Cost: ${state.used.cost_usd:.4f}")
+
+    if state.budget.max_iterations or state.budget.max_tokens:
+        click.echo(f"\nBudget:")
+        if state.budget.max_iterations:
+            click.echo(f"  Max iterations: {state.budget.max_iterations}")
+        if state.budget.max_tokens:
+            click.echo(f"  Max tokens: {state.budget.max_tokens}")
+        if state.budget.max_time_seconds:
+            click.echo(f"  Max time: {state.budget.max_time_seconds}s")
+        if state.budget.max_cost_usd:
+            click.echo(f"  Max cost: ${state.budget.max_cost_usd:.2f}")
+
+    if state.violations:
+        click.echo(f"\nViolations ({len(state.violations)}):")
+        for v in state.violations:
+            click.echo(f"  [{v['invariant_id']}] {v['message']}")
+
+    if state.progress:
+        click.echo(f"\nProgress:")
+        for k, v in state.progress.items():
+            click.echo(f"  {k}: {v}")
+
+
+@autonomous_cmd.command("delete")
+@click.argument("session_id")
+@click.option("--confirm", is_flag=True, required=True, help="Confirm deletion")
+@click.pass_context
+def auto_delete(ctx, session_id, confirm):
+    """Delete an execution session."""
+    from .execution import SessionManager
+
+    root = Path(ctx.obj["root"])
+    manager = SessionManager(root)
+    if manager.delete(session_id):
+        click.echo(f"Session '{session_id}' deleted.")
+    else:
+        click.echo(f"Session '{session_id}' not found.", err=True)
+        ctx.exit(1)
+
+
+@autonomous_cmd.command("handoff")
+@click.argument("session_id")
+@click.pass_context
+def auto_handoff(ctx, session_id):
+    """Show handoff summary for a session (for human review)."""
+    from .execution import SessionManager
+
+    root = Path(ctx.obj["root"])
+    manager = SessionManager(root)
+    state = manager.get(session_id)
+
+    if state is None:
+        click.echo(f"Session '{session_id}' not found.", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo("=" * 60)
+    click.echo(f"HANDOFF: Session {state.session_id}")
+    click.echo("=" * 60)
+    click.echo(f"Task: {state.task}")
+    click.echo(f"Status: {state.status.value}")
+    if state.stop_reason:
+        click.echo(f"Stop reason: {state.stop_reason.value}")
+    click.echo(f"Iterations completed: {state.used.iterations}")
+    click.echo(f"Tokens used: {state.used.tokens}")
+    click.echo(f"Cost: ${state.used.cost_usd:.4f}")
+
+    if state.violations:
+        click.echo(f"\nViolations encountered: {len(state.violations)}")
+        for v in state.violations:
+            click.echo(f"  - [{v['invariant_id']}] {v['message']}")
+
+    if state.progress:
+        click.echo(f"\nProgress notes:")
+        for k, v in state.progress.items():
+            click.echo(f"  {k}: {v}")
+
+    if state.is_active:
+        remaining = state.budget.remaining(state.used)
+        if remaining:
+            click.echo(f"\nRemaining budget:")
+            for k, v in remaining.items():
+                click.echo(f"  {k}: {v}")
+
+    click.echo("=" * 60)
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

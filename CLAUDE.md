@@ -46,8 +46,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Agent Roles & Revalidation**: Layer 5 agent role assignment (PROPOSER/RETRIEVER/FALSIFIER/SYNTHESIZER), role budgets per risk level, quorum Gate 8, periodic revalidation orchestrator wiring TTL→AuditPipeline.
 **ClaimStatus FSM Enforcement**: Layer 6 transition table (PROPOSED→SUPPORTED↔CONTESTED→{INVALIDATED|EXPIRED|REFUSED}), 9 TransitionReasons, guard validation, transition history, cascade SUPPORTED→STALE, terminal state HUMAN-only recovery.
 **Tone Profiling**: ToneProfile dataclass (28 dimensions), text analysis, ToneChecker with violation detection, tone guidance generation for system prompts, ToneManager persistence, corpus analysis (extract_tone_profile), profile comparison (compare_profiles, ProfileDeviation), CLI commands.
-**Autonomous Execution (A1)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence).
-**Total: 4109 tests**
+**Autonomous Execution (A1-A2)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence), AutonomousExecutor (step-function loop with spine+invariant enforcement, budget checking, checkpointing, resume), Spine CLI (lock/unlock/list/show/activate/check), Session CLI (list/show/delete/handoff).
+**Total: 4154 tests**
 
 ## Key Documents
 
@@ -297,6 +297,21 @@ governor puppet delete <puppet_id>      # Delete custom profile
 governor puppet test <puppet_id>        # Test profile with sample text
 governor puppet render <text>           # Render text through active puppet
 
+# Spine Management (Phase A2: project structure locking)
+governor spine lock <id> [-rf file] [-rd dir] [--forbid pattern]  # Lock a spine
+governor spine unlock <id> --confirm    # Unlock (remove) a spine
+governor spine list                     # List all locked spines
+governor spine show <id>                # Show spine details
+governor spine activate <id>            # Set spine as active constraint
+governor spine deactivate               # Deactivate current spine
+governor spine check [-m file] [-c file] [-d file]  # Check proposal against active spine
+
+# Autonomous Execution Sessions (Phase A3: session lifecycle)
+governor autonomous list [--active]     # List execution sessions
+governor autonomous show <id>           # Show session details
+governor autonomous delete <id> --confirm  # Delete a session
+governor autonomous handoff <id>        # Show handoff summary for human review
+
 # Fiction Governor - Context Drift Detection
 fiction-gov drift status               # Show drift detector state
 fiction-gov drift classify <text>      # Classify text register/mode
@@ -406,10 +421,11 @@ src/governor/
 ├── sybil.py          # BlocDetector, SybilDetector, NeffResult, ProvenanceVector, OriginBudgetTracker
 ├── research.py       # ResearchLedger, Hypothesis, EntropyMonitor, DominanceMonitor, TimescaleMonitor
 │
-# Autonomous Execution (Phase A1):
+# Autonomous Execution (Phase A1-A2):
 ├── spine.py          # Spine, SpineManager, locked project structure, proposal verification
 ├── invariants.py     # InvariantType, Invariant, InvariantSet, InvariantLibrary, mechanically verifiable rules
 ├── execution.py      # ExecutionBudget, ExecutionUsage, ExecutionState, SessionManager, checkpoint/resume
+├── executor.py       # AutonomousExecutor, StepResult, ExecutorConfig, ExecutionEvent, step-function loop
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -773,16 +789,17 @@ src/ops_governor/
 
 **ClaimStatus FSM Enforcement tests: 106**
 
-### Autonomous Execution (Phase A1: Core Types)
+### Autonomous Execution (Phase A1-A2: Core Types + Executor)
 | Module | Description | Tests |
 |--------|-------------|-------|
 | spine.py | Spine (locked project structure), SpineViolation, SpineCheckResult, SpineManager, glob pattern matching, proposal verification | 41 |
 | invariants.py | InvariantType (6 types), Invariant, InvariantResult, InvariantSet, InvariantLibrary (tests_must_pass, file/dir exists, forbidden patterns, no_secrets, max_file_size) | 36 |
 | execution.py | ExecutionBudget (tokens/iterations/time/cost), ExecutionUsage, ExecutionState, StopReason, ExecutionStatus, SessionManager, checkpoint/resume | 34 |
+| executor.py | AutonomousExecutor (step-function loop), StepResult, ExecutorConfig, ExecutionEvent, spine compliance, invariant verification, budget enforcement, checkpointing, resume | 45 |
 
-**Autonomous Execution tests: 111**
+**Autonomous Execution tests: 156**
 
-**Total: 4109 tests**
+**Total: 4154 tests**
 
 ## Common Mistakes to Avoid
 

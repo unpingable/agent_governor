@@ -545,7 +545,7 @@ from .research import (
     create_research_config,
 )
 
-# Autonomous execution (Phase A1)
+# Autonomous execution (Phase A1-A2)
 from .spine import (
     Spine,
     SpineViolation,
@@ -566,6 +566,12 @@ from .execution import (
     ExecutionUsage,
     ExecutionState,
     SessionManager,
+)
+from .executor import (
+    StepResult,
+    ExecutorConfig,
+    ExecutionEvent,
+    AutonomousExecutor,
 )
 
 __all__ = [
@@ -1014,7 +1020,7 @@ __all__ = [
     "ResearchLedger",
     "create_research_ledger",
     "create_research_config",
-    # Autonomous execution (Phase A1)
+    # Autonomous execution (Phase A1-A2)
     "Spine",
     "SpineViolation",
     "SpineCheckResult",
@@ -1030,6 +1036,10 @@ __all__ = [
     "ExecutionUsage",
     "ExecutionState",
     "SessionManager",
+    "StepResult",
+    "ExecutorConfig",
+    "ExecutionEvent",
+    "AutonomousExecutor",
 ]
 
 __version__ = "0.6.0"

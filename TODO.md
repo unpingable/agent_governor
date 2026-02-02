@@ -1478,51 +1478,57 @@ at any time.
   - `SessionManager`: create/get/save/list/delete sessions in `.governor/autonomous/`
   - Module: `src/governor/execution.py` (34 tests)
 
-- [ ] **Spine CLI** — Lock/unlock/load/list spines (CLI wiring deferred to Phase A2)
-  - `governor spine lock <file> --id <name> --confirm`
-  - `governor spine unlock <name> --confirm` (warns: disables autonomous mode)
-  - `governor spine list`, `governor spine show <name>`
+- [x] **Spine CLI** — Lock/unlock/list/show/activate/deactivate/check
+  - `governor spine lock <id> [-rf file] [-rd dir] [--forbid pattern] [-f spec.json]`
+  - `governor spine unlock <id> --confirm`
+  - `governor spine list`, `governor spine show <id>`
+  - `governor spine activate <id>`, `governor spine deactivate`
+  - `governor spine check [-m file] [-c file] [-d file]`
 
 **Phase A1 tests: 111**
 
-#### Phase A2: Autonomous Executor
+#### Phase A2: Autonomous Executor ✅
 
-- [ ] **AutonomousExecutor** — Main loop: propose → verify → auto-apply/reject
-  - Constructor: governor, spine, invariants
-  - `execute(task, budget, stop_on_violation, checkpoint_interval)` → ExecutionState
-  - Verification: check spine compliance, then each invariant, then produce receipts
-  - On approval: auto-apply, update progress, continue
-  - On rejection: record violation, stop (if stop_on_violation), surface details
-  - Checkpointing: save state every N iterations + on violation/budget/completion
-  - Rate limiting: small delay between iterations to avoid API limits
+- [x] **AutonomousExecutor** — Step-function executor with governor constraints
+  - Constructor: spine_manager, invariants, session_manager, config
+  - `execute(step_fn, task, budget, spine_id, resume_state)` → ExecutionState
+  - Step function pattern: `(ExecutionState, int) → StepResult`
+  - Spine compliance check after each step
+  - Invariant verification (blocking_violations) after each step
+  - Budget enforcement before each step (tokens, iterations, time, cost)
+  - Checkpointing every N iterations + final checkpoint
+  - Consecutive failure tracking with configurable max
+  - Rate limiting between iterations
+  - `ExecutorConfig`: stop_on_violation, checkpoint_interval, rate_limit_seconds, max_consecutive_failures
+  - `StepResult`: success, message, files_modified/created/deleted, tokens_used, cost_usd, progress, done
+  - `ExecutionEvent`: iteration, event_type, message, timestamp, details (audit trail)
+  - Module: `src/governor/executor.py` (45 tests)
 
-- [ ] **Invariant management CLI**
-  - `governor invariant add --spine <name> --type <type> --rule <text> --verify <func>`
-  - `governor invariant list --spine <name>`
-  - `governor invariant remove --spine <name> --id <id>`
-  - `governor invariant test --spine <name> --id <id>`
+- [ ] **Invariant management CLI** (deferred)
+  - `governor invariant add --type <type> --rule <text>`
+  - `governor invariant list`
+  - `governor invariant remove --id <id>`
 
-- [ ] **Execution CLI**
-  - `governor execute --task <desc> --spine <name> --budget <spec> --stop-on-violation`
-  - `governor execute --resume <session_id> --budget <spec>`
-  - `governor execute --watch` (real-time output)
+- [ ] **Execution CLI** (deferred — needs real agent integration)
+  - `governor execute --task <desc> --spine <name> --budget <spec>`
+  - `governor execute --resume <session_id>`
 
-#### Phase A3: Session Management & Multi-Day Execution
+#### Phase A3: Session Management & Multi-Day Execution ✅
 
-- [ ] **Session persistence** — Save/resume execution state across days
+- [x] **Session persistence** — Save/resume execution state across days
   - Checkpoint files: `.governor/autonomous/<session_id>.json`
-  - Resume from any checkpoint
-  - Progress tracking per task type (chapters/words for books, components/tests for code)
+  - Resume from any checkpoint via executor resume_state parameter
+  - Progress tracking via state.progress dict
 
-- [ ] **Session CLI**
-  - `governor session list` — active/completed sessions with progress
-  - `governor session show <id>` — full state, violations, budget
-  - `governor session handoff <id>` — generate handoff report (progress, remaining, violations, next action)
-  - `governor session delete <id>`
+- [x] **Session CLI** — `governor autonomous` command group
+  - `governor autonomous list [--active]` — sessions with status, iterations, tokens, task
+  - `governor autonomous show <id>` — full state, violations, budget, progress
+  - `governor autonomous handoff <id>` — handoff summary (progress, remaining, violations)
+  - `governor autonomous delete <id> --confirm`
 
-- [ ] **Handoff generation** — Everything needed to resume
+- [x] **Handoff generation** — Everything needed to resume
   - What was accomplished, what's left, current state, budget remaining, violations
-  - Recommended next action, resume command
+  - Via `governor autonomous handoff <id>`
 
 #### Phase A4: Integration with Existing Governors
 

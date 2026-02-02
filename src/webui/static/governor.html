@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Governor UI</title>
+<style>
+  :root {
+    --bg: #fff; --fg: #111; --muted: #666; --border: #ddd;
+    --card-bg: #fafafa; --badge-ok: #22c55e; --badge-warn: #eab308; --badge-block: #ef4444;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111; --fg: #eee; --muted: #999; --border: #333;
+      --card-bg: #1a1a1a;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.5; }
+  .container { max-width: 720px; margin: 0 auto; padding: 1rem; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; }
+  header h1 { font-size: 1.1rem; font-weight: 600; }
+  .controls { display: flex; gap: 0.5rem; align-items: center; }
+  .controls label { font-size: 0.8rem; color: var(--muted); cursor: pointer; }
+  button { background: var(--card-bg); border: 1px solid var(--border); color: var(--fg); padding: 0.25rem 0.6rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+  button:hover { border-color: var(--muted); }
+
+  section { margin-bottom: 1.5rem; }
+  section h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.5rem; }
+
+  /* NOW */
+  .status-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+  .badge { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .badge-ok { background: var(--badge-ok); }
+  .badge-needs_attention { background: var(--badge-warn); }
+  .badge-blocked { background: var(--badge-block); }
+  .status-text { font-size: 1rem; font-weight: 500; }
+  .sentence { margin-bottom: 0.25rem; }
+  .meta { font-size: 0.8rem; color: var(--muted); }
+  .action { font-size: 0.85rem; color: var(--badge-warn); margin-top: 0.25rem; }
+
+  /* WHY */
+  .feed-item { border: 1px solid var(--border); border-radius: 4px; margin-bottom: 0.5rem; background: var(--card-bg); }
+  .feed-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; cursor: pointer; }
+  .feed-header:hover { opacity: 0.8; }
+  .severity { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .severity-error { background: var(--badge-block); }
+  .severity-warning { background: var(--badge-warn); }
+  .severity-info { background: var(--badge-ok); }
+  .feed-title { font-size: 0.9rem; font-weight: 500; flex: 1; }
+  .feed-summary { font-size: 0.8rem; color: var(--muted); }
+  .feed-detail { padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); font-size: 0.8rem; font-family: monospace; white-space: pre-wrap; word-break: break-all; display: none; }
+  .feed-item.open .feed-detail { display: block; }
+
+  /* HISTORY */
+  .day-group { margin-bottom: 0.75rem; }
+  .day-header { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; cursor: pointer; border-bottom: 1px solid var(--border); }
+  .day-header:hover { opacity: 0.8; }
+  .day-date { font-size: 0.9rem; font-weight: 500; }
+  .day-stats { font-size: 0.8rem; color: var(--muted); }
+  .day-items { display: none; padding-top: 0.25rem; }
+  .day-group.open .day-items { display: block; }
+  .history-item { font-size: 0.8rem; padding: 0.25rem 0; border-bottom: 1px solid var(--border); }
+  .history-item:last-child { border-bottom: none; }
+
+  .error-banner { background: var(--badge-block); color: #fff; padding: 0.5rem 0.75rem; border-radius: 4px; font-size: 0.85rem; margin-bottom: 1rem; display: none; }
+  .empty { font-size: 0.85rem; color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Governor</h1>
+    <div class="controls">
+      <label><input type="checkbox" id="auto-refresh" checked> Auto-refresh</label>
+      <button id="refresh-btn">Refresh</button>
+    </div>
+  </header>
+
+  <div class="error-banner" id="error-banner"></div>
+
+  <!-- NOW -->
+  <section id="section-now">
+    <h2>NOW</h2>
+    <div class="status-row">
+      <div class="badge" id="now-badge"></div>
+      <span class="status-text" id="now-status">Loading...</span>
+    </div>
+    <div class="sentence" id="now-sentence"></div>
+    <div class="action" id="now-action"></div>
+    <div class="meta" id="now-meta"></div>
+  </section>
+
+  <!-- WHY -->
+  <section id="section-why">
+    <h2>WHY</h2>
+    <div id="why-feed"><span class="empty">Loading...</span></div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="section-history">
+    <h2>HISTORY</h2>
+    <div id="history-days"><span class="empty">Loading...</span></div>
+  </section>
+</div>
+
+<script>
+(function() {
+  var timer = null;
+  var INTERVAL = 2000;
+
+  function relTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return Math.floor(diff) + 's ago';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function showError(msg) {
+    var el = document.getElementById('error-banner');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function hideError() {
+    document.getElementById('error-banner').style.display = 'none';
+  }
+
+  function renderNow(data) {
+    var badge = document.getElementById('now-badge');
+    badge.className = 'badge badge-' + (data.status || 'ok');
+
+    document.getElementById('now-status').textContent =
+      data.status === 'ok' ? 'OK' :
+      data.status === 'needs_attention' ? 'Needs Attention' : 'Blocked';
+
+    document.getElementById('now-sentence').textContent = data.sentence || '';
+
+    var actionEl = document.getElementById('now-action');
+    actionEl.textContent = data.suggested_action || '';
+    actionEl.style.display = data.suggested_action ? 'block' : 'none';
+
+    var parts = [];
+    if (data.last_event) {
+      parts.push('Last event: ' + esc(data.last_event.title || data.last_event.type || 'unknown') + ' ' + relTime(data.last_event.timestamp));
+    }
+    if (data.regime) parts.push('Regime: ' + data.regime);
+    if (data.mode) parts.push('Mode: ' + data.mode);
+    document.getElementById('now-meta').textContent = parts.join(' \u00B7 ');
+  }
+
+  function renderWhy(data) {
+    var container = document.getElementById('why-feed');
+    var feed = data.feed || [];
+    if (feed.length === 0) {
+      container.innerHTML = '<span class="empty">No items.</span>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < feed.length; i++) {
+      var item = feed[i];
+      var sev = item.severity || 'info';
+      html += '<div class="feed-item" onclick="this.classList.toggle(\'open\')">';
+      html += '<div class="feed-header">';
+      html += '<div class="severity severity-' + esc(sev) + '"></div>';
+      html += '<span class="feed-title">' + esc(item.title || item.type || 'Item') + '</span>';
+      html += '<span class="feed-summary">' + esc(item.summary || '') + '</span>';
+      html += '</div>';
+      if (item.detail) {
+        html += '<div class="feed-detail">' + esc(typeof item.detail === 'string' ? item.detail : JSON.stringify(item.detail, null, 2)) + '</div>';
+      }
+      html += '</div>';
+    }
+    container.innerHTML = html;
+  }
+
+  function renderHistory(data) {
+    var container = document.getElementById('history-days');
+    var days = data.days || [];
+    if (days.length === 0) {
+      container.innerHTML = '<span class="empty">No history.</span>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < days.length; i++) {
+      var day = days[i];
+      var items = day.items || [];
+      var rejections = day.rejection_count || 0;
+      html += '<div class="day-group" onclick="this.classList.toggle(\'open\')">';
+      html += '<div class="day-header">';
+      html += '<span class="day-date">' + esc(day.date || 'Unknown') + '</span>';
+      html += '<span class="day-stats">' + items.length + ' items' + (rejections > 0 ? ', ' + rejections + ' rejected' : '') + '</span>';
+      html += '</div>';
+      html += '<div class="day-items">';
+      for (var j = 0; j < items.length; j++) {
+        html += '<div class="history-item">' + esc(items[j].title || items[j].type || 'Event') + ' &mdash; ' + esc(items[j].summary || '') + '</div>';
+      }
+      html += '</div></div>';
+    }
+    container.innerHTML = html;
+  }
+
+  function fetchAll() {
+    var failed = false;
+    Promise.all([
+      fetch('now').then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch('why').then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch('history').then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    ]).then(function(results) {
+      hideError();
+      renderNow(results[0]);
+      renderWhy(results[1]);
+      renderHistory(results[2]);
+    }).catch(function(err) {
+      showError('Adapter unreachable: ' + err.message + '. Retrying...');
+    });
+  }
+
+  function startAutoRefresh() {
+    stopAutoRefresh();
+    timer = setInterval(fetchAll, INTERVAL);
+  }
+
+  function stopAutoRefresh() {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+
+  document.getElementById('refresh-btn').addEventListener('click', fetchAll);
+  document.getElementById('auto-refresh').addEventListener('change', function() {
+    if (this.checked) startAutoRefresh(); else stopAutoRefresh();
+  });
+
+  fetchAll();
+  startAutoRefresh();
+})();
+</script>
+</body>
+</html>

@@ -695,3 +695,33 @@ class TestRootEndpointV2:
         assert "governor_why" in endpoints
         assert "governor_history" in endpoints
         assert "governor_detail" in endpoints
+
+
+# ============================================================================
+# TestGovernorUI
+# ============================================================================
+
+
+class TestGovernorUI:
+    """Tests for GET /governor/ui."""
+
+    def test_ui_returns_html(self, client) -> None:
+        """GET /governor/ui returns 200 with HTML content type."""
+        response = client.get("/governor/ui")
+        assert response.status_code == 200
+        assert "text/html" in response.headers.get("content-type", "")
+
+    def test_ui_contains_sections(self, client) -> None:
+        """HTML body contains the three section markers."""
+        response = client.get("/governor/ui")
+        body = response.text
+        assert "NOW" in body
+        assert "WHY" in body
+        assert "HISTORY" in body
+
+    def test_ui_in_root_endpoints(self, client) -> None:
+        """Root endpoint lists /governor/ui."""
+        response = client.get("/")
+        data = response.json()
+        assert "governor_ui" in data["endpoints"]
+        assert data["endpoints"]["governor_ui"] == "/governor/ui"

@@ -27,7 +27,7 @@ from typing import Any, AsyncGenerator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from governor.chat_bridge import (
@@ -493,6 +493,20 @@ async def governor_detail(item_id: str) -> dict[str, Any]:
 
 
 # ============================================================================
+# Sidecar UI
+# ============================================================================
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+@app.get("/governor/ui", response_class=HTMLResponse)
+async def governor_ui() -> HTMLResponse:
+    """Serve the single-page Governor UI."""
+    html_path = _STATIC_DIR / "governor.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
+# ============================================================================
 # Health / Root
 # ============================================================================
 
@@ -546,6 +560,7 @@ async def root() -> dict[str, Any]:
             "governor_why": "/governor/why",
             "governor_history": "/governor/history",
             "governor_detail": "/governor/detail/{item_id}",
+            "governor_ui": "/governor/ui",
         },
     }
 

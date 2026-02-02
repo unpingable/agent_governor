@@ -411,3 +411,287 @@ class TestStreamingResponse:
         # Parse SSE chunks
         content = response.text
         assert "data:" in content
+
+
+# ============================================================================
+# TestGovernorNow
+# ============================================================================
+
+
+class TestGovernorNow:
+    """Tests for GET /governor/now."""
+
+    def test_uninitialized_returns_ok(self, client) -> None:
+        """Uninitialized context returns ok status."""
+        response = client.get("/governor/now")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["sentence"].startswith("OK:")
+        assert data["last_event"] is None
+        assert data["suggested_action"] is None
+
+    def test_with_empty_context(self, client, tmp_contexts_dir) -> None:
+        """Empty initialized context returns ok."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="code")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/now")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["mode"] == "code"
+
+    def test_includes_context_id(self, client) -> None:
+        response = client.get("/governor/now")
+        data = response.json()
+        assert "context_id" in data
+
+    def test_includes_regime(self, client, tmp_contexts_dir) -> None:
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/now")
+        data = response.json()
+        # regime is present (may be None or a string depending on state)
+        assert "regime" in data
+
+    def test_response_shape(self, client) -> None:
+        """Response has all expected keys."""
+        response = client.get("/governor/now")
+        data = response.json()
+        expected_keys = {"context_id", "status", "sentence", "last_event", "suggested_action", "regime", "mode"}
+        assert expected_keys == set(data.keys())
+
+    def test_status_is_valid_pill(self, client) -> None:
+        response = client.get("/governor/now")
+        data = response.json()
+        assert data["status"] in ("ok", "needs_attention", "blocked")
+
+
+# ============================================================================
+# TestGovernorWhy
+# ============================================================================
+
+
+class TestGovernorWhy:
+    """Tests for GET /governor/why."""
+
+    def test_uninitialized_returns_empty(self, client) -> None:
+        response = client.get("/governor/why")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["feed"] == []
+        assert data["total"] == 0
+
+    def test_with_empty_context(self, client, tmp_contexts_dir) -> None:
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="code")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/why")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["feed"], list)
+
+    def test_limit_parameter(self, client) -> None:
+        response = client.get("/governor/why?limit=5")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["feed"]) <= 5
+
+    def test_severity_parameter(self, client) -> None:
+        response = client.get("/governor/why?severity=error")
+        assert response.status_code == 200
+
+    def test_response_shape(self, client) -> None:
+        response = client.get("/governor/why")
+        data = response.json()
+        expected_keys = {"context_id", "feed", "total"}
+        assert expected_keys == set(data.keys())
+
+
+# ============================================================================
+# TestGovernorHistory
+# ============================================================================
+
+
+class TestGovernorHistory:
+    """Tests for GET /governor/history."""
+
+    def test_uninitialized_returns_empty(self, client) -> None:
+        response = client.get("/governor/history")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == []
+
+    def test_with_empty_context(self, client, tmp_contexts_dir) -> None:
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="code")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/history")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["days"], list)
+
+    def test_days_parameter(self, client) -> None:
+        response = client.get("/governor/history?days=3")
+        assert response.status_code == 200
+
+    def test_response_shape(self, client) -> None:
+        response = client.get("/governor/history")
+        data = response.json()
+        expected_keys = {"context_id", "days"}
+        assert expected_keys == set(data.keys())
+
+
+# ============================================================================
+# TestGovernorDetail
+# ============================================================================
+
+
+class TestGovernorDetail:
+    """Tests for GET /governor/detail/{item_id}."""
+
+    def test_404_when_uninitialized(self, client) -> None:
+        response = client.get("/governor/detail/dec_test123")
+        assert response.status_code == 404
+
+    def test_404_unknown_id(self, client, tmp_contexts_dir) -> None:
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="code")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/detail/dec_nonexistent")
+        assert response.status_code == 404
+
+    def test_404_unknown_prefix(self, client, tmp_contexts_dir) -> None:
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="code")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/detail/xxx_unknown")
+        assert response.status_code == 404
+
+    def test_valid_prefixes_handled(self, client, tmp_contexts_dir) -> None:
+        """All valid prefixes (dec_, clm_, ev_, vio_) are handled without 500."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="code")
+        adapter_mod._context_manager = cm
+
+        for prefix in ["dec_", "clm_", "ev_", "vio_"]:
+            response = client.get(f"/governor/detail/{prefix}nonexistent")
+            # Should be 404 (not found), not 500 (server error)
+            assert response.status_code == 404
+
+    def test_response_shape_on_404(self, client, tmp_contexts_dir) -> None:
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="code")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/detail/dec_missing")
+        assert response.status_code == 404
+        data = response.json()
+        assert "detail" in data
+
+
+# ============================================================================
+# TestGovernorStatusV2
+# ============================================================================
+
+
+class TestGovernorStatusV2:
+    """Tests for /governor/status with viewmodel integration."""
+
+    def test_uninitialized_no_viewmodel(self, client) -> None:
+        """Uninitialized context does not include viewmodel key."""
+        response = client.get("/governor/status")
+        data = response.json()
+        assert data["initialized"] is False
+        assert "viewmodel" not in data
+
+    def test_initialized_includes_viewmodel(self, client, tmp_contexts_dir) -> None:
+        """Initialized context includes viewmodel key."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="code")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/status")
+        data = response.json()
+        assert data["initialized"] is True
+        assert "viewmodel" in data
+        assert data["viewmodel"]["schema_version"] == "v2"
+
+    def test_backward_compat_fields(self, client, tmp_contexts_dir) -> None:
+        """Backward-compat fields still present alongside viewmodel."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="fiction")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/status")
+        data = response.json()
+        # Old fields still present
+        assert "context_id" in data
+        assert "initialized" in data
+        assert "mode" in data
+        assert "facts_count" in data
+        assert "decisions_count" in data
+        assert "metadata" in data
+        # New field present
+        assert "viewmodel" in data
+
+    def test_viewmodel_has_sections(self, client, tmp_contexts_dir) -> None:
+        """Viewmodel contains the 8 standard sections."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/status")
+        vm = response.json()["viewmodel"]
+        expected_sections = {"schema_version", "generated_at", "session", "regime",
+                             "decisions", "claims", "evidence", "violations",
+                             "execution", "stability"}
+        assert expected_sections == set(vm.keys())
+
+
+# ============================================================================
+# TestRootEndpointV2
+# ============================================================================
+
+
+class TestRootEndpointV2:
+    """Tests for new routes in root endpoint."""
+
+    def test_includes_new_endpoints(self, client) -> None:
+        response = client.get("/")
+        data = response.json()
+        endpoints = data["endpoints"]
+        assert "governor_now" in endpoints
+        assert "governor_why" in endpoints
+        assert "governor_history" in endpoints
+        assert "governor_detail" in endpoints

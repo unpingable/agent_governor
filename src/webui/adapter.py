@@ -40,6 +40,15 @@ from governor.chat_bridge import (
     create_backend,
 )
 from governor.context_manager import GovernorContextManager
+from governor.viewmodel import build_viewmodel, GovernorViewModel
+from webui.summaries import (
+    derive_status_pill,
+    derive_one_sentence,
+    derive_suggested_action,
+    derive_last_event,
+    derive_why_feed,
+    derive_history_days,
+)
 
 # ============================================================================
 # Configuration from environment
@@ -307,6 +316,21 @@ async def _stream_response(
 # ============================================================================
 
 
+def _resolve_context() -> tuple[Any | None, str]:
+    """Resolve the active governor context.
+
+    Returns (context_or_None, context_id).
+    """
+    cm = _get_context_manager()
+    ctx = cm.get(GOVERNOR_CONTEXT_ID)
+    return ctx, GOVERNOR_CONTEXT_ID
+
+
+def _build_vm_for_context(ctx: Any) -> GovernorViewModel:
+    """Build a GovernorViewModel from a resolved context."""
+    return build_viewmodel(ctx.governor_dir, ctx.root)
+
+
 @app.get("/governor/contexts")
 async def list_contexts() -> dict[str, Any]:
     """List all governor contexts."""
@@ -320,13 +344,15 @@ async def list_contexts() -> dict[str, Any]:
 
 @app.get("/governor/status")
 async def governor_status() -> dict[str, Any]:
-    """Show governor state for the active context."""
-    cm = _get_context_manager()
-    ctx = cm.get(GOVERNOR_CONTEXT_ID)
+    """Show governor state for the active context.
+
+    Backward-compat fields preserved; adds 'viewmodel' key with v2 schema.
+    """
+    ctx, context_id = _resolve_context()
 
     if ctx is None:
         return {
-            "context_id": GOVERNOR_CONTEXT_ID,
+            "context_id": context_id,
             "initialized": False,
             "mode": GOVERNOR_MODE,
         }
@@ -354,6 +380,9 @@ async def governor_status() -> dict[str, Any]:
             except (json.JSONDecodeError, OSError):
                 pass
 
+    # Build ViewModel v2
+    vm = _build_vm_for_context(ctx)
+
     return {
         "context_id": ctx.context_id,
         "initialized": True,
@@ -364,7 +393,103 @@ async def governor_status() -> dict[str, Any]:
         "facts_count": facts_count,
         "decisions_count": decisions_count,
         "metadata": ctx.metadata,
+        "viewmodel": vm.to_dict(),
     }
+
+
+@app.get("/governor/now")
+async def governor_now() -> dict[str, Any]:
+    """Now screen: glanceable status for the active context."""
+    ctx, context_id = _resolve_context()
+
+    if ctx is None:
+        return {
+            "context_id": context_id,
+            "status": "ok",
+            "sentence": "OK: no governor context initialized.",
+            "last_event": None,
+            "suggested_action": None,
+            "regime": None,
+            "mode": GOVERNOR_MODE,
+        }
+
+    vm = _build_vm_for_context(ctx)
+
+    return {
+        "context_id": context_id,
+        "status": derive_status_pill(vm),
+        "sentence": derive_one_sentence(vm),
+        "last_event": derive_last_event(vm),
+        "suggested_action": derive_suggested_action(vm),
+        "regime": vm.regime.name if vm.regime else None,
+        "mode": ctx.mode,
+    }
+
+
+@app.get("/governor/why")
+async def governor_why(limit: int = 20, severity: str | None = None) -> dict[str, Any]:
+    """Why screen: decision/violation/claim feed."""
+    ctx, context_id = _resolve_context()
+
+    if ctx is None:
+        return {"context_id": context_id, "feed": [], "total": 0}
+
+    vm = _build_vm_for_context(ctx)
+    feed = derive_why_feed(vm, limit=limit, severity_filter=severity)
+
+    return {
+        "context_id": context_id,
+        "feed": feed,
+        "total": len(feed),
+    }
+
+
+@app.get("/governor/history")
+async def governor_history(days: int = 7) -> dict[str, Any]:
+    """History screen: events grouped by calendar day."""
+    ctx, context_id = _resolve_context()
+
+    if ctx is None:
+        return {"context_id": context_id, "days": []}
+
+    vm = _build_vm_for_context(ctx)
+    grouped = derive_history_days(vm, days=days)
+
+    return {
+        "context_id": context_id,
+        "days": grouped,
+    }
+
+
+@app.get("/governor/detail/{item_id}")
+async def governor_detail(item_id: str) -> dict[str, Any]:
+    """Drill-down by ID prefix (dec_, clm_, ev_, vio_)."""
+    ctx, context_id = _resolve_context()
+
+    if ctx is None:
+        raise HTTPException(status_code=404, detail="No governor context initialized.")
+
+    vm = _build_vm_for_context(ctx)
+
+    # Search by prefix
+    if item_id.startswith("dec_"):
+        for d in vm.decisions:
+            if d.id == item_id:
+                return {"id": item_id, "type": "decision", "data": d.to_dict()}
+    elif item_id.startswith("clm_"):
+        for c in vm.claims:
+            if c.id == item_id:
+                return {"id": item_id, "type": "claim", "data": c.to_dict()}
+    elif item_id.startswith("ev_"):
+        for e in vm.evidence:
+            if e.id == item_id:
+                return {"id": item_id, "type": "evidence", "data": e.to_dict()}
+    elif item_id.startswith("vio_"):
+        for v in vm.violations:
+            if v.id == item_id:
+                return {"id": item_id, "type": "violation", "data": v.to_dict()}
+
+    raise HTTPException(status_code=404, detail=f"Item not found: {item_id}")
 
 
 # ============================================================================
@@ -417,6 +542,10 @@ async def root() -> dict[str, Any]:
             "health": "/health",
             "governor_contexts": "/governor/contexts",
             "governor_status": "/governor/status",
+            "governor_now": "/governor/now",
+            "governor_why": "/governor/why",
+            "governor_history": "/governor/history",
+            "governor_detail": "/governor/detail/{item_id}",
         },
     }
 

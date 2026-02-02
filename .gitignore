@@ -28,5 +28,10 @@ venv/
 baselines/
 *.tar.gz
 
+# VS Code Extension
+vscode-governor/dist/
+vscode-governor/node_modules/
+vscode-governor/*.vsix
+
 # Misc
 ingest/

@@ -512,7 +512,7 @@ Based on `ingest/direction.md` - artificial landmarks that impose orientation co
 ## Cross-cutting
 
 - [ ] **Web UI** - Simple dashboard showing claim history, rejection rates, regime status
-- [ ] **VS Code Integration** - add governor support as method to VS Code
+- [x] **VS Code Integration** - Phase V1 complete: `governor check` CLI + VS Code extension (commands, diagnostics, status bar)
 - [x] **Config profiles** - `governor profile use strict` vs `governor profile use permissive` ✓ COMPLETE
   - 6 builtins: strict, permissive, research, production, audit, research_mode
   - Custom profile creation/deletion, activation/deactivation
@@ -1681,22 +1681,22 @@ be doable via CLI; extension just makes it faster with visual feedback.
 **Design principle:** Extension is stateless. All state lives in `.governor/`.
 Extension just queries and displays it.
 
-#### Phase V1: Core Commands & Diagnostics
+#### Phase V1: Core Commands & Diagnostics ✓
 
-- [ ] **Governor CLI client wrapper** — TypeScript wrapper around `governor check --format json`
+- [x] **Governor CLI client wrapper** — TypeScript wrapper around `governor check --format json`
   - Input: stdin JSON (content, filepath, context)
   - Output: JSON (status, findings with code/message/severity/range/suggestion, summary)
   - Configurable executable path via settings
 
-- [ ] **"Governor: Check Selection" / "Governor: Check File" commands**
+- [x] **"Governor: Check Selection" / "Governor: Check File" commands**
   - Shell out to governor binary, pass selected text/file via stdin
   - Parse JSON response, create DiagnosticCollection
   - Severity mapping: error → red squiggle, warning → yellow, info → blue
 
-- [ ] **Status bar item** — `[Governor] [Session: 1h23m] [Tasks: 2/5] [Budget: 47%]`
-  - Click behaviors for each section
+- [x] **Status bar item** — `[Governor] Pass/Warn/Error`
+  - Click opens output channel
 
-- [ ] **Output channel** — Raw governor output for debugging
+- [x] **Output channel** — Raw governor output for debugging
 
 #### Phase V2: Side Panel & State Display
 

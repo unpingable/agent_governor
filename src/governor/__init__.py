@@ -568,6 +568,17 @@ from .research import (
     create_research_config,
 )
 
+# Unified check aggregation (VS Code extension integration)
+from .check import (
+    Position as CheckPosition,
+    Range as CheckRange,
+    CheckFinding,
+    CheckResult,
+    run_check,
+    security_finding_to_check,
+    continuity_violation_to_check,
+)
+
 # Continuity enforcement (Deferred 5: closed-loop generation control)
 from .continuity import (
     AnchorType as ContinuityAnchorType,
@@ -1205,6 +1216,14 @@ __all__ = [
     "ResearchLedger",
     "create_research_ledger",
     "create_research_config",
+    # Unified check aggregation (VS Code extension)
+    "CheckPosition",
+    "CheckRange",
+    "CheckFinding",
+    "CheckResult",
+    "run_check",
+    "security_finding_to_check",
+    "continuity_violation_to_check",
     # Continuity enforcement (Deferred 5)
     "ContinuityAnchorType",
     "ContinuitySeverity",

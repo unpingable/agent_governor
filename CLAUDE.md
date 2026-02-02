@@ -53,7 +53,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Structured Telemetry (Deferred 4, B2)**: TelemetryCollector (pluggable backends, fail-safe), StructuredLogger (JSONL, date-partitioned, size/retention rotation), TelemetryEvent with typed field helpers, cost/performance/convergence analysis, CSV/JSON export, CLI (enable/disable/status/logs/analyze/export/rotate-logs), executor integration. Convergence telemetry: CONTINUITY_TRACE/CONTINUITY_RESULT events, ConvergenceExecutor + one-shot gate instrumentation, ConvergenceReport (acceptance rate, efficiency, monotone/oscillation rates, windup, per-anchor stats, interference graph).
 **Continuity Enforcement (Deferred 5)**: Closed-loop generation control. AnchorRegistry (semantic constraint setpoints), ContinuityChecker (lexical deviation measurement), CorrectionLadder (escalating interventions), ConvergenceExecutor (iterate-until-convergence with budget enforcement, telemetry instrumented), GenerationProvider Protocol, adapter integration, CLI (anchor CRUD, check, import). Continuity Bridges: mode-specific anchor factories (fiction bible, nonfiction corpus, puppet profile), GovernorHooks integration (one-shot gating with telemetry, system prompt enrichment).
 **Convergence Auto-Tuning (Deferred 6)**: Offline system identification over convergence traces. ConvergenceAnalyzer (per-anchor decomposition, action effectiveness matrices, deadzone detection, interference tracking, opportunity identification). TuningProposal artifacts (28 dataclass types, HardGuards forced-True, Approval forced-requires_human). ProposalStore (file-per-item JSON persistence). 5 admissibility checks (regime match, strength non-regression, objective constraints, trial requirements, determinism hygiene). ConvergenceTuner orchestrator (propose/apply/rollback). 10 footgun guardrails. CLI (governor tune convergence {status,propose,apply,rollback,proposals,show}).
-**Total: 5475 tests**
+**VS Code Extension (Deferred 3, Phase V1)**: Unified check aggregation (check.py: Position, Range, CheckFinding, CheckResult, run_check). CLI `governor check` command (file/stdin, JSON/text output, security/continuity toggles). TypeScript VS Code extension (vscode-governor/: CLI client wrapper, diagnostic provider, Check File/Check Selection commands, status bar, on-save handler).
+**Total: 5507 tests**
 
 ## Key Documents
 
@@ -356,6 +357,13 @@ governor continuity anchor remove <id>  # Remove anchor
 governor continuity check <text>        # Check text against all anchors, show report
 governor continuity import <path>       # Import anchors from JSON file
 
+# Unified Check (VS Code extension integration)
+governor check <path>                  # Check a file for security + continuity issues
+governor check <path> --format json    # JSON output for tooling
+governor check --stdin --format json   # Read from stdin (JSON or plain text)
+governor check <path> --no-security    # Skip security scanning
+governor check <path> --no-continuity  # Skip continuity checking
+
 # Fiction Governor - Context Drift Detection
 fiction-gov drift status               # Show drift detector state
 fiction-gov drift classify <text>      # Classify text register/mode
@@ -478,6 +486,7 @@ src/governor/
 ├── continuity.py      # AnchorRegistry, ContinuityChecker, CorrectionLadder, ConvergenceExecutor, closed-loop generation control
 ├── continuity_bridges.py # Mode-specific anchor factories: fiction bible, nonfiction corpus, puppet profile → Anchor lists
 ├── convergence_tuning.py # ConvergenceAnalyzer, ConvergenceTuner, ProposalStore, TuningProposal, admissibility checks
+├── check.py          # Position, Range, CheckFinding, CheckResult, run_check (unified check aggregation for VS Code)
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -514,6 +523,23 @@ src/ops_governor/
 ├── verifiers.py      # RunbookVerifier, TimeWindowVerifier, BlastRadiusVerifier, PreconditionChainVerifier
 ├── policy.py         # PolicyRegistry, operational policy enforcement
 └── cli.py            # ops-gov CLI
+
+vscode-governor/
+├── package.json              # Extension manifest, commands, settings
+├── tsconfig.json             # TypeScript config
+├── esbuild.mjs               # Bundler (esbuild, not webpack)
+├── .vscodeignore              # Publish ignore
+├── src/
+│   ├── extension.ts           # Entry point: activate, commands, status bar, on-save
+│   ├── governor/
+│   │   ├── client.ts          # CLI wrapper: spawn governor, parse JSON
+│   │   └── types.ts           # TypeScript interfaces for CheckResult/CheckFinding
+│   └── diagnostics/
+│       └── provider.ts        # DiagnosticCollection management
+└── src/test/
+    └── suite/
+        ├── client.test.ts     # Client unit tests (mock child_process)
+        └── provider.test.ts   # Provider unit tests (mock vscode API)
 ```
 
 ## Implementation Summary
@@ -906,7 +932,15 @@ src/ops_governor/
 
 **Convergence Auto-Tuning tests: 145**
 
-**Total: 5475 tests**
+### VS Code Extension (Deferred 3, Phase V1)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| check.py | Position, Range, CheckFinding, CheckResult, security_finding_to_check, continuity_violation_to_check, run_check (unified aggregation) | 34 |
+| vscode-governor/ | VS Code extension: CLI client wrapper, diagnostic provider, commands (Check File, Check Selection, Show Output), status bar, on-save handler | 16 |
+
+**VS Code Extension tests: 50 (34 Python + 16 TypeScript)**
+
+**Total: 5507 tests**
 
 ## Common Mistakes to Avoid
 

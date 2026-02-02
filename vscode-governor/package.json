@@ -1,0 +1,76 @@
+{
+  "name": "vscode-governor",
+  "displayName": "Agent Governor",
+  "description": "Security and continuity checking for agentic coding tools",
+  "version": "0.1.0",
+  "publisher": "agent-governor",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "activationEvents": [
+    "workspaceContains:.governor"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "governor.checkFile",
+        "title": "Governor: Check File"
+      },
+      {
+        "command": "governor.checkSelection",
+        "title": "Governor: Check Selection"
+      },
+      {
+        "command": "governor.showOutput",
+        "title": "Governor: Show Output"
+      }
+    ],
+    "configuration": {
+      "title": "Agent Governor",
+      "properties": {
+        "governor.executablePath": {
+          "type": "string",
+          "default": "governor",
+          "description": "Path to the governor CLI executable"
+        },
+        "governor.checkOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run governor check automatically on file save"
+        },
+        "governor.mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "code",
+            "fiction",
+            "nonfiction"
+          ],
+          "default": "auto",
+          "description": "Governor operating mode"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "lint": "tsc --noEmit",
+    "test": "jest --config jest.config.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "@types/jest": "^29.5.0",
+    "typescript": "^5.3.0",
+    "esbuild": "^0.20.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0"
+  }
+}

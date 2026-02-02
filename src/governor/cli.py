@@ -9496,6 +9496,89 @@ def continuity_import(ctx: click.Context, path: str) -> None:
     click.echo(f"Imported {len(imported)} anchor(s).")
 
 
+# =============================================================================
+# Unified Check Command (VS Code extension integration)
+# =============================================================================
+
+
+@cli.command("check")
+@click.argument("path", required=False, type=click.Path())
+@click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin (JSON or plain text)")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--no-security", "skip_security", is_flag=True, help="Skip security scanning")
+@click.option("--no-continuity", "skip_continuity", is_flag=True, help="Skip continuity checking")
+@click.pass_context
+def check(ctx: click.Context, path: str | None, use_stdin: bool, fmt: str, skip_security: bool, skip_continuity: bool) -> None:
+    """Check a file for security and continuity issues.
+
+    Aggregates findings from security scanning and continuity checking into
+    a unified format suitable for editor diagnostics.
+
+    \b
+    Examples:
+        governor check src/main.py --format json
+        echo '{"content":"...","filepath":"f.py"}' | governor check --stdin --format json
+        governor check src/main.py --no-continuity
+    """
+    from .check import run_check
+
+    # Determine content and filepath
+    if use_stdin:
+        raw = click.get_text_stream("stdin").read()
+        try:
+            payload = json.loads(raw)
+            if isinstance(payload, dict) and "content" in payload:
+                content = payload["content"]
+                file_path = payload.get("filepath", "<stdin>")
+            else:
+                content = raw
+                file_path = "<stdin>"
+        except (json.JSONDecodeError, ValueError):
+            content = raw
+            file_path = "<stdin>"
+    elif path is not None:
+        p = Path(path)
+        if not p.exists():
+            click.echo(f"Error: File not found: {path}", err=True)
+            ctx.exit(1)
+            return
+        content = p.read_text()
+        file_path = str(p)
+    else:
+        click.echo("Error: Provide a file path or use --stdin.", err=True)
+        ctx.exit(1)
+        return
+
+    # Resolve governor dir (may not exist — that's OK)
+    gov_dir = get_governor_dir(ctx)
+    if not gov_dir.exists():
+        gov_dir = None
+
+    result = run_check(
+        content,
+        file_path,
+        run_security=not skip_security,
+        run_continuity=not skip_continuity,
+        governor_dir=gov_dir,
+    )
+
+    if fmt == "json":
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        # Human-readable output
+        if result.status == "pass":
+            click.echo(f"✓ {result.summary}")
+        else:
+            status_sym = "✗" if result.status == "error" else "⚠"
+            click.echo(f"{status_sym} {result.summary}")
+            for f in result.findings:
+                sev_color = {"error": "red", "warning": "yellow", "info": "blue"}.get(f.severity, "white")
+                loc = f"{file_path}:{f.range.start.line + 1}:{f.range.start.character + 1}"
+                click.echo(click.style(f"  [{f.severity.upper()}]", fg=sev_color) + f" {loc} {f.code}: {f.message}")
+                if f.suggestion:
+                    click.echo(f"    → {f.suggestion}")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

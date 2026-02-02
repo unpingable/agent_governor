@@ -1551,6 +1551,31 @@ at any time.
   - No cross-imports between governor packages; governors stay dumb libraries
   - Full integration with InvariantSet.blocking_violations() and executor loop
 
+#### Strategic Test Suites (from `ingest/govtests.md`) ✅ COMPLETE
+
+- [x] **Golden-file tests for JSON artifacts** — `tests/test_golden_files.py` (107 tests)
+  - Locks serialization schemas for all `to_dict()` types: FileSnapshot, CmdRun, DiffReceipt, ExecutionBudget/Usage/State, Spine, SpineCheckResult, InvariantResult, Invariant, InvariantSet, Fact, Decision, EvidenceRef, GroundedClaim, StatusTransition, CascadeEvent, PremiseCheckResult, QuorumPolicy, Vote, QuorumState, ClaimSnapshot, LedgerSnapshot, MutationEvent, Violation, DiffResult, AdapterFinding
+  - Key set assertions, value type assertions, round-trip tests, JSON serializability
+  - Cross-type stability tests: receipt type tags, universal JSON safety, full round-trips
+
+- [x] **No-laundering regression tests** — `tests/test_no_laundering.py` (40 tests)
+  - Money Rule: ASSUMED confidence starts low, PEER_ASSERTED capped at MAX_PEER_CONFIDENCE
+  - Provenance Rule: promotions require evidence, PEER→OBSERVED always forbidden
+  - Premise Rule: HARD claims cannot depend on SOFT, cascade on retraction, cycle/self-dep rejection
+  - Silent Retraction: claims stay in ledger, retraction counted, ClaimDiffer detects disappearance
+  - Envelope Mode Retrograde: facts/decisions/epistemic claims survive strict→exploratory switch
+  - Evidence Type Gating: enum completeness, factory correctness, grounding rules
+  - ClaimStatus FSM: transition guards enforced, terminal states HUMAN-only, HUMAN always valid
+
+- [x] **Failure-injection tests for executor** — `tests/test_failure_injection.py` (27 tests)
+  - Timeout handling: TimeoutError counts as failure, recorded in events, state stays consistent, recovery works
+  - Checkpoint write failures: fail-closed (OSError propagates), final save failure handled
+  - Corrupted checkpoint resume: bad JSON raises, empty file raises, partial JSON uses defaults, invalid status raises, SessionManager skips bad files
+  - Consecutive failure threshold: stops at limit, recovery resets counter, all exception types counted
+  - Budget exhaustion: token/iteration/cost limits, pre-step checking, accurate usage tracking
+  - Spine/invariant checks during recovery: violations stop execution, warnings don't block
+  - State persistence under faults: saved after error/budget/completion stops, resume from saved state
+
 ---
 
 ### Deferred 2: Web UI — Household Claude (from `ingest/webui.md`)

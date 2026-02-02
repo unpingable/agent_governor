@@ -47,7 +47,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **ClaimStatus FSM Enforcement**: Layer 6 transition table (PROPOSED→SUPPORTED↔CONTESTED→{INVALIDATED|EXPIRED|REFUSED}), 9 TransitionReasons, guard validation, transition history, cascade SUPPORTED→STALE, terminal state HUMAN-only recovery.
 **Tone Profiling**: ToneProfile dataclass (28 dimensions), text analysis, ToneChecker with violation detection, tone guidance generation for system prompts, ToneManager persistence, corpus analysis (extract_tone_profile), profile comparison (compare_profiles, ProfileDeviation), CLI commands.
 **Autonomous Execution (A1-A4)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence), AutonomousExecutor (step-function loop with spine+invariant enforcement, budget checking, checkpointing, resume), Spine CLI (lock/unlock/list/show/activate/check), Session CLI (list/show/delete/handoff), Governor adapters (security, CFI, fiction, nonfiction citation, tone, generic content → Invariant).
-**Total: 4298 tests**
+**Strategic Test Suites**: Golden-file tests (JSON schema locking for all serialized types), no-laundering regression tests (structural integrity invariants), failure-injection tests (executor fault tolerance).
+**Total: 4472 tests**
 
 ## Key Documents
 
@@ -804,7 +805,16 @@ src/ops_governor/
 
 **Autonomous Execution tests: 232**
 
-**Total: 4298 tests**
+### Strategic Test Suites (govtests)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| test_golden_files.py | Golden-file tests for JSON artifact shapes: receipts, execution state, spine, invariants, ledger entries, epistemic claims, quorum types, claim diff, adapters. Locks serialization schemas. | 107 |
+| test_no_laundering.py | No-laundering regression tests: money rule, provenance rule, premise rule, silent retraction prevention, PEER_ASSERTED cap, envelope mode retrograde, evidence type gating, ClaimStatus FSM invariants | 40 |
+| test_failure_injection.py | Failure-injection for executor: timeouts, checkpoint write failures, corrupted checkpoint resume, consecutive failure threshold, budget exhaustion, spine checks during recovery, state persistence under faults | 27 |
+
+**Strategic Test Suite tests: 174**
+
+**Total: 4472 tests**
 
 ## Common Mistakes to Avoid
 

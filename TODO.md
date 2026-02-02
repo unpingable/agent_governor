@@ -1421,11 +1421,11 @@ author's voice. **This is the last core feature before deferred cross-cutting wo
   - `nonfiction-gov tone lock` — lock current profile as enforcement invariant
   - `nonfiction-gov tone unlock --confirm` — disable tone enforcement
 
-- [ ] **Tone drift warnings** — Surface during autonomous execution (DEFERRED: needs autonomous executor)
-  - Autonomous executor rejects proposals that fail style invariant
-  - Violations include specific suggestions: "break up long sentences",
-    "use more contractions", "add fragments for emphasis"
-  - Iteration retries with tone guidance reinforced
+- [x] **Tone drift warnings** — Surface during autonomous execution via `tone_invariant()` adapter
+  - `tone_invariant(checker)` wraps ToneChecker as an Invariant for the executor
+  - Violations surface specific suggestions: "break up long sentences", "use more contractions"
+  - Default warn-only; can be set to block for strict enforcement
+  - Module: `src/governor/adapters.py` (integrated with Phase A4)
 
 ---
 
@@ -1538,7 +1538,7 @@ at any time.
 
 #### Phase A4: Integration with Existing Governors ✅ COMPLETE
 
-- [x] **Governor adapter invariants** — `src/governor/adapters.py` (67 tests)
+- [x] **Governor adapter invariants** — `src/governor/adapters.py` (76 tests)
   - Thin factory functions wrapping domain governors as `Invariant` objects
   - `security_invariant()` — wraps SecurityVerifier, scans touched files for vulnerabilities with severity threshold
   - `cfi_invariant()` — wraps CFIDetector, checks prose files for contextual frame intrusion (default warn-only)

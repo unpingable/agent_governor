@@ -46,8 +46,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Agent Roles & Revalidation**: Layer 5 agent role assignment (PROPOSER/RETRIEVER/FALSIFIER/SYNTHESIZER), role budgets per risk level, quorum Gate 8, periodic revalidation orchestrator wiring TTL→AuditPipeline.
 **ClaimStatus FSM Enforcement**: Layer 6 transition table (PROPOSED→SUPPORTED↔CONTESTED→{INVALIDATED|EXPIRED|REFUSED}), 9 TransitionReasons, guard validation, transition history, cascade SUPPORTED→STALE, terminal state HUMAN-only recovery.
 **Tone Profiling**: ToneProfile dataclass (28 dimensions), text analysis, ToneChecker with violation detection, tone guidance generation for system prompts, ToneManager persistence, corpus analysis (extract_tone_profile), profile comparison (compare_profiles, ProfileDeviation), CLI commands.
-**Autonomous Execution (A1-A4)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence), AutonomousExecutor (step-function loop with spine+invariant enforcement, budget checking, checkpointing, resume), Spine CLI (lock/unlock/list/show/activate/check), Session CLI (list/show/delete/handoff), Governor adapters (security, CFI, fiction, nonfiction citation, generic content → Invariant).
-**Total: 4289 tests**
+**Autonomous Execution (A1-A4)**: Spine (locked project structure), SpineManager, InvariantType/Invariant/InvariantSet/InvariantLibrary (mechanically verifiable rules), ExecutionBudget/ExecutionUsage/ExecutionState (resource tracking), SessionManager (multi-session persistence), AutonomousExecutor (step-function loop with spine+invariant enforcement, budget checking, checkpointing, resume), Spine CLI (lock/unlock/list/show/activate/check), Session CLI (list/show/delete/handoff), Governor adapters (security, CFI, fiction, nonfiction citation, tone, generic content → Invariant).
+**Total: 4298 tests**
 
 ## Key Documents
 
@@ -800,11 +800,11 @@ src/ops_governor/
 | invariants.py | InvariantType (6 types), Invariant, InvariantResult, InvariantSet, InvariantLibrary (tests_must_pass, file/dir exists, forbidden patterns, no_secrets, max_file_size) | 36 |
 | execution.py | ExecutionBudget (tokens/iterations/time/cost), ExecutionUsage, ExecutionState, StopReason, ExecutionStatus, SessionManager, checkpoint/resume | 34 |
 | executor.py | AutonomousExecutor (step-function loop), StepResult, ExecutorConfig, ExecutionEvent, spine compliance, invariant verification, budget enforcement, checkpointing, resume | 45 |
-| adapters.py | Governor adapter invariants: security_invariant, cfi_invariant, fiction_invariant, nonfiction_citation_invariant, content_invariant, AdapterConfig, build_adapter_set | 67 |
+| adapters.py | Governor adapter invariants: security_invariant, cfi_invariant, fiction_invariant, nonfiction_citation_invariant, tone_invariant, content_invariant, AdapterConfig, build_adapter_set | 76 |
 
-**Autonomous Execution tests: 223**
+**Autonomous Execution tests: 232**
 
-**Total: 4289 tests**
+**Total: 4298 tests**
 
 ## Common Mistakes to Avoid
 

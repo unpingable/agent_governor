@@ -377,6 +377,87 @@ def nonfiction_citation_invariant(
 
 
 # =============================================================================
+# Tone adapter (nonfiction style enforcement)
+# =============================================================================
+
+
+def tone_invariant(
+    checker: Any,
+    file_extensions: set[str] | None = None,
+    invariant_id: str = "tone_check",
+    on_violation: str = "warn",
+) -> Invariant:
+    """
+    Wrap a ToneChecker as an Invariant.
+
+    Checks touched prose files against a locked tone profile. Violations
+    include specific suggestions (e.g., "break up long sentences").
+
+    Args:
+        checker: ToneChecker instance (from nonfiction_governor.tone)
+        file_extensions: Which file extensions to scan (default: prose files)
+        invariant_id: Invariant identifier
+        on_violation: "block" or "warn"
+    """
+    exts = file_extensions or PROSE_EXTENSIONS
+
+    def verify(**kwargs: Any) -> InvariantResult:
+        root = kwargs.get("root", Path("."))
+        files = kwargs.get("files_touched", [])
+
+        file_contents = _read_text_files(files, root, exts)
+        all_violations: list[AdapterFinding] = []
+
+        for rel_path, content in file_contents:
+            try:
+                result = checker.check(content)
+            except Exception:
+                continue
+            if not result.valid:
+                for v in result.violations:
+                    msg = v.message if hasattr(v, "message") else str(v)
+                    suggestion = v.suggestion if hasattr(v, "suggestion") else ""
+                    all_violations.append(AdapterFinding(
+                        source="tone",
+                        file_path=rel_path,
+                        message=msg,
+                        severity="warning",
+                        details={
+                            "dimension": v.dimension if hasattr(v, "dimension") else "",
+                            "suggestion": suggestion,
+                        },
+                    ))
+
+        if all_violations:
+            suggestions = [
+                v.details.get("suggestion", "")
+                for v in all_violations if v.details.get("suggestion")
+            ]
+            msg = f"Tone: {len(all_violations)} violation(s)"
+            if suggestions:
+                msg += f" — {'; '.join(suggestions[:3])}"
+            return InvariantResult(
+                passed=False,
+                message=msg,
+                invariant_id=invariant_id,
+                details={"violations": [v.to_dict() for v in all_violations[:20]]},
+            )
+        return InvariantResult(
+            passed=True,
+            message="Tone profile satisfied",
+            invariant_id=invariant_id,
+        )
+
+    return Invariant(
+        id=invariant_id,
+        type=InvariantType.CONSISTENCY,
+        rule="Prose must match the locked tone profile",
+        verify=verify,
+        on_violation=on_violation,
+    )
+
+
+# =============================================================================
 # Generic content adapter
 # =============================================================================
 
@@ -481,6 +562,8 @@ class AdapterConfig:
 
     citation_verifier: Any | None = None
 
+    tone_checker: Any | None = None
+
     custom_checks: list[tuple[ContentCheckFn, str, str]] = field(default_factory=list)
     """List of (check_fn, name, rule) tuples."""
 
@@ -525,6 +608,11 @@ def build_adapter_set(config: AdapterConfig) -> list[Invariant]:
     if config.citation_verifier is not None:
         result.append(nonfiction_citation_invariant(
             verifier=config.citation_verifier,
+        ))
+
+    if config.tone_checker is not None:
+        result.append(tone_invariant(
+            checker=config.tone_checker,
         ))
 
     for check_fn, name, rule in config.custom_checks:

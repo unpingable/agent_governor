@@ -19,6 +19,7 @@ from governor.adapters import (
     cfi_invariant,
     fiction_invariant,
     nonfiction_citation_invariant,
+    tone_invariant,
     content_invariant,
     build_adapter_set,
     _read_text_files,
@@ -152,6 +153,34 @@ class MockFictionVerifier:
 
     def quick_check(self, content: str, characters: list[str]) -> tuple[bool, list[str]]:
         return self._results.get(content, (True, []))
+
+
+@dataclass
+class MockToneViolation:
+    """Mimics ToneViolation from nonfiction_governor.tone."""
+
+    dimension: str
+    message: str
+    suggestion: str = ""
+
+
+@dataclass
+class MockToneCheckResult:
+    """Mimics ToneCheckResult from nonfiction_governor.tone."""
+
+    valid: bool
+    violations: list[MockToneViolation] = field(default_factory=list)
+
+
+class MockToneChecker:
+    """Mimics ToneChecker from nonfiction_governor.tone."""
+
+    def __init__(self, results_by_content: dict[str, MockToneCheckResult] | None = None):
+        self._results = results_by_content or {}
+        self._default = MockToneCheckResult(valid=True)
+
+    def check(self, text: str) -> MockToneCheckResult:
+        return self._results.get(text, self._default)
 
 
 # =============================================================================
@@ -548,6 +577,93 @@ class TestNonfictionCitationInvariant:
 
 
 # =============================================================================
+# Tone adapter tests
+# =============================================================================
+
+
+class TestToneInvariant:
+    def test_no_files_passes(self):
+        checker = MockToneChecker()
+        inv = tone_invariant(checker)
+        result = inv.check(files_touched=[], root=Path("."))
+        assert result.passed
+
+    def test_valid_tone_passes(self, tmp_path):
+        text = "Clean prose that matches the profile."
+        (tmp_path / "essay.md").write_text(text)
+        checker = MockToneChecker({text: MockToneCheckResult(valid=True)})
+        inv = tone_invariant(checker)
+        result = inv.check(files_touched=["essay.md"], root=tmp_path)
+        assert result.passed
+
+    def test_violation_detected(self, tmp_path):
+        text = "This sentence is way too long and rambling with too many clauses."
+        (tmp_path / "essay.md").write_text(text)
+        violation = MockToneViolation(
+            dimension="avg_sentence_length",
+            message="Sentences too long (avg 15.2, target 10.0)",
+            suggestion="Break up long sentences",
+        )
+        checker = MockToneChecker({
+            text: MockToneCheckResult(valid=False, violations=[violation]),
+        })
+        inv = tone_invariant(checker)
+        result = inv.check(files_touched=["essay.md"], root=tmp_path)
+        assert not result.passed
+        assert "1 violation" in result.message
+        assert "Break up long sentences" in result.message
+
+    def test_multiple_violations(self, tmp_path):
+        text = "Bad prose."
+        (tmp_path / "essay.md").write_text(text)
+        violations = [
+            MockToneViolation("sentence_length", "Too long", "Use shorter sentences"),
+            MockToneViolation("contraction_rate", "Too formal", "Use more contractions"),
+        ]
+        checker = MockToneChecker({
+            text: MockToneCheckResult(valid=False, violations=violations),
+        })
+        inv = tone_invariant(checker)
+        result = inv.check(files_touched=["essay.md"], root=tmp_path)
+        assert not result.passed
+        assert "2 violation" in result.message
+
+    def test_skips_non_prose_files(self, tmp_path):
+        (tmp_path / "code.py").write_text("x = 1")
+        checker = MockToneChecker()
+        checker.check = MagicMock(return_value=MockToneCheckResult(valid=True))
+        inv = tone_invariant(checker)
+        result = inv.check(files_touched=["code.py"], root=tmp_path)
+        assert result.passed
+        checker.check.assert_not_called()
+
+    def test_default_warn_only(self):
+        checker = MockToneChecker()
+        inv = tone_invariant(checker)
+        assert inv.on_violation == "warn"
+        assert inv.id == "tone_check"
+
+    def test_custom_extensions(self, tmp_path):
+        (tmp_path / "file.py").write_text("text")
+        checker = MockToneChecker({"text": MockToneCheckResult(valid=True)})
+        inv = tone_invariant(checker, file_extensions={".py"})
+        result = inv.check(files_touched=["file.py"], root=tmp_path)
+        assert result.passed
+
+    def test_suggestion_in_details(self, tmp_path):
+        text = "Text."
+        (tmp_path / "doc.md").write_text(text)
+        violation = MockToneViolation("metric", "Issue", "Add fragments for emphasis")
+        checker = MockToneChecker({
+            text: MockToneCheckResult(valid=False, violations=[violation]),
+        })
+        inv = tone_invariant(checker)
+        result = inv.check(files_touched=["doc.md"], root=tmp_path)
+        assert not result.passed
+        assert result.details["violations"][0]["details"]["suggestion"] == "Add fragments for emphasis"
+
+
+# =============================================================================
 # Content invariant (generic adapter) tests
 # =============================================================================
 
@@ -659,6 +775,7 @@ class TestAdapterConfig:
         assert config.cfi_detector is None
         assert config.fiction_verifier is None
         assert config.citation_verifier is None
+        assert config.tone_checker is None
         assert config.custom_checks == []
 
     def test_empty_config_builds_empty_set(self):
@@ -690,17 +807,24 @@ class TestAdapterConfig:
         assert len(result) == 1
         assert result[0].id == "nonfiction_citations"
 
+    def test_tone_only(self):
+        config = AdapterConfig(tone_checker=MockToneChecker())
+        result = build_adapter_set(config)
+        assert len(result) == 1
+        assert result[0].id == "tone_check"
+
     def test_all_adapters(self):
         config = AdapterConfig(
             security_verifier=MockSecurityVerifier(),
             cfi_detector=MockCFIDetector(),
             fiction_verifier=MockFictionVerifier(),
             citation_verifier=MockCitationVerifier(),
+            tone_checker=MockToneChecker(),
         )
         result = build_adapter_set(config)
-        assert len(result) == 4
+        assert len(result) == 5
         ids = {inv.id for inv in result}
-        assert ids == {"security_scan", "cfi_check", "fiction_check", "nonfiction_citations"}
+        assert ids == {"security_scan", "cfi_check", "fiction_check", "nonfiction_citations", "tone_check"}
 
     def test_custom_checks_included(self):
         def my_check(content: str, path: str) -> tuple[bool, str]:

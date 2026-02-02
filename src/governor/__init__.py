@@ -554,6 +554,7 @@ from .adapters import (
     cfi_invariant,
     fiction_invariant,
     nonfiction_citation_invariant,
+    tone_invariant,
     content_invariant,
     build_adapter_set,
 )
@@ -1041,6 +1042,7 @@ __all__ = [
     "cfi_invariant",
     "fiction_invariant",
     "nonfiction_citation_invariant",
+    "tone_invariant",
     "content_invariant",
     "build_adapter_set",
     # Autonomous execution (Phase A1-A2)

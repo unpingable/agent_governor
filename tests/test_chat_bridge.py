@@ -15,6 +15,7 @@ from governor.chat_bridge import (
     AnthropicBackend,
     GovernorHooks,
     GovernorCheckResult,
+    ViolationPendingResponse,
     ChatBridge,
     create_backend,
     _format_governor_footer,
@@ -1174,3 +1175,159 @@ class TestChatBridgeStreaming:
             assert gc.finish_reason is None
         # Last chunk has finish_reason
         assert collected[-1].finish_reason == "stop"
+
+
+# ============================================================================
+# TestViolationPendingResponse
+# ============================================================================
+
+
+class TestViolationPendingResponse:
+    """Tests for ViolationPendingResponse dataclass."""
+
+    def test_creation(self) -> None:
+        """ViolationPendingResponse can be created."""
+        vpr = ViolationPendingResponse(
+            blocked_response="Hello world",
+            violations=[{"anchor_id": "a1", "severity": "reject"}],
+            choices=["1. Fix", "2. Revise", "3. Proceed"],
+            prompt="Choose an action",
+            run_id="run_001",
+        )
+        assert vpr.blocked_response == "Hello world"
+        assert len(vpr.violations) == 1
+
+    def test_to_dict(self) -> None:
+        """ViolationPendingResponse serializes to dict."""
+        vpr = ViolationPendingResponse(
+            blocked_response="content",
+            violations=[{"a": "b"}],
+            choices=["1", "2"],
+            prompt="prompt",
+            run_id="run",
+            pending_id="pend_xyz",
+        )
+        d = vpr.to_dict()
+        assert d["blocked_response"] == "content"
+        assert d["pending_id"] == "pend_xyz"
+
+
+# ============================================================================
+# TestCheckResponseBlocking
+# ============================================================================
+
+
+class TestCheckResponseBlocking:
+    """Tests for check_response_blocking method."""
+
+    def _setup_context_with_reject_anchor(self, tmp_path: Path) -> GovernorContext:
+        """Create a context with a REJECT-severity anchor."""
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="fiction")
+
+        # Create a continuity anchor with REJECT severity
+        anchors_dir = ctx.governor_dir / "continuity"
+        anchors_dir.mkdir(parents=True)
+        anchors_file = anchors_dir / "anchors.json"
+        anchors_file.write_text(json.dumps({
+            "anchors": [{
+                "id": "test_reject_anchor",
+                "anchor_type": "prohibition",
+                "description": "Cannot mention secret password",
+                "forbidden_patterns": ["secret password"],
+                "severity": "reject",
+            }]
+        }))
+        return ctx
+
+    def test_non_blocking_returns_check_result(self, tmp_path: Path) -> None:
+        """Non-blocking violations return GovernorCheckResult."""
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="fiction")
+        hooks = GovernorHooks(ctx)
+
+        result = hooks.check_response_blocking("Hello world", "run_001")
+        assert isinstance(result, GovernorCheckResult)
+        assert result.passed is True
+
+    def test_reject_severity_returns_pending(self, tmp_path: Path) -> None:
+        """REJECT-severity violations return ViolationPendingResponse."""
+        ctx = self._setup_context_with_reject_anchor(tmp_path)
+        hooks = GovernorHooks(ctx)
+
+        result = hooks.check_response_blocking(
+            "The secret password is 12345", "run_002"
+        )
+        assert isinstance(result, ViolationPendingResponse)
+        assert result.blocked_response == "The secret password is 12345"
+        assert len(result.violations) >= 1
+        assert result.run_id == "run_002"
+
+    def test_pending_has_choices(self, tmp_path: Path) -> None:
+        """ViolationPendingResponse includes mode-appropriate choices."""
+        ctx = self._setup_context_with_reject_anchor(tmp_path)
+        hooks = GovernorHooks(ctx)
+
+        result = hooks.check_response_blocking(
+            "The secret password is 12345", "run_003"
+        )
+        assert isinstance(result, ViolationPendingResponse)
+        assert len(result.choices) == 3
+        # Fiction mode should mention canon
+        assert any("canon" in c.lower() for c in result.choices)
+
+    def test_pending_prompt_is_formatted(self, tmp_path: Path) -> None:
+        """ViolationPendingResponse has formatted user prompt."""
+        ctx = self._setup_context_with_reject_anchor(tmp_path)
+        hooks = GovernorHooks(ctx)
+
+        result = hooks.check_response_blocking(
+            "The secret password is 12345", "run_004"
+        )
+        assert isinstance(result, ViolationPendingResponse)
+        assert "[Governor] Blocked" in result.prompt
+        assert "maude fix" in result.prompt.lower()
+
+    def test_pending_creates_file(self, tmp_path: Path) -> None:
+        """Blocking check creates pending violation file."""
+        ctx = self._setup_context_with_reject_anchor(tmp_path)
+        hooks = GovernorHooks(ctx)
+
+        result = hooks.check_response_blocking(
+            "The secret password is 12345", "run_005"
+        )
+        assert isinstance(result, ViolationPendingResponse)
+
+        # Check pending file was created
+        from governor.violation_resolver import ViolationResolver
+        resolver = ViolationResolver(ctx.governor_dir)
+        pending = resolver.get_pending()
+        assert pending is not None
+        assert pending.run_id == "run_005"
+
+    def test_warn_severity_not_blocking(self, tmp_path: Path) -> None:
+        """WARN-severity violations do not block."""
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="fiction")
+
+        # Create anchor with WARN severity
+        anchors_dir = ctx.governor_dir / "continuity"
+        anchors_dir.mkdir(parents=True)
+        anchors_file = anchors_dir / "anchors.json"
+        anchors_file.write_text(json.dumps({
+            "anchors": [{
+                "id": "warn_anchor",
+                "anchor_type": "prohibition",
+                "description": "Warn about clichés",
+                "forbidden_patterns": ["once upon a time"],
+                "severity": "warn",
+            }]
+        }))
+
+        hooks = GovernorHooks(ctx)
+        result = hooks.check_response_blocking(
+            "Once upon a time in a land far away", "run_006"
+        )
+        # Should return GovernorCheckResult, not ViolationPendingResponse
+        assert isinstance(result, GovernorCheckResult)
+        assert len(result.violations) >= 1  # Has violations but not blocking

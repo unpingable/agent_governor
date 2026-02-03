@@ -65,6 +65,32 @@ class GovernorCheckResult:
     passed: bool
 
 
+@dataclass
+class ViolationPendingResponse:
+    """Response when violations require resolution (blocking).
+
+    Instead of returning the assistant's response, this object is returned
+    to indicate that the user must resolve the violation first.
+    """
+
+    blocked_response: str           # The response that was blocked
+    violations: list[dict[str, Any]]  # Blocking violations (REJECT severity)
+    choices: list[str]              # Available resolution choices
+    prompt: str                     # User-facing prompt
+    run_id: str                     # Generation run identifier
+    pending_id: str = ""            # ID of the pending violation record
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "blocked_response": self.blocked_response,
+            "violations": self.violations,
+            "choices": self.choices,
+            "prompt": self.prompt,
+            "run_id": self.run_id,
+            "pending_id": self.pending_id,
+        }
+
+
 def _format_governor_footer(result: GovernorCheckResult, show_ok: bool) -> str | None:
     """Format a governor footer string for chat responses.
 
@@ -496,6 +522,54 @@ class GovernorHooks:
         Returns a list of violation dicts. Delegates to check_response_full().
         """
         return self.check_response_full(content, collector=collector).violations
+
+    def check_response_blocking(
+        self, content: str, run_id: str, collector: Any | None = None
+    ) -> GovernorCheckResult | ViolationPendingResponse:
+        """Check response and return blocking response if REJECT-severity violations.
+
+        For non-blocking violations (WARN, CORRECT), returns normal GovernorCheckResult.
+        For blocking violations (REJECT), creates a pending violation and returns
+        ViolationPendingResponse that must be resolved before continuing.
+
+        Args:
+            content: Response content to check
+            run_id: Identifier for this generation run
+            collector: Optional telemetry collector
+
+        Returns:
+            GovernorCheckResult for non-blocking, ViolationPendingResponse for blocking
+        """
+        result = self.check_response_full(content, collector=collector)
+
+        # Check for REJECT-severity violations (blocking)
+        blocking = [v for v in result.violations if v.get("severity") == "reject"]
+
+        if not blocking:
+            return result
+
+        # Create pending violation
+        from .violation_resolver import (
+            ViolationResolver,
+            format_violation_prompt,
+            get_mode_choices,
+        )
+
+        resolver = ViolationResolver(
+            governor_dir=self.context.governor_dir,
+            mode=self.context.mode,
+            context_id=self.context.context_id,
+        )
+        pending = resolver.create_pending(blocking, content, run_id)
+
+        return ViolationPendingResponse(
+            blocked_response=content,
+            violations=blocking,
+            choices=get_mode_choices(self.context.mode),
+            prompt=format_violation_prompt(blocking, self.context.mode),
+            run_id=run_id,
+            pending_id=pending.id,
+        )
 
     def _load_mode_anchors(self) -> list:
         """Load continuity anchors for the current mode.

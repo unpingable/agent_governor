@@ -37,7 +37,13 @@ from governor.chat_bridge import (
     ChatResponse as BridgeChatResponse,
     GovernorHooks,
     OllamaBackend,
+    ViolationPendingResponse,
     create_backend,
+)
+from governor.violation_resolver import (
+    ResolutionAction,
+    ViolationResolver,
+    format_violation_prompt,
 )
 from governor.context_manager import GovernorContextManager
 from governor.viewmodel import build_viewmodel, GovernorViewModel
@@ -203,8 +209,31 @@ async def get_model(model_id: str) -> ModelInfo:
 async def chat_completions(
     request: ChatCompletionRequest,
 ) -> ChatCompletionResponse | StreamingResponse:
-    """OpenAI-compatible chat completions endpoint."""
+    """OpenAI-compatible chat completions endpoint with violation resolution."""
     bridge = _get_bridge()
+    cm = _get_context_manager()
+    ctx = cm.get_or_create(GOVERNOR_CONTEXT_ID, mode=GOVERNOR_MODE)
+
+    # Check for pending violation FIRST
+    resolver = ViolationResolver(
+        governor_dir=ctx.governor_dir,
+        mode=ctx.mode,
+        context_id=ctx.context_id,
+    )
+    pending = resolver.get_pending()
+
+    if pending:
+        # User has a pending violation — check if this message resolves it
+        last_message = request.messages[-1].content if request.messages else ""
+        action = resolver.is_resolution_command(last_message)
+
+        if action:
+            # Handle resolution
+            result = await _handle_resolution(resolver, pending, action, bridge, request.model)
+            return _format_resolution_response(result, request.model)
+        else:
+            # Re-present the choices — don't proceed with normal chat
+            return _format_violation_pending_response(pending, request.model)
 
     # Convert Pydantic models to bridge messages
     bridge_messages = [
@@ -226,8 +255,8 @@ async def chat_completions(
             media_type="text/event-stream",
         )
     else:
-        return await _non_streaming_response(
-            bridge, bridge_messages, request.model, context_id, kwargs
+        return await _non_streaming_response_with_blocking(
+            bridge, bridge_messages, request.model, context_id, kwargs, ctx, resolver
         )
 
 
@@ -238,7 +267,7 @@ async def _non_streaming_response(
     context_id: str,
     kwargs: dict[str, Any],
 ) -> ChatCompletionResponse:
-    """Handle non-streaming chat response."""
+    """Handle non-streaming chat response (legacy, no blocking check)."""
     try:
         result = await bridge.chat(
             messages=messages,
@@ -269,6 +298,138 @@ async def _non_streaming_response(
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Backend error: {e}")
+
+
+async def _non_streaming_response_with_blocking(
+    bridge: ChatBridge,
+    messages: list[BridgeChatMessage],
+    model: str,
+    context_id: str,
+    kwargs: dict[str, Any],
+    ctx: Any,
+    resolver: ViolationResolver,
+) -> ChatCompletionResponse:
+    """Handle non-streaming chat response with blocking violation check."""
+    try:
+        result = await bridge.chat(
+            messages=messages,
+            model=model,
+            context_id=context_id,
+            stream=False,
+            **kwargs,
+        )
+        assert isinstance(result, BridgeChatResponse)
+
+        # Check for blocking violations
+        run_id = uuid.uuid4().hex[:12]
+        hooks = GovernorHooks(ctx)
+        check_result = hooks.check_response_blocking(result.content, run_id)
+
+        if isinstance(check_result, ViolationPendingResponse):
+            # Return violation prompt instead of normal response
+            return _format_violation_pending_response(check_result, model)
+
+        # Normal response (may have non-blocking violations in footer)
+        return ChatCompletionResponse(
+            id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
+            created=int(time.time()),
+            model=result.model,
+            choices=[
+                ChatCompletionChoice(
+                    index=0,
+                    message=ChatMessage(role="assistant", content=result.content),
+                    finish_reason=result.finish_reason,
+                )
+            ],
+            usage=Usage(
+                prompt_tokens=result.usage.get("prompt_tokens", 0),
+                completion_tokens=result.usage.get("completion_tokens", 0),
+                total_tokens=result.usage.get("total_tokens", 0),
+            ),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Backend error: {e}")
+
+
+async def _handle_resolution(
+    resolver: ViolationResolver,
+    pending: Any,
+    action: ResolutionAction,
+    bridge: ChatBridge,
+    model: str,
+) -> Any:
+    """Handle a resolution action for a pending violation."""
+    if action == ResolutionAction.FIX:
+        return await resolver.resolve_fix(pending, bridge.backend, model)
+    elif action == ResolutionAction.REVISE:
+        return resolver.resolve_revise(pending)
+    else:  # PROCEED
+        return resolver.resolve_proceed(pending)
+
+
+def _format_violation_pending_response(
+    pending: Any,
+    model: str,
+) -> ChatCompletionResponse:
+    """Format a ViolationPendingResponse as a ChatCompletionResponse.
+
+    The response content is the violation prompt asking user to choose an action.
+    """
+    # Handle both ViolationPendingResponse and PendingViolation
+    if hasattr(pending, "prompt"):
+        # ViolationPendingResponse from check_response_blocking
+        prompt_text = pending.prompt
+    else:
+        # PendingViolation from get_pending
+        prompt_text = format_violation_prompt(pending.violations, pending.mode)
+
+    return ChatCompletionResponse(
+        id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
+        created=int(time.time()),
+        model=model,
+        choices=[
+            ChatCompletionChoice(
+                index=0,
+                message=ChatMessage(role="assistant", content=prompt_text),
+                finish_reason="stop",
+            )
+        ],
+        usage=Usage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
+    )
+
+
+def _format_resolution_response(
+    result: Any,
+    model: str,
+) -> ChatCompletionResponse:
+    """Format a ResolutionResult as a ChatCompletionResponse."""
+    # Build response content based on resolution action
+    if result.success:
+        if result.action == ResolutionAction.FIX:
+            # Return the corrected content
+            content = result.new_content or result.message
+        elif result.action == ResolutionAction.REVISE:
+            # Return original (now permitted) + note about revision
+            content = f"[Governor] {result.message}\n\n{result.new_content or ''}"
+        else:  # PROCEED
+            # Return original (now permitted) + exception note
+            content = f"[Governor] {result.message}\n\n{result.new_content or ''}"
+    else:
+        content = f"[Governor] Resolution failed: {result.message}"
+
+    return ChatCompletionResponse(
+        id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
+        created=int(time.time()),
+        model=model,
+        choices=[
+            ChatCompletionChoice(
+                index=0,
+                message=ChatMessage(role="assistant", content=content),
+                finish_reason="stop",
+            )
+        ],
+        usage=Usage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
+    )
 
 
 async def _stream_response(

@@ -903,25 +903,216 @@ def hook_status(ctx: click.Context) -> None:
 
 @hook.command("pre-commit")
 @click.option("--bypass", is_flag=True, help="Bypass the check")
+@click.option("--check-continuity", "-c", is_flag=True, help="Also check staged content for continuity violations")
+@click.option("--interactive", "-i", is_flag=True, help="Interactive mode for violation resolution")
+@click.option("--mode", "hook_mode", type=click.Choice(["code", "fiction", "nonfiction"]), default="code", help="Context mode for continuity checking")
 @click.pass_context
-def hook_pre_commit(ctx: click.Context, bypass: bool) -> None:
+def hook_pre_commit(ctx: click.Context, bypass: bool, check_continuity: bool, interactive: bool, hook_mode: str) -> None:
     """
     Run the pre-commit check.
 
     This is called by the git pre-commit hook script.
-    Not typically called directly by users.
+    Can also be run directly with --interactive for violation resolution.
+
+    With --check-continuity, staged file contents are checked against anchors.
+    With --interactive, blocking violations trigger the resolution flow.
+
+    Examples:
+        governor hook pre-commit
+        governor hook pre-commit --check-continuity --interactive
     """
-    from .hooks import run_pre_commit_check, get_git_root
+    from .hooks import run_pre_commit_check, get_git_root, get_staged_files
+    from .violation_resolver import ViolationResolver
 
     root = Path(ctx.obj["root"])
     git_root = get_git_root(root)
+    gov_dir = root / ".governor"
 
+    # First check for pending violations from previous runs
+    if gov_dir.exists():
+        resolver = ViolationResolver(gov_dir, mode=hook_mode, context_id="hook_precommit")
+        pending = resolver.get_pending()
+        if pending:
+            click.echo(click.style("[Governor] Pending violation requires resolution:", fg="yellow"))
+            click.echo()
+            for v in pending.violations:
+                desc = v.get("description", str(v))
+                click.echo(f"  • {desc}")
+            click.echo()
+            click.echo("Resolve before committing:")
+            click.echo("  governor lite fix      # Regenerate compliant content")
+            click.echo("  governor lite revise   # Update the constraint")
+            click.echo("  governor lite proceed  # Log as exception")
+            click.echo()
+            click.echo("Or view details with: governor lite pending")
+            ctx.exit(1)
+            return
+
+    # Standard pre-commit approval check
     success, message = run_pre_commit_check(git_root, bypass=bypass)
+
+    if not success:
+        click.echo(message)
+        ctx.exit(1)
+        return
+
+    # Optionally check continuity on staged content
+    if check_continuity and gov_dir.exists():
+        continuity_ok, continuity_msg = _check_staged_continuity(
+            ctx, git_root, gov_dir, interactive, hook_mode
+        )
+        if not continuity_ok:
+            click.echo(continuity_msg)
+            ctx.exit(1)
+            return
 
     click.echo(message)
 
-    if not success:
-        ctx.exit(1)
+
+def _check_staged_continuity(
+    ctx: click.Context,
+    git_root: Path,
+    gov_dir: Path,
+    interactive: bool,
+    mode: str,
+) -> tuple[bool, str]:
+    """Check staged file contents for continuity violations."""
+    import subprocess
+    from .check import run_check
+    from .violation_resolver import (
+        ViolationResolver,
+        ResolutionAction,
+        format_violation_prompt,
+        get_mode_choices,
+    )
+
+    # Get staged files
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+        cwd=git_root,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return True, ""  # Can't get staged files, pass through
+
+    staged_files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
+    if not staged_files:
+        return True, ""
+
+    # Check each staged file
+    blocking_violations = []
+    blocked_content_parts = []
+
+    for file_path in staged_files:
+        # Skip .governor files
+        if file_path.startswith(".governor/"):
+            continue
+
+        # Get staged content
+        content_result = subprocess.run(
+            ["git", "show", f":{file_path}"],
+            cwd=git_root,
+            capture_output=True,
+        )
+        if content_result.returncode != 0:
+            continue
+
+        try:
+            content = content_result.stdout.decode("utf-8")
+        except UnicodeDecodeError:
+            continue  # Skip binary files
+
+        check_result = run_check(
+            content,
+            file_path,
+            run_security=True,
+            run_continuity=True,
+            governor_dir=gov_dir,
+        )
+
+        for f in check_result.findings:
+            if f.severity == "error":
+                blocking_violations.append({
+                    "file": file_path,
+                    "anchor_id": f.code,
+                    "description": f"{file_path}: {f.message}",
+                    "severity": "reject",
+                    "evidence": [f.suggestion] if f.suggestion else [],
+                })
+                blocked_content_parts.append(f"=== {file_path} ===\n{content}")
+
+    if not blocking_violations:
+        return True, ""
+
+    # Violations found
+    click.echo()
+    click.echo(click.style(f"[Governor] {len(blocking_violations)} blocking violation(s) in staged files:", fg="red"))
+    for v in blocking_violations:
+        click.echo(f"  • {v['description']}")
+    click.echo()
+
+    if not interactive:
+        click.echo("COMMIT BLOCKED: Staged files have continuity violations.")
+        click.echo()
+        click.echo("To resolve:")
+        click.echo("  1. Fix the violations and re-stage")
+        click.echo("  2. Or run: governor hook pre-commit --check-continuity --interactive")
+        click.echo("  3. Or bypass with: git commit --no-verify (not recommended)")
+        return False, ""
+
+    # Interactive mode
+    blocked_response = "\n\n".join(blocked_content_parts)
+    resolver = ViolationResolver(gov_dir, mode=mode, context_id="hook_precommit")
+    run_id = f"precommit_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    pending = resolver.create_pending(blocking_violations, blocked_response, run_id)
+
+    click.echo(format_violation_prompt(blocking_violations, mode))
+    click.echo()
+
+    # Interactive resolution loop
+    while True:
+        try:
+            user_input = click.prompt("Choice", default="", show_default=False)
+        except click.exceptions.Abort:
+            click.echo("\nAborted. Pending violation saved for later resolution.")
+            return False, "Commit blocked - pending violation"
+
+        action = resolver.is_resolution_command(user_input)
+        if action is None:
+            click.echo()
+            click.echo("Invalid choice. Please enter 1, 2, 3 or: fix | revise | proceed")
+            click.echo()
+            for choice in get_mode_choices(mode):
+                click.echo(f"  {choice}")
+            click.echo()
+            continue
+
+        if action == ResolutionAction.FIX:
+            click.echo()
+            click.echo("[Governor] Fix: Edit the staged files to comply with constraints,")
+            click.echo("then re-stage and commit.")
+            resolver.clear_pending()
+            return False, "Commit blocked - fix staged files and retry"
+
+        elif action == ResolutionAction.REVISE:
+            result_obj = resolver.resolve_revise(pending)
+            click.echo()
+            click.echo(f"[Governor] {result_obj.message}")
+            if result_obj.anchor_update:
+                for anchor_id in result_obj.anchor_update.get("revised_anchors", []):
+                    click.echo(f"  - Revised: {anchor_id}")
+            # Allow commit to proceed
+            return True, ""
+
+        elif action == ResolutionAction.PROCEED:
+            scope = click.prompt("Exception scope", default="single_instance",
+                               type=click.Choice(["single_instance", "session", "project"]))
+            result_obj = resolver.resolve_proceed(pending, scope=scope)
+            click.echo()
+            click.echo(f"[Governor] {result_obj.message}")
+            # Allow commit to proceed
+            return True, ""
 
 
 @hook.command("bypass")
@@ -946,31 +1137,200 @@ def hook_bypass(ctx: click.Context) -> None:
 @cli.command("wrap")
 @click.argument("command", nargs=-1, required=True)
 @click.option("--auto-approve", "-a", is_flag=True, help="Auto-approve in exploratory mode")
+@click.option("--check-continuity", "-c", is_flag=True, help="Check file changes for continuity violations")
+@click.option("--interactive", "-i", is_flag=True, help="Interactive mode: offer fix/revise/proceed on violations")
+@click.option("--mode", "wrap_mode", type=click.Choice(["code", "fiction", "nonfiction"]), default="code", help="Context mode for continuity checking")
 @click.pass_context
-def wrap(ctx: click.Context, command: tuple[str, ...], auto_approve: bool) -> None:
+def wrap(ctx: click.Context, command: tuple[str, ...], auto_approve: bool, check_continuity: bool, interactive: bool, wrap_mode: str) -> None:
     """
     Wrap an agent command with governor enforcement.
 
     Monitors file changes made by the agent and ensures they go
     through the governor approval workflow.
 
+    With --check-continuity, file changes are checked against anchors.
+    With --interactive, blocking violations trigger the resolution flow.
+
     Examples:
         governor wrap -- python script.py
         governor wrap --auto-approve -- claude-code
         governor wrap -- npm run build
+        governor wrap --check-continuity --interactive -- claude-code
     """
-    from .wrapper import wrap_agent
+    from .wrapper import wrap_agent, AgentWrapper
 
     root = Path(ctx.obj["root"])
+    gov_dir = root / ".governor"
 
-    exit_code, message = wrap_agent(
-        list(command),
-        root=root,
-        auto_approve=auto_approve,
+    if check_continuity and not gov_dir.exists():
+        click.echo("Warning: --check-continuity requires initialized governor. Running without continuity checks.", err=True)
+        check_continuity = False
+
+    if not check_continuity:
+        # Original behavior
+        exit_code, message = wrap_agent(
+            list(command),
+            root=root,
+            auto_approve=auto_approve,
+        )
+        click.echo(message)
+        ctx.exit(exit_code)
+        return
+
+    # Enhanced wrap with continuity checking
+    exit_code, message = _wrap_with_continuity_check(
+        ctx, list(command), root, gov_dir, auto_approve, interactive, wrap_mode
     )
-
     click.echo(message)
     ctx.exit(exit_code)
+
+
+def _wrap_with_continuity_check(
+    ctx: click.Context,
+    command: list[str],
+    root: Path,
+    gov_dir: Path,
+    auto_approve: bool,
+    interactive: bool,
+    mode: str,
+) -> tuple[int, str]:
+    """Wrap command with continuity violation checking."""
+    from .wrapper import AgentWrapper, rollback_changes
+    from .check import run_check
+    from .violation_resolver import (
+        ViolationResolver,
+        ResolutionAction,
+        format_violation_prompt,
+        get_mode_choices,
+    )
+    from .envelopes import get_current_envelope
+
+    wrapper = AgentWrapper(root, gov_dir, auto_approve=auto_approve)
+    exit_code, changes = wrapper.run(command)
+
+    if not changes:
+        return exit_code, "No file changes detected"
+
+    # Check changed files for violations
+    blocking_violations = []
+    for change in changes:
+        if change.change_type in ("created", "modified") and change.new_content:
+            try:
+                content = change.new_content.decode("utf-8")
+            except UnicodeDecodeError:
+                continue  # Skip binary files
+
+            result = run_check(
+                content,
+                change.path,
+                run_security=True,
+                run_continuity=True,
+                governor_dir=gov_dir,
+            )
+
+            # Collect blocking errors
+            for f in result.findings:
+                if f.severity == "error":
+                    blocking_violations.append({
+                        "file": change.path,
+                        "anchor_id": f.code,
+                        "description": f.message,
+                        "severity": "reject",
+                        "evidence": [f.suggestion] if f.suggestion else [],
+                    })
+
+    if not blocking_violations:
+        # No violations - proceed with normal approval flow
+        envelope = get_current_envelope(gov_dir)
+        if auto_approve and not envelope.require_receipts:
+            return exit_code, f"Approved {len(changes)} file change(s) - no violations"
+        return exit_code, f"{len(changes)} file change(s) detected - no violations"
+
+    # Violations found
+    click.echo()
+    click.echo(click.style(f"[Governor] {len(blocking_violations)} blocking violation(s) in changed files:", fg="red"))
+    for v in blocking_violations:
+        click.echo(f"  • {v['file']}: {v['description']}")
+    click.echo()
+
+    if not interactive:
+        # Non-interactive: rollback and exit
+        rollback_changes(root, changes)
+        click.echo("Changes rolled back due to violations.")
+        click.echo()
+        click.echo("To resolve interactively, run with --interactive flag:")
+        click.echo(f"  governor wrap --check-continuity --interactive -- {' '.join(command)}")
+        click.echo()
+        click.echo("Or resolve manually:")
+        click.echo("  governor lite pending  # View pending violations")
+        click.echo("  governor lite fix      # Regenerate compliant content")
+        click.echo("  governor lite revise   # Update the constraint")
+        click.echo("  governor lite proceed  # Log as exception")
+        return 1, "Blocked due to continuity violations"
+
+    # Interactive mode
+    # Aggregate content for pending violation
+    all_content = []
+    for change in changes:
+        if change.change_type in ("created", "modified") and change.new_content:
+            try:
+                all_content.append(f"=== {change.path} ===\n{change.new_content.decode('utf-8')}")
+            except UnicodeDecodeError:
+                pass
+    blocked_response = "\n\n".join(all_content)
+
+    resolver = ViolationResolver(gov_dir, mode=mode, context_id="cli_wrap")
+    run_id = f"wrap_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    pending = resolver.create_pending(blocking_violations, blocked_response, run_id)
+
+    click.echo(format_violation_prompt(blocking_violations, mode))
+    click.echo()
+
+    # Interactive resolution loop
+    while True:
+        try:
+            user_input = click.prompt("Choice", default="", show_default=False)
+        except click.exceptions.Abort:
+            rollback_changes(root, changes)
+            click.echo("\nAborted. Changes rolled back.")
+            return 1, "Aborted by user"
+
+        action = resolver.is_resolution_command(user_input)
+        if action is None:
+            click.echo()
+            click.echo("Invalid choice. Please enter 1, 2, 3 or: fix | revise | proceed")
+            click.echo()
+            for choice in get_mode_choices(mode):
+                click.echo(f"  {choice}")
+            click.echo()
+            continue
+
+        if action == ResolutionAction.FIX:
+            rollback_changes(root, changes)
+            click.echo()
+            click.echo("[Governor] Fix requires manual correction or chat backend.")
+            click.echo("Changes have been rolled back. Edit files and re-run the command.")
+            resolver.clear_pending()
+            return 1, "Fix selected - changes rolled back for manual correction"
+
+        elif action == ResolutionAction.REVISE:
+            result_obj = resolver.resolve_revise(pending)
+            click.echo()
+            click.echo(f"[Governor] {result_obj.message}")
+            if result_obj.anchor_update:
+                for anchor_id in result_obj.anchor_update.get("revised_anchors", []):
+                    click.echo(f"  - Revised: {anchor_id}")
+            # Keep changes - they're now permitted
+            return exit_code, f"Constraints revised. {len(changes)} file change(s) now permitted."
+
+        elif action == ResolutionAction.PROCEED:
+            scope = click.prompt("Exception scope", default="single_instance",
+                               type=click.Choice(["single_instance", "session", "project"]))
+            result_obj = resolver.resolve_proceed(pending, scope=scope)
+            click.echo()
+            click.echo(f"[Governor] {result_obj.message}")
+            # Keep changes - exception logged
+            return exit_code, f"Exception logged. {len(changes)} file change(s) permitted."
 
 
 @cli.command("changes")
@@ -9960,6 +10320,152 @@ def maude_lite_extract(ctx, text, use_stdin, file, fmt):
             click.echo(f"       ID: {claim.id}, Evidence: {evidence_status}")
 
 
+@lite_cmd.command("pending")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
+@click.pass_context
+def maude_lite_pending(ctx, fmt):
+    """Show pending violation requiring resolution."""
+    from .violation_resolver import ViolationResolver, format_violation_prompt
+
+    gov_dir = ensure_initialized(ctx)
+    resolver = ViolationResolver(gov_dir)
+    pending = resolver.get_pending()
+
+    if not pending:
+        if fmt == "json":
+            click.echo(json.dumps({"pending": None}))
+        else:
+            click.echo("No pending violation.")
+        return
+
+    if fmt == "json":
+        click.echo(json.dumps({"pending": pending.to_dict()}, indent=2))
+    else:
+        click.echo(format_violation_prompt(pending.violations, pending.mode))
+
+
+@lite_cmd.command("fix")
+@click.pass_context
+def maude_lite_fix(ctx):
+    """Resolve pending violation by fixing the response.
+
+    Regenerates the blocked response to comply with violated constraints.
+    This command requires an LLM backend (use --backend or environment vars).
+    """
+    from .violation_resolver import ViolationResolver, ResolutionAction
+
+    gov_dir = ensure_initialized(ctx)
+    resolver = ViolationResolver(gov_dir)
+    pending = resolver.get_pending()
+
+    if not pending:
+        click.echo("No pending violation to resolve.")
+        return
+
+    # For CLI, we can't easily call async backend — note this limitation
+    click.echo("[Governor] Fix action requires the web API with an LLM backend.")
+    click.echo("Use the web UI or reply '1' / 'maude fix' in chat.")
+    click.echo()
+    click.echo("Pending violation:")
+    for v in pending.violations:
+        desc = v.get("description", str(v))
+        click.echo(f"  - {desc}")
+
+
+@lite_cmd.command("revise")
+@click.pass_context
+def maude_lite_revise(ctx):
+    """Resolve pending violation by updating the anchor.
+
+    Updates the constraint/anchor that caused the violation, making the
+    original response now permitted.
+    """
+    from .violation_resolver import ViolationResolver
+
+    gov_dir = ensure_initialized(ctx)
+    resolver = ViolationResolver(gov_dir)
+    pending = resolver.get_pending()
+
+    if not pending:
+        click.echo("No pending violation to resolve.")
+        return
+
+    result = resolver.resolve_revise(pending)
+
+    if result.success:
+        click.echo(f"[Governor] {result.message}")
+        if result.anchor_update:
+            for anchor_id in result.anchor_update.get("revised_anchors", []):
+                click.echo(f"  Updated: {anchor_id}")
+    else:
+        click.echo(f"[Governor] Revision failed: {result.message}", err=True)
+
+
+@lite_cmd.command("proceed")
+@click.option("--scope", type=click.Choice(["single_instance", "session", "project"]), default="single_instance", help="Exception scope")
+@click.option("--expiry", default=None, help="Exception expiry (ISO timestamp, or omit for permanent)")
+@click.pass_context
+def maude_lite_proceed(ctx, scope, expiry):
+    """Resolve pending violation by logging an exception.
+
+    Records the violation as an intentional deviation with specified scope
+    and optional expiry.
+    """
+    from .violation_resolver import ViolationResolver
+
+    gov_dir = ensure_initialized(ctx)
+    resolver = ViolationResolver(gov_dir)
+    pending = resolver.get_pending()
+
+    if not pending:
+        click.echo("No pending violation to resolve.")
+        return
+
+    result = resolver.resolve_proceed(pending, scope=scope, expiry=expiry)
+
+    if result.success:
+        click.echo(f"[Governor] {result.message}")
+        click.echo(f"  Scope: {scope}")
+        if expiry:
+            click.echo(f"  Expiry: {expiry}")
+    else:
+        click.echo(f"[Governor] Exception logging failed: {result.message}", err=True)
+
+
+@lite_cmd.command("exceptions")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
+@click.pass_context
+def maude_lite_exceptions(ctx, fmt):
+    """List logged exceptions (violations proceeded past)."""
+    from .violation_resolver import ViolationResolver
+
+    gov_dir = ensure_initialized(ctx)
+    resolver = ViolationResolver(gov_dir)
+    exceptions = resolver.list_exceptions()
+
+    if fmt == "json":
+        click.echo(json.dumps([e.to_dict() for e in exceptions], indent=2))
+    else:
+        if not exceptions:
+            click.echo("No exceptions logged.")
+            return
+
+        click.echo(f"Exceptions: {len(exceptions)}")
+        click.echo()
+        for exc in exceptions:
+            click.echo(f"  {exc.id} [{exc.scope}]")
+            click.echo(f"    Created: {exc.created_at}")
+            click.echo(f"    Mode: {exc.mode}")
+            if exc.expiry:
+                click.echo(f"    Expiry: {exc.expiry}")
+            for v in exc.violations[:2]:
+                desc = v.get("description", str(v))[:60]
+                click.echo(f"    - {desc}...")
+            if len(exc.violations) > 2:
+                click.echo(f"    ... and {len(exc.violations) - 2} more violations")
+            click.echo()
+
+
 # =============================================================================
 # Unified Check Command (VS Code extension integration)
 # =============================================================================
@@ -9971,18 +10477,24 @@ def maude_lite_extract(ctx, text, use_stdin, file, fmt):
 @click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--no-security", "skip_security", is_flag=True, help="Skip security scanning")
 @click.option("--no-continuity", "skip_continuity", is_flag=True, help="Skip continuity checking")
+@click.option("--interactive", "-i", is_flag=True, help="Interactive mode: offer fix/revise/proceed on errors")
+@click.option("--mode", "check_mode", type=click.Choice(["code", "fiction", "nonfiction"]), default="code", help="Context mode for interactive resolution")
 @click.pass_context
-def check(ctx: click.Context, path: str | None, use_stdin: bool, fmt: str, skip_security: bool, skip_continuity: bool) -> None:
+def check(ctx: click.Context, path: str | None, use_stdin: bool, fmt: str, skip_security: bool, skip_continuity: bool, interactive: bool, check_mode: str) -> None:
     """Check a file for security and continuity issues.
 
     Aggregates findings from security scanning and continuity checking into
     a unified format suitable for editor diagnostics.
+
+    With --interactive, blocking errors (REJECT severity) trigger the violation
+    resolution flow, presenting fix/revise/proceed options.
 
     \b
     Examples:
         governor check src/main.py --format json
         echo '{"content":"...","filepath":"f.py"}' | governor check --stdin --format json
         governor check src/main.py --no-continuity
+        governor check response.txt --interactive --mode fiction
     """
     from .check import run_check
 
@@ -10016,14 +10528,16 @@ def check(ctx: click.Context, path: str | None, use_stdin: bool, fmt: str, skip_
     # Resolve governor dir (may not exist — that's OK)
     gov_dir = get_governor_dir(ctx)
     if not gov_dir.exists():
-        gov_dir = None
+        gov_dir_resolved = None
+    else:
+        gov_dir_resolved = gov_dir
 
     result = run_check(
         content,
         file_path,
         run_security=not skip_security,
         run_continuity=not skip_continuity,
-        governor_dir=gov_dir,
+        governor_dir=gov_dir_resolved,
     )
 
     if fmt == "json":
@@ -10041,6 +10555,103 @@ def check(ctx: click.Context, path: str | None, use_stdin: bool, fmt: str, skip_
                 click.echo(click.style(f"  [{f.severity.upper()}]", fg=sev_color) + f" {loc} {f.code}: {f.message}")
                 if f.suggestion:
                     click.echo(f"    → {f.suggestion}")
+
+    # Interactive mode: offer resolution for blocking errors
+    if interactive and result.status == "error" and gov_dir_resolved:
+        _handle_interactive_check_resolution(ctx, result, content, file_path, gov_dir_resolved, check_mode)
+
+
+def _handle_interactive_check_resolution(
+    ctx: click.Context,
+    result: "CheckResult",  # type: ignore[name-defined]
+    content: str,
+    file_path: str,
+    gov_dir: Path,
+    mode: str,
+) -> None:
+    """Handle interactive resolution for check command errors."""
+    from .violation_resolver import (
+        ViolationResolver,
+        ResolutionAction,
+        format_violation_prompt,
+        get_mode_choices,
+    )
+
+    # Filter to error-severity findings (REJECT)
+    blocking_findings = [f for f in result.findings if f.severity == "error"]
+    if not blocking_findings:
+        return
+
+    # Convert findings to violation-like dicts for the resolver
+    violations = []
+    for f in blocking_findings:
+        violations.append({
+            "anchor_id": f.code,
+            "description": f.message,
+            "severity": "reject",
+            "evidence": [f.suggestion] if f.suggestion else [],
+        })
+
+    # Create resolver and pending violation
+    resolver = ViolationResolver(gov_dir, mode=mode, context_id="cli_check")
+    run_id = f"check_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    pending = resolver.create_pending(violations, content, run_id)
+
+    click.echo()
+    click.echo(format_violation_prompt(violations, mode))
+    click.echo()
+
+    # Interactive resolution loop
+    while True:
+        try:
+            user_input = click.prompt("Choice", default="", show_default=False)
+        except click.exceptions.Abort:
+            click.echo("\nAborted. Pending violation saved.")
+            click.echo(f"Resume with: governor lite pending")
+            ctx.exit(1)
+            return
+
+        action = resolver.is_resolution_command(user_input)
+        if action is None:
+            click.echo()
+            click.echo("Invalid choice. Please enter 1, 2, 3 or: fix | revise | proceed")
+            click.echo()
+            for choice in get_mode_choices(mode):
+                click.echo(f"  {choice}")
+            click.echo()
+            continue
+
+        # Execute resolution
+        if action == ResolutionAction.FIX:
+            click.echo()
+            click.echo("[Governor] Fix requires a chat backend. Use:")
+            click.echo("  - WebUI for interactive fix")
+            click.echo("  - governor lite fix (with backend configured)")
+            click.echo()
+            click.echo("Alternatively, manually edit the content and re-run check.")
+            resolver.clear_pending()
+            ctx.exit(1)
+            return
+
+        elif action == ResolutionAction.REVISE:
+            result_obj = resolver.resolve_revise(pending)
+            click.echo()
+            click.echo(f"[Governor] {result_obj.message}")
+            if result_obj.anchor_update:
+                for anchor_id in result_obj.anchor_update.get("revised_anchors", []):
+                    click.echo(f"  - Revised: {anchor_id}")
+            click.echo()
+            click.echo("Re-run check to verify.")
+            return
+
+        elif action == ResolutionAction.PROCEED:
+            scope = click.prompt("Exception scope", default="single_instance",
+                               type=click.Choice(["single_instance", "session", "project"]))
+            result_obj = resolver.resolve_proceed(pending, scope=scope)
+            click.echo()
+            click.echo(f"[Governor] {result_obj.message}")
+            click.echo(f"  Exception ID: {result_obj.exception_id}")
+            return
 
 
 def main() -> None:

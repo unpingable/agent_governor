@@ -618,6 +618,19 @@ from .continuity_bridges import (
     anchors_from_puppet_profile,
 )
 
+# Violation resolver (W4: Interactive Violation Resolution)
+from .violation_resolver import (
+    ResolutionAction,
+    ResolutionStatus,
+    PendingViolation,
+    ResolutionResult,
+    ExceptionRecord,
+    ViolationResolver,
+    format_violation_prompt,
+    get_mode_choices,
+    create_resolver as create_violation_resolver,
+)
+
 # Maude Lite (evidence-gated coding harness)
 from .maude_lite import (
     MaudeLiteStatus,
@@ -1302,6 +1315,16 @@ __all__ = [
     "maude_lite_wrapper",
     "BlockedError",
     "check_maude_lite_output",
+    # Violation resolver (W4: Interactive Violation Resolution)
+    "ResolutionAction",
+    "ResolutionStatus",
+    "PendingViolation",
+    "ResolutionResult",
+    "ExceptionRecord",
+    "ViolationResolver",
+    "format_violation_prompt",
+    "get_mode_choices",
+    "create_violation_resolver",
     # Governor adapters (Phase A4)
     "AdapterFinding",
     "AdapterConfig",

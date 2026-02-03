@@ -61,7 +61,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Maude Lite**: Evidence-gated coding harness — kernel-only surface. HARD claims require evidence, contradictions persist, failures are loud. Custody scoring (Ap accountability, Ip invariant coupling, Fp failure explicitness). Claim extraction (HARD/SOFT patterns), evidence linking, contradiction detection, exit shape checking. Status codes (OK/WARN/BLOCKED). Agent wrapper integration, JSONL logging. CLI (governor lite {check,validate,config,score,extract}).
 **W5 Writing Modules (Deferred 2, W5)**: Spec application from fic.md, nonfic.md, anc.md, tone.md, writingconstraints.md. writing_patterns.py (18 pattern banks), writing_governance.py (GovernanceVisibilityScorer, GovernanceLeakDetector, SmoothingSuppressor, ExitShapeChecker), writing_tone.py (ToneVector 6D, ToneEnvelope, 16 regime envelopes, ToneCollision, ToneStabilityController), writing_regime.py (AffectRegime, RegimeVector, RegimeHysteresis, RpScorer, TragedyConstraints), writing_nonfiction.py (NfClaimLevel, PromotionGate, VelocityController, EpScorer, ReScorer, HedgeCalibrator, AhScorer, NleadChecker), writing_intent.py (IntentClassifier, 12 ancillary regime scorers, RegimeCollision), writing_constraints.py (11 structural constraints + Section 14 causal narration resistance), writing_ticketing.py (14 prose + 11 code ticket types, recurrence, routing), writing_puppet.py (extended puppet constraints), writing_code.py (code-specific constraints), writing_router.py (writing-aware routing). 922 tests.
 **VS Code Extension (Deferred 3, Phase V4)**: Hover tooltips (GovernorHoverProvider — decision/claim/violation context on hover), code actions (GovernorCodeActionProvider — quick fixes, suppress comments, security actions), real-time checking (RealtimeChecker — debounced on-type, configurable delay). New commands: Toggle Realtime, Check Now. Keybindings: Ctrl+Shift+G (check file), Ctrl+Shift+Alt+G (toggle realtime). 36 new TypeScript tests.
-**Total: 6976 tests**
+**Interactive Violation Resolution (Deferred 2, W4)**: Erin-ready chat. Blocking violations present 3 choices: fix (rewrite compliant), revise (update anchor), proceed (log exception). State machine (PENDING_RESOLUTION→FIX/REVISE/PROCEED→NORMAL). ViolationResolver with persistent pending state. Resolution command detection (1/2/3, maude fix/revise/proceed). Mode-specific choices (fiction: canon, code: decisions). Exception logging with scope/expiry. ChatBridge check_response_blocking(), ViolationPendingResponse. Adapter integration with resolution handling. CLI (governor lite {pending,fix,revise,proceed,exceptions}). Main CLI integration: `governor check --interactive`, `governor wrap --check-continuity --interactive`, `governor hook pre-commit --check-continuity --interactive`.
+**Total: 7144 tests**
 
 ## Key Documents
 
@@ -107,7 +108,13 @@ governor decay                   # Check for stale facts
 # Integration
 governor hook install            # Install git pre-commit hook
 governor hook status             # Check hook status
+governor hook pre-commit         # Run pre-commit check (called by git hook)
+governor hook pre-commit --check-continuity  # Also check staged files for violations
+governor hook pre-commit -c -i   # Interactive mode: offer fix/revise/proceed
 governor wrap -- <cmd>           # Wrap agent command with enforcement
+governor wrap --auto-approve -- <cmd>  # Auto-approve in exploratory mode
+governor wrap --check-continuity -- <cmd>  # Check file changes for violations
+governor wrap -c -i -- <cmd>     # Interactive mode: offer fix/revise/proceed
 governor changes                 # Show file approval status
 
 # MCP Server
@@ -378,6 +385,11 @@ governor lite validate <path>    # Validate file contents
 governor lite config             # Show configuration and kernel constraints
 governor lite score <text>       # Score custody metrics (Ap, Ip, Fp)
 governor lite extract <text>     # Extract claims from content
+governor lite pending            # Show pending violation requiring resolution (--format json)
+governor lite fix                # Resolve pending violation by fixing the response
+governor lite revise             # Resolve pending violation by updating the anchor
+governor lite proceed            # Resolve pending violation by logging an exception (--scope, --expiry)
+governor lite exceptions         # List logged exceptions (--format json)
 
 # Continuity Enforcement (Deferred 5: closed-loop generation control)
 governor continuity status              # Registry stats, anchor count by type
@@ -394,6 +406,8 @@ governor check <path> --format json    # JSON output for tooling
 governor check --stdin --format json   # Read from stdin (JSON or plain text)
 governor check <path> --no-security    # Skip security scanning
 governor check <path> --no-continuity  # Skip continuity checking
+governor check <path> --interactive    # Interactive mode: offer fix/revise/proceed on errors
+governor check <path> -i --mode fiction  # Interactive with fiction-mode resolution options
 
 # Fiction Governor - Context Drift Detection
 fiction-gov drift status               # Show drift detector state
@@ -520,6 +534,7 @@ src/governor/
 ├── check.py          # Position, Range, CheckFinding, CheckResult, run_check (unified check aggregation for VS Code)
 ├── viewmodel.py      # GovernorViewModel (schema v2), 8 section builders, read-only state derivation, V1 compat
 ├── maude_lite.py     # MaudeLite, evidence-gated coding harness, claim extraction, evidence linking, custody scoring
+├── violation_resolver.py # ViolationResolver, PendingViolation, ResolutionAction, ExceptionRecord, fix/revise/proceed actions
 │
 # W5 Writing Modules (Deferred 2, W5):
 ├── writing_patterns.py    # 18 pattern banks for governance/tone/regime detection
@@ -998,6 +1013,16 @@ vscode-governor/
 
 **Maude Lite tests: 101**
 
+### Interactive Violation Resolution (W4)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| violation_resolver.py | ViolationResolver, PendingViolation, ResolutionAction, ResolutionResult, ExceptionRecord, fix/revise/proceed actions, command detection, exception logging | 62 |
+| chat_bridge.py (+) | ViolationPendingResponse, check_response_blocking, blocking severity filtering | +8 |
+| adapter.py (+) | Resolution handling, pending check, format helpers | — |
+| cli.py (+) | `check --interactive`, `wrap --check-continuity -i`, `hook pre-commit -c -i`, CLI integration tests | +12 |
+
+**Interactive Violation Resolution tests: 82**
+
 ### W5 Writing Modules (Deferred 2, W5)
 | Module | Description | Tests |
 |--------|-------------|-------|
@@ -1014,7 +1039,7 @@ vscode-governor/
 
 **W5 Writing Modules tests: 922**
 
-**Total: 6976 tests**
+**Total: 6988 tests**
 
 ## Common Mistakes to Avoid
 

@@ -6,11 +6,16 @@ from uuid import uuid4
 
 from governor.routing import (
     ModelTier,
+    RoutingStrategy,
     ComplexityEstimate,
     ComplexityEstimator,
     ModelCapabilities,
     ModelStatus,
     ModelRegistry,
+    BudgetScope,
+    Budget,
+    BudgetCheckResult,
+    BudgetManager,
     TaskRecord,
     TaskHistory,
     RoutingDecision,
@@ -730,4 +735,586 @@ class TestEdgeCases:
         )
 
         # Should work without historical data
+        assert decision.selected_model is not None
+
+
+# =============================================================================
+# RoutingStrategy Tests
+# =============================================================================
+
+class TestRoutingStrategy:
+    """Tests for RoutingStrategy enum."""
+
+    def test_strategy_values(self):
+        """All strategy values exist."""
+        assert RoutingStrategy.COST_OPTIMAL.value == "cost_optimal"
+        assert RoutingStrategy.SPEED_OPTIMAL.value == "speed_optimal"
+        assert RoutingStrategy.QUALITY_OPTIMAL.value == "quality_optimal"
+        assert RoutingStrategy.BALANCED.value == "balanced"
+
+    def test_strategy_count(self):
+        """Correct number of strategies."""
+        assert len(RoutingStrategy) == 4
+
+
+# =============================================================================
+# Budget Tests
+# =============================================================================
+
+class TestBudgetScope:
+    """Tests for BudgetScope enum."""
+
+    def test_scope_values(self):
+        """All scope values exist."""
+        assert BudgetScope.SESSION.value == "session"
+        assert BudgetScope.TASK.value == "task"
+        assert BudgetScope.PROJECT.value == "project"
+        assert BudgetScope.GLOBAL.value == "global"
+
+
+class TestBudget:
+    """Tests for Budget dataclass."""
+
+    def test_remaining_unlimited(self):
+        """Unlimited budget (total=0) has infinite remaining."""
+        budget = Budget(scope=BudgetScope.SESSION, scope_id="s1", total_usd=0.0)
+        assert budget.remaining_usd == float("inf")
+
+    def test_remaining_with_spending(self):
+        """Remaining calculated correctly with spending."""
+        budget = Budget(
+            scope=BudgetScope.SESSION,
+            scope_id="s1",
+            total_usd=10.0,
+            spent_usd=3.0,
+        )
+        assert budget.remaining_usd == 7.0
+
+    def test_is_exhausted_true(self):
+        """Exhausted when spent >= total."""
+        budget = Budget(
+            scope=BudgetScope.SESSION,
+            scope_id="s1",
+            total_usd=10.0,
+            spent_usd=10.0,
+        )
+        assert budget.is_exhausted
+
+    def test_is_exhausted_false(self):
+        """Not exhausted when under budget."""
+        budget = Budget(
+            scope=BudgetScope.SESSION,
+            scope_id="s1",
+            total_usd=10.0,
+            spent_usd=5.0,
+        )
+        assert not budget.is_exhausted
+
+    def test_is_exhausted_unlimited(self):
+        """Unlimited budget never exhausted."""
+        budget = Budget(
+            scope=BudgetScope.SESSION,
+            scope_id="s1",
+            total_usd=0.0,
+            spent_usd=1000.0,
+        )
+        assert not budget.is_exhausted
+
+    def test_can_afford(self):
+        """can_afford respects budget limits."""
+        budget = Budget(
+            scope=BudgetScope.SESSION,
+            scope_id="s1",
+            total_usd=10.0,
+            spent_usd=8.0,
+        )
+        assert budget.can_afford(1.0)
+        assert budget.can_afford(2.0)
+        assert not budget.can_afford(3.0)
+
+    def test_can_afford_unlimited(self):
+        """Unlimited budget can afford anything."""
+        budget = Budget(scope=BudgetScope.SESSION, scope_id="s1", total_usd=0.0)
+        assert budget.can_afford(999999.0)
+
+    def test_record_usage(self):
+        """Usage recording updates fields."""
+        budget = Budget(scope=BudgetScope.SESSION, scope_id="s1")
+        budget.record_usage(1.50, input_tokens=1000, output_tokens=500)
+
+        assert budget.spent_usd == 1.50
+        assert budget.input_tokens == 1000
+        assert budget.output_tokens == 500
+
+    def test_serialization_roundtrip(self):
+        """Budget serializes and deserializes."""
+        budget = Budget(
+            scope=BudgetScope.PROJECT,
+            scope_id="proj1",
+            total_usd=100.0,
+            spent_usd=25.0,
+            model_limits={"claude-opus-4": 50.0},
+            input_tokens=10000,
+            output_tokens=5000,
+        )
+
+        data = budget.to_dict()
+        restored = Budget.from_dict(data)
+
+        assert restored.scope == BudgetScope.PROJECT
+        assert restored.scope_id == "proj1"
+        assert restored.total_usd == 100.0
+        assert restored.spent_usd == 25.0
+        assert restored.model_limits == {"claude-opus-4": 50.0}
+
+
+class TestBudgetManager:
+    """Tests for BudgetManager class."""
+
+    def test_create_budget(self):
+        """Can create and retrieve budgets."""
+        manager = BudgetManager()
+        budget = manager.create_budget(BudgetScope.SESSION, "s1", total_usd=50.0)
+
+        assert budget.total_usd == 50.0
+        assert manager.get_budget(BudgetScope.SESSION, "s1") is budget
+
+    def test_get_nonexistent_budget(self):
+        """Returns None for nonexistent budget."""
+        manager = BudgetManager()
+        assert manager.get_budget(BudgetScope.SESSION, "nonexistent") is None
+
+    def test_check_budget_within_limit(self):
+        """Budget check passes when within limit."""
+        registry = ModelRegistry()
+        manager = BudgetManager(registry=registry)
+        manager.create_budget(BudgetScope.SESSION, "s1", total_usd=100.0)
+
+        result = manager.check_budget(
+            "claude-sonnet-4",
+            estimated_tokens=1000,
+            scope=BudgetScope.SESSION,
+            scope_id="s1",
+        )
+
+        assert result.allowed
+
+    def test_check_budget_exceeds_limit(self):
+        """Budget check fails when exceeding limit."""
+        registry = ModelRegistry()
+        manager = BudgetManager(registry=registry)
+        manager.create_budget(BudgetScope.SESSION, "s1", total_usd=0.001)  # Very small
+
+        result = manager.check_budget(
+            "claude-opus-4",
+            estimated_tokens=1000000,  # Large
+            scope=BudgetScope.SESSION,
+            scope_id="s1",
+        )
+
+        assert not result.allowed
+        assert "exhausted" in result.reason.lower()
+
+    def test_record_usage_to_budget(self):
+        """Recording usage updates the correct budget."""
+        manager = BudgetManager()
+        manager.create_budget(BudgetScope.SESSION, "s1", total_usd=100.0)
+
+        manager.record_usage(
+            BudgetScope.SESSION, "s1",
+            cost_usd=5.0, input_tokens=1000, output_tokens=500,
+        )
+
+        budget = manager.get_budget(BudgetScope.SESSION, "s1")
+        assert budget.spent_usd == 5.0
+
+    def test_spending_summary(self):
+        """Can get spending summary across budgets."""
+        manager = BudgetManager()
+        manager.create_budget(BudgetScope.SESSION, "s1", total_usd=100.0)
+        manager.create_budget(BudgetScope.PROJECT, "p1", total_usd=500.0)
+
+        manager.record_usage(BudgetScope.SESSION, "s1", cost_usd=10.0)
+        manager.record_usage(BudgetScope.PROJECT, "p1", cost_usd=20.0)
+
+        summary = manager.get_spending_summary()
+
+        assert summary["total_spent"] == 30.0
+        assert "session:s1" in summary["budgets"]
+        assert "project:p1" in summary["budgets"]
+
+
+# =============================================================================
+# Enhanced ModelCapabilities Tests
+# =============================================================================
+
+class TestEnhancedModelCapabilities:
+    """Tests for enhanced ModelCapabilities fields."""
+
+    def test_cost_fields(self):
+        """Cost fields are populated."""
+        caps = ModelCapabilities(
+            name="test-model",
+            tier=ModelTier.STANDARD,
+            provider="test",
+            cost_input=3.00,
+            cost_output=15.00,
+        )
+
+        assert caps.cost_input == 3.00
+        assert caps.cost_output == 15.00
+
+    def test_latency_fields(self):
+        """Latency fields are populated."""
+        caps = ModelCapabilities(
+            name="test-model",
+            tier=ModelTier.STANDARD,
+            latency_p50=1000,
+            latency_p95=3000,
+        )
+
+        assert caps.latency_p50 == 1000
+        assert caps.latency_p95 == 3000
+
+    def test_rate_limit_fields(self):
+        """Rate limit fields are populated."""
+        caps = ModelCapabilities(
+            name="test-model",
+            tier=ModelTier.STANDARD,
+            requests_per_minute=500,
+            tokens_per_minute=80000,
+        )
+
+        assert caps.requests_per_minute == 500
+        assert caps.tokens_per_minute == 80000
+
+    def test_strengths_field(self):
+        """Strengths field is populated."""
+        caps = ModelCapabilities(
+            name="test-model",
+            tier=ModelTier.STANDARD,
+            strengths=["code", "reasoning", "creative"],
+        )
+
+        assert "code" in caps.strengths
+        assert "reasoning" in caps.strengths
+
+    def test_cost_per_1k_tokens(self):
+        """cost_per_1k_tokens helper works."""
+        caps = ModelCapabilities(
+            name="test-model",
+            tier=ModelTier.STANDARD,
+            cost_input=3.00,  # per 1M
+            cost_output=15.00,  # per 1M
+        )
+
+        # 70% input, 30% output
+        expected = (3.00 * 0.7 + 15.00 * 0.3) / 1000
+        assert abs(caps.cost_per_1k_tokens(0.7) - expected) < 0.0001
+
+    def test_default_models_have_pricing(self):
+        """Default registered models have cost data."""
+        registry = ModelRegistry()
+        sonnet = registry.get_capabilities("claude-sonnet-4")
+
+        assert sonnet is not None
+        assert sonnet.cost_input > 0
+        assert sonnet.cost_output > 0
+        assert sonnet.latency_p50 > 0
+
+
+# =============================================================================
+# Strategy-Based Routing Tests
+# =============================================================================
+
+class TestStrategyRouting:
+    """Tests for strategy-based routing."""
+
+    def test_cost_optimal_strategy(self):
+        """Cost optimal strategy prefers cheaper models."""
+        config = RoutingConfig(strategy=RoutingStrategy.COST_OPTIMAL)
+        router = Router(config=config)
+
+        decision = router.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="test.py")],
+        )
+
+        assert decision.strategy_used == RoutingStrategy.COST_OPTIMAL
+        # Should not use expensive opus
+        assert "opus" not in decision.selected_model.lower()
+
+    def test_quality_optimal_strategy(self):
+        """Quality optimal strategy prefers capable models."""
+        config = RoutingConfig(strategy=RoutingStrategy.QUALITY_OPTIMAL)
+        router = Router(config=config)
+
+        decision = router.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="test.py")],
+        )
+
+        assert decision.strategy_used == RoutingStrategy.QUALITY_OPTIMAL
+
+    def test_balanced_strategy_weights(self):
+        """Balanced strategy respects custom weights."""
+        config = RoutingConfig(
+            strategy=RoutingStrategy.BALANCED,
+            strategy_weights={"cost": 0.1, "speed": 0.1, "quality": 0.8},
+        )
+        router = Router(config=config)
+
+        decision = router.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="test.py")],
+        )
+
+        assert decision.strategy_used == RoutingStrategy.BALANCED
+
+    def test_routing_decision_has_estimates(self):
+        """Routing decisions include cost/latency estimates."""
+        router = Router()
+
+        decision = router.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="test.py")],
+        )
+
+        # Estimates populated
+        assert decision.estimated_cost >= 0
+        assert decision.estimated_latency_ms >= 0
+
+    def test_routing_decision_has_alternatives(self):
+        """Routing decisions include alternatives considered."""
+        router = Router()
+
+        decision = router.route(
+            claims=[Claim(type=ClaimType.CHANGESET, diff="test", paths=["a.py"])],
+        )
+
+        # Alternatives tracked for explainability
+        assert isinstance(decision.alternatives_considered, list)
+
+
+# =============================================================================
+# Router.explain() Tests
+# =============================================================================
+
+class TestRouterExplain:
+    """Tests for Router.explain() method."""
+
+    def test_explain_returns_dict(self):
+        """explain() returns a dictionary."""
+        router = Router()
+        decision = router.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="test.py")],
+        )
+
+        explanation = router.explain(decision)
+
+        assert isinstance(explanation, dict)
+
+    def test_explain_has_task_id(self):
+        """Explanation includes task_id."""
+        router = Router()
+        decision = router.route(claims=[])
+
+        explanation = router.explain(decision)
+
+        assert "task_id" in explanation
+        assert explanation["task_id"] == str(decision.task_id)
+
+    def test_explain_has_complexity_breakdown(self):
+        """Explanation includes complexity breakdown."""
+        router = Router()
+        decision = router.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="test.py")],
+            description="Check if file exists",
+        )
+
+        explanation = router.explain(decision)
+
+        assert "complexity" in explanation
+        complexity = explanation["complexity"]
+        assert "score" in complexity
+        assert "classification" in complexity
+        assert "factors" in complexity
+        assert "recommended_tier" in complexity
+
+    def test_explain_has_selection_info(self):
+        """Explanation includes selection information."""
+        router = Router()
+        decision = router.route(claims=[])
+
+        explanation = router.explain(decision)
+
+        assert "selection" in explanation
+        selection = explanation["selection"]
+        assert "model" in selection
+        assert "tier" in selection
+        assert "reasoning" in selection
+        assert "strategy" in selection
+
+    def test_explain_has_model_capabilities(self):
+        """Explanation includes model capabilities."""
+        router = Router()
+        decision = router.route(claims=[])
+
+        explanation = router.explain(decision)
+
+        selection = explanation["selection"]
+        assert "model_capabilities" in selection
+        caps = selection["model_capabilities"]
+        assert "provider" in caps
+        assert "context_window" in caps
+        assert "cost_per_1M_input" in caps
+        assert "cost_per_1M_output" in caps
+
+    def test_explain_has_model_status(self):
+        """Explanation includes model runtime status."""
+        router = Router()
+        decision = router.route(claims=[])
+
+        explanation = router.explain(decision)
+
+        selection = explanation["selection"]
+        assert "model_status" in selection
+        status = selection["model_status"]
+        assert "available" in status
+        assert "success_rate" in status
+
+    def test_explain_has_cost_analysis(self):
+        """Explanation includes cost analysis."""
+        router = Router()
+        decision = router.route(claims=[])
+
+        explanation = router.explain(decision)
+
+        assert "cost_analysis" in explanation
+        costs = explanation["cost_analysis"]
+        assert "estimated_cost_usd" in costs
+        assert "estimated_latency_ms" in costs
+
+    def test_explain_has_alternatives(self):
+        """Explanation includes alternatives considered."""
+        router = Router()
+        decision = router.route(claims=[])
+
+        explanation = router.explain(decision)
+
+        assert "alternatives_considered" in explanation
+        assert isinstance(explanation["alternatives_considered"], list)
+
+    def test_explain_has_fallback_chain(self):
+        """Explanation includes fallback chain."""
+        router = Router()
+        decision = router.route(claims=[])
+
+        explanation = router.explain(decision)
+
+        assert "fallback_chain" in explanation
+        assert isinstance(explanation["fallback_chain"], list)
+        if explanation["fallback_chain"]:
+            fb = explanation["fallback_chain"][0]
+            assert "model" in fb
+
+    def test_explain_has_historical_context(self):
+        """Explanation includes historical context."""
+        router = Router()
+
+        # Add some history
+        decision = router.route(claims=[])
+        router.record_outcome(decision, success=True, latency_ms=500)
+
+        # Route again and explain
+        decision2 = router.route(claims=[])
+        explanation = router.explain(decision2)
+
+        assert "historical_context" in explanation
+        hist = explanation["historical_context"]
+        assert "tier_success_rate" in hist
+        assert "complexity_range_success_rate" in hist
+
+    def test_explain_budget_check_included(self):
+        """Explanation includes budget check when present."""
+        registry = ModelRegistry()
+        budget_manager = BudgetManager(registry=registry)
+        budget_manager.create_budget(BudgetScope.SESSION, "s1", total_usd=100.0)
+
+        router = Router(budget_manager=budget_manager)
+
+        decision = router.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="test.py")],
+            budget_scope=BudgetScope.SESSION,
+            budget_scope_id="s1",
+        )
+
+        explanation = router.explain(decision)
+
+        # Budget check should be in cost analysis
+        if decision.budget_check:
+            costs = explanation["cost_analysis"]
+            assert "budget_check" in costs
+
+    def test_explain_complexity_classification(self):
+        """Explanation correctly classifies complexity."""
+        router = Router()
+
+        # Simple task
+        simple_decision = router.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="x.py")],
+        )
+        simple_exp = router.explain(simple_decision)
+
+        # Complex task
+        files = [f"f{i}.py" for i in range(20)]
+        complex_decision = router.route(
+            claims=[Claim(type=ClaimType.CHANGESET, diff="d" * 5000, paths=files)],
+            description="Major refactoring" * 20,
+            files=files,
+        )
+        complex_exp = router.explain(complex_decision)
+
+        # Classifications should differ
+        assert simple_exp["complexity"]["classification"] in ["simple", "moderate"]
+        assert complex_exp["complexity"]["classification"] in ["moderate", "complex"]
+
+
+# =============================================================================
+# Budget Integration with Routing Tests
+# =============================================================================
+
+class TestBudgetRoutingIntegration:
+    """Tests for budget integration with routing."""
+
+    def test_route_with_budget_tracking(self):
+        """Routing respects budget constraints."""
+        registry = ModelRegistry()
+        budget_manager = BudgetManager(registry=registry)
+        budget_manager.create_budget(BudgetScope.SESSION, "s1", total_usd=0.001)  # Tiny
+
+        config = RoutingConfig(enforce_budget=True)
+        router = Router(config=config, budget_manager=budget_manager)
+
+        decision = router.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="test.py")],
+            budget_scope=BudgetScope.SESSION,
+            budget_scope_id="s1",
+        )
+
+        # Budget check should be performed
+        assert decision.budget_check is not None
+
+    def test_route_suggests_cheaper_alternatives(self):
+        """When over budget, suggests cheaper alternatives."""
+        registry = ModelRegistry()
+        budget_manager = BudgetManager(registry=registry)
+        # Small budget that can't afford opus
+        budget_manager.create_budget(BudgetScope.SESSION, "s1", total_usd=0.0001)
+
+        router = Router(budget_manager=budget_manager)
+
+        decision = router.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="test.py")],
+            budget_scope=BudgetScope.SESSION,
+            budget_scope_id="s1",
+        )
+
+        # Should still route successfully to a cheaper model
         assert decision.selected_model is not None

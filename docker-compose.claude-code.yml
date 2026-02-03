@@ -1,0 +1,33 @@
+# Agent Governor WebUI — Claude Code Backend Override
+#
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.claude-code.yml up -d
+#
+# Routes chat through the `claude` CLI to use your Claude Max subscription
+# instead of paying API credits.
+#
+# Requirements:
+#   - Claude Code CLI installed and authenticated on the host
+#   - Mount the host's claude config into the container
+
+services:
+  erin-adapter:
+    environment:
+      - BACKEND_TYPE=claude-code
+      - CLAUDE_PATH=/usr/local/bin/claude
+    volumes:
+      # Mount claude CLI from host
+      - ${HOME}/.local/bin/claude:/usr/local/bin/claude:ro
+      # Mount claude config/auth from host
+      - ${HOME}/.claude:/root/.claude:ro
+      - ${HOME}/.config/claude:/root/.config/claude:ro
+
+  james-adapter:
+    environment:
+      - BACKEND_TYPE=claude-code
+      - CLAUDE_PATH=/usr/local/bin/claude
+    volumes:
+      # Mount claude CLI from host
+      - ${HOME}/.local/bin/claude:/usr/local/bin/claude:ro
+      # Mount claude config/auth from host
+      - ${HOME}/.claude:/root/.claude:ro
+      - ${HOME}/.config/claude:/root/.config/claude:ro

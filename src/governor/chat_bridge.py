@@ -364,6 +364,175 @@ class AnthropicBackend:
         return list(self.MODELS)
 
 
+class ClaudeCodeBackend:
+    """Claude Code CLI backend — uses Max subscription instead of API credits.
+
+    Routes chat through the `claude` CLI with --print mode, parsing stream-json output.
+    This lets you use your Claude Max subscription for WebUI chat.
+    """
+
+    # Model mapping (WebUI model names -> claude CLI understands these)
+    MODELS = [
+        {"id": "claude-sonnet-4-20250514", "owned_by": "claude-code"},
+        {"id": "claude-opus-4-20250514", "owned_by": "claude-code"},
+        {"id": "sonnet", "owned_by": "claude-code"},
+        {"id": "opus", "owned_by": "claude-code"},
+    ]
+
+    def __init__(self, claude_path: str = "claude") -> None:
+        """Initialize with path to claude CLI."""
+        self.claude_path = claude_path
+
+    async def chat(
+        self, messages: list[ChatMessage], model: str, **kwargs: Any
+    ) -> ChatResponse:
+        """Send a non-streaming chat request via Claude Code CLI."""
+        import asyncio
+
+        # Build the prompt from messages
+        prompt = self._build_prompt(messages)
+
+        # Build command
+        cmd = [
+            self.claude_path,
+            "--print",
+            "--output-format", "json",
+            "--dangerously-skip-permissions",  # Non-interactive mode
+            prompt,
+        ]
+
+        # Run claude CLI
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            error_msg = stderr.decode("utf-8", errors="replace")
+            raise RuntimeError(f"Claude Code CLI failed: {error_msg}")
+
+        # Parse JSON output
+        try:
+            data = json.loads(stdout.decode("utf-8"))
+        except json.JSONDecodeError as e:
+            # Fall back to treating stdout as plain text
+            content = stdout.decode("utf-8").strip()
+            return ChatResponse(content=content, model=model)
+
+        # Extract content from response
+        content = data.get("result", data.get("content", str(data)))
+        if isinstance(content, dict):
+            content = content.get("text", str(content))
+
+        return ChatResponse(
+            content=content,
+            model=model,
+            usage={
+                "prompt_tokens": data.get("usage", {}).get("input_tokens", 0),
+                "completion_tokens": data.get("usage", {}).get("output_tokens", 0),
+                "total_tokens": (
+                    data.get("usage", {}).get("input_tokens", 0) +
+                    data.get("usage", {}).get("output_tokens", 0)
+                ),
+            },
+            finish_reason="stop",
+        )
+
+    async def stream(
+        self, messages: list[ChatMessage], model: str, **kwargs: Any
+    ) -> AsyncIterator[ChatChunk]:
+        """Stream a chat response via Claude Code CLI."""
+        import asyncio
+
+        # Build the prompt from messages
+        prompt = self._build_prompt(messages)
+
+        # Build command with streaming output
+        cmd = [
+            self.claude_path,
+            "--print",
+            "--output-format", "stream-json",
+            "--dangerously-skip-permissions",
+            prompt,
+        ]
+
+        # Run claude CLI with streaming
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        # Read stdout line by line
+        buffer = ""
+        while True:
+            chunk = await proc.stdout.read(1024)
+            if not chunk:
+                break
+
+            buffer += chunk.decode("utf-8", errors="replace")
+
+            # Process complete lines
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                # Handle different message types from stream-json
+                msg_type = data.get("type", "")
+
+                if msg_type == "assistant":
+                    # Content chunk
+                    content = data.get("message", {}).get("content", "")
+                    if isinstance(content, list):
+                        # Content blocks
+                        for block in content:
+                            if block.get("type") == "text":
+                                yield ChatChunk(content=block.get("text", ""))
+                    elif isinstance(content, str):
+                        yield ChatChunk(content=content)
+
+                elif msg_type == "result":
+                    # Final result
+                    yield ChatChunk(content="", finish_reason="stop")
+
+        # Wait for process to complete
+        await proc.wait()
+
+        # Ensure we send a final stop chunk
+        yield ChatChunk(content="", finish_reason="stop")
+
+    async def list_models(self) -> list[dict[str, str]]:
+        """Return available models for Claude Code."""
+        return list(self.MODELS)
+
+    def _build_prompt(self, messages: list[ChatMessage]) -> str:
+        """Build a prompt string from chat messages."""
+        parts = []
+
+        for msg in messages:
+            if msg.role == "system":
+                parts.append(f"[System]: {msg.content}")
+            elif msg.role == "user":
+                parts.append(f"[User]: {msg.content}")
+            elif msg.role == "assistant":
+                parts.append(f"[Assistant]: {msg.content}")
+
+        # Add instruction for assistant to continue
+        if parts and not parts[-1].startswith("[Assistant]"):
+            parts.append("[Assistant]:")
+
+        return "\n\n".join(parts)
+
+
 class GovernorHooks:
     """Pre/post hooks for governor integration based on context mode."""
 
@@ -937,11 +1106,13 @@ def create_backend(backend_type: str, **kwargs: Any) -> ChatBackend:
     """Factory: create a ChatBackend by type.
 
     Args:
-        backend_type: "anthropic" or "ollama"
-        **kwargs: Backend-specific config (api_key, host, etc.)
+        backend_type: "anthropic", "ollama", or "claude-code"
+        **kwargs: Backend-specific config (api_key, host, claude_path, etc.)
     """
     if backend_type == "anthropic":
         return AnthropicBackend(api_key=kwargs["api_key"])
     elif backend_type == "ollama":
         return OllamaBackend(host=kwargs.get("host", "http://localhost:11434"))
+    elif backend_type == "claude-code":
+        return ClaudeCodeBackend(claude_path=kwargs.get("claude_path", "claude"))
     raise ValueError(f"Unknown backend type: {backend_type}")

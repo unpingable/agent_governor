@@ -1,19 +1,22 @@
 """
 OpenAI-compatible API adapter with Governor integration.
 
-Supports switchable backends (Anthropic Claude, Ollama) with isolated governor
-contexts per user/project. Designed for use with Open WebUI or any OpenAI-
-compatible client.
+Supports switchable backends (Anthropic Claude, Ollama, Claude Code CLI) with
+isolated governor contexts per user/project. Designed for use with Open WebUI
+or any OpenAI-compatible client.
 
 Run with: uvicorn webui.adapter:app --host 0.0.0.0 --port 8000
 
 Configuration via environment variables:
-    BACKEND_TYPE        - "anthropic" or "ollama" (default: "ollama")
+    BACKEND_TYPE        - "anthropic", "ollama", or "claude-code" (default: "ollama")
     ANTHROPIC_API_KEY   - Required when BACKEND_TYPE=anthropic
     OLLAMA_HOST         - Ollama URL (default: http://localhost:11434)
+    CLAUDE_PATH         - Path to claude CLI (default: "claude") for claude-code backend
     GOVERNOR_CONTEXT_ID - Active context ID (default: "default")
     GOVERNOR_MODE       - Context mode: fiction/code/nonfiction/general (default: "general")
     GOVERNOR_CONTEXTS_DIR - Base dir for contexts (default: ~/.governor-contexts)
+
+The claude-code backend uses your Claude Max subscription instead of API credits.
 """
 
 from __future__ import annotations
@@ -63,6 +66,7 @@ from webui.summaries import (
 BACKEND_TYPE = os.environ.get("BACKEND_TYPE", "ollama")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+CLAUDE_PATH = os.environ.get("CLAUDE_PATH", "claude")  # Path to claude CLI for claude-code backend
 GOVERNOR_CONTEXT_ID = os.environ.get("GOVERNOR_CONTEXT_ID", "default")
 GOVERNOR_MODE = os.environ.get("GOVERNOR_MODE", "general")
 GOVERNOR_CONTEXTS_DIR = os.environ.get("GOVERNOR_CONTEXTS_DIR", "")
@@ -169,6 +173,8 @@ def _get_bridge() -> ChatBridge:
             kwargs["api_key"] = ANTHROPIC_API_KEY
         elif BACKEND_TYPE == "ollama":
             kwargs["host"] = OLLAMA_HOST
+        elif BACKEND_TYPE == "claude-code":
+            kwargs["claude_path"] = CLAUDE_PATH
         backend = create_backend(BACKEND_TYPE, **kwargs)
         _bridge = ChatBridge(
             backend=backend,

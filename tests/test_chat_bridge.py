@@ -13,6 +13,7 @@ from governor.chat_bridge import (
     ChatBackend,
     OllamaBackend,
     AnthropicBackend,
+    ClaudeCodeBackend,
     GovernorHooks,
     GovernorCheckResult,
     ViolationPendingResponse,
@@ -831,9 +832,80 @@ class TestCreateBackend:
         backend = create_backend("anthropic", api_key="sk-test")
         assert isinstance(backend, AnthropicBackend)
 
+    def test_claude_code_backend(self) -> None:
+        backend = create_backend("claude-code")
+        assert isinstance(backend, ClaudeCodeBackend)
+
+    def test_claude_code_custom_path(self) -> None:
+        backend = create_backend("claude-code", claude_path="/custom/path/claude")
+        assert isinstance(backend, ClaudeCodeBackend)
+        assert backend.claude_path == "/custom/path/claude"
+
     def test_unknown_backend(self) -> None:
         with pytest.raises(ValueError, match="Unknown backend"):
             create_backend("unknown")
+
+
+# ============================================================================
+# TestClaudeCodeBackend
+# ============================================================================
+
+
+class TestClaudeCodeBackend:
+    """Tests for ClaudeCodeBackend."""
+
+    def test_init_default_path(self) -> None:
+        backend = ClaudeCodeBackend()
+        assert backend.claude_path == "claude"
+
+    def test_init_custom_path(self) -> None:
+        backend = ClaudeCodeBackend(claude_path="/usr/local/bin/claude")
+        assert backend.claude_path == "/usr/local/bin/claude"
+
+    def test_build_prompt_user_only(self) -> None:
+        backend = ClaudeCodeBackend()
+        messages = [ChatMessage(role="user", content="Hello")]
+        prompt = backend._build_prompt(messages)
+        assert "[User]: Hello" in prompt
+        assert "[Assistant]:" in prompt
+
+    def test_build_prompt_with_system(self) -> None:
+        backend = ClaudeCodeBackend()
+        messages = [
+            ChatMessage(role="system", content="Be helpful"),
+            ChatMessage(role="user", content="Hi"),
+        ]
+        prompt = backend._build_prompt(messages)
+        assert "[System]: Be helpful" in prompt
+        assert "[User]: Hi" in prompt
+
+    def test_build_prompt_conversation(self) -> None:
+        backend = ClaudeCodeBackend()
+        messages = [
+            ChatMessage(role="user", content="What is 2+2?"),
+            ChatMessage(role="assistant", content="4"),
+            ChatMessage(role="user", content="Thanks!"),
+        ]
+        prompt = backend._build_prompt(messages)
+        assert "[User]: What is 2+2?" in prompt
+        assert "[Assistant]: 4" in prompt
+        assert "[User]: Thanks!" in prompt
+
+    def test_list_models(self) -> None:
+        backend = ClaudeCodeBackend()
+        models = run_async(backend.list_models())
+        assert len(models) > 0
+        assert any(m["id"] == "sonnet" for m in models)
+        assert all(m["owned_by"] == "claude-code" for m in models)
+
+    @pytest.mark.asyncio
+    async def test_chat_subprocess_error(self) -> None:
+        """Test that chat handles subprocess errors gracefully."""
+        backend = ClaudeCodeBackend(claude_path="/nonexistent/path")
+        messages = [ChatMessage(role="user", content="test")]
+
+        with pytest.raises((FileNotFoundError, RuntimeError)):
+            await backend.chat(messages, "sonnet")
 
 
 # ============================================================================

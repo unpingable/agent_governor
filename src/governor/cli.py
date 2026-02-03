@@ -9463,6 +9463,109 @@ def dashboard_stats(trace_path: str) -> None:
 
 
 # =============================================================================
+# Prometheus Metrics
+# =============================================================================
+
+
+@cli.group("prometheus")
+@click.pass_context
+def prometheus_group(ctx: click.Context) -> None:
+    """Prometheus metrics export for monitoring."""
+    pass
+
+
+@prometheus_group.command("enable")
+@click.option("--port", type=int, default=9090, help="Port for /metrics endpoint")
+@click.pass_context
+def prometheus_enable(ctx: click.Context, port: int) -> None:
+    """Enable Prometheus metrics and start server."""
+    from .prometheus import (
+        PROMETHEUS_AVAILABLE,
+        PrometheusConfig,
+        get_metrics,
+        get_server,
+    )
+
+    if not PROMETHEUS_AVAILABLE:
+        click.echo("Error: prometheus_client library not installed.")
+        click.echo("Install with: pip install prometheus-client")
+        raise SystemExit(1)
+
+    gov_dir = ensure_initialized(ctx)
+
+    config = PrometheusConfig(enabled=True, port=port)
+    config.save(gov_dir)
+
+    metrics = get_metrics()
+    server = get_server(config)
+
+    if server.start():
+        click.echo(f"Prometheus metrics enabled")
+        click.echo(f"  Endpoint: http://localhost:{port}/metrics")
+        click.echo(f"  Config saved to: {gov_dir / 'prometheus.json'}")
+    else:
+        click.echo("Failed to start metrics server")
+        raise SystemExit(1)
+
+
+@prometheus_group.command("disable")
+@click.pass_context
+def prometheus_disable(ctx: click.Context) -> None:
+    """Disable Prometheus metrics server."""
+    from .prometheus import PrometheusConfig, get_server
+
+    gov_dir = ensure_initialized(ctx)
+
+    config = PrometheusConfig.load(gov_dir)
+    config.enabled = False
+    config.save(gov_dir)
+
+    server = get_server()
+    server.stop()
+
+    click.echo("Prometheus metrics disabled")
+
+
+@prometheus_group.command("status")
+@click.pass_context
+def prometheus_status(ctx: click.Context) -> None:
+    """Show Prometheus configuration and status."""
+    from .prometheus import PROMETHEUS_AVAILABLE, PrometheusConfig, get_server
+
+    gov_dir = ensure_initialized(ctx)
+    config = PrometheusConfig.load(gov_dir)
+
+    click.echo("Prometheus Metrics Status")
+    click.echo(f"  Library installed: {PROMETHEUS_AVAILABLE}")
+    click.echo(f"  Enabled: {config.enabled}")
+    click.echo(f"  Port: {config.port}")
+    click.echo(f"  Host: {config.host}")
+
+    if PROMETHEUS_AVAILABLE and config.enabled:
+        server = get_server(config)
+        click.echo(f"  Server running: {server.running}")
+        if server.running:
+            click.echo(f"  Endpoint: http://{config.host}:{config.port}/metrics")
+
+
+@prometheus_group.command("metrics")
+@click.pass_context
+def prometheus_metrics(ctx: click.Context) -> None:
+    """Show current metrics in Prometheus text format."""
+    from .prometheus import PROMETHEUS_AVAILABLE, get_server, PrometheusConfig
+
+    if not PROMETHEUS_AVAILABLE:
+        click.echo("# prometheus_client not installed")
+        return
+
+    gov_dir = ensure_initialized(ctx)
+    config = PrometheusConfig.load(gov_dir)
+    server = get_server(config)
+
+    click.echo(server.get_metrics_text())
+
+
+# =============================================================================
 # Continuity Enforcement
 # =============================================================================
 

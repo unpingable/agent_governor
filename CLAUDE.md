@@ -57,7 +57,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **VS Code Extension (Deferred 3, Phase V2)**: TreeView side panel. `governor state --json` aggregation command, `--json` flags on 7 existing commands (status, facts, decisions, task list, regime status, boil status, autonomous list). GovernorTreeProvider (activity bar, state tree with regime/boil/proposals/decisions/facts/tasks/autonomous, refresh command, click-to-detail). GovernorState TypeScript types, generic CLI runner refactor, fetchState client method.
 **VS Code Extension (Deferred 3, Phase V2-3)**: GovernorViewModel canonical schema v2. 8 top-level sections: Session, Regime, Decisions, Claims, Evidence, Violations, Execution, Stability. Read-only derivation from existing subsystems. `--schema v1|v2` backward compat on `governor state --json`. V2 TypeScript types (GovernorViewModelV2), TreeView rewrite with claim/decision/violation/evidence builders, icon mappings for claim states and violation severities.
 **Telemetry Dashboard**: Rich TUI for real-time regime visualization. Phase space plot (λ arrival vs μ resolution), regime gauge (ELASTIC→UNSTABLE), energy sparkline, event log, budget panel. Live mode (reads from telemetry logs), replay mode (trace playback), demo mode. CLI (governor dashboard {live,replay,demo,stats}).
-**Total: 6826 tests**
+**Prometheus Metrics**: Optional Prometheus metrics export at /metrics. Counters (proposals, verifications, llm_calls, tokens, cost, errors, claims, security_scans, continuity_checks, regime_transitions), histograms (verification_duration, llm_call_duration, continuity_iterations, complexity_score), gauges (regime, stress, budget_spent/remaining, active_sessions, open_proposals, anchors). TelemetryCollector backend integration. CLI (governor prometheus {enable,disable,status,metrics}).
+**Total: 6866 tests**
 
 ## Key Documents
 
@@ -359,6 +360,12 @@ governor dashboard live                # Live dashboard (reads from telemetry lo
 governor dashboard replay <path>       # Replay trace file through dashboard (--speed)
 governor dashboard demo                # Generate and play demo trace (--speed)
 governor dashboard stats <path>        # Print trace file statistics
+
+# Prometheus Metrics (optional, requires prometheus-client)
+governor prometheus enable             # Enable metrics, start server (--port 9090)
+governor prometheus disable            # Disable metrics server
+governor prometheus status             # Show config and server status
+governor prometheus metrics            # Print current metrics in Prometheus text format
 
 # Continuity Enforcement (Deferred 5: closed-loop generation control)
 governor continuity status              # Registry stats, anchor count by type

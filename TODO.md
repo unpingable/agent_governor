@@ -1824,17 +1824,21 @@ Task balancing extends existing `routing.py`. Telemetry is new infrastructure.
 
 **91 tests in tests/test_telemetry.py + 60 tests in tests/test_convergence_telemetry.py**
 
-#### Phase B3: Prometheus & Grafana (optional)
+#### Phase B3: Prometheus Metrics ✓ COMPLETE (Grafana deferred)
 
-- [ ] **PrometheusMetrics** — Counters, histograms, gauges for governor operations
-  - Counters: proposals_total, verifications_total, llm_calls_total, tokens_total, cost_total, errors_total
-  - Histograms: verification_duration, llm_call_duration
-  - Gauges: active_sessions, autonomous_iterations, budget_remaining
+- [x] **PrometheusMetrics** — Counters, histograms, gauges for governor operations
+  - Counters: proposals_total, verifications_total, llm_calls_total, tokens_total, cost_total, errors_total, claims_total, security_scans_total, continuity_checks_total, regime_transitions_total
+  - Histograms: verification_duration_seconds, llm_call_duration_seconds, continuity_iterations, task_complexity
+  - Gauges: regime (1-4), stress (0-1), budget_spent_usd, budget_remaining_usd, active_sessions, open_proposals, anchors_registered
+  - Info: governor version and mode
   - `start_http_server(port=9090)` — expose at `/metrics`
+  - Optional dependency: `prometheus-client` (graceful degradation if missing)
+  - `PrometheusTelemetryBackend` — integrates with TelemetryCollector
+  - CLI: `governor prometheus {enable,disable,status,metrics}`
+  - Module: `src/governor/prometheus.py` (40 tests, 27 require prometheus-client)
 
-- [ ] **Grafana dashboards** — Pre-built PromQL queries
-  - Proposal throughput, verification success rate, LLM cost rate, token consumption,
-    average latency, budget utilization, error rate
+- [ ] **Grafana dashboards** — DEFERRED (need real usage data to know what's useful)
+  - Will add when we have metrics history to analyze
 
 #### Telemetry Configuration
 

@@ -465,6 +465,7 @@ class GovernorHooks:
         """
         from .continuity import Anchor, AnchorRegistry
         from .continuity_bridges import (
+            anchors_from_code_decisions,
             anchors_from_fiction_bible,
             anchors_from_nonfiction_corpus,
             anchors_from_puppet_profile,
@@ -481,6 +482,10 @@ class GovernorHooks:
             corpus_data = self._load_nonfiction_corpus_data()
             if corpus_data:
                 anchors.extend(anchors_from_nonfiction_corpus(corpus_data))
+        elif self.context.mode == "code":
+            decisions_data = self._load_code_decisions_data()
+            if decisions_data:
+                anchors.extend(anchors_from_code_decisions(decisions_data))
 
         # Puppet anchors (all modes)
         puppet_data = self._load_active_puppet()
@@ -499,24 +504,42 @@ class GovernorHooks:
         return anchors
 
     def _load_fiction_bible_data(self) -> dict:
-        """Read fiction bible JSON files directly (no Bible() instantiation)."""
-        bible_dir = self.context.root / ".fiction-gov" / "bible"
-        if not bible_dir.exists():
-            return {}
+        """Read fiction bible + canon JSON files directly (no Bible()/Canon() instantiation)."""
         data: dict[str, Any] = {}
-        for name in ("characters", "world_rules", "banned_tropes"):
-            f = bible_dir / f"{name}.json"
-            if f.exists():
+
+        # Bible data
+        bible_dir = self.context.root / ".fiction-gov" / "bible"
+        if bible_dir.exists():
+            for name in ("characters", "world_rules", "banned_tropes"):
+                f = bible_dir / f"{name}.json"
+                if f.exists():
+                    try:
+                        data[name] = json.loads(f.read_text())
+                    except (json.JSONDecodeError, OSError):
+                        pass
+            tone_f = bible_dir / "tone.json"
+            if tone_f.exists():
                 try:
-                    data[name] = json.loads(f.read_text())
+                    data["tone"] = json.loads(tone_f.read_text())
                 except (json.JSONDecodeError, OSError):
                     pass
-        tone_f = bible_dir / "tone.json"
-        if tone_f.exists():
-            try:
-                data["tone"] = json.loads(tone_f.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
+
+        # Canon data (events, relationships, threads)
+        canon_dir = self.context.root / ".fiction-gov" / "canon"
+        if canon_dir.exists():
+            canon_map = {
+                "events": "canon_events",
+                "relationships": "relationships",
+                "threads": "threads",
+            }
+            for filename, key in canon_map.items():
+                f = canon_dir / f"{filename}.json"
+                if f.exists():
+                    try:
+                        data[key] = json.loads(f.read_text())
+                    except (json.JSONDecodeError, OSError):
+                        pass
+
         return data
 
     def _load_nonfiction_corpus_data(self) -> dict:
@@ -528,6 +551,16 @@ class GovernorHooks:
             return json.loads(corpus_path.read_text())
         except (json.JSONDecodeError, OSError):
             return {}
+
+    def _load_code_decisions_data(self) -> list[dict]:
+        """Read governor decisions index directly (no DecisionLedger instantiation)."""
+        decisions_path = self.context.root / ".governor" / "decisions" / "index.json"
+        if not decisions_path.exists():
+            return []
+        try:
+            return json.loads(decisions_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return []
 
     def _load_active_puppet(self) -> dict | None:
         """Read active puppet profile if one exists."""

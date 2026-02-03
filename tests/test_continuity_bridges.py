@@ -8,6 +8,10 @@ from governor.continuity_bridges import (
     anchors_from_banned_tropes,
     anchors_from_world_rules,
     anchors_from_tone_settings,
+    anchors_from_canon_events,
+    anchors_from_relationships,
+    anchors_from_plot_threads,
+    anchors_from_code_decisions,
     anchors_from_fiction_bible,
     anchors_from_concepts,
     anchors_from_positions,
@@ -285,6 +289,368 @@ class TestAnchorsFromFictionBible:
         }
         anchors = anchors_from_fiction_bible(bible)
         assert all(a.source == "fiction_bridge" for a in anchors)
+
+    def test_canon_events_flow_through(self) -> None:
+        bible = {
+            "canon_events": [{"chapter": 1, "summary": "Hero arrives"}],
+        }
+        anchors = anchors_from_fiction_bible(bible)
+        assert len(anchors) == 1
+        assert anchors[0].anchor_type == AnchorType.CANON
+
+    def test_relationships_flow_through(self) -> None:
+        bible = {
+            "relationships": [
+                {"character_a": "Alice", "character_b": "Bob", "type": "siblings"},
+            ],
+        }
+        anchors = anchors_from_fiction_bible(bible)
+        assert len(anchors) == 1
+        assert "siblings" in anchors[0].description
+
+    def test_threads_flow_through(self) -> None:
+        bible = {
+            "threads": [
+                {"name": "Missing Key", "status": "active", "planted_chapter": 1},
+            ],
+        }
+        anchors = anchors_from_fiction_bible(bible)
+        assert len(anchors) == 1
+        assert anchors[0].anchor_type == AnchorType.REQUIREMENT
+
+    def test_combined_bible_with_canon(self) -> None:
+        bible = {
+            "characters": [{"name": "A", "anti_patterns": ["x"]}],
+            "canon_events": [{"chapter": 1, "summary": "Event"}],
+            "relationships": [{"character_a": "A", "character_b": "B", "type": "rivals"}],
+            "threads": [{"name": "Quest", "status": "active"}],
+        }
+        anchors = anchors_from_fiction_bible(bible)
+        # 1 character anti + 1 canon event + 1 relationship + 1 thread = 4
+        assert len(anchors) == 4
+
+
+# =============================================================================
+# TestAnchorsFromCanonEvents
+# =============================================================================
+
+
+class TestAnchorsFromCanonEvents:
+    """Tests for anchors_from_canon_events."""
+
+    def test_basic_event(self) -> None:
+        events = [{"chapter": 3, "summary": "Alice discovers the letter"}]
+        anchors = anchors_from_canon_events(events)
+        assert len(anchors) == 1
+        assert anchors[0].anchor_type == AnchorType.CANON
+        assert "Chapter 3" in anchors[0].description
+        assert "Alice discovers the letter" in anchors[0].description
+
+    def test_id_format(self) -> None:
+        events = [{"chapter": 3, "summary": "Event"}]
+        anchors = anchors_from_canon_events(events)
+        assert anchors[0].id == "fiction_canon_event_3_0"
+
+    def test_id_uses_index(self) -> None:
+        events = [
+            {"chapter": 1, "summary": "First"},
+            {"chapter": 1, "summary": "Second"},
+        ]
+        anchors = anchors_from_canon_events(events)
+        assert anchors[0].id == "fiction_canon_event_1_0"
+        assert anchors[1].id == "fiction_canon_event_1_1"
+
+    def test_empty_summary_skipped(self) -> None:
+        events = [{"chapter": 1, "summary": ""}]
+        anchors = anchors_from_canon_events(events)
+        assert len(anchors) == 0
+
+    def test_missing_summary_skipped(self) -> None:
+        events = [{"chapter": 1}]
+        anchors = anchors_from_canon_events(events)
+        assert len(anchors) == 0
+
+    def test_characters_in_description(self) -> None:
+        events = [{"chapter": 1, "summary": "Meeting", "characters": ["Alice", "Bob"]}]
+        anchors = anchors_from_canon_events(events)
+        assert "Alice, Bob" in anchors[0].description
+
+    def test_location_in_description(self) -> None:
+        events = [{"chapter": 1, "summary": "Arrival", "location": "library"}]
+        anchors = anchors_from_canon_events(events)
+        assert "Location: library" in anchors[0].description
+
+    def test_establishes_in_description(self) -> None:
+        events = [{"chapter": 1, "summary": "Discovery", "establishes": ["letter exists", "Alice knows"]}]
+        anchors = anchors_from_canon_events(events)
+        assert "Establishes: letter exists, Alice knows" in anchors[0].description
+
+    def test_severity_is_warn(self) -> None:
+        events = [{"chapter": 1, "summary": "Event"}]
+        anchors = anchors_from_canon_events(events)
+        assert anchors[0].severity == Severity.WARN
+
+    def test_source_field(self) -> None:
+        events = [{"chapter": 1, "summary": "Event"}]
+        anchors = anchors_from_canon_events(events)
+        assert anchors[0].source == "fiction_bridge"
+
+    def test_no_pattern_matching(self) -> None:
+        events = [{"chapter": 1, "summary": "Event"}]
+        anchors = anchors_from_canon_events(events)
+        assert anchors[0].forbidden_patterns == []
+        assert anchors[0].required_patterns == []
+
+    def test_empty_list(self) -> None:
+        anchors = anchors_from_canon_events([])
+        assert len(anchors) == 0
+
+    def test_missing_chapter_uses_default(self) -> None:
+        events = [{"summary": "Something happened"}]
+        anchors = anchors_from_canon_events(events)
+        assert "Chapter ?" in anchors[0].description
+
+    def test_multiple_events(self) -> None:
+        events = [
+            {"chapter": 1, "summary": "Event A"},
+            {"chapter": 2, "summary": "Event B"},
+            {"chapter": 2, "summary": "Event C"},
+        ]
+        anchors = anchors_from_canon_events(events)
+        assert len(anchors) == 3
+
+
+# =============================================================================
+# TestAnchorsFromRelationships
+# =============================================================================
+
+
+class TestAnchorsFromRelationships:
+    """Tests for anchors_from_relationships."""
+
+    def test_basic_relationship(self) -> None:
+        rels = [{"character_a": "Alice", "character_b": "Bob", "type": "siblings"}]
+        anchors = anchors_from_relationships(rels)
+        assert len(anchors) == 1
+        assert anchors[0].anchor_type == AnchorType.CANON
+        assert "Alice and Bob: siblings" in anchors[0].description
+
+    def test_sorted_id(self) -> None:
+        rels = [{"character_a": "Zara", "character_b": "Alice", "type": "friends"}]
+        anchors = anchors_from_relationships(rels)
+        assert anchors[0].id == "fiction_rel_alice_zara"
+
+    def test_sorted_id_deterministic(self) -> None:
+        rels_a = [{"character_a": "Alice", "character_b": "Bob", "type": "x"}]
+        rels_b = [{"character_a": "Bob", "character_b": "Alice", "type": "x"}]
+        a = anchors_from_relationships(rels_a)
+        b = anchors_from_relationships(rels_b)
+        assert a[0].id == b[0].id
+
+    def test_missing_character_a_skipped(self) -> None:
+        rels = [{"character_b": "Bob", "type": "x"}]
+        anchors = anchors_from_relationships(rels)
+        assert len(anchors) == 0
+
+    def test_missing_character_b_skipped(self) -> None:
+        rels = [{"character_a": "Alice", "type": "x"}]
+        anchors = anchors_from_relationships(rels)
+        assert len(anchors) == 0
+
+    def test_empty_character_a_skipped(self) -> None:
+        rels = [{"character_a": "", "character_b": "Bob", "type": "x"}]
+        anchors = anchors_from_relationships(rels)
+        assert len(anchors) == 0
+
+    def test_as_of_chapter(self) -> None:
+        rels = [{"character_a": "A", "character_b": "B", "type": "x", "as_of_chapter": 5}]
+        anchors = anchors_from_relationships(rels)
+        assert "as of chapter 5" in anchors[0].description
+
+    def test_dynamics_in_description(self) -> None:
+        rels = [{"character_a": "A", "character_b": "B", "type": "x", "dynamics": ["A fears B", "B protects A"]}]
+        anchors = anchors_from_relationships(rels)
+        assert "Dynamics: A fears B, B protects A" in anchors[0].description
+
+    def test_severity_is_warn(self) -> None:
+        rels = [{"character_a": "A", "character_b": "B", "type": "x"}]
+        anchors = anchors_from_relationships(rels)
+        assert anchors[0].severity == Severity.WARN
+
+    def test_source_field(self) -> None:
+        rels = [{"character_a": "A", "character_b": "B", "type": "x"}]
+        anchors = anchors_from_relationships(rels)
+        assert anchors[0].source == "fiction_bridge"
+
+    def test_empty_list(self) -> None:
+        anchors = anchors_from_relationships([])
+        assert len(anchors) == 0
+
+
+# =============================================================================
+# TestAnchorsFromPlotThreads
+# =============================================================================
+
+
+class TestAnchorsFromPlotThreads:
+    """Tests for anchors_from_plot_threads."""
+
+    def test_active_thread(self) -> None:
+        threads = [{"name": "Missing Key", "status": "active", "planted_chapter": 1}]
+        anchors = anchors_from_plot_threads(threads)
+        assert len(anchors) == 1
+        assert anchors[0].anchor_type == AnchorType.REQUIREMENT
+
+    def test_resolved_thread_skipped(self) -> None:
+        threads = [{"name": "X", "status": "resolved"}]
+        anchors = anchors_from_plot_threads(threads)
+        assert len(anchors) == 0
+
+    def test_abandoned_thread_skipped(self) -> None:
+        threads = [{"name": "X", "status": "abandoned"}]
+        anchors = anchors_from_plot_threads(threads)
+        assert len(anchors) == 0
+
+    def test_no_status_treated_as_active(self) -> None:
+        threads = [{"name": "X"}]
+        anchors = anchors_from_plot_threads(threads)
+        assert len(anchors) == 1
+
+    def test_empty_status_treated_as_active(self) -> None:
+        threads = [{"name": "X", "status": ""}]
+        anchors = anchors_from_plot_threads(threads)
+        assert len(anchors) == 1
+
+    def test_id_format(self) -> None:
+        threads = [{"name": "Missing Key", "status": "active"}]
+        anchors = anchors_from_plot_threads(threads)
+        assert anchors[0].id == "fiction_thread_missing_key"
+
+    def test_description_includes_type(self) -> None:
+        threads = [{"name": "X", "type": "mystery", "status": "active"}]
+        anchors = anchors_from_plot_threads(threads)
+        assert "(mystery)" in anchors[0].description
+
+    def test_planted_chapter_in_description(self) -> None:
+        threads = [{"name": "X", "status": "active", "planted_chapter": 3}]
+        anchors = anchors_from_plot_threads(threads)
+        assert "planted chapter 3" in anchors[0].description
+
+    def test_characters_in_description(self) -> None:
+        threads = [{"name": "X", "status": "active", "characters": ["Alice", "Bob"]}]
+        anchors = anchors_from_plot_threads(threads)
+        assert "Alice, Bob" in anchors[0].description
+
+    def test_payoff_deadline_in_description(self) -> None:
+        threads = [{"name": "X", "status": "active", "payoff_deadline": 10}]
+        anchors = anchors_from_plot_threads(threads)
+        assert "Payoff deadline: chapter 10" in anchors[0].description
+
+    def test_severity_is_warn(self) -> None:
+        threads = [{"name": "X", "status": "active"}]
+        anchors = anchors_from_plot_threads(threads)
+        assert anchors[0].severity == Severity.WARN
+
+    def test_source_field(self) -> None:
+        threads = [{"name": "X", "status": "active"}]
+        anchors = anchors_from_plot_threads(threads)
+        assert anchors[0].source == "fiction_bridge"
+
+    def test_mixed_statuses(self) -> None:
+        threads = [
+            {"name": "A", "status": "active"},
+            {"name": "B", "status": "resolved"},
+            {"name": "C", "status": "abandoned"},
+            {"name": "D", "status": "open"},
+        ]
+        anchors = anchors_from_plot_threads(threads)
+        assert len(anchors) == 2
+        names = {a.id for a in anchors}
+        assert "fiction_thread_a" in names
+        assert "fiction_thread_d" in names
+
+
+# =============================================================================
+# TestAnchorsFromCodeDecisions
+# =============================================================================
+
+
+class TestAnchorsFromCodeDecisions:
+    """Tests for anchors_from_code_decisions."""
+
+    def test_basic_decision(self) -> None:
+        decs = [{"topic": "framework", "choice": "React", "rationale": "Community support"}]
+        anchors = anchors_from_code_decisions(decs)
+        assert len(anchors) == 1
+        assert anchors[0].anchor_type == AnchorType.CANON
+
+    def test_description_format(self) -> None:
+        decs = [{"topic": "framework", "choice": "React", "rationale": "Community support"}]
+        anchors = anchors_from_code_decisions(decs)
+        assert "Decision: framework = React" in anchors[0].description
+        assert "Rationale: Community support" in anchors[0].description
+
+    def test_id_format(self) -> None:
+        decs = [{"topic": "test runner", "choice": "pytest"}]
+        anchors = anchors_from_code_decisions(decs)
+        assert anchors[0].id == "code_decision_test_runner"
+
+    def test_no_topic_skipped(self) -> None:
+        decs = [{"choice": "React"}]
+        anchors = anchors_from_code_decisions(decs)
+        assert len(anchors) == 0
+
+    def test_empty_topic_skipped(self) -> None:
+        decs = [{"topic": "", "choice": "React"}]
+        anchors = anchors_from_code_decisions(decs)
+        assert len(anchors) == 0
+
+    def test_superseded_skipped(self) -> None:
+        decs = [{"topic": "framework", "choice": "React", "superseded_by": "new_id"}]
+        anchors = anchors_from_code_decisions(decs)
+        assert len(anchors) == 0
+
+    def test_superseded_none_included(self) -> None:
+        decs = [{"topic": "framework", "choice": "React", "superseded_by": None}]
+        anchors = anchors_from_code_decisions(decs)
+        assert len(anchors) == 1
+
+    def test_no_superseded_key_included(self) -> None:
+        decs = [{"topic": "framework", "choice": "React"}]
+        anchors = anchors_from_code_decisions(decs)
+        assert len(anchors) == 1
+
+    def test_severity_is_warn(self) -> None:
+        decs = [{"topic": "x", "choice": "y"}]
+        anchors = anchors_from_code_decisions(decs)
+        assert anchors[0].severity == Severity.WARN
+
+    def test_source_field(self) -> None:
+        decs = [{"topic": "x", "choice": "y"}]
+        anchors = anchors_from_code_decisions(decs)
+        assert anchors[0].source == "code_bridge"
+
+    def test_no_pattern_matching(self) -> None:
+        decs = [{"topic": "x", "choice": "y"}]
+        anchors = anchors_from_code_decisions(decs)
+        assert anchors[0].forbidden_patterns == []
+        assert anchors[0].required_patterns == []
+
+    def test_multiple_decisions_mixed(self) -> None:
+        decs = [
+            {"topic": "framework", "choice": "React"},
+            {"topic": "testing", "choice": "pytest", "superseded_by": "new"},
+            {"topic": "db", "choice": "PostgreSQL"},
+        ]
+        anchors = anchors_from_code_decisions(decs)
+        assert len(anchors) == 2
+        topics = {a.id for a in anchors}
+        assert "code_decision_framework" in topics
+        assert "code_decision_db" in topics
+
+    def test_empty_list(self) -> None:
+        anchors = anchors_from_code_decisions([])
+        assert len(anchors) == 0
 
 
 # =============================================================================

@@ -169,6 +169,184 @@ def anchors_from_tone_settings(tone: dict) -> list[Anchor]:
     return anchors
 
 
+def anchors_from_canon_events(events: list[dict]) -> list[Anchor]:
+    """
+    Build continuity anchors from canon event dicts.
+
+    Each event becomes a CANON anchor (prompt enrichment only, no pattern
+    matching -- lexical matching can't reliably detect contradiction of
+    semantic facts).
+
+    Expected dict keys: chapter, summary, characters, location, establishes.
+    Skips events with empty summary.
+    """
+    anchors: list[Anchor] = []
+    for idx, event in enumerate(events):
+        summary = event.get("summary", "")
+        if not summary:
+            continue
+
+        chapter = event.get("chapter", "?")
+        characters = event.get("characters") or []
+        location = event.get("location", "")
+        establishes = event.get("establishes") or []
+
+        desc = f"Chapter {chapter}: {summary}"
+        if characters:
+            desc += f". Characters: {', '.join(characters)}"
+        if location:
+            desc += f". Location: {location}"
+        if establishes:
+            desc += f". Establishes: {', '.join(establishes)}"
+
+        anchors.append(Anchor(
+            id=f"fiction_canon_event_{chapter}_{idx}",
+            anchor_type=AnchorType.CANON,
+            description=desc,
+            severity=Severity.WARN,
+            source="fiction_bridge",
+        ))
+
+    return anchors
+
+
+def anchors_from_relationships(relationships: list[dict]) -> list[Anchor]:
+    """
+    Build continuity anchors from relationship dicts.
+
+    Each relationship becomes a CANON anchor (prompt enrichment only).
+    ID uses sorted character names for deterministic ordering.
+
+    Expected dict keys: character_a, character_b, type, as_of_chapter, dynamics.
+    Skips entries missing character_a or character_b.
+    """
+    anchors: list[Anchor] = []
+    for rel in relationships:
+        char_a = rel.get("character_a", "")
+        char_b = rel.get("character_b", "")
+        if not char_a or not char_b:
+            continue
+
+        rel_type = rel.get("type", "related")
+        as_of = rel.get("as_of_chapter", "")
+        dynamics = rel.get("dynamics") or []
+
+        desc = f"{char_a} and {char_b}: {rel_type}"
+        if as_of:
+            desc += f" (as of chapter {as_of})"
+        if dynamics:
+            desc += f". Dynamics: {', '.join(dynamics)}"
+
+        sorted_pair = sorted([char_a.lower().replace(" ", "_"),
+                              char_b.lower().replace(" ", "_")])
+        anchor_id = f"fiction_rel_{sorted_pair[0]}_{sorted_pair[1]}"
+
+        anchors.append(Anchor(
+            id=anchor_id,
+            anchor_type=AnchorType.CANON,
+            description=desc,
+            severity=Severity.WARN,
+            source="fiction_bridge",
+        ))
+
+    return anchors
+
+
+_INACTIVE_THREAD_STATUSES = {"resolved", "abandoned"}
+
+
+def anchors_from_plot_threads(threads: list[dict]) -> list[Anchor]:
+    """
+    Build continuity anchors from plot thread dicts.
+
+    Only active threads become REQUIREMENT anchors (threads are narrative
+    obligations, not just established facts). Threads with status in
+    {"resolved", "abandoned"} are skipped.
+
+    Expected dict keys: name, type, status, planted_chapter, characters,
+                        payoff_deadline.
+    """
+    anchors: list[Anchor] = []
+    for thread in threads:
+        status = (thread.get("status") or "").lower()
+        if status in _INACTIVE_THREAD_STATUSES:
+            continue
+
+        name = thread.get("name", "unknown")
+        safe_name = name.lower().replace(" ", "_")
+        thread_type = thread.get("type", "")
+        planted = thread.get("planted_chapter", "")
+        characters = thread.get("characters") or []
+        deadline = thread.get("payoff_deadline", "")
+
+        desc = f"Plot thread '{name}'"
+        if thread_type:
+            desc += f" ({thread_type})"
+        if planted:
+            desc += f", planted chapter {planted}"
+        if characters:
+            desc += f". Characters: {', '.join(characters)}"
+        if deadline:
+            desc += f". Payoff deadline: chapter {deadline}"
+            # Check overdue: if planted chapter is known, compare
+            if planted:
+                try:
+                    if int(planted) < int(deadline):
+                        pass  # not overdue yet by definition
+                except (ValueError, TypeError):
+                    pass
+
+        anchors.append(Anchor(
+            id=f"fiction_thread_{safe_name}",
+            anchor_type=AnchorType.REQUIREMENT,
+            description=desc,
+            severity=Severity.WARN,
+            source="fiction_bridge",
+        ))
+
+    return anchors
+
+
+def anchors_from_code_decisions(decisions: list[dict]) -> list[Anchor]:
+    """
+    Build continuity anchors from governor decision dicts.
+
+    Only active decisions (not superseded) become CANON anchors (prompt
+    enrichment only). Handles supersession filtering internally.
+
+    Expected dict keys: topic, choice, rationale, superseded_by.
+    Skips entries with no topic.
+    """
+    anchors: list[Anchor] = []
+    for dec in decisions:
+        topic = dec.get("topic", "")
+        if not topic:
+            continue
+        # Skip superseded decisions
+        if dec.get("superseded_by") is not None:
+            continue
+
+        safe_topic = topic.lower().replace(" ", "_")
+        choice = dec.get("choice", "")
+        rationale = dec.get("rationale", "")
+
+        desc = f"Decision: {topic}"
+        if choice:
+            desc += f" = {choice}"
+        if rationale:
+            desc += f". Rationale: {rationale}"
+
+        anchors.append(Anchor(
+            id=f"code_decision_{safe_topic}",
+            anchor_type=AnchorType.CANON,
+            description=desc,
+            severity=Severity.WARN,
+            source="code_bridge",
+        ))
+
+    return anchors
+
+
 def anchors_from_fiction_bible(bible_data: dict) -> list[Anchor]:
     """
     Master factory: build all fiction anchors from a bible data dict.
@@ -178,6 +356,9 @@ def anchors_from_fiction_bible(bible_data: dict) -> list[Anchor]:
         world_rules: list[dict]
         banned_tropes: list[dict]
         tone: dict
+        canon_events: list[dict]
+        relationships: list[dict]
+        threads: list[dict]
     """
     anchors: list[Anchor] = []
     anchors.extend(anchors_from_characters(bible_data.get("characters") or []))
@@ -187,6 +368,10 @@ def anchors_from_fiction_bible(bible_data: dict) -> list[Anchor]:
     tone = bible_data.get("tone")
     if tone:
         anchors.extend(anchors_from_tone_settings(tone))
+
+    anchors.extend(anchors_from_canon_events(bible_data.get("canon_events") or []))
+    anchors.extend(anchors_from_relationships(bible_data.get("relationships") or []))
+    anchors.extend(anchors_from_plot_threads(bible_data.get("threads") or []))
 
     return anchors
 

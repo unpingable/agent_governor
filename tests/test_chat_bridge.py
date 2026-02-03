@@ -462,7 +462,7 @@ class TestGovernorHooksContinuity:
         warnings = hooks.check_response("I think this is correct.")
         assert warnings == []
 
-    def test_check_response_code_mode_empty(self, tmp_path: Path) -> None:
+    def test_check_response_code_mode_no_decisions_empty(self, tmp_path: Path) -> None:
         ctx = self._make_context(tmp_path, mode="code")
         hooks = GovernorHooks(ctx)
         warnings = hooks.check_response("Some code output")
@@ -502,6 +502,104 @@ class TestGovernorHooksContinuity:
         assert "message" in w
         assert "evidence" in w
         assert w["type"] == "continuity_violation"
+
+    # ---- Fiction canon integration ----
+
+    def _setup_fiction_canon(self, tmp_path: Path) -> None:
+        canon_dir = tmp_path / ".fiction-gov" / "canon"
+        canon_dir.mkdir(parents=True, exist_ok=True)
+        (canon_dir / "events.json").write_text(json.dumps([
+            {"chapter": 3, "summary": "Alice discovers the letter", "characters": ["Alice"], "location": "library"},
+        ]))
+        (canon_dir / "relationships.json").write_text(json.dumps([
+            {"character_a": "Alice", "character_b": "Bob", "type": "siblings", "as_of_chapter": 1},
+        ]))
+        (canon_dir / "threads.json").write_text(json.dumps([
+            {"name": "Missing Key", "status": "active", "planted_chapter": 2, "characters": ["Alice"]},
+            {"name": "Old Quest", "status": "resolved"},
+        ]))
+
+    def test_fiction_canon_events_loaded(self, tmp_path: Path) -> None:
+        self._setup_fiction_canon(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        result = hooks.check_response_full("Some text")
+        # Canon events produce anchors (no violations since CANON has no patterns)
+        assert result.checked_anchors >= 1
+
+    def test_fiction_relationships_loaded(self, tmp_path: Path) -> None:
+        self._setup_fiction_canon(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        result = hooks.check_response_full("Some text")
+        assert result.checked_anchors >= 2  # at least event + relationship
+
+    def test_fiction_threads_loaded(self, tmp_path: Path) -> None:
+        self._setup_fiction_canon(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        result = hooks.check_response_full("Some text")
+        # 1 event + 1 relationship + 1 active thread (resolved skipped) = 3
+        assert result.checked_anchors >= 3
+
+    def test_fiction_canon_missing_dir_graceful(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        # No .fiction-gov/canon/ dir at all - should not error
+        result = hooks.check_response_full("Some text")
+        assert result.passed is True
+
+    def test_fiction_canon_in_system_prompt(self, tmp_path: Path) -> None:
+        self._setup_fiction_canon(tmp_path)
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        messages = [ChatMessage(role="user", content="Write a scene")]
+        result = hooks.augment_messages(messages)
+        system = result[0].content
+        assert "Alice discovers the letter" in system
+        assert "siblings" in system
+
+    # ---- Code decisions integration ----
+
+    def _setup_code_decisions(self, tmp_path: Path) -> None:
+        dec_dir = tmp_path / ".governor" / "decisions"
+        dec_dir.mkdir(parents=True, exist_ok=True)
+        (dec_dir / "index.json").write_text(json.dumps([
+            {"topic": "framework", "choice": "React", "rationale": "Community support"},
+            {"topic": "testing", "choice": "pytest", "rationale": "Rich plugins"},
+        ]))
+
+    def test_code_decisions_loaded(self, tmp_path: Path) -> None:
+        self._setup_code_decisions(tmp_path)
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        result = hooks.check_response_full("Some code output")
+        assert result.checked_anchors == 2
+
+    def test_code_decisions_in_system_prompt(self, tmp_path: Path) -> None:
+        self._setup_code_decisions(tmp_path)
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        messages = [ChatMessage(role="user", content="Fix the bug")]
+        result = hooks.augment_messages(messages)
+        system = result[0].content
+        assert "framework" in system.lower()
+        assert "React" in system
+
+    def test_code_decisions_missing_dir_graceful(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        result = hooks.check_response_full("Some code output")
+        assert result.passed is True
+        assert result.checked_anchors == 0
+
+    def test_code_mode_checked_anchors_count(self, tmp_path: Path) -> None:
+        self._setup_code_decisions(tmp_path)
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        result = hooks.check_response_full("Some code output")
+        assert result.checked_anchors == 2
+        assert result.passed is True
 
     def test_augment_includes_anchor_context(self, tmp_path: Path) -> None:
         self._setup_fiction_bible(tmp_path)

@@ -618,6 +618,30 @@ from .continuity_bridges import (
     anchors_from_puppet_profile,
 )
 
+# Maude Lite (evidence-gated coding harness)
+from .maude_lite import (
+    MaudeLiteStatus,
+    ClaimLevel,
+    MaudeLiteClaim,
+    MaudeLiteCitation,
+    MaudeLiteInput,
+    MaudeLiteOutput,
+    CustodyScore,
+    MaudeLiteConfig,
+    MaudeLiteEvent,
+    MaudeLiteLogger,
+    MaudeLite,
+    extract_claims,
+    check_evidence,
+    link_evidence_to_claims,
+    detect_contradictions,
+    score_custody,
+    check_exit_shape,
+    maude_lite_wrapper,
+    BlockedError,
+    check_output as check_maude_lite_output,
+)
+
 # Governor adapters (Phase A4)
 from .adapters import (
     AdapterFinding,
@@ -1257,6 +1281,27 @@ __all__ = [
     "anchors_from_concepts",
     "anchors_from_positions",
     "anchors_from_puppet_profile",
+    # Maude Lite (evidence-gated coding harness)
+    "MaudeLiteStatus",
+    "ClaimLevel",
+    "MaudeLiteClaim",
+    "MaudeLiteCitation",
+    "MaudeLiteInput",
+    "MaudeLiteOutput",
+    "CustodyScore",
+    "MaudeLiteConfig",
+    "MaudeLiteEvent",
+    "MaudeLiteLogger",
+    "MaudeLite",
+    "extract_claims",
+    "check_evidence",
+    "link_evidence_to_claims",
+    "detect_contradictions",
+    "score_custody",
+    "check_exit_shape",
+    "maude_lite_wrapper",
+    "BlockedError",
+    "check_maude_lite_output",
     # Governor adapters (Phase A4)
     "AdapterFinding",
     "AdapterConfig",

@@ -58,7 +58,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **VS Code Extension (Deferred 3, Phase V2-3)**: GovernorViewModel canonical schema v2. 8 top-level sections: Session, Regime, Decisions, Claims, Evidence, Violations, Execution, Stability. Read-only derivation from existing subsystems. `--schema v1|v2` backward compat on `governor state --json`. V2 TypeScript types (GovernorViewModelV2), TreeView rewrite with claim/decision/violation/evidence builders, icon mappings for claim states and violation severities.
 **Telemetry Dashboard**: Rich TUI for real-time regime visualization. Phase space plot (λ arrival vs μ resolution), regime gauge (ELASTIC→UNSTABLE), energy sparkline, event log, budget panel. Live mode (reads from telemetry logs), replay mode (trace playback), demo mode. CLI (governor dashboard {live,replay,demo,stats}).
 **Prometheus Metrics**: Optional Prometheus metrics export at /metrics. Counters (proposals, verifications, llm_calls, tokens, cost, errors, claims, security_scans, continuity_checks, regime_transitions), histograms (verification_duration, llm_call_duration, continuity_iterations, complexity_score), gauges (regime, stress, budget_spent/remaining, active_sessions, open_proposals, anchors). TelemetryCollector backend integration. CLI (governor prometheus {enable,disable,status,metrics}).
-**Total: 6866 tests**
+**Maude Lite**: Evidence-gated coding harness — kernel-only surface. HARD claims require evidence, contradictions persist, failures are loud. Custody scoring (Ap accountability, Ip invariant coupling, Fp failure explicitness). Claim extraction (HARD/SOFT patterns), evidence linking, contradiction detection, exit shape checking. Status codes (OK/WARN/BLOCKED). Agent wrapper integration, JSONL logging. CLI (governor maude-lite {check,validate,config,score,extract}).
+**Total: 6940 tests**
 
 ## Key Documents
 
@@ -367,6 +368,15 @@ governor prometheus disable            # Disable metrics server
 governor prometheus status             # Show config and server status
 governor prometheus metrics            # Print current metrics in Prometheus text format
 
+# Maude Lite (evidence-gated coding harness)
+governor maude-lite check <text>       # Check agent output against kernel constraints
+governor maude-lite check --stdin      # Read from stdin
+governor maude-lite check -f <file>    # Read from file (--strict/--permissive, --format json)
+governor maude-lite validate <path>    # Validate file contents
+governor maude-lite config             # Show configuration and kernel constraints
+governor maude-lite score <text>       # Score custody metrics (Ap, Ip, Fp)
+governor maude-lite extract <text>     # Extract claims from content
+
 # Continuity Enforcement (Deferred 5: closed-loop generation control)
 governor continuity status              # Registry stats, anchor count by type
 governor continuity anchor add          # --id, --type, --description, --required, --forbidden, --severity
@@ -507,6 +517,7 @@ src/governor/
 ├── convergence_tuning.py # ConvergenceAnalyzer, ConvergenceTuner, ProposalStore, TuningProposal, admissibility checks
 ├── check.py          # Position, Range, CheckFinding, CheckResult, run_check (unified check aggregation for VS Code)
 ├── viewmodel.py      # GovernorViewModel (schema v2), 8 section builders, read-only state derivation, V1 compat
+├── maude_lite.py     # MaudeLite, evidence-gated coding harness, claim extraction, evidence linking, custody scoring
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -965,7 +976,14 @@ vscode-governor/
 
 **VS Code Extension tests: 140 (87 Python + 53 TypeScript)**
 
-**Total: 6774 tests**
+### Maude Lite (Evidence-Gated Coding Harness)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| maude_lite.py | MaudeLite, MaudeLiteStatus, ClaimLevel, MaudeLiteClaim, CustodyScore, claim extraction, evidence linking, contradiction detection, custody scoring, exit shape checking, agent wrapper, JSONL logging | 101 |
+
+**Maude Lite tests: 101**
+
+**Total: 6940 tests**
 
 ## Common Mistakes to Avoid
 

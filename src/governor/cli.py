@@ -9764,6 +9764,198 @@ def continuity_import(ctx: click.Context, path: str) -> None:
 
 
 # =============================================================================
+# Maude Lite (Evidence-Gated Coding Harness)
+# =============================================================================
+
+
+@cli.group("maude-lite")
+@click.pass_context
+def maude_lite_cmd(ctx):
+    """Maude Lite — evidence-gated coding harness.
+
+    Kernel-only surface: claims need evidence, contradictions persist, failures are loud.
+    """
+    pass
+
+
+@maude_lite_cmd.command("check")
+@click.argument("text", required=False)
+@click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
+@click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
+@click.option("--task", "-t", default="", help="Task description for context")
+@click.option("--strict/--permissive", default=True, help="Strict mode (fail-closed) or permissive (warn only)")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.pass_context
+def maude_lite_check(ctx, text, use_stdin, file, task, strict, fmt):
+    """Check agent output against kernel constraints.
+
+    \b
+    Examples:
+        governor maude-lite check "This improves performance by 10x"
+        echo "code..." | governor maude-lite check --stdin
+        governor maude-lite check --file output.txt --format json
+    """
+    from .maude_lite import MaudeLite, MaudeLiteConfig
+
+    # Get content to check
+    if use_stdin:
+        content = click.get_text_stream("stdin").read()
+    elif file:
+        content = Path(file).read_text()
+    elif text:
+        content = text
+    else:
+        click.echo("Error: Provide text, --stdin, or --file.", err=True)
+        ctx.exit(1)
+        return
+
+    config = MaudeLiteConfig(strict=strict)
+    lite = MaudeLite(config=config)
+    result = lite.check(task=task, context="", output=content)
+
+    if fmt == "json":
+        click.echo(result.to_json())
+    else:
+        click.echo(lite.format_status(result))
+
+
+@maude_lite_cmd.command("validate")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--task", "-t", default="validate file", help="Task description")
+@click.option("--strict/--permissive", default=True, help="Strict mode or permissive")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.pass_context
+def maude_lite_validate(ctx, path, task, strict, fmt):
+    """Validate a file's contents against kernel constraints."""
+    from .maude_lite import MaudeLite, MaudeLiteConfig
+
+    content = Path(path).read_text()
+    config = MaudeLiteConfig(strict=strict)
+    lite = MaudeLite(config=config)
+    result = lite.check(task=task, context=str(path), output=content)
+
+    if fmt == "json":
+        click.echo(result.to_json())
+    else:
+        click.echo(f"File: {path}")
+        click.echo(lite.format_status(result))
+        if result.claims:
+            click.echo(f"\nClaims extracted: {len(result.claims)}")
+            for claim in result.claims[:5]:  # Show first 5
+                level = claim.level.value
+                evidence = "✓" if claim.evidence else "✗"
+                click.echo(f"  [{level}] {claim.text[:50]}... (evidence: {evidence})")
+            if len(result.claims) > 5:
+                click.echo(f"  ... and {len(result.claims) - 5} more")
+
+
+@maude_lite_cmd.command("config")
+@click.pass_context
+def maude_lite_config(ctx):
+    """Show Maude Lite configuration."""
+    from .maude_lite import MaudeLiteConfig, CUSTODY_THRESHOLD
+
+    config = MaudeLiteConfig()
+
+    click.echo("Maude Lite Configuration")
+    click.echo("========================")
+    click.echo(f"Mode: {'strict' if config.strict else 'permissive'}")
+    click.echo(f"Custody threshold: {config.custody_threshold}")
+    click.echo(f"Evidence required for HARD claims: {config.evidence_required_for_hard}")
+    click.echo(f"Contradiction action: {config.contradiction_action}")
+    click.echo("\nKernel constraints (non-negotiable):")
+    for constraint in config._kernel_constraints:
+        click.echo(f"  - {constraint}")
+    click.echo("\nDisabled features (surface):")
+    for feature in ["puppet_mode", "persona", "tone_modulation", "regime_detection", "ticketing", "journal"]:
+        click.echo(f"  - {feature}")
+
+
+@maude_lite_cmd.command("score")
+@click.argument("text", required=False)
+@click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
+@click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.pass_context
+def maude_lite_score(ctx, text, use_stdin, file, fmt):
+    """Score custody metrics (Ap, Ip, Fp) for content."""
+    from .maude_lite import score_custody
+
+    # Get content to check
+    if use_stdin:
+        content = click.get_text_stream("stdin").read()
+    elif file:
+        content = Path(file).read_text()
+    elif text:
+        content = text
+    else:
+        click.echo("Error: Provide text, --stdin, or --file.", err=True)
+        ctx.exit(1)
+        return
+
+    custody = score_custody(content)
+
+    if fmt == "json":
+        click.echo(json.dumps(custody.to_dict(), indent=2))
+    else:
+        click.echo("Custody Score")
+        click.echo("=============")
+        click.echo(f"Accountability (Ap): {custody.ap:.2f}")
+        click.echo(f"Invariant coupling (Ip): {custody.ip:.2f}")
+        click.echo(f"Failure explicitness (Fp): {custody.fp:.2f}")
+        click.echo(f"Total: {custody.total:.2f}")
+        click.echo(f"Status: {'PASS' if custody.passed else 'FAIL'}")
+        if not custody.passed:
+            click.echo("\nIssues:")
+            for reason in custody.blocking_reasons:
+                click.echo(f"  - {reason}")
+
+
+@maude_lite_cmd.command("extract")
+@click.argument("text", required=False)
+@click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
+@click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.pass_context
+def maude_lite_extract(ctx, text, use_stdin, file, fmt):
+    """Extract claims from content."""
+    from .maude_lite import extract_claims, check_evidence, link_evidence_to_claims
+
+    # Get content to check
+    if use_stdin:
+        content = click.get_text_stream("stdin").read()
+    elif file:
+        content = Path(file).read_text()
+    elif text:
+        content = text
+    else:
+        click.echo("Error: Provide text, --stdin, or --file.", err=True)
+        ctx.exit(1)
+        return
+
+    claims = extract_claims(content)
+    evidence = check_evidence(content)
+    claims = link_evidence_to_claims(claims, evidence, content)
+
+    if fmt == "json":
+        click.echo(json.dumps({
+            "claims": [c.to_dict() for c in claims],
+            "evidence_indicators": evidence,
+        }, indent=2))
+    else:
+        click.echo(f"Claims extracted: {len(claims)}")
+        click.echo(f"Evidence indicators: {len(evidence)}")
+        if evidence:
+            click.echo(f"  {', '.join(evidence[:3])}{'...' if len(evidence) > 3 else ''}")
+        click.echo()
+        for claim in claims:
+            level = claim.level.value
+            evidence_status = f"✓ {claim.evidence}" if claim.evidence else "✗ no evidence"
+            click.echo(f"[{level}] \"{claim.text}\"")
+            click.echo(f"       ID: {claim.id}, Evidence: {evidence_status}")
+
+
+# =============================================================================
 # Unified Check Command (VS Code extension integration)
 # =============================================================================
 

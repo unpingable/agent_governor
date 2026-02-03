@@ -555,7 +555,7 @@ Based on `ingest/direction.md` - artificial landmarks that impose orientation co
   - Historical factor affects complexity estimation
   - CLI: `governor routing status/models/estimate/route/register/available`
 
-**48 tests in tests/test_routing.py**
+**91 tests in tests/test_routing.py** (48 original + 43 Phase B1)
 
 ```toml
 # Example config
@@ -1754,32 +1754,30 @@ vscode-governor/
 Two post-MVP features extending the governor's routing and observability.
 Task balancing extends existing `routing.py`. Telemetry is new infrastructure.
 
-#### Phase B1: Enhanced Task Balancing (extends `routing.py`)
+#### Phase B1: Enhanced Task Balancing ✓ COMPLETE (extends `routing.py`)
 
-- [ ] **LLM capability profiles** — Cost/latency/strength per model
-  - `LLMProfile`: model_id, provider, max_complexity, strengths, context_window,
-    cost_input/output (per 1M tokens), latency p50/p95, rate limits
-  - Pre-defined profiles: claude-haiku-4, claude-sonnet-4, claude-opus-4,
-    gpt-4o-mini, gpt-4o, deepseek-coder
-  - This extends existing `ModelCapabilities` in routing.py with cost data
+- [x] **LLM capability profiles** — Cost/latency/strength per model
+  - Extended `ModelCapabilities` with: provider, cost_input/output (per 1M tokens), latency_p50/p95, requests_per_minute, tokens_per_minute, strengths[]
+  - Pre-defined profiles: claude-3-haiku, claude-3-5-haiku, claude-sonnet-4, claude-opus-4, gpt-4o-mini, gpt-4o, deepseek-coder
+  - `cost_per_1k_tokens()` helper method with configurable input/output ratio
 
-- [ ] **Routing strategies** — Cost/speed/quality/balanced optimization
-  - `cost_optimal`: Cheapest model that can handle complexity
-  - `speed_optimal`: Fastest model that can handle complexity
-  - `quality_optimal`: Best model regardless of cost
-  - `balanced`: Weighted sum of cost/speed/quality scores
-  - Fallback chains: if primary fails, escalate to next tier
-  - `governor config set routing.strategy cost_optimal`
+- [x] **Routing strategies** — Cost/speed/quality/balanced optimization
+  - `RoutingStrategy` enum: COST_OPTIMAL, SPEED_OPTIMAL, QUALITY_OPTIMAL, BALANCED
+  - `RoutingConfig.strategy` and `strategy_weights` (cost/speed/quality weights for balanced)
+  - `Router._select_model_by_strategy()` scores models per strategy
+  - Fallback chains: built from higher tiers when primary unavailable
 
-- [ ] **Budget management** — Multi-scope cost tracking
-  - `Budget` dataclass: total_usd, spent_usd, model_limits
-  - `BudgetManager`: session/task/project scopes, all checked before routing
-  - `governor session start --budget 10.00`
-  - `governor task add "task" --budget 2.50`
-  - `governor budget status` — spending breakdown by model and operation
+- [x] **Budget management** — Multi-scope cost tracking
+  - `BudgetScope` enum: SESSION, TASK, PROJECT, GLOBAL
+  - `Budget` dataclass: total_usd, spent_usd, model_limits, input/output tokens
+  - `BudgetManager`: create/get budgets, `check_budget()` before routing, `record_usage()`
+  - `BudgetCheckResult` with allowed status, reason, cheaper alternatives
+  - `RoutingConfig.enforce_budget` flag, `Router.route()` accepts budget_scope/scope_id
 
-- [ ] **Routing explainability** — `governor task route <id> --explain`
-  - Show complexity analysis, selected model, reason, alternatives with costs
+- [x] **Routing explainability** — `Router.explain(decision)` method
+  - Returns dict with: complexity breakdown, selection info (model, tier, reasoning, strategy), model capabilities and status, cost analysis (estimated cost/latency, budget check), alternatives considered, fallback chain, historical context (tier success rate, complexity range success rate)
+
+**91 tests in tests/test_routing.py** (43 new tests for Phase B1)
 
 #### Phase B2: Structured Telemetry ✓ COMPLETE
 

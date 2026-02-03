@@ -56,7 +56,7 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **VS Code Extension (Deferred 3, Phase V1)**: Unified check aggregation (check.py: Position, Range, CheckFinding, CheckResult, run_check). CLI `governor check` command (file/stdin, JSON/text output, security/continuity toggles). TypeScript VS Code extension (vscode-governor/: CLI client wrapper, diagnostic provider, Check File/Check Selection commands, status bar, on-save handler).
 **VS Code Extension (Deferred 3, Phase V2)**: TreeView side panel. `governor state --json` aggregation command, `--json` flags on 7 existing commands (status, facts, decisions, task list, regime status, boil status, autonomous list). GovernorTreeProvider (activity bar, state tree with regime/boil/proposals/decisions/facts/tasks/autonomous, refresh command, click-to-detail). GovernorState TypeScript types, generic CLI runner refactor, fetchState client method.
 **VS Code Extension (Deferred 3, Phase V2-3)**: GovernorViewModel canonical schema v2. 8 top-level sections: Session, Regime, Decisions, Claims, Evidence, Violations, Execution, Stability. Read-only derivation from existing subsystems. `--schema v1|v2` backward compat on `governor state --json`. V2 TypeScript types (GovernorViewModelV2), TreeView rewrite with claim/decision/violation/evidence builders, icon mappings for claim states and violation severities.
-**Total: 5594 tests**
+**Total: 6774 tests**
 
 ## Key Documents
 
@@ -653,9 +653,9 @@ vscode-governor/
 ### Multi-Agent Routing
 | Module | Description | Tests |
 |--------|-------------|-------|
-| routing.py | Router, ModelRegistry, ComplexityEstimator, TaskHistory, adaptive routing | 48 |
+| routing.py | Router, ModelRegistry, ComplexityEstimator, TaskHistory, adaptive routing, RoutingStrategy, BudgetManager, routing explainability | 91 |
 
-**Multi-Agent Routing tests: 48**
+**Multi-Agent Routing tests: 91**
 
 ### Failure Provenance & Scars
 | Module | Description | Tests |
@@ -951,7 +951,7 @@ vscode-governor/
 
 **VS Code Extension tests: 140 (87 Python + 53 TypeScript)**
 
-**Total: 5594 tests**
+**Total: 6774 tests**
 
 ## Common Mistakes to Avoid
 

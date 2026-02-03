@@ -14,8 +14,10 @@ from governor.chat_bridge import (
     OllamaBackend,
     AnthropicBackend,
     GovernorHooks,
+    GovernorCheckResult,
     ChatBridge,
     create_backend,
+    _format_governor_footer,
 )
 from governor.context_manager import GovernorContext, GovernorContextManager
 
@@ -651,3 +653,344 @@ class TestCreateBackend:
     def test_unknown_backend(self) -> None:
         with pytest.raises(ValueError, match="Unknown backend"):
             create_backend("unknown")
+
+
+# ============================================================================
+# TestGovernorCheckResult
+# ============================================================================
+
+
+class TestGovernorCheckResult:
+    """Tests for GovernorCheckResult dataclass."""
+
+    def test_check_result_dataclass(self) -> None:
+        result = GovernorCheckResult(
+            violations=[{"message": "bad"}],
+            checked_anchors=3,
+            passed=False,
+        )
+        assert result.violations == [{"message": "bad"}]
+        assert result.checked_anchors == 3
+        assert result.passed is False
+
+    def test_check_result_empty(self) -> None:
+        result = GovernorCheckResult(violations=[], checked_anchors=0, passed=True)
+        assert result.violations == []
+        assert result.passed is True
+
+
+# ============================================================================
+# TestFormatGovernorFooter
+# ============================================================================
+
+
+class TestFormatGovernorFooter:
+    """Tests for _format_governor_footer helper."""
+
+    def test_violations_footer(self) -> None:
+        result = GovernorCheckResult(
+            violations=[{"message": "banned trope detected"}],
+            checked_anchors=2,
+            passed=False,
+        )
+        footer = _format_governor_footer(result, show_ok=True)
+        assert footer is not None
+        assert "[Governor] banned trope detected" in footer
+        assert footer.startswith("\n\n---\n")
+
+    def test_ok_footer_when_anchors_checked(self) -> None:
+        result = GovernorCheckResult(violations=[], checked_anchors=3, passed=True)
+        footer = _format_governor_footer(result, show_ok=True)
+        assert footer == "\n\n---\n[Governor] OK"
+
+    def test_no_footer_when_show_ok_disabled(self) -> None:
+        result = GovernorCheckResult(violations=[], checked_anchors=3, passed=True)
+        footer = _format_governor_footer(result, show_ok=False)
+        assert footer is None
+
+    def test_no_footer_when_no_anchors(self) -> None:
+        result = GovernorCheckResult(violations=[], checked_anchors=0, passed=True)
+        footer = _format_governor_footer(result, show_ok=True)
+        assert footer is None
+
+    def test_multiple_violations(self) -> None:
+        result = GovernorCheckResult(
+            violations=[{"message": "issue A"}, {"message": "issue B"}],
+            checked_anchors=5,
+            passed=False,
+        )
+        footer = _format_governor_footer(result, show_ok=True)
+        assert "[Governor] issue A" in footer
+        assert "[Governor] issue B" in footer
+
+
+# ============================================================================
+# TestChatBridgeGovernorFooter
+# ============================================================================
+
+
+class TestChatBridgeGovernorFooter:
+    """Tests for non-streaming governor footer behavior."""
+
+    def _setup_fiction_context(self, tmp_path: Path) -> GovernorContextManager:
+        """Create a fiction context and populate its bible dir."""
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("fiction-ctx", mode="fiction")
+        bible_dir = ctx.root / ".fiction-gov" / "bible"
+        bible_dir.mkdir(parents=True, exist_ok=True)
+        (bible_dir / "banned_tropes.json").write_text(json.dumps([
+            {"name": "chosen_one", "patterns": ["the chosen one"], "severity": "error", "reason": "cliche"},
+        ]))
+        return cm
+
+    def test_non_streaming_ok_footer(self, tmp_path: Path) -> None:
+        """Clean pass in fiction mode appends [Governor] OK."""
+        cm = self._setup_fiction_context(tmp_path)
+        mock_backend = AsyncMock()
+        mock_backend.chat = AsyncMock(return_value=ChatResponse(
+            content="Alice walked peacefully.", model="test-model"
+        ))
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=True)
+
+        result = run_async(bridge.chat(
+            [ChatMessage(role="user", content="Write")], "test-model", "fiction-ctx"
+        ))
+        assert isinstance(result, ChatResponse)
+        assert result.content.endswith("[Governor] OK")
+
+    def test_non_streaming_ok_footer_disabled(self, tmp_path: Path) -> None:
+        """show_ok_footer=False suppresses OK footer."""
+        cm = self._setup_fiction_context(tmp_path)
+        mock_backend = AsyncMock()
+        mock_backend.chat = AsyncMock(return_value=ChatResponse(
+            content="Alice walked peacefully.", model="test-model"
+        ))
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=False)
+
+        result = run_async(bridge.chat(
+            [ChatMessage(role="user", content="Write")], "test-model", "fiction-ctx"
+        ))
+        assert isinstance(result, ChatResponse)
+        assert "[Governor]" not in result.content
+
+    def test_non_streaming_violations_appended(self, tmp_path: Path) -> None:
+        """Violations are appended as before."""
+        cm = self._setup_fiction_context(tmp_path)
+        mock_backend = AsyncMock()
+        mock_backend.chat = AsyncMock(return_value=ChatResponse(
+            content="She was the chosen one.", model="test-model"
+        ))
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm)
+
+        result = run_async(bridge.chat(
+            [ChatMessage(role="user", content="Write")], "test-model", "fiction-ctx"
+        ))
+        assert isinstance(result, ChatResponse)
+        assert "[Governor]" in result.content
+        # Should be a violation, not OK
+        assert "chosen" in result.content.lower()
+
+    def test_non_streaming_no_anchors_no_footer(self, tmp_path: Path) -> None:
+        """General mode with no anchors: no footer at all."""
+        mock_backend = AsyncMock()
+        mock_backend.chat = AsyncMock(return_value=ChatResponse(
+            content="Hello world", model="test-model"
+        ))
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        cm.create("gen-ctx", mode="general")
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=True)
+
+        result = run_async(bridge.chat(
+            [ChatMessage(role="user", content="Hi")], "test-model", "gen-ctx"
+        ))
+        assert isinstance(result, ChatResponse)
+        assert result.content == "Hello world"
+
+    def test_non_streaming_default_show_ok(self, tmp_path: Path) -> None:
+        """Default show_ok_footer is True."""
+        mock_backend = AsyncMock()
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm)
+        assert bridge.show_ok_footer is True
+
+
+# ============================================================================
+# TestChatBridgeStreaming
+# ============================================================================
+
+
+class TestChatBridgeStreaming:
+    """Tests for streaming governor check behavior."""
+
+    def _setup_fiction_context(self, tmp_path: Path) -> GovernorContextManager:
+        """Create a fiction context and populate its bible dir."""
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("fiction-ctx", mode="fiction")
+        bible_dir = ctx.root / ".fiction-gov" / "bible"
+        bible_dir.mkdir(parents=True, exist_ok=True)
+        (bible_dir / "banned_tropes.json").write_text(json.dumps([
+            {"name": "chosen_one", "patterns": ["the chosen one"], "severity": "error", "reason": "cliche"},
+        ]))
+        return cm
+
+    def _make_stream(self, chunks: list[ChatChunk]):
+        """Create an async iterator from a list of chunks."""
+        async def stream():
+            for c in chunks:
+                yield c
+        return stream()
+
+    def test_streaming_accumulates_and_checks(self, tmp_path: Path) -> None:
+        """Banned trope in streamed content triggers governor violation chunk."""
+        cm = self._setup_fiction_context(tmp_path)
+
+        chunks = [
+            ChatChunk(content="She was "),
+            ChatChunk(content="the chosen one."),
+            ChatChunk(content="", finish_reason="stop"),
+        ]
+        mock_backend = AsyncMock()
+        mock_backend.stream = MagicMock(return_value=self._make_stream(chunks))
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=True)
+
+        async def collect():
+            result = await bridge.chat(
+                [ChatMessage(role="user", content="Write")], "test-model", "fiction-ctx",
+                stream=True,
+            )
+            return [c async for c in result]
+
+        collected = run_async(collect())
+        # Should have content chunks + governor footer chunk + finish chunk
+        contents = "".join(c.content for c in collected)
+        assert "[Governor]" in contents
+        # The last chunk should have finish_reason
+        assert collected[-1].finish_reason == "stop"
+
+    def test_streaming_ok_footer_when_clean(self, tmp_path: Path) -> None:
+        """Clean pass in fiction mode gets OK chunk in stream."""
+        cm = self._setup_fiction_context(tmp_path)
+
+        chunks = [
+            ChatChunk(content="Alice walked peacefully."),
+            ChatChunk(content="", finish_reason="stop"),
+        ]
+        mock_backend = AsyncMock()
+        mock_backend.stream = MagicMock(return_value=self._make_stream(chunks))
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=True)
+
+        async def collect():
+            result = await bridge.chat(
+                [ChatMessage(role="user", content="Write")], "test-model", "fiction-ctx",
+                stream=True,
+            )
+            return [c async for c in result]
+
+        collected = run_async(collect())
+        contents = "".join(c.content for c in collected)
+        assert "[Governor] OK" in contents
+        assert collected[-1].finish_reason == "stop"
+
+    def test_streaming_ok_footer_disabled(self, tmp_path: Path) -> None:
+        """show_ok_footer=False suppresses OK in stream."""
+        cm = self._setup_fiction_context(tmp_path)
+
+        chunks = [
+            ChatChunk(content="Alice walked peacefully."),
+            ChatChunk(content="", finish_reason="stop"),
+        ]
+        mock_backend = AsyncMock()
+        mock_backend.stream = MagicMock(return_value=self._make_stream(chunks))
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=False)
+
+        async def collect():
+            result = await bridge.chat(
+                [ChatMessage(role="user", content="Write")], "test-model", "fiction-ctx",
+                stream=True,
+            )
+            return [c async for c in result]
+
+        collected = run_async(collect())
+        contents = "".join(c.content for c in collected)
+        assert "[Governor]" not in contents
+
+    def test_streaming_no_anchors_no_footer(self, tmp_path: Path) -> None:
+        """General mode, no anchors: stream passes through unchanged."""
+        chunks = [
+            ChatChunk(content="Hello "),
+            ChatChunk(content="world"),
+            ChatChunk(content="", finish_reason="stop"),
+        ]
+        mock_backend = AsyncMock()
+        mock_backend.stream = MagicMock(return_value=self._make_stream(chunks))
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        cm.create("gen-ctx", mode="general")
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=True)
+
+        async def collect():
+            result = await bridge.chat(
+                [ChatMessage(role="user", content="Hi")], "test-model", "gen-ctx",
+                stream=True,
+            )
+            return [c async for c in result]
+
+        collected = run_async(collect())
+        contents = "".join(c.content for c in collected)
+        assert contents == "Hello world"
+        assert collected[-1].finish_reason == "stop"
+
+    def test_streaming_error_handling(self, tmp_path: Path) -> None:
+        """Check failure in stream produces a warning chunk instead of crash."""
+        cm = self._setup_fiction_context(tmp_path)
+
+        chunks = [
+            ChatChunk(content="Some text."),
+            ChatChunk(content="", finish_reason="stop"),
+        ]
+        mock_backend = AsyncMock()
+        mock_backend.stream = MagicMock(return_value=self._make_stream(chunks))
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=True)
+
+        async def collect():
+            result = await bridge.chat(
+                [ChatMessage(role="user", content="Write")], "test-model", "fiction-ctx",
+                stream=True,
+            )
+            # Patch after stream is created but before iteration
+            with patch.object(GovernorHooks, "check_response_full", side_effect=RuntimeError("boom")):
+                return [c async for c in result]
+
+        collected = run_async(collect())
+        contents = "".join(c.content for c in collected)
+        assert "[Governor] Check failed:" in contents
+        assert "boom" in contents
+        assert collected[-1].finish_reason == "stop"
+
+    def test_streaming_finish_reason_ordering(self, tmp_path: Path) -> None:
+        """Governor footer chunk comes before the finish_reason chunk."""
+        cm = self._setup_fiction_context(tmp_path)
+
+        chunks = [
+            ChatChunk(content="the chosen one appears"),
+            ChatChunk(content="", finish_reason="stop"),
+        ]
+        mock_backend = AsyncMock()
+        mock_backend.stream = MagicMock(return_value=self._make_stream(chunks))
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=True)
+
+        async def collect():
+            result = await bridge.chat(
+                [ChatMessage(role="user", content="Write")], "test-model", "fiction-ctx",
+                stream=True,
+            )
+            return [c async for c in result]
+
+        collected = run_async(collect())
+        # Find the governor chunk
+        gov_chunks = [c for c in collected if "[Governor]" in c.content]
+        assert len(gov_chunks) >= 1
+        # Governor chunk should have no finish_reason
+        for gc in gov_chunks:
+            assert gc.finish_reason is None
+        # Last chunk has finish_reason
+        assert collected[-1].finish_reason == "stop"

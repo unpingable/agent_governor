@@ -60,6 +60,7 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 GOVERNOR_CONTEXT_ID = os.environ.get("GOVERNOR_CONTEXT_ID", "default")
 GOVERNOR_MODE = os.environ.get("GOVERNOR_MODE", "general")
 GOVERNOR_CONTEXTS_DIR = os.environ.get("GOVERNOR_CONTEXTS_DIR", "")
+GOVERNOR_SHOW_OK_FOOTER = os.environ.get("GOVERNOR_SHOW_OK_FOOTER", "true").lower() in ("true", "1", "yes")
 
 # ============================================================================
 # Application setup
@@ -163,7 +164,11 @@ def _get_bridge() -> ChatBridge:
         elif BACKEND_TYPE == "ollama":
             kwargs["host"] = OLLAMA_HOST
         backend = create_backend(BACKEND_TYPE, **kwargs)
-        _bridge = ChatBridge(backend=backend, context_manager=_get_context_manager())
+        _bridge = ChatBridge(
+            backend=backend,
+            context_manager=_get_context_manager(),
+            show_ok_footer=GOVERNOR_SHOW_OK_FOOTER,
+        )
     return _bridge
 
 

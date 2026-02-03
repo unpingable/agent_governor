@@ -725,3 +725,85 @@ class TestGovernorUI:
         data = response.json()
         assert "governor_ui" in data["endpoints"]
         assert data["endpoints"]["governor_ui"] == "/governor/ui"
+
+
+# ============================================================================
+# TestGovernorFooterIntegration
+# ============================================================================
+
+
+class TestGovernorFooterIntegration:
+    """End-to-end tests for governor footer in chat responses."""
+
+    def _setup_fiction_context(self, tmp_contexts_dir: Path) -> GovernorContextManager:
+        """Create a fiction context with a banned trope bible."""
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        ctx = cm.create("test-context", mode="fiction")
+        bible_dir = ctx.root / ".fiction-gov" / "bible"
+        bible_dir.mkdir(parents=True, exist_ok=True)
+        (bible_dir / "banned_tropes.json").write_text(json.dumps([
+            {"name": "chosen_one", "patterns": ["the chosen one"], "severity": "error", "reason": "cliche"},
+        ]))
+        return cm
+
+    def test_non_streaming_governor_ok_footer(self, client, tmp_contexts_dir) -> None:
+        """Non-streaming response includes [Governor] OK when clean."""
+        import webui.adapter as adapter_mod
+        from governor.chat_bridge import ChatBridge, ChatResponse as BridgeCR
+
+        cm = self._setup_fiction_context(tmp_contexts_dir)
+
+        mock_backend = AsyncMock()
+        mock_backend.chat = AsyncMock(return_value=BridgeCR(
+            content="Alice walked peacefully.", model="test-model"
+        ))
+
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=True)
+        adapter_mod._bridge = bridge
+        adapter_mod._context_manager = cm
+
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "test-model",
+                "messages": [{"role": "user", "content": "Write a scene"}],
+                "stream": False,
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        content = data["choices"][0]["message"]["content"]
+        assert "[Governor] OK" in content
+
+    def test_streaming_governor_footer_in_sse(self, client, tmp_contexts_dir) -> None:
+        """Streaming response includes governor feedback in SSE chunks."""
+        import webui.adapter as adapter_mod
+        from governor.chat_bridge import ChatBridge, ChatChunk as BridgeChunk
+
+        cm = self._setup_fiction_context(tmp_contexts_dir)
+
+        async def mock_stream_fn(*args, **kwargs):
+            yield BridgeChunk(content="She was the chosen one.")
+            yield BridgeChunk(content="", finish_reason="stop")
+
+        mock_backend = AsyncMock()
+        mock_backend.stream = MagicMock(return_value=mock_stream_fn())
+
+        bridge = ChatBridge(backend=mock_backend, context_manager=cm, show_ok_footer=True)
+        adapter_mod._bridge = bridge
+        adapter_mod._context_manager = cm
+
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "test-model",
+                "messages": [{"role": "user", "content": "Write a scene"}],
+                "stream": True,
+            },
+        )
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers.get("content-type", "")
+
+        # Parse SSE data to find governor feedback
+        full_text = response.text
+        assert "[Governor]" in full_text

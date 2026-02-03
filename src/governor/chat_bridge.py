@@ -56,6 +56,28 @@ class ChatChunk:
     finish_reason: str | None = None
 
 
+@dataclass
+class GovernorCheckResult:
+    """Result of a governor response check."""
+
+    violations: list[dict[str, Any]]
+    checked_anchors: int
+    passed: bool
+
+
+def _format_governor_footer(result: GovernorCheckResult, show_ok: bool) -> str | None:
+    """Format a governor footer string for chat responses.
+
+    Returns a footer string to append, or None if no footer needed.
+    """
+    if result.violations:
+        lines = [f"[Governor] {w.get('message', str(w))}" for w in result.violations]
+        return "\n\n---\n" + "\n".join(lines)
+    if show_ok and result.checked_anchors > 0:
+        return "\n\n---\n[Governor] OK"
+    return None
+
+
 @runtime_checkable
 class ChatBackend(Protocol):
     """Protocol for LLM backends."""
@@ -334,13 +356,16 @@ class GovernorHooks:
 
         return [ChatMessage(role="system", content=system_prompt)] + messages
 
-    def check_response(
+    def check_response_full(
         self, content: str, collector: Any | None = None
-    ) -> list[dict[str, Any]]:
-        """Check response content against mode-specific continuity anchors."""
+    ) -> GovernorCheckResult:
+        """Check response content against mode-specific continuity anchors.
+
+        Returns a GovernorCheckResult with violations, anchor count, and pass/fail.
+        """
         anchors = self._load_mode_anchors()
         if not anchors:
-            return []
+            return GovernorCheckResult(violations=[], checked_anchors=0, passed=True)
 
         from .continuity import ContinuityChecker
 
@@ -402,7 +427,7 @@ class GovernorHooks:
             except Exception:
                 pass
 
-        return [
+        violations = [
             {
                 "type": "continuity_violation",
                 "anchor_id": v.anchor_id,
@@ -413,6 +438,20 @@ class GovernorHooks:
             }
             for v in report.violations
         ]
+        return GovernorCheckResult(
+            violations=violations,
+            checked_anchors=len(anchors),
+            passed=report.passed,
+        )
+
+    def check_response(
+        self, content: str, collector: Any | None = None
+    ) -> list[dict[str, Any]]:
+        """Check response content against mode-specific continuity anchors.
+
+        Returns a list of violation dicts. Delegates to check_response_full().
+        """
+        return self.check_response_full(content, collector=collector).violations
 
     def _load_mode_anchors(self) -> list:
         """Load continuity anchors for the current mode.
@@ -571,10 +610,12 @@ class ChatBridge:
         backend: ChatBackend,
         context_manager: GovernorContextManager,
         collector: Any | None = None,
+        show_ok_footer: bool = True,
     ) -> None:
         self.backend = backend
         self.context_manager = context_manager
         self._collector = collector
+        self.show_ok_footer = show_ok_footer
 
     async def chat(
         self,
@@ -592,22 +633,57 @@ class ChatBridge:
         augmented = hooks.augment_messages(messages)
 
         if stream:
-            return self.backend.stream(augmented, model, **kwargs)
+            raw_stream = self.backend.stream(augmented, model, **kwargs)
+            return self._checked_stream(raw_stream, hooks, self.show_ok_footer)
         else:
             response = await self.backend.chat(augmented, model, **kwargs)
             # Post-response: check for governor warnings
-            warnings = hooks.check_response(response.content, collector=self._collector)
-            if warnings:
-                warning_text = "\n\n---\n" + "\n".join(
-                    f"[Governor] {w.get('message', str(w))}" for w in warnings
-                )
+            result = hooks.check_response_full(
+                response.content, collector=self._collector
+            )
+            footer = _format_governor_footer(result, self.show_ok_footer)
+            if footer:
                 response = ChatResponse(
-                    content=response.content + warning_text,
+                    content=response.content + footer,
                     model=response.model,
                     usage=response.usage,
                     finish_reason=response.finish_reason,
                 )
             return response
+
+    async def _checked_stream(
+        self,
+        raw_stream: AsyncIterator[ChatChunk],
+        hooks: GovernorHooks,
+        show_ok: bool,
+    ) -> AsyncIterator[ChatChunk]:
+        """Wrap a raw backend stream with governor checks.
+
+        Yields chunks in real-time. On stream completion, runs governor check
+        on accumulated content and injects a footer chunk before the final
+        finish_reason chunk if needed.
+        """
+        accumulated: list[str] = []
+        async for chunk in raw_stream:
+            if chunk.content:
+                accumulated.append(chunk.content)
+            if chunk.finish_reason is not None:
+                # Stream is done — run governor check on accumulated text
+                full_text = "".join(accumulated)
+                try:
+                    result = hooks.check_response_full(
+                        full_text, collector=self._collector
+                    )
+                    footer = _format_governor_footer(result, show_ok)
+                except Exception as e:
+                    footer = f"\n\n---\n[Governor] Check failed: {e}"
+                if footer:
+                    # Yield footer content before the finish chunk
+                    yield ChatChunk(content=footer, finish_reason=None)
+                yield chunk
+                return
+            else:
+                yield chunk
 
     async def list_models(self) -> list[dict[str, str]]:
         """List models from the backend."""

@@ -371,6 +371,85 @@ class TestGovernorHooks:
 
 
 # ============================================================================
+# TestGovernorHooksFictionType
+# ============================================================================
+
+
+class TestGovernorHooksFictionType:
+    """Tests for fiction type and code regime setters."""
+
+    def _make_context(self, tmp_path: Path, mode: str = "fiction") -> GovernorContext:
+        return GovernorContext(
+            context_id="test",
+            mode=mode,
+            root=tmp_path,
+            governor_dir=tmp_path / ".governor",
+            created_at="2025-01-01",
+        )
+
+    def test_set_fiction_type_comedy(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path)
+        hooks = GovernorHooks(ctx)
+        hooks.set_fiction_type("comedy")
+        assert hooks.get_fiction_type() == "comedy"
+
+    def test_set_fiction_type_tragedy(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path)
+        hooks = GovernorHooks(ctx)
+        hooks.set_fiction_type("tragedy")
+        assert hooks.get_fiction_type() == "tragedy"
+
+    def test_set_fiction_type_dramedy(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path)
+        hooks = GovernorHooks(ctx)
+        hooks.set_fiction_type("dramedy")
+        assert hooks.get_fiction_type() == "dramedy"
+
+    def test_set_fiction_type_all_valid_types(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path)
+        hooks = GovernorHooks(ctx)
+        valid_types = [
+            "comedy", "tragedy", "drama", "sincerity",
+            "dramedy", "tragicomedy", "sincere_drama", "neutral",
+        ]
+        for ft in valid_types:
+            hooks.set_fiction_type(ft)
+            assert hooks.get_fiction_type() == ft
+
+    def test_set_fiction_type_invalid_raises(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path)
+        hooks = GovernorHooks(ctx)
+        with pytest.raises(ValueError) as excinfo:
+            hooks.set_fiction_type("invalid_type")
+        assert "Invalid fiction type" in str(excinfo.value)
+        assert "invalid_type" in str(excinfo.value)
+
+    def test_get_fiction_type_none_when_unset(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path)
+        hooks = GovernorHooks(ctx)
+        assert hooks.get_fiction_type() is None
+
+    def test_set_code_regime_dev(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        hooks.set_code_regime("dev")
+        assert ctx.metadata["code_regime"] == "dev"
+
+    def test_set_code_regime_sre(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        hooks.set_code_regime("sre")
+        assert ctx.metadata["code_regime"] == "sre"
+
+    def test_set_code_regime_invalid_raises(self, tmp_path: Path) -> None:
+        ctx = self._make_context(tmp_path, mode="code")
+        hooks = GovernorHooks(ctx)
+        with pytest.raises(ValueError) as excinfo:
+            hooks.set_code_regime("invalid")
+        assert "Invalid code regime" in str(excinfo.value)
+
+
+# ============================================================================
 # TestGovernorHooksContinuity
 # ============================================================================
 
@@ -620,16 +699,19 @@ class TestGovernorHooksContinuity:
         system = result[0].content
         assert "chosen_one" in system.lower() or "FORBIDDEN" in system
 
-    def test_augment_no_data_unchanged(self, tmp_path: Path) -> None:
+    def test_augment_no_bible_data(self, tmp_path: Path) -> None:
+        """Even without bible data, fiction mode has writing module anchors."""
         ctx = self._make_context(tmp_path, mode="fiction")
         hooks = GovernorHooks(ctx)
         messages = [ChatMessage(role="user", content="Write a scene")]
         result = hooks.augment_messages(messages)
         assert len(result) == 2
         system = result[0].content
-        # Base fiction prompt present, no ESTABLISHED CONSTRAINTS
+        # Base fiction prompt present with writing module anchors
         assert "fiction" in system.lower()
-        assert "ESTABLISHED DEFINITIONS" not in system
+        # Writing module anchors are now always present for fiction mode
+        # Should have governance/tone/constraint anchors
+        assert "Governance" in system or "PROHIBITED" in system or "STYLE" in system
 
     def test_user_registered_anchors_loaded(self, tmp_path: Path) -> None:
         """User-registered anchors from CLI are loaded in all modes."""

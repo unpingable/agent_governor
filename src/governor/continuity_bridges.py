@@ -493,3 +493,244 @@ def anchors_from_puppet_profile(profile_dict: dict) -> list[Anchor]:
         ))
 
     return anchors
+
+
+# =============================================================================
+# Writing module bridges (W5g)
+# =============================================================================
+
+
+def anchors_from_governance_rules(regime: str) -> list[Anchor]:
+    """
+    Build continuity anchors from governance rules for a regime.
+
+    Creates PROHIBITION anchors that catch governance visibility artifacts
+    (banned phrases, institutional markers) that should never appear in output.
+    These are patterns that violate the meta-constraint: governance must
+    never surface in-band.
+
+    Args:
+        regime: The active writing regime (e.g., "comedy", "research", "instruction")
+
+    Returns:
+        List of PROHIBITION anchors with severity=CORRECT
+    """
+    from .writing_patterns import (
+        APOLOGY_META_PATTERNS,
+        COMMITTEE_PATTERNS,
+        SELF_REFERENCE_PATTERNS,
+    )
+
+    anchors: list[Anchor] = []
+    regime_lower = regime.lower()
+
+    # Core governance patterns that apply to all regimes
+    # These are patterns that reveal the author is managing the audience
+    forbidden_patterns: list[str] = []
+
+    # Self-reference patterns are always forbidden (reveal AI nature)
+    for pattern in SELF_REFERENCE_PATTERNS:
+        forbidden_patterns.append(pattern.pattern)
+
+    # For fiction regimes, committee patterns kill perceived risk
+    fiction_regimes = {"comedy", "tragedy", "horror", "romance", "drama", "sincerity"}
+    if regime_lower in fiction_regimes:
+        for pattern in COMMITTEE_PATTERNS[:5]:  # Most egregious ones
+            forbidden_patterns.append(pattern.pattern)
+        for pattern in APOLOGY_META_PATTERNS[:5]:  # Meta patterns kill fiction
+            forbidden_patterns.append(pattern.pattern)
+
+    if forbidden_patterns:
+        anchors.append(Anchor(
+            id=f"writing_governance_{regime_lower}",
+            anchor_type=AnchorType.PROHIBITION,
+            description=f"Governance artifacts forbidden in {regime} regime",
+            forbidden_patterns=forbidden_patterns,
+            severity=Severity.CORRECT,
+            source="writing_bridge",
+        ))
+
+    return anchors
+
+
+def anchors_from_tone_envelope(regime: str) -> list[Anchor]:
+    """
+    Build continuity anchors from tone envelope for a regime.
+
+    Creates STYLE anchors with envelope descriptions as prompt enrichment.
+    These inform the LLM of the appropriate tone range but don't pattern match.
+
+    Args:
+        regime: The active writing regime
+
+    Returns:
+        List of STYLE anchors with severity=WARN (prompt enrichment only)
+    """
+    from .writing_tone import REGIME_ENVELOPES
+
+    anchors: list[Anchor] = []
+    regime_lower = regime.lower()
+
+    envelope = REGIME_ENVELOPES.get(regime_lower)
+    if envelope:
+        # Format envelope as guidance
+        desc_parts = [f"Tone envelope for {regime_lower}:"]
+        dim_names = ["formality", "temperature", "density", "velocity", "distance", "certainty"]
+        for name in dim_names:
+            bounds = getattr(envelope, name)
+            desc_parts.append(f"  {name}: {bounds[0]:.1f}-{bounds[1]:.1f}")
+
+        anchors.append(Anchor(
+            id=f"writing_tone_{regime_lower}",
+            anchor_type=AnchorType.STYLE,
+            description="\n".join(desc_parts),
+            severity=Severity.WARN,
+            source="writing_bridge",
+        ))
+
+    return anchors
+
+
+def anchors_from_regime_constraints(regime: str) -> list[Anchor]:
+    """
+    Build continuity anchors from per-regime constraints.
+
+    Creates PROHIBITION/REQUIREMENT anchors from regime-specific failure modes
+    and constraint patterns.
+
+    Args:
+        regime: The active writing regime
+
+    Returns:
+        List of anchors capturing regime-specific constraints
+    """
+    from .writing_patterns import (
+        BAD_EXIT_PATTERNS,
+        FAKE_CONFIDENCE_PATTERNS,
+        HEDGE_PATTERNS,
+        PREMATURE_CLOSURE_PATTERNS,
+    )
+
+    anchors: list[Anchor] = []
+    regime_lower = regime.lower()
+
+    # Regime-specific patterns
+    if regime_lower in {"comedy", "horror", "romance"}:
+        # Fiction regimes: hedges kill perceived risk
+        # Use fewer patterns for targeted enforcement
+        hedge_patterns = [p.pattern for p in HEDGE_PATTERNS[:6]]
+        anchors.append(Anchor(
+            id=f"writing_constraint_{regime_lower}_hedges",
+            anchor_type=AnchorType.STYLE,
+            description=f"Excessive hedging reduces impact in {regime_lower} regime",
+            forbidden_patterns=hedge_patterns,
+            severity=Severity.WARN,
+            source="writing_bridge",
+        ))
+
+    if regime_lower == "horror":
+        # Horror: premature closure kills unresolved threat
+        closure_patterns = [p.pattern for p in PREMATURE_CLOSURE_PATTERNS]
+        anchors.append(Anchor(
+            id="writing_constraint_horror_closure",
+            anchor_type=AnchorType.PROHIBITION,
+            description="Premature closure kills horror tension",
+            forbidden_patterns=closure_patterns,
+            severity=Severity.WARN,
+            source="writing_bridge",
+        ))
+
+    if regime_lower in {"instruction", "debugging"}:
+        # Instruction/debugging: fake confidence undermines trust
+        fake_patterns = [p.pattern for p in FAKE_CONFIDENCE_PATTERNS]
+        anchors.append(Anchor(
+            id=f"writing_constraint_{regime_lower}_fake_confidence",
+            anchor_type=AnchorType.PROHIBITION,
+            description="Fake confidence reduces actionability",
+            forbidden_patterns=fake_patterns,
+            severity=Severity.WARN,
+            source="writing_bridge",
+        ))
+
+    # Bad exit patterns apply to all regimes
+    exit_patterns = [p.pattern for p in BAD_EXIT_PATTERNS]
+    anchors.append(Anchor(
+        id=f"writing_constraint_{regime_lower}_exit",
+        anchor_type=AnchorType.PROHIBITION,
+        description="Bad exit patterns damage lasting impression",
+        forbidden_patterns=exit_patterns,
+        severity=Severity.WARN,
+        source="writing_bridge",
+    ))
+
+    return anchors
+
+
+def anchors_from_structural_constraints(regime: str) -> list[Anchor]:
+    """
+    Build continuity anchors from structural constraints.
+
+    Creates anchors from the 11 structural constraint categories
+    (audience, commitment, authority, silence, repetition, error posture,
+    exit shape, temporal consistency, moral weight, legibility, premature solution).
+
+    Args:
+        regime: The active writing regime
+
+    Returns:
+        List of anchors for structural constraints
+    """
+    from .writing_patterns import INFLATED_WEIGHT_PATTERNS
+
+    anchors: list[Anchor] = []
+    regime_lower = regime.lower()
+
+    # Moral weight inflation applies to all regimes
+    weight_patterns = [p.pattern for p in INFLATED_WEIGHT_PATTERNS]
+    anchors.append(Anchor(
+        id=f"writing_structural_{regime_lower}_weight",
+        anchor_type=AnchorType.STYLE,
+        description="Inflated moral weight damages credibility",
+        forbidden_patterns=weight_patterns,
+        severity=Severity.WARN,
+        source="writing_bridge",
+    ))
+
+    return anchors
+
+
+def anchors_from_writing_modules(
+    regime: str,
+    include_governance: bool = True,
+    include_tone: bool = True,
+    include_regime_constraints: bool = True,
+    include_structural: bool = True,
+) -> list[Anchor]:
+    """
+    Master factory: build all writing module anchors for a regime.
+
+    Combines governance rules, tone envelopes, regime constraints, and
+    structural constraints into a unified anchor list.
+
+    Args:
+        regime: The active writing regime
+        include_governance: Whether to include governance visibility anchors
+        include_tone: Whether to include tone envelope anchors
+        include_regime_constraints: Whether to include regime-specific constraints
+        include_structural: Whether to include structural constraints
+
+    Returns:
+        Combined list of anchors from all writing modules
+    """
+    anchors: list[Anchor] = []
+
+    if include_governance:
+        anchors.extend(anchors_from_governance_rules(regime))
+    if include_tone:
+        anchors.extend(anchors_from_tone_envelope(regime))
+    if include_regime_constraints:
+        anchors.extend(anchors_from_regime_constraints(regime))
+    if include_structural:
+        anchors.extend(anchors_from_structural_constraints(regime))
+
+    return anchors

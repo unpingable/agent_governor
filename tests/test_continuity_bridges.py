@@ -892,3 +892,211 @@ class TestEdgeCases:
         roundtrip = Anchor.from_dict(d)
         assert roundtrip.id == a.id
         assert roundtrip.forbidden_patterns == a.forbidden_patterns
+
+
+# =============================================================================
+# Writing Module Bridge Tests (W5g)
+# =============================================================================
+
+
+from governor.continuity_bridges import (
+    anchors_from_governance_rules,
+    anchors_from_tone_envelope,
+    anchors_from_regime_constraints,
+    anchors_from_structural_constraints,
+    anchors_from_writing_modules,
+)
+
+
+class TestAnchorsFromGovernanceRules:
+    """Tests for anchors_from_governance_rules."""
+
+    def test_comedy_creates_prohibition(self) -> None:
+        anchors = anchors_from_governance_rules("comedy")
+        assert len(anchors) >= 1
+        types = {a.anchor_type for a in anchors}
+        assert AnchorType.PROHIBITION in types
+
+    def test_fiction_regimes_include_self_reference(self) -> None:
+        for regime in ["comedy", "tragedy", "horror", "romance"]:
+            anchors = anchors_from_governance_rules(regime)
+            all_patterns = []
+            for a in anchors:
+                all_patterns.extend(a.forbidden_patterns or [])
+            # Should include some self-reference patterns
+            assert len(all_patterns) > 0
+
+    def test_nonfiction_regime(self) -> None:
+        anchors = anchors_from_governance_rules("nonfiction")
+        assert len(anchors) >= 1
+
+    def test_severity_is_correct(self) -> None:
+        anchors = anchors_from_governance_rules("comedy")
+        for a in anchors:
+            assert a.severity == Severity.CORRECT
+
+    def test_source_is_writing_bridge(self) -> None:
+        anchors = anchors_from_governance_rules("comedy")
+        for a in anchors:
+            assert a.source == "writing_bridge"
+
+    def test_id_includes_regime(self) -> None:
+        anchors = anchors_from_governance_rules("horror")
+        assert any("horror" in a.id for a in anchors)
+
+    def test_case_insensitive(self) -> None:
+        lower = anchors_from_governance_rules("comedy")
+        upper = anchors_from_governance_rules("COMEDY")
+        assert len(lower) == len(upper)
+
+
+class TestAnchorsFromToneEnvelope:
+    """Tests for anchors_from_tone_envelope."""
+
+    def test_comedy_creates_style(self) -> None:
+        anchors = anchors_from_tone_envelope("comedy")
+        assert len(anchors) == 1
+        assert anchors[0].anchor_type == AnchorType.STYLE
+
+    def test_envelope_in_description(self) -> None:
+        anchors = anchors_from_tone_envelope("comedy")
+        desc = anchors[0].description
+        assert "formality" in desc
+        assert "temperature" in desc
+        assert "velocity" in desc
+
+    def test_unknown_regime_no_anchors(self) -> None:
+        anchors = anchors_from_tone_envelope("unknown_regime_xyz")
+        assert len(anchors) == 0
+
+    def test_severity_is_warn(self) -> None:
+        anchors = anchors_from_tone_envelope("tragedy")
+        for a in anchors:
+            assert a.severity == Severity.WARN
+
+    def test_source_is_writing_bridge(self) -> None:
+        anchors = anchors_from_tone_envelope("comedy")
+        for a in anchors:
+            assert a.source == "writing_bridge"
+
+    def test_id_includes_regime(self) -> None:
+        anchors = anchors_from_tone_envelope("horror")
+        assert "horror" in anchors[0].id
+
+    def test_nonfiction_envelope(self) -> None:
+        anchors = anchors_from_tone_envelope("nonfiction")
+        assert len(anchors) == 1
+
+    def test_instruction_envelope(self) -> None:
+        anchors = anchors_from_tone_envelope("instruction")
+        assert len(anchors) == 1
+
+
+class TestAnchorsFromRegimeConstraints:
+    """Tests for anchors_from_regime_constraints."""
+
+    def test_horror_has_closure_constraint(self) -> None:
+        anchors = anchors_from_regime_constraints("horror")
+        ids = [a.id for a in anchors]
+        assert any("closure" in id for id in ids)
+
+    def test_instruction_has_fake_confidence_constraint(self) -> None:
+        anchors = anchors_from_regime_constraints("instruction")
+        ids = [a.id for a in anchors]
+        assert any("fake_confidence" in id for id in ids)
+
+    def test_all_regimes_have_exit_constraint(self) -> None:
+        for regime in ["comedy", "horror", "instruction", "nonfiction"]:
+            anchors = anchors_from_regime_constraints(regime)
+            ids = [a.id for a in anchors]
+            assert any("exit" in id for id in ids)
+
+    def test_fiction_regimes_have_hedge_constraint(self) -> None:
+        for regime in ["comedy", "horror", "romance"]:
+            anchors = anchors_from_regime_constraints(regime)
+            ids = [a.id for a in anchors]
+            assert any("hedge" in id for id in ids)
+
+    def test_source_is_writing_bridge(self) -> None:
+        anchors = anchors_from_regime_constraints("comedy")
+        for a in anchors:
+            assert a.source == "writing_bridge"
+
+
+class TestAnchorsFromStructuralConstraints:
+    """Tests for anchors_from_structural_constraints."""
+
+    def test_creates_weight_constraint(self) -> None:
+        anchors = anchors_from_structural_constraints("comedy")
+        ids = [a.id for a in anchors]
+        assert any("weight" in id for id in ids)
+
+    def test_style_anchor_type(self) -> None:
+        anchors = anchors_from_structural_constraints("comedy")
+        types = {a.anchor_type for a in anchors}
+        assert AnchorType.STYLE in types
+
+    def test_severity_is_warn(self) -> None:
+        anchors = anchors_from_structural_constraints("comedy")
+        for a in anchors:
+            assert a.severity == Severity.WARN
+
+    def test_source_is_writing_bridge(self) -> None:
+        anchors = anchors_from_structural_constraints("comedy")
+        for a in anchors:
+            assert a.source == "writing_bridge"
+
+
+class TestAnchorsFromWritingModules:
+    """Tests for anchors_from_writing_modules master factory."""
+
+    def test_combines_all_sources(self) -> None:
+        anchors = anchors_from_writing_modules("comedy")
+        # Should have governance, tone, regime, and structural anchors
+        assert len(anchors) >= 4
+
+    def test_can_disable_governance(self) -> None:
+        with_gov = anchors_from_writing_modules("comedy", include_governance=True)
+        without_gov = anchors_from_writing_modules("comedy", include_governance=False)
+        assert len(with_gov) > len(without_gov)
+
+    def test_can_disable_tone(self) -> None:
+        with_tone = anchors_from_writing_modules("comedy", include_tone=True)
+        without_tone = anchors_from_writing_modules("comedy", include_tone=False)
+        assert len(with_tone) > len(without_tone)
+
+    def test_can_disable_regime_constraints(self) -> None:
+        with_rc = anchors_from_writing_modules("comedy", include_regime_constraints=True)
+        without_rc = anchors_from_writing_modules("comedy", include_regime_constraints=False)
+        assert len(with_rc) > len(without_rc)
+
+    def test_can_disable_structural(self) -> None:
+        with_struct = anchors_from_writing_modules("comedy", include_structural=True)
+        without_struct = anchors_from_writing_modules("comedy", include_structural=False)
+        assert len(with_struct) > len(without_struct)
+
+    def test_disable_all_returns_empty(self) -> None:
+        anchors = anchors_from_writing_modules(
+            "comedy",
+            include_governance=False,
+            include_tone=False,
+            include_regime_constraints=False,
+            include_structural=False,
+        )
+        assert len(anchors) == 0
+
+    def test_different_regimes_different_anchors(self) -> None:
+        comedy = anchors_from_writing_modules("comedy")
+        horror = anchors_from_writing_modules("horror")
+        # Should have different IDs
+        comedy_ids = {a.id for a in comedy}
+        horror_ids = {a.id for a in horror}
+        assert comedy_ids != horror_ids
+
+    def test_all_anchors_valid(self) -> None:
+        anchors = anchors_from_writing_modules("comedy")
+        for a in anchors:
+            assert isinstance(a, Anchor)
+            d = a.to_dict()
+            roundtrip = Anchor.from_dict(d)
+            assert roundtrip.id == a.id

@@ -341,8 +341,52 @@ class AnthropicBackend:
 class GovernorHooks:
     """Pre/post hooks for governor integration based on context mode."""
 
+    # Valid fiction types (from writing_router.py)
+    VALID_FICTION_TYPES = {
+        "comedy", "tragedy", "drama", "sincerity",
+        "dramedy", "tragicomedy", "sincere_drama", "neutral",
+    }
+
     def __init__(self, context: GovernorContext) -> None:
         self.context = context
+
+    def set_fiction_type(self, fiction_type: str) -> None:
+        """Set the explicit fiction type for fiction mode.
+
+        Fiction type is NEVER auto-detected. User must explicitly set:
+        - Pure types: comedy, tragedy, drama, sincerity
+        - Hybrids: dramedy, tragicomedy, sincere_drama
+        - neutral: balanced (no strong regime)
+
+        No one wants comedy in their drama. Unless it's a dramedy.
+
+        Args:
+            fiction_type: One of the valid fiction types
+
+        Raises:
+            ValueError: If fiction_type is not valid
+        """
+        if fiction_type not in self.VALID_FICTION_TYPES:
+            raise ValueError(
+                f"Invalid fiction type: {fiction_type}. "
+                f"Must be one of: {sorted(self.VALID_FICTION_TYPES)}"
+            )
+        self.context.metadata["fiction_type"] = fiction_type
+
+    def get_fiction_type(self) -> str | None:
+        """Get the currently set fiction type, if any."""
+        return self.context.metadata.get("fiction_type")
+
+    def set_code_regime(self, regime: str) -> None:
+        """Set the code regime for code mode.
+
+        Args:
+            regime: dev, sre, or analysis
+        """
+        valid = {"dev", "sre", "analysis"}
+        if regime not in valid:
+            raise ValueError(f"Invalid code regime: {regime}. Must be one of: {valid}")
+        self.context.metadata["code_regime"] = regime
 
     def augment_messages(self, messages: list[ChatMessage]) -> list[ChatMessage]:
         """Inject system prompt based on context mode."""
@@ -457,8 +501,8 @@ class GovernorHooks:
         """Load continuity anchors for the current mode.
 
         Dispatches by mode:
-        - fiction: reads .fiction-gov/bible/ JSON files
-        - nonfiction: reads .nonfiction/corpus.json
+        - fiction: reads .fiction-gov/bible/ JSON files + writing module anchors
+        - nonfiction: reads .nonfiction/corpus.json + writing module anchors
         - code/general: no mode-specific anchors
 
         All modes also check for active puppet and user-registered anchors.
@@ -469,6 +513,7 @@ class GovernorHooks:
             anchors_from_fiction_bible,
             anchors_from_nonfiction_corpus,
             anchors_from_puppet_profile,
+            anchors_from_writing_modules,
         )
 
         anchors: list[Anchor] = []
@@ -478,10 +523,16 @@ class GovernorHooks:
             bible_data = self._load_fiction_bible_data()
             if bible_data:
                 anchors.extend(anchors_from_fiction_bible(bible_data))
+            # Add writing module anchors for fiction
+            regime = self._detect_active_regime()
+            anchors.extend(anchors_from_writing_modules(regime))
         elif self.context.mode == "nonfiction":
             corpus_data = self._load_nonfiction_corpus_data()
             if corpus_data:
                 anchors.extend(anchors_from_nonfiction_corpus(corpus_data))
+            # Add writing module anchors for nonfiction
+            regime = self._detect_active_regime()
+            anchors.extend(anchors_from_writing_modules(regime))
         elif self.context.mode == "code":
             decisions_data = self._load_code_decisions_data()
             if decisions_data:
@@ -502,6 +553,54 @@ class GovernorHooks:
                 pass
 
         return anchors
+
+    def _detect_active_regime(self) -> str:
+        """Detect the active writing regime for the current mode.
+
+        Fiction type is EXPLICIT - user must set it, not auto-detected.
+        Defaults: fiction→neutral (idle loop), nonfiction→nonfiction, code→code_dev.
+
+        Neutral is the default for fiction. Most language isn't doing heavy
+        authorial work - it's connective tissue. Users must explicitly select
+        comedy/tragedy/drama/sincerity when they want regime-specific control.
+
+        Priority:
+        1. fiction_type metadata (explicit type like comedy/tragedy/dramedy)
+        2. regime metadata (legacy, regime name string)
+        3. Mode-based defaults
+
+        Returns:
+            The regime name string
+        """
+        # Check for explicit fiction_type (preferred - user-selected)
+        fiction_type = self.context.metadata.get("fiction_type")
+        if fiction_type:
+            # Map fiction type to regime name
+            fiction_type_to_regime = {
+                "comedy": "comedy",
+                "tragedy": "tragedy",
+                "drama": "drama",
+                "sincerity": "sincerity",
+                "dramedy": "drama",  # Primary component
+                "tragicomedy": "tragedy",  # Primary component
+                "sincere_drama": "drama",  # Primary component
+                "neutral": "neutral",  # Idle loop
+            }
+            return fiction_type_to_regime.get(fiction_type, "neutral")
+
+        # Check for explicit regime in context metadata (legacy)
+        regime = self.context.metadata.get("regime")
+        if regime:
+            return regime
+
+        # Mode-based defaults
+        if self.context.mode == "fiction":
+            return "neutral"  # Neutral is the idle loop, not comedy
+        elif self.context.mode == "nonfiction":
+            return "nonfiction"
+        elif self.context.mode == "code":
+            return "code_dev"  # Code domain uses custody controller
+        return "nonfiction"  # Safe default
 
     def _load_fiction_bible_data(self) -> dict:
         """Read fiction bible + canon JSON files directly (no Bible()/Canon() instantiation)."""
@@ -602,14 +701,29 @@ class GovernorHooks:
         return None
 
     def _build_fiction_prompt(self) -> str:
-        """System prompt for fiction writing mode."""
+        """System prompt for fiction writing mode.
+
+        Incorporates affect regime awareness, governance invisibility rules,
+        and tone envelope guidance from fic.md and tone.md specs.
+        """
+        regime = self._detect_active_regime()
         return (
-            "You are a fiction writing assistant with governor integration. "
-            "Help maintain consistency:\n"
+            "You are a fiction writing assistant with governor integration.\n\n"
+            "## Core Invariant\n"
+            "Governance must never surface in-band. The reader should never detect "
+            "that an author is managing outcomes. No apologies, no meta-commentary, "
+            "no committee voice, no hedging that reveals authorial anxiety.\n\n"
+            "## Affect Regime\n"
+            f"Current regime: {regime}. Maintain regime-appropriate tone and pacing.\n"
+            "- Comedy: preserve perceived risk (Rp). Hedges kill comedy.\n"
+            "- Tragedy: meaning must lag suffering. Don't explain too soon.\n"
+            "- Horror: maintain unresolved threat. Premature closure kills tension.\n"
+            "- Romance: authentic vulnerability. Fake confidence kills credibility.\n\n"
+            "## Consistency\n"
             "- Track character motivations and beliefs\n"
             "- Note when actions might contradict established facts\n"
-            "- Flag potential continuity issues\n"
-            "- Respect the narrative tone and style"
+            "- Respect the narrative tone and style\n"
+            "- Exit cleanly without moral bows or unearned CTAs"
         )
 
     def _build_code_prompt(self) -> str:
@@ -624,14 +738,32 @@ class GovernorHooks:
         )
 
     def _build_nonfiction_prompt(self) -> str:
-        """System prompt for non-fiction writing mode."""
+        """System prompt for non-fiction writing mode.
+
+        Incorporates epistemic control guidance from nonfic.md spec:
+        claim levels, velocity discipline, Ep/Re expectations, governance
+        visibility suppression.
+        """
         return (
-            "You are a non-fiction writing assistant with governor integration. "
-            "Help maintain scholarly rigor:\n"
+            "You are a non-fiction writing assistant with governor integration.\n\n"
+            "## Core Invariant\n"
+            "Governance must never surface in-band. No preemptive defense, no virtue "
+            "signaling, no balance theater, no empty rigor markers.\n\n"
+            "## Epistemic Control\n"
+            "- Claims have levels: SOFT (maybe), HARD (supported), NORM (value-laden)\n"
+            "- Don't promote claims without explicit evidence support\n"
+            "- Maintain velocity discipline: claim rate should not outpace evidence\n"
+            "- Normative claims require sufficient evidence foundation first\n\n"
+            "## Epistemic Honesty (Ep)\n"
+            "- Calibrate hedges: epistemic hedges (uncertainty) are appropriate, "
+            "social hedges (anxiety) reveal governance\n"
+            "- Expose falsifiers and boundary conditions\n"
+            "- Engage alternatives honestly, not as strawmen\n\n"
+            "## Structural Integrity\n"
             "- Verify citations and references\n"
             "- Maintain consistent terminology\n"
-            "- Flag unsupported claims\n"
-            "- Track the argument structure"
+            "- Track the argument structure\n"
+            "- Exit cleanly without moral inflation or unearned conclusions"
         )
 
 

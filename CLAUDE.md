@@ -58,7 +58,7 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **VS Code Extension (Deferred 3, Phase V2-3)**: GovernorViewModel canonical schema v2. 8 top-level sections: Session, Regime, Decisions, Claims, Evidence, Violations, Execution, Stability. Read-only derivation from existing subsystems. `--schema v1|v2` backward compat on `governor state --json`. V2 TypeScript types (GovernorViewModelV2), TreeView rewrite with claim/decision/violation/evidence builders, icon mappings for claim states and violation severities.
 **Telemetry Dashboard**: Rich TUI for real-time regime visualization. Phase space plot (λ arrival vs μ resolution), regime gauge (ELASTIC→UNSTABLE), energy sparkline, event log, budget panel. Live mode (reads from telemetry logs), replay mode (trace playback), demo mode. CLI (governor dashboard {live,replay,demo,stats}).
 **Prometheus Metrics**: Optional Prometheus metrics export at /metrics. Counters (proposals, verifications, llm_calls, tokens, cost, errors, claims, security_scans, continuity_checks, regime_transitions), histograms (verification_duration, llm_call_duration, continuity_iterations, complexity_score), gauges (regime, stress, budget_spent/remaining, active_sessions, open_proposals, anchors). TelemetryCollector backend integration. CLI (governor prometheus {enable,disable,status,metrics}).
-**Maude Lite**: Evidence-gated coding harness — kernel-only surface. HARD claims require evidence, contradictions persist, failures are loud. Custody scoring (Ap accountability, Ip invariant coupling, Fp failure explicitness). Claim extraction (HARD/SOFT patterns), evidence linking, contradiction detection, exit shape checking. Status codes (OK/WARN/BLOCKED). Agent wrapper integration, JSONL logging. CLI (governor maude-lite {check,validate,config,score,extract}).
+**Maude Lite**: Evidence-gated coding harness — kernel-only surface. HARD claims require evidence, contradictions persist, failures are loud. Custody scoring (Ap accountability, Ip invariant coupling, Fp failure explicitness). Claim extraction (HARD/SOFT patterns), evidence linking, contradiction detection, exit shape checking. Status codes (OK/WARN/BLOCKED). Agent wrapper integration, JSONL logging. CLI (governor lite {check,validate,config,score,extract}).
 **Total: 6940 tests**
 
 ## Key Documents
@@ -369,13 +369,13 @@ governor prometheus status             # Show config and server status
 governor prometheus metrics            # Print current metrics in Prometheus text format
 
 # Maude Lite (evidence-gated coding harness)
-governor maude-lite check <text>       # Check agent output against kernel constraints
-governor maude-lite check --stdin      # Read from stdin
-governor maude-lite check -f <file>    # Read from file (--strict/--permissive, --format json)
-governor maude-lite validate <path>    # Validate file contents
-governor maude-lite config             # Show configuration and kernel constraints
-governor maude-lite score <text>       # Score custody metrics (Ap, Ip, Fp)
-governor maude-lite extract <text>     # Extract claims from content
+governor lite check <text>       # Check agent output against kernel constraints
+governor lite check --stdin      # Read from stdin
+governor lite check -f <file>    # Read from file (--strict/--permissive, --format json)
+governor lite validate <path>    # Validate file contents
+governor lite config             # Show configuration and kernel constraints
+governor lite score <text>       # Score custody metrics (Ap, Ip, Fp)
+governor lite extract <text>     # Extract claims from content
 
 # Continuity Enforcement (Deferred 5: closed-loop generation control)
 governor continuity status              # Registry stats, anchor count by type

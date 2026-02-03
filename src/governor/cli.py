@@ -9768,17 +9768,22 @@ def continuity_import(ctx: click.Context, path: str) -> None:
 # =============================================================================
 
 
-@cli.group("maude-lite")
+@cli.group("lite")
 @click.pass_context
-def maude_lite_cmd(ctx):
+def lite_cmd(ctx):
     """Maude Lite — evidence-gated coding harness.
 
     Kernel-only surface: claims need evidence, contradictions persist, failures are loud.
+
+    \b
+    Examples:
+        governor lite check "text"
+        maude lite check "text"
     """
     pass
 
 
-@maude_lite_cmd.command("check")
+@lite_cmd.command("check")
 @click.argument("text", required=False)
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
@@ -9786,14 +9791,14 @@ def maude_lite_cmd(ctx):
 @click.option("--strict/--permissive", default=True, help="Strict mode (fail-closed) or permissive (warn only)")
 @click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.pass_context
-def maude_lite_check(ctx, text, use_stdin, file, task, strict, fmt):
+def lite_check(ctx, text, use_stdin, file, task, strict, fmt):
     """Check agent output against kernel constraints.
 
     \b
     Examples:
-        governor maude-lite check "This improves performance by 10x"
-        echo "code..." | governor maude-lite check --stdin
-        governor maude-lite check --file output.txt --format json
+        governor lite check "This improves performance by 10x"
+        maude lite check --stdin < output.txt
+        maude lite check --file output.txt --format json
     """
     from .maude_lite import MaudeLite, MaudeLiteConfig
 
@@ -9819,7 +9824,7 @@ def maude_lite_check(ctx, text, use_stdin, file, task, strict, fmt):
         click.echo(lite.format_status(result))
 
 
-@maude_lite_cmd.command("validate")
+@lite_cmd.command("validate")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--task", "-t", default="validate file", help="Task description")
 @click.option("--strict/--permissive", default=True, help="Strict mode or permissive")
@@ -9849,7 +9854,7 @@ def maude_lite_validate(ctx, path, task, strict, fmt):
                 click.echo(f"  ... and {len(result.claims) - 5} more")
 
 
-@maude_lite_cmd.command("config")
+@lite_cmd.command("config")
 @click.pass_context
 def maude_lite_config(ctx):
     """Show Maude Lite configuration."""
@@ -9871,7 +9876,7 @@ def maude_lite_config(ctx):
         click.echo(f"  - {feature}")
 
 
-@maude_lite_cmd.command("score")
+@lite_cmd.command("score")
 @click.argument("text", required=False)
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
@@ -9911,7 +9916,7 @@ def maude_lite_score(ctx, text, use_stdin, file, fmt):
                 click.echo(f"  - {reason}")
 
 
-@maude_lite_cmd.command("extract")
+@lite_cmd.command("extract")
 @click.argument("text", required=False)
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")

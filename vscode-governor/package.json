@@ -2,7 +2,7 @@
   "name": "vscode-governor",
   "displayName": "Agent Governor",
   "description": "Security and continuity checking for agentic coding tools",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "agent-governor",
   "license": "MIT",
   "engines": {
@@ -54,6 +54,14 @@
       {
         "command": "governor.showDetail",
         "title": "Governor: Show Detail"
+      },
+      {
+        "command": "governor.toggleRealtime",
+        "title": "Governor: Toggle Real-time Checking"
+      },
+      {
+        "command": "governor.checkNow",
+        "title": "Governor: Check Current File Now"
       }
     ],
     "menus": {
@@ -62,6 +70,17 @@
           "command": "governor.refreshState",
           "when": "view == governorState",
           "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "governor.checkSelection",
+          "when": "editorHasSelection",
+          "group": "governor@1"
+        },
+        {
+          "command": "governor.checkFile",
+          "group": "governor@2"
         }
       ]
     },
@@ -88,9 +107,57 @@
           ],
           "default": "auto",
           "description": "Governor operating mode"
+        },
+        "governor.realtimeChecking.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable real-time checking as you type (may impact performance)"
+        },
+        "governor.realtimeChecking.debounceMs": {
+          "type": "number",
+          "default": 500,
+          "minimum": 100,
+          "maximum": 5000,
+          "description": "Delay in milliseconds before triggering a check after typing stops"
+        },
+        "governor.realtimeChecking.excludedLanguages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "json",
+            "yaml",
+            "markdown",
+            "plaintext"
+          ],
+          "description": "Language IDs to exclude from real-time checking"
+        },
+        "governor.hover.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show governor context (decisions, claims) on hover"
+        },
+        "governor.codeActions.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show quick fix suggestions for governor findings"
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "governor.checkFile",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "governor.toggleRealtime",
+        "key": "ctrl+shift+alt+g",
+        "mac": "cmd+shift+alt+g"
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.mjs",

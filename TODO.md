@@ -1720,12 +1720,12 @@ Extension just queries and displays it.
 
 - [ ] **Non-fiction mode** — Citation checking, framework term consistency (hover shows definition + usage), quick reference panel for terms
 
-#### Phase V4: Advanced Features
+#### Phase V4: Advanced Features ✓ COMPLETE
 
-- [ ] **Hover tooltips** — Governor context on hover (decision records, framework terms)
-- [ ] **Code actions (quick fixes)** — Auto-fix suggestions from governor findings
+- [x] **Hover tooltips** — GovernorHoverProvider: decision/claim/violation context on hover, cached state fetching
+- [x] **Code actions (quick fixes)** — GovernorCodeActionProvider: suppress comments, security comment/reviewed actions, continuity details
 - [ ] **Peek definition for decisions** — F12/Alt+F12 on decision references
-- [ ] **Real-time checking** — Debounced on-type checking (off by default, 500ms)
+- [x] **Real-time checking** — RealtimeChecker: debounced on-type (500ms default, off by default), excluded languages, large file skip
 
 #### Phase V5: Autonomous Mode Monitor
 

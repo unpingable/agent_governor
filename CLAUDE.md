@@ -60,7 +60,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Prometheus Metrics**: Optional Prometheus metrics export at /metrics. Counters (proposals, verifications, llm_calls, tokens, cost, errors, claims, security_scans, continuity_checks, regime_transitions), histograms (verification_duration, llm_call_duration, continuity_iterations, complexity_score), gauges (regime, stress, budget_spent/remaining, active_sessions, open_proposals, anchors). TelemetryCollector backend integration. CLI (governor prometheus {enable,disable,status,metrics}).
 **Maude Lite**: Evidence-gated coding harness — kernel-only surface. HARD claims require evidence, contradictions persist, failures are loud. Custody scoring (Ap accountability, Ip invariant coupling, Fp failure explicitness). Claim extraction (HARD/SOFT patterns), evidence linking, contradiction detection, exit shape checking. Status codes (OK/WARN/BLOCKED). Agent wrapper integration, JSONL logging. CLI (governor lite {check,validate,config,score,extract}).
 **W5 Writing Modules (Deferred 2, W5)**: Spec application from fic.md, nonfic.md, anc.md, tone.md, writingconstraints.md. writing_patterns.py (18 pattern banks), writing_governance.py (GovernanceVisibilityScorer, GovernanceLeakDetector, SmoothingSuppressor, ExitShapeChecker), writing_tone.py (ToneVector 6D, ToneEnvelope, 16 regime envelopes, ToneCollision, ToneStabilityController), writing_regime.py (AffectRegime, RegimeVector, RegimeHysteresis, RpScorer, TragedyConstraints), writing_nonfiction.py (NfClaimLevel, PromotionGate, VelocityController, EpScorer, ReScorer, HedgeCalibrator, AhScorer, NleadChecker), writing_intent.py (IntentClassifier, 12 ancillary regime scorers, RegimeCollision), writing_constraints.py (11 structural constraints + Section 14 causal narration resistance), writing_ticketing.py (14 prose + 11 code ticket types, recurrence, routing), writing_puppet.py (extended puppet constraints), writing_code.py (code-specific constraints), writing_router.py (writing-aware routing). 922 tests.
-**Total: 6940 tests**
+**VS Code Extension (Deferred 3, Phase V4)**: Hover tooltips (GovernorHoverProvider — decision/claim/violation context on hover), code actions (GovernorCodeActionProvider — quick fixes, suppress comments, security actions), real-time checking (RealtimeChecker — debounced on-type, configurable delay). New commands: Toggle Realtime, Check Now. Keybindings: Ctrl+Shift+G (check file), Ctrl+Shift+Alt+G (toggle realtime). 36 new TypeScript tests.
+**Total: 6976 tests**
 
 ## Key Documents
 
@@ -980,15 +981,15 @@ vscode-governor/
 
 **Convergence Auto-Tuning tests: 145**
 
-### VS Code Extension (Deferred 3, Phase V1+V2)
+### VS Code Extension (Deferred 3, Phase V1-V4)
 | Module | Description | Tests |
 |--------|-------------|-------|
 | check.py | Position, Range, CheckFinding, CheckResult, security_finding_to_check, continuity_violation_to_check, run_check (unified aggregation) | 34 |
 | viewmodel.py | GovernorViewModel (schema v2), SessionView, RegimeView, DecisionView, ClaimView, EvidenceView, ViolationView, ExecutionView, StabilityView, 8 section builders, build_viewmodel, build_v1_state, claim state mapping | 65 |
 | test_state_cmd.py | `governor state --json` aggregation (v1+v2), `--json` flags on 7 existing commands | 22 |
-| vscode-governor/ | VS Code extension: CLI client wrapper, diagnostic provider, GovernorTreeProvider (TreeView side panel, V2 schema), commands (Check File, Check Selection, Show Output, Refresh State, Show Detail), status bar, activity bar, on-save handler | 53 |
+| vscode-governor/ | VS Code extension: CLI client wrapper, diagnostic provider, GovernorTreeProvider (TreeView side panel, V2 schema), GovernorHoverProvider (decision/claim/violation context on hover), GovernorCodeActionProvider (quick fixes, suppress comments, security actions), RealtimeChecker (debounced on-type checking), commands (Check File, Check Selection, Show Output, Refresh State, Show Detail, Toggle Realtime, Check Now), keybindings (Ctrl+Shift+G, Ctrl+Shift+Alt+G), status bar, activity bar, on-save handler | 89 |
 
-**VS Code Extension tests: 140 (87 Python + 53 TypeScript)**
+**VS Code Extension tests: 176 (87 Python + 89 TypeScript)**
 
 ### Maude Lite (Evidence-Gated Coding Harness)
 | Module | Description | Tests |
@@ -1013,7 +1014,7 @@ vscode-governor/
 
 **W5 Writing Modules tests: 922**
 
-**Total: 6940 tests**
+**Total: 6976 tests**
 
 ## Common Mistakes to Avoid
 

@@ -160,6 +160,7 @@ export enum StatusBarAlignment {
 }
 
 export class Uri {
+  public readonly scheme = "file";
   constructor(public readonly fsPath: string) {}
   toString() {
     return this.fsPath;
@@ -168,3 +169,98 @@ export class Uri {
     return new Uri(path);
   }
 }
+
+// Hover types
+export class Hover {
+  constructor(
+    public readonly contents: MarkdownString | MarkdownString[],
+    public readonly range?: Range
+  ) {}
+}
+
+export class MarkdownString {
+  public isTrusted = false;
+  private content = "";
+
+  constructor(value?: string) {
+    if (value) {
+      this.content = value;
+    }
+  }
+
+  appendMarkdown(value: string): MarkdownString {
+    this.content += value;
+    return this;
+  }
+
+  get value(): string {
+    return this.content;
+  }
+}
+
+// Code action types
+export class CodeAction {
+  public isPreferred?: boolean;
+  public edit?: WorkspaceEdit;
+  public command?: { command: string; title: string; arguments?: unknown[] };
+  public diagnostics?: Diagnostic[];
+
+  constructor(
+    public readonly title: string,
+    public readonly kind?: CodeActionKind
+  ) {}
+}
+
+export class CodeActionKind {
+  static readonly QuickFix = new CodeActionKind("quickfix");
+  static readonly RefactorRewrite = new CodeActionKind("refactor.rewrite");
+
+  constructor(public readonly value: string) {}
+
+  append(suffix: string): CodeActionKind {
+    return new CodeActionKind(`${this.value}.${suffix}`);
+  }
+}
+
+export class WorkspaceEdit {
+  private edits: Array<{
+    uri: Uri;
+    type: "replace" | "insert" | "delete";
+    range: Range;
+    newText: string;
+  }> = [];
+
+  replace(uri: Uri, range: Range, newText: string): void {
+    this.edits.push({ uri, type: "replace", range, newText });
+  }
+
+  insert(uri: Uri, position: Position, newText: string): void {
+    this.edits.push({
+      uri,
+      type: "insert",
+      range: new Range(position, position),
+      newText,
+    });
+  }
+
+  delete(uri: Uri, range: Range): void {
+    this.edits.push({ uri, type: "delete", range, newText: "" });
+  }
+
+  getEdits(): typeof this.edits {
+    return this.edits;
+  }
+}
+
+// Configuration target
+export enum ConfigurationTarget {
+  Global = 1,
+  Workspace = 2,
+  WorkspaceFolder = 3,
+}
+
+// CancellationToken mock
+export const CancellationToken = {
+  isCancellationRequested: false,
+  onCancellationRequested: () => ({ dispose: () => {} }),
+};

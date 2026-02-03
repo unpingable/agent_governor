@@ -3,17 +3,23 @@
  *
  * Phase 1: commands, diagnostics, output channel, status bar.
  * Phase 2: TreeView side panel with live governor state.
+ * Phase 4: Hover tooltips, code actions, real-time checking.
  */
 
 import * as vscode from "vscode";
 import { checkFile, checkStdin, fetchState, GovernorOptions } from "./governor/client";
-import type { CheckResult } from "./governor/types";
+import type { CheckResult, CheckInput, GovernorViewModelV2 } from "./governor/types";
 import { DiagnosticProvider } from "./diagnostics/provider";
 import { GovernorTreeProvider } from "./views/governorTree";
+import { GovernorHoverProvider } from "./hovers/provider";
+import { GovernorCodeActionProvider, updateFindings, clearFindings } from "./code-actions/provider";
+import { RealtimeChecker } from "./realtime/checker";
 
 let outputChannel: vscode.OutputChannel;
 let diagnosticProvider: DiagnosticProvider;
 let statusBarItem: vscode.StatusBarItem;
+let realtimeChecker: RealtimeChecker | null = null;
+let hoverProvider: GovernorHoverProvider | null = null;
 
 function getOptions(): GovernorOptions {
   const config = vscode.workspace.getConfiguration("governor");
@@ -54,6 +60,7 @@ async function runCheckFile(): Promise<void> {
   try {
     const result = await checkFile(filePath, getOptions());
     diagnosticProvider.update(editor.document.uri, result);
+    updateFindings(editor.document.uri, result.findings);
     updateStatusBar(result);
     outputChannel.appendLine(`Result: ${result.summary}`);
     for (const f of result.findings) {
@@ -104,6 +111,7 @@ async function runCheckSelection(): Promise<void> {
     }
 
     diagnosticProvider.update(editor.document.uri, result);
+    updateFindings(editor.document.uri, result.findings);
     updateStatusBar(result);
     outputChannel.appendLine(`Result: ${result.summary}`);
   } catch (err: unknown) {
@@ -111,6 +119,14 @@ async function runCheckSelection(): Promise<void> {
     outputChannel.appendLine(`Error: ${msg}`);
     vscode.window.showErrorMessage(`Governor check failed: ${msg}`);
   }
+}
+
+async function checkContentViaStdin(content: string, filepath: string): Promise<CheckResult> {
+  return checkStdin({ content, filepath }, getOptions());
+}
+
+async function fetchStateWrapper(): Promise<GovernorViewModelV2> {
+  return fetchState(getOptions());
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -133,12 +149,45 @@ export function activate(context: vscode.ExtensionContext): void {
     showCollapseAll: true,
   });
 
+  // Hover provider (Phase V4)
+  hoverProvider = new GovernorHoverProvider(fetchStateWrapper, outputChannel);
+  const hoverRegistration = vscode.languages.registerHoverProvider(
+    { scheme: "file" },
+    hoverProvider
+  );
+
+  // Code action provider (Phase V4)
+  const codeActionProvider = new GovernorCodeActionProvider();
+  const codeActionRegistration = vscode.languages.registerCodeActionsProvider(
+    { scheme: "file" },
+    codeActionProvider,
+    {
+      providedCodeActionKinds: GovernorCodeActionProvider.providedCodeActionKinds,
+    }
+  );
+
+  // Real-time checker (Phase V4)
+  realtimeChecker = new RealtimeChecker({
+    checkFunction: checkContentViaStdin,
+    onResult: (uri, result) => {
+      diagnosticProvider.update(uri, result);
+      updateStatusBar(result);
+      // Invalidate hover cache when results change
+      hoverProvider?.invalidateCache();
+    },
+    outputChannel,
+  });
+
   context.subscriptions.push(
     outputChannel,
     diagnosticProvider,
     statusBarItem,
     treeView,
     treeProvider,
+    hoverProvider,
+    hoverRegistration,
+    codeActionRegistration,
+    realtimeChecker,
     vscode.commands.registerCommand("governor.checkFile", runCheckFile),
     vscode.commands.registerCommand(
       "governor.checkSelection",
@@ -149,10 +198,31 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("governor.refreshState", () => {
       treeProvider.refresh();
+      hoverProvider?.invalidateCache();
     }),
     vscode.commands.registerCommand("governor.showDetail", (detail: string) => {
       outputChannel.appendLine(detail);
       outputChannel.show();
+    }),
+    vscode.commands.registerCommand("governor.toggleRealtime", () => {
+      if (realtimeChecker) {
+        const newState = !realtimeChecker.isEnabled();
+        realtimeChecker.setEnabled(newState);
+        vscode.window.showInformationMessage(
+          `Governor: Real-time checking ${newState ? "enabled" : "disabled"}`
+        );
+      }
+    }),
+    vscode.commands.registerCommand("governor.checkNow", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showWarningMessage("No active editor.");
+        return;
+      }
+      if (realtimeChecker) {
+        await realtimeChecker.checkNow(editor.document);
+        vscode.window.showInformationMessage("Governor: Check complete");
+      }
     })
   );
 
@@ -167,6 +237,7 @@ export function activate(context: vscode.ExtensionContext): void {
       try {
         const result = await checkFile(doc.uri.fsPath, getOptions());
         diagnosticProvider.update(doc.uri, result);
+        updateFindings(doc.uri, result.findings);
         updateStatusBar(result);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -174,13 +245,21 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       // Refresh tree view after check
       treeProvider.refresh();
+      hoverProvider?.invalidateCache();
+    })
+  );
+
+  // Clean up findings when documents close
+  context.subscriptions.push(
+    vscode.workspace.onDidCloseTextDocument((doc) => {
+      clearFindings(doc.uri);
     })
   );
 
   // Initial tree load
   treeProvider.refresh();
 
-  outputChannel.appendLine("Agent Governor extension activated.");
+  outputChannel.appendLine("Agent Governor extension activated (Phase V4).");
 }
 
 export function deactivate(): void {

@@ -59,6 +59,7 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **Telemetry Dashboard**: Rich TUI for real-time regime visualization. Phase space plot (λ arrival vs μ resolution), regime gauge (ELASTIC→UNSTABLE), energy sparkline, event log, budget panel. Live mode (reads from telemetry logs), replay mode (trace playback), demo mode. CLI (governor dashboard {live,replay,demo,stats}).
 **Prometheus Metrics**: Optional Prometheus metrics export at /metrics. Counters (proposals, verifications, llm_calls, tokens, cost, errors, claims, security_scans, continuity_checks, regime_transitions), histograms (verification_duration, llm_call_duration, continuity_iterations, complexity_score), gauges (regime, stress, budget_spent/remaining, active_sessions, open_proposals, anchors). TelemetryCollector backend integration. CLI (governor prometheus {enable,disable,status,metrics}).
 **Maude Lite**: Evidence-gated coding harness — kernel-only surface. HARD claims require evidence, contradictions persist, failures are loud. Custody scoring (Ap accountability, Ip invariant coupling, Fp failure explicitness). Claim extraction (HARD/SOFT patterns), evidence linking, contradiction detection, exit shape checking. Status codes (OK/WARN/BLOCKED). Agent wrapper integration, JSONL logging. CLI (governor lite {check,validate,config,score,extract}).
+**W5 Writing Modules (Deferred 2, W5)**: Spec application from fic.md, nonfic.md, anc.md, tone.md, writingconstraints.md. writing_patterns.py (18 pattern banks), writing_governance.py (GovernanceVisibilityScorer, GovernanceLeakDetector, SmoothingSuppressor, ExitShapeChecker), writing_tone.py (ToneVector 6D, ToneEnvelope, 16 regime envelopes, ToneCollision, ToneStabilityController), writing_regime.py (AffectRegime, RegimeVector, RegimeHysteresis, RpScorer, TragedyConstraints), writing_nonfiction.py (NfClaimLevel, PromotionGate, VelocityController, EpScorer, ReScorer, HedgeCalibrator, AhScorer, NleadChecker), writing_intent.py (IntentClassifier, 12 ancillary regime scorers, RegimeCollision), writing_constraints.py (11 structural constraints + Section 14 causal narration resistance), writing_ticketing.py (14 prose + 11 code ticket types, recurrence, routing), writing_puppet.py (extended puppet constraints), writing_code.py (code-specific constraints), writing_router.py (writing-aware routing). 922 tests.
 **Total: 6940 tests**
 
 ## Key Documents
@@ -518,6 +519,19 @@ src/governor/
 ├── check.py          # Position, Range, CheckFinding, CheckResult, run_check (unified check aggregation for VS Code)
 ├── viewmodel.py      # GovernorViewModel (schema v2), 8 section builders, read-only state derivation, V1 compat
 ├── maude_lite.py     # MaudeLite, evidence-gated coding harness, claim extraction, evidence linking, custody scoring
+│
+# W5 Writing Modules (Deferred 2, W5):
+├── writing_patterns.py    # 18 pattern banks for governance/tone/regime detection
+├── writing_governance.py  # GovernanceVisibilityScorer, GovernanceLeakDetector, SmoothingSuppressor, ExitShapeChecker
+├── writing_tone.py        # ToneVector (6D), ToneEnvelope, 16 regime envelopes, ToneCollision, ToneStabilityController
+├── writing_regime.py      # AffectRegime, RegimeVector, RegimeHysteresis, RpScorer, TragedyConstraints
+├── writing_nonfiction.py  # NfClaimLevel, PromotionGate, VelocityController, EpScorer, ReScorer, HedgeCalibrator
+├── writing_intent.py      # IntentClassifier (6 categories), 12 ancillary regime scorers, RegimeCollision
+├── writing_constraints.py # 11 structural constraints + Section 14 causal narration resistance
+├── writing_ticketing.py   # Ticketing layer: 14 prose + 11 code ticket types, recurrence, routing
+├── writing_puppet.py      # Extended puppet constraints from puppet.md spec
+├── writing_code.py        # Code-specific constraints from code.md spec
+├── writing_router.py      # Writing-aware routing from specs
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
@@ -982,6 +996,22 @@ vscode-governor/
 | maude_lite.py | MaudeLite, MaudeLiteStatus, ClaimLevel, MaudeLiteClaim, CustodyScore, claim extraction, evidence linking, contradiction detection, custody scoring, exit shape checking, agent wrapper, JSONL logging | 101 |
 
 **Maude Lite tests: 101**
+
+### W5 Writing Modules (Deferred 2, W5)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| writing_patterns.py | 18 pattern banks: hedge, self-reference, apology/meta, committee, meaning-word, normative, causal humility, falsifier, strawman, anxiety hedge, governance artifacts, institutional markers, bad exit, inflated weight, instruction filler, fake confidence, premature closure, bureaucratic | 68 |
+| writing_governance.py | GovernanceVisibilityScorer (6 artifact categories), GovernanceLeakDetector (5 institutional voice types), SmoothingSuppressor, ExitShapeChecker | 82 |
+| writing_tone.py | ToneVector (6D), ToneEnvelope, 16 regime envelopes, ToneCollision, ToneStabilityController, ToneDriftScorer | 95 |
+| writing_regime.py | AffectRegime enum, RegimeVector, RegimeHysteresis, RpScorer, TragedyConstraints, SincerityTracker, DramaConstraints, MixerConfig | 112 |
+| writing_nonfiction.py | NfClaimLevel, NfClaimNode, PromotionGate, VelocityController, EpScorer, ReScorer, HedgeCalibrator, AhScorer, NleadChecker, NonfictionFailureDetector | 89 |
+| writing_intent.py | IntentCategory, IntentClassifier, 12 ancillary regime scorers (Ap, Fi, Au, Fp, Mt, Pa, Ut, Vv, De, Mc, Sa, Lm), RegimeCollision matrix | 72 |
+| writing_constraints.py | 11 structural constraints + Section 14 causal narration resistance (6 techniques, 10 failure modes) | 118 |
+| writing_ticketing.py | 14 prose + 11 code ticket types, recurrence detection, routing actions, auto-triage | 102 |
+| writing_puppet.py | Extended puppet constraints from puppet.md spec | 98 |
+| writing_code.py | Code-specific constraints from code.md spec | 86 |
+
+**W5 Writing Modules tests: 922**
 
 **Total: 6940 tests**
 

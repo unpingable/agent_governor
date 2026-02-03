@@ -518,7 +518,11 @@ Based on `ingest/direction.md` - artificial landmarks that impose orientation co
   - Custom profile creation/deletion, activation/deactivation
   - Applies envelope, boil, jurisdiction, and strict mode in one command
   - Module: `src/governor/profiles.py` (46 tests)
-- [ ] **Telemetry dashboard** - Real-time regime visualization (reference: `ingest/epistemic_governor/src/epistemic_governor/observability/trace_tui.py`)
+- [x] **Telemetry dashboard** ✓ COMPLETE - Real-time regime visualization
+  - Rich TUI: Phase space plot (λ vs μ), regime gauge, energy sparkline, event log, budget panel
+  - Live mode (reads telemetry logs), replay mode (trace playback), demo mode
+  - CLI: `governor dashboard {live,replay,demo,stats}`
+  - Module: `src/governor/dashboard.py` (52 tests)
 
 ## Multi-Agent Routing & Task Sizing ✓ COMPLETE
 

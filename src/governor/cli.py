@@ -9393,6 +9393,76 @@ def telemetry_rotate(ctx: click.Context, dry_run: bool) -> None:
 
 
 # =============================================================================
+# Dashboard (Real-time Visualization)
+# =============================================================================
+
+
+@cli.group("dashboard")
+@click.pass_context
+def dashboard_group(ctx: click.Context) -> None:
+    """Real-time telemetry dashboard and trace replay."""
+    pass
+
+
+@dashboard_group.command("live")
+@click.option("--refresh", type=float, default=2.0, help="Refresh interval in seconds")
+@click.pass_context
+def dashboard_live(ctx: click.Context, refresh: float) -> None:
+    """Run live dashboard (reads from telemetry logs)."""
+    from .dashboard import run_live_dashboard, RICH_AVAILABLE
+
+    if not RICH_AVAILABLE:
+        click.echo("Error: Rich library required. Install with: pip install rich")
+        raise SystemExit(1)
+
+    gov_dir = ensure_initialized(ctx)
+    log_dir = gov_dir / "logs"
+
+    if not log_dir.exists():
+        click.echo(f"Warning: No logs directory at {log_dir}")
+        click.echo("Enable telemetry first: governor telemetry enable")
+
+    run_live_dashboard(log_dir, refresh_interval=refresh)
+
+
+@dashboard_group.command("replay")
+@click.argument("trace_path", type=click.Path(exists=True))
+@click.option("--speed", type=float, default=1.0, help="Playback speed multiplier")
+def dashboard_replay(trace_path: str, speed: float) -> None:
+    """Replay a trace file through the dashboard."""
+    from .dashboard import run_replay, RICH_AVAILABLE
+
+    if not RICH_AVAILABLE:
+        click.echo("Error: Rich library required. Install with: pip install rich")
+        raise SystemExit(1)
+
+    run_replay(Path(trace_path), speed=speed)
+
+
+@dashboard_group.command("demo")
+@click.option("--speed", type=float, default=1.0, help="Playback speed multiplier")
+def dashboard_demo(speed: float) -> None:
+    """Generate and play a demo trace."""
+    from .dashboard import generate_demo_trace, run_replay, RICH_AVAILABLE
+
+    if not RICH_AVAILABLE:
+        click.echo("Error: Rich library required. Install with: pip install rich")
+        raise SystemExit(1)
+
+    trace_path = generate_demo_trace(Path("demo_trace.jsonl"))
+    run_replay(trace_path, speed=speed)
+
+
+@dashboard_group.command("stats")
+@click.argument("trace_path", type=click.Path(exists=True))
+def dashboard_stats(trace_path: str) -> None:
+    """Print statistics about a trace file."""
+    from .dashboard import print_trace_stats
+
+    print_trace_stats(Path(trace_path))
+
+
+# =============================================================================
 # Continuity Enforcement
 # =============================================================================
 

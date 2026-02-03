@@ -56,7 +56,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **VS Code Extension (Deferred 3, Phase V1)**: Unified check aggregation (check.py: Position, Range, CheckFinding, CheckResult, run_check). CLI `governor check` command (file/stdin, JSON/text output, security/continuity toggles). TypeScript VS Code extension (vscode-governor/: CLI client wrapper, diagnostic provider, Check File/Check Selection commands, status bar, on-save handler).
 **VS Code Extension (Deferred 3, Phase V2)**: TreeView side panel. `governor state --json` aggregation command, `--json` flags on 7 existing commands (status, facts, decisions, task list, regime status, boil status, autonomous list). GovernorTreeProvider (activity bar, state tree with regime/boil/proposals/decisions/facts/tasks/autonomous, refresh command, click-to-detail). GovernorState TypeScript types, generic CLI runner refactor, fetchState client method.
 **VS Code Extension (Deferred 3, Phase V2-3)**: GovernorViewModel canonical schema v2. 8 top-level sections: Session, Regime, Decisions, Claims, Evidence, Violations, Execution, Stability. Read-only derivation from existing subsystems. `--schema v1|v2` backward compat on `governor state --json`. V2 TypeScript types (GovernorViewModelV2), TreeView rewrite with claim/decision/violation/evidence builders, icon mappings for claim states and violation severities.
-**Total: 6774 tests**
+**Telemetry Dashboard**: Rich TUI for real-time regime visualization. Phase space plot (λ arrival vs μ resolution), regime gauge (ELASTIC→UNSTABLE), energy sparkline, event log, budget panel. Live mode (reads from telemetry logs), replay mode (trace playback), demo mode. CLI (governor dashboard {live,replay,demo,stats}).
+**Total: 6826 tests**
 
 ## Key Documents
 
@@ -352,6 +353,12 @@ governor telemetry analyze performance # Verification latency percentiles, appro
 governor telemetry analyze convergence # Convergence loop stats: acceptance rate, efficiency, oscillation, per-anchor (--since, --json)
 governor telemetry export              # Export events (--format csv|json, --output, --since, --type)
 governor telemetry rotate-logs         # Delete old logs (--dry-run)
+
+# Telemetry Dashboard (real-time visualization)
+governor dashboard live                # Live dashboard (reads from telemetry logs, --refresh)
+governor dashboard replay <path>       # Replay trace file through dashboard (--speed)
+governor dashboard demo                # Generate and play demo trace (--speed)
+governor dashboard stats <path>        # Print trace file statistics
 
 # Continuity Enforcement (Deferred 5: closed-loop generation control)
 governor continuity status              # Registry stats, anchor count by type

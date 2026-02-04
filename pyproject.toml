@@ -75,6 +75,10 @@ packages = ["src/governor", "src/fiction_governor", "src/nonfiction_governor", "
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "asyncio: mark test as async",
+]
 
 [tool.ruff]
 target-version = "py310"

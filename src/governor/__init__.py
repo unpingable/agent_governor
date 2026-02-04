@@ -707,6 +707,18 @@ from .chrono import (
     get_current_year,
 )
 
+# Identity check (name grounding)
+from .identity import (
+    IdentitySeverity,
+    IdentityMatchType,
+    IdentityFinding,
+    IdentityConfig,
+    check_identity,
+    check_identity_strict,
+    identity_invariant_check,
+    load_identity_config,
+)
+
 # Governor adapters (Phase A4)
 from .adapters import (
     AdapterFinding,
@@ -1407,6 +1419,15 @@ __all__ = [
     "check_chrono_strict",
     "chrono_invariant_check",
     "get_current_year",
+    # Identity check (name grounding)
+    "IdentitySeverity",
+    "IdentityMatchType",
+    "IdentityFinding",
+    "IdentityConfig",
+    "check_identity",
+    "check_identity_strict",
+    "identity_invariant_check",
+    "load_identity_config",
     # Violation resolver (W4: Interactive Violation Resolution)
     "ResolutionAction",
     "ResolutionStatus",

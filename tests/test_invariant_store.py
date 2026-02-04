@@ -120,7 +120,7 @@ class TestInvariantSpec:
 
 class TestValidKinds:
     def test_all_kinds_present(self):
-        expected = {"test", "file-exists", "dir-exists", "forbidden", "no-secrets", "max-file-size", "chrono"}
+        expected = {"test", "file-exists", "dir-exists", "forbidden", "no-secrets", "max-file-size", "chrono", "identity"}
         assert set(VALID_KINDS.keys()) == expected
 
     def test_each_kind_has_factory(self):

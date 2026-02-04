@@ -400,3 +400,57 @@ class InvariantLibrary:
             rule="No stale or implausible years (training cutoff artifacts)",
             verify=verify,
         )
+
+    @staticmethod
+    def identity_check(
+        invariant_id: str = "identity_check",
+        gov_dir: Path | None = None,
+    ) -> Invariant:
+        """Check for hallucinated or incomplete names against configured identities."""
+        from .identity import check_identity, IdentitySeverity, load_identity_config
+
+        def verify(**kwargs: Any) -> InvariantResult:
+            content = kwargs.get("content", "")
+            if not content:
+                return InvariantResult(
+                    passed=True,
+                    message="No content to check",
+                    invariant_id=invariant_id,
+                )
+
+            # Load config from gov_dir or default
+            check_dir = gov_dir or kwargs.get("gov_dir") or Path(".governor")
+            if isinstance(check_dir, str):
+                check_dir = Path(check_dir)
+
+            config = load_identity_config(check_dir)
+            if not config.authors and not config.organizations:
+                return InvariantResult(
+                    passed=True,
+                    message="No identities configured",
+                    invariant_id=invariant_id,
+                )
+
+            findings = check_identity(content, config)
+            severe = [f for f in findings if f.severity in (IdentitySeverity.WARN, IdentitySeverity.ERROR)]
+
+            if severe:
+                messages = [f.reason for f in severe]
+                return InvariantResult(
+                    passed=False,
+                    message=f"Identity issues: {'; '.join(messages)}",
+                    invariant_id=invariant_id,
+                    details={"findings": [f.to_dict() for f in severe]},
+                )
+            return InvariantResult(
+                passed=True,
+                message="All identities match configured names",
+                invariant_id=invariant_id,
+            )
+
+        return Invariant(
+            id=invariant_id,
+            type=InvariantType.CONTENT,
+            rule="Names must match configured identities (no hallucination)",
+            verify=verify,
+        )

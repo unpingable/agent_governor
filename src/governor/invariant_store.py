@@ -69,6 +69,12 @@ VALID_KINDS: dict[str, dict[str, Any]] = {
         "optional_params": [],
         "description": "Check for stale years (training cutoff artifacts)",
     },
+    "identity": {
+        "factory": "identity_check",
+        "required_params": [],
+        "optional_params": [],
+        "description": "Check for hallucinated/incomplete names",
+    },
 }
 
 
@@ -253,6 +259,9 @@ def _materialize_spec(spec: InvariantSpec) -> Invariant | None:
 
     elif spec.kind == "chrono":
         pass  # No extra params needed
+
+    elif spec.kind == "identity":
+        pass  # Reads config from .governor/config.toml
 
     try:
         inv = factory(**kwargs)

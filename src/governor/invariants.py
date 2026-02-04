@@ -360,3 +360,43 @@ class InvariantLibrary:
             rule=f"No file may exceed {max_kb}KB",
             verify=verify,
         )
+
+    @staticmethod
+    def chrono_check(
+        invariant_id: str = "chrono_check",
+    ) -> Invariant:
+        """Check for temporal anomalies (stale years from training cutoff)."""
+        from .chrono import check_chrono, ChronoSeverity
+
+        def verify(**kwargs: Any) -> InvariantResult:
+            content = kwargs.get("content", "")
+            if not content:
+                return InvariantResult(
+                    passed=True,
+                    message="No content to check",
+                    invariant_id=invariant_id,
+                )
+
+            findings = check_chrono(content)
+            severe = [f for f in findings if f.severity in (ChronoSeverity.WARN, ChronoSeverity.ERROR)]
+
+            if severe:
+                messages = [f.reason for f in severe]
+                return InvariantResult(
+                    passed=False,
+                    message=f"Temporal anomalies: {'; '.join(messages)}",
+                    invariant_id=invariant_id,
+                    details={"findings": [f.to_dict() for f in severe]},
+                )
+            return InvariantResult(
+                passed=True,
+                message="No temporal anomalies detected",
+                invariant_id=invariant_id,
+            )
+
+        return Invariant(
+            id=invariant_id,
+            type=InvariantType.CONTENT,
+            rule="No stale or implausible years (training cutoff artifacts)",
+            verify=verify,
+        )

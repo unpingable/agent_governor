@@ -697,6 +697,16 @@ from .maude_lite import (
     check_output as check_maude_lite_output,
 )
 
+# Chrono check (temporal grounding)
+from .chrono import (
+    ChronoSeverity,
+    ChronoFinding,
+    check_chrono,
+    check_chrono_strict,
+    chrono_invariant_check,
+    get_current_year,
+)
+
 # Governor adapters (Phase A4)
 from .adapters import (
     AdapterFinding,
@@ -1390,6 +1400,13 @@ __all__ = [
     "maude_lite_wrapper",
     "BlockedError",
     "check_maude_lite_output",
+    # Chrono check (temporal grounding)
+    "ChronoSeverity",
+    "ChronoFinding",
+    "check_chrono",
+    "check_chrono_strict",
+    "chrono_invariant_check",
+    "get_current_year",
     # Violation resolver (W4: Interactive Violation Resolution)
     "ResolutionAction",
     "ResolutionStatus",

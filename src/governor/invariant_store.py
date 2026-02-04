@@ -63,6 +63,12 @@ VALID_KINDS: dict[str, dict[str, Any]] = {
         "optional_params": [],
         "description": "No file may exceed size limit",
     },
+    "chrono": {
+        "factory": "chrono_check",
+        "required_params": [],
+        "optional_params": [],
+        "description": "Check for stale years (training cutoff artifacts)",
+    },
 }
 
 
@@ -244,6 +250,9 @@ def _materialize_spec(spec: InvariantSpec) -> Invariant | None:
 
     elif spec.kind == "max-file-size":
         kwargs["max_kb"] = int(spec.params["max_kb"])
+
+    elif spec.kind == "chrono":
+        pass  # No extra params needed
 
     try:
         inv = factory(**kwargs)

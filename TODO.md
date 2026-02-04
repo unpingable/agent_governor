@@ -1653,8 +1653,8 @@ user/project. One Claude account, multiple isolated governor contexts.
 - [x] **Docker setup** — Multi-container deployment
   - docker-compose.yml: per-mode stacks (fiction + code)
   - docker-compose.ollama.yml: Ollama override for local usage
-  - Fiction: adapter at port 8001 (self-contained UI), Open WebUI at port 3001 (optional)
-  - Code: adapter at port 8002 (self-contained UI), Open WebUI at port 3002 (optional)
+  - Fiction: self-contained chat + governor UI at port 8001
+  - Code: self-contained chat + governor UI at port 8002
   - Shared: API key via .env, governor contexts via volume mount
   - anthropic>=0.30.0 added to webui optional deps
 

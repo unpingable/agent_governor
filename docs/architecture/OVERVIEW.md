@@ -15,7 +15,7 @@ This document provides a high-level view of the Agent Governor system. For detai
 │                                                                 │
 │  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐       │
 │  │   WebUI     │────▶│  Adapters   │────▶│   Governor  │       │
-│  │ (Open WebUI)│     │ (per-user)  │     │   (kernel)  │       │
+│  │ (built-in)  │     │ (per-user)  │     │   (kernel)  │       │
 │  └─────────────┘     └─────────────┘     └──────┬──────┘       │
 │                                                  │              │
 │                      ┌───────────────────────────┼───────────┐  │
@@ -312,7 +312,7 @@ For understanding *why* things are the way they are, see `docs/adr/`:
 - `0002-governance-polarity-flip.md` - Why governor gates rather than advises
 - `0003-fiction-vs-code-modes.md` - Why different modes exist
 - `0004-sqlite-over-postgres.md` - Why SQLite for local state
-- `0005-open-webui-fork.md` - Why Open WebUI as frontend
+- `0005-self-contained-webui.md` - Why self-contained UI over Open WebUI
 
 ---
 

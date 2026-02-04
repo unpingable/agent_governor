@@ -43,8 +43,6 @@ echo "  Fiction:   http://localhost:8001"
 echo "  Code:      http://localhost:8002"
 echo "  Ollama:    http://localhost:11434"
 echo ""
-echo "  (Open WebUI frontends also at :3001 and :3002)"
-echo ""
 echo "  Stop with: docker-compose down"
 echo ""
 

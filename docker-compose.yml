@@ -2,13 +2,9 @@
 #
 # Run: docker-compose up -d
 #
-# Primary UI (self-contained chat + governor panel):
+# Self-contained chat + governor panel:
 #   - Fiction:  http://localhost:8001
 #   - Code:     http://localhost:8002
-#
-# Open WebUI frontends (optional, legacy):
-#   - Fiction:  http://localhost:3001
-#   - Code:     http://localhost:3002
 #
 # Requires: ANTHROPIC_API_KEY in .env or environment
 #
@@ -36,22 +32,6 @@ services:
       - contexts_data:/contexts
     restart: unless-stopped
 
-  fiction-webui:
-    image: ghcr.io/open-webui/open-webui:main
-    container_name: governor-fiction-webui
-    ports:
-      - "3001:8080"
-    environment:
-      - OPENAI_API_BASE_URL=http://fiction-adapter:8000/v1
-      - OPENAI_API_KEY=not-needed
-      - WEBUI_AUTH=false
-      - WEBUI_NAME=Fiction Writing Studio
-    volumes:
-      - fiction_webui_data:/app/backend/data
-    depends_on:
-      - fiction-adapter
-    restart: unless-stopped
-
   # ============================================================
   # Code development stack
   # ============================================================
@@ -73,23 +53,5 @@ services:
       - contexts_data:/contexts
     restart: unless-stopped
 
-  code-webui:
-    image: ghcr.io/open-webui/open-webui:main
-    container_name: governor-code-webui
-    ports:
-      - "3002:8080"
-    environment:
-      - OPENAI_API_BASE_URL=http://code-adapter:8000/v1
-      - OPENAI_API_KEY=not-needed
-      - WEBUI_AUTH=false
-      - WEBUI_NAME=Code Development Console
-    volumes:
-      - code_webui_data:/app/backend/data
-    depends_on:
-      - code-adapter
-    restart: unless-stopped
-
 volumes:
   contexts_data:
-  fiction_webui_data:
-  code_webui_data:

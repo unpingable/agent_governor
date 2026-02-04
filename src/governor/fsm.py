@@ -22,6 +22,17 @@ from .claims import Claim
 from .receipts import Receipt
 
 
+def _parse_iso_datetime(s: str) -> datetime:
+    """Parse ISO datetime string with Python 3.10 compatibility.
+
+    Python 3.10 doesn't support "Z" suffix in fromisoformat().
+    This was added in Python 3.11.
+    """
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    return datetime.fromisoformat(s)
+
+
 class ProposalState(Enum):
     """States in the proposal lifecycle."""
 
@@ -201,12 +212,12 @@ class Proposal:
             id=UUID(data["id"]),
             claims=[Claim.from_dict(c) for c in data["claims"]],
             state=ProposalState(data["state"]),
-            created_at=datetime.fromisoformat(data["created_at"]),
+            created_at=_parse_iso_datetime(data["created_at"]),
             receipts=[receipt_from_dict(r) for r in data.get("receipts", [])],
             rejection=RejectionInfo.from_dict(data["rejection"])
                 if data.get("rejection") else None,
             patch_path=data.get("patch_path"),
-            applied_at=datetime.fromisoformat(data["applied_at"])
+            applied_at=_parse_iso_datetime(data["applied_at"])
                 if data.get("applied_at") else None,
         )
 

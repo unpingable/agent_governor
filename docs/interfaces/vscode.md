@@ -83,6 +83,42 @@ Quick fixes appear as lightbulb suggestions:
 - **Governor: Change rule** — Modify the constraint
 - **Governor: Mark as reviewed** — For security findings
 
+### Code Autopilot (Profiles & Intent)
+
+Quickly switch between enforcement profiles without manual configuration.
+
+**Set Profile:**
+- Command Palette: "Governor: Set Profile"
+- Keyboard: `Ctrl+Shift+P Ctrl+Shift+G` (chord)
+- State Panel: Click the profile button in the title bar
+
+**Available Profiles:**
+
+| Profile | Icon | Description |
+|---------|------|-------------|
+| greenfield | $(beaker) | New project, experimenting (warn only) |
+| established | $(shield) | Normal development (default) |
+| production | $(lock) | High-stakes changes (strict) |
+| hotfix | $(flame) | Urgent targeted fix (narrow scope) |
+| refactor | $(tools) | Restructuring code (soft anchors) |
+
+**Profile Selection Flow:**
+1. Select profile from QuickPick
+2. For hotfix: prompted for scope pattern (e.g., `src/auth/**`)
+3. Optionally provide a reason
+
+**Status Bar:**
+- Shows profile if non-default: `$(shield) Governor [hotfix]: Pass`
+- Tooltip includes profile name
+
+**Commands:**
+
+| Command | Description |
+|---------|-------------|
+| Governor: Set Profile | Open profile selector |
+| Governor: Clear Intent | Reset to default (established) |
+| Governor: Show Intent | Show full intent + provenance in output |
+
 ### State Panel
 
 The Activity Bar shows a Governor icon. Click it for the State Panel:
@@ -92,6 +128,13 @@ GOVERNOR STATE
 ├── Problems (2)  ← Shown first, expanded if any
 │   ├── Missing evidence for claim
 │   └── Hardcoded secret detected
+├── Intent: HOTFIX  ← Code Autopilot section
+│   ├── Profile: HOTFIX (cli)
+│   ├── Scope: src/auth/**
+│   ├── Timebox: 45m remaining
+│   ├── Reason: fixing login bug
+│   └── Overrides (1)
+│       └── no-eval (30m) - migrations/**
 ├── Decisions (3)
 │   ├── framework: React
 │   ├── database: PostgreSQL
@@ -174,6 +217,9 @@ Access via Command Palette (`Ctrl+Shift+P`):
 | Governor: Show Output | Open governor output channel |
 | Governor: Refresh State | Refresh state panel |
 | Governor: Show Detail | Show details for selected item |
+| Governor: Set Profile | Select enforcement profile (Code Autopilot) |
+| Governor: Clear Intent | Reset to default profile |
+| Governor: Show Intent | Show current intent with provenance |
 
 ---
 
@@ -185,6 +231,7 @@ Default keybindings:
 |-----|---------|
 | `Ctrl+Shift+G` | Check current file |
 | `Ctrl+Shift+Alt+G` | Toggle real-time checking |
+| `Ctrl+Shift+P Ctrl+Shift+G` | Set profile (chord) |
 
 Customize in `keybindings.json`:
 
@@ -197,6 +244,10 @@ Customize in `keybindings.json`:
   {
     "key": "ctrl+alt+r",
     "command": "governor.toggleRealtime"
+  },
+  {
+    "key": "ctrl+alt+p",
+    "command": "governor.setProfile"
   }
 ]
 ```
@@ -269,6 +320,23 @@ const API_KEY = "sk-test-...";  // This is a documented test key
 
 ## State Panel Details
 
+### Intent Section (Code Autopilot)
+
+Shows current enforcement intent:
+- **Profile**: Active autopilot profile (greenfield/established/production/hotfix/refactor)
+- **Scope**: Path patterns where enforcement applies (if set)
+- **Deny**: Path patterns explicitly forbidden (if set)
+- **Timebox**: Remaining time if session is time-limited
+- **Reason**: Why this intent was set
+- **Overrides**: Active overrides for invariant anchors (with remaining time)
+
+Profile icons indicate enforcement level:
+- $(beaker) greenfield — experimenting
+- $(shield) established — normal
+- $(lock) production — strict
+- $(flame) hotfix — urgent
+- $(tools) refactor — restructuring
+
 ### Session Section
 
 Shows current governor configuration:
@@ -320,6 +388,12 @@ The extension calls the governor CLI for operations:
 governor check <file> --format json
 governor state --json --schema v2
 governor continuity anchor list --json
+
+# Code Autopilot commands
+governor intent show --json
+governor intent set --profile hotfix --scope "src/**" --because "reason"
+governor intent clear
+governor override list --json
 ```
 
 Ensure `governor` is in your PATH, or set `governor.cliPath`.

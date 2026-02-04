@@ -11,7 +11,9 @@ These aren't full "modes" like Fiction, Code, Nonfiction, or Ops. They're govern
 | **Puppet Mode** | Pin AI to a specific persona/voice | Any mode |
 | **Strict Mode** | Fail-closed governance preset | Any mode |
 | **Research Mode** | Non-convergent epistemic exploration | Nonfiction, Code |
-| **Maude Lite** | Evidence-gated kernel harness | Code (primarily) |
+| **Docket & Adjudicator** | Time-bounded verification, rulings | Any mode |
+
+> **On "Maude"**: In chat/interactive mode, you can prefix resolution commands with "maude" (e.g., `maude fix`). The CLI commands are `governor lite *`.
 
 ---
 
@@ -221,11 +223,103 @@ Research Mode still has constraints:
 
 ---
 
-## Maude Lite
+## Docket & Adjudicator
 
 ### What It Does
 
-Maude Lite is an evidence-gated coding harness — the kernel-only surface for code generation. It enforces:
+The Docket presents governance issues as cases requiring rulings, not linting warnings. It treats verification as a **time-bounded relation** between artifact, context, and evidence.
+
+Key concept: *Verification is not a property of artifacts. It is a time-bounded relation.*
+
+### Why It Exists
+
+Claims decay. Evidence becomes stale. Constraints get violated. Instead of treating these as errors to fix, the Docket frames them as cases requiring adjudication:
+
+- **Contested cases**: Anchor violations (output conflicts with constraint)
+- **Stale cases**: Claim confidence decayed below threshold
+
+### How to Use It
+
+```bash
+# View the docket (pending cases)
+governor docket list
+
+# Show a specific case
+governor docket show 4721
+
+# Issue rulings on contested cases
+governor rule sustain 4721    # Regenerate compliant output
+governor rule amend 4721      # Update the anchor instead
+governor rule except 4721     # Log as intentional exception
+
+# Issue rulings on stale cases
+governor rule reverify 4721   # Re-run verification
+governor rule dismiss 4721    # Accept current state
+
+# View past rulings
+governor precedent list
+governor precedent search "elena"
+
+# View claim health (weather report)
+governor status --claims
+
+# View specific claim
+governor claim show gc_abc123
+```
+
+### Case Types
+
+| Type | Trigger | Rulings Available |
+|------|---------|-------------------|
+| **CONTESTED** | Anchor violation | Sustain, Amend, Grant Exception |
+| **STALE** | Confidence decay | Reverify, Dismiss |
+
+### Staleness Detection
+
+Claims decay over time based on:
+
+- **Freshness window**: How long before decay begins (default: 7 days)
+- **Decay rate**: How fast confidence drops (default: 0.1/day)
+- **Artifact mutation**: File hash changed since verification
+- **Assumption violation**: Stated assumptions no longer hold
+
+### Weather Report
+
+`governor status --claims` shows a health summary:
+
+```
+CLAIM STATUS SUMMARY
+==================================================
+Live Claims:          47  ████████████████░░░░
+Degrading:            12  ████░░░░░░░░░░░░░░░░  (confidence 0.5-0.8)
+Stale:                 3  █░░░░░░░░░░░░░░░░░░░  (confidence <0.5)
+Contested:             1  ░░░░░░░░░░░░░░░░░░░░  (awaiting ruling)
+
+Health Score: 82/100
+
+ATTENTION REQUIRED:
+  * 1 contested claim(s) awaiting ruling
+  * 3 stale claim(s) need reverification or dismissal
+
+Run `governor docket` to adjudicate.
+```
+
+### Precedent Record
+
+Rulings are logged as precedents that inform future decisions:
+
+```bash
+governor precedent list
+# prec_abc123  #4721  GRANT_EXCEPTION  gc_xyz  elena-eyes  session  "Intentional deviation for dramatic effect"
+```
+
+---
+
+## Evidence-Gated Kernel
+
+### What It Does
+
+The `governor lite` commands provide an evidence-gated kernel for coding workflows — the minimal governance surface. It enforces:
 
 - HARD claims require evidence
 - Contradictions persist (no silent overwrites)
@@ -233,14 +327,14 @@ Maude Lite is an evidence-gated coding harness — the kernel-only surface for c
 
 ### Why It Exists
 
-The full governor has many subsystems. Maude Lite extracts the core invariants for coding workflows:
+The full governor has many subsystems. The lite commands extract the core invariants for coding workflows:
 
 1. **Claims must be typed** (HARD vs SOFT)
 2. **HARD claims need evidence** (test results, file checks)
 3. **Contradictions don't disappear** (you must resolve them)
 4. **Exit shape is checked** (did you actually finish?)
 
-It's the minimum viable governance for agent coding.
+It's the minimum viable governance for agent coding (the "lite" kernel).
 
 ### How to Use It
 
@@ -267,7 +361,7 @@ governor lite extract "The API now returns JSON. Tests pass."
 
 ### Custody Scoring
 
-Maude Lite scores output on three dimensions:
+The lite kernel scores output on three dimensions:
 
 | Metric | What It Measures |
 |--------|------------------|
@@ -288,7 +382,7 @@ SOFT claims are allowed but flagged. Too many SOFT claims without HARD evidence 
 
 ### Exit Shape Checking
 
-Maude Lite verifies that agent output has a proper "exit shape":
+The lite kernel verifies that agent output has a proper "exit shape":
 
 - Did the agent complete the task?
 - Is the final state clear?
@@ -319,9 +413,9 @@ governor profile use strict
 governor profile use research
 # Now nonfiction mode allows competing hypotheses
 
-# Code mode + Maude Lite (agent wrapper)
+# Code mode + lite kernel (agent wrapper)
 governor wrap --mode code -- agent "implement feature X"
-# Maude Lite checks agent output before commit
+# Lite kernel checks agent output before commit
 ```
 
 ---
@@ -336,8 +430,10 @@ governor wrap --mode code -- agent "implement feature X"
 | Audit-sensitive environment | Strict Mode |
 | Early research, multiple hypotheses | Research Mode |
 | Exploratory coding, uncertain direction | Research Mode |
-| Wrapping coding agents | Maude Lite |
-| CI/CD integration | Maude Lite |
+| Wrapping coding agents | `governor lite` / `governor wrap` |
+| CI/CD integration | `governor lite check` |
+| Claim decay / stale verification | Docket & Adjudicator |
+| Logging intentional deviations | Docket (precedent record) |
 
 ---
 
@@ -377,7 +473,23 @@ governor research evidence add --supports <id> --description <desc> --weight <0-
 governor research status
 ```
 
-### Maude Lite
+### Docket & Adjudicator
+
+```bash
+governor docket list
+governor docket show <case>
+governor rule sustain <case>
+governor rule amend <case>
+governor rule except <case>
+governor rule reverify <case>
+governor rule dismiss <case>
+governor precedent list
+governor precedent search <query>
+governor claim show <id>
+governor status --claims
+```
+
+### Lite Kernel
 
 ```bash
 governor lite check <text>
@@ -387,6 +499,11 @@ governor lite validate <path>
 governor lite config
 governor lite score <text>
 governor lite extract <text>
+governor lite pending
+governor lite fix
+governor lite revise
+governor lite proceed
+governor lite exceptions
 ```
 
 ---

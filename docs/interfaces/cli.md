@@ -116,7 +116,7 @@ governor continuity anchor add \
   --severity <warn|correct|reject>
 ```
 
-### Violation Resolution (Maude/Lite)
+### Violation Resolution
 
 | Command | Description |
 |---------|-------------|
@@ -125,10 +125,28 @@ governor continuity anchor add \
 | `governor lite revise` | Update the anchor |
 | `governor lite proceed` | Log exception, continue |
 | `governor lite exceptions` | View logged exceptions |
-| `governor lite check <text>` | Check text (Maude Lite) |
+| `governor lite check <text>` | Check text against kernel |
 | `governor lite validate <path>` | Validate file |
 | `governor lite score <text>` | Score custody metrics |
 | `governor lite extract <text>` | Extract claims |
+
+> **Chat alias**: In interactive mode, you can also type `1`/`2`/`3` or `fix`/`revise`/`proceed` (or prefix with "maude", e.g., `maude fix`).
+
+### Docket & Rulings (Adjudicator)
+
+| Command | Description |
+|---------|-------------|
+| `governor docket list` | View pending cases on the docket |
+| `governor docket show <case>` | Show details of a specific case |
+| `governor rule sustain <case>` | Sustain constraint, regenerate compliant |
+| `governor rule amend <case>` | Amend anchor to permit output |
+| `governor rule except <case>` | Grant exception, log as precedent |
+| `governor rule reverify <case>` | Re-verify stale claim |
+| `governor rule dismiss <case>` | Dismiss stale claim |
+| `governor precedent list` | View past rulings (precedent record) |
+| `governor precedent search <query>` | Search precedents |
+| `governor claim show <id>` | View claim details |
+| `governor status --claims` | Claim health weather report |
 
 ### Integration
 

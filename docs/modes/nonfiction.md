@@ -88,7 +88,7 @@ Now when AI tries to make reductionist claims, you'll see:
 2. Revise — Update the position
 3. Proceed — Log as intentional exception
 
-Reply with 1, 2, 3 or: maude fix | maude revise | maude proceed
+Reply with 1, 2, 3 or: fix | revise | proceed
 ```
 
 ---

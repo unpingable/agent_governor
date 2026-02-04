@@ -136,16 +136,16 @@ When the AI generates content that violates an anchor, you'll see:
 2. Revise — Update the constraint
 3. Proceed — Log as intentional exception
 
-Reply with 1, 2, 3 or: maude fix | maude revise | maude proceed
+Reply with 1, 2, 3 or: fix | revise | proceed
 ```
 
 ### Resolution Commands
 
 | Input | Action |
 |-------|--------|
-| `1` or `maude fix` | AI regenerates compliant response |
-| `2` or `maude revise` | Updates the anchor to permit the output |
-| `3` or `maude proceed` | Logs exception, shows original output |
+| `1` or `fix` | AI regenerates compliant response |
+| `2` or `revise` | Updates the anchor to permit the output |
+| `3` or `proceed` | Logs exception, shows original output |
 
 ### Blocking Behavior
 
@@ -308,8 +308,8 @@ export CLAUDE_PATH=/home/user/.local/bin/claude
 Getting the same violation repeatedly after "fix".
 
 This means the AI can't satisfy the constraint. Options:
-1. `maude revise` — relax the constraint
-2. `maude proceed` — accept the exception
+1. `revise` — relax the constraint
+2. `proceed` — accept the exception
 3. Check if the anchor is too strict
 
 ### "No anchors loaded"

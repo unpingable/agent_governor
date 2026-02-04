@@ -28,7 +28,7 @@ This document provides a high-level view of the Agent Governor system. For detai
 │                                                                 │
 │  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐       │
 │  │     CLI     │────▶│   Modes     │────▶│  Profiles   │       │
-│  │ (governor)  │     │(fiction/code)│    │(Maude/Lite) │       │
+│  │ (governor)  │     │(fiction/code)│    │  (presets)  │       │
 │  └─────────────┘     └─────────────┘     └─────────────┘       │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -81,6 +81,9 @@ This document provides a high-level view of the Agent Governor system. For detai
 | Correction Ladder | `src/governor/continuity.py` | Escalating interventions |
 | Convergence Executor | `src/governor/continuity.py` | Closed-loop generation control |
 | Violation Resolver | `src/governor/violation_resolver.py` | Fix/Revise/Proceed resolution flow |
+| Staleness Detector | `src/governor/staleness.py` | Time-bounded verification, decay |
+| Docket Manager | `src/governor/docket.py` | Cases, rulings, precedent record |
+| Claim Status Dashboard | `src/governor/claim_status.py` | Weather report, health scoring |
 
 ### Governance Control
 
@@ -249,6 +252,8 @@ These rules cannot be broken:
 ├── governor.db               # SQLite database (facts, decisions, claims)
 ├── anchors.json              # Continuity anchors
 ├── pending_violations.json   # Awaiting resolution
+├── docket_cases.json         # Pending docket cases
+├── precedents.json           # Logged rulings (precedent record)
 ├── exceptions/               # Logged proceed decisions
 ├── receipts/                 # Verification receipts
 ├── sessions/                 # Execution sessions

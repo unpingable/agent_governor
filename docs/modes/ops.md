@@ -80,7 +80,7 @@ Now when AI suggests a production deploy at 3pm on a Tuesday without running tes
 2. Revise — Update operational constraints
 3. Proceed — Log as emergency exception
 
-Reply with 1, 2, 3 or: maude fix | maude revise | maude proceed
+Reply with 1, 2, 3 or: fix | revise | proceed
 ```
 
 ---

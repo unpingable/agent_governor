@@ -68,14 +68,14 @@ Use the WebUI, Claude Code with hooks, or the CLI wrapper. When the AI tries to 
 2. Revise — Update decision record
 3. Proceed — Record waiver
 
-Reply with 1, 2, 3 or: maude fix | maude revise | maude proceed
+Reply with 1, 2, 3 or: fix | revise | proceed
 ```
 
 ### 4. Resolve and Continue
 
-- Type **1** (or "maude fix") → AI regenerates code that respects your decisions
-- Type **2** (or "maude revise") → Decision record updates (you changed your mind)
-- Type **3** (or "maude proceed") → Waiver logged, continues as-is (intentional exception)
+- Type **1** or **fix** → AI regenerates code that respects your decisions
+- Type **2** or **revise** → Decision record updates (you changed your mind)
+- Type **3** or **proceed** → Waiver logged, continues as-is (intentional exception)
 
 That's it. Your codebase stays consistent.
 

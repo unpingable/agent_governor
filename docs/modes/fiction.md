@@ -78,14 +78,14 @@ Chat with the AI through the WebUI. Write your scenes. When the AI tries to give
 2. Revise — Update the canon anchor
 3. Proceed — Log as intentional deviation
 
-Reply with 1, 2, 3 or: maude fix | maude revise | maude proceed
+Reply with 1, 2, 3 or: fix | revise | proceed
 ```
 
 ### 4. Resolve and Continue
 
-- Type **1** (or "maude fix") → AI rewrites the passage to match your canon
-- Type **2** (or "maude revise") → Canon updates to match the new direction
-- Type **3** (or "maude proceed") → Exception logged, continues as-is
+- Type **1** or **fix** → AI rewrites the passage to match your canon
+- Type **2** or **revise** → Canon updates to match the new direction
+- Type **3** or **proceed** → Exception logged, continues as-is
 
 That's it. Your story stays consistent.
 

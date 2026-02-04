@@ -28,7 +28,7 @@ These work alongside the main modes to provide additional control:
 | **Puppet Mode** | Pin AI to a specific persona/voice |
 | **Strict Mode** | Fail-closed governance preset |
 | **Research Mode** | Non-convergent epistemic exploration |
-| **Maude Lite** | Evidence-gated kernel harness |
+| **Docket & Adjudicator** | Time-bounded verification, rulings, precedent |
 
 See [modes/ancillary.md](modes/ancillary.md) for details.
 
@@ -60,11 +60,13 @@ For understanding the system internals:
 
 When the governor blocks a violation, you have three choices:
 
-| Command | Action |
-|---------|--------|
-| `maude fix` (or `1`) | Regenerate to comply with constraint |
-| `maude revise` (or `2`) | Update the constraint to match new reality |
-| `maude proceed` (or `3`) | Log as intentional exception, continue |
+| In Chat | CLI Equivalent | Action |
+|---------|----------------|--------|
+| `1` or `fix` | `governor lite fix` | Regenerate to comply with constraint |
+| `2` or `revise` | `governor lite revise` | Update the constraint to match new reality |
+| `3` or `proceed` | `governor lite proceed` | Log as intentional exception, continue |
+
+> **Note**: In chat/interactive mode, you can also prefix with "maude" (e.g., `maude fix`).
 
 ### Core CLI Commands
 
@@ -124,7 +126,7 @@ Open **http://localhost:3001**
 - [modes/code.md](modes/code.md) - Code Mode for developers
 - [modes/nonfiction.md](modes/nonfiction.md) - Nonfiction Mode for researchers
 - [modes/ops.md](modes/ops.md) - Ops Mode for SREs
-- [modes/ancillary.md](modes/ancillary.md) - Puppet, Strict, Research, Maude Lite
+- [modes/ancillary.md](modes/ancillary.md) - Puppet, Strict, Research, Docket
 
 ### Interfaces
 - [interfaces/webui.md](interfaces/webui.md) - WebUI setup and usage

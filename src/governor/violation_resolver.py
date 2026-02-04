@@ -690,7 +690,7 @@ def format_violation_prompt(
         ])
 
     lines.append("")
-    lines.append("Reply with 1, 2, 3 or: maude fix | maude revise | maude proceed")
+    lines.append("Reply with 1, 2, 3 or: fix | revise | proceed")
 
     return "\n".join(lines)
 

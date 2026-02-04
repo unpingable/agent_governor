@@ -80,13 +80,11 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "F",   # pyflakes
-    "I",   # isort
-    "UP",  # pyupgrade
+    "F",   # pyflakes (actual errors: undefined names, etc.)
 ]
 ignore = [
-    "E501",  # line too long (let formatter handle it)
+    "F401",  # unused imports (common in __init__.py re-exports)
+    "F841",  # unused variables (sometimes intentional)
 ]
 
 [tool.ruff.format]

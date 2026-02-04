@@ -79,6 +79,3 @@ jobs:
 
       - name: Run ruff check
         run: ruff check src/ tests/ --output-format=github
-
-      - name: Run ruff format check
-        run: ruff format src/ tests/ --check

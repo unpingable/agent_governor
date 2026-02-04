@@ -409,7 +409,7 @@ class TestRejectionPersistence:
 
     def test_rejection_claim_errors_roundtrip(self):
         """Claim errors survive serialization roundtrip."""
-        from governor.fsm import Proposal, ProposalState
+        from governor.fsm import Proposal
         from datetime import datetime, timezone
         from uuid import uuid4
 

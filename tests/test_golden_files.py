@@ -965,7 +965,7 @@ class TestQuorumStateShape:
 
 from governor.claim_diff import (
     ClaimSnapshot, LedgerSnapshot, MutationEvent, MutationType,
-    Violation, ViolationType, DiffResult,
+    Violation as ClaimDiffViolation, ViolationType, DiffResult,
 )
 
 
@@ -1072,11 +1072,11 @@ class TestMutationEventShape:
         assert isinstance(d["new_value"], str)
 
 
-class TestViolationShape:
-    """Violation.to_dict() golden shape."""
+class TestClaimDiffViolationShape:
+    """ClaimDiffViolation.to_dict() golden shape."""
 
-    def _make(self) -> Violation:
-        return Violation(
+    def _make(self) -> ClaimDiffViolation:
+        return ClaimDiffViolation(
             violation_type=ViolationType.CONFIDENCE_DRIFT,
             severity=0.8,
             claim_id="c_001",
@@ -1211,8 +1211,8 @@ class TestAnchorShape:
         assert isinstance(s, str)
 
 
-class TestViolationShape:
-    """Violation.to_dict() golden shape (continuity)."""
+class TestContinuityViolationShape:
+    """Violation.to_dict() golden shape (continuity module)."""
 
     def _make(self) -> Violation:
         return Violation(

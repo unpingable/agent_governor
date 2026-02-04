@@ -273,7 +273,7 @@ def cmd_claim_list(args: argparse.Namespace) -> int:
 def cmd_claim_approve(args: argparse.Namespace) -> int:
     """Add approval evidence to a pending claim."""
     # For now, just demonstrate the pattern
-    print(f"Approval recorded:")
+    print("Approval recorded:")
     print(f"  Claim: {args.claim}")
     print(f"  Approver: {args.approver}")
     print(f"  Role: {args.role}")
@@ -291,7 +291,7 @@ def cmd_claim_approve(args: argparse.Namespace) -> int:
 
 def cmd_claim_waive(args: argparse.Namespace) -> int:
     """Waive a requirement with explicit reason."""
-    print(f"Waiver recorded:")
+    print("Waiver recorded:")
     print(f"  Claim: {args.claim}")
     print(f"  Requirement: {args.requirement}")
     print(f"  Approver: {args.approver}")

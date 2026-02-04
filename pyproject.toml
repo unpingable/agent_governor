@@ -84,6 +84,7 @@ select = [
 ]
 ignore = [
     "F401",  # unused imports (common in __init__.py re-exports)
+    "F821",  # undefined name (false positives on forward reference type hints)
     "F841",  # unused variables (sometimes intentional)
 ]
 

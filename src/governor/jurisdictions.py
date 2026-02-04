@@ -759,7 +759,7 @@ class JurisdictionManager:
         if self.current_state.consume_budget(cost):
             self.current_state.record_claim()
             return True, f"Claim made (cost: {cost:.1f}, remaining: {self.current_state.current_budget:.1f})"
-        return False, f"Insufficient budget for claim"
+        return False, "Insufficient budget for claim"
 
     def can_open_contradiction(self) -> tuple[bool, str]:
         """Check if a contradiction can be opened."""
@@ -770,7 +770,7 @@ class JurisdictionManager:
         cost = self.current_state.jurisdiction.budget.contradiction_cost
         if self.current_state.current_budget >= cost:
             return True, f"Contradiction allowed (cost: {cost:.1f})"
-        return False, f"Insufficient budget for contradiction"
+        return False, "Insufficient budget for contradiction"
 
     def open_contradiction(self) -> tuple[bool, str]:
         """Open a contradiction, consuming budget."""
@@ -792,7 +792,7 @@ class JurisdictionManager:
             return False, f"Resolution blocked by cost ({cost:.1f})"
         if self.current_state.current_budget >= cost:
             return True, f"Resolution allowed (cost: {cost:.1f})"
-        return False, f"Insufficient budget for resolution"
+        return False, "Insufficient budget for resolution"
 
     def resolve_contradiction(self) -> tuple[bool, str]:
         """Resolve a contradiction, consuming budget."""
@@ -814,7 +814,7 @@ class JurisdictionManager:
         cost = j.budget.export_cost
         if self.current_state.current_budget >= cost:
             return True, f"Export allowed (cost: {cost:.1f})"
-        return False, f"Insufficient budget for export"
+        return False, "Insufficient budget for export"
 
     def export_to_factual(self, has_evidence: bool) -> tuple[bool, str]:
         """Export a claim to factual jurisdiction."""

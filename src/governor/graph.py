@@ -273,7 +273,7 @@ class StableSummary:
         if self.notes:
             lines.extend(["", "## Notes", self.notes])
 
-        lines.extend(["", f"---", f"*Collapsed from {len(self.node_ids)} nodes*"])
+        lines.extend(["", "---", f"*Collapsed from {len(self.node_ids)} nodes*"])
 
         return "\n".join(lines)
 

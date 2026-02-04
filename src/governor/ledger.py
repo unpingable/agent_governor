@@ -244,7 +244,7 @@ class CodebaseLedger:
                         existing_claim=existing.claim,
                         existing_commit_id=existing.id,
                         new_claim=new_claim,
-                        reason=f"Framework conflict: existing commitment uses different framework",
+                        reason="Framework conflict: existing commitment uses different framework",
                     )
             
             # Check for "not X" vs "X" patterns

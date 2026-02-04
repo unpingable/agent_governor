@@ -175,7 +175,7 @@ class InvariantLibrary:
             except subprocess.TimeoutExpired:
                 return InvariantResult(
                     passed=False,
-                    message=f"Tests timed out after 300s",
+                    message="Tests timed out after 300s",
                     invariant_id=invariant_id,
                 )
 
@@ -273,7 +273,7 @@ class InvariantLibrary:
                 )
             return InvariantResult(
                 passed=True,
-                message=f"No forbidden files touched",
+                message="No forbidden files touched",
                 invariant_id=inv_id,
             )
 

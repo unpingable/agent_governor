@@ -1082,7 +1082,7 @@ def show_friendly_status(ctx: click.Context) -> None:
         rules = len([a for a in anchors if a.anchor_type == AnchorType.DEFINITION])
         prohibitions = len([a for a in anchors if a.anchor_type == AnchorType.PROHIBITION and "char-" not in a.id])
 
-        click.echo(f"  Mode: Fiction")
+        click.echo("  Mode: Fiction")
         click.echo(f"  Story: \"{story_name}\"")
         click.echo(f"     {characters} characters * {rules} world rules * {prohibitions} boundaries")
         click.echo()
@@ -1104,7 +1104,7 @@ def show_friendly_status(ctx: click.Context) -> None:
         registry = create_registry(gov_dir)
         constraints = len([a for a in registry.all() if a.anchor_type == AnchorType.PROHIBITION])
 
-        click.echo(f"  Mode: Code")
+        click.echo("  Mode: Code")
         click.echo(f"     {decisions} decisions * {constraints} constraints")
         click.echo()
         click.echo("  No unresolved issues")

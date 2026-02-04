@@ -121,7 +121,7 @@ class RunbookVerifier:
                         return False, f"Expected exit code {exp.get('value', 0)}, got {evidence.get('exit_code')}"
                 elif exp_type == "output_contains":
                     if exp.get("pattern") not in evidence.get("output", ""):
-                        return False, f"Output doesn't contain expected pattern"
+                        return False, "Output doesn't contain expected pattern"
 
         return True, f"Step {step_index} verified"
 

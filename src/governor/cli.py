@@ -465,7 +465,7 @@ def apply(ctx: click.Context, proposal_id: str) -> None:
     proposals[proposal_id] = fsm.proposal.to_dict()
     save_proposals(gov_dir, proposals)
 
-    click.echo(f"\nProposal APPLIED")
+    click.echo("\nProposal APPLIED")
 
 
 @cli.command()
@@ -807,7 +807,7 @@ def revise(ctx: click.Context, decision_id: str, choice: str, rationale: str | N
     new_decision = decision_ledger.revise(old_id, new_claim, rationale=rationale)
 
     if new_decision:
-        click.echo(f"Decision revised:")
+        click.echo("Decision revised:")
         click.echo(f"  Topic: {new_decision.topic}")
         click.echo(f"  Old choice: {old_decision.choice}")
         click.echo(f"  New choice: {new_decision.choice}")
@@ -947,7 +947,7 @@ def hook_status(ctx: click.Context) -> None:
         click.echo(f"  Executable: {'yes' if status['executable'] else 'no'}")
 
     if status["has_backup"]:
-        click.echo(f"  Backup exists: yes")
+        click.echo("  Backup exists: yes")
 
 
 @hook.command("pre-commit")
@@ -1800,7 +1800,7 @@ def task_claim(ctx: click.Context, agent_id: str, task_desc: str, scope: str, et
         res_scope = json.loads(res["scope_json"])
         overlap = set(res_scope) & set(scope_paths)
         if overlap:
-            click.echo(f"Error: Scope conflict with existing reservation", err=True)
+            click.echo("Error: Scope conflict with existing reservation", err=True)
             click.echo(f"  Task: {res['task']}", err=True)
             click.echo(f"  Agent: {res['agent_id']}", err=True)
             click.echo(f"  Overlapping paths: {overlap}", err=True)
@@ -1878,7 +1878,7 @@ def task_heartbeat(ctx: click.Context, agent_id: str, task_id: str, extend_minut
     # Update agent heartbeat
     storage.update("agents", "id", agent_id, {"last_heartbeat": now.isoformat()})
 
-    click.echo(f"Task heartbeat recorded")
+    click.echo("Task heartbeat recorded")
     click.echo(f"  Task: {task_id}")
     click.echo(f"  New expiry: {new_expires.isoformat()}")
 
@@ -2799,11 +2799,11 @@ def session_end(
     if summary:
         click.echo(f"\n  Summary: {summary}")
     if next_steps:
-        click.echo(f"\n  Next steps:")
+        click.echo("\n  Next steps:")
         for step in next_steps:
             click.echo(f"    - {step}")
     if blocker:
-        click.echo(f"\n  Blockers:")
+        click.echo("\n  Blockers:")
         for b in blocker:
             click.echo(f"    - {b}")
 
@@ -3049,17 +3049,17 @@ def graph_stats(ctx: click.Context) -> None:
         type_name = edge.type.value
         edge_counts[type_name] = edge_counts.get(type_name, 0) + 1
 
-    click.echo(f"Audit Graph Statistics\n")
+    click.echo("Audit Graph Statistics\n")
     click.echo(f"Total nodes: {len(graph.nodes)}")
     click.echo(f"Total edges: {len(graph.edges)}")
 
     if node_counts:
-        click.echo(f"\nNodes by type:")
+        click.echo("\nNodes by type:")
         for type_name, count in sorted(node_counts.items()):
             click.echo(f"  {type_name}: {count}")
 
     if edge_counts:
-        click.echo(f"\nEdges by type:")
+        click.echo("\nEdges by type:")
         for type_name, count in sorted(edge_counts.items()):
             click.echo(f"  {type_name}: {count}")
 
@@ -3553,7 +3553,7 @@ def ops_policy(ctx: click.Context, action: str, name: str | None) -> None:
             status = "enabled" if pack.enabled else "disabled"
             click.echo(f"  [{status}] {pack.name}: {pack.description}")
 
-        click.echo(f"\nAvailable built-in packs:")
+        click.echo("\nAvailable built-in packs:")
         for pack_name in BUILTIN_PACKS:
             click.echo(f"  {pack_name}")
 
@@ -3789,7 +3789,7 @@ def ops_incident(
             click.echo(f"  Title: {data['title']}")
             click.echo(f"  Severity: {data['severity']}")
             click.echo(f"  Status: {data['status']}")
-            click.echo(f"\n  Timeline:")
+            click.echo("\n  Timeline:")
             for event in data["timeline"]:
                 click.echo(f"    [{event['timestamp']}] {event['event_type']}: {event['description']}")
 
@@ -3910,7 +3910,7 @@ def runbook_create(ctx: click.Context, name: str, description: str | None) -> No
 
     click.echo(f"Created runbook: {name}")
     click.echo(f"  Location: {verifier.runbooks_dir / f'{name}.json'}")
-    click.echo(f"\nEdit the JSON file to add your steps.")
+    click.echo("\nEdit the JSON file to add your steps.")
 
 
 @runbook.command("show")
@@ -4086,7 +4086,7 @@ def epistemic_status(ctx: click.Context) -> None:
         click.echo(f"  ⚠️  DANGEROUS CLAIMS: {dangerous}")
         click.echo("      (high confidence without evidence)")
     else:
-        click.echo(f"  ✓ No dangerous claims")
+        click.echo("  ✓ No dangerous claims")
     click.echo()
 
     click.echo("  Provenance distribution:")
@@ -4244,7 +4244,7 @@ def epistemic_create(
     click.echo(f"  Grounded: {'yes' if claim.is_grounded else 'no'}")
 
     if claim.is_dangerous:
-        click.echo(f"  ⚠️  WARNING: This claim is dangerous (high confidence without evidence)")
+        click.echo("  ⚠️  WARNING: This claim is dangerous (high confidence without evidence)")
 
 
 @epistemic.command("evidence")
@@ -6628,7 +6628,7 @@ def explore_observe(ctx, revision_rate, contradiction_rate, hedge_rate,
 
     click.echo(f"Context:    {h.context.value}")
     click.echo(f"EMA urgency: {h.ema_urgency:.4f}")
-    click.echo(f"Tuning deltas:")
+    click.echo("Tuning deltas:")
     click.echo(f"  confidence_mult:  {tuning.confidence_ceiling_mult:.3f}")
     click.echo(f"  support_bias:     {tuning.require_support_bias:+.3f}")
     click.echo(f"  retrieval_bias:   {tuning.retrieval_force_bias:+.3f}")
@@ -8892,7 +8892,7 @@ def spine_show(ctx, spine_id):
     click.echo(f"Locked at: {spine.locked_at}")
     click.echo(f"Locked by: {spine.locked_by}")
     click.echo(f"Unlock requires: {spine.unlock_requires}")
-    click.echo(f"\nStructure:")
+    click.echo("\nStructure:")
     click.echo(json.dumps(spine.structure, indent=2))
 
 
@@ -9266,14 +9266,14 @@ def auto_show(ctx, session_id):
     click.echo(f"Started: {state.started_at}")
     if state.last_checkpoint:
         click.echo(f"Last checkpoint: {state.last_checkpoint}")
-    click.echo(f"\nUsage:")
+    click.echo("\nUsage:")
     click.echo(f"  Iterations: {state.used.iterations}")
     click.echo(f"  Tokens: {state.used.tokens}")
     click.echo(f"  Time: {state.used.elapsed_seconds:.1f}s")
     click.echo(f"  Cost: ${state.used.cost_usd:.4f}")
 
     if state.budget.max_iterations or state.budget.max_tokens:
-        click.echo(f"\nBudget:")
+        click.echo("\nBudget:")
         if state.budget.max_iterations:
             click.echo(f"  Max iterations: {state.budget.max_iterations}")
         if state.budget.max_tokens:
@@ -9289,7 +9289,7 @@ def auto_show(ctx, session_id):
             click.echo(f"  [{v['invariant_id']}] {v['message']}")
 
     if state.progress:
-        click.echo(f"\nProgress:")
+        click.echo("\nProgress:")
         for k, v in state.progress.items():
             click.echo(f"  {k}: {v}")
 
@@ -9344,14 +9344,14 @@ def auto_handoff(ctx, session_id):
             click.echo(f"  - [{v['invariant_id']}] {v['message']}")
 
     if state.progress:
-        click.echo(f"\nProgress notes:")
+        click.echo("\nProgress notes:")
         for k, v in state.progress.items():
             click.echo(f"  {k}: {v}")
 
     if state.is_active:
         remaining = state.budget.remaining(state.used)
         if remaining:
-            click.echo(f"\nRemaining budget:")
+            click.echo("\nRemaining budget:")
             for k, v in remaining.items():
                 click.echo(f"  {k}: {v}")
 
@@ -9414,7 +9414,7 @@ def auto_run(ctx, task, budget_spec, spine_id, dry_run):
         click.echo(f"  Invariants: {len(inv_set.invariants)}")
         for inv in inv_set.invariants:
             click.echo(f"    - {inv.id} ({inv.on_violation})")
-        click.echo(f"  Budget:")
+        click.echo("  Budget:")
         if budget.max_iterations is not None:
             click.echo(f"    max_iterations: {budget.max_iterations}")
         if budget.max_tokens is not None:
@@ -9559,7 +9559,7 @@ def telemetry_status(ctx: click.Context) -> None:
     if log_dir.exists():
         logger = get_logger(gov_dir)
         stats = logger.stats()
-        click.echo(f"\nLog Statistics:")
+        click.echo("\nLog Statistics:")
         click.echo(f"  Total events: {stats.total_events}")
         click.echo(f"  Log files: {len(stats.log_files)}")
         click.echo(f"  Total size: {stats.total_size_bytes:,} bytes")
@@ -9568,11 +9568,11 @@ def telemetry_status(ctx: click.Context) -> None:
         if stats.newest:
             click.echo(f"  Newest: {stats.newest}")
         if stats.by_type:
-            click.echo(f"  By type:")
+            click.echo("  By type:")
             for t, c in sorted(stats.by_type.items()):
                 click.echo(f"    {t}: {c}")
         if stats.by_level:
-            click.echo(f"  By level:")
+            click.echo("  By level:")
             for lv, c in sorted(stats.by_level.items()):
                 click.echo(f"    {lv}: {c}")
     else:
@@ -9909,7 +9909,7 @@ def prometheus_enable(ctx: click.Context, port: int) -> None:
     server = get_server(config)
 
     if server.start():
-        click.echo(f"Prometheus metrics enabled")
+        click.echo("Prometheus metrics enabled")
         click.echo(f"  Endpoint: http://localhost:{port}/metrics")
         click.echo(f"  Config saved to: {gov_dir / 'prometheus.json'}")
     else:
@@ -10000,7 +10000,7 @@ def continuity_status(ctx: click.Context) -> None:
     gov_dir = ensure_initialized(ctx)
     registry = create_registry(gov_dir)
 
-    click.echo(f"Continuity Enforcement Status")
+    click.echo("Continuity Enforcement Status")
     click.echo(f"  Total anchors: {len(registry)}")
     for atype in AnchorType:
         anchors = registry.get_by_type(atype)
@@ -11038,7 +11038,7 @@ def _handle_interactive_check_resolution(
             user_input = click.prompt("Choice", default="", show_default=False)
         except click.exceptions.Abort:
             click.echo("\nAborted. Pending violation saved.")
-            click.echo(f"Resume with: governor lite pending")
+            click.echo("Resume with: governor lite pending")
             ctx.exit(1)
             return
 

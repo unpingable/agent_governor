@@ -132,7 +132,7 @@ def generate_unified_diff(changes: list[FileChange]) -> str:
 
     for change in changes:
         if change.change_type == "created":
-            diff_lines.append(f"--- /dev/null")
+            diff_lines.append("--- /dev/null")
             diff_lines.append(f"+++ b/{change.path}")
             if change.new_content:
                 try:
@@ -146,7 +146,7 @@ def generate_unified_diff(changes: list[FileChange]) -> str:
 
         elif change.change_type == "deleted":
             diff_lines.append(f"--- a/{change.path}")
-            diff_lines.append(f"+++ /dev/null")
+            diff_lines.append("+++ /dev/null")
             if change.old_content:
                 try:
                     content = change.old_content.decode("utf-8")

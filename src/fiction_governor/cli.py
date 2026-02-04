@@ -466,7 +466,7 @@ def cmd_state_motivation_conflict(args: argparse.Namespace) -> int:
     state = CharacterState(get_project_dir())
 
     if state.add_motivation_conflict(args.id_a, args.id_b):
-        print(f"Marked motivations as conflicting.")
+        print("Marked motivations as conflicting.")
         return 0
     else:
         print(f"Motivation not found: {args.id_a}")
@@ -976,10 +976,10 @@ def cmd_thread_show(args: argparse.Namespace) -> int:
     print(f"Status: {thread.status.value}")
     print(f"Importance: {thread.importance}/10")
     print()
-    print(f"## Description")
+    print("## Description")
     print(thread.description)
     print()
-    print(f"## Timeline")
+    print("## Timeline")
     print(f"Planted: chapter {thread.planted_chapter}")
     if thread.planted_text:
         print(f"  > {thread.planted_text}")
@@ -1001,7 +1001,7 @@ def cmd_thread_show(args: argparse.Namespace) -> int:
 
     if thread.notes:
         print()
-        print(f"## Notes")
+        print("## Notes")
         print(thread.notes)
 
     print()
@@ -1137,7 +1137,7 @@ def cmd_proposal_show(args: argparse.Namespace) -> int:
 
     if proposal.rejection_reason:
         print()
-        print(f"## Rejection Reason")
+        print("## Rejection Reason")
         print(proposal.rejection_reason)
 
     print()
@@ -1415,7 +1415,7 @@ def cmd_drift_status(args: argparse.Namespace) -> int:
         last = state.transitions[-1]
         print(f"  Last: {last.from_mode.value} → {last.to_mode.value} "
               f"(conf={last.confidence:.2f}, signaled={last.user_signaled})")
-    print(f"\nHysteresis:")
+    print("\nHysteresis:")
     print(f"  θ_up:          {state.hysteresis.theta_up:.2f}")
     print(f"  θ_down:        {state.hysteresis.theta_down:.2f}")
     print(f"  min_dwell:     {state.hysteresis.min_dwell_tokens}")
@@ -1659,11 +1659,11 @@ def cmd_guardrails_config(args: argparse.Namespace) -> int:
     config = guardrails.config
 
     print("Guardrail Configuration:")
-    print(f"\nHard constraints:")
+    print("\nHard constraints:")
     print(f"  C1 (consent gate):        {'ON' if config.block_coercive_without_opt_in else 'OFF'}")
     print(f"  C2 (mode escalation):     {'ON' if config.block_high_risk_without_enable else 'OFF'}")
     print(f"  C3 (anachronism causal):  {'ON' if config.block_anachronistic_causal else 'OFF'}")
-    print(f"\nSoft penalty weights (λ):")
+    print("\nSoft penalty weights (λ):")
     print(f"  P1 (DSI):                 {config.lambda_dsi}")
     print(f"  P2 (unearned fact):       {config.lambda_unearned}")
     print(f"  P3 (register drift):      {config.lambda_drift}")
@@ -1675,7 +1675,7 @@ def cmd_guardrails_config(args: argparse.Namespace) -> int:
     if pairs:
         print(f"\nConsent pairs tracked: {len(pairs)}")
     else:
-        print(f"\nNo consent pairs tracked.")
+        print("\nNo consent pairs tracked.")
 
     gs = consent.global_state
     print(f"Global opt-in: erotic={'yes' if gs.erotic_allowed else 'no'}, "

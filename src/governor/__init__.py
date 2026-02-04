@@ -6,7 +6,7 @@ hallucination, maintaining architectural coherence, and enforcing evidence requi
 """
 
 from .core import AgentGovernor
-from .ledger import CodebaseLedger, Commitment, CommitID
+from .ledger import CodebaseLedger, CommitID
 from .validators import Validator, FileValidator, Evidence
 from .types import ProposalResult, Contradiction
 

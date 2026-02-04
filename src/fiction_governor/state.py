@@ -467,7 +467,7 @@ class CharacterState:
                 intensity = m.effective_intensity(at_chapter) if at_chapter else m.intensity
                 lines.append(f"- [{m.type.value.upper()}] {m.description} (intensity: {intensity:.1f})")
                 if m.conflicts_with:
-                    lines.append(f"  *Conflicts with other motivations*")
+                    lines.append("  *Conflicts with other motivations*")
             lines.append("")
 
         # Current beliefs

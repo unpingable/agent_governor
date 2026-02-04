@@ -889,7 +889,7 @@ def cfi_scan(ctx, path, expect_frame, expect_perspective):
                     fg="yellow",
                 ))
 
-    click.echo(f"\n--- Summary ---")
+    click.echo("\n--- Summary ---")
     click.echo(f"Paragraphs: {len(paragraphs)}")
     click.echo(f"Faults: {total_faults}")
     stats = detector.stats()

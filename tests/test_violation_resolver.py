@@ -1,7 +1,7 @@
 """
 Tests for violation_resolver module.
 
-W4: Interactive Violation Resolution — "Erin-Ready" Chat
+W4: Interactive Violation Resolution — Author-Friendly Chat
 """
 
 import json

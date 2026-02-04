@@ -2,9 +2,9 @@
 #
 # Run: docker-compose up -d
 #
-# Users:
-#   - Erin (fiction):  WebUI at http://localhost:3001, adapter at http://localhost:8001
-#   - James (code):    WebUI at http://localhost:3002, adapter at http://localhost:8002
+# Stacks:
+#   - Fiction:  WebUI at http://localhost:3001, adapter at http://localhost:8001
+#   - Code:     WebUI at http://localhost:3002, adapter at http://localhost:8002
 #
 # Requires: ANTHROPIC_API_KEY in .env or environment
 #
@@ -12,80 +12,80 @@
 
 services:
   # ============================================================
-  # Erin's fiction writing stack
+  # Fiction writing stack
   # ============================================================
 
-  erin-adapter:
+  fiction-adapter:
     build:
       context: .
       dockerfile: Dockerfile.adapter
-    container_name: governor-erin-adapter
+    container_name: governor-fiction-adapter
     ports:
       - "8001:8000"
     environment:
       - BACKEND_TYPE=anthropic
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOVERNOR_CONTEXT_ID=erin-current-novel
+      - GOVERNOR_CONTEXT_ID=fiction-current-novel
       - GOVERNOR_MODE=fiction
       - GOVERNOR_CONTEXTS_DIR=/contexts
     volumes:
       - contexts_data:/contexts
     restart: unless-stopped
 
-  erin-webui:
+  fiction-webui:
     image: ghcr.io/open-webui/open-webui:main
-    container_name: governor-erin-webui
+    container_name: governor-fiction-webui
     ports:
       - "3001:8080"
     environment:
-      - OPENAI_API_BASE_URL=http://erin-adapter:8000/v1
+      - OPENAI_API_BASE_URL=http://fiction-adapter:8000/v1
       - OPENAI_API_KEY=not-needed
       - WEBUI_AUTH=false
-      - WEBUI_NAME=Erin's Writing Studio
+      - WEBUI_NAME=Fiction Writing Studio
     volumes:
-      - erin_webui_data:/app/backend/data
+      - fiction_webui_data:/app/backend/data
     depends_on:
-      - erin-adapter
+      - fiction-adapter
     restart: unless-stopped
 
   # ============================================================
-  # James's code development stack
+  # Code development stack
   # ============================================================
 
-  james-adapter:
+  code-adapter:
     build:
       context: .
       dockerfile: Dockerfile.adapter
-    container_name: governor-james-adapter
+    container_name: governor-code-adapter
     ports:
       - "8002:8000"
     environment:
       - BACKEND_TYPE=anthropic
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOVERNOR_CONTEXT_ID=james-current-project
+      - GOVERNOR_CONTEXT_ID=code-current-project
       - GOVERNOR_MODE=code
       - GOVERNOR_CONTEXTS_DIR=/contexts
     volumes:
       - contexts_data:/contexts
     restart: unless-stopped
 
-  james-webui:
+  code-webui:
     image: ghcr.io/open-webui/open-webui:main
-    container_name: governor-james-webui
+    container_name: governor-code-webui
     ports:
       - "3002:8080"
     environment:
-      - OPENAI_API_BASE_URL=http://james-adapter:8000/v1
+      - OPENAI_API_BASE_URL=http://code-adapter:8000/v1
       - OPENAI_API_KEY=not-needed
       - WEBUI_AUTH=false
-      - WEBUI_NAME=James's Dev Console
+      - WEBUI_NAME=Code Development Console
     volumes:
-      - james_webui_data:/app/backend/data
+      - code_webui_data:/app/backend/data
     depends_on:
-      - james-adapter
+      - code-adapter
     restart: unless-stopped
 
 volumes:
   contexts_data:
-  erin_webui_data:
-  james_webui_data:
+  fiction_webui_data:
+  code_webui_data:

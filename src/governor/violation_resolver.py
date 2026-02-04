@@ -1,5 +1,5 @@
 """
-Violation Resolver: Interactive violation resolution for Erin-ready chat.
+Violation Resolver: Interactive violation resolution for author-friendly chat.
 
 When a governor violation fires, don't just show a footer — present 3 explicit,
 bounded choices and block continuation until the user picks one.

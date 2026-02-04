@@ -30,7 +30,7 @@ cd agent_gov
 docker-compose up -d
 ```
 
-Open **http://localhost:3001** (Erin's Writing Studio) in your browser.
+Open **http://localhost:3001** (Fiction Writing Studio) in your browser.
 
 For local LLM instead of API:
 ```bash

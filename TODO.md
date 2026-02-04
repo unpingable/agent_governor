@@ -1651,10 +1651,10 @@ user/project. One Claude account, multiple isolated governor contexts.
 #### Phase W3: Docker Deployment ✅
 
 - [x] **Docker setup** — Multi-container deployment
-  - docker-compose.yml: per-user stacks (Erin fiction + James code)
+  - docker-compose.yml: per-mode stacks (fiction + code)
   - docker-compose.ollama.yml: Ollama override for local usage
-  - Erin: Open WebUI (port 3001) + adapter (port 8001, fiction mode)
-  - James: Open WebUI (port 3002) + adapter (port 8002, code mode)
+  - Fiction: Open WebUI (port 3001) + adapter (port 8001, fiction mode)
+  - Code: Open WebUI (port 3002) + adapter (port 8002, code mode)
   - Shared: API key via .env, governor contexts via volume mount
   - anthropic>=0.30.0 added to webui optional deps
 
@@ -1666,11 +1666,11 @@ user/project. One Claude account, multiple isolated governor contexts.
   - Puppet: voice constraints → anchors in all modes
   - One-shot gating per response (ConvergenceExecutor retry loop is deferred)
 
-- [ ] **Fiction mode for Erin** — Canon checking, character continuity, timeline validation
+- [ ] **Fiction mode** — Canon checking, character continuity, timeline validation
   - Governor violations surface naturally in chat responses
   - Canon violation → offer: fix instance, revise canon, proceed with inconsistency
 
-- [ ] **Code mode for James** — Architecture enforcement, decision tracking, proposal workflow
+- [ ] **Code mode** — Architecture enforcement, decision tracking, proposal workflow
   - Decision conflicts surface in chat
   - Receipt-based verification in conversation flow
 

@@ -7,16 +7,20 @@
 #
 # Requirements:
 #   - Claude Code CLI installed and authenticated on the host
-#   - Mount the host's claude config into the container
+#   - Set CLAUDE_VERSION to match your installed version (check ~/.local/share/claude/versions/)
+#
+# Example:
+#   CLAUDE_VERSION=2.1.31 docker-compose -f docker-compose.yml -f docker-compose.claude-code.yml up -d
 
 services:
   fiction-adapter:
     environment:
       - BACKEND_TYPE=claude-code
-      - CLAUDE_PATH=/usr/local/bin/claude
+      - CLAUDE_PATH=/opt/claude/claude
     volumes:
-      # Mount claude CLI from host
-      - ${HOME}/.local/bin/claude:/usr/local/bin/claude:ro
+      # Mount the actual claude binary (symlinks don't work with Docker mounts)
+      # Find your version with: ls ~/.local/share/claude/versions/
+      - ${HOME}/.local/share/claude/versions/${CLAUDE_VERSION:-2.1.31}:/opt/claude/claude:ro
       # Mount claude config/auth from host
       - ${HOME}/.claude:/root/.claude:ro
       - ${HOME}/.config/claude:/root/.config/claude:ro
@@ -24,10 +28,10 @@ services:
   code-adapter:
     environment:
       - BACKEND_TYPE=claude-code
-      - CLAUDE_PATH=/usr/local/bin/claude
+      - CLAUDE_PATH=/opt/claude/claude
     volumes:
-      # Mount claude CLI from host
-      - ${HOME}/.local/bin/claude:/usr/local/bin/claude:ro
+      # Mount the actual claude binary (symlinks don't work with Docker mounts)
+      - ${HOME}/.local/share/claude/versions/${CLAUDE_VERSION:-2.1.31}:/opt/claude/claude:ro
       # Mount claude config/auth from host
       - ${HOME}/.claude:/root/.claude:ro
       - ${HOME}/.config/claude:/root/.config/claude:ro

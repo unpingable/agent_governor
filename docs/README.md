@@ -56,6 +56,25 @@ For understanding the system internals:
 
 ## Quick Reference
 
+### Code Autopilot (Intent-Based Governance)
+
+Declare what you're doing, the system configures enforcement:
+
+```bash
+# Quick profile switch
+governor code --profile hotfix --scope "src/auth/**" --timebox 90 --because "fixing login"
+
+# Check current state
+governor code --status
+
+# Full commands
+governor intent show       # See resolved intent with provenance
+governor intent set ...    # Set session intent
+governor intent clear      # Clear session intent
+```
+
+**Profiles:** `greenfield` (warn only), `established` (default), `production` (strict), `hotfix` (narrow scope), `refactor` (soft anchors)
+
 ### The Three Moves
 
 When the governor blocks a violation, you have three choices:
@@ -74,10 +93,22 @@ When the governor blocks a violation, you have three choices:
 # Initialize
 governor init
 
+# Autopilot (quick profile switch)
+governor code --profile hotfix --scope "src/**" --timebox 60 --because "reason"
+governor code --status
+governor intent show
+governor intent set --profile <name> ...
+governor intent clear
+
 # Anchors (constraints)
-governor continuity anchor add --id <id> --type <type> --description <desc> --forbidden-patterns <patterns> --severity reject
+governor continuity anchor add --id <id> --type <type> --description <desc> --forbidden-patterns <patterns> --severity reject [--class invariant]
 governor continuity anchor list
 governor continuity anchor remove <id>
+
+# Overrides (for invariant anchors)
+governor override create --anchor <id> --scope "..." --expires 2h --because "reason"
+governor override list
+governor override revoke <id> --because "done"
 
 # Check content
 governor continuity check <text>

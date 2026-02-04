@@ -142,6 +142,57 @@ governor state --json --schema v2  # Canonical ViewModel
 | `governor profile status` | Show active profile |
 | `governor profile off` | Deactivate profile |
 
+### Intent (Code Autopilot)
+
+Control session intent — what you're trying to accomplish and how strictly to enforce it.
+
+| Command | Description |
+|---------|-------------|
+| `governor intent show` | Show resolved intent with provenance |
+| `governor intent show --json` | JSON output |
+| `governor intent set --profile <name>` | Set session intent |
+| `governor intent set --profile <name> --scope "src/**"` | With path scope |
+| `governor intent set --profile <name> --timebox 90` | With time limit (minutes) |
+| `governor intent set --profile <name> --because "reason"` | With reason |
+| `governor intent clear` | Clear session intent |
+
+**Profiles:**
+- `greenfield` — New project, experimenting (warn only)
+- `established` — Normal development (block violations)
+- `production` — High-stakes changes (strict, requires evidence)
+- `hotfix` — Urgent fix with narrow scope (block outside scope)
+- `refactor` — Restructuring code (warn, soft anchors)
+
+**Shortcut (from `governor code`):**
+```bash
+governor code --profile hotfix --scope "src/net/**" --timebox 90 --because "fixing auth bug"
+governor code --status  # Show current autopilot state
+```
+
+### Override (Scoped Exceptions)
+
+Create time-limited exceptions for invariant constraints.
+
+| Command | Description |
+|---------|-------------|
+| `governor override create` | Create scoped override |
+| `governor override list` | List active overrides |
+| `governor override list --json` | JSON output |
+| `governor override show <id>` | Show override details |
+| `governor override revoke <id> --because "reason"` | Revoke early |
+| `governor override cleanup` | Remove expired overrides |
+
+**Create override:**
+```bash
+governor override create \
+  --anchor no-sql-injection \
+  --scope "migrations/**" \
+  --expires 2h \
+  --because "Legacy migration script"
+```
+
+**Duration formats:** `30m` (minutes), `2h` (hours), `1d` (days), `2h30m` (combined)
+
 ### Continuity (Anchors)
 
 | Command | Description |
@@ -162,7 +213,17 @@ governor continuity anchor add \
   --description "What this anchor enforces" \
   --forbidden-patterns "pattern1" "pattern2" \
   --required-patterns "must-have" \
-  --severity <warn|correct|reject>
+  --severity <warn|correct|reject> \
+  --class <invariant|preference>  # Optional: constraint class
+```
+
+**Constraint classes:**
+- `invariant` — Cannot be disabled by profile (e.g., security rules)
+- `preference` — Profile can relax enforcement (default)
+
+**Upgrade anchor constraint class:**
+```bash
+governor continuity anchor upgrade <id> --class invariant
 ```
 
 ### Violation Resolution
@@ -370,6 +431,13 @@ governor continuity anchor add \
 | `governor mcp tools` | List MCP tools |
 | `governor mcp call <tool>` | Test MCP tool |
 
+**Intent/Override MCP tools:**
+- `governor_get_intent` — Get resolved intent with provenance
+- `governor_set_intent` — Set session intent (profile, scope, timebox)
+- `governor_suggest_profile` — Get profile suggestion for branch/files
+- `governor_override` — Create scoped override
+- `governor_override_list` — List active overrides
+
 ---
 
 ## Persona Commands (Human-Friendly)
@@ -535,6 +603,7 @@ fi
 | `GOVERNOR_DIR` | Path to .governor directory |
 | `GOVERNOR_MODE` | Default mode (fiction/code/nonfiction/ops) |
 | `GOVERNOR_PROFILE` | Default profile |
+| `GOV_PROFILE` | Autopilot profile override (greenfield/established/production/hotfix/refactor) |
 | `ANTHROPIC_API_KEY` | API key for Anthropic backend |
 | `OLLAMA_HOST` | Ollama server URL |
 | `CLAUDE_PATH` | Path to Claude Code CLI |

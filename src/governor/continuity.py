@@ -78,6 +78,22 @@ class CorrectionLevel(str, Enum):
     FAIL_CLOSED = "fail_closed"
 
 
+class ConstraintClass(str, Enum):
+    """
+    Classification of anchor constraints for Code Autopilot.
+
+    INVARIANT: Never disabled by profile. Profile can modulate friction
+               (prompts, retry budget) but cannot ignore the violation.
+               Override mechanism required for exceptions.
+
+    PREFERENCE: Profile controls enforcement level. Can be relaxed to
+                ignore/warn/block based on profile settings.
+    """
+
+    INVARIANT = "invariant"    # Cannot be disabled by profile
+    PREFERENCE = "preference"  # Profile can relax
+
+
 # =============================================================================
 # Dataclasses
 # =============================================================================
@@ -103,6 +119,7 @@ class Anchor:
     custom_check: Callable[[str, "Anchor"], tuple[bool, list[str]]] | None = None
     source: str = "user"
     established_at: int | None = None
+    constraint_class: ConstraintClass = ConstraintClass.PREFERENCE  # Code Autopilot
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -116,6 +133,7 @@ class Anchor:
             "severity": self.severity.value,
             "source": self.source,
             "established_at": self.established_at,
+            "constraint_class": self.constraint_class.value,
         }
 
     @classmethod
@@ -131,6 +149,7 @@ class Anchor:
             severity=Severity(data.get("severity", "correct")),
             source=data.get("source", "user"),
             established_at=data.get("established_at"),
+            constraint_class=ConstraintClass(data.get("constraint_class", "preference")),
         )
 
     def to_prompt_reminder(self) -> str:
@@ -1201,3 +1220,89 @@ def check_output(output: str, anchors: list[Anchor]) -> ContinuityReport:
     """One-shot convenience: check output against anchors."""
     checker = ContinuityChecker()
     return checker.check(output, anchors)
+
+
+# =============================================================================
+# Code Autopilot Integration
+# =============================================================================
+
+
+@dataclass
+class EnforcementAction:
+    """
+    Result of resolve_enforcement: what action to take for a violation.
+
+    Attributes:
+        action: The enforcement action (ignore/warn/block)
+        override_available: Whether an override can be created for this violation
+        reason: Why this action was chosen
+    """
+
+    action: str  # "ignore" | "warn" | "block"
+    override_available: bool
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "action": self.action,
+            "override_available": self.override_available,
+            "reason": self.reason,
+        }
+
+
+def resolve_enforcement(
+    violation: Violation,
+    anchor: Anchor,
+    profile_violation_default: str = "warn",
+    invariant_floor: str = "warn",
+) -> EnforcementAction:
+    """
+    Determine enforcement action based on constraint class and profile.
+
+    For Code Autopilot integration. Maps anchor constraint class to
+    enforcement action, respecting the hierarchy:
+    - Invariants: cannot be disabled by profile, only modulated
+    - Preferences: profile controls enforcement level
+
+    Args:
+        violation: The violation that occurred
+        anchor: The anchor that was violated
+        profile_violation_default: Profile's default violation handling
+        invariant_floor: Minimum enforcement level for invariants
+
+    Returns:
+        EnforcementAction with action, override_available, and reason
+    """
+    # Map string actions to severity for comparison
+    action_severity = {"ignore": 0, "warn": 1, "block": 2}
+
+    if anchor.constraint_class == ConstraintClass.INVARIANT:
+        # Invariant: profile cannot disable, only modulate friction
+        # Take the higher of floor and profile default
+        floor_sev = action_severity.get(invariant_floor, 1)
+        profile_sev = action_severity.get(profile_violation_default, 1)
+        effective_sev = max(floor_sev, profile_sev)
+
+        # Convert back to action string
+        for action, sev in action_severity.items():
+            if sev == effective_sev:
+                return EnforcementAction(
+                    action=action,
+                    override_available=True,  # Override available for invariants
+                    reason=f"Invariant constraint (floor={invariant_floor}, profile={profile_violation_default})",
+                )
+
+        # Default to warn if something goes wrong
+        return EnforcementAction(
+            action="warn",
+            override_available=True,
+            reason="Invariant constraint (default fallback)",
+        )
+
+    else:
+        # Preference: profile controls entirely
+        return EnforcementAction(
+            action=profile_violation_default,
+            override_available=False,  # Just change profile for preferences
+            reason=f"Preference constraint (profile={profile_violation_default})",
+        )

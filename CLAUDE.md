@@ -62,7 +62,8 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **W5 Writing Modules (Deferred 2, W5)**: Spec application from fic.md, nonfic.md, anc.md, tone.md, writingconstraints.md. writing_patterns.py (18 pattern banks), writing_governance.py (GovernanceVisibilityScorer, GovernanceLeakDetector, SmoothingSuppressor, ExitShapeChecker), writing_tone.py (ToneVector 6D, ToneEnvelope, 16 regime envelopes, ToneCollision, ToneStabilityController), writing_regime.py (AffectRegime, RegimeVector, RegimeHysteresis, RpScorer, TragedyConstraints), writing_nonfiction.py (NfClaimLevel, PromotionGate, VelocityController, EpScorer, ReScorer, HedgeCalibrator, AhScorer, NleadChecker), writing_intent.py (IntentClassifier, 12 ancillary regime scorers, RegimeCollision), writing_constraints.py (11 structural constraints + Section 14 causal narration resistance), writing_ticketing.py (14 prose + 11 code ticket types, recurrence, routing), writing_puppet.py (extended puppet constraints), writing_code.py (code-specific constraints), writing_router.py (writing-aware routing). 922 tests.
 **VS Code Extension (Deferred 3, Phase V4)**: Hover tooltips (GovernorHoverProvider — decision/claim/violation context on hover), code actions (GovernorCodeActionProvider — quick fixes, suppress comments, security actions), real-time checking (RealtimeChecker — debounced on-type, configurable delay). New commands: Toggle Realtime, Check Now. Keybindings: Ctrl+Shift+G (check file), Ctrl+Shift+Alt+G (toggle realtime). 36 new TypeScript tests.
 **Interactive Violation Resolution (Deferred 2, W4)**: Erin-ready chat. Blocking violations present 3 choices: fix (rewrite compliant), revise (update anchor), proceed (log exception). State machine (PENDING_RESOLUTION→FIX/REVISE/PROCEED→NORMAL). ViolationResolver with persistent pending state. Resolution command detection (1/2/3, maude fix/revise/proceed). Mode-specific choices (fiction: canon, code: decisions). Exception logging with scope/expiry. ChatBridge check_response_blocking(), ViolationPendingResponse. Adapter integration with resolution handling. CLI (governor lite {pending,fix,revise,proceed,exceptions}). Main CLI integration: `governor check --interactive`, `governor wrap --check-continuity --interactive`, `governor hook pre-commit --check-continuity --interactive`.
-**Total: 7144 tests**
+**Code Autopilot**: Intent-based governance system. Declare what you're doing (profile + scope + timebox), system configures enforcement. 5 profiles (greenfield/established/production/hotfix/refactor), intent resolution from 6 layers (CLI→env→session→config→heuristic→default), constraint classes (invariant vs preference), scoped time-limited overrides with receipts, branch heuristics. CLI (governor intent {show,set,clear}, governor override {create,list,show,revoke,cleanup}), MCP tools (get_intent, set_intent, suggest_profile, override, override_list).
+**Total: 7247 tests**
 
 ## Key Documents
 
@@ -272,6 +273,21 @@ governor profile off                  # Deactivate current profile
 governor profile create <name>        # Create custom profile
 governor profile delete <name>        # Delete custom profile
 
+# Code Autopilot (intent-based governance)
+governor intent show                  # Show resolved intent with provenance (--json)
+governor intent set --profile <name>  # Set session intent (greenfield|established|production|hotfix|refactor)
+governor intent set --profile <name> --scope "src/**" --timebox 90 --because "reason"  # Full options
+governor intent clear                 # Clear session intent
+governor code --profile <name>        # Shortcut: set profile from code command
+governor code --status                # Show autopilot status
+
+# Override Management (scoped exceptions for invariant anchors)
+governor override create --anchor <id> --scope "..." --expires 2h --because "reason"
+governor override list                # List active overrides (--json)
+governor override show <id>           # Show override details
+governor override revoke <id> --because "reason"  # Revoke early
+governor override cleanup             # Remove expired overrides
+
 # Quorum State Machine (multi-agent consensus)
 governor quorum status <proposal_id>  # Show quorum state for a proposal
 governor quorum vote <proposal_id>    # Cast a vote on a proposal
@@ -393,7 +409,8 @@ governor lite exceptions         # List logged exceptions (--format json)
 
 # Continuity Enforcement (Deferred 5: closed-loop generation control)
 governor continuity status              # Registry stats, anchor count by type
-governor continuity anchor add          # --id, --type, --description, --required, --forbidden, --severity
+governor continuity anchor add          # --id, --type, --description, --required, --forbidden, --severity, --class
+governor continuity anchor upgrade <id> --class <class>  # Upgrade anchor constraint class (invariant|preference)
 governor continuity anchor list         # All anchors with type and severity
 governor continuity anchor show <id>    # Full anchor details (JSON)
 governor continuity anchor remove <id>  # Remove anchor

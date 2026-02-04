@@ -360,6 +360,48 @@ from .profiles import (
     get_profile_manager,
 )
 
+# Code Autopilot (intent, profile config, overrides)
+from .intent import (
+    Intent,
+    IntentProvenance,
+    BRANCH_HEURISTICS,
+    DEFAULT_PROFILE,
+    get_intent,
+    set_intent,
+    clear_intent,
+    resolve_intent,
+    suggest_profile_for_branch,
+    format_provenance,
+)
+from .autopilot import (
+    ViolationDefault,
+    ApprovalPath,
+    EvidenceRequired,
+    AnchorStrictness,
+    ScopeEnforcement,
+    ChangeLimit,
+    ProfileConfig,
+    AUTOPILOT_PROFILES,
+    get_autopilot_profile,
+    list_autopilot_profiles,
+    apply_autopilot_profile,
+    load_autopilot_config,
+    resolve_violation_action,
+    check_change_limits,
+)
+from .overrides import (
+    OverrideReceipt,
+    OverrideManager,
+    parse_duration,
+    create_override_manager,
+    check_override,
+)
+from .continuity import (
+    ConstraintClass,
+    EnforcementAction,
+    resolve_enforcement,
+)
+
 # Claim diff (epistemic state change detection)
 from .claim_diff import (
     MutationType,
@@ -1052,6 +1094,39 @@ __all__ = [
     "BUILTIN_PROFILES",
     "apply_profile",
     "get_profile_manager",
+    # Code Autopilot (intent, profile config, overrides)
+    "Intent",
+    "IntentProvenance",
+    "BRANCH_HEURISTICS",
+    "DEFAULT_PROFILE",
+    "get_intent",
+    "set_intent",
+    "clear_intent",
+    "resolve_intent",
+    "suggest_profile_for_branch",
+    "format_provenance",
+    "ViolationDefault",
+    "ApprovalPath",
+    "EvidenceRequired",
+    "AnchorStrictness",
+    "ScopeEnforcement",
+    "ChangeLimit",
+    "ProfileConfig",
+    "AUTOPILOT_PROFILES",
+    "get_autopilot_profile",
+    "list_autopilot_profiles",
+    "apply_autopilot_profile",
+    "load_autopilot_config",
+    "resolve_violation_action",
+    "check_change_limits",
+    "OverrideReceipt",
+    "OverrideManager",
+    "parse_duration",
+    "create_override_manager",
+    "check_override",
+    "ConstraintClass",
+    "EnforcementAction",
+    "resolve_enforcement",
     # Claim diff (epistemic state change detection)
     "MutationType",
     "ViolationType",

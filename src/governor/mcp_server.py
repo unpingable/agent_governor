@@ -306,6 +306,108 @@ class GovernorMCPServer:
                 },
                 handler=self._handle_reverify,
             ),
+            # =========================================================================
+            # Code Autopilot: Intent and Override Management
+            # =========================================================================
+            "governor_get_intent": MCPTool(
+                name="governor_get_intent",
+                description="Get current resolved intent with provenance. Shows active profile, scope, timebox, and how it was determined.",
+                parameters={},
+                handler=self._handle_get_intent,
+            ),
+            "governor_set_intent": MCPTool(
+                name="governor_set_intent",
+                description="Set session intent (profile, scope, timebox). Controls Governor enforcement level for this session.",
+                parameters={
+                    "profile": {
+                        "type": "string",
+                        "enum": ["greenfield", "established", "production", "hotfix", "refactor"],
+                        "description": "Profile name",
+                        "required": True,
+                    },
+                    "scope": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Allowed path patterns (glob)",
+                        "required": False,
+                    },
+                    "deny": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Denied path patterns (glob)",
+                        "required": False,
+                    },
+                    "timebox_minutes": {
+                        "type": "number",
+                        "description": "Auto-expire after this many minutes",
+                        "required": False,
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Why this intent is being set",
+                        "required": False,
+                    },
+                },
+                handler=self._handle_set_intent,
+            ),
+            "governor_suggest_profile": MCPTool(
+                name="governor_suggest_profile",
+                description="Get profile suggestion based on context (branch name, files touched).",
+                parameters={
+                    "branch": {
+                        "type": "string",
+                        "description": "Current git branch name",
+                        "required": False,
+                    },
+                    "files_touched": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of files being modified",
+                        "required": False,
+                    },
+                },
+                handler=self._handle_suggest_profile,
+            ),
+            "governor_override": MCPTool(
+                name="governor_override",
+                description="Create scoped override for invariant constraint. Allows temporary exception with audit trail.",
+                parameters={
+                    "anchor_id": {
+                        "type": "string",
+                        "description": "ID of the anchor (invariant constraint) to override",
+                        "required": True,
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Why this override is needed",
+                        "required": True,
+                    },
+                    "scope": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Path patterns covered by this override",
+                        "required": True,
+                    },
+                    "expires_hours": {
+                        "type": "number",
+                        "description": "Hours until override expires",
+                        "required": True,
+                    },
+                },
+                handler=self._handle_override,
+            ),
+            "governor_override_list": MCPTool(
+                name="governor_override_list",
+                description="List active overrides.",
+                parameters={
+                    "include_expired": {
+                        "type": "boolean",
+                        "description": "Include expired/revoked overrides. Default: false",
+                        "required": False,
+                    },
+                },
+                handler=self._handle_override_list,
+            ),
         }
 
     def _ensure_initialized(self) -> tuple[bool, str]:
@@ -1014,6 +1116,186 @@ class GovernorMCPServer:
                 "old_confidence": freshness.confidence,
                 "new_confidence": claim.confidence if claim else freshness.confidence,
                 "hint": "Claim has been refreshed. Consider attaching new evidence.",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # =========================================================================
+    # Code Autopilot Handlers
+    # =========================================================================
+
+    def _handle_get_intent(self) -> dict[str, Any]:
+        """Handle get_intent tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .intent import resolve_intent
+
+            intent, provenance = resolve_intent(self.gov_dir)
+
+            return {
+                "success": True,
+                "intent": intent.to_dict(),
+                "status_string": intent.to_status_string(),
+                "provenance": [p.to_dict() for p in provenance],
+                "is_expired": intent.is_expired,
+                "remaining_minutes": intent.remaining_minutes,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_set_intent(
+        self,
+        profile: str,
+        scope: list[str] | None = None,
+        deny: list[str] | None = None,
+        timebox_minutes: float | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
+        """Handle set_intent tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .intent import Intent, set_intent
+            from .autopilot import get_autopilot_profile, apply_autopilot_profile
+
+            # Validate profile
+            profile_config = get_autopilot_profile(profile)
+            if not profile_config:
+                return {
+                    "success": False,
+                    "error": f"Unknown profile: {profile}",
+                    "valid_profiles": ["greenfield", "established", "production", "hotfix", "refactor"],
+                }
+
+            intent = Intent(
+                profile=profile,
+                scope=scope,
+                deny=deny,
+                timebox_minutes=int(timebox_minutes) if timebox_minutes else None,
+                reason=reason,
+                source="mcp",
+            )
+
+            set_intent(self.gov_dir, intent)
+            applied = apply_autopilot_profile(self.gov_dir, profile_config)
+
+            return {
+                "success": True,
+                "intent": intent.to_dict(),
+                "status_string": intent.to_status_string(),
+                "applied_settings": applied,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_suggest_profile(
+        self,
+        branch: str | None = None,
+        files_touched: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Handle suggest_profile tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .intent import suggest_profile_for_branch, get_current_branch
+            from .autopilot import get_autopilot_profile
+
+            # Get branch if not provided
+            if not branch:
+                branch = get_current_branch()
+
+            suggested, auto_apply, is_high_risk = suggest_profile_for_branch(branch)
+            profile_config = get_autopilot_profile(suggested)
+
+            return {
+                "success": True,
+                "branch": branch,
+                "suggested_profile": suggested,
+                "auto_apply": auto_apply,
+                "is_high_risk": is_high_risk,
+                "profile_description": profile_config.description if profile_config else "",
+                "hint": f"Use governor_set_intent with profile='{suggested}' to apply" if not auto_apply else "Profile can be auto-applied for this branch type",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_override(
+        self,
+        anchor_id: str,
+        reason: str,
+        scope: list[str],
+        expires_hours: float,
+    ) -> dict[str, Any]:
+        """Handle override tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .overrides import OverrideManager
+            from .continuity import create_registry, ConstraintClass
+            import os
+
+            # Check that anchor exists and is invariant
+            registry = create_registry(self.gov_dir)
+            anchor = registry.get(anchor_id)
+            if anchor is None:
+                return {"success": False, "error": f"Anchor not found: {anchor_id}"}
+
+            if anchor.constraint_class != ConstraintClass.INVARIANT:
+                return {
+                    "success": False,
+                    "error": f"Anchor '{anchor_id}' is not an invariant. Use profile settings for preferences.",
+                }
+
+            manager = OverrideManager(gov_dir=self.gov_dir)
+            operator = os.environ.get("USER", os.environ.get("USERNAME", "mcp"))
+
+            receipt = manager.create(
+                anchor_id=anchor_id,
+                reason=reason,
+                operator=operator,
+                scope=scope,
+                expires_hours=expires_hours,
+            )
+
+            return {
+                "success": True,
+                "override_id": receipt.id,
+                "anchor_id": anchor_id,
+                "scope": scope,
+                "expires_at": receipt.expires_at,
+                "remaining_minutes": receipt.remaining_minutes,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_override_list(
+        self,
+        include_expired: bool = False,
+    ) -> dict[str, Any]:
+        """Handle override_list tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .overrides import OverrideManager
+
+            manager = OverrideManager(gov_dir=self.gov_dir)
+            overrides = manager.list_all() if include_expired else manager.list_active()
+
+            return {
+                "success": True,
+                "count": len(overrides),
+                "overrides": [o.to_dict() for o in overrides],
             }
         except Exception as e:
             return {"success": False, "error": str(e)}

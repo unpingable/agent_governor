@@ -10034,6 +10034,12 @@ def continuity_anchor() -> None:
     default="correct",
     help="Violation severity",
 )
+@click.option(
+    "--class", "constraint_class",
+    type=click.Choice(["invariant", "preference"]),
+    default="preference",
+    help="Constraint class: invariant (cannot be disabled by profile) or preference (profile controls)",
+)
 @click.pass_context
 def continuity_anchor_add(
     ctx: click.Context,
@@ -10043,9 +10049,10 @@ def continuity_anchor_add(
     required: tuple[str, ...],
     forbidden: tuple[str, ...],
     severity: str,
+    constraint_class: str,
 ) -> None:
     """Add a continuity anchor."""
-    from .continuity import Anchor, AnchorType, Severity, create_registry
+    from .continuity import Anchor, AnchorType, Severity, ConstraintClass, create_registry
 
     gov_dir = ensure_initialized(ctx)
     registry = create_registry(gov_dir)
@@ -10057,12 +10064,13 @@ def continuity_anchor_add(
         required_patterns=list(required),
         forbidden_patterns=list(forbidden),
         severity=Severity(severity),
+        constraint_class=ConstraintClass(constraint_class),
     )
     registry.register(anchor)
 
     path = gov_dir / "continuity" / "anchors.json"
     registry.save(path)
-    click.echo(f"Registered anchor: {anchor_id} ({anchor_type}, {severity})")
+    click.echo(f"Registered anchor: {anchor_id} ({anchor_type}, {severity}, {constraint_class})")
 
 
 @continuity_anchor.command("list")
@@ -10080,7 +10088,8 @@ def continuity_anchor_list(ctx: click.Context) -> None:
         return
 
     for a in anchors:
-        click.echo(f"  {a.id} [{a.anchor_type.value}] ({a.severity.value}): {a.description}")
+        class_marker = "[I]" if a.constraint_class.value == "invariant" else "[P]"
+        click.echo(f"  {a.id} {class_marker} [{a.anchor_type.value}] ({a.severity.value}): {a.description}")
 
 
 @continuity_anchor.command("show")
@@ -10121,6 +10130,37 @@ def continuity_anchor_remove(ctx: click.Context, anchor_id: str) -> None:
     path = gov_dir / "continuity" / "anchors.json"
     registry.save(path)
     click.echo(f"Removed anchor: {anchor_id}")
+
+
+@continuity_anchor.command("upgrade")
+@click.argument("anchor_id")
+@click.option(
+    "--class", "constraint_class",
+    type=click.Choice(["invariant", "preference"]),
+    required=True,
+    help="New constraint class",
+)
+@click.pass_context
+def continuity_anchor_upgrade(ctx: click.Context, anchor_id: str, constraint_class: str) -> None:
+    """Upgrade anchor constraint class."""
+    from .continuity import ConstraintClass, create_registry
+
+    gov_dir = ensure_initialized(ctx)
+    registry = create_registry(gov_dir)
+
+    anchor = registry.get(anchor_id)
+    if anchor is None:
+        click.echo(f"Anchor not found: {anchor_id}", err=True)
+        ctx.exit(1)
+        return
+
+    old_class = anchor.constraint_class.value
+    anchor.constraint_class = ConstraintClass(constraint_class)
+    registry.register(anchor)  # Re-register to update
+
+    path = gov_dir / "continuity" / "anchors.json"
+    registry.save(path)
+    click.echo(f"Upgraded anchor {anchor_id}: {old_class} -> {constraint_class}")
 
 
 @continuity_group.command("check")
@@ -11043,6 +11083,281 @@ def _handle_interactive_check_resolution(
             click.echo(f"[Governor] {result_obj.message}")
             click.echo(f"  Exception ID: {result_obj.exception_id}")
             return
+
+
+# =============================================================================
+# Friendly CLI Commands (layered by persona)
+# =============================================================================
+# Intent Management (Code Autopilot)
+# =============================================================================
+
+
+@cli.group("intent")
+def intent_group() -> None:
+    """Manage session intent (Code Autopilot).
+
+    Intent controls how Governor behaves for this session.
+    Set a profile, scope, timebox, and reason.
+
+    \b
+    Examples:
+      governor intent show                  # Show resolved intent
+      governor intent set --profile hotfix --scope "src/**" --timebox 90
+      governor intent clear                 # Clear session intent
+    """
+    pass
+
+
+@intent_group.command("show")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def intent_show(ctx: click.Context, as_json: bool) -> None:
+    """Show resolved intent with provenance."""
+    from .intent import resolve_intent, format_provenance
+
+    gov_dir = ensure_initialized(ctx)
+    intent, provenance = resolve_intent(gov_dir)
+
+    if as_json:
+        output = {
+            "intent": intent.to_dict(),
+            "provenance": [p.to_dict() for p in provenance],
+        }
+        click.echo(json.dumps(output, indent=2))
+    else:
+        click.echo()
+        click.echo(f"  Intent: {intent.to_status_string()}")
+        if intent.reason:
+            click.echo(f"  Reason: {intent.reason}")
+        click.echo(f"  Source: {intent.source}")
+        click.echo()
+        click.echo(format_provenance(provenance))
+        click.echo()
+
+
+@intent_group.command("set")
+@click.option("--profile", "-p", required=True, help="Profile name (greenfield/established/production/hotfix/refactor)")
+@click.option("--scope", "-s", multiple=True, help="Allowed path patterns (repeatable)")
+@click.option("--deny", "-d", multiple=True, help="Denied path patterns (repeatable)")
+@click.option("--timebox", "-t", type=int, help="Timebox in minutes")
+@click.option("--because", "reason", help="Reason for this intent")
+@click.pass_context
+def intent_set(
+    ctx: click.Context,
+    profile: str,
+    scope: tuple[str, ...],
+    deny: tuple[str, ...],
+    timebox: int | None,
+    reason: str | None,
+) -> None:
+    """Set session intent."""
+    from .intent import Intent, set_intent
+    from .autopilot import get_autopilot_profile, apply_autopilot_profile
+
+    gov_dir = ensure_initialized(ctx)
+
+    # Validate profile exists
+    profile_config = get_autopilot_profile(profile)
+    if not profile_config:
+        valid_profiles = ["greenfield", "established", "production", "hotfix", "refactor"]
+        click.echo(f"Unknown profile: {profile}", err=True)
+        click.echo(f"Valid profiles: {', '.join(valid_profiles)}", err=True)
+        ctx.exit(1)
+        return
+
+    intent = Intent(
+        profile=profile,
+        scope=list(scope) if scope else None,
+        deny=list(deny) if deny else None,
+        timebox_minutes=timebox,
+        reason=reason,
+        source="cli",
+    )
+
+    set_intent(gov_dir, intent)
+
+    # Apply the autopilot profile settings
+    applied = apply_autopilot_profile(gov_dir, profile_config)
+
+    click.echo()
+    click.echo(f"  Intent set: {intent.to_status_string()}")
+    if reason:
+        click.echo(f"  Reason: {reason}")
+    click.echo()
+    click.echo("  Applied settings:")
+    for key, value in applied.items():
+        click.echo(f"    {key}: {value}")
+    click.echo()
+
+
+@intent_group.command("clear")
+@click.pass_context
+def intent_clear(ctx: click.Context) -> None:
+    """Clear session intent."""
+    from .intent import clear_intent
+
+    gov_dir = ensure_initialized(ctx)
+    cleared = clear_intent(gov_dir)
+
+    if cleared:
+        click.echo("Session intent cleared.")
+    else:
+        click.echo("No session intent was set.")
+
+
+# =============================================================================
+# Override Management (Code Autopilot)
+# =============================================================================
+
+
+@cli.group("override")
+def override_group() -> None:
+    """Manage constraint overrides (Code Autopilot).
+
+    Create scoped, expiring exceptions to invariant constraints.
+    Overrides allow emergency bypasses while maintaining audit trail.
+
+    \b
+    Examples:
+      governor override create --anchor no-sql --because "legacy" --scope "migrations/**" --expires 2h
+      governor override list
+      governor override revoke <id> --because "fixed"
+    """
+    pass
+
+
+@override_group.command("create")
+@click.option("--anchor", "-a", required=True, help="Anchor ID to override")
+@click.option("--because", "-b", required=True, help="Reason for override")
+@click.option("--scope", "-s", multiple=True, required=True, help="Path patterns covered (repeatable)")
+@click.option("--expires", "-e", required=True, help="Duration like '2h', '90m', '1d'")
+@click.pass_context
+def override_create(
+    ctx: click.Context,
+    anchor: str,
+    because: str,
+    scope: tuple[str, ...],
+    expires: str,
+) -> None:
+    """Create scoped override for invariant constraint."""
+    from .overrides import OverrideManager
+    from .continuity import create_registry, ConstraintClass
+    import os
+
+    gov_dir = ensure_initialized(ctx)
+
+    # Check that anchor exists and is invariant
+    registry = create_registry(gov_dir)
+    anchor_obj = registry.get(anchor)
+    if anchor_obj is None:
+        click.echo(f"Anchor not found: {anchor}", err=True)
+        ctx.exit(1)
+        return
+
+    if anchor_obj.constraint_class != ConstraintClass.INVARIANT:
+        click.echo(f"Anchor '{anchor}' is not an invariant. Use profile settings for preferences.", err=True)
+        ctx.exit(1)
+        return
+
+    manager = OverrideManager(gov_dir=gov_dir)
+    operator = os.environ.get("USER", os.environ.get("USERNAME", "unknown"))
+
+    receipt = manager.create(
+        anchor_id=anchor,
+        reason=because,
+        operator=operator,
+        scope=list(scope),
+        expires_duration=expires,
+    )
+
+    click.echo()
+    click.echo(f"  Override created: {receipt.id}")
+    click.echo(f"  Anchor: {anchor}")
+    click.echo(f"  Scope: {', '.join(scope)}")
+    click.echo(f"  Expires: {receipt.remaining_minutes} minutes")
+    click.echo(f"  Reason: {because}")
+    click.echo()
+
+
+@override_group.command("list")
+@click.option("--all", "show_all", is_flag=True, help="Include expired/revoked overrides")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def override_list(ctx: click.Context, show_all: bool, as_json: bool) -> None:
+    """List active overrides."""
+    from .overrides import OverrideManager
+
+    gov_dir = ensure_initialized(ctx)
+    manager = OverrideManager(gov_dir=gov_dir)
+
+    overrides = manager.list_all() if show_all else manager.list_active()
+
+    if as_json:
+        click.echo(json.dumps([o.to_dict() for o in overrides], indent=2))
+        return
+
+    if not overrides:
+        click.echo("No active overrides.")
+        return
+
+    click.echo()
+    click.echo("  Active Overrides:")
+    for o in overrides:
+        click.echo(f"    {o.to_status_string()}")
+        click.echo(f"      Reason: {o.reason}")
+    click.echo()
+
+
+@override_group.command("show")
+@click.argument("override_id")
+@click.pass_context
+def override_show(ctx: click.Context, override_id: str) -> None:
+    """Show override details."""
+    from .overrides import OverrideManager
+
+    gov_dir = ensure_initialized(ctx)
+    manager = OverrideManager(gov_dir=gov_dir)
+
+    override = manager.get(override_id)
+    if override is None:
+        click.echo(f"Override not found: {override_id}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(json.dumps(override.to_dict(), indent=2))
+
+
+@override_group.command("revoke")
+@click.argument("override_id")
+@click.option("--because", "-b", required=True, help="Reason for revocation")
+@click.pass_context
+def override_revoke(ctx: click.Context, override_id: str, because: str) -> None:
+    """Revoke an override early."""
+    from .overrides import OverrideManager
+
+    gov_dir = ensure_initialized(ctx)
+    manager = OverrideManager(gov_dir=gov_dir)
+
+    success = manager.revoke(override_id, because)
+    if not success:
+        click.echo(f"Override not found: {override_id}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Override revoked: {override_id}")
+
+
+@override_group.command("cleanup")
+@click.pass_context
+def override_cleanup(ctx: click.Context) -> None:
+    """Remove expired override files."""
+    from .overrides import OverrideManager
+
+    gov_dir = ensure_initialized(ctx)
+    manager = OverrideManager(gov_dir=gov_dir)
+
+    count = manager.cleanup_expired()
+    click.echo(f"Cleaned up {count} expired override(s).")
 
 
 # =============================================================================

@@ -509,14 +509,90 @@ def fiction_corrections(ctx: click.Context, show_all: bool) -> None:
 # Code Commands
 # =============================================================================
 
-@click.group()
+@click.group(invoke_without_command=True)
+@click.option("--profile", "-p", help="Set autopilot profile (greenfield/established/production/hotfix/refactor)")
+@click.option("--scope", "-s", multiple=True, help="Set allowed path patterns")
+@click.option("--timebox", "-t", type=int, help="Set timebox in minutes")
+@click.option("--because", "reason", help="Reason for this intent")
+@click.option("--status", "show_status", is_flag=True, help="Show autopilot status")
 @click.pass_context
-def code(ctx: click.Context) -> None:
-    """Code development commands.
+def code(
+    ctx: click.Context,
+    profile: str | None,
+    scope: tuple[str, ...],
+    timebox: int | None,
+    reason: str | None,
+    show_status: bool,
+) -> None:
+    """Code development commands (with Autopilot support).
 
     Manage decisions, constraints, and verification.
+
+    \b
+    Autopilot shortcuts:
+      governor code --profile hotfix --scope "src/**" --timebox 90
+      governor code --status
     """
-    pass
+    from . import cli as main_cli
+
+    # If profile specified, set intent and apply autopilot settings
+    if profile:
+        from .intent import Intent, set_intent
+        from .autopilot import get_autopilot_profile, apply_autopilot_profile
+
+        gov_dir = main_cli.ensure_initialized(ctx)
+
+        profile_config = get_autopilot_profile(profile)
+        if not profile_config:
+            valid_profiles = ["greenfield", "established", "production", "hotfix", "refactor"]
+            click.echo(f"Unknown profile: {profile}", err=True)
+            click.echo(f"Valid profiles: {', '.join(valid_profiles)}", err=True)
+            ctx.exit(1)
+            return
+
+        intent = Intent(
+            profile=profile,
+            scope=list(scope) if scope else None,
+            timebox_minutes=timebox,
+            reason=reason,
+            source="cli",
+        )
+
+        set_intent(gov_dir, intent)
+        applied = apply_autopilot_profile(gov_dir, profile_config)
+
+        click.echo()
+        click.echo(f"  Autopilot: {intent.to_status_string()}")
+        if reason:
+            click.echo(f"  Reason: {reason}")
+        click.echo()
+        return
+
+    # If --status flag, show autopilot status
+    if show_status:
+        from .intent import resolve_intent
+
+        gov_dir = main_cli.get_governor_dir(ctx)
+        if not gov_dir.exists():
+            click.echo("Governor not initialized. Run 'governor init' first.")
+            return
+
+        intent, provenance = resolve_intent(gov_dir)
+        click.echo()
+        click.echo(f"  Autopilot: {intent.to_status_string()}")
+        click.echo(f"  Source: {intent.source}")
+        if intent.reason:
+            click.echo(f"  Reason: {intent.reason}")
+        if intent.scope:
+            click.echo(f"  Scope: {', '.join(intent.scope)}")
+        if intent.deny:
+            click.echo(f"  Deny: {', '.join(intent.deny)}")
+        click.echo()
+        return
+
+    # If no subcommand and no options, show help
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
 
 
 @code.command("init")
@@ -547,11 +623,16 @@ def code_init(ctx: click.Context) -> None:
 @code.command("status")
 @click.pass_context
 def code_status(ctx: click.Context) -> None:
-    """Show current project state."""
+    """Show current project state (including Autopilot)."""
     from . import cli as main_cli
     from .ledgers import DecisionLedger
+    from .intent import resolve_intent
+    from .overrides import OverrideManager
 
     gov_dir = main_cli.ensure_initialized(ctx)
+
+    # Load intent
+    intent, _ = resolve_intent(gov_dir)
 
     # Load decisions
     decision_ledger = DecisionLedger(gov_dir)
@@ -560,9 +641,20 @@ def code_status(ctx: click.Context) -> None:
     # Load constraints
     registry = create_registry(gov_dir)
     constraints = [a for a in registry.all() if a.anchor_type == AnchorType.PROHIBITION]
+    invariants = [a for a in registry.all() if a.constraint_class.value == "invariant"]
+
+    # Load overrides
+    override_manager = OverrideManager(gov_dir=gov_dir)
+    active_overrides = override_manager.list_active()
 
     click.echo()
     click.echo("  Project Status")
+    click.echo()
+
+    # Autopilot
+    click.echo(f"  Autopilot: {intent.to_status_string()}")
+    if intent.reason:
+        click.echo(f"     Reason: {intent.reason}")
     click.echo()
 
     # Decisions
@@ -576,16 +668,26 @@ def code_status(ctx: click.Context) -> None:
         click.echo("     No decisions yet. Run 'governor code decision add \"<decision>\"'")
     click.echo()
 
-    # Constraints
-    click.echo(f"  Constraints ({len(constraints)})")
+    # Constraints with invariant count
+    click.echo(f"  Constraints ({len(constraints)}, {len(invariants)} invariants)")
     if constraints:
         for con in constraints[:5]:
-            click.echo(f"     * {con.description}")
+            class_marker = "[I]" if con.constraint_class.value == "invariant" else "[P]"
+            click.echo(f"     {class_marker} {con.description}")
         if len(constraints) > 5:
             click.echo(f"     ... and {len(constraints) - 5} more")
     else:
         click.echo("     No constraints yet. Run 'governor code constraint add \"<constraint>\"'")
     click.echo()
+
+    # Active overrides
+    if active_overrides:
+        click.echo(f"  Active Overrides ({len(active_overrides)})")
+        for override in active_overrides[:3]:
+            click.echo(f"     * {override.to_status_string()}")
+        if len(active_overrides) > 3:
+            click.echo(f"     ... and {len(active_overrides) - 3} more")
+        click.echo()
 
 
 # Decision subgroup

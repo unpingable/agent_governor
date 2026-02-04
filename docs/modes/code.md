@@ -56,6 +56,18 @@ governor continuity anchor add \
   --severity reject
 ```
 
+For security rules that should **never** be bypassed by profile settings, mark them as invariant:
+
+```bash
+governor continuity anchor add \
+  --id "no-eval" \
+  --type prohibition \
+  --description "Never use eval() - security risk" \
+  --forbidden-patterns "eval(" \
+  --severity reject \
+  --class invariant
+```
+
 ### 3. Start Coding
 
 Use the WebUI, Claude Code with hooks, or the CLI wrapper. When the AI tries to use Vue or sneak in `any` types, you'll see:
@@ -78,6 +90,128 @@ Reply with 1, 2, 3 or: fix | revise | proceed
 - Type **3** or **proceed** → Waiver logged, continues as-is (intentional exception)
 
 That's it. Your codebase stays consistent.
+
+---
+
+## Code Autopilot (Profiles & Intent)
+
+Instead of configuring enforcement settings manually, declare *what you're doing* and let the system configure itself.
+
+### Setting Your Intent
+
+```bash
+# Quick: set profile for your session
+governor code --profile hotfix --scope "src/auth/**" --timebox 90 --because "fixing login bug"
+
+# Or use the full command
+governor intent set --profile hotfix --scope "src/auth/**" --timebox 90 --because "fixing login bug"
+
+# Check current state
+governor code --status
+governor intent show
+```
+
+### Profiles
+
+| Profile | Violations | Scope | Use Case |
+|---------|------------|-------|----------|
+| `greenfield` | Warn only | Unlimited | New projects, experiments |
+| `established` | Block | Unlimited | Normal development (default) |
+| `production` | Block + evidence | Limited (20 files) | Critical paths, releases |
+| `hotfix` | Block outside, warn inside | Narrow | Urgent targeted fixes |
+| `refactor` | Warn | Unlimited | Restructuring, cleanup |
+
+### Profile Behavior
+
+**greenfield** — Maximum freedom for exploration
+- Violations produce warnings, not blocks
+- No evidence requirements
+- No file count limits
+- Soft anchor enforcement (preferences only)
+
+**established** — Balanced development (default)
+- Violations block until resolved
+- Tests required before commit
+- Scope warnings but not enforced
+
+**production** — High-stakes changes
+- All violations block
+- Tests + static analysis + review required
+- Max 20 files per change
+- Hard anchor enforcement
+- Human approval required for commits
+
+**hotfix** — Urgent targeted fixes
+- Violations BLOCK outside scope, WARN inside scope
+- Narrowly scoped (must specify `--scope`)
+- Timebox enforced (expires after duration)
+- Zero exploration budget
+
+**refactor** — Restructuring code
+- Violations warn but don't block
+- Soft anchor enforcement
+- Higher exploration budget
+
+### Branch Heuristics
+
+The system can suggest profiles based on your git branch:
+
+| Branch Pattern | Suggested Profile | Auto-Apply |
+|----------------|-------------------|------------|
+| `main`, `master` | production | No (too risky) |
+| `hotfix/*`, `fix/*` | hotfix | No (too risky) |
+| `feature/*` | established | Yes |
+| `wip/*`, `experiment/*` | greenfield | Yes |
+| `refactor/*` | refactor | Yes |
+
+```bash
+# See what's suggested for current branch
+governor intent show
+```
+
+### Overrides for Invariant Constraints
+
+Some anchors are marked as **invariant** (can't be disabled by profile). For these, you can create time-limited, scoped overrides:
+
+```bash
+# Check which anchors are invariant
+governor continuity anchor list
+
+# Create a 2-hour override for migrations
+governor override create \
+  --anchor no-sql-injection \
+  --scope "migrations/**" \
+  --expires 2h \
+  --because "Legacy data migration requires raw SQL"
+
+# List active overrides
+governor override list
+
+# Revoke early when done
+governor override revoke abc123 --because "Migration complete"
+```
+
+Overrides are:
+- **Scoped** — Only apply to specific paths
+- **Expiring** — Auto-expire after duration
+- **Receipted** — Logged with reason, operator, timestamp
+- **Revocable** — Can be ended early
+
+### Intent Resolution
+
+Intent is resolved from multiple layers (first match wins):
+
+1. **CLI override** (`--profile hotfix`)
+2. **Environment variable** (`GOV_PROFILE=hotfix`)
+3. **Session state** (`.git/governor/intent.json`)
+4. **Repo config** (`.governor.toml` `[defaults]`)
+5. **Branch heuristic** (suggestion only for high-risk)
+6. **System default** (`established`)
+
+```bash
+# See full provenance chain
+governor intent show --json
+```
 
 ---
 
@@ -442,8 +576,23 @@ All three are valid. The point is that *you* decide, not the AI.
 ## CLI Reference
 
 ```bash
+# Autopilot (profiles and intent)
+governor code --profile <name> --scope "..." --timebox 90 --because "reason"
+governor code --status              # Show current autopilot state
+governor intent show                # Resolved intent with provenance
+governor intent set --profile <name> [--scope ...] [--timebox N] [--because "..."]
+governor intent clear               # Clear session intent
+
+# Override management (for invariant anchors)
+governor override create --anchor <id> --scope "..." --expires 2h --because "reason"
+governor override list              # List active overrides
+governor override show <id>         # Override details
+governor override revoke <id> --because "reason"
+governor override cleanup           # Remove expired
+
 # Anchor management
-governor continuity anchor add --id <id> --type <type> --description <desc> [--forbidden-patterns ...] [--required-patterns ...] [--severity warn|correct|reject]
+governor continuity anchor add --id <id> --type <type> --description <desc> [--forbidden-patterns ...] [--required-patterns ...] [--severity warn|correct|reject] [--class invariant|preference]
+governor continuity anchor upgrade <id> --class invariant  # Upgrade constraint class
 governor continuity anchor list
 governor continuity anchor show <id>
 governor continuity anchor remove <id>

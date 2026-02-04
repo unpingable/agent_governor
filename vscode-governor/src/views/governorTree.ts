@@ -155,19 +155,20 @@ export class GovernorTreeProvider
     }
 
     const nodes: TreeNodeData[] = [];
-    nodes.push(this.buildSessionNode(this.state));
-    nodes.push(this.buildRegimeNode(this.state));
-    nodes.push(this.buildDecisionsNode(this.state));
-    nodes.push(this.buildClaimsNode(this.state));
 
-    const evidenceNode = this.buildEvidenceNode(this.state);
-    if (evidenceNode) {
-      nodes.push(evidenceNode);
-    }
-
+    // Per UX spec: Problems first (expanded if any), then Decisions, then Constraints
     const violationsNode = this.buildViolationsNode(this.state);
     if (violationsNode) {
       nodes.push(violationsNode);
+    }
+
+    nodes.push(this.buildDecisionsNode(this.state));
+    nodes.push(this.buildClaimsNode(this.state));
+
+    // Collapsed by default: Recent, Checks, Advanced
+    const evidenceNode = this.buildEvidenceNode(this.state);
+    if (evidenceNode) {
+      nodes.push(evidenceNode);
     }
 
     const executionNode = this.buildExecutionNode(this.state);
@@ -175,6 +176,9 @@ export class GovernorTreeProvider
       nodes.push(executionNode);
     }
 
+    // Advanced section (collapsed)
+    nodes.push(this.buildSessionNode(this.state));
+    nodes.push(this.buildRegimeNode(this.state));
     nodes.push(this.buildStabilityNode(this.state));
 
     return nodes;
@@ -282,20 +286,38 @@ export class GovernorTreeProvider
   }
 
   buildDecisionsNode(s: GovernorViewModelV2): TreeNodeData {
-    const children: TreeNodeData[] = s.decisions.map((d: DecisionView) => ({
-      kind: "decision",
-      label: `[${d.status.toUpperCase()}] ${d.id} — ${d.type}`,
-      description: d.rationale ? d.rationale.slice(0, 40) : undefined,
-      collapsible: false,
-      icon: DECISION_ICONS[d.status] ?? "law",
-      detail: JSON.stringify(d, null, 2),
-    }));
+    const children: TreeNodeData[] = s.decisions.map((d: DecisionView) => {
+      // Human-friendly: show topic: choice, not ID
+      const topic = (d.raw?.topic as string) ?? d.type;
+      const choice = (d.raw?.choice as string) ?? "";
+      const displayLabel = choice ? `${topic}: ${choice}` : topic;
+
+      return {
+        kind: "decision",
+        label: displayLabel,
+        description: d.rationale ? `"${d.rationale.slice(0, 40)}"` : undefined,
+        collapsible: false,
+        icon: "pin",  // More friendly than "law"
+        detail: JSON.stringify(d, null, 2),
+      };
+    });
+
+    // Human-friendly empty state
+    if (children.length === 0) {
+      children.push({
+        kind: "decision-empty",
+        label: "No decisions yet",
+        description: "Add decisions to catch contradictions",
+        collapsible: false,
+        icon: "info",
+      });
+    }
 
     return {
       kind: "decisions",
       label: `Decisions (${s.decisions.length})`,
       collapsible: true,
-      icon: "law",
+      icon: "pin",
       children,
     };
   }
@@ -343,24 +365,35 @@ export class GovernorTreeProvider
   }
 
   buildViolationsNode(s: GovernorViewModelV2): TreeNodeData | null {
-    if (s.violations.length === 0) {
-      return null;
-    }
-
+    // Rename to "Problems" for user-friendliness
     const children: TreeNodeData[] = s.violations.map((v: ViolationView) => ({
       kind: "violation",
-      label: `[${v.severity.toUpperCase()}] ${v.rule_breached}`,
+      // Human-friendly: "You said X" framing
+      label: v.rule_breached,
       description: v.detail ? v.detail.slice(0, 40) : undefined,
       collapsible: false,
       icon: VIOLATION_SEVERITY_ICONS[v.severity] ?? "warning",
       detail: JSON.stringify(v, null, 2),
     }));
 
+    // Always show Problems section (even if empty)
+    if (children.length === 0) {
+      return {
+        kind: "problems",
+        label: "Problems (0)",
+        description: "All good",
+        collapsible: false,
+        icon: "check",
+        children: [],
+      };
+    }
+
     return {
-      kind: "violations",
-      label: `Violations (${s.violations.length})`,
+      kind: "problems",
+      label: `Problems (${s.violations.length})`,
+      // Expand if there are problems
       collapsible: true,
-      icon: "alert",
+      icon: "warning",
       children,
     };
   }

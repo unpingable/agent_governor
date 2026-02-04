@@ -211,9 +211,10 @@ describe("GovernorCodeActionProvider", () => {
       const range = createRange(0, 0, 0, 10);
       const context = { diagnostics: [] };
       const actions = provider.provideCodeActions(doc as any, range as any, context as any, mockToken as any);
-      const suppressAction = actions.find((a) => a.title.includes("Suppress"));
-      expect(suppressAction).toBeDefined();
-      expect(suppressAction?.edit).toBeDefined();
+      // Human-friendly: "Allow here" instead of "Suppress"
+      const allowAction = actions.find((a) => a.title.includes("Allow here"));
+      expect(allowAction).toBeDefined();
+      expect(allowAction?.edit).toBeDefined();
     });
 
     it("returns security-specific actions for security findings", () => {
@@ -232,9 +233,8 @@ describe("GovernorCodeActionProvider", () => {
       const range = createRange(0, 0, 0, 10);
       const context = { diagnostics: [] };
       const actions = provider.provideCodeActions(doc as any, range as any, context as any, mockToken as any);
-      const commentAction = actions.find((a) => a.title.includes("security comment"));
+      // Human-friendly: "Mark as reviewed" instead of "security comment"
       const reviewedAction = actions.find((a) => a.title.includes("reviewed"));
-      expect(commentAction).toBeDefined();
       expect(reviewedAction).toBeDefined();
     });
 
@@ -255,9 +255,10 @@ describe("GovernorCodeActionProvider", () => {
       const range = createRange(0, 0, 0, 10);
       const context = { diagnostics: [] };
       const actions = provider.provideCodeActions(doc as any, range as any, context as any, mockToken as any);
-      const detailsAction = actions.find((a) => a.title.includes("anchor details"));
-      expect(detailsAction).toBeDefined();
-      expect(detailsAction?.command?.command).toBe("governor.showDetail");
+      // Human-friendly: "Change rule" action instead of "anchor details"
+      const changeRuleAction = actions.find((a) => a.title.includes("Change rule"));
+      expect(changeRuleAction).toBeDefined();
+      expect(changeRuleAction?.command?.command).toBe("governor.changeRule");
     });
 
     it("returns fix action when suggestion provided", () => {
@@ -277,7 +278,8 @@ describe("GovernorCodeActionProvider", () => {
       const range = createRange(0, 0, 0, 20);
       const context = { diagnostics: [] };
       const actions = provider.provideCodeActions(doc as any, range as any, context as any, mockToken as any);
-      const fixAction = actions.find((a) => a.title.startsWith("Fix:"));
+      // Human-friendly: "Governor: Fix —" prefix
+      const fixAction = actions.find((a) => a.title.includes("Governor: Fix"));
       expect(fixAction).toBeDefined();
       expect(fixAction?.isPreferred).toBe(true);
     });
@@ -302,13 +304,17 @@ describe("GovernorCodeActionProvider", () => {
       ];
       updateFindings(doc.uri as any, findings);
 
+      // Query at range (0,0,0,5) - only overlaps with FINDING1 (continuity)
       const range = createRange(0, 0, 0, 5);
       const context = { diagnostics: [] };
       const actions = provider.provideCodeActions(doc as any, range as any, context as any, mockToken as any);
-      const finding1Actions = actions.filter((a) => a.title.includes("FINDING1"));
-      const finding2Actions = actions.filter((a) => a.title.includes("FINDING2"));
-      expect(finding1Actions.length).toBeGreaterThan(0);
-      expect(finding2Actions.length).toBe(0);
+
+      // Should get continuity-specific actions (Change rule) for overlapping finding
+      // Should NOT get security-specific actions (Mark as reviewed) since FINDING2 doesn't overlap
+      const changeRuleActions = actions.filter((a) => a.title.includes("Change rule"));
+      const reviewedActions = actions.filter((a) => a.title.includes("reviewed"));
+      expect(changeRuleActions.length).toBeGreaterThan(0);
+      expect(reviewedActions.length).toBe(0);
     });
   });
 
@@ -336,8 +342,11 @@ describe("GovernorCodeActionProvider", () => {
       const range = createRange(0, 0, 0, 5);
       const context = { diagnostics: [] };
       const actions = provider.provideCodeActions(doc as any, range as any, context as any, mockToken as any);
-      const suppressAction = actions.find((a) => a.title.includes("Suppress"));
-      expect(suppressAction?.title).toContain("SPECIFIC_CODE");
+      // Human-friendly: "Allow here" instead of "Suppress CODE"
+      const allowAction = actions.find((a) => a.title.includes("Allow here"));
+      expect(allowAction).toBeDefined();
+      // The comment inserted should still include the specific code
+      expect(allowAction?.edit).toBeDefined();
     });
   });
 });

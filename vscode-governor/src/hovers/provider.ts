@@ -130,17 +130,17 @@ export class GovernorHoverProvider implements vscode.HoverProvider, vscode.Dispo
   private formatDecisions(decisions: DecisionView[]): vscode.MarkdownString {
     const md = new vscode.MarkdownString();
     md.isTrusted = true;
-    md.appendMarkdown("**Governor Decisions**\n\n");
 
     for (const d of decisions.slice(0, 3)) {
       const topic = (d.raw?.topic as string) ?? d.type;
       const choice = (d.raw?.choice as string) ?? "";
-      const icon = d.status === "accepted" ? "$(check)" : d.status === "rejected" ? "$(x)" : "$(clock)";
-      md.appendMarkdown(`${icon} **${topic}**: ${choice}\n`);
+      // Human-friendly: "You decided" not "Decision:"
+      md.appendMarkdown(`**You decided:** ${topic}: ${choice}\n\n`);
       if (d.rationale) {
-        md.appendMarkdown(`> _${d.rationale}_\n`);
+        md.appendMarkdown(`> _"${d.rationale}"_\n\n`);
       }
-      md.appendMarkdown("\n");
+      // Minimal actions
+      md.appendMarkdown(`[Edit](command:governor.editDecision) [Remove](command:governor.removeDecision)\n\n`);
     }
 
     return md;
@@ -149,7 +149,6 @@ export class GovernorHoverProvider implements vscode.HoverProvider, vscode.Dispo
   private formatClaims(claims: ClaimView[]): vscode.MarkdownString {
     const md = new vscode.MarkdownString();
     md.isTrusted = true;
-    md.appendMarkdown("**Governor Claims**\n\n");
 
     for (const c of claims) {
       const stateIcon =
@@ -160,9 +159,9 @@ export class GovernorHoverProvider implements vscode.HoverProvider, vscode.Dispo
             : c.state === "contradicted"
               ? "$(error)"
               : "$(question)";
-      md.appendMarkdown(`${stateIcon} ${c.content}\n`);
-      md.appendMarkdown(`- Confidence: ${(c.confidence * 100).toFixed(0)}%\n`);
-      md.appendMarkdown(`- Provenance: ${c.provenance}\n\n`);
+      // Human-friendly
+      md.appendMarkdown(`${stateIcon} **Tracked:** ${c.content}\n\n`);
+      md.appendMarkdown(`_Confidence: ${(c.confidence * 100).toFixed(0)}%_\n\n`);
     }
 
     return md;
@@ -171,21 +170,16 @@ export class GovernorHoverProvider implements vscode.HoverProvider, vscode.Dispo
   private formatViolations(violations: ViolationView[]): vscode.MarkdownString {
     const md = new vscode.MarkdownString();
     md.isTrusted = true;
-    md.appendMarkdown("**Governor Violations**\n\n");
 
     for (const v of violations) {
-      const severityIcon =
-        v.severity === "critical"
-          ? "$(error)"
-          : v.severity === "high"
-            ? "$(warning)"
-            : "$(info)";
-      md.appendMarkdown(`${severityIcon} **${v.rule_breached}**\n`);
-      md.appendMarkdown(`${v.detail}\n`);
+      // Human-friendly: "You said X" not "Violation:"
+      md.appendMarkdown(`$(warning) **You said:** ${v.rule_breached}\n\n`);
+      md.appendMarkdown(`${v.detail}\n\n`);
       if (v.resolution) {
-        md.appendMarkdown(`> Fix: ${v.resolution}\n`);
+        md.appendMarkdown(`_Suggestion: ${v.resolution}_\n\n`);
       }
-      md.appendMarkdown("\n");
+      // Human-friendly actions
+      md.appendMarkdown(`[Fix](command:governor.fix) [Change Rule](command:governor.changeRule) [Allow Here](command:governor.allowHere)\n\n`);
     }
 
     return md;

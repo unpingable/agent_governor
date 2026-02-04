@@ -182,15 +182,16 @@ describe("GovernorTreeProvider", () => {
       const roots = provider.getChildren();
       const kinds = roots.map((r) => r.kind);
       expect(kinds).not.toContain("evidence-section");
-      expect(kinds).not.toContain("violations");
       expect(kinds).not.toContain("execution");
     });
 
-    it("decisions node shows count 0", () => {
+    it("decisions node shows count 0 with empty state message", () => {
       const roots = provider.getChildren();
       const decisions = roots.find((r) => r.kind === "decisions")!;
       expect(decisions.label).toBe("Decisions (0)");
-      expect(decisions.children).toHaveLength(0);
+      // Human-friendly empty state
+      expect(decisions.children).toHaveLength(1);
+      expect(decisions.children![0].kind).toBe("decision-empty");
     });
 
     it("claims node shows count 0", () => {
@@ -209,7 +210,7 @@ describe("GovernorTreeProvider", () => {
 
     it("shows all 8 root nodes", () => {
       const roots = provider.getChildren();
-      // session, regime, decisions, claims, evidence, violations, execution, stability
+      // problems, decisions, claims, evidence, execution, session, regime, stability (reordered for UX)
       expect(roots).toHaveLength(8);
     });
 
@@ -235,8 +236,9 @@ describe("GovernorTreeProvider", () => {
       const decisions = roots.find((r) => r.kind === "decisions")!;
       expect(decisions.label).toBe("Decisions (2)");
       expect(decisions.children).toHaveLength(2);
-      expect(decisions.children![0].label).toContain("ACCEPTED");
-      expect(decisions.children![1].label).toContain("REJECTED");
+      // Human-friendly: shows topic: choice instead of status prefix
+      expect(decisions.children![0].label).toBe("framework: react");
+      expect(decisions.children![1].label).toBe("Claim needs evidence");
     });
 
     it("claims node has correct children with confidence", () => {
@@ -257,12 +259,13 @@ describe("GovernorTreeProvider", () => {
       expect(evidence.children![0].label).toContain("tool_trace");
     });
 
-    it("violations node shows when violations exist", () => {
+    it("problems node shows when violations exist", () => {
       const roots = provider.getChildren();
-      const violations = roots.find((r) => r.kind === "violations")!;
-      expect(violations).toBeDefined();
-      expect(violations.label).toBe("Violations (1)");
-      expect(violations.children![0].label).toContain("HIGH");
+      const problems = roots.find((r) => r.kind === "problems")!;
+      expect(problems).toBeDefined();
+      expect(problems.label).toBe("Problems (1)");
+      // Human-friendly: shows rule_breached directly, not severity prefix
+      expect(problems.children![0].label).toBe("Missing evidence for claim");
     });
 
     it("execution node shows when actions exist", () => {
@@ -424,37 +427,30 @@ describe("GovernorTreeProvider", () => {
     }
   });
 
-  describe("decision status icon mapping", () => {
-    const statuses: Array<[string, string]> = [
-      ["accepted", "check-all"],
-      ["rejected", "close"],
-      ["pending", "clock"],
-    ];
+  describe("decision icon mapping", () => {
+    // UX spec: decisions use simple "pin" icon regardless of status
+    it("uses pin icon for all decisions", async () => {
+      const state = emptyState();
+      state.decisions = [
+        {
+          id: "dec_test",
+          status: "accepted",
+          type: "test",
+          rationale: "",
+          dependencies: [],
+          violations: [],
+          source: "proposal",
+          created_at: "2025-01-01T00:00:00Z",
+          raw: {},
+        },
+      ];
+      mockFetchState.mockResolvedValue(state);
+      await provider.refresh();
 
-    for (const [status, expectedIcon] of statuses) {
-      it(`uses ${expectedIcon} icon for ${status}`, async () => {
-        const state = emptyState();
-        state.decisions = [
-          {
-            id: "dec_test",
-            status: status as "accepted" | "rejected" | "pending",
-            type: "test",
-            rationale: "",
-            dependencies: [],
-            violations: [],
-            source: "proposal",
-            created_at: "2025-01-01T00:00:00Z",
-            raw: {},
-          },
-        ];
-        mockFetchState.mockResolvedValue(state);
-        await provider.refresh();
-
-        const roots = provider.getChildren();
-        const decisionsNode = roots.find((r) => r.kind === "decisions")!;
-        expect(decisionsNode.children![0].icon).toBe(expectedIcon);
-      });
-    }
+      const roots = provider.getChildren();
+      const decisionsNode = roots.find((r) => r.kind === "decisions")!;
+      expect(decisionsNode.children![0].icon).toBe("pin");
+    });
   });
 
   describe("claim state icon mapping", () => {
@@ -519,8 +515,8 @@ describe("GovernorTreeProvider", () => {
         await provider.refresh();
 
         const roots = provider.getChildren();
-        const violationsNode = roots.find((r) => r.kind === "violations")!;
-        expect(violationsNode.children![0].icon).toBe(expectedIcon);
+        const problemsNode = roots.find((r) => r.kind === "problems")!;
+        expect(problemsNode.children![0].icon).toBe(expectedIcon);
       });
     }
   });

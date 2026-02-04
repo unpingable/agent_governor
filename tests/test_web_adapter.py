@@ -712,12 +712,13 @@ class TestGovernorUI:
         assert "text/html" in response.headers.get("content-type", "")
 
     def test_ui_contains_sections(self, client) -> None:
-        """HTML body contains the three section markers."""
+        """HTML body contains the key UI elements."""
         response = client.get("/governor/ui")
         body = response.text
-        assert "NOW" in body
-        assert "WHY" in body
-        assert "HISTORY" in body
+        # Human-friendly UI has mode-specific panels and corrections log
+        assert "Governor" in body
+        assert "mode" in body.lower()
+        assert "Corrections" in body
 
     def test_ui_in_root_endpoints(self, client) -> None:
         """Root endpoint lists /governor/ui."""

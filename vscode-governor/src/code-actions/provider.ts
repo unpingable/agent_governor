@@ -116,8 +116,9 @@ export class GovernorCodeActionProvider implements vscode.CodeActionProvider {
       return null;
     }
 
+    // Human-friendly: "Governor: Fix — use ORM instead" not "Fix: suggestion"
     const action = new vscode.CodeAction(
-      `Fix: ${finding.suggestion}`,
+      `Governor: Fix — ${finding.suggestion}`,
       GOVERNOR_ACTION_KIND
     );
     action.isPreferred = true;
@@ -180,26 +181,13 @@ export class GovernorCodeActionProvider implements vscode.CodeActionProvider {
   ): vscode.CodeAction[] {
     const actions: vscode.CodeAction[] = [];
 
-    // Add comment explaining the issue
-    const commentAction = new vscode.CodeAction(
-      "Add security comment",
-      vscode.CodeActionKind.RefactorRewrite
-    );
-    const commentEdit = new vscode.WorkspaceEdit();
     const lineStart = new vscode.Position(range.start.line, 0);
     const indent = document.lineAt(range.start.line).firstNonWhitespaceCharacterIndex;
     const indentStr = " ".repeat(indent);
-    commentEdit.insert(
-      document.uri,
-      lineStart,
-      `${indentStr}// SECURITY: ${finding.code} - ${finding.message}\n`
-    );
-    commentAction.edit = commentEdit;
-    actions.push(commentAction);
 
-    // Add "mark as reviewed" action
+    // Human-friendly: "Mark as reviewed"
     const reviewedAction = new vscode.CodeAction(
-      "Mark as security-reviewed",
+      "Governor: Mark as reviewed",
       vscode.CodeActionKind.QuickFix
     );
     const reviewEdit = new vscode.WorkspaceEdit();
@@ -221,17 +209,17 @@ export class GovernorCodeActionProvider implements vscode.CodeActionProvider {
   ): vscode.CodeAction[] {
     const actions: vscode.CodeAction[] = [];
 
-    // Show details action
-    const detailsAction = new vscode.CodeAction(
-      "Show anchor details",
+    // Human-friendly: "Change rule" action
+    const changeRuleAction = new vscode.CodeAction(
+      "Governor: Change rule",
       vscode.CodeActionKind.QuickFix
     );
-    detailsAction.command = {
-      command: "governor.showDetail",
-      title: "Show Details",
-      arguments: [`Continuity violation: ${finding.code}\n${finding.message}\n\nSuggestion: ${finding.suggestion ?? "None"}`],
+    changeRuleAction.command = {
+      command: "governor.changeRule",
+      title: "Change Rule",
+      arguments: [finding.code],
     };
-    actions.push(detailsAction);
+    actions.push(changeRuleAction);
 
     return actions;
   }
@@ -241,8 +229,9 @@ export class GovernorCodeActionProvider implements vscode.CodeActionProvider {
     finding: CheckFinding,
     range: vscode.Range
   ): vscode.CodeAction {
+    // Human-friendly: "Governor: Allow here" not "Suppress"
     const action = new vscode.CodeAction(
-      `Suppress ${finding.code}`,
+      `Governor: Allow here`,
       vscode.CodeActionKind.QuickFix
     );
 
@@ -253,7 +242,32 @@ export class GovernorCodeActionProvider implements vscode.CodeActionProvider {
     edit.insert(
       document.uri,
       lineStart,
-      `${indentStr}// governor-disable-next-line ${finding.code}\n`
+      `${indentStr}// governor-allow: ${finding.code}\n`
+    );
+    action.edit = edit;
+
+    return action;
+  }
+
+  /**
+   * Create "Ignore in this file" action.
+   */
+  private createIgnoreFileAction(
+    document: vscode.TextDocument,
+    finding: CheckFinding
+  ): vscode.CodeAction {
+    const action = new vscode.CodeAction(
+      `Governor: Ignore in this file`,
+      vscode.CodeActionKind.QuickFix
+    );
+
+    // Add file-level disable comment at the top
+    const edit = new vscode.WorkspaceEdit();
+    const firstLine = new vscode.Position(0, 0);
+    edit.insert(
+      document.uri,
+      firstLine,
+      `// governor-disable-file ${finding.code}\n`
     );
     action.edit = edit;
 

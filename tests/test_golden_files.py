@@ -1174,6 +1174,7 @@ class TestAnchorShape:
             "required_patterns", "required_concepts",
             "forbidden_patterns", "forbidden_concepts",
             "severity", "source", "established_at",
+            "constraint_class",
         }
 
     def test_value_types(self):
@@ -1188,6 +1189,7 @@ class TestAnchorShape:
         assert isinstance(d["severity"], str)
         assert isinstance(d["source"], str)
         assert isinstance(d["established_at"], int)
+        assert isinstance(d["constraint_class"], str)
 
     def test_enum_values_are_strings(self):
         d = self._make().to_dict()

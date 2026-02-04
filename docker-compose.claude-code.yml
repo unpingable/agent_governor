@@ -1,20 +1,17 @@
 # Agent Governor WebUI — Claude Code Backend Override
 #
-# Use with: docker-compose -f docker-compose.yml -f docker-compose.claude-code.yml up -d
+# Recommended: ./start.sh (auto-detects everything)
+#
+# Manual: docker-compose -f docker-compose.yml -f docker-compose.claude-code.yml up --build -d
 #
 # Routes chat through the `claude` CLI to use your Claude Max subscription
-# instead of paying API credits.
+# instead of paying API credits. Requires Claude Code CLI installed and
+# authenticated on the host.
 #
-# Requirements:
-#   - Claude Code CLI installed and authenticated on the host
-#   - Set CLAUDE_VERSION to match your installed version:
-#       ls ~/.local/share/claude/versions/
-#
-# IMPORTANT: If using snap Docker, $HOME resolves to the snap's home directory,
-# not your actual home. Set REAL_HOME explicitly:
-#
-#   REAL_HOME=/home/youruser CLAUDE_VERSION=2.1.31 \
-#     docker-compose -f docker-compose.yml -f docker-compose.claude-code.yml up -d --build
+# REAL_HOME and CLAUDE_VERSION are auto-detected by start.sh and written to .env.
+# If running manually, set them or create .env:
+#   REAL_HOME=/home/youruser
+#   CLAUDE_VERSION=2.1.31
 
 services:
   fiction-adapter:

@@ -430,6 +430,16 @@ class ClaudeCodeBackend:
             content = stdout.decode("utf-8").strip()
             return ChatResponse(content=content, model=model)
 
+        # --verbose + --output-format json returns a JSON array of messages:
+        # [{type:"system",...}, {type:"assistant",...}, {type:"result",...}]
+        # Find the "result" item if data is a list.
+        if isinstance(data, list):
+            result_item = next(
+                (item for item in data if isinstance(item, dict) and item.get("type") == "result"),
+                None,
+            )
+            data = result_item if result_item is not None else {}
+
         # Extract content — data["result"] is the content string
         content = data.get("result", "")
         if not isinstance(content, str):
@@ -574,24 +584,30 @@ class ClaudeCodeBackend:
         system_parts: list[str] = []
         conversation_parts: list[str] = []
 
+        has_assistant = False
         for msg in messages:
             if msg.role == "system":
                 system_parts.append(msg.content)
             elif msg.role == "user":
-                conversation_parts.append(msg.content)
+                conversation_parts.append(("user", msg.content))
             elif msg.role == "assistant":
-                conversation_parts.append(f"[Assistant]: {msg.content}")
+                conversation_parts.append(("assistant", msg.content))
+                has_assistant = True
 
         system_text = "\n\n".join(system_parts)
 
-        # For single-turn (common case), just send the user message
-        # For multi-turn, flatten with role markers
-        if len(conversation_parts) == 1 and not any(
-            p.startswith("[Assistant]:") for p in conversation_parts
-        ):
-            user_prompt = conversation_parts[0]
+        # For single-turn (common case), just send the user message as-is.
+        # For multi-turn, flatten with role markers so the model sees context.
+        if len(conversation_parts) == 1 and not has_assistant:
+            user_prompt = conversation_parts[0][1]
         elif conversation_parts:
-            user_prompt = "\n\n".join(conversation_parts)
+            parts = []
+            for role, content in conversation_parts:
+                if role == "assistant":
+                    parts.append(f"[Assistant]: {content}")
+                else:
+                    parts.append(f"[User]: {content}")
+            user_prompt = "\n\n".join(parts)
         else:
             user_prompt = ""
 

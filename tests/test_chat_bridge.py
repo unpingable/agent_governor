@@ -890,9 +890,9 @@ class TestClaudeCodeBackend:
         ]
         system, prompt = backend._extract_system_and_prompt(messages)
         assert system == ""
-        assert "What is 2+2?" in prompt
+        assert "[User]: What is 2+2?" in prompt
         assert "[Assistant]: 4" in prompt
-        assert "Thanks!" in prompt
+        assert "[User]: Thanks!" in prompt
 
     def test_extract_system_and_prompt_multiple_system(self) -> None:
         """Multiple system messages are concatenated."""
@@ -1094,6 +1094,56 @@ class TestClaudeCodeBackend:
         assert response.content == "Hello from Claude!"
         assert response.usage["prompt_tokens"] == 10
         assert response.usage["completion_tokens"] == 5
+
+    def test_chat_json_array_verbose_output(self) -> None:
+        """--verbose + --output-format json returns a JSON array, not a dict."""
+        backend = ClaudeCodeBackend()
+
+        # This is the actual format from `claude --print --output-format json --verbose`
+        verbose_output = json.dumps([
+            {"type": "system", "subtype": "init", "session_id": "abc"},
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": "Hi!"}]}},
+            {"type": "result", "subtype": "success", "result": "Hi!",
+             "usage": {"input_tokens": 100, "output_tokens": 10}},
+        ])
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            proc.communicate = AsyncMock(return_value=(
+                verbose_output.encode(), b"",
+            ))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            response = run_async(backend.chat(messages, "sonnet"))
+
+        assert response.content == "Hi!"
+        assert response.usage["prompt_tokens"] == 100
+        assert response.usage["completion_tokens"] == 10
+
+    def test_chat_json_array_no_result_item(self) -> None:
+        """JSON array without a result item should return empty content."""
+        backend = ClaudeCodeBackend()
+
+        verbose_output = json.dumps([
+            {"type": "system", "subtype": "init"},
+        ])
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            proc.communicate = AsyncMock(return_value=(
+                verbose_output.encode(), b"",
+            ))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            response = run_async(backend.chat(messages, "sonnet"))
+
+        assert response.content == ""
 
     @pytest.mark.asyncio
     async def test_chat_subprocess_error(self) -> None:

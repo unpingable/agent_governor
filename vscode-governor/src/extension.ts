@@ -7,8 +7,8 @@
  */
 
 import * as vscode from "vscode";
-import { checkFile, checkStdin, fetchState, GovernorOptions } from "./governor/client";
-import type { CheckResult, CheckInput, GovernorViewModelV2 } from "./governor/types";
+import { checkFile, checkStdin, fetchState, getIntent, setIntent, clearIntent, GovernorOptions, SetIntentOptions } from "./governor/client";
+import type { CheckResult, CheckInput, GovernorViewModelV2, IntentResult } from "./governor/types";
 import { DiagnosticProvider } from "./diagnostics/provider";
 import { GovernorTreeProvider } from "./views/governorTree";
 import { GovernorHoverProvider } from "./hovers/provider";
@@ -20,6 +20,8 @@ let diagnosticProvider: DiagnosticProvider;
 let statusBarItem: vscode.StatusBarItem;
 let realtimeChecker: RealtimeChecker | null = null;
 let hoverProvider: GovernorHoverProvider | null = null;
+let currentIntent: IntentResult | null = null;
+let treeProviderRef: GovernorTreeProvider | null = null;
 
 function getOptions(): GovernorOptions {
   const config = vscode.workspace.getConfiguration("governor");
@@ -42,9 +44,22 @@ function updateStatusBar(result: CheckResult): void {
       : result.status === "warn"
         ? "Warn"
         : "Error";
-  statusBarItem.text = `${icon} Governor: ${label}`;
-  statusBarItem.tooltip = result.summary;
+
+  // Include profile in status bar if available
+  const profile = currentIntent?.intent.profile;
+  const profileText = profile && profile !== "established" ? ` [${profile}]` : "";
+
+  statusBarItem.text = `${icon} Governor${profileText}: ${label}`;
+  statusBarItem.tooltip = result.summary + (profile ? `\nProfile: ${profile}` : "");
   statusBarItem.show();
+}
+
+async function refreshIntent(): Promise<void> {
+  try {
+    currentIntent = await getIntent(getOptions());
+  } catch {
+    currentIntent = null;
+  }
 }
 
 async function runCheckFile(): Promise<void> {
@@ -144,6 +159,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Tree view (Phase V2)
   const treeProvider = new GovernorTreeProvider(outputChannel, getOptions);
+  treeProviderRef = treeProvider;
   const treeView = vscode.window.createTreeView("governorState", {
     treeDataProvider: treeProvider,
     showCollapseAll: true,
@@ -223,6 +239,85 @@ export function activate(context: vscode.ExtensionContext): void {
         await realtimeChecker.checkNow(editor.document);
         vscode.window.showInformationMessage("Governor: Check complete");
       }
+    }),
+    // Code Autopilot: Profile switching
+    vscode.commands.registerCommand("governor.setProfile", async () => {
+      const profiles = [
+        { label: "greenfield", description: "New project, experimenting (warn only)" },
+        { label: "established", description: "Normal development (default)" },
+        { label: "production", description: "High-stakes changes (strict)" },
+        { label: "hotfix", description: "Urgent targeted fix (narrow scope)" },
+        { label: "refactor", description: "Restructuring code (soft anchors)" },
+      ];
+
+      const selected = await vscode.window.showQuickPick(profiles, {
+        placeHolder: "Select a profile",
+        title: "Governor: Set Profile",
+      });
+
+      if (!selected) {
+        return;
+      }
+
+      // For hotfix, prompt for scope
+      let scope: string[] | undefined;
+      if (selected.label === "hotfix") {
+        const scopeInput = await vscode.window.showInputBox({
+          prompt: "Enter scope pattern (e.g., src/auth/**)",
+          placeHolder: "src/**",
+        });
+        if (scopeInput) {
+          scope = [scopeInput];
+        }
+      }
+
+      // Prompt for optional reason
+      const reason = await vscode.window.showInputBox({
+        prompt: "Why are you setting this profile? (optional)",
+        placeHolder: "fixing auth bug",
+      });
+
+      try {
+        const intentOpts: SetIntentOptions = {
+          profile: selected.label,
+          scope,
+          reason: reason || undefined,
+        };
+        await setIntent(getOptions(), intentOpts);
+        await refreshIntent();
+        treeProvider.refresh();
+        vscode.window.showInformationMessage(`Governor: Profile set to ${selected.label}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Failed to set profile: ${msg}`);
+      }
+    }),
+    vscode.commands.registerCommand("governor.clearIntent", async () => {
+      try {
+        await clearIntent(getOptions());
+        currentIntent = null;
+        treeProvider.refresh();
+        vscode.window.showInformationMessage("Governor: Intent cleared");
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Failed to clear intent: ${msg}`);
+      }
+    }),
+    vscode.commands.registerCommand("governor.showIntent", async () => {
+      try {
+        const intent = await getIntent(getOptions());
+        outputChannel.appendLine("\n=== Current Intent ===");
+        outputChannel.appendLine(JSON.stringify(intent.intent, null, 2));
+        outputChannel.appendLine("\n=== Provenance ===");
+        for (const p of intent.provenance) {
+          outputChannel.appendLine(`[${p.layer}] ${p.reason || ""}`);
+        }
+        outputChannel.show();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`Error fetching intent: ${msg}`);
+        outputChannel.show();
+      }
     })
   );
 
@@ -256,10 +351,11 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
-  // Initial tree load
+  // Initial tree load and intent fetch
   treeProvider.refresh();
+  refreshIntent();
 
-  outputChannel.appendLine("Agent Governor extension activated (Phase V4).");
+  outputChannel.appendLine("Agent Governor extension activated (Phase V5 - Code Autopilot).");
 }
 
 export function deactivate(): void {

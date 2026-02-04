@@ -213,6 +213,54 @@ export interface StabilityView {
   drift_signals: Record<string, number>;
 }
 
+// =========================================================================
+// Code Autopilot types (intent, profiles, overrides)
+// =========================================================================
+
+export interface IntentView {
+  profile: string;
+  scope: string[] | null;
+  deny: string[] | null;
+  timebox_minutes: number | null;
+  reason: string | null;
+  operator: string;
+  source: string;
+  set_at: string;
+  expires_at: string | null;
+}
+
+export interface IntentProvenanceView {
+  layer: string;
+  source_path: string | null;
+  value: IntentView | null;
+  checked: boolean;
+  reason: string | null;
+}
+
+export interface IntentResult {
+  intent: IntentView;
+  provenance: IntentProvenanceView[];
+}
+
+export interface OverrideView {
+  id: string;
+  anchor_id: string;
+  reason: string;
+  operator: string;
+  scope: string[];
+  created_at: string;
+  expires_at: string;
+  revoked: boolean;
+  violation_snapshot: Record<string, unknown>;
+}
+
+export interface AutopilotProfile {
+  name: string;
+  description: string;
+  violation_default: string;
+  retry_budget: number;
+}
+
 export interface GovernorViewModelV2 {
   schema_version: "v2";
   generated_at: string;

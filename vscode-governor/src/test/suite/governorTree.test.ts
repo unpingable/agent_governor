@@ -6,10 +6,14 @@ import * as vscode from "vscode";
 import { GovernorTreeProvider, TreeNodeData } from "../../views/governorTree";
 import type { GovernorViewModelV2 } from "../../governor/types";
 
-// Mock fetchState
+// Mock client functions
 const mockFetchState = jest.fn();
+const mockGetIntent = jest.fn();
+const mockListOverrides = jest.fn();
 jest.mock("../../governor/client", () => ({
   fetchState: (...args: unknown[]) => mockFetchState(...args),
+  getIntent: (...args: unknown[]) => mockGetIntent(...args),
+  listOverrides: (...args: unknown[]) => mockListOverrides(...args),
   GovernorOptions: {},
 }));
 
@@ -141,11 +145,34 @@ function fullState(): GovernorViewModelV2 {
   };
 }
 
+// Default mock intent result
+function defaultIntent() {
+  return {
+    intent: {
+      profile: "established",
+      scope: null,
+      deny: null,
+      timebox_minutes: null,
+      reason: null,
+      operator: "test",
+      source: "default",
+      set_at: "2025-01-01T00:00:00Z",
+      expires_at: null,
+    },
+    provenance: [],
+  };
+}
+
 describe("GovernorTreeProvider", () => {
   let provider: GovernorTreeProvider;
 
   beforeEach(() => {
     mockFetchState.mockReset();
+    mockGetIntent.mockReset();
+    mockListOverrides.mockReset();
+    // Default mocks for intent/overrides (always succeed with defaults)
+    mockGetIntent.mockResolvedValue(defaultIntent());
+    mockListOverrides.mockResolvedValue([]);
     provider = new GovernorTreeProvider(createOutputChannel(), () => defaultOpts);
   });
 
@@ -208,10 +235,10 @@ describe("GovernorTreeProvider", () => {
       await provider.refresh();
     });
 
-    it("shows all 8 root nodes", () => {
+    it("shows all 9 root nodes", () => {
       const roots = provider.getChildren();
-      // problems, decisions, claims, evidence, execution, session, regime, stability (reordered for UX)
-      expect(roots).toHaveLength(8);
+      // problems, intent, decisions, claims, evidence, execution, session, regime, stability (reordered for UX)
+      expect(roots).toHaveLength(9);
     });
 
     it("session node has mode and authority children", () => {
@@ -394,6 +421,76 @@ describe("GovernorTreeProvider", () => {
 
       await provider.refresh();
       expect(fired).toBe(true);
+    });
+  });
+
+  describe("intent section", () => {
+    it("shows intent node with default profile", async () => {
+      mockFetchState.mockResolvedValue(emptyState());
+      await provider.refresh();
+
+      const roots = provider.getChildren();
+      const intent = roots.find((r) => r.kind === "intent");
+      expect(intent).toBeDefined();
+      expect(intent!.label).toBe("Intent: ESTABLISHED");
+    });
+
+    it("shows hotfix profile with scope", async () => {
+      mockFetchState.mockResolvedValue(emptyState());
+      mockGetIntent.mockResolvedValue({
+        intent: {
+          profile: "hotfix",
+          scope: ["src/auth/**"],
+          deny: null,
+          timebox_minutes: 90,
+          reason: "fixing login bug",
+          operator: "test",
+          source: "cli",
+          set_at: "2025-01-01T00:00:00Z",
+          expires_at: new Date(Date.now() + 60 * 60000).toISOString(), // 60 mins from now
+        },
+        provenance: [],
+      });
+      await provider.refresh();
+
+      const roots = provider.getChildren();
+      const intent = roots.find((r) => r.kind === "intent");
+      expect(intent).toBeDefined();
+      expect(intent!.label).toBe("Intent: HOTFIX");
+      expect(intent!.description).toBe("(cli)");
+
+      // Check children
+      const children = intent!.children!;
+      expect(children.find((c) => c.kind === "intent-profile")).toBeDefined();
+      expect(children.find((c) => c.kind === "intent-scope")).toBeDefined();
+      expect(children.find((c) => c.kind === "intent-scope")!.label).toContain("src/auth/**");
+      expect(children.find((c) => c.kind === "intent-timebox")).toBeDefined();
+      expect(children.find((c) => c.kind === "intent-reason")).toBeDefined();
+    });
+
+    it("shows active overrides", async () => {
+      mockFetchState.mockResolvedValue(emptyState());
+      mockListOverrides.mockResolvedValue([
+        {
+          id: "ovr_test123",
+          anchor_id: "no-eval",
+          reason: "Legacy code",
+          operator: "test",
+          scope: ["migrations/**"],
+          created_at: "2025-01-01T00:00:00Z",
+          expires_at: new Date(Date.now() + 30 * 60000).toISOString(), // 30 mins from now
+          revoked: false,
+          violation_snapshot: {},
+        },
+      ]);
+      await provider.refresh();
+
+      const roots = provider.getChildren();
+      const intent = roots.find((r) => r.kind === "intent");
+      const overridesSection = intent!.children!.find((c) => c.kind === "overrides");
+      expect(overridesSection).toBeDefined();
+      expect(overridesSection!.label).toBe("Overrides (1)");
+      expect(overridesSection!.children![0].label).toContain("no-eval");
     });
   });
 

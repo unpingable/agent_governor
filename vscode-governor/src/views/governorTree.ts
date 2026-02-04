@@ -6,7 +6,7 @@
  */
 
 import * as vscode from "vscode";
-import { fetchState, GovernorOptions } from "../governor/client";
+import { fetchState, getIntent, listOverrides, GovernorOptions } from "../governor/client";
 import type {
   GovernorViewModelV2,
   DecisionView,
@@ -15,6 +15,8 @@ import type {
   ViolationView,
   ExecutionView,
   StabilityView,
+  IntentResult,
+  OverrideView,
 } from "../governor/types";
 
 // =========================================================================
@@ -64,6 +66,14 @@ const VIOLATION_SEVERITY_ICONS: Record<string, string> = {
   critical: "alert",
 };
 
+const PROFILE_ICONS: Record<string, string> = {
+  greenfield: "beaker",       // Experimenting
+  established: "shield",      // Normal (default)
+  production: "lock",         // Strict
+  hotfix: "flame",            // Urgent
+  refactor: "tools",          // Restructuring
+};
+
 // =========================================================================
 // GovernorTreeProvider
 // =========================================================================
@@ -75,6 +85,8 @@ export class GovernorTreeProvider
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private state: GovernorViewModelV2 | null = null;
+  private intent: IntentResult | null = null;
+  private overrides: OverrideView[] = [];
   private error: string | null = null;
 
   constructor(
@@ -82,16 +94,39 @@ export class GovernorTreeProvider
     private getOptions: () => GovernorOptions
   ) {}
 
+  /**
+   * Get the current intent (for status bar integration).
+   */
+  getIntent(): IntentResult | null {
+    return this.intent;
+  }
+
   dispose(): void {
     this._onDidChangeTreeData.dispose();
   }
 
   async refresh(): Promise<void> {
     try {
-      this.state = await fetchState(this.getOptions());
-      this.error = null;
+      // Fetch all state in parallel
+      const opts = this.getOptions();
+      const [stateResult, intentResult, overridesResult] = await Promise.allSettled([
+        fetchState(opts),
+        getIntent(opts),
+        listOverrides(opts),
+      ]);
+
+      this.state = stateResult.status === "fulfilled" ? stateResult.value : null;
+      this.intent = intentResult.status === "fulfilled" ? intentResult.value : null;
+      this.overrides = overridesResult.status === "fulfilled" ? overridesResult.value : [];
+
+      // Only set error if state fetch failed (intent/overrides are optional)
+      this.error = stateResult.status === "rejected"
+        ? (stateResult.reason instanceof Error ? stateResult.reason.message : String(stateResult.reason))
+        : null;
     } catch (err: unknown) {
       this.state = null;
+      this.intent = null;
+      this.overrides = [];
       this.error = err instanceof Error ? err.message : String(err);
     }
     this._onDidChangeTreeData.fire();
@@ -156,11 +191,14 @@ export class GovernorTreeProvider
 
     const nodes: TreeNodeData[] = [];
 
-    // Per UX spec: Problems first (expanded if any), then Decisions, then Constraints
+    // Per UX spec: Problems first (expanded if any), then Intent, then Decisions
     const violationsNode = this.buildViolationsNode(this.state);
     if (violationsNode) {
       nodes.push(violationsNode);
     }
+
+    // Code Autopilot: Intent section (prominently displayed)
+    nodes.push(this.buildIntentNode());
 
     nodes.push(this.buildDecisionsNode(this.state));
     nodes.push(this.buildClaimsNode(this.state));
@@ -481,6 +519,124 @@ export class GovernorTreeProvider
       icon: "graph-line",
       children,
       detail: s.stability ? JSON.stringify(s.stability, null, 2) : undefined,
+    };
+  }
+
+  // -----------------------------------------------------------------------
+  // Code Autopilot: Intent section
+  // -----------------------------------------------------------------------
+
+  buildIntentNode(): TreeNodeData {
+    const children: TreeNodeData[] = [];
+
+    if (this.intent) {
+      const intent = this.intent.intent;
+      const profile = intent.profile;
+      const profileIcon = PROFILE_ICONS[profile] ?? "account";
+
+      // Profile (with switch command)
+      children.push({
+        kind: "intent-profile",
+        label: `Profile: ${profile.toUpperCase()}`,
+        description: intent.source !== "default" ? `(${intent.source})` : undefined,
+        collapsible: false,
+        icon: profileIcon,
+        tooltip: `Click to change profile`,
+      });
+
+      // Scope (if set)
+      if (intent.scope && intent.scope.length > 0) {
+        children.push({
+          kind: "intent-scope",
+          label: `Scope: ${intent.scope.join(", ")}`,
+          collapsible: false,
+          icon: "folder",
+        });
+      }
+
+      // Deny (if set)
+      if (intent.deny && intent.deny.length > 0) {
+        children.push({
+          kind: "intent-deny",
+          label: `Deny: ${intent.deny.join(", ")}`,
+          collapsible: false,
+          icon: "circle-slash",
+        });
+      }
+
+      // Timebox (if set)
+      if (intent.expires_at) {
+        const expires = new Date(intent.expires_at);
+        const now = new Date();
+        const remainingMs = expires.getTime() - now.getTime();
+        const remainingMins = Math.max(0, Math.round(remainingMs / 60000));
+
+        children.push({
+          kind: "intent-timebox",
+          label: `Timebox: ${remainingMins}m remaining`,
+          collapsible: false,
+          icon: "clock",
+          tooltip: `Expires at ${expires.toLocaleTimeString()}`,
+        });
+      }
+
+      // Reason (if set)
+      if (intent.reason) {
+        children.push({
+          kind: "intent-reason",
+          label: `Reason: ${intent.reason}`,
+          collapsible: false,
+          icon: "note",
+        });
+      }
+    } else {
+      // No intent set - show default
+      children.push({
+        kind: "intent-default",
+        label: "Profile: ESTABLISHED (default)",
+        description: "Click to change",
+        collapsible: false,
+        icon: "shield",
+      });
+    }
+
+    // Active overrides (if any)
+    if (this.overrides.length > 0) {
+      const overrideChildren: TreeNodeData[] = this.overrides.map((o) => {
+        const expires = new Date(o.expires_at);
+        const now = new Date();
+        const remainingMs = expires.getTime() - now.getTime();
+        const remainingMins = Math.max(0, Math.round(remainingMs / 60000));
+
+        return {
+          kind: "override",
+          label: `${o.anchor_id} (${remainingMins}m)`,
+          description: o.scope.join(", "),
+          tooltip: o.reason,
+          collapsible: false,
+          icon: "pass",
+          detail: JSON.stringify(o, null, 2),
+        };
+      });
+
+      children.push({
+        kind: "overrides",
+        label: `Overrides (${this.overrides.length})`,
+        collapsible: true,
+        icon: "pass",
+        children: overrideChildren,
+      });
+    }
+
+    const profile = this.intent?.intent.profile ?? "established";
+    return {
+      kind: "intent",
+      label: `Intent: ${profile.toUpperCase()}`,
+      description: this.intent?.intent.source !== "default" ? `(${this.intent?.intent.source})` : undefined,
+      collapsible: true,
+      icon: PROFILE_ICONS[profile] ?? "zap",
+      children,
+      detail: this.intent ? JSON.stringify(this.intent.intent, null, 2) : undefined,
     };
   }
 }

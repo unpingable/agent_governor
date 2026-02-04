@@ -15,6 +15,7 @@ authors = [
 dependencies = [
     "click>=8.0",
     "tomli>=2.0; python_version < '3.11'",
+    "rich>=13.0",
 ]
 keywords = [
     "ai",

@@ -59,7 +59,7 @@ def save_proposals(gov_dir: Path, proposals: dict[str, dict]) -> None:
     proposals_path.write_text(json.dumps(proposals, indent=2))
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.option(
     "--root", "-r",
     type=click.Path(exists=True, file_okay=False, resolve_path=True),
@@ -68,9 +68,42 @@ def save_proposals(gov_dir: Path, proposals: dict[str, dict]) -> None:
 )
 @click.pass_context
 def cli(ctx: click.Context, root: str) -> None:
-    """Agent Governor - Gate for file mutations."""
+    """Agent Governor - AI that remembers your rules.
+
+    \b
+    Quick start:
+      governor                    See status and quick commands
+      governor fiction init       Start a story project
+      governor code init          Start a code project
+
+    \b
+    Fiction (for writers):
+      governor fiction            All fiction commands
+      governor fiction character  Manage characters
+      governor fiction world      Manage world rules
+
+    \b
+    Code (for developers):
+      governor code               All code commands
+      governor code decision      Manage decisions
+      governor code constraint    Manage constraints
+
+    \b
+    Universal:
+      governor check <file>       Check content
+      governor resolve            Handle pending issues
+
+    \b
+    Advanced:
+      governor advanced           Power user commands (50+)
+    """
     ctx.ensure_object(dict)
     ctx.obj["root"] = root
+
+    # Show friendly status when no subcommand is provided
+    if ctx.invoked_subcommand is None:
+        from .cli_friendly import show_friendly_status
+        show_friendly_status(ctx)
 
 
 @cli.command()
@@ -11010,6 +11043,43 @@ def _handle_interactive_check_resolution(
             click.echo(f"[Governor] {result_obj.message}")
             click.echo(f"  Exception ID: {result_obj.exception_id}")
             return
+
+
+# =============================================================================
+# Friendly CLI Commands (layered by persona)
+# =============================================================================
+
+# Import and register friendly command groups
+from .cli_friendly import fiction, code, resolve
+
+cli.add_command(fiction)
+cli.add_command(code)
+cli.add_command(resolve)
+
+
+# Advanced command group - pointer to existing commands
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def advanced(ctx: click.Context) -> None:
+    """Power user commands (50+).
+
+    These are the full set of governor commands for advanced use cases.
+    Most users won't need them - they're also available at the top level.
+
+    \b
+    Categories:
+      Continuity:    continuity, lite, docket, rule, precedent, claim
+      Epistemic:     epistemic, regime, jurisdiction, drift, signals
+      Multi-agent:   agent, task, quorum, independence
+      Automation:    hook, mcp, wrap, autonomous, spine, invariant
+      Monitoring:    adapt, audit, strict, telemetry, dashboard, prometheus
+      Modes:         profile, puppet, boil
+      Security:      security, scar, taint
+      Tuning:        tune, semvar
+      Other:         graph, routing, watch, claude-hooks, issue
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
 
 
 def main() -> None:

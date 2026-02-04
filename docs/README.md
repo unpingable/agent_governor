@@ -139,7 +139,7 @@ docker-compose -f docker-compose.yml -f docker-compose.claude-code.yml up -d
 docker-compose -f docker-compose.yml -f docker-compose.ollama.yml up -d
 ```
 
-Open **http://localhost:3001**
+Open **http://localhost:8001** (fiction) or **http://localhost:8002** (code)
 
 ### VS Code
 

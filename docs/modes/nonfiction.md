@@ -303,7 +303,7 @@ governor hook pre-commit --interactive --mode nonfiction
 docker-compose up -d
 ```
 
-Open **http://localhost:3001** and select "Nonfiction Mode."
+Open **http://localhost:8001** (or whichever adapter port you started with `GOVERNOR_MODE=nonfiction`).
 
 ### With CLI Wrapper
 

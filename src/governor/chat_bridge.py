@@ -369,6 +369,12 @@ class ClaudeCodeBackend:
 
     Routes chat through the `claude` CLI with --print mode, parsing stream-json output.
     This lets you use your Claude Max subscription for WebUI chat.
+
+    Key implementation details:
+    - Prompt is piped via stdin (not CLI arg) to avoid ARG_MAX limits
+    - System messages are passed via --system-prompt flag
+    - --verbose is required for stream-json output format
+    - --model flag passes the model selection to the CLI
     """
 
     # Model mapping (WebUI model names -> claude CLI understands these)
@@ -389,25 +395,28 @@ class ClaudeCodeBackend:
         """Send a non-streaming chat request via Claude Code CLI."""
         import asyncio
 
-        # Build the prompt from messages
-        prompt = self._build_prompt(messages)
+        system_text, user_prompt = self._extract_system_and_prompt(messages)
 
-        # Build command
+        # Build command — prompt goes via stdin, not args
         cmd = [
             self.claude_path,
             "--print",
             "--output-format", "json",
-            "--dangerously-skip-permissions",  # Non-interactive mode
-            prompt,
+            "--verbose",
+            "--model", model,
+            "--dangerously-skip-permissions",
         ]
+        if system_text:
+            cmd.extend(["--system-prompt", system_text])
 
-        # Run claude CLI
+        # Run claude CLI — pipe prompt via stdin
         proc = await asyncio.create_subprocess_exec(
             *cmd,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        stdout, stderr = await proc.communicate(input=user_prompt.encode("utf-8"))
 
         if proc.returncode != 0:
             error_msg = stderr.decode("utf-8", errors="replace")
@@ -416,15 +425,15 @@ class ClaudeCodeBackend:
         # Parse JSON output
         try:
             data = json.loads(stdout.decode("utf-8"))
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             # Fall back to treating stdout as plain text
             content = stdout.decode("utf-8").strip()
             return ChatResponse(content=content, model=model)
 
-        # Extract content from response
-        content = data.get("result", data.get("content", str(data)))
-        if isinstance(content, dict):
-            content = content.get("text", str(content))
+        # Extract content — data["result"] is the content string
+        content = data.get("result", "")
+        if not isinstance(content, str):
+            content = str(content)
 
         return ChatResponse(
             content=content,
@@ -446,27 +455,36 @@ class ClaudeCodeBackend:
         """Stream a chat response via Claude Code CLI."""
         import asyncio
 
-        # Build the prompt from messages
-        prompt = self._build_prompt(messages)
+        system_text, user_prompt = self._extract_system_and_prompt(messages)
 
-        # Build command with streaming output
+        # Build command — --verbose is required for stream-json
         cmd = [
             self.claude_path,
             "--print",
             "--output-format", "stream-json",
+            "--verbose",
+            "--model", model,
             "--dangerously-skip-permissions",
-            prompt,
         ]
+        if system_text:
+            cmd.extend(["--system-prompt", system_text])
 
-        # Run claude CLI with streaming
+        # Run claude CLI with streaming — pipe prompt via stdin
         proc = await asyncio.create_subprocess_exec(
             *cmd,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
 
+        # Write prompt to stdin and close it so the CLI can proceed
+        proc.stdin.write(user_prompt.encode("utf-8"))
+        await proc.stdin.drain()
+        proc.stdin.close()
+
         # Read stdout line by line
         buffer = ""
+        sent_stop = False
         while True:
             chunk = await proc.stdout.read(1024)
             if not chunk:
@@ -503,34 +521,81 @@ class ClaudeCodeBackend:
                 elif msg_type == "result":
                     # Final result
                     yield ChatChunk(content="", finish_reason="stop")
+                    sent_stop = True
 
-        # Wait for process to complete
+        # Process any remaining data in buffer after EOF
+        remaining = buffer.strip()
+        if remaining:
+            try:
+                data = json.loads(remaining)
+                msg_type = data.get("type", "")
+                if msg_type == "assistant":
+                    content = data.get("message", {}).get("content", "")
+                    if isinstance(content, list):
+                        for block in content:
+                            if block.get("type") == "text":
+                                yield ChatChunk(content=block.get("text", ""))
+                    elif isinstance(content, str):
+                        yield ChatChunk(content=content)
+                elif msg_type == "result":
+                    yield ChatChunk(content="", finish_reason="stop")
+                    sent_stop = True
+            except json.JSONDecodeError:
+                pass
+
+        # Wait for process to complete and check for errors
         await proc.wait()
 
+        if proc.returncode != 0 and not sent_stop:
+            stderr_data = await proc.stderr.read()
+            error_msg = stderr_data.decode("utf-8", errors="replace").strip()
+            error_text = f"Claude Code CLI failed (exit {proc.returncode})"
+            if error_msg:
+                error_text += f": {error_msg}"
+            yield ChatChunk(content=f"\n\n[Error] {error_text}")
+
         # Ensure we send a final stop chunk
-        yield ChatChunk(content="", finish_reason="stop")
+        if not sent_stop:
+            yield ChatChunk(content="", finish_reason="stop")
 
     async def list_models(self) -> list[dict[str, str]]:
         """Return available models for Claude Code."""
         return list(self.MODELS)
 
-    def _build_prompt(self, messages: list[ChatMessage]) -> str:
-        """Build a prompt string from chat messages."""
-        parts = []
+    def _extract_system_and_prompt(
+        self, messages: list[ChatMessage]
+    ) -> tuple[str, str]:
+        """Extract system prompt and user conversation from messages.
+
+        Returns:
+            (system_text, user_prompt) — system messages concatenated for
+            --system-prompt flag, user/assistant turns flattened for stdin.
+        """
+        system_parts: list[str] = []
+        conversation_parts: list[str] = []
 
         for msg in messages:
             if msg.role == "system":
-                parts.append(f"[System]: {msg.content}")
+                system_parts.append(msg.content)
             elif msg.role == "user":
-                parts.append(f"[User]: {msg.content}")
+                conversation_parts.append(msg.content)
             elif msg.role == "assistant":
-                parts.append(f"[Assistant]: {msg.content}")
+                conversation_parts.append(f"[Assistant]: {msg.content}")
 
-        # Add instruction for assistant to continue
-        if parts and not parts[-1].startswith("[Assistant]"):
-            parts.append("[Assistant]:")
+        system_text = "\n\n".join(system_parts)
 
-        return "\n\n".join(parts)
+        # For single-turn (common case), just send the user message
+        # For multi-turn, flatten with role markers
+        if len(conversation_parts) == 1 and not any(
+            p.startswith("[Assistant]:") for p in conversation_parts
+        ):
+            user_prompt = conversation_parts[0]
+        elif conversation_parts:
+            user_prompt = "\n\n".join(conversation_parts)
+        else:
+            user_prompt = ""
+
+        return system_text, user_prompt
 
 
 class GovernorHooks:

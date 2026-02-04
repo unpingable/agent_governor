@@ -424,7 +424,7 @@ governor wrap --interactive --mode code -- claude "implement login endpoint"
 docker-compose -f docker-compose.yml -f docker-compose.claude-code.yml up -d
 ```
 
-Open **http://localhost:3001** and select "Code Mode" from the settings.
+Open **http://localhost:8002** (Code Development Console) in your browser.
 
 ---
 

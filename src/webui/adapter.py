@@ -1,11 +1,15 @@
 """
 OpenAI-compatible API adapter with Governor integration.
 
-Supports switchable backends (Anthropic Claude, Ollama, Claude Code CLI) with
-isolated governor contexts per user/project. Designed for use with Open WebUI
-or any OpenAI-compatible client.
+Serves a self-contained chat + governor UI at the root URL (/), and exposes
+an OpenAI-compatible API for external clients. Supports switchable backends
+(Anthropic Claude, Ollama, Claude Code CLI) with isolated governor contexts
+per user/project.
 
 Run with: uvicorn webui.adapter:app --host 0.0.0.0 --port 8000
+
+Primary UI:  http://localhost:8000  (combined chat + governor panel)
+API info:    http://localhost:8000/api/info
 
 Configuration via environment variables:
     BACKEND_TYPE        - "anthropic", "ollama", or "claude-code" (default: "ollama")
@@ -79,7 +83,7 @@ GOVERNOR_SHOW_OK_FOOTER = os.environ.get("GOVERNOR_SHOW_OK_FOOTER", "true").lowe
 app = FastAPI(
     title="Governor Chat Adapter",
     description="OpenAI-compatible API with switchable backends and Governor integration",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -1100,19 +1104,28 @@ async def health() -> dict[str, Any]:
 
 
 @app.get("/")
-async def root() -> dict[str, Any]:
-    """Root endpoint with basic info."""
+async def root() -> HTMLResponse:
+    """Serve the combined chat + governor UI."""
+    html_path = _STATIC_DIR / "index.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
+@app.get("/api/info")
+async def api_info() -> dict[str, Any]:
+    """JSON endpoint with API info and available endpoints."""
     return {
         "name": "Governor Chat Adapter",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "backend": BACKEND_TYPE,
         "openai_compatible": True,
         "governor_context": GOVERNOR_CONTEXT_ID,
         "governor_mode": GOVERNOR_MODE,
         "endpoints": {
+            "ui": "/",
             "models": "/v1/models",
             "chat": "/v1/chat/completions",
             "health": "/health",
+            "api_info": "/api/info",
             "governor_contexts": "/governor/contexts",
             "governor_status": "/governor/status",
             "governor_now": "/governor/now",

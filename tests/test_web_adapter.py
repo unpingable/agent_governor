@@ -65,23 +65,36 @@ def client(app):
 
 
 class TestRootEndpoint:
-    """Tests for GET /."""
+    """Tests for GET / (serves combined UI) and GET /api/info."""
 
-    def test_returns_info(self, client) -> None:
+    def test_root_returns_html(self, client) -> None:
         response = client.get("/")
+        assert response.status_code == 200
+        assert "text/html" in response.headers.get("content-type", "")
+        assert "Governor Chat" in response.text
+
+    def test_root_contains_chat_and_governor(self, client) -> None:
+        response = client.get("/")
+        body = response.text
+        assert "chat-panel" in body
+        assert "governor-panel" in body
+        assert "model-select" in body
+
+    def test_api_info_returns_json(self, client) -> None:
+        response = client.get("/api/info")
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "Governor Chat Adapter"
         assert data["openai_compatible"] is True
 
-    def test_includes_version(self, client) -> None:
-        response = client.get("/")
+    def test_api_info_includes_version(self, client) -> None:
+        response = client.get("/api/info")
         data = response.json()
         assert "version" in data
-        assert data["version"] == "0.2.0"
+        assert data["version"] == "0.3.0"
 
-    def test_includes_endpoints(self, client) -> None:
-        response = client.get("/")
+    def test_api_info_includes_endpoints(self, client) -> None:
+        response = client.get("/api/info")
         data = response.json()
         assert "endpoints" in data
         assert "/v1/models" in data["endpoints"].values()
@@ -685,10 +698,10 @@ class TestGovernorStatusV2:
 
 
 class TestRootEndpointV2:
-    """Tests for new routes in root endpoint."""
+    """Tests for new routes in api/info endpoint."""
 
     def test_includes_new_endpoints(self, client) -> None:
-        response = client.get("/")
+        response = client.get("/api/info")
         data = response.json()
         endpoints = data["endpoints"]
         assert "governor_now" in endpoints
@@ -720,9 +733,9 @@ class TestGovernorUI:
         assert "mode" in body.lower()
         assert "Corrections" in body
 
-    def test_ui_in_root_endpoints(self, client) -> None:
-        """Root endpoint lists /governor/ui."""
-        response = client.get("/")
+    def test_ui_in_api_info_endpoints(self, client) -> None:
+        """API info endpoint lists /governor/ui."""
+        response = client.get("/api/info")
         data = response.json()
         assert "governor_ui" in data["endpoints"]
         assert data["endpoints"]["governor_ui"] == "/governor/ui"

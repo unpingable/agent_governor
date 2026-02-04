@@ -2,9 +2,13 @@
 #
 # Run: docker-compose up -d
 #
-# Stacks:
-#   - Fiction:  WebUI at http://localhost:3001, adapter at http://localhost:8001
-#   - Code:     WebUI at http://localhost:3002, adapter at http://localhost:8002
+# Primary UI (self-contained chat + governor panel):
+#   - Fiction:  http://localhost:8001
+#   - Code:     http://localhost:8002
+#
+# Open WebUI frontends (optional, legacy):
+#   - Fiction:  http://localhost:3001
+#   - Code:     http://localhost:3002
 #
 # Requires: ANTHROPIC_API_KEY in .env or environment
 #

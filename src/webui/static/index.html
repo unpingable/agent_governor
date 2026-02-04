@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Governor Chat</title>
+<style>
+  :root {
+    --bg: #fff; --fg: #111; --muted: #666; --border: #ddd;
+    --card-bg: #fafafa; --badge-ok: #22c55e; --badge-warn: #eab308; --badge-block: #ef4444;
+    --accent: #3b82f6; --accent-light: #eff6ff;
+    --msg-user: #eff6ff; --msg-asst: #f9fafb;
+    --code-bg: #f3f4f6; --code-border: #e5e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111; --fg: #eee; --muted: #999; --border: #333;
+      --card-bg: #1a1a1a; --accent-light: #1e3a5f;
+      --msg-user: #1e3a5f; --msg-asst: #1a1a1a;
+      --code-bg: #1e1e1e; --code-border: #333;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.5; height: 100vh; overflow: hidden; }
+
+  /* Layout */
+  .app { display: grid; grid-template-columns: 1fr 360px; height: 100vh; }
+
+  /* Chat Panel */
+  .chat-panel { display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+  .chat-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .chat-header h1 { font-size: 1rem; font-weight: 600; }
+  .model-select { padding: 0.3rem 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); font-size: 0.8rem; }
+  .backend-badge { font-size: 0.7rem; color: var(--muted); margin-left: auto; }
+
+  .messages { flex: 1; overflow-y: auto; padding: 1rem; }
+  .message { margin-bottom: 1rem; display: flex; gap: 0.75rem; }
+  .message.user { justify-content: flex-end; }
+  .message.user .bubble { background: var(--msg-user); border-radius: 12px 12px 2px 12px; max-width: 80%; }
+  .message.assistant .bubble { background: var(--msg-asst); border: 1px solid var(--border); border-radius: 12px 12px 12px 2px; max-width: 85%; }
+  .bubble { padding: 0.75rem 1rem; font-size: 0.9rem; word-wrap: break-word; overflow-wrap: break-word; }
+  .bubble p { margin-bottom: 0.5rem; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble strong { font-weight: 600; }
+  .bubble em { font-style: italic; }
+  .bubble code { background: var(--code-bg); padding: 0.15rem 0.35rem; border-radius: 3px; font-size: 0.85em; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+  .bubble pre { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 6px; padding: 0.75rem; overflow-x: auto; margin: 0.5rem 0; }
+  .bubble pre code { background: none; padding: 0; font-size: 0.85em; }
+  .bubble ul, .bubble ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+
+  .typing-indicator { color: var(--muted); font-size: 0.85rem; padding: 0.5rem 0; display: none; }
+  .typing-indicator.active { display: block; }
+
+  .chat-input { display: flex; gap: 0.5rem; padding: 0.75rem 1rem; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .chat-input textarea { flex: 1; padding: 0.6rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; background: var(--bg); color: var(--fg); resize: none; min-height: 42px; max-height: 120px; font-family: inherit; }
+  .chat-input textarea:focus { outline: none; border-color: var(--accent); }
+  .chat-input button { padding: 0.5rem 1rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; flex-shrink: 0; }
+  .chat-input button:hover { opacity: 0.9; }
+  .chat-input button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Governor Sidebar */
+  .governor-panel { display: flex; flex-direction: column; overflow-y: auto; padding: 1rem; }
+
+  /* Reuse governor.html styles */
+  .gov-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  .gov-header h2 { font-size: 1rem; font-weight: 600; }
+  .mode-badge { font-size: 0.75rem; background: var(--accent-light); color: var(--accent); padding: 0.2rem 0.5rem; border-radius: 4px; }
+
+  button.gov-btn { background: var(--card-bg); border: 1px solid var(--border); color: var(--fg); padding: 0.4rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+  button.gov-btn:hover { border-color: var(--muted); }
+  button.gov-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.gov-btn.primary:hover { opacity: 0.9; }
+
+  .card { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 1rem; background: var(--card-bg); }
+  .card-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border); }
+  .card-header h3 { font-size: 0.85rem; font-weight: 500; }
+  .card-header .count { font-size: 0.75rem; color: var(--muted); }
+  .card-body { padding: 0.75rem; }
+  .card-body.empty { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 1.5rem 0.75rem; }
+
+  .item { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+  .item:last-child { border-bottom: none; }
+  .item-title { font-size: 0.9rem; font-weight: 500; }
+  .item-detail { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+
+  .status-banner { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; }
+  .status-banner.ok { background: #dcfce7; color: #166534; }
+  .status-banner.warn { background: #fef3c7; color: #92400e; }
+  .status-banner.block { background: #fee2e2; color: #991b1b; }
+  .status-banner .icon { font-size: 1.2rem; }
+  .status-banner .text { font-size: 0.9rem; flex: 1; }
+
+  .correction { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+  .correction:last-child { border-bottom: none; }
+  .correction-icon { display: inline-block; width: 1.2rem; margin-right: 0.25rem; }
+  .correction-text { font-size: 0.85rem; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg); border-radius: 12px; max-width: 400px; width: 90%; padding: 1.25rem; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+  .modal h3 { font-size: 1rem; margin-bottom: 0.75rem; }
+  .modal .form-group { margin-bottom: 0.75rem; }
+  .modal .form-group label { display: block; font-size: 0.8rem; margin-bottom: 0.25rem; }
+  .modal input, .modal textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; background: var(--bg); color: var(--fg); }
+  .modal input:focus, .modal textarea:focus { outline: none; border-color: var(--accent); }
+  .modal textarea { min-height: 80px; resize: vertical; }
+  .modal .buttons { display: flex; gap: 0.5rem; margin-top: 1rem; }
+  .modal .buttons button { flex: 1; }
+
+  .hidden { display: none !important; }
+
+  /* Sidebar toggle for mobile */
+  .sidebar-toggle { display: none; position: fixed; bottom: 1rem; right: 1rem; width: 48px; height: 48px; border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 1.2rem; cursor: pointer; z-index: 50; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+
+  @media (max-width: 768px) {
+    .app { grid-template-columns: 1fr; }
+    .governor-panel { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 340px; background: var(--bg); z-index: 60; border-left: 1px solid var(--border); box-shadow: -4px 0 20px rgba(0,0,0,0.1); }
+    .governor-panel.open { display: flex; }
+    .sidebar-toggle { display: flex; align-items: center; justify-content: center; }
+    .chat-panel { border-right: none; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .status-banner.ok { background: #14532d; color: #86efac; }
+    .status-banner.warn { background: #78350f; color: #fcd34d; }
+    .status-banner.block { background: #7f1d1d; color: #fca5a5; }
+  }
+
+  /* Welcome state */
+  .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); text-align: center; padding: 2rem; }
+  .welcome h2 { font-size: 1.2rem; color: var(--fg); margin-bottom: 0.5rem; }
+  .welcome p { font-size: 0.9rem; max-width: 400px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Chat Panel -->
+  <div class="chat-panel">
+    <div class="chat-header">
+      <h1>Governor Chat</h1>
+      <select class="model-select" id="model-select">
+        <option value="">Loading models...</option>
+      </select>
+      <span class="backend-badge" id="backend-badge"></span>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="welcome" id="welcome">
+        <h2>Governor Chat</h2>
+        <p>Chat with AI under governor constraints. Your rules are enforced in real time.</p>
+      </div>
+    </div>
+
+    <div class="typing-indicator" id="typing">Generating...</div>
+
+    <div class="chat-input">
+      <textarea id="input" placeholder="Type a message..." rows="1"></textarea>
+      <button id="send-btn" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <!-- Governor Sidebar -->
+  <div class="governor-panel" id="governor-panel">
+    <div class="gov-header">
+      <h2>Governor</h2>
+      <span class="mode-badge" id="mode-badge">Loading...</span>
+    </div>
+
+    <!-- Status Banner -->
+    <div class="status-banner ok" id="status-banner">
+      <span class="icon">&#10003;</span>
+      <span class="text" id="status-text">Everything looks good.</span>
+    </div>
+
+    <!-- Fiction Mode Panel -->
+    <div id="fiction-panel" class="hidden">
+      <!-- Characters -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Characters</h3>
+          <span class="count" id="char-count">0</span>
+        </div>
+        <div class="card-body" id="characters-list">
+          <div class="empty">No characters yet.<br>Add one and I'll remember what's true about them.</div>
+        </div>
+        <div style="padding: 0 0.75rem 0.75rem;">
+          <button class="gov-btn" onclick="openModal('add-char-modal')" style="width: 100%;">+ Add Character</button>
+        </div>
+      </div>
+
+      <!-- World Rules -->
+      <div class="card">
+        <div class="card-header">
+          <h3>World Rules</h3>
+          <span class="count" id="rule-count">0</span>
+        </div>
+        <div class="card-body" id="rules-list">
+          <div class="empty">No rules yet.<br>Tell me how your world works.</div>
+        </div>
+        <div style="padding: 0 0.75rem 0.75rem;">
+          <button class="gov-btn" onclick="openModal('add-rule-modal')" style="width: 100%;">+ Add Rule</button>
+        </div>
+      </div>
+
+      <!-- Forbidden -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Things That Shouldn't Happen</h3>
+          <span class="count" id="forbid-count">0</span>
+        </div>
+        <div class="card-body" id="forbidden-list">
+          <div class="empty">Nothing forbidden yet.</div>
+        </div>
+        <div style="padding: 0 0.75rem 0.75rem;">
+          <button class="gov-btn" onclick="openModal('add-forbid-modal')" style="width: 100%;">+ Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Code Mode Panel -->
+    <div id="code-panel" class="hidden">
+      <!-- Decisions -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Decisions</h3>
+          <span class="count" id="decision-count">0</span>
+        </div>
+        <div class="card-body" id="decisions-list">
+          <div class="empty">No decisions recorded yet.<br>Add one and I'll catch contradictions.</div>
+        </div>
+        <div style="padding: 0 0.75rem 0.75rem;">
+          <button class="gov-btn" onclick="openModal('add-decision-modal')" style="width: 100%;">+ Add Decision</button>
+        </div>
+      </div>
+
+      <!-- Constraints -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Constraints</h3>
+          <span class="count" id="constraint-count">0</span>
+        </div>
+        <div class="card-body" id="constraints-list">
+          <div class="empty">No constraints yet.</div>
+        </div>
+        <div style="padding: 0 0.75rem 0.75rem;">
+          <button class="gov-btn" onclick="openModal('add-constraint-modal')" style="width: 100%;">+ Add Constraint</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Corrections Log (all modes) -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Corrections</h3>
+      </div>
+      <div class="card-body" id="corrections-list">
+        <div class="empty">Nothing yet.<br>When I catch something, it'll show up here.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sidebar toggle (mobile) -->
+<button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()">&#9776;</button>
+
+<!-- Add Character Modal -->
+<div class="modal-overlay" id="add-char-modal">
+  <div class="modal">
+    <h3>Add Character</h3>
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" id="char-name" placeholder="Elena">
+    </div>
+    <div class="form-group">
+      <label>What's true about them</label>
+      <textarea id="char-desc" placeholder="Tall, green eyes, grew up in Valencia..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>How they talk and act</label>
+      <input type="text" id="char-voice" placeholder="Formal speech, never uses contractions...">
+    </div>
+    <div class="form-group">
+      <label>Things they wouldn't do</label>
+      <input type="text" id="char-wont" placeholder="Smile warmly, show vulnerability...">
+    </div>
+    <div class="buttons">
+      <button class="gov-btn" onclick="closeModal('add-char-modal')">Cancel</button>
+      <button class="gov-btn primary" onclick="submitCharacter()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Rule Modal -->
+<div class="modal-overlay" id="add-rule-modal">
+  <div class="modal">
+    <h3>Add World Rule</h3>
+    <div class="form-group">
+      <label>What's true about your world?</label>
+      <textarea id="rule-text" placeholder="Magic requires spoken words. Technology is 1920s level..."></textarea>
+    </div>
+    <div class="buttons">
+      <button class="gov-btn" onclick="closeModal('add-rule-modal')">Cancel</button>
+      <button class="gov-btn primary" onclick="submitRule()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Forbidden Modal -->
+<div class="modal-overlay" id="add-forbid-modal">
+  <div class="modal">
+    <h3>What shouldn't happen?</h3>
+    <div class="form-group">
+      <label>Describe what you want to avoid</label>
+      <textarea id="forbid-text" placeholder="Graphic violence, modern slang..."></textarea>
+    </div>
+    <div class="buttons">
+      <button class="gov-btn" onclick="closeModal('add-forbid-modal')">Cancel</button>
+      <button class="gov-btn primary" onclick="submitForbidden()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Decision Modal -->
+<div class="modal-overlay" id="add-decision-modal">
+  <div class="modal">
+    <h3>Record a Decision</h3>
+    <div class="form-group">
+      <label>What did you decide?</label>
+      <input type="text" id="decision-text" placeholder="REST API, not GraphQL">
+    </div>
+    <div class="form-group">
+      <label>Why?</label>
+      <input type="text" id="decision-rationale" placeholder="Simpler, team knows it...">
+    </div>
+    <div class="buttons">
+      <button class="gov-btn" onclick="closeModal('add-decision-modal')">Cancel</button>
+      <button class="gov-btn primary" onclick="submitDecision()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Constraint Modal -->
+<div class="modal-overlay" id="add-constraint-modal">
+  <div class="modal">
+    <h3>Add Constraint</h3>
+    <div class="form-group">
+      <label>What shouldn't happen in the code?</label>
+      <input type="text" id="constraint-text" placeholder="No raw SQL, No Redux...">
+    </div>
+    <div class="buttons">
+      <button class="gov-btn" onclick="closeModal('add-constraint-modal')">Cancel</button>
+      <button class="gov-btn primary" onclick="submitConstraint()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var mode = 'general';
+  var selectedModel = '';
+  var isGenerating = false;
+  var GOV_REFRESH = 3000;
+  var BASE = window.location.origin;
+
+  // ========== Utilities ==========
+
+  function esc(s) {
+    if (!s) return '';
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function renderMarkdown(text) {
+    // Basic markdown: code blocks, inline code, bold, italic, lists, paragraphs
+    var html = text;
+
+    // Code blocks: ```lang\n...\n```
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
+      return '<pre><code>' + esc(code.trim()) + '</code></pre>';
+    });
+
+    // Inline code: `...`
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Bold: **...**
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // Italic: *...*
+    html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+
+    // Split into paragraphs (but preserve pre blocks)
+    var blocks = html.split(/\n\n+/);
+    var result = [];
+    for (var i = 0; i < blocks.length; i++) {
+      var block = blocks[i].trim();
+      if (!block) continue;
+      if (block.startsWith('<pre>')) {
+        result.push(block);
+      } else {
+        // Convert single newlines to <br> within paragraphs
+        result.push('<p>' + block.replace(/\n/g, '<br>') + '</p>');
+      }
+    }
+    return result.join('');
+  }
+
+  // ========== Chat ==========
+
+  function addMessage(role, content) {
+    var welcome = document.getElementById('welcome');
+    if (welcome) welcome.remove();
+
+    var messagesEl = document.getElementById('messages');
+    var msgDiv = document.createElement('div');
+    msgDiv.className = 'message ' + role;
+
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    if (role === 'user') {
+      bubble.textContent = content;
+    } else {
+      bubble.innerHTML = renderMarkdown(content);
+    }
+
+    msgDiv.appendChild(bubble);
+    messagesEl.appendChild(msgDiv);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return bubble;
+  }
+
+  window.sendMessage = function() {
+    var input = document.getElementById('input');
+    var text = input.value.trim();
+    if (!text || isGenerating) return;
+
+    addMessage('user', text);
+    input.value = '';
+    input.style.height = 'auto';
+
+    var model = document.getElementById('model-select').value;
+    streamResponse(text, model);
+  };
+
+  function streamResponse(text, model) {
+    isGenerating = true;
+    document.getElementById('send-btn').disabled = true;
+    document.getElementById('typing').classList.add('active');
+
+    var bubble = addMessage('assistant', '');
+    var accumulated = '';
+
+    var payload = {
+      model: model || 'sonnet',
+      messages: [{ role: 'user', content: text }],
+      stream: true
+    };
+
+    fetch(BASE + '/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function(response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      var reader = response.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+
+      function pump() {
+        return reader.read().then(function(result) {
+          if (result.done) {
+            finishGeneration();
+            return;
+          }
+
+          buffer += decoder.decode(result.value, { stream: true });
+          var lines = buffer.split('\n');
+          buffer = lines.pop(); // Keep incomplete line
+
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (!line.startsWith('data: ')) continue;
+            var data = line.slice(6);
+            if (data === '[DONE]') {
+              finishGeneration();
+              return;
+            }
+            try {
+              var parsed = JSON.parse(data);
+              var delta = parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
+              if (delta && delta.content) {
+                accumulated += delta.content;
+                bubble.innerHTML = renderMarkdown(accumulated);
+                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+              }
+              if (parsed.choices && parsed.choices[0] && parsed.choices[0].finish_reason) {
+                finishGeneration();
+                return;
+              }
+            } catch (e) {}
+          }
+
+          return pump();
+        });
+      }
+
+      return pump();
+    }).catch(function(err) {
+      if (!accumulated) {
+        bubble.innerHTML = '<p style="color: var(--badge-block);">Error: ' + esc(err.message) + '</p>';
+      }
+      finishGeneration();
+    });
+  }
+
+  function finishGeneration() {
+    isGenerating = false;
+    document.getElementById('send-btn').disabled = false;
+    document.getElementById('typing').classList.remove('active');
+    // Refresh governor state after response
+    refreshGovernor();
+  }
+
+  // Textarea auto-resize and enter-to-send
+  var inputEl = document.getElementById('input');
+  inputEl.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+  inputEl.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+
+  // ========== Models ==========
+
+  function loadModels() {
+    fetch(BASE + '/v1/models').then(function(r) { return r.json(); }).then(function(data) {
+      var select = document.getElementById('model-select');
+      select.innerHTML = '';
+      var models = data.data || [];
+      for (var i = 0; i < models.length; i++) {
+        var opt = document.createElement('option');
+        opt.value = models[i].id;
+        opt.textContent = models[i].id;
+        select.appendChild(opt);
+      }
+      if (models.length > 0) selectedModel = models[0].id;
+    }).catch(function() {
+      var select = document.getElementById('model-select');
+      select.innerHTML = '<option value="sonnet">sonnet</option>';
+    });
+  }
+
+  // ========== Governor Sidebar ==========
+
+  function setMode(m) {
+    mode = m;
+    document.getElementById('mode-badge').textContent = m.charAt(0).toUpperCase() + m.slice(1);
+    document.getElementById('fiction-panel').classList.toggle('hidden', m !== 'fiction');
+    document.getElementById('code-panel').classList.toggle('hidden', m !== 'code');
+  }
+
+  function setStatus(status, text) {
+    var banner = document.getElementById('status-banner');
+    banner.className = 'status-banner ' + (status === 'ok' ? 'ok' : status === 'needs_attention' ? 'warn' : 'block');
+    banner.querySelector('.icon').textContent = status === 'ok' ? '\u2713' : '\u26A0';
+    document.getElementById('status-text').textContent = text || (status === 'ok' ? 'Everything looks good.' : 'Needs attention.');
+  }
+
+  function renderCharacters(chars) {
+    var el = document.getElementById('characters-list');
+    document.getElementById('char-count').textContent = chars.length;
+    if (chars.length === 0) {
+      el.innerHTML = '<div class="empty">No characters yet.<br>Add one and I\'ll remember what\'s true about them.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < chars.length; i++) {
+      var c = chars[i];
+      html += '<div class="item"><div class="item-title">' + esc(c.name) + '</div>';
+      if (c.description) html += '<div class="item-detail">' + esc(c.description) + '</div>';
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderRules(rules) {
+    var el = document.getElementById('rules-list');
+    document.getElementById('rule-count').textContent = rules.length;
+    if (rules.length === 0) { el.innerHTML = '<div class="empty">No rules yet.</div>'; return; }
+    var html = '';
+    for (var i = 0; i < rules.length; i++) {
+      html += '<div class="item"><div class="item-detail">' + esc(rules[i].rule) + '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderForbidden(list) {
+    var el = document.getElementById('forbidden-list');
+    document.getElementById('forbid-count').textContent = list.length;
+    if (list.length === 0) { el.innerHTML = '<div class="empty">Nothing forbidden yet.</div>'; return; }
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      html += '<div class="item"><div class="item-detail">' + esc(list[i].description) + '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderDecisions(list) {
+    var el = document.getElementById('decisions-list');
+    document.getElementById('decision-count').textContent = list.length;
+    if (list.length === 0) { el.innerHTML = '<div class="empty">No decisions recorded yet.</div>'; return; }
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      var d = list[i];
+      html += '<div class="item"><div class="item-title">' + esc(d.topic) + ': ' + esc(d.choice) + '</div>';
+      if (d.rationale) html += '<div class="item-detail">"' + esc(d.rationale) + '"</div>';
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderConstraints(list) {
+    var el = document.getElementById('constraints-list');
+    document.getElementById('constraint-count').textContent = list.length;
+    if (list.length === 0) { el.innerHTML = '<div class="empty">No constraints yet.</div>'; return; }
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      html += '<div class="item"><div class="item-detail">' + esc(list[i].description) + '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderCorrections(list) {
+    var el = document.getElementById('corrections-list');
+    if (list.length === 0) {
+      el.innerHTML = '<div class="empty">Nothing yet.<br>When I catch something, it\'ll show up here.</div>';
+      return;
+    }
+    var icons = { fix: '\uD83D\uDD04', revise: '\u270E', proceed: '\u2713' };
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      var icon = icons[c.action] || '\u2022';
+      html += '<div class="correction"><span class="correction-icon">' + icon + '</span>';
+      html += '<span class="correction-text">' + esc(c.summary || c.anchor_id) + '</span></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function refreshGovernor() {
+    // Status
+    fetch(BASE + '/governor/status').then(function(r) { return r.json(); }).then(function(data) {
+      setMode(data.mode || 'general');
+      document.getElementById('backend-badge').textContent = data.has_governor ? 'Governor active' : '';
+    }).catch(function() {});
+
+    // Now
+    fetch(BASE + '/governor/now').then(function(r) { return r.json(); }).then(function(data) {
+      setStatus(data.status, data.sentence);
+    }).catch(function() {});
+
+    // Mode-specific data
+    if (mode === 'fiction') {
+      Promise.all([
+        fetch(BASE + '/governor/fiction/characters').then(function(r) { return r.json(); }),
+        fetch(BASE + '/governor/fiction/world-rules').then(function(r) { return r.json(); }),
+        fetch(BASE + '/governor/fiction/forbidden').then(function(r) { return r.json(); })
+      ]).then(function(results) {
+        renderCharacters(results[0].characters || []);
+        renderRules(results[1].rules || []);
+        renderForbidden(results[2].forbidden || []);
+      }).catch(function() {});
+    }
+    if (mode === 'code') {
+      Promise.all([
+        fetch(BASE + '/governor/code/decisions').then(function(r) { return r.json(); }),
+        fetch(BASE + '/governor/code/constraints').then(function(r) { return r.json(); })
+      ]).then(function(results) {
+        renderDecisions(results[0].decisions || []);
+        renderConstraints(results[1].constraints || []);
+      }).catch(function() {});
+    }
+
+    // Corrections
+    fetch(BASE + '/governor/corrections').then(function(r) { return r.json(); }).then(function(data) {
+      renderCorrections(data.corrections || []);
+    }).catch(function() {});
+  }
+
+  // ========== Modal Helpers ==========
+
+  window.openModal = function(id) { document.getElementById(id).classList.add('open'); };
+  window.closeModal = function(id) { document.getElementById(id).classList.remove('open'); };
+
+  window.submitCharacter = function() {
+    var data = {
+      name: document.getElementById('char-name').value,
+      description: document.getElementById('char-desc').value,
+      voice: document.getElementById('char-voice').value,
+      wont: document.getElementById('char-wont').value
+    };
+    fetch(BASE + '/governor/fiction/characters', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+    }).then(function() {
+      closeModal('add-char-modal');
+      document.getElementById('char-name').value = '';
+      document.getElementById('char-desc').value = '';
+      document.getElementById('char-voice').value = '';
+      document.getElementById('char-wont').value = '';
+      refreshGovernor();
+    });
+  };
+
+  window.submitRule = function() {
+    fetch(BASE + '/governor/fiction/world-rules', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rule: document.getElementById('rule-text').value })
+    }).then(function() {
+      closeModal('add-rule-modal');
+      document.getElementById('rule-text').value = '';
+      refreshGovernor();
+    });
+  };
+
+  window.submitForbidden = function() {
+    fetch(BASE + '/governor/fiction/forbidden', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: document.getElementById('forbid-text').value })
+    }).then(function() {
+      closeModal('add-forbid-modal');
+      document.getElementById('forbid-text').value = '';
+      refreshGovernor();
+    });
+  };
+
+  window.submitDecision = function() {
+    fetch(BASE + '/governor/code/decisions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        decision: document.getElementById('decision-text').value,
+        rationale: document.getElementById('decision-rationale').value
+      })
+    }).then(function() {
+      closeModal('add-decision-modal');
+      document.getElementById('decision-text').value = '';
+      document.getElementById('decision-rationale').value = '';
+      refreshGovernor();
+    });
+  };
+
+  window.submitConstraint = function() {
+    fetch(BASE + '/governor/code/constraints', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ constraint: document.getElementById('constraint-text').value })
+    }).then(function() {
+      closeModal('add-constraint-modal');
+      document.getElementById('constraint-text').value = '';
+      refreshGovernor();
+    });
+  };
+
+  // ========== Sidebar Toggle (mobile) ==========
+
+  window.toggleSidebar = function() {
+    document.getElementById('governor-panel').classList.toggle('open');
+  };
+
+  // ========== Init ==========
+
+  loadModels();
+  refreshGovernor();
+  setInterval(refreshGovernor, GOV_REFRESH);
+
+  // Load backend info
+  fetch(BASE + '/api/info').then(function(r) { return r.json(); }).then(function(data) {
+    document.getElementById('backend-badge').textContent = data.backend || '';
+  }).catch(function() {});
+})();
+</script>
+</body>
+</html>

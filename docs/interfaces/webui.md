@@ -1,6 +1,6 @@
 # WebUI Guide
 
-The WebUI provides a chat interface for working with AI under governor constraints. It's built on Open WebUI with governor integration.
+The WebUI provides a chat interface for working with AI under governor constraints. It serves a self-contained chat + governor panel at a single URL — no external frontend needed.
 
 ---
 
@@ -13,7 +13,7 @@ cd agent_gov
 docker-compose up -d
 ```
 
-Open **http://localhost:3001**
+Open **http://localhost:8001**
 
 This uses the Anthropic API directly (charges apply).
 
@@ -22,6 +22,8 @@ This uses the Anthropic API directly (charges apply).
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.claude-code.yml up -d
 ```
+
+Open **http://localhost:8001**
 
 Routes chat through Claude Code CLI, using your Max subscription instead of API credits.
 
@@ -35,33 +37,61 @@ Routes chat through Claude Code CLI, using your Max subscription instead of API 
 docker-compose -f docker-compose.yml -f docker-compose.ollama.yml up -d
 ```
 
+Open **http://localhost:8001**
+
 Uses local Ollama instance. No API charges, but requires local GPU/compute.
 
 **Requirements:**
 - Ollama running (`ollama serve`)
 - Model pulled (`ollama pull llama3` or similar)
 
+### Without Docker
+
+```bash
+pip install -e .
+BACKEND_TYPE=ollama GOVERNOR_MODE=fiction uvicorn webui.adapter:app --port 8001
+```
+
+Open **http://localhost:8001**
+
 ---
 
 ## Architecture
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│    Browser      │────▶│   Open WebUI    │────▶│  Governor       │
-│  localhost:3001 │     │   (frontend)    │     │  Adapter        │
-└─────────────────┘     └─────────────────┘     └────────┬────────┘
-                                                         │
-                        ┌────────────────────────────────┼────────┐
-                        │                                ▼        │
-                        │  ┌──────────┐  ┌──────────┐  ┌────────┐│
-                        │  │ Anthropic│  │  Ollama  │  │ Claude ││
-                        │  │   API    │  │  Local   │  │  Code  ││
-                        │  └──────────┘  └──────────┘  └────────┘│
-                        │              BACKENDS                   │
-                        └─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│              Browser — localhost:8001            │
+│  ┌──────────────────────┬──────────────────────┐│
+│  │     Chat Panel       │  Governor Sidebar    ││
+│  │  Messages + Input    │  Status, Rules,      ││
+│  │  Streaming SSE       │  Characters, etc.    ││
+│  └──────────┬───────────┴──────────┬───────────┘│
+└─────────────┼──────────────────────┼─────────────┘
+              │                      │
+              ▼                      ▼
+┌─────────────────────────────────────────────────┐
+│            Governor Adapter (:8001)             │
+│  /v1/chat/completions  │  /governor/*           │
+│  /v1/models            │  /governor/ui          │
+│  /health               │  /api/info             │
+└────────────┬────────────────────────────────────┘
+             │
+    ┌────────┼────────┐
+    ▼        ▼        ▼
+┌────────┐┌────────┐┌────────┐
+│Anthropic││ Ollama ││ Claude │
+│  API   ││ Local  ││  Code  │
+└────────┘└────────┘└────────┘
 ```
 
-The adapter sits between Open WebUI and the LLM backends, adding:
+The adapter serves both the UI and the API:
+- **GET /** — Combined chat + governor UI (single-page app)
+- **POST /v1/chat/completions** — OpenAI-compatible chat (streaming supported)
+- **GET /governor/*** — Governor state, fiction/code data, corrections
+- **GET /governor/ui** — Standalone governor panel (backward compat)
+- **GET /api/info** — JSON endpoint with API info
+
+Governor integration adds:
 - Mode-specific system prompts
 - Continuity checking on responses
 - Violation resolution flow
@@ -75,12 +105,14 @@ The adapter sits between Open WebUI and the LLM backends, adding:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GOVERNOR_MODE` | `code` | Active mode: fiction, code, nonfiction, ops |
-| `GOVERNOR_BACKEND` | `anthropic` | Backend: anthropic, ollama, claude-code |
+| `BACKEND_TYPE` | `ollama` | Backend: anthropic, ollama, claude-code |
+| `GOVERNOR_MODE` | `general` | Active mode: fiction, code, nonfiction, general |
 | `ANTHROPIC_API_KEY` | — | API key (for anthropic backend) |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama URL (for ollama backend) |
 | `CLAUDE_PATH` | `claude` | Path to claude CLI (for claude-code backend) |
-| `GOVERNOR_DIR` | `.governor` | Path to governor state directory |
+| `GOVERNOR_CONTEXT_ID` | `default` | Active context ID |
+| `GOVERNOR_CONTEXTS_DIR` | `~/.governor-contexts` | Base dir for contexts |
+| `GOVERNOR_SHOW_OK_FOOTER` | `true` | Show "[Governor] OK" in chat when clean |
 
 ### Docker Compose Override
 
@@ -92,7 +124,7 @@ services:
   governor-adapter:
     environment:
       - GOVERNOR_MODE=fiction
-      - GOVERNOR_BACKEND=claude-code
+      - BACKEND_TYPE=claude-code
 ```
 
 ---
@@ -101,33 +133,27 @@ services:
 
 ### Selecting a Mode
 
-The mode determines what constraints are active. Set via environment variable or in-chat command.
+The mode determines what constraints are active. Set via environment variable.
 
-**Environment:**
 ```bash
-GOVERNOR_MODE=fiction docker-compose up -d
-```
-
-**In-chat:**
-```
-/mode fiction
+GOVERNOR_MODE=fiction uvicorn webui.adapter:app --port 8001
 ```
 
 ### Mode Differences
 
-| Mode | System Prompt Focus | Anchor Types |
-|------|---------------------|--------------|
-| Fiction | Story consistency, character voice | canon, prohibition, persona |
-| Code | Tech decisions, patterns | canon, prohibition, style |
-| Nonfiction | Sources, positions, hedging | canon, definition, style |
-| Ops | Runbooks, time windows | All (via ops-gov) |
+| Mode | System Prompt Focus | Sidebar Panels |
+|------|---------------------|----------------|
+| Fiction | Story consistency, character voice, affect regime | Characters, World Rules, Forbidden |
+| Code | Tech decisions, patterns | Decisions, Constraints |
+| Nonfiction | Sources, positions, hedging | (status + corrections) |
+| General | No mode-specific prompts | (status + corrections) |
 
 ### Mode-Specific UI Panels
 
-The WebUI shows different panels based on the active mode:
+The sidebar shows different panels based on the active mode:
 
 **Fiction Mode:**
-- Characters — Add/view characters with descriptions
+- Characters — Add/view characters with descriptions and prohibitions
 - World Rules — "In this world..." constraints
 - Forbidden — Things that shouldn't happen
 
@@ -139,19 +165,18 @@ The WebUI shows different panels based on the active mode:
 
 ## Violation Resolution
 
-When the AI generates content that violates a constraint, you'll see a friendly prompt:
+When the AI generates content that violates a constraint, you'll see a prompt in the chat:
 
 ```
-⚠️ This conflicts with something you said earlier
+[Governor] Blocked — 1 violation(s) detected.
 
-You said: "Elena has green eyes, not blue"
-But I wrote: "Elena's blue eyes glistened..."
+  - test_reject_anchor: Cannot mention secret password
 
 How would you like to handle this?
 
-1. 🔄 Fix — I'll rewrite to match your rules
-2. ✎ Change — Update what I should remember
-3. ✓ Allow — Let this one through (I'll log it)
+1. fix — Rewrite to comply with the constraint
+2. revise — Update the constraint to permit this
+3. proceed — Allow this once and log an exception
 ```
 
 ### Resolution Commands
@@ -159,17 +184,12 @@ How would you like to handle this?
 | Input | Action |
 |-------|--------|
 | `1` or `fix` | AI regenerates compliant response |
-| `2` or `change` | Updates the constraint to permit the output |
-| `3` or `allow` | Logs exception, shows original output |
-
-You can also type the words: `fix`, `change`, `allow`
+| `2` or `revise` | Updates the constraint to permit the output |
+| `3` or `proceed` | Logs exception, shows original output |
 
 ### Corrections Log
 
-The UI shows a "Corrections" panel tracking all resolutions:
-- 🔄 Fixed — rewrote to comply
-- ✎ Changed — updated the rule
-- ✓ Allowed — logged exception
+The sidebar shows a "Corrections" panel tracking all resolutions.
 
 ### Blocking Behavior
 
@@ -204,9 +224,9 @@ services:
       service: governor-adapter
     environment:
       - GOVERNOR_MODE=fiction
-      - GOVERNOR_USER=erin
+      - GOVERNOR_CONTEXT_ID=erin
     ports:
-      - "3001:3000"
+      - "8001:8000"
 
   james-studio:
     extends:
@@ -214,9 +234,9 @@ services:
       service: governor-adapter
     environment:
       - GOVERNOR_MODE=code
-      - GOVERNOR_USER=james
+      - GOVERNOR_CONTEXT_ID=james
     ports:
-      - "3002:3000"
+      - "8002:8000"
 ```
 
 ---
@@ -227,37 +247,23 @@ services:
 
 Direct API access to Claude models.
 
-**Pros:**
-- Full model access
-- Streaming support
-- All features available
+**Pros:** Full model access, streaming support, all features
+**Cons:** API charges apply, requires API key
 
-**Cons:**
-- API charges apply
-- Requires API key management
-
-**Config:**
 ```bash
+export BACKEND_TYPE=anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
-export GOVERNOR_BACKEND=anthropic
 ```
 
 ### Claude Code
 
 Routes through Claude Code CLI, using your Max subscription.
 
-**Pros:**
-- Uses Max subscription (no per-message charges)
-- Same Claude models
-- No API key in environment
+**Pros:** Uses Max subscription (no per-message charges), no API key in environment
+**Cons:** Requires Claude Code installed and authenticated, slightly higher latency
 
-**Cons:**
-- Requires Claude Code installed and authenticated
-- Slightly higher latency (subprocess spawn)
-
-**Config:**
 ```bash
-export GOVERNOR_BACKEND=claude-code
+export BACKEND_TYPE=claude-code
 export CLAUDE_PATH=/path/to/claude  # if not in PATH
 ```
 
@@ -265,28 +271,36 @@ export CLAUDE_PATH=/path/to/claude  # if not in PATH
 
 Local LLM inference via Ollama.
 
-**Pros:**
-- No API charges
-- Data stays local
-- Works offline
+**Pros:** No API charges, data stays local, works offline
+**Cons:** Requires GPU/compute resources, model quality varies
 
-**Cons:**
-- Requires GPU/compute resources
-- Model quality varies
-- Larger models need significant RAM/VRAM
-
-**Config:**
 ```bash
-export GOVERNOR_BACKEND=ollama
+export BACKEND_TYPE=ollama
 export OLLAMA_HOST=http://localhost:11434
 ```
 
-**Model selection** in chat:
-```
-/model llama3
-/model codellama
-/model mixtral
-```
+---
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Combined chat + governor UI |
+| `/v1/chat/completions` | POST | Chat completion (streaming supported) |
+| `/v1/models` | GET | List available models |
+| `/api/info` | GET | JSON API info |
+| `/health` | GET | Health check |
+| `/governor/status` | GET | Governor state |
+| `/governor/now` | GET | Glanceable status |
+| `/governor/why` | GET | Decision/violation feed |
+| `/governor/history` | GET | Events by day |
+| `/governor/corrections` | GET | Resolution history |
+| `/governor/ui` | GET | Standalone governor panel |
+| `/governor/fiction/characters` | GET/POST | Fiction characters |
+| `/governor/fiction/world-rules` | GET/POST | Fiction world rules |
+| `/governor/fiction/forbidden` | GET/POST | Fiction prohibitions |
+| `/governor/code/decisions` | GET/POST | Code decisions |
+| `/governor/code/constraints` | GET/POST | Code constraints |
 
 ---
 
@@ -294,13 +308,10 @@ export OLLAMA_HOST=http://localhost:11434
 
 ### "Connection refused"
 
-WebUI can't reach the adapter.
+Adapter isn't running.
 
 ```bash
-# Check adapter is running
 docker-compose ps
-
-# Check logs
 docker-compose logs governor-adapter
 ```
 
@@ -309,10 +320,7 @@ docker-compose logs governor-adapter
 Anthropic backend needs API key.
 
 ```bash
-# Set in environment
 export ANTHROPIC_API_KEY=sk-ant-...
-
-# Or in docker-compose.override.yml
 ```
 
 ### "Claude not found"
@@ -320,10 +328,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 Claude-code backend can't find CLI.
 
 ```bash
-# Check claude is installed
 which claude
-
-# Set explicit path
 export CLAUDE_PATH=/home/user/.local/bin/claude
 ```
 
@@ -331,7 +336,7 @@ export CLAUDE_PATH=/home/user/.local/bin/claude
 
 Getting the same violation repeatedly after "fix".
 
-This means the AI can't satisfy the constraint. Options:
+Options:
 1. `revise` — relax the constraint
 2. `proceed` — accept the exception
 3. Check if the anchor is too strict
@@ -341,49 +346,10 @@ This means the AI can't satisfy the constraint. Options:
 Mode-specific anchors aren't loading.
 
 ```bash
-# Check anchor status
 governor continuity status
-
-# List anchors
 governor continuity anchor list
-
-# Check mode
 echo $GOVERNOR_MODE
 ```
-
----
-
-## Advanced Usage
-
-### Custom System Prompts
-
-The adapter injects mode-specific system prompts. Customize in:
-
-```
-src/governor/chat_bridge.py → GovernorHooks._system_prompt_for_mode()
-```
-
-### Telemetry
-
-Enable structured logging:
-
-```bash
-governor telemetry enable --logging
-```
-
-Logs go to `.governor/telemetry/`.
-
-### API Endpoints
-
-The adapter exposes OpenAI-compatible endpoints:
-
-| Endpoint | Description |
-|----------|-------------|
-| `POST /v1/chat/completions` | Chat completion (streaming supported) |
-| `GET /v1/models` | List available models |
-| `GET /governor/status` | Governor state |
-| `GET /governor/anchors` | List anchors |
-| `POST /governor/resolve` | Resolve pending violation |
 
 ---
 
@@ -393,7 +359,3 @@ The adapter exposes OpenAI-compatible endpoints:
 - The adapter runs with governor enforcement — it can block output
 - Exception logs contain partial responses (review before sharing)
 - Multi-user setup isolates state but shares the same backend
-
----
-
-*"Chat with guardrails. Your constraints, enforced."*

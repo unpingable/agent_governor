@@ -862,34 +862,56 @@ class TestClaudeCodeBackend:
         backend = ClaudeCodeBackend(claude_path="/usr/local/bin/claude")
         assert backend.claude_path == "/usr/local/bin/claude"
 
-    def test_build_prompt_user_only(self) -> None:
+    def test_extract_system_and_prompt_user_only(self) -> None:
         backend = ClaudeCodeBackend()
         messages = [ChatMessage(role="user", content="Hello")]
-        prompt = backend._build_prompt(messages)
-        assert "[User]: Hello" in prompt
-        assert "[Assistant]:" in prompt
+        system, prompt = backend._extract_system_and_prompt(messages)
+        assert system == ""
+        assert prompt == "Hello"
 
-    def test_build_prompt_with_system(self) -> None:
+    def test_extract_system_and_prompt_with_system(self) -> None:
         backend = ClaudeCodeBackend()
         messages = [
             ChatMessage(role="system", content="Be helpful"),
             ChatMessage(role="user", content="Hi"),
         ]
-        prompt = backend._build_prompt(messages)
-        assert "[System]: Be helpful" in prompt
-        assert "[User]: Hi" in prompt
+        system, prompt = backend._extract_system_and_prompt(messages)
+        assert system == "Be helpful"
+        assert prompt == "Hi"
+        # System messages should NOT be in the user prompt
+        assert "Be helpful" not in prompt
 
-    def test_build_prompt_conversation(self) -> None:
+    def test_extract_system_and_prompt_conversation(self) -> None:
         backend = ClaudeCodeBackend()
         messages = [
             ChatMessage(role="user", content="What is 2+2?"),
             ChatMessage(role="assistant", content="4"),
             ChatMessage(role="user", content="Thanks!"),
         ]
-        prompt = backend._build_prompt(messages)
-        assert "[User]: What is 2+2?" in prompt
+        system, prompt = backend._extract_system_and_prompt(messages)
+        assert system == ""
+        assert "What is 2+2?" in prompt
         assert "[Assistant]: 4" in prompt
-        assert "[User]: Thanks!" in prompt
+        assert "Thanks!" in prompt
+
+    def test_extract_system_and_prompt_multiple_system(self) -> None:
+        """Multiple system messages are concatenated."""
+        backend = ClaudeCodeBackend()
+        messages = [
+            ChatMessage(role="system", content="Rule 1"),
+            ChatMessage(role="system", content="Rule 2"),
+            ChatMessage(role="user", content="Hi"),
+        ]
+        system, prompt = backend._extract_system_and_prompt(messages)
+        assert "Rule 1" in system
+        assert "Rule 2" in system
+        assert prompt == "Hi"
+
+    def test_extract_system_and_prompt_empty(self) -> None:
+        backend = ClaudeCodeBackend()
+        system, prompt = backend._extract_system_and_prompt([])
+        assert system == ""
+        assert prompt == ""
 
     def test_list_models(self) -> None:
         backend = ClaudeCodeBackend()
@@ -897,6 +919,181 @@ class TestClaudeCodeBackend:
         assert len(models) > 0
         assert any(m["id"] == "sonnet" for m in models)
         assert all(m["owned_by"] == "claude-code" for m in models)
+
+    def test_chat_command_has_model_flag(self) -> None:
+        """Chat command should include --model flag."""
+        import asyncio
+
+        backend = ClaudeCodeBackend()
+
+        captured_cmd = []
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            captured_cmd.extend(args)
+            proc = MagicMock()
+            proc.communicate = AsyncMock(return_value=(
+                json.dumps({"result": "ok"}).encode(),
+                b"",
+            ))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            run_async(backend.chat(messages, "sonnet"))
+
+        assert "--model" in captured_cmd
+        model_idx = captured_cmd.index("--model")
+        assert captured_cmd[model_idx + 1] == "sonnet"
+
+    def test_chat_command_has_system_prompt_flag(self) -> None:
+        """Chat command should include --system-prompt when system messages present."""
+        import asyncio
+
+        backend = ClaudeCodeBackend()
+
+        captured_cmd = []
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            captured_cmd.extend(args)
+            proc = MagicMock()
+            proc.communicate = AsyncMock(return_value=(
+                json.dumps({"result": "ok"}).encode(),
+                b"",
+            ))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [
+                ChatMessage(role="system", content="Be helpful"),
+                ChatMessage(role="user", content="Hello"),
+            ]
+            run_async(backend.chat(messages, "sonnet"))
+
+        assert "--system-prompt" in captured_cmd
+        sp_idx = captured_cmd.index("--system-prompt")
+        assert captured_cmd[sp_idx + 1] == "Be helpful"
+
+    def test_chat_command_pipes_via_stdin(self) -> None:
+        """Prompt should be piped via stdin, not as CLI arg."""
+        import asyncio
+
+        backend = ClaudeCodeBackend()
+
+        captured_input = []
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            async def mock_communicate(input=None):
+                if input:
+                    captured_input.append(input)
+                return (json.dumps({"result": "ok"}).encode(), b"")
+            proc.communicate = mock_communicate
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            run_async(backend.chat(messages, "sonnet"))
+
+        assert len(captured_input) == 1
+        assert captured_input[0] == b"Hello"
+
+    def test_chat_command_no_system_prompt_flag_when_absent(self) -> None:
+        """No --system-prompt flag when no system messages."""
+        import asyncio
+
+        backend = ClaudeCodeBackend()
+
+        captured_cmd = []
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            captured_cmd.extend(args)
+            proc = MagicMock()
+            proc.communicate = AsyncMock(return_value=(
+                json.dumps({"result": "ok"}).encode(),
+                b"",
+            ))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            run_async(backend.chat(messages, "sonnet"))
+
+        assert "--system-prompt" not in captured_cmd
+
+    def test_stream_command_has_verbose_flag(self) -> None:
+        """Stream command should include --verbose (required for stream-json)."""
+        import asyncio
+
+        backend = ClaudeCodeBackend()
+
+        captured_cmd = []
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            captured_cmd.extend(args)
+            proc = MagicMock()
+            # Mock stdin
+            proc.stdin = MagicMock()
+            proc.stdin.write = MagicMock()
+            proc.stdin.drain = AsyncMock()
+            proc.stdin.close = MagicMock()
+            # Mock stdout that returns empty (no data)
+            async def read_empty(n):
+                return b""
+            proc.stdout = MagicMock()
+            proc.stdout.read = read_empty
+            # Mock stderr for error handling path
+            async def read_stderr():
+                return b""
+            proc.stderr = MagicMock()
+            proc.stderr.read = read_stderr
+            proc.returncode = 0
+            proc.wait = AsyncMock(return_value=0)
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+
+            async def collect():
+                chunks = []
+                async for chunk in backend.stream(messages, "sonnet"):
+                    chunks.append(chunk)
+                return chunks
+
+            run_async(collect())
+
+        assert "--verbose" in captured_cmd
+        assert "--model" in captured_cmd
+        assert "stream-json" in captured_cmd
+
+    def test_chat_json_parsing_result_field(self) -> None:
+        """Chat should extract content from data['result'] string."""
+        import asyncio
+
+        backend = ClaudeCodeBackend()
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            proc.communicate = AsyncMock(return_value=(
+                json.dumps({
+                    "result": "Hello from Claude!",
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                }).encode(),
+                b"",
+            ))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            response = run_async(backend.chat(messages, "sonnet"))
+
+        assert response.content == "Hello from Claude!"
+        assert response.usage["prompt_tokens"] == 10
+        assert response.usage["completion_tokens"] == 5
 
     @pytest.mark.asyncio
     async def test_chat_subprocess_error(self) -> None:

@@ -39,16 +39,18 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  Governor WebUI is ready!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "  Chat UI:  http://localhost:3000"
-echo "  API:      http://localhost:8000"
-echo "  Ollama:   http://localhost:11434"
+echo "  Fiction:   http://localhost:8001"
+echo "  Code:      http://localhost:8002"
+echo "  Ollama:    http://localhost:11434"
+echo ""
+echo "  (Open WebUI frontends also at :3001 and :3002)"
 echo ""
 echo "  Stop with: docker-compose down"
 echo ""
 
 # Open browser (macOS/Linux)
 if command -v open &> /dev/null; then
-    open http://localhost:3000
+    open http://localhost:8001
 elif command -v xdg-open &> /dev/null; then
-    xdg-open http://localhost:3000
+    xdg-open http://localhost:8001
 fi

@@ -10,7 +10,7 @@
 #   - Mount the host's claude config into the container
 
 services:
-  erin-adapter:
+  fiction-adapter:
     environment:
       - BACKEND_TYPE=claude-code
       - CLAUDE_PATH=/usr/local/bin/claude
@@ -21,7 +21,7 @@ services:
       - ${HOME}/.claude:/root/.claude:ro
       - ${HOME}/.config/claude:/root/.config/claude:ro
 
-  james-adapter:
+  code-adapter:
     environment:
       - BACKEND_TYPE=claude-code
       - CLAUDE_PATH=/usr/local/bin/claude

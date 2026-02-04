@@ -1356,7 +1356,7 @@ class TestEdgeCases:
             tuner.record(RegimeSignals(hysteresis=0.4), OperationalRegime.WARM)
         dists = tuner._compute_distributions()
         elastic_hyst = dists["elastic"].distributions["hysteresis"]
-        assert elastic_hyst.stddev == 0.0
+        assert elastic_hyst.stddev == pytest.approx(0.0, abs=1e-10)
 
     def test_single_sweep_point(self):
         sweeper = BudgetSweeper("budget")

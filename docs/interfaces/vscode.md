@@ -71,16 +71,17 @@ Access via Command Palette (`Ctrl+Shift+P`).
 ### Hover Tooltips
 
 Hover over code to see governor context:
-- **Decisions**: Relevant architectural decisions
-- **Claims**: Active claims about this code
-- **Violations**: Why this code was flagged
+- **"You decided:"** — Relevant architectural decisions with Edit/Remove actions
+- **"Tracked:"** — Active claims about this code
+- **"You said:"** — Why this code was flagged with Fix/Change Rule/Allow Here actions
 
 ### Code Actions
 
 Quick fixes appear as lightbulb suggestions:
-- **Fix violation**: Attempt automatic correction
-- **Add suppression comment**: Suppress this check
-- **Update anchor**: Modify the constraint
+- **Governor: Fix —** Attempt automatic correction (preferred action)
+- **Governor: Allow here** — Suppress this check with inline comment
+- **Governor: Change rule** — Modify the constraint
+- **Governor: Mark as reviewed** — For security findings
 
 ### State Panel
 
@@ -88,26 +89,28 @@ The Activity Bar shows a Governor icon. Click it for the State Panel:
 
 ```
 GOVERNOR STATE
-├── Session
-│   ├── Mode: code
-│   ├── Profile: strict
-│   └── Uptime: 2h 15m
-├── Regime
-│   ├── Status: ELASTIC
-│   └── Stress: 0.23
+├── Problems (2)  ← Shown first, expanded if any
+│   ├── Missing evidence for claim
+│   └── Hardcoded secret detected
 ├── Decisions (3)
-│   ├── Use React for frontend
-│   ├── PostgreSQL for database
-│   └── REST over GraphQL
+│   ├── framework: React
+│   ├── database: PostgreSQL
+│   └── api-style: REST
 ├── Claims (12)
-│   ├── SUPPORTED (8)
-│   ├── PROPOSED (3)
-│   └── CONTESTED (1)
-├── Violations (2)
-│   ├── WARN: style-no-any
-│   └── REJECT: security-no-secrets
-└── Execution
-    └── No active sessions
+│   ├── [STABILIZED] Tests pass (0.92)
+│   ├── [PROPOSED] API is RESTful (0.45)
+│   └── ...
+├── Evidence (3)
+├── Execution
+│   └── Pending: 1
+├── Session
+│   ├── Mode: STRICT
+│   └── Authority: Balanced
+├── Regime: ELASTIC
+│   └── Boil: OOLONG
+└── Stability
+    ├── Rejection rate: 0.18
+    └── Drift: NONE
 ```
 
 Click items to see details.
@@ -239,26 +242,27 @@ Click to jump to location.
 
 When you hover over a diagnostic, the lightbulb offers:
 
-**For violations:**
-- "Fix: [description]" — Attempt auto-fix
-- "Suppress with comment" — Add `// governor-ignore: <anchor-id>`
-- "View anchor" — Show anchor details
+**For all findings:**
+- **Governor: Fix —** [description] — Attempt auto-fix (preferred action)
+- **Governor: Allow here** — Add `// governor-allow: <code>` comment
 
-**For security issues:**
-- "Move to environment variable" — Refactor secret
-- "Add to .gitignore" — Prevent commit
-- "Mark as false positive" — Suppress check
+**For continuity findings:**
+- **Governor: Change rule** — Opens rule editing command
+
+**For security findings:**
+- **Governor: Mark as reviewed** — Add `// @security-reviewed: <code>` comment
+- **Governor: Fix —** Use environment variable (for secrets)
 
 ### Suppression Comments
 
 Add inline suppression:
 
 ```typescript
-// governor-ignore: style-no-any
+// governor-allow: style-no-any
 const config: any = loadConfig();
 
-// governor-ignore-next-line: security-no-secrets
-const API_KEY = "sk-test-...";  // This is a test key
+// @security-reviewed: SEC003
+const API_KEY = "sk-test-...";  // This is a documented test key
 ```
 
 ---
@@ -291,11 +295,12 @@ Shows epistemic state:
 - **PROPOSED**: Awaiting verification
 - **CONTESTED**: Conflicting evidence
 
-### Violations Section
+### Problems Section
 
-Active violations requiring attention:
-- Click to jump to violation location
-- Shows severity and anchor ID
+Active problems requiring attention (shown first in tree, expanded if any):
+- Click to see full problem details
+- Shows the rule breached and detail
+- Icons indicate severity: info, warning, error, alert
 
 ### Execution Section
 

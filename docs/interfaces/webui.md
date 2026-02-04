@@ -122,21 +122,36 @@ GOVERNOR_MODE=fiction docker-compose up -d
 | Nonfiction | Sources, positions, hedging | canon, definition, style |
 | Ops | Runbooks, time windows | All (via ops-gov) |
 
+### Mode-Specific UI Panels
+
+The WebUI shows different panels based on the active mode:
+
+**Fiction Mode:**
+- Characters — Add/view characters with descriptions
+- World Rules — "In this world..." constraints
+- Forbidden — Things that shouldn't happen
+
+**Code Mode:**
+- Decisions — "We use X for Y" architectural choices
+- Constraints — "Never do X" prohibitions
+
 ---
 
 ## Violation Resolution
 
-When the AI generates content that violates an anchor, you'll see:
+When the AI generates content that violates a constraint, you'll see a friendly prompt:
 
 ```
-[Governor] Blocked — choose an action:
-  • [anchor-id] Description of violation
+⚠️ This conflicts with something you said earlier
 
-1. Fix — Rewrite to comply with constraint
-2. Revise — Update the constraint
-3. Proceed — Log as intentional exception
+You said: "Elena has green eyes, not blue"
+But I wrote: "Elena's blue eyes glistened..."
 
-Reply with 1, 2, 3 or: fix | revise | proceed
+How would you like to handle this?
+
+1. 🔄 Fix — I'll rewrite to match your rules
+2. ✎ Change — Update what I should remember
+3. ✓ Allow — Let this one through (I'll log it)
 ```
 
 ### Resolution Commands
@@ -144,8 +159,17 @@ Reply with 1, 2, 3 or: fix | revise | proceed
 | Input | Action |
 |-------|--------|
 | `1` or `fix` | AI regenerates compliant response |
-| `2` or `revise` | Updates the anchor to permit the output |
-| `3` or `proceed` | Logs exception, shows original output |
+| `2` or `change` | Updates the constraint to permit the output |
+| `3` or `allow` | Logs exception, shows original output |
+
+You can also type the words: `fix`, `change`, `allow`
+
+### Corrections Log
+
+The UI shows a "Corrections" panel tracking all resolutions:
+- 🔄 Fixed — rewrote to comply
+- ✎ Changed — updated the rule
+- ✓ Allowed — logged exception
 
 ### Blocking Behavior
 

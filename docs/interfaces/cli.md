@@ -17,6 +17,55 @@ governor --help
 
 ---
 
+## Quick Start (Human-Friendly)
+
+Running `governor` with no arguments shows a friendly status overview:
+
+```bash
+governor              # Shows status, not a man page
+```
+
+### For Fiction Writers
+
+```bash
+# Initialize fiction project
+governor fiction init
+
+# Add characters, world rules, forbidden elements
+governor fiction character add elena --description "The protagonist"
+governor fiction world add "Magic requires sacrifice"
+governor fiction forbid "time travel"
+
+# Check status
+governor fiction status
+```
+
+### For Code Developers
+
+```bash
+# Initialize code project
+governor code init
+
+# Record decisions and constraints
+governor code decision add "We use React for UI"
+governor code constraint add "No eval() calls"
+
+# Verify code follows decisions
+governor code verify src/
+```
+
+### Resolving Violations
+
+When Governor catches something:
+
+```bash
+governor resolve fix      # Regenerate compliant output
+governor resolve change   # Update the rule
+governor resolve allow    # Allow this instance (logs exception)
+```
+
+---
+
 ## Core Workflow
 
 ### Initialize
@@ -320,6 +369,44 @@ governor continuity anchor add \
 | `governor mcp serve` | Run MCP server |
 | `governor mcp tools` | List MCP tools |
 | `governor mcp call <tool>` | Test MCP tool |
+
+---
+
+## Persona Commands (Human-Friendly)
+
+### Fiction (governor fiction)
+
+| Command | Description |
+|---------|-------------|
+| `governor fiction init` | Initialize fiction project with sample canon |
+| `governor fiction status` | Show characters, world rules, forbidden |
+| `governor fiction character add <name>` | Add a character |
+| `governor fiction character list` | List all characters |
+| `governor fiction character show <id>` | Show character details |
+| `governor fiction character remove <id>` | Remove a character |
+| `governor fiction world add <rule>` | Add a world-building rule |
+| `governor fiction world list` | List world rules |
+| `governor fiction forbid <pattern>` | Add forbidden element |
+
+### Code (governor code)
+
+| Command | Description |
+|---------|-------------|
+| `governor code init` | Initialize code project |
+| `governor code status` | Show decisions and constraints |
+| `governor code decision add <text>` | Add architectural decision |
+| `governor code decision list` | List decisions |
+| `governor code constraint add <text>` | Add a constraint |
+| `governor code constraint list` | List constraints |
+| `governor code verify [path]` | Verify code against decisions |
+
+### Resolve (governor resolve)
+
+| Command | Description |
+|---------|-------------|
+| `governor resolve fix` | Regenerate compliant response |
+| `governor resolve change` | Update the rule/anchor |
+| `governor resolve allow` | Allow this instance (logs exception) |
 
 ---
 

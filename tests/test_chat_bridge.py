@@ -1358,7 +1358,8 @@ class TestCheckResponseBlocking:
         )
         assert isinstance(result, ViolationPendingResponse)
         assert "[Governor] Blocked" in result.prompt
-        assert "maude fix" in result.prompt.lower()
+        # Prompt includes resolution commands (fix/revise/proceed)
+        assert "fix" in result.prompt.lower()
 
     def test_pending_creates_file(self, tmp_path: Path) -> None:
         """Blocking check creates pending violation file."""

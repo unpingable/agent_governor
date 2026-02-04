@@ -665,6 +665,393 @@ async def governor_detail(item_id: str) -> dict[str, Any]:
 
 
 # ============================================================================
+# Mode-Specific Endpoints (Fiction / Code)
+# ============================================================================
+
+
+class CharacterRequest(BaseModel):
+    """Request to add a character."""
+    name: str
+    description: str | None = None
+    voice: str | None = None
+    wont: str | None = None  # Things they wouldn't do
+
+
+class WorldRuleRequest(BaseModel):
+    """Request to add a world rule."""
+    rule: str
+
+
+class ForbiddenRequest(BaseModel):
+    """Request to add a forbidden thing."""
+    description: str
+    patterns: list[str] = Field(default_factory=list)
+
+
+class DecisionRequest(BaseModel):
+    """Request to add a decision."""
+    decision: str
+    rationale: str | None = None
+
+
+class ConstraintRequest(BaseModel):
+    """Request to add a constraint."""
+    constraint: str
+    patterns: list[str] = Field(default_factory=list)
+
+
+@app.get("/governor/fiction/characters")
+async def list_characters() -> dict[str, Any]:
+    """List all characters for fiction mode."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        return {"characters": [], "message": "No governor context initialized."}
+
+    from governor.continuity import AnchorType, create_registry
+
+    registry = create_registry(ctx.governor_dir)
+    anchors = registry.all()
+
+    characters = []
+    for a in anchors:
+        if a.anchor_type == AnchorType.CANON and "char-" in a.id.lower():
+            name = a.id.replace("char-", "").replace("-", " ").title()
+            # Check for associated "wont" anchor
+            wont_anchor = registry.get(f"{a.id}-wont")
+            characters.append({
+                "id": a.id,
+                "name": name,
+                "description": a.description,
+                "wont": wont_anchor.description if wont_anchor else None,
+            })
+
+    return {"characters": characters}
+
+
+@app.post("/governor/fiction/characters")
+async def add_character(request: CharacterRequest) -> dict[str, Any]:
+    """Add a character for fiction mode."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        raise HTTPException(status_code=400, detail="No governor context initialized.")
+
+    from governor.continuity import Anchor, AnchorType, Severity, create_registry
+
+    registry = create_registry(ctx.governor_dir)
+
+    char_id = f"char-{request.name.lower().replace(' ', '-')}"
+
+    # Build description
+    desc_parts = []
+    if request.description:
+        desc_parts.append(f"Appearance: {request.description}")
+    if request.voice:
+        desc_parts.append(f"Voice: {request.voice}")
+    description = "; ".join(desc_parts) if desc_parts else f"Character: {request.name}"
+
+    # Create character anchor
+    anchor = Anchor(
+        id=char_id,
+        anchor_type=AnchorType.CANON,
+        description=description,
+        severity=Severity.REJECT,
+    )
+    registry.register(anchor)
+
+    # Create prohibition anchor if wont provided
+    if request.wont:
+        patterns = [p.strip() for p in request.wont.split(",")]
+        wont_anchor = Anchor(
+            id=f"{char_id}-wont",
+            anchor_type=AnchorType.PROHIBITION,
+            description=f"{request.name} wouldn't: {request.wont}",
+            forbidden_patterns=patterns,
+            severity=Severity.REJECT,
+        )
+        registry.register(wont_anchor)
+
+    # Save
+    registry.save(ctx.governor_dir / "continuity" / "anchors.json")
+
+    return {
+        "success": True,
+        "message": f"{request.name} added. I'll remember.",
+        "id": char_id,
+    }
+
+
+@app.delete("/governor/fiction/characters/{char_id}")
+async def remove_character(char_id: str) -> dict[str, Any]:
+    """Remove a character."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        raise HTTPException(status_code=400, detail="No governor context initialized.")
+
+    from governor.continuity import create_registry
+
+    registry = create_registry(ctx.governor_dir)
+    anchor = registry.unregister(char_id)
+    registry.unregister(f"{char_id}-wont")
+
+    if anchor:
+        registry.save(ctx.governor_dir / "continuity" / "anchors.json")
+        return {"success": True, "message": "Character removed."}
+
+    raise HTTPException(status_code=404, detail="Character not found.")
+
+
+@app.get("/governor/fiction/world-rules")
+async def list_world_rules() -> dict[str, Any]:
+    """List all world rules for fiction mode."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        return {"rules": [], "message": "No governor context initialized."}
+
+    from governor.continuity import AnchorType, create_registry
+
+    registry = create_registry(ctx.governor_dir)
+    anchors = registry.all()
+
+    rules = []
+    for a in anchors:
+        if a.anchor_type == AnchorType.DEFINITION:
+            rules.append({
+                "id": a.id,
+                "rule": a.description,
+            })
+
+    return {"rules": rules}
+
+
+@app.post("/governor/fiction/world-rules")
+async def add_world_rule(request: WorldRuleRequest) -> dict[str, Any]:
+    """Add a world rule for fiction mode."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        raise HTTPException(status_code=400, detail="No governor context initialized.")
+
+    from governor.continuity import Anchor, AnchorType, Severity, create_registry
+
+    registry = create_registry(ctx.governor_dir)
+
+    rule_id = f"world-{len([a for a in registry.all() if 'world-' in a.id]) + 1}"
+
+    anchor = Anchor(
+        id=rule_id,
+        anchor_type=AnchorType.DEFINITION,
+        description=request.rule,
+        severity=Severity.REJECT,
+    )
+    registry.register(anchor)
+    registry.save(ctx.governor_dir / "continuity" / "anchors.json")
+
+    return {
+        "success": True,
+        "message": "Rule added. I'll keep it consistent.",
+        "id": rule_id,
+    }
+
+
+@app.get("/governor/fiction/forbidden")
+async def list_forbidden() -> dict[str, Any]:
+    """List all forbidden things for fiction mode."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        return {"forbidden": [], "message": "No governor context initialized."}
+
+    from governor.continuity import AnchorType, create_registry
+
+    registry = create_registry(ctx.governor_dir)
+    anchors = registry.all()
+
+    forbidden = []
+    for a in anchors:
+        if a.anchor_type == AnchorType.PROHIBITION and not a.id.endswith("-wont"):
+            forbidden.append({
+                "id": a.id,
+                "description": a.description,
+                "patterns": a.forbidden_patterns,
+            })
+
+    return {"forbidden": forbidden}
+
+
+@app.post("/governor/fiction/forbidden")
+async def add_forbidden(request: ForbiddenRequest) -> dict[str, Any]:
+    """Add a forbidden thing for fiction mode."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        raise HTTPException(status_code=400, detail="No governor context initialized.")
+
+    from governor.continuity import Anchor, AnchorType, Severity, create_registry
+
+    registry = create_registry(ctx.governor_dir)
+
+    forbid_id = f"forbid-{len([a for a in registry.all() if 'forbid-' in a.id]) + 1}"
+
+    anchor = Anchor(
+        id=forbid_id,
+        anchor_type=AnchorType.PROHIBITION,
+        description=request.description,
+        forbidden_patterns=request.patterns,
+        severity=Severity.REJECT,
+    )
+    registry.register(anchor)
+    registry.save(ctx.governor_dir / "continuity" / "anchors.json")
+
+    return {
+        "success": True,
+        "message": "I'll watch for that.",
+        "id": forbid_id,
+    }
+
+
+@app.get("/governor/code/decisions")
+async def list_decisions() -> dict[str, Any]:
+    """List all decisions for code mode."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        return {"decisions": [], "message": "No governor context initialized."}
+
+    from governor.ledgers import DecisionLedger
+
+    try:
+        ledger = DecisionLedger(ctx.governor_dir)
+        decisions = list(ledger.all())
+
+        return {
+            "decisions": [
+                {
+                    "id": str(d.id),
+                    "topic": d.topic,
+                    "choice": d.choice,
+                    "rationale": d.rationale,
+                    "created_at": d.created_at.isoformat() if d.created_at else None,
+                }
+                for d in decisions
+            ]
+        }
+    except Exception:
+        return {"decisions": []}
+
+
+@app.post("/governor/code/decisions")
+async def add_decision(request: DecisionRequest) -> dict[str, Any]:
+    """Add a decision for code mode."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        raise HTTPException(status_code=400, detail="No governor context initialized.")
+
+    from governor.claims import decision as make_decision
+    from governor.ledgers import DecisionLedger
+
+    # Parse decision into topic/choice
+    if ":" in request.decision:
+        topic, choice = request.decision.split(":", 1)
+    elif "," in request.decision:
+        parts = request.decision.split(",", 1)
+        topic = parts[0].strip()
+        choice = parts[1].strip() if len(parts) > 1 else topic
+    else:
+        topic = "architecture"
+        choice = request.decision
+
+    topic = topic.strip()
+    choice = choice.strip()
+
+    ledger = DecisionLedger(ctx.governor_dir)
+    claim = make_decision(topic, choice)
+    decision = ledger.add(claim, rationale=request.rationale)
+
+    return {
+        "success": True,
+        "message": "Decision recorded. I'll catch anything that contradicts it.",
+        "id": str(decision.id),
+    }
+
+
+@app.get("/governor/code/constraints")
+async def list_constraints() -> dict[str, Any]:
+    """List all constraints for code mode."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        return {"constraints": [], "message": "No governor context initialized."}
+
+    from governor.continuity import AnchorType, create_registry
+
+    registry = create_registry(ctx.governor_dir)
+    anchors = registry.all()
+
+    constraints = []
+    for a in anchors:
+        if a.anchor_type == AnchorType.PROHIBITION and "constraint-" in a.id:
+            constraints.append({
+                "id": a.id,
+                "description": a.description,
+                "patterns": a.forbidden_patterns,
+            })
+
+    return {"constraints": constraints}
+
+
+@app.post("/governor/code/constraints")
+async def add_constraint(request: ConstraintRequest) -> dict[str, Any]:
+    """Add a constraint for code mode."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        raise HTTPException(status_code=400, detail="No governor context initialized.")
+
+    from governor.continuity import Anchor, AnchorType, Severity, create_registry
+
+    registry = create_registry(ctx.governor_dir)
+
+    con_id = f"constraint-{len([a for a in registry.all() if 'constraint-' in a.id]) + 1}"
+
+    anchor = Anchor(
+        id=con_id,
+        anchor_type=AnchorType.PROHIBITION,
+        description=request.constraint,
+        forbidden_patterns=request.patterns,
+        severity=Severity.REJECT,
+    )
+    registry.register(anchor)
+    registry.save(ctx.governor_dir / "continuity" / "anchors.json")
+
+    return {
+        "success": True,
+        "message": "Constraint added.",
+        "id": con_id,
+    }
+
+
+@app.get("/governor/corrections")
+async def list_corrections(limit: int = 20) -> dict[str, Any]:
+    """List past corrections/resolutions."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        return {"corrections": [], "message": "No governor context initialized."}
+
+    resolver = ViolationResolver(
+        governor_dir=ctx.governor_dir,
+        mode=ctx.mode,
+        context_id=ctx.context_id,
+    )
+    exceptions = resolver.list_exceptions()
+
+    corrections = []
+    for exc in exceptions[:limit]:
+        corrections.append({
+            "id": exc.id,
+            "action": exc.action.value,
+            "anchor_id": exc.anchor_id,
+            "summary": exc.scope,
+            "created_at": exc.created_at.isoformat() if exc.created_at else None,
+        })
+
+    return {"corrections": corrections}
+
+
+# ============================================================================
 # Sidecar UI
 # ============================================================================
 
@@ -732,7 +1119,15 @@ async def root() -> dict[str, Any]:
             "governor_why": "/governor/why",
             "governor_history": "/governor/history",
             "governor_detail": "/governor/detail/{item_id}",
+            "governor_corrections": "/governor/corrections",
             "governor_ui": "/governor/ui",
+            # Fiction mode
+            "fiction_characters": "/governor/fiction/characters",
+            "fiction_world_rules": "/governor/fiction/world-rules",
+            "fiction_forbidden": "/governor/fiction/forbidden",
+            # Code mode
+            "code_decisions": "/governor/code/decisions",
+            "code_constraints": "/governor/code/constraints",
         },
     }
 

@@ -802,10 +802,11 @@ class TestInvalidationCascade:
 
 
 class TestSchemaV5Migration:
-    """Tests for Schema V5 migration."""
+    """Tests for Schema V5+ migration (V5 tables still present in V6)."""
 
-    def test_schema_version_is_5(self):
-        assert SCHEMA_VERSION == 5
+    def test_schema_version_is_current(self):
+        # Schema has progressed to V6 (staleness/docket), but V5 tables should still exist
+        assert SCHEMA_VERSION >= 5
 
     def test_fresh_db_has_v5_tables(self):
         tmp = tempfile.mkdtemp()
@@ -855,12 +856,12 @@ class TestSchemaV5Migration:
         conn.commit()
         conn.close()
 
-        # Now open with Storage, which should auto-migrate to V5
+        # Now open with Storage, which should auto-migrate to current version
         storage = Storage(db_path)
         cursor = storage.conn.cursor()
 
         cursor.execute("SELECT version FROM schema_version")
-        assert cursor.fetchone()["version"] == 5
+        assert cursor.fetchone()["version"] == SCHEMA_VERSION
 
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='claim_dependencies'"
@@ -880,7 +881,7 @@ class TestSchemaV5Migration:
         storage2 = Storage(Path(tmp) / "test.db")
         cursor = storage2.conn.cursor()
         cursor.execute("SELECT version FROM schema_version")
-        assert cursor.fetchone()["version"] == 5
+        assert cursor.fetchone()["version"] == SCHEMA_VERSION
 
     def test_depends_on_json_default(self):
         """New claims should have depends_on_json defaulting to '[]'."""

@@ -22,8 +22,79 @@ Built-in profiles:
 
 import json
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
+
+
+# =============================================================================
+# Staleness Settings
+# =============================================================================
+
+
+@dataclass
+class StalenessSettings:
+    """Configuration for claim staleness detection."""
+
+    default_freshness_window_days: int = 7
+    default_decay_rate: float = 0.1
+    confidence_threshold: float = 0.5
+    assumption_violation_penalty: float = 0.3
+    overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "default_freshness_window_days": self.default_freshness_window_days,
+            "default_decay_rate": self.default_decay_rate,
+            "confidence_threshold": self.confidence_threshold,
+            "assumption_violation_penalty": self.assumption_violation_penalty,
+            "overrides": self.overrides,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "StalenessSettings":
+        return cls(
+            default_freshness_window_days=data.get("default_freshness_window_days", 7),
+            default_decay_rate=data.get("default_decay_rate", 0.1),
+            confidence_threshold=data.get("confidence_threshold", 0.5),
+            assumption_violation_penalty=data.get("assumption_violation_penalty", 0.3),
+            overrides=data.get("overrides", {}),
+        )
+
+    def to_staleness_config(self) -> "StalenessConfig":
+        """Convert to StalenessConfig for use with StalenessDetector."""
+        from .staleness import StalenessConfig
+        return StalenessConfig(
+            default_freshness_window=timedelta(days=self.default_freshness_window_days),
+            default_decay_rate=self.default_decay_rate,
+            confidence_threshold=self.confidence_threshold,
+            assumption_violation_penalty=self.assumption_violation_penalty,
+            overrides=self.overrides,
+        )
+
+
+# =============================================================================
+# Adjudicator Settings
+# =============================================================================
+
+
+@dataclass
+class AdjudicatorSettings:
+    """Configuration for docket/adjudicator display."""
+
+    style: str = "full"  # full, compact, legacy
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"style": self.style}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AdjudicatorSettings":
+        return cls(style=data.get("style", "full"))
+
+
+# =============================================================================
+# Profile Settings
+# =============================================================================
 
 
 @dataclass

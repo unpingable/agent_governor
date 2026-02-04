@@ -539,10 +539,26 @@ def decay(ctx: click.Context, auto_prune: bool) -> None:
 @cli.command()
 @click.option("--limit", "-n", default=20, help="Number of proposals to show")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--claims", "show_claims", is_flag=True, help="Show claim status weather report")
 @click.pass_context
-def status(ctx: click.Context, limit: int, as_json: bool) -> None:
-    """Show proposal status."""
+def status(ctx: click.Context, limit: int, as_json: bool, show_claims: bool) -> None:
+    """Show proposal status. With --claims, show claim weather report."""
     gov_dir = ensure_initialized(ctx)
+
+    # If --claims flag, show claim status summary
+    if show_claims:
+        from .epistemic import EpistemicLedger
+        from .claim_status import create_claim_status_dashboard
+
+        ledger = EpistemicLedger()
+        dashboard = create_claim_status_dashboard(ledger)
+
+        if as_json:
+            summary = dashboard.get_summary()
+            click.echo(json.dumps(summary.to_dict(), indent=2))
+        else:
+            click.echo(dashboard.format_summary())
+        return
 
     proposals = load_proposals(gov_dir)
 
@@ -10464,6 +10480,348 @@ def maude_lite_exceptions(ctx, fmt):
             if len(exc.violations) > 2:
                 click.echo(f"    ... and {len(exc.violations) - 2} more violations")
             click.echo()
+
+
+# =============================================================================
+# Docket Commands (Adjudicator UX)
+# =============================================================================
+
+
+@cli.group()
+@click.pass_context
+def docket(ctx: click.Context) -> None:
+    """View and manage pending cases on the docket."""
+    pass
+
+
+@docket.command("list")
+@click.option("--style", type=click.Choice(["full", "compact", "legacy"]), default="full", help="Display style")
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def docket_list(ctx: click.Context, style: str, json_output: bool) -> None:
+    """List all pending cases on the docket."""
+    gov_dir = ensure_initialized(ctx)
+
+    from .docket import create_docket_manager
+    from .staleness import create_staleness_detector, StalenessConfig
+    from .epistemic import EpistemicLedger
+
+    # Create components
+    ledger = EpistemicLedger()
+    staleness = create_staleness_detector(ledger)
+    docket_mgr = create_docket_manager(staleness=staleness, governor_dir=gov_dir)
+
+    cases = docket_mgr.get_docket()
+
+    if json_output:
+        click.echo(json.dumps([c.to_dict() for c in cases], indent=2))
+        return
+
+    if not cases:
+        click.echo("No pending cases on the docket.")
+        return
+
+    click.echo(f"DOCKET: {len(cases)} pending case(s)")
+    click.echo("=" * 50)
+    for case in cases:
+        click.echo()
+        click.echo(docket_mgr.format_case(case, style=style))
+
+
+@docket.command("show")
+@click.argument("case_number", type=int)
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def docket_show(ctx: click.Context, case_number: int, json_output: bool) -> None:
+    """Show details of a specific case."""
+    gov_dir = ensure_initialized(ctx)
+
+    from .docket import create_docket_manager
+    from .staleness import create_staleness_detector
+    from .epistemic import EpistemicLedger
+
+    ledger = EpistemicLedger()
+    staleness = create_staleness_detector(ledger)
+    docket_mgr = create_docket_manager(staleness=staleness, governor_dir=gov_dir)
+
+    case = docket_mgr.get_case(case_number)
+    if case is None:
+        click.echo(f"Case #{case_number} not found.", err=True)
+        ctx.exit(1)
+        return
+
+    if json_output:
+        click.echo(json.dumps(case.to_dict(), indent=2))
+    else:
+        click.echo(docket_mgr.format_case(case, style="full"))
+
+
+# =============================================================================
+# Rule Commands (Issue Rulings)
+# =============================================================================
+
+
+@cli.group()
+@click.pass_context
+def rule(ctx: click.Context) -> None:
+    """Issue rulings on docket cases."""
+    pass
+
+
+@rule.command("sustain")
+@click.argument("case_number", type=int)
+@click.option("--rationale", "-r", default="", help="Rationale for ruling")
+@click.pass_context
+def rule_sustain(ctx: click.Context, case_number: int, rationale: str) -> None:
+    """Sustain the constraint - regenerate compliant output."""
+    gov_dir = ensure_initialized(ctx)
+
+    from .docket import create_docket_manager, CaseType
+    from .staleness import create_staleness_detector
+    from .epistemic import EpistemicLedger
+
+    ledger = EpistemicLedger()
+    staleness = create_staleness_detector(ledger)
+    docket_mgr = create_docket_manager(staleness=staleness, governor_dir=gov_dir)
+
+    try:
+        precedent = docket_mgr.rule_sustain(case_number, rationale)
+        click.echo(f"[Ruling] Case #{case_number}: SUSTAINED")
+        click.echo(f"  Precedent logged: {precedent.id}")
+        click.echo("  Constraint upheld. Regeneration required.")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+
+
+@rule.command("amend")
+@click.argument("case_number", type=int)
+@click.option("--rationale", "-r", default="", help="Rationale for ruling")
+@click.pass_context
+def rule_amend(ctx: click.Context, case_number: int, rationale: str) -> None:
+    """Amend the anchor to permit the output."""
+    gov_dir = ensure_initialized(ctx)
+
+    from .docket import create_docket_manager
+    from .staleness import create_staleness_detector
+    from .epistemic import EpistemicLedger
+
+    ledger = EpistemicLedger()
+    staleness = create_staleness_detector(ledger)
+    docket_mgr = create_docket_manager(staleness=staleness, governor_dir=gov_dir)
+
+    try:
+        precedent = docket_mgr.rule_amend(case_number, rationale)
+        click.echo(f"[Ruling] Case #{case_number}: AMENDED")
+        click.echo(f"  Precedent logged: {precedent.id}")
+        click.echo("  Anchor updated. Output now permitted.")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+
+
+@rule.command("except")
+@click.argument("case_number", type=int)
+@click.option("--scope", type=click.Choice(["single_instance", "session", "project"]), default="single_instance", help="Exception scope")
+@click.option("--rationale", "-r", default="", help="Rationale for ruling")
+@click.pass_context
+def rule_except(ctx: click.Context, case_number: int, scope: str, rationale: str) -> None:
+    """Grant exception - log as precedent."""
+    gov_dir = ensure_initialized(ctx)
+
+    from .docket import create_docket_manager
+    from .staleness import create_staleness_detector
+    from .epistemic import EpistemicLedger
+
+    ledger = EpistemicLedger()
+    staleness = create_staleness_detector(ledger)
+    docket_mgr = create_docket_manager(staleness=staleness, governor_dir=gov_dir)
+
+    try:
+        precedent = docket_mgr.rule_grant_exception(case_number, scope, rationale)
+        click.echo(f"[Ruling] Case #{case_number}: EXCEPTION GRANTED")
+        click.echo(f"  Precedent logged: {precedent.id}")
+        click.echo(f"  Scope: {scope}")
+        click.echo("  Output permitted as intentional deviation.")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+
+
+@rule.command("reverify")
+@click.argument("case_number", type=int)
+@click.option("--rationale", "-r", default="", help="Rationale for ruling")
+@click.pass_context
+def rule_reverify(ctx: click.Context, case_number: int, rationale: str) -> None:
+    """Re-run verification on a stale claim."""
+    gov_dir = ensure_initialized(ctx)
+
+    from .docket import create_docket_manager
+    from .staleness import create_staleness_detector
+    from .epistemic import EpistemicLedger
+
+    ledger = EpistemicLedger()
+    staleness = create_staleness_detector(ledger)
+    docket_mgr = create_docket_manager(staleness=staleness, governor_dir=gov_dir)
+
+    try:
+        precedent = docket_mgr.rule_reverify(case_number, rationale)
+        click.echo(f"[Ruling] Case #{case_number}: REVERIFY")
+        click.echo(f"  Precedent logged: {precedent.id}")
+        click.echo("  Claim scheduled for reverification.")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+
+
+@rule.command("dismiss")
+@click.argument("case_number", type=int)
+@click.option("--rationale", "-r", default="", help="Rationale for ruling")
+@click.pass_context
+def rule_dismiss(ctx: click.Context, case_number: int, rationale: str) -> None:
+    """Dismiss a stale claim - accept current state."""
+    gov_dir = ensure_initialized(ctx)
+
+    from .docket import create_docket_manager
+    from .staleness import create_staleness_detector
+    from .epistemic import EpistemicLedger
+
+    ledger = EpistemicLedger()
+    staleness = create_staleness_detector(ledger)
+    docket_mgr = create_docket_manager(staleness=staleness, governor_dir=gov_dir)
+
+    try:
+        precedent = docket_mgr.rule_dismiss(case_number, rationale)
+        click.echo(f"[Ruling] Case #{case_number}: DISMISSED")
+        click.echo(f"  Precedent logged: {precedent.id}")
+        click.echo("  Stale claim accepted as-is.")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+
+
+# =============================================================================
+# Precedent Commands (View Past Rulings)
+# =============================================================================
+
+
+@cli.group()
+@click.pass_context
+def precedent(ctx: click.Context) -> None:
+    """View past rulings (precedent record)."""
+    pass
+
+
+@precedent.command("list")
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def precedent_list(ctx: click.Context, json_output: bool) -> None:
+    """List all precedents."""
+    gov_dir = ensure_initialized(ctx)
+
+    from .docket import create_docket_manager
+    from .staleness import create_staleness_detector
+    from .epistemic import EpistemicLedger
+
+    ledger = EpistemicLedger()
+    staleness = create_staleness_detector(ledger)
+    docket_mgr = create_docket_manager(staleness=staleness, governor_dir=gov_dir)
+
+    precedents = docket_mgr.get_precedents()
+
+    if json_output:
+        click.echo(json.dumps([p.to_dict() for p in precedents], indent=2))
+        return
+
+    if not precedents:
+        click.echo("No precedents recorded.")
+        return
+
+    click.echo(f"PRECEDENT RECORD: {len(precedents)} ruling(s)")
+    click.echo("=" * 50)
+    for p in precedents:
+        click.echo()
+        click.echo(f"[{p.id}] Case #{p.case_number}")
+        click.echo(f"  Ruling: {p.ruling.value.upper()}")
+        click.echo(f"  Claim: {p.claim_id}")
+        if p.anchor_id:
+            click.echo(f"  Anchor: {p.anchor_id}")
+        click.echo(f"  Scope: {p.scope}")
+        if p.rationale:
+            click.echo(f"  Rationale: {p.rationale}")
+        click.echo(f"  Date: {p.created_at.isoformat()}")
+
+
+@precedent.command("search")
+@click.argument("query")
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def precedent_search(ctx: click.Context, query: str, json_output: bool) -> None:
+    """Search precedents by query string."""
+    gov_dir = ensure_initialized(ctx)
+
+    from .docket import create_docket_manager
+    from .staleness import create_staleness_detector
+    from .epistemic import EpistemicLedger
+
+    ledger = EpistemicLedger()
+    staleness = create_staleness_detector(ledger)
+    docket_mgr = create_docket_manager(staleness=staleness, governor_dir=gov_dir)
+
+    results = docket_mgr.search_precedents(query)
+
+    if json_output:
+        click.echo(json.dumps([p.to_dict() for p in results], indent=2))
+        return
+
+    if not results:
+        click.echo(f"No precedents matching '{query}'.")
+        return
+
+    click.echo(f"Search results for '{query}': {len(results)} match(es)")
+    click.echo("=" * 50)
+    for p in results:
+        click.echo()
+        click.echo(f"[{p.id}] Case #{p.case_number} - {p.ruling.value.upper()}")
+        click.echo(f"  {p.rationale or '(no rationale)'}")
+
+
+# =============================================================================
+# Claim Commands (View Claim Details)
+# =============================================================================
+
+
+@cli.group("claim")
+@click.pass_context
+def claim_cmd(ctx: click.Context) -> None:
+    """View claim details and status."""
+    pass
+
+
+@claim_cmd.command("show")
+@click.argument("claim_id")
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON")
+@click.pass_context
+def claim_show(ctx: click.Context, claim_id: str, json_output: bool) -> None:
+    """Show detailed claim status."""
+    gov_dir = ensure_initialized(ctx)
+
+    from .epistemic import EpistemicLedger
+    from .claim_status import create_claim_status_dashboard
+
+    ledger = EpistemicLedger()
+    dashboard = create_claim_status_dashboard(ledger)
+
+    detail = dashboard.get_detail(claim_id)
+    if detail is None:
+        click.echo(f"Claim not found: {claim_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if json_output:
+        click.echo(json.dumps(detail.to_dict(), indent=2))
+    else:
+        click.echo(dashboard.format_detail(detail))
 
 
 # =============================================================================

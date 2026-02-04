@@ -20,7 +20,7 @@ from uuid import UUID
 
 
 # Schema version for migrations
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 SCHEMA = """
@@ -253,6 +253,64 @@ CREATE INDEX IF NOT EXISTS idx_ce_affected ON cascade_events(affected_claim_id);
 """
 
 
+# Schema V6: Staleness and Docket tables
+_SCHEMA_V6_ALTER = [
+    "ALTER TABLE epistemic_claims ADD COLUMN freshness_window_seconds INTEGER",
+    "ALTER TABLE epistemic_claims ADD COLUMN verified_at TEXT",
+    "ALTER TABLE epistemic_claims ADD COLUMN last_artifact_hash TEXT",
+    "ALTER TABLE epistemic_claims ADD COLUMN violated_assumptions_json TEXT DEFAULT '[]'",
+]
+
+_SCHEMA_V6_TABLES = """
+-- Staleness events log
+CREATE TABLE IF NOT EXISTS staleness_events (
+    event_id TEXT PRIMARY KEY,
+    claim_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    old_confidence REAL,
+    new_confidence REAL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_se_claim ON staleness_events(claim_id);
+CREATE INDEX IF NOT EXISTS idx_se_type ON staleness_events(event_type);
+
+-- Docket cases (auto-incrementing case numbers)
+CREATE TABLE IF NOT EXISTS docket_cases (
+    case_number INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_type TEXT NOT NULL,
+    claim_id TEXT NOT NULL,
+    anchor_id TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    description TEXT NOT NULL,
+    evidence_json TEXT DEFAULT '[]',
+    blocked_content TEXT,
+    freshness_info_json TEXT,
+    created_at TEXT NOT NULL,
+    ruled_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_dc_claim ON docket_cases(claim_id);
+CREATE INDEX IF NOT EXISTS idx_dc_status ON docket_cases(status);
+CREATE INDEX IF NOT EXISTS idx_dc_type ON docket_cases(case_type);
+
+-- Precedents (logged rulings)
+CREATE TABLE IF NOT EXISTS precedents (
+    id TEXT PRIMARY KEY,
+    case_number INTEGER NOT NULL,
+    ruling TEXT NOT NULL,
+    claim_id TEXT NOT NULL,
+    anchor_id TEXT,
+    scope TEXT NOT NULL,
+    rationale TEXT,
+    created_at TEXT NOT NULL,
+    expiry TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_prec_case ON precedents(case_number);
+CREATE INDEX IF NOT EXISTS idx_prec_claim ON precedents(claim_id);
+CREATE INDEX IF NOT EXISTS idx_prec_ruling ON precedents(ruling);
+"""
+
+
 @dataclass
 class Lease:
     """A resource lease for coordination."""
@@ -326,6 +384,9 @@ class Storage:
                 for stmt in _SCHEMA_V5_ALTER:
                     cursor.execute(stmt)
                 cursor.executescript(_SCHEMA_V5_TABLES)
+                for stmt in _SCHEMA_V6_ALTER:
+                    cursor.execute(stmt)
+                cursor.executescript(_SCHEMA_V6_TABLES)
                 cursor.execute(
                     "INSERT INTO schema_version (version) VALUES (?)",
                     (SCHEMA_VERSION,)
@@ -363,6 +424,13 @@ class Storage:
                 except sqlite3.OperationalError:
                     pass  # Column already exists (idempotent)
             cursor.executescript(_SCHEMA_V5_TABLES)
+        if from_version < 6:
+            for stmt in _SCHEMA_V6_ALTER:
+                try:
+                    cursor.execute(stmt)
+                except sqlite3.OperationalError:
+                    pass  # Column already exists (idempotent)
+            cursor.executescript(_SCHEMA_V6_TABLES)
         cursor.execute(
             "UPDATE schema_version SET version = ?", (to_version,)
         )

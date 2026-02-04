@@ -489,6 +489,13 @@
             }
             try {
               var parsed = JSON.parse(data);
+              // Handle error chunks from backend
+              if (parsed.error) {
+                accumulated += '\n\n[Error] ' + (parsed.error.message || 'Unknown error');
+                bubble.innerHTML = '<p style="color: var(--badge-block);">' + esc(accumulated) + '</p>';
+                finishGeneration();
+                return;
+              }
               var delta = parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
               if (delta && delta.content) {
                 accumulated += delta.content;

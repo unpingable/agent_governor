@@ -398,13 +398,13 @@ class ClaudeCodeBackend:
         system_text, user_prompt = self._extract_system_and_prompt(messages)
 
         # Build command — prompt goes via stdin, not args
+        # Note: --print mode doesn't execute tools, so no permissions flag needed
         cmd = [
             self.claude_path,
             "--print",
             "--output-format", "json",
             "--verbose",
             "--model", model,
-            "--dangerously-skip-permissions",
         ]
         if system_text:
             cmd.extend(["--system-prompt", system_text])
@@ -458,13 +458,13 @@ class ClaudeCodeBackend:
         system_text, user_prompt = self._extract_system_and_prompt(messages)
 
         # Build command — --verbose is required for stream-json
+        # Note: --print mode doesn't execute tools, so no permissions flag needed
         cmd = [
             self.claude_path,
             "--print",
             "--output-format", "stream-json",
             "--verbose",
             "--model", model,
-            "--dangerously-skip-permissions",
         ]
         if system_text:
             cmd.extend(["--system-prompt", system_text])

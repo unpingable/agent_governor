@@ -56,28 +56,49 @@ Agent Governor enforces the **Non-Linguistic Authority Invariant (NLAI)**:
 
 ```bash
 pip install agent-governor
-```
 
-```python
-from governor import AgentGovernor
+# Initialize governor in your project
+cd your-project
+governor init
 
-# Initialize with your repo root
-governor = AgentGovernor("/path/to/your/repo")
+# Record an architectural decision
+governor propose --claim "Using React for frontend" --topic framework
+governor verify 1
+governor apply 1
 
-# Agent proposes a claim with evidence
-result = governor.propose(
-    claim="Using React for frontend framework",
-    topic="framework",
-    paths=["package.json", "src/App.jsx"],  # Evidence files
-)
-
-if result.accepted:
-    print(f"✓ Committed: {result.commit_id}")
-else:
-    print(f"✗ Rejected: {result.rejection_reason}")
+# Now the governor will catch contradictions
+governor propose --claim "Using Vue for frontend" --topic framework
+# ✗ REJECTED - Contradicts existing decision on 'framework'
 ```
 
 **That's it.** The agent now can't contradict this decision without the governor catching it.
+
+### For Writers (Fiction Mode)
+
+```bash
+# Set up a character constraint
+governor continuity anchor add \
+  --id "elena-eyes" \
+  --type canon \
+  --description "Elena has green eyes" \
+  --forbidden-patterns "Elena's blue eyes" "her blue eyes" \
+  --severity reject
+
+# Check text for violations
+governor check chapter3.txt --mode fiction
+```
+
+### For Developers (Code Mode)
+
+```bash
+# Set your working profile
+governor intent set --profile hotfix --scope "src/auth/**" --because "fixing login bug"
+
+# Check files as you work
+governor check src/auth/login.py
+
+# VS Code: Ctrl+Shift+G to check current file
+```
 
 ---
 

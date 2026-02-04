@@ -37,9 +37,11 @@ def reset_adapter_globals() -> None:
     import webui.adapter as adapter_mod
     adapter_mod._bridge = None
     adapter_mod._context_manager = None
+    adapter_mod._session_store = None
     yield
     adapter_mod._bridge = None
     adapter_mod._context_manager = None
+    adapter_mod._session_store = None
 
 
 @pytest.fixture
@@ -821,3 +823,262 @@ class TestGovernorFooterIntegration:
         # Parse SSE data to find governor feedback
         full_text = response.text
         assert "[Governor]" in full_text
+
+
+# ============================================================================
+# TestSessionEndpoints
+# ============================================================================
+
+
+class TestSessionEndpoints:
+    """Tests for session CRUD endpoints."""
+
+    def test_list_sessions_empty(self, client, tmp_contexts_dir) -> None:
+        """GET /sessions/ returns empty list initially."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        response = client.get("/sessions/")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["sessions"] == []
+
+    def test_create_session(self, client, tmp_contexts_dir) -> None:
+        """POST /sessions/ creates a new session."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        response = client.post("/sessions/", json={"model": "test-model", "title": "My Chat"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["title"] == "My Chat"
+        assert data["model"] == "test-model"
+        assert "id" in data
+        assert data["message_count"] == 0
+
+    def test_get_session(self, client, tmp_contexts_dir) -> None:
+        """GET /sessions/{id} returns session with messages."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+        adapter_mod._session_store = store
+
+        # Create via API
+        create_resp = client.post("/sessions/", json={"title": "Test"})
+        session_id = create_resp.json()["id"]
+
+        response = client.get(f"/sessions/{session_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == session_id
+        assert "messages" in data
+
+    def test_get_session_404(self, client, tmp_contexts_dir) -> None:
+        """GET /sessions/{id} returns 404 for missing session."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        response = client.get("/sessions/nonexistent")
+        assert response.status_code == 404
+
+    def test_delete_session(self, client, tmp_contexts_dir) -> None:
+        """DELETE /sessions/{id} removes session."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        create_resp = client.post("/sessions/", json={"title": "To Delete"})
+        session_id = create_resp.json()["id"]
+
+        response = client.delete(f"/sessions/{session_id}")
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+        # Confirm deletion
+        get_resp = client.get(f"/sessions/{session_id}")
+        assert get_resp.status_code == 404
+
+    def test_delete_session_404(self, client, tmp_contexts_dir) -> None:
+        """DELETE /sessions/{id} returns 404 for missing session."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        response = client.delete("/sessions/nonexistent")
+        assert response.status_code == 404
+
+    def test_update_title(self, client, tmp_contexts_dir) -> None:
+        """PATCH /sessions/{id} updates title."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        create_resp = client.post("/sessions/", json={"title": "Old"})
+        session_id = create_resp.json()["id"]
+
+        response = client.patch(f"/sessions/{session_id}", json={"title": "New Title"})
+        assert response.status_code == 200
+        assert response.json()["title"] == "New Title"
+
+    def test_append_message(self, client, tmp_contexts_dir) -> None:
+        """POST /sessions/{id}/messages appends a message."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        create_resp = client.post("/sessions/", json={"title": "Chat"})
+        session_id = create_resp.json()["id"]
+
+        response = client.post(f"/sessions/{session_id}/messages", json={
+            "role": "user", "content": "Hello world"
+        })
+        assert response.status_code == 200
+        msg_data = response.json()
+        assert msg_data["role"] == "user"
+        assert msg_data["content"] == "Hello world"
+
+        # Verify message was stored
+        get_resp = client.get(f"/sessions/{session_id}")
+        assert get_resp.json()["message_count"] == 1
+
+    def test_session_roundtrip(self, client, tmp_contexts_dir) -> None:
+        """Full roundtrip: create, add messages, retrieve."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        # Create
+        create_resp = client.post("/sessions/", json={"title": "Roundtrip", "model": "m1"})
+        session_id = create_resp.json()["id"]
+
+        # Add messages
+        client.post(f"/sessions/{session_id}/messages", json={
+            "role": "user", "content": "First"
+        })
+        client.post(f"/sessions/{session_id}/messages", json={
+            "role": "assistant", "content": "Response", "model": "m1"
+        })
+        client.post(f"/sessions/{session_id}/messages", json={
+            "role": "user", "content": "Second"
+        })
+
+        # Retrieve
+        get_resp = client.get(f"/sessions/{session_id}")
+        data = get_resp.json()
+        assert data["message_count"] == 3
+        assert data["messages"][0]["content"] == "First"
+        assert data["messages"][1]["content"] == "Response"
+        assert data["messages"][2]["content"] == "Second"
+
+    def test_api_info_includes_session_endpoints(self, client) -> None:
+        """GET /api/info includes session endpoints."""
+        response = client.get("/api/info")
+        data = response.json()
+        endpoints = data["endpoints"]
+        assert "sessions_list" in endpoints
+        assert "sessions_create" in endpoints
+        assert "sessions_get" in endpoints
+        assert "sessions_delete" in endpoints
+        assert "sessions_update" in endpoints
+        assert "sessions_append_message" in endpoints
+
+    def test_list_sessions_sorted_by_recent(self, client, tmp_contexts_dir) -> None:
+        """Sessions are listed most-recent first."""
+        import time
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        client.post("/sessions/", json={"title": "Older"})
+        time.sleep(0.01)
+        client.post("/sessions/", json={"title": "Newer"})
+
+        response = client.get("/sessions/")
+        sessions = response.json()["sessions"]
+        assert len(sessions) == 2
+        assert sessions[0]["title"] == "Newer"
+
+    def test_append_message_to_missing_session(self, client, tmp_contexts_dir) -> None:
+        """POST /sessions/{id}/messages returns 404 for missing session."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        response = client.post("/sessions/nonexistent/messages", json={
+            "role": "user", "content": "Hello"
+        })
+        assert response.status_code == 404
+
+    def test_update_title_missing_session(self, client, tmp_contexts_dir) -> None:
+        """PATCH /sessions/{id} returns 404 for missing session."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        response = client.patch("/sessions/nonexistent", json={"title": "X"})
+        assert response.status_code == 404
+
+    def test_create_session_default_title(self, client, tmp_contexts_dir) -> None:
+        """POST /sessions/ with no title gets default."""
+        import webui.adapter as adapter_mod
+        from governor.session_store import SessionStore
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+        adapter_mod._session_store = SessionStore(tmp_contexts_dir / "test-context" / "sessions")
+
+        response = client.post("/sessions/", json={})
+        assert response.status_code == 200
+        assert response.json()["title"] == "New conversation"

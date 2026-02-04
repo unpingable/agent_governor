@@ -53,6 +53,7 @@ from governor.violation_resolver import (
     format_violation_prompt,
 )
 from governor.context_manager import GovernorContextManager
+from governor.session_store import ChatSession, SessionMessage, SessionStore
 from governor.viewmodel import build_viewmodel, GovernorViewModel
 from webui.summaries import (
     derive_status_pill,
@@ -159,6 +160,7 @@ class ModelList(BaseModel):
 
 _bridge: ChatBridge | None = None
 _context_manager: GovernorContextManager | None = None
+_session_store: SessionStore | None = None
 
 
 def _get_context_manager() -> GovernorContextManager:
@@ -186,6 +188,22 @@ def _get_bridge() -> ChatBridge:
             show_ok_footer=GOVERNOR_SHOW_OK_FOOTER,
         )
     return _bridge
+
+
+def _get_session_store() -> SessionStore:
+    global _session_store
+    if _session_store is None:
+        cm = _get_context_manager()
+        ctx = cm.get(GOVERNOR_CONTEXT_ID)
+        if ctx is not None:
+            sessions_dir = ctx.root / "sessions"
+        else:
+            # Context not created yet — compute path without writing to disk.
+            # SessionStore.list_summaries() handles non-existent dir gracefully;
+            # create() calls _ensure_dir() only when actually needed.
+            sessions_dir = cm.base_dir / GOVERNOR_CONTEXT_ID / "sessions"
+        _session_store = SessionStore(sessions_dir)
+    return _session_store
 
 
 # ============================================================================
@@ -485,6 +503,90 @@ async def _stream_response(
     except Exception as e:
         error_chunk = {"error": {"message": str(e), "type": "server_error"}}
         yield f"data: {json.dumps(error_chunk)}\n\n"
+
+
+# ============================================================================
+# Session Endpoints
+# ============================================================================
+
+
+class CreateSessionRequest(BaseModel):
+    model: str = ""
+    title: str = "New conversation"
+
+
+class UpdateSessionRequest(BaseModel):
+    title: str
+
+
+class AppendMessageRequest(BaseModel):
+    role: str
+    content: str
+    model: str | None = None
+    usage: dict[str, int] | None = None
+
+
+@app.get("/sessions/")
+async def list_sessions() -> dict[str, Any]:
+    """List all session summaries (no messages), sorted by most recent."""
+    store = _get_session_store()
+    return {"sessions": store.list_summaries()}
+
+
+@app.post("/sessions/")
+async def create_session(request: CreateSessionRequest) -> dict[str, Any]:
+    """Create a new chat session."""
+    store = _get_session_store()
+    session = store.create(
+        context_id=GOVERNOR_CONTEXT_ID,
+        model=request.model,
+        title=request.title,
+    )
+    return session.to_dict()
+
+
+@app.get("/sessions/{session_id}")
+async def get_session(session_id: str) -> dict[str, Any]:
+    """Get a session with full message history."""
+    store = _get_session_store()
+    session = store.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session.to_dict()
+
+
+@app.delete("/sessions/{session_id}")
+async def delete_session(session_id: str) -> dict[str, Any]:
+    """Delete a session."""
+    store = _get_session_store()
+    if not store.delete(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"success": True}
+
+
+@app.patch("/sessions/{session_id}")
+async def update_session(session_id: str, request: UpdateSessionRequest) -> dict[str, Any]:
+    """Update a session's title."""
+    store = _get_session_store()
+    if not store.update_title(session_id, request.title):
+        raise HTTPException(status_code=404, detail="Session not found")
+    session = store.get(session_id)
+    return session.to_dict() if session else {"success": True}
+
+
+@app.post("/sessions/{session_id}/messages")
+async def append_message(session_id: str, request: AppendMessageRequest) -> dict[str, Any]:
+    """Append a message to a session (write-through target)."""
+    store = _get_session_store()
+    msg = SessionMessage.create(
+        role=request.role,
+        content=request.content,
+        model=request.model,
+        usage=request.usage,
+    )
+    if not store.append_message(session_id, msg):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return msg.to_dict()
 
 
 # ============================================================================
@@ -1126,6 +1228,14 @@ async def api_info() -> dict[str, Any]:
             "chat": "/v1/chat/completions",
             "health": "/health",
             "api_info": "/api/info",
+            # Sessions
+            "sessions_list": "/sessions/",
+            "sessions_create": "/sessions/",
+            "sessions_get": "/sessions/{id}",
+            "sessions_delete": "/sessions/{id}",
+            "sessions_update": "/sessions/{id}",
+            "sessions_append_message": "/sessions/{id}/messages",
+            # Governor
             "governor_contexts": "/governor/contexts",
             "governor_status": "/governor/status",
             "governor_now": "/governor/now",

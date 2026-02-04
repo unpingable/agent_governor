@@ -131,6 +131,12 @@
   .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); text-align: center; padding: 2rem; }
   .welcome h2 { font-size: 1.2rem; color: var(--fg); margin-bottom: 0.5rem; }
   .welcome p { font-size: 0.9rem; max-width: 400px; }
+
+  /* Session picker */
+  .session-picker { display: flex; align-items: center; gap: 0.4rem; }
+  .session-select { padding: 0.3rem 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); font-size: 0.8rem; max-width: 200px; }
+  .new-session-btn { padding: 0.3rem 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); font-size: 0.85rem; cursor: pointer; line-height: 1; }
+  .new-session-btn:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -140,6 +146,12 @@
   <div class="chat-panel">
     <div class="chat-header">
       <h1>Governor Chat</h1>
+      <div class="session-picker">
+        <select class="session-select" id="session-select" onchange="switchSession(this.value)">
+          <option value="">Loading...</option>
+        </select>
+        <button class="new-session-btn" onclick="newSession()" title="New conversation">+</button>
+      </div>
       <select class="model-select" id="model-select">
         <option value="">Loading models...</option>
       </select>
@@ -359,6 +371,7 @@
 <script>
 (function() {
   var mode = 'general';
+  var contextId = 'default';
   var selectedModel = '';
   var isGenerating = false;
   var GOV_REFRESH = 3000;
@@ -374,24 +387,13 @@
   }
 
   function renderMarkdown(text) {
-    // Basic markdown: code blocks, inline code, bold, italic, lists, paragraphs
     var html = text;
-
-    // Code blocks: ```lang\n...\n```
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
       return '<pre><code>' + esc(code.trim()) + '</code></pre>';
     });
-
-    // Inline code: `...`
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-    // Bold: **...**
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-
-    // Italic: *...*
     html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
-
-    // Split into paragraphs (but preserve pre blocks)
     var blocks = html.split(/\n\n+/);
     var result = [];
     for (var i = 0; i < blocks.length; i++) {
@@ -400,14 +402,149 @@
       if (block.startsWith('<pre>')) {
         result.push(block);
       } else {
-        // Convert single newlines to <br> within paragraphs
         result.push('<p>' + block.replace(/\n/g, '<br>') + '</p>');
       }
     }
     return result.join('');
   }
 
+  function truncate(s, n) { return s && s.length > n ? s.substring(0, n) + '...' : s; }
+
+  // ========== Session Manager ==========
+
+  var SM = {
+    currentSessionId: null,
+    sessions: [],
+    conversationMessages: [],
+
+    cacheKey: function() {
+      return 'governor_session_' + contextId + '_' + (SM.currentSessionId || '');
+    },
+
+    cacheToLocal: function() {
+      if (!SM.currentSessionId) return;
+      try {
+        localStorage.setItem(SM.cacheKey(), JSON.stringify({
+          sessionId: SM.currentSessionId,
+          messages: SM.conversationMessages
+        }));
+        localStorage.setItem('governor_last_session_' + contextId, SM.currentSessionId);
+      } catch (e) {}
+    },
+
+    restoreFromLocal: function() {
+      try {
+        var lastId = localStorage.getItem('governor_last_session_' + contextId);
+        if (!lastId) return false;
+        var cached = localStorage.getItem('governor_session_' + contextId + '_' + lastId);
+        if (!cached) return false;
+        var data = JSON.parse(cached);
+        SM.currentSessionId = data.sessionId;
+        SM.conversationMessages = data.messages || [];
+        return true;
+      } catch (e) { return false; }
+    },
+
+    saveMessage: function(msg) {
+      SM.conversationMessages.push(msg);
+      SM.cacheToLocal();
+      // Fire-and-forget write-through to server
+      if (SM.currentSessionId) {
+        fetch(BASE + '/sessions/' + SM.currentSessionId + '/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(msg)
+        }).catch(function() {});
+      }
+    },
+
+    createSession: function(title) {
+      return fetch(BASE + '/sessions/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selectedModel, title: title || 'New conversation' })
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        SM.currentSessionId = data.id;
+        SM.conversationMessages = [];
+        SM.cacheToLocal();
+        SM.refreshSessionList();
+        return data;
+      });
+    },
+
+    loadSession: function(sessionId) {
+      // Try localStorage first
+      try {
+        var cached = localStorage.getItem('governor_session_' + contextId + '_' + sessionId);
+        if (cached) {
+          var data = JSON.parse(cached);
+          if (data.messages && data.messages.length > 0) {
+            SM.currentSessionId = sessionId;
+            SM.conversationMessages = data.messages;
+            renderConversation();
+            localStorage.setItem('governor_last_session_' + contextId, sessionId);
+            return Promise.resolve();
+          }
+        }
+      } catch (e) {}
+
+      // Fallback to server
+      return fetch(BASE + '/sessions/' + sessionId).then(function(r) {
+        if (!r.ok) throw new Error('Session not found');
+        return r.json();
+      }).then(function(data) {
+        SM.currentSessionId = data.id;
+        SM.conversationMessages = (data.messages || []).map(function(m) {
+          return { role: m.role, content: m.content };
+        });
+        SM.cacheToLocal();
+        renderConversation();
+      });
+    },
+
+    listSessions: function() {
+      return fetch(BASE + '/sessions/').then(function(r) { return r.json(); }).then(function(data) {
+        SM.sessions = data.sessions || [];
+        return SM.sessions;
+      }).catch(function() { return []; });
+    },
+
+    deleteSession: function(sessionId) {
+      return fetch(BASE + '/sessions/' + sessionId, { method: 'DELETE' })
+        .then(function() {
+          try { localStorage.removeItem('governor_session_' + contextId + '_' + sessionId); } catch(e) {}
+          SM.refreshSessionList();
+        });
+    },
+
+    refreshSessionList: function() {
+      SM.listSessions().then(function(sessions) {
+        var select = document.getElementById('session-select');
+        select.innerHTML = '';
+        for (var i = 0; i < sessions.length; i++) {
+          var s = sessions[i];
+          var opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = truncate(s.title, 30);
+          if (s.id === SM.currentSessionId) opt.selected = true;
+          select.appendChild(opt);
+        }
+        if (sessions.length === 0) {
+          var opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = 'No sessions';
+          select.appendChild(opt);
+        }
+      });
+    }
+  };
+
   // ========== Chat ==========
+
+  function clearMessages() {
+    var messagesEl = document.getElementById('messages');
+    messagesEl.innerHTML = '<div class="welcome" id="welcome"><h2>Governor Chat</h2><p>Chat with AI under governor constraints. Your rules are enforced in real time.</p></div>';
+  }
 
   function addMessage(role, content) {
     var welcome = document.getElementById('welcome');
@@ -431,20 +568,51 @@
     return bubble;
   }
 
+  function renderConversation() {
+    clearMessages();
+    for (var i = 0; i < SM.conversationMessages.length; i++) {
+      var m = SM.conversationMessages[i];
+      addMessage(m.role, m.content);
+    }
+  }
+
   window.sendMessage = function() {
     var input = document.getElementById('input');
     var text = input.value.trim();
     if (!text || isGenerating) return;
 
+    // Auto-title on first message
+    if (SM.conversationMessages.length === 0 && SM.currentSessionId) {
+      var title = truncate(text, 50);
+      fetch(BASE + '/sessions/' + SM.currentSessionId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title })
+      }).then(function() { SM.refreshSessionList(); }).catch(function() {});
+    }
+
     addMessage('user', text);
+    SM.saveMessage({ role: 'user', content: text });
     input.value = '';
     input.style.height = 'auto';
 
     var model = document.getElementById('model-select').value;
-    streamResponse(text, model);
+    streamResponse(model);
   };
 
-  function streamResponse(text, model) {
+  window.switchSession = function(sessionId) {
+    if (!sessionId || sessionId === SM.currentSessionId) return;
+    SM.loadSession(sessionId).catch(function() {});
+  };
+
+  window.newSession = function() {
+    SM.createSession('New conversation').then(function() {
+      clearMessages();
+      SM.refreshSessionList();
+    }).catch(function() {});
+  };
+
+  function streamResponse(model) {
     isGenerating = true;
     document.getElementById('send-btn').disabled = true;
     document.getElementById('typing').classList.add('active');
@@ -452,9 +620,12 @@
     var bubble = addMessage('assistant', '');
     var accumulated = '';
 
+    // Send full conversation history (multi-turn fix)
     var payload = {
       model: model || 'sonnet',
-      messages: [{ role: 'user', content: text }],
+      messages: SM.conversationMessages.map(function(m) {
+        return { role: m.role, content: m.content };
+      }),
       stream: true
     };
 
@@ -471,29 +642,28 @@
       function pump() {
         return reader.read().then(function(result) {
           if (result.done) {
-            finishGeneration();
+            finishGeneration(accumulated);
             return;
           }
 
           buffer += decoder.decode(result.value, { stream: true });
           var lines = buffer.split('\n');
-          buffer = lines.pop(); // Keep incomplete line
+          buffer = lines.pop();
 
           for (var i = 0; i < lines.length; i++) {
             var line = lines[i].trim();
             if (!line.startsWith('data: ')) continue;
             var data = line.slice(6);
             if (data === '[DONE]') {
-              finishGeneration();
+              finishGeneration(accumulated);
               return;
             }
             try {
               var parsed = JSON.parse(data);
-              // Handle error chunks from backend
               if (parsed.error) {
                 accumulated += '\n\n[Error] ' + (parsed.error.message || 'Unknown error');
                 bubble.innerHTML = '<p style="color: var(--badge-block);">' + esc(accumulated) + '</p>';
-                finishGeneration();
+                finishGeneration(accumulated);
                 return;
               }
               var delta = parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
@@ -503,7 +673,7 @@
                 document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
               }
               if (parsed.choices && parsed.choices[0] && parsed.choices[0].finish_reason) {
-                finishGeneration();
+                finishGeneration(accumulated);
                 return;
               }
             } catch (e) {}
@@ -518,15 +688,17 @@
       if (!accumulated) {
         bubble.innerHTML = '<p style="color: var(--badge-block);">Error: ' + esc(err.message) + '</p>';
       }
-      finishGeneration();
+      finishGeneration(accumulated);
     });
   }
 
-  function finishGeneration() {
+  function finishGeneration(content) {
     isGenerating = false;
     document.getElementById('send-btn').disabled = false;
     document.getElementById('typing').classList.remove('active');
-    // Refresh governor state after response
+    if (content) {
+      SM.saveMessage({ role: 'assistant', content: content });
+    }
     refreshGovernor();
   }
 
@@ -661,18 +833,15 @@
   }
 
   function refreshGovernor() {
-    // Status
     fetch(BASE + '/governor/status').then(function(r) { return r.json(); }).then(function(data) {
       setMode(data.mode || 'general');
       document.getElementById('backend-badge').textContent = data.has_governor ? 'Governor active' : '';
     }).catch(function() {});
 
-    // Now
     fetch(BASE + '/governor/now').then(function(r) { return r.json(); }).then(function(data) {
       setStatus(data.status, data.sentence);
     }).catch(function() {});
 
-    // Mode-specific data
     if (mode === 'fiction') {
       Promise.all([
         fetch(BASE + '/governor/fiction/characters').then(function(r) { return r.json(); }),
@@ -694,7 +863,6 @@
       }).catch(function() {});
     }
 
-    // Corrections
     fetch(BASE + '/governor/corrections').then(function(r) { return r.json(); }).then(function(data) {
       renderCorrections(data.corrections || []);
     }).catch(function() {});
@@ -784,10 +952,55 @@
   refreshGovernor();
   setInterval(refreshGovernor, GOV_REFRESH);
 
-  // Load backend info
+  // Load backend info and context ID
   fetch(BASE + '/api/info').then(function(r) { return r.json(); }).then(function(data) {
     document.getElementById('backend-badge').textContent = data.backend || '';
-  }).catch(function() {});
+    contextId = data.governor_context || 'default';
+    initSession();
+  }).catch(function() {
+    initSession();
+  });
+
+  function initSession() {
+    // 1. Try localStorage restore (instant)
+    var restored = SM.restoreFromLocal();
+    if (restored && SM.conversationMessages.length > 0) {
+      renderConversation();
+    }
+
+    // 2. Fetch session list from server
+    SM.listSessions().then(function(sessions) {
+      SM.refreshSessionList();
+
+      if (restored && SM.currentSessionId) {
+        // Check if our cached session still exists on server
+        var found = false;
+        for (var i = 0; i < sessions.length; i++) {
+          if (sessions[i].id === SM.currentSessionId) { found = true; break; }
+        }
+        if (found) return; // All good, use cached session
+        // Session was deleted on server, fall through
+      }
+
+      if (!restored || !SM.currentSessionId) {
+        if (sessions.length > 0) {
+          // Load most recent session from server
+          SM.loadSession(sessions[0].id).catch(function() {
+            SM.createSession('New conversation');
+          });
+        } else {
+          // No sessions at all, create one
+          SM.createSession('New conversation');
+        }
+      }
+    }).catch(function() {
+      // Server unreachable, use local state or create placeholder
+      if (!restored) {
+        SM.currentSessionId = 'local-' + Date.now();
+        SM.conversationMessages = [];
+      }
+    });
+  }
 })();
 </script>
 </body>

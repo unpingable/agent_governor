@@ -78,7 +78,7 @@ def _fetch_json(url: str, headers: dict[str, str] | None = None) -> dict[str, An
     """Fetch JSON from URL."""
     req_headers = {
         "Accept": "application/json",
-        "User-Agent": "NonfictionGovernor/0.1 (https://github.com/anthropics/agent_gov)",
+        "User-Agent": "NonfictionGovernor/0.1 (https://github.com/unpingable/agent_governor)",
     }
     if headers:
         req_headers.update(headers)

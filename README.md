@@ -318,7 +318,7 @@ pip install agent-governor
 
 Or from source:
 ```bash
-git clone https://github.com/yourusername/agent-governor
+git clone https://github.com/unpingable/agent_governor
 cd agent-governor
 pip install -e .
 ```

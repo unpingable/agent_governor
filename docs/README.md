@@ -6,6 +6,8 @@
 2. **Initialize**: `governor init`
 3. **Choose your mode**: See the mode guides below
 
+---
+
 ## Mode Guides
 
 Pick the guide that matches your use case:
@@ -15,12 +17,42 @@ Pick the guide that matches your use case:
 | **Fiction** | [modes/fiction.md](modes/fiction.md) | Novel writing, worldbuilding, character consistency |
 | **Code** | [modes/code.md](modes/code.md) | Software development, tech stack decisions, patterns |
 | **Nonfiction** | [modes/nonfiction.md](modes/nonfiction.md) | Academic writing, research, citation management |
+| **Ops** | [modes/ops.md](modes/ops.md) | SRE, runbooks, change management, blast radius |
+
+### Ancillary Modes & Layers
+
+These work alongside the main modes to provide additional control:
+
+| Layer | Description |
+|-------|-------------|
+| **Puppet Mode** | Pin AI to a specific persona/voice |
+| **Strict Mode** | Fail-closed governance preset |
+| **Research Mode** | Non-convergent epistemic exploration |
+| **Maude Lite** | Evidence-gated kernel harness |
+
+See [modes/ancillary.md](modes/ancillary.md) for details.
+
+---
+
+## Interfaces
+
+How you interact with the governor:
+
+| Interface | Guide | Best For |
+|-----------|-------|----------|
+| **WebUI** | [interfaces/webui.md](interfaces/webui.md) | Chat-based interaction, visual feedback |
+| **VS Code** | [interfaces/vscode.md](interfaces/vscode.md) | Real-time checking while coding |
+| **CLI** | [interfaces/cli.md](interfaces/cli.md) | Scripting, automation, full control |
+
+---
 
 ## Architecture
 
 For understanding the system internals:
 
 - [architecture/OVERVIEW.md](architecture/OVERVIEW.md) - High-level map of components
+
+---
 
 ## Quick Reference
 
@@ -75,6 +107,32 @@ docker-compose -f docker-compose.yml -f docker-compose.ollama.yml up -d
 ```
 
 Open **http://localhost:3001**
+
+### VS Code
+
+1. Install the extension from `vscode-governor/`
+2. Open a project with `.governor/` initialized
+3. Use `Ctrl+Shift+G` to check the current file
+4. Use `Ctrl+Shift+Alt+G` to toggle real-time checking
+
+---
+
+## Document Index
+
+### Modes
+- [modes/fiction.md](modes/fiction.md) - Fiction Mode for writers
+- [modes/code.md](modes/code.md) - Code Mode for developers
+- [modes/nonfiction.md](modes/nonfiction.md) - Nonfiction Mode for researchers
+- [modes/ops.md](modes/ops.md) - Ops Mode for SREs
+- [modes/ancillary.md](modes/ancillary.md) - Puppet, Strict, Research, Maude Lite
+
+### Interfaces
+- [interfaces/webui.md](interfaces/webui.md) - WebUI setup and usage
+- [interfaces/vscode.md](interfaces/vscode.md) - VS Code extension
+- [interfaces/cli.md](interfaces/cli.md) - Complete CLI reference
+
+### Architecture
+- [architecture/OVERVIEW.md](architecture/OVERVIEW.md) - System architecture
 
 ---
 

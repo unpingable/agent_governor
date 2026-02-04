@@ -11,10 +11,25 @@ The server provides tools for:
 - Querying facts and decisions
 - Managing operating envelopes
 
+Extended surface for Claude Code integration:
+- Querying anchors (constraints) before generation
+- Checking text against constraints during generation
+- Viewing docket (pending cases) and claim status
+- Recording rulings on violations
+- Staleness checking and reverification
+
 Usage:
     governor mcp serve
 
-Or configure in Claude Desktop's MCP settings.
+Or configure in Claude Desktop's MCP settings:
+    {
+      "mcpServers": {
+        "governor": {
+          "command": "governor",
+          "args": ["mcp", "serve"]
+        }
+      }
+    }
 """
 
 import json
@@ -167,6 +182,129 @@ class GovernorMCPServer:
                     },
                 },
                 handler=self._handle_envelope,
+            ),
+            # =========================================================================
+            # Extended surface for Claude Code integration
+            # =========================================================================
+            "governor_get_anchors": MCPTool(
+                name="governor_get_anchors",
+                description="Get all continuity anchors (constraints) for this project. Call this BEFORE generating code to know what constraints to respect.",
+                parameters={
+                    "type": {
+                        "type": "string",
+                        "description": "Optional anchor type filter (canon, prohibition, persona, definition, requirement, style)",
+                        "required": False,
+                    },
+                },
+                handler=self._handle_get_anchors,
+            ),
+            "governor_get_docket": MCPTool(
+                name="governor_get_docket",
+                description="Get pending cases on the docket that need attention (violations awaiting ruling, stale claims).",
+                parameters={
+                    "case_type": {
+                        "type": "string",
+                        "enum": ["contested", "stale", "all"],
+                        "description": "Filter by case type. Default: all",
+                        "required": False,
+                    },
+                },
+                handler=self._handle_get_docket,
+            ),
+            "governor_claim_status": MCPTool(
+                name="governor_claim_status",
+                description="Get claim health summary: what's live, degrading, stale, or contested. The 'weather report' for epistemic state.",
+                parameters={},
+                handler=self._handle_claim_status,
+            ),
+            "governor_check_text": MCPTool(
+                name="governor_check_text",
+                description="Check arbitrary text against all anchors. Use this to verify output BEFORE presenting to user.",
+                parameters={
+                    "text": {
+                        "type": "string",
+                        "description": "The text to check against anchors",
+                        "required": True,
+                    },
+                },
+                handler=self._handle_check_text,
+            ),
+            "governor_check_file": MCPTool(
+                name="governor_check_file",
+                description="Check a file for security and continuity violations.",
+                parameters={
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to check",
+                        "required": True,
+                    },
+                },
+                handler=self._handle_check_file,
+            ),
+            "governor_record_ruling": MCPTool(
+                name="governor_record_ruling",
+                description="Record a ruling on a docket case (after human decision). Used when human chooses fix/revise/proceed.",
+                parameters={
+                    "case_number": {
+                        "type": "integer",
+                        "description": "The case number from the docket",
+                        "required": True,
+                    },
+                    "ruling": {
+                        "type": "string",
+                        "enum": ["sustain", "amend", "except", "reverify", "dismiss"],
+                        "description": "The ruling type",
+                        "required": True,
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "description": "Optional rationale for the ruling",
+                        "required": False,
+                    },
+                    "scope": {
+                        "type": "string",
+                        "enum": ["single_instance", "session", "project"],
+                        "description": "Scope for exception rulings. Default: single_instance",
+                        "required": False,
+                    },
+                },
+                handler=self._handle_record_ruling,
+            ),
+            "governor_get_constraints_for_fix": MCPTool(
+                name="governor_get_constraints_for_fix",
+                description="Get the specific constraints that need to be respected when regenerating after a violation. Call this before attempting a fix.",
+                parameters={
+                    "case_number": {
+                        "type": "integer",
+                        "description": "The case number from the docket",
+                        "required": True,
+                    },
+                },
+                handler=self._handle_get_constraints_for_fix,
+            ),
+            "governor_check_staleness": MCPTool(
+                name="governor_check_staleness",
+                description="Check which claims are stale or decaying. Returns claims that need reverification.",
+                parameters={
+                    "threshold": {
+                        "type": "number",
+                        "description": "Confidence threshold below which claims are considered stale. Default: 0.5",
+                        "required": False,
+                    },
+                },
+                handler=self._handle_check_staleness,
+            ),
+            "governor_reverify": MCPTool(
+                name="governor_reverify",
+                description="Request reverification of a stale claim.",
+                parameters={
+                    "claim_id": {
+                        "type": "string",
+                        "description": "The claim ID to reverify",
+                        "required": True,
+                    },
+                },
+                handler=self._handle_reverify,
             ),
         }
 
@@ -519,6 +657,366 @@ class GovernorMCPServer:
             "commit_decisions": current.commit_decisions,
             "allow_conflicts": current.allow_conflicts,
         }
+
+    # =========================================================================
+    # Extended handlers for Claude Code integration
+    # =========================================================================
+
+    def _handle_get_anchors(self, type: str | None = None) -> dict[str, Any]:
+        """Handle get_anchors tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .continuity import create_registry
+
+            registry = create_registry(self.gov_dir)
+            anchors = registry.all()
+
+            result = []
+            for anchor in anchors:
+                if type and anchor.anchor_type.value != type:
+                    continue
+                result.append({
+                    "id": anchor.id,
+                    "type": anchor.anchor_type.value,
+                    "description": anchor.description,
+                    "severity": anchor.severity.value,
+                    "forbidden_patterns": anchor.forbidden_patterns,
+                    "required_patterns": anchor.required_patterns,
+                })
+
+            return {
+                "success": True,
+                "count": len(result),
+                "anchors": result,
+                "hint": "Respect these constraints when generating code/text",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_get_docket(self, case_type: str | None = None) -> dict[str, Any]:
+        """Handle get_docket tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .docket import DocketManager, CaseType
+
+            docket = DocketManager(governor_dir=self.gov_dir)
+            cases = docket.get_docket()
+
+            result = []
+            for case in cases:
+                if case_type and case_type != "all":
+                    if case.case_type.value != case_type:
+                        continue
+                result.append({
+                    "case_number": case.case_number,
+                    "type": case.case_type.value,
+                    "claim_id": case.claim_id,
+                    "anchor_id": case.anchor_id,
+                    "status": case.status.value,
+                    "description": case.description,
+                })
+
+            return {
+                "success": True,
+                "count": len(result),
+                "cases": result,
+                "hint": "These cases need rulings. Use governor_record_ruling to resolve.",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_claim_status(self) -> dict[str, Any]:
+        """Handle claim_status tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .epistemic import EpistemicLedger
+            from .claim_status import ClaimStatusDashboard
+            from .docket import DocketManager
+
+            ledger = EpistemicLedger()
+            docket = DocketManager(governor_dir=self.gov_dir)
+            dashboard = ClaimStatusDashboard(ledger, docket=docket)
+
+            summary = dashboard.get_summary()
+
+            return {
+                "success": True,
+                "summary": {
+                    "live_count": summary.live_count,
+                    "live_confidence_avg": summary.live_confidence_avg,
+                    "degrading_count": summary.degrading_count,
+                    "stale_count": summary.stale_count,
+                    "contested_count": summary.contested_count,
+                    "total_claims": summary.total_claims,
+                    "health_score": summary.health_score,
+                },
+                "attention_needed": summary.stale_count > 0 or summary.contested_count > 0,
+                "hint": "Run governor_get_docket for details on contested/stale cases",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_check_text(self, text: str) -> dict[str, Any]:
+        """Handle check_text tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .continuity import create_registry, ContinuityChecker
+
+            registry = create_registry(self.gov_dir)
+            checker = ContinuityChecker()
+            anchors = registry.all()
+            report = checker.check(text, anchors)
+
+            violations = []
+            for v in report.violations:
+                violations.append({
+                    "anchor_id": v.anchor_id,
+                    "description": v.description,
+                    "matched_text": v.matched_text,
+                    "severity": v.severity.value,
+                    "action": v.recommended_action.value,
+                })
+
+            return {
+                "success": True,
+                "clean": len(violations) == 0,
+                "violations": violations,
+                "blocking": any(v["severity"] == "reject" for v in violations),
+                "hint": "If blocking, use governor_get_constraints_for_fix to get constraints for regeneration" if violations else "Text passes all constraints",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_check_file(self, path: str) -> dict[str, Any]:
+        """Handle check_file tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .check import run_check
+
+            file_path = Path(path)
+            if not file_path.is_absolute():
+                file_path = self.root / file_path
+
+            if not file_path.exists():
+                return {"success": False, "error": f"File not found: {path}"}
+
+            content = file_path.read_text()
+            result = run_check(
+                content,
+                file_path=str(file_path),
+                governor_dir=self.gov_dir,
+                run_security=True,
+                run_continuity=True,
+            )
+
+            findings = []
+            for f in result.findings:
+                findings.append({
+                    "source": f.source,
+                    "severity": f.severity,
+                    "message": f.message,
+                    "line": f.range.start.line if f.range else None,
+                })
+
+            return {
+                "success": True,
+                "path": str(file_path),
+                "clean": len(findings) == 0,
+                "findings": findings,
+                "blocking": any(f["severity"] in ("error", "reject") for f in findings),
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_record_ruling(
+        self,
+        case_number: int,
+        ruling: str,
+        rationale: str | None = None,
+        scope: str | None = None,
+    ) -> dict[str, Any]:
+        """Handle record_ruling tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .docket import DocketManager
+
+            docket = DocketManager(governor_dir=self.gov_dir)
+
+            if ruling == "sustain":
+                precedent = docket.rule_sustain(case_number, rationale or "")
+            elif ruling == "amend":
+                precedent = docket.rule_amend(case_number, rationale or "")
+            elif ruling == "except":
+                precedent = docket.rule_grant_exception(
+                    case_number,
+                    scope=scope or "single_instance",
+                    rationale=rationale or "",
+                )
+            elif ruling == "reverify":
+                precedent = docket.rule_reverify(case_number, rationale or "")
+            elif ruling == "dismiss":
+                precedent = docket.rule_dismiss(case_number, rationale or "")
+            else:
+                return {"success": False, "error": f"Unknown ruling type: {ruling}"}
+
+            return {
+                "success": True,
+                "precedent_id": precedent.id,
+                "case_number": case_number,
+                "ruling": ruling,
+                "scope": precedent.scope,
+            }
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_get_constraints_for_fix(self, case_number: int) -> dict[str, Any]:
+        """Handle get_constraints_for_fix tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .docket import DocketManager, CaseType
+            from .continuity import create_registry
+
+            docket = DocketManager(governor_dir=self.gov_dir)
+            case = docket.get_case(case_number)
+
+            if case is None:
+                return {"success": False, "error": f"Case #{case_number} not found"}
+
+            if case.case_type != CaseType.CONTESTED:
+                return {
+                    "success": False,
+                    "error": f"Case #{case_number} is not a contested case (type: {case.case_type.value})",
+                }
+
+            # Get the anchor that was violated
+            constraints = []
+            if case.anchor_id:
+                registry = create_registry(self.gov_dir)
+                anchor = registry.get(case.anchor_id)
+                if anchor:
+                    constraints.append({
+                        "anchor_id": anchor.id,
+                        "description": anchor.description,
+                        "forbidden_patterns": anchor.forbidden_patterns,
+                        "required_patterns": anchor.required_patterns,
+                        "severity": anchor.severity.value,
+                    })
+
+            # Also include evidence from the case
+            evidence_hints = []
+            for ev in case.evidence:
+                if ev.get("description"):
+                    evidence_hints.append(ev["description"])
+
+            return {
+                "success": True,
+                "case_number": case_number,
+                "constraints": constraints,
+                "evidence_hints": evidence_hints,
+                "blocked_content": case.blocked_content[:500] if case.blocked_content else None,
+                "hint": "Regenerate output respecting these constraints",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_check_staleness(self, threshold: float | None = None) -> dict[str, Any]:
+        """Handle check_staleness tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .epistemic import EpistemicLedger
+            from .staleness import StalenessDetector, StalenessConfig
+
+            config = StalenessConfig(
+                confidence_threshold=threshold or 0.5,
+            )
+            ledger = EpistemicLedger()
+            detector = StalenessDetector(ledger, config)
+
+            stale_claims = detector.detect_stale_claims()
+
+            result = []
+            for freshness in stale_claims:
+                result.append({
+                    "claim_id": freshness.claim_id,
+                    "confidence": freshness.confidence,
+                    "is_live": freshness.is_live,
+                    "decay_amount": freshness.decay_amount,
+                    "staleness_reason": freshness.staleness_reason,
+                    "violated_assumptions": freshness.violated_assumptions,
+                })
+
+            return {
+                "success": True,
+                "count": len(result),
+                "stale_claims": result,
+                "hint": "Use governor_reverify to refresh stale claims, or governor_record_ruling with 'dismiss' to accept",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _handle_reverify(self, claim_id: str) -> dict[str, Any]:
+        """Handle reverify tool call."""
+        ok, err = self._ensure_initialized()
+        if not ok:
+            return {"success": False, "error": err}
+
+        try:
+            from .epistemic import EpistemicLedger
+            from .staleness import StalenessDetector
+
+            ledger = EpistemicLedger()
+            detector = StalenessDetector(ledger)
+
+            # Compute current freshness
+            freshness = detector.compute_freshness(claim_id)
+
+            if freshness.staleness_reason == "Claim not found":
+                return {"success": False, "error": f"Claim {claim_id} not found"}
+
+            # Get the claim and refresh its timestamp
+            claim = ledger.get(claim_id)
+            if claim:
+                from datetime import datetime
+                claim.last_updated_at = datetime.now()
+                # Restore some confidence if it decayed
+                if claim.confidence < 0.8:
+                    claim.confidence = min(1.0, claim.confidence + 0.3)
+
+            return {
+                "success": True,
+                "claim_id": claim_id,
+                "old_confidence": freshness.confidence,
+                "new_confidence": claim.confidence if claim else freshness.confidence,
+                "hint": "Claim has been refreshed. Consider attaching new evidence.",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def list_tools(self) -> list[dict[str, Any]]:
         """List available tools in MCP format."""

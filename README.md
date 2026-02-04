@@ -325,7 +325,7 @@ This is research in the old sense. The kind that produces:
 - Stable objects
 - Reusable insight
 
-**The spicy part:** Once you have that graph, LLMs stop being oracles and become junior analysts. They don't get to invent structure - they navigate one.
+**The key insight:** Once you have that graph, LLMs stop being oracles and become junior analysts. They don't get to invent structure — they navigate one.
 
 You're not building OSINT tooling. You're building a **lab bench for reasoning under constraint**.
 
@@ -340,9 +340,12 @@ pip install agent-governor
 Or from source:
 ```bash
 git clone https://github.com/unpingable/agent_governor
-cd agent-governor
+cd agent_governor
 pip install -e .
 ```
+
+> **Note:** `maude` is an alias for `governor` — same CLI, shorter to type.
+> Use whichever you prefer: `governor check` or `maude check`.
 
 ---
 

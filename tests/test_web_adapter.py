@@ -1248,3 +1248,204 @@ class TestExportImport:
         data = response.json()
         assert "governor_export" in data["endpoints"]
         assert "governor_import" in data["endpoints"]
+
+
+# ============================================================================
+# TestResearchEndpoints
+# ============================================================================
+
+
+class TestResearchEndpoints:
+    """Tests for /governor/research/ endpoints."""
+
+    @pytest.fixture(autouse=True)
+    def setup_research(self, client, tmp_contexts_dir) -> None:
+        """Create research mode context and reset research store."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="research")
+        adapter_mod._context_manager = cm
+        adapter_mod._research_store = None
+        adapter_mod.GOVERNOR_MODE = "research"
+
+    def test_state_empty(self, client) -> None:
+        """GET /governor/research/state returns empty state."""
+        response = client.get("/governor/research/state")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["claims"] == []
+        assert data["assumptions"] == []
+        assert data["ed"]["total"] == 0
+
+    def test_add_claim(self, client) -> None:
+        """POST /governor/research/claims creates a claim."""
+        response = client.post(
+            "/governor/research/claims",
+            json={"content": "Temperature affects rate"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"]
+        assert data["claim"]["content"] == "Temperature affects rate"
+        assert data["claim"]["status"] == "floating"
+
+    def test_add_claim_with_scope(self, client) -> None:
+        """POST /governor/research/claims with scope."""
+        response = client.post(
+            "/governor/research/claims",
+            json={"content": "Test claim", "scope": "Chapter 3"},
+        )
+        data = response.json()
+        assert data["claim"]["scope"] == "Chapter 3"
+
+    def test_delete_claim(self, client) -> None:
+        """DELETE /governor/research/claims/{id} removes claim."""
+        resp = client.post("/governor/research/claims", json={"content": "To delete"})
+        claim_id = resp.json()["claim"]["id"]
+
+        del_resp = client.delete(f"/governor/research/claims/{claim_id}")
+        assert del_resp.status_code == 200
+
+        state = client.get("/governor/research/state").json()
+        assert len(state["claims"]) == 0
+
+    def test_delete_claim_not_found(self, client) -> None:
+        response = client.delete("/governor/research/claims/C-NONEXISTENT")
+        assert response.status_code == 404
+
+    def test_change_claim_status(self, client) -> None:
+        """PATCH /governor/research/claims/{id}/status changes status."""
+        resp = client.post("/governor/research/claims", json={"content": "Test"})
+        claim_id = resp.json()["claim"]["id"]
+
+        patch_resp = client.patch(
+            f"/governor/research/claims/{claim_id}/status",
+            json={"status": "retracted"},
+        )
+        assert patch_resp.status_code == 200
+        assert patch_resp.json()["claim"]["status"] == "retracted"
+
+    def test_change_claim_status_invalid(self, client) -> None:
+        resp = client.post("/governor/research/claims", json={"content": "Test"})
+        claim_id = resp.json()["claim"]["id"]
+
+        patch_resp = client.patch(
+            f"/governor/research/claims/{claim_id}/status",
+            json={"status": "bogus"},
+        )
+        assert patch_resp.status_code == 400
+
+    def test_add_assumption(self, client) -> None:
+        """POST /governor/research/assumptions creates an assumption."""
+        response = client.post(
+            "/governor/research/assumptions",
+            json={"content": "Stable incentives"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["assumption"]["status"] == "proposed"
+
+    def test_delete_assumption(self, client) -> None:
+        resp = client.post("/governor/research/assumptions", json={"content": "Test"})
+        a_id = resp.json()["assumption"]["id"]
+        del_resp = client.delete(f"/governor/research/assumptions/{a_id}")
+        assert del_resp.status_code == 200
+
+    def test_change_assumption_status(self, client) -> None:
+        resp = client.post("/governor/research/assumptions", json={"content": "Test"})
+        a_id = resp.json()["assumption"]["id"]
+        patch_resp = client.patch(
+            f"/governor/research/assumptions/{a_id}/status",
+            json={"status": "accepted"},
+        )
+        assert patch_resp.status_code == 200
+        assert patch_resp.json()["assumption"]["status"] == "accepted"
+
+    def test_add_uncertainty(self, client) -> None:
+        """POST /governor/research/uncertainties creates an uncertainty."""
+        resp = client.post("/governor/research/claims", json={"content": "Claim"})
+        claim_id = resp.json()["claim"]["id"]
+
+        response = client.post(
+            "/governor/research/uncertainties",
+            json={"content": "Sample size", "attached_to": claim_id},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["uncertainty"]["attached_to"] == claim_id
+
+    def test_delete_uncertainty(self, client) -> None:
+        resp = client.post("/governor/research/uncertainties", json={"content": "Test"})
+        u_id = resp.json()["uncertainty"]["id"]
+        del_resp = client.delete(f"/governor/research/uncertainties/{u_id}")
+        assert del_resp.status_code == 200
+
+    def test_change_uncertainty_status(self, client) -> None:
+        resp = client.post("/governor/research/uncertainties", json={"content": "Test"})
+        u_id = resp.json()["uncertainty"]["id"]
+        patch_resp = client.patch(
+            f"/governor/research/uncertainties/{u_id}/status",
+            json={"status": "resolved"},
+        )
+        assert patch_resp.status_code == 200
+
+    def test_add_link(self, client) -> None:
+        """POST /governor/research/links creates a typed link."""
+        c1 = client.post("/governor/research/claims", json={"content": "Evidence"}).json()["claim"]
+        c2 = client.post("/governor/research/claims", json={"content": "Main"}).json()["claim"]
+
+        response = client.post(
+            "/governor/research/links",
+            json={"link_type": "supports", "from_id": c1["id"], "to_id": c2["id"]},
+        )
+        assert response.status_code == 200
+        assert response.json()["link"]["link_type"] == "supports"
+
+    def test_add_link_invalid_type(self, client) -> None:
+        response = client.post(
+            "/governor/research/links",
+            json={"link_type": "bogus", "from_id": "a", "to_id": "b"},
+        )
+        assert response.status_code == 400
+
+    def test_delete_link(self, client) -> None:
+        c1 = client.post("/governor/research/claims", json={"content": "A"}).json()["claim"]
+        c2 = client.post("/governor/research/claims", json={"content": "B"}).json()["claim"]
+        link = client.post(
+            "/governor/research/links",
+            json={"link_type": "supports", "from_id": c1["id"], "to_id": c2["id"]},
+        ).json()["link"]
+        del_resp = client.delete(f"/governor/research/links/{link['id']}")
+        assert del_resp.status_code == 200
+
+    def test_state_reflects_ed(self, client) -> None:
+        """State endpoint reflects ED computation."""
+        client.post("/governor/research/claims", json={"content": "Floating claim"})
+        state = client.get("/governor/research/state").json()
+        assert state["ed"]["floating"] == 1
+        assert state["ed"]["total"] > 0
+
+    def test_export_includes_research(self, client) -> None:
+        """Export includes research data in research mode."""
+        client.post("/governor/research/claims", json={"content": "Test claim"})
+        exported = client.get("/governor/export").json()
+        assert "research" in exported
+        assert len(exported["research"]["claims"]) == 1
+
+    def test_import_research_data(self, client) -> None:
+        """Import restores research data."""
+        client.post("/governor/research/claims", json={"content": "Original"})
+        exported = client.get("/governor/export").json()
+
+        # Add a new claim to the exported data
+        exported["research"]["claims"].append({
+            "id": "C-IMPORT1",
+            "content": "Imported",
+            "status": "floating",
+            "scope": "",
+            "created_at": "2024-01-01T00:00:00",
+        })
+
+        result = client.post("/governor/import", json=exported).json()
+        assert result["imported"] >= 1

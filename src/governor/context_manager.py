@@ -29,7 +29,7 @@ from typing import Any
 DEFAULT_BASE_DIR = Path.home() / ".governor-contexts"
 
 # Valid context modes
-VALID_MODES = {"general", "fiction", "code", "nonfiction"}
+VALID_MODES = {"general", "fiction", "code", "nonfiction", "research"}
 
 # Context metadata filename
 CONTEXT_META_FILE = "_context.json"

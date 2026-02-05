@@ -661,7 +661,7 @@ async def governor_status() -> dict[str, Any]:
     # Build ViewModel v2
     vm = _build_vm_for_context(ctx)
 
-    return {
+    result: dict[str, Any] = {
         "context_id": ctx.context_id,
         "initialized": True,
         "mode": ctx.mode,
@@ -673,6 +673,19 @@ async def governor_status() -> dict[str, Any]:
         "metadata": ctx.metadata,
         "viewmodel": vm.to_dict(),
     }
+
+    # Research mode: include ED summary
+    if ctx.mode == "research":
+        try:
+            from governor.research_store import ResearchStore
+
+            store = ResearchStore(ctx.governor_dir)
+            ed = store.compute_ed()
+            result["research_ed"] = ed
+        except Exception:
+            pass
+
+    return result
 
 
 @app.get("/governor/now")
@@ -693,7 +706,7 @@ async def governor_now() -> dict[str, Any]:
 
     vm = _build_vm_for_context(ctx)
 
-    return {
+    now_result: dict[str, Any] = {
         "context_id": context_id,
         "status": derive_status_pill(vm),
         "sentence": derive_one_sentence(vm),
@@ -702,6 +715,23 @@ async def governor_now() -> dict[str, Any]:
         "regime": vm.regime.name if vm.regime else None,
         "mode": ctx.mode,
     }
+
+    # Research mode: override sentence with ED summary
+    if ctx.mode == "research":
+        try:
+            from governor.research_store import ResearchStore
+
+            store = ResearchStore(ctx.governor_dir)
+            ed = store.compute_ed()
+            now_result["sentence"] = (
+                f"ED: {ed['total']} | {ed['floating']} floating | "
+                f"{ed['open_uncertain']} uncertain"
+            )
+            now_result["research_ed"] = ed
+        except Exception:
+            pass
+
+    return now_result
 
 
 @app.get("/governor/why")
@@ -773,6 +803,55 @@ async def governor_detail(item_id: str) -> dict[str, Any]:
 # ============================================================================
 # Mode-Specific Endpoints (Fiction / Code)
 # ============================================================================
+
+
+# ============================================================================
+# Research Mode Pydantic Models
+# ============================================================================
+
+
+class ClaimRequest(BaseModel):
+    content: str
+    scope: str = ""
+
+
+class AssumptionRequest(BaseModel):
+    content: str
+
+
+class UncertaintyRequest(BaseModel):
+    content: str
+    attached_to: str = ""
+
+
+class LinkRequest(BaseModel):
+    link_type: str
+    from_id: str
+    to_id: str
+    subtype: str = ""
+
+
+class StatusChangeRequest(BaseModel):
+    status: str
+
+
+# ============================================================================
+# Research Store (lazy init)
+# ============================================================================
+
+_research_store: Any = None
+
+
+def _get_research_store() -> Any:
+    """Lazy-init research store for the active context."""
+    global _research_store
+    if _research_store is None:
+        from governor.research_store import ResearchStore
+
+        cm = _get_context_manager()
+        ctx = cm.get_or_create(GOVERNOR_CONTEXT_ID, mode=GOVERNOR_MODE)
+        _research_store = ResearchStore(ctx.governor_dir)
+    return _research_store
 
 
 class CharacterRequest(BaseModel):
@@ -1130,6 +1209,172 @@ async def add_constraint(request: ConstraintRequest) -> dict[str, Any]:
     }
 
 
+# ============================================================================
+# Research Mode Endpoints
+# ============================================================================
+
+
+@app.get("/governor/research/state")
+async def research_state() -> dict[str, Any]:
+    """Full research state + ED score."""
+    store = _get_research_store()
+    return store.get_state()
+
+
+@app.post("/governor/research/claims")
+async def add_research_claim(request: ClaimRequest) -> dict[str, Any]:
+    """Add a research claim."""
+    store = _get_research_store()
+    claim = store.add_claim(content=request.content, scope=request.scope)
+    return {"success": True, "claim": claim.to_dict()}
+
+
+@app.delete("/governor/research/claims/{claim_id}")
+async def delete_research_claim(claim_id: str) -> dict[str, Any]:
+    """Delete a research claim."""
+    store = _get_research_store()
+    if not store.delete_claim(claim_id):
+        raise HTTPException(status_code=404, detail="Claim not found")
+    return {"success": True}
+
+
+@app.patch("/governor/research/claims/{claim_id}/status")
+async def change_claim_status(
+    claim_id: str, request: StatusChangeRequest
+) -> dict[str, Any]:
+    """Change a claim's status."""
+    from governor.research_store import ClaimStatus as RClaimStatus
+
+    try:
+        status = RClaimStatus(request.status)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status: {request.status}. Valid: {[s.value for s in RClaimStatus]}",
+        )
+
+    store = _get_research_store()
+    try:
+        claim = store.update_claim_status(claim_id, status)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    return {"success": True, "claim": claim.to_dict()}
+
+
+@app.post("/governor/research/assumptions")
+async def add_research_assumption(request: AssumptionRequest) -> dict[str, Any]:
+    """Add a research assumption."""
+    store = _get_research_store()
+    assumption = store.add_assumption(content=request.content)
+    return {"success": True, "assumption": assumption.to_dict()}
+
+
+@app.delete("/governor/research/assumptions/{assumption_id}")
+async def delete_research_assumption(assumption_id: str) -> dict[str, Any]:
+    """Delete a research assumption."""
+    store = _get_research_store()
+    if not store.delete_assumption(assumption_id):
+        raise HTTPException(status_code=404, detail="Assumption not found")
+    return {"success": True}
+
+
+@app.patch("/governor/research/assumptions/{assumption_id}/status")
+async def change_assumption_status(
+    assumption_id: str, request: StatusChangeRequest
+) -> dict[str, Any]:
+    """Change an assumption's status."""
+    from governor.research_store import AssumptionStatus
+
+    try:
+        status = AssumptionStatus(request.status)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status: {request.status}. Valid: {[s.value for s in AssumptionStatus]}",
+        )
+
+    store = _get_research_store()
+    try:
+        assumption = store.update_assumption_status(assumption_id, status)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Assumption not found")
+    return {"success": True, "assumption": assumption.to_dict()}
+
+
+@app.post("/governor/research/uncertainties")
+async def add_research_uncertainty(request: UncertaintyRequest) -> dict[str, Any]:
+    """Add a research uncertainty."""
+    store = _get_research_store()
+    uncertainty = store.add_uncertainty(
+        content=request.content, attached_to=request.attached_to
+    )
+    return {"success": True, "uncertainty": uncertainty.to_dict()}
+
+
+@app.delete("/governor/research/uncertainties/{uncertainty_id}")
+async def delete_research_uncertainty(uncertainty_id: str) -> dict[str, Any]:
+    """Delete a research uncertainty."""
+    store = _get_research_store()
+    if not store.delete_uncertainty(uncertainty_id):
+        raise HTTPException(status_code=404, detail="Uncertainty not found")
+    return {"success": True}
+
+
+@app.patch("/governor/research/uncertainties/{uncertainty_id}/status")
+async def change_uncertainty_status(
+    uncertainty_id: str, request: StatusChangeRequest
+) -> dict[str, Any]:
+    """Change an uncertainty's status."""
+    from governor.research_store import UncertaintyStatus
+
+    try:
+        status = UncertaintyStatus(request.status)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status: {request.status}. Valid: {[s.value for s in UncertaintyStatus]}",
+        )
+
+    store = _get_research_store()
+    try:
+        uncertainty = store.update_uncertainty_status(uncertainty_id, status)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Uncertainty not found")
+    return {"success": True, "uncertainty": uncertainty.to_dict()}
+
+
+@app.post("/governor/research/links")
+async def add_research_link(request: LinkRequest) -> dict[str, Any]:
+    """Add a typed link between research items."""
+    from governor.research_store import LinkType
+
+    try:
+        link_type = LinkType(request.link_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid link type: {request.link_type}. Valid: {[t.value for t in LinkType]}",
+        )
+
+    store = _get_research_store()
+    link = store.add_link(
+        link_type=link_type,
+        from_id=request.from_id,
+        to_id=request.to_id,
+        subtype=request.subtype,
+    )
+    return {"success": True, "link": link.to_dict()}
+
+
+@app.delete("/governor/research/links/{link_id}")
+async def delete_research_link(link_id: str) -> dict[str, Any]:
+    """Delete a research link."""
+    store = _get_research_store()
+    if not store.remove_link(link_id):
+        raise HTTPException(status_code=404, detail="Link not found")
+    return {"success": True}
+
+
 @app.get("/governor/corrections")
 async def list_corrections(limit: int = 20) -> dict[str, Any]:
     """List past corrections/resolutions."""
@@ -1264,13 +1509,25 @@ async def export_governor_state() -> dict[str, Any]:
     except Exception:
         pass
 
-    return {
+    result = {
         "version": 1,
         "mode": GOVERNOR_MODE,
         "exported_at": __import__("datetime").datetime.now().isoformat(),
         "anchors": anchor_list,
         "corrections": corrections,
     }
+
+    # Research mode: include research store data
+    if ctx.mode == "research":
+        try:
+            from governor.research_store import ResearchStore
+
+            store = ResearchStore(ctx.governor_dir)
+            result["research"] = store.export_data()
+        except Exception:
+            pass
+
+    return result
 
 
 @app.post("/governor/import")
@@ -1319,11 +1576,24 @@ async def import_governor_state(payload: dict[str, Any]) -> dict[str, Any]:
     if imported > 0:
         registry.save(ctx.governor_dir / "continuity" / "anchors.json")
 
+    # Research mode: import research store data
+    research_imported = 0
+    if ctx.mode == "research" and "research" in payload:
+        try:
+            from governor.research_store import ResearchStore
+
+            store = ResearchStore(ctx.governor_dir)
+            research_imported = store.import_data(payload["research"])
+        except Exception:
+            pass
+
+    total_imported = imported + research_imported
+
     return {
         "success": True,
-        "imported": imported,
+        "imported": total_imported,
         "skipped": skipped,
-        "message": f"Imported {imported} item(s), skipped {skipped} duplicate(s).",
+        "message": f"Imported {total_imported} item(s), skipped {skipped} duplicate(s).",
     }
 
 
@@ -1366,6 +1636,12 @@ async def api_info() -> dict[str, Any]:
             # Code mode
             "code_decisions": "/governor/code/decisions",
             "code_constraints": "/governor/code/constraints",
+            # Research mode
+            "research_state": "/governor/research/state",
+            "research_claims": "/governor/research/claims",
+            "research_assumptions": "/governor/research/assumptions",
+            "research_uncertainties": "/governor/research/uncertainties",
+            "research_links": "/governor/research/links",
             # Export/Import
             "governor_export": "/governor/export",
             "governor_import": "/governor/import",

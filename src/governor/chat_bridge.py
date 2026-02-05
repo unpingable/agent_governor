@@ -861,6 +861,9 @@ class GovernorHooks:
             decisions_data = self._load_code_decisions_data()
             if decisions_data:
                 anchors.extend(anchors_from_code_decisions(decisions_data))
+        elif self.context.mode == "research":
+            research_anchors = self._load_research_anchors()
+            anchors.extend(research_anchors)
 
         # Puppet anchors (all modes)
         puppet_data = self._load_active_puppet()
@@ -995,6 +998,42 @@ class GovernorHooks:
         except (json.JSONDecodeError, OSError):
             return None
 
+    def _load_research_anchors(self) -> list:
+        """Build continuity anchors from the research store.
+
+        Claims become definition anchors, assumptions become definition anchors.
+        """
+        from .continuity import Anchor, AnchorType, Severity
+
+        anchors = []
+        store = self._load_research_store()
+        if store is None:
+            return anchors
+
+        from .research_store import ClaimStatus as RClaimStatus
+
+        for claim in store.claims.values():
+            if claim.status in (RClaimStatus.RETRACTED, RClaimStatus.SUPERSEDED):
+                continue
+            anchors.append(Anchor(
+                id=f"research-{claim.id}",
+                anchor_type=AnchorType.DEFINITION,
+                description=f"Claim: {claim.content}",
+                severity=Severity.WARN,
+            ))
+
+        for assumption in store.assumptions.values():
+            if assumption.status.value == "deprecated":
+                continue
+            anchors.append(Anchor(
+                id=f"research-{assumption.id}",
+                anchor_type=AnchorType.DEFINITION,
+                description=f"Assumption: {assumption.content}",
+                severity=Severity.WARN,
+            ))
+
+        return anchors
+
     def _build_system_prompt(self) -> str | None:
         """Build mode-specific system prompt with anchor context appended."""
         base = self._build_mode_prompt()
@@ -1022,6 +1061,8 @@ class GovernorHooks:
             return self._build_code_prompt()
         elif self.context.mode == "nonfiction":
             return self._build_nonfiction_prompt()
+        elif self.context.mode == "research":
+            return self._build_research_prompt()
         return None
 
     def _build_fiction_prompt(self) -> str:
@@ -1089,6 +1130,60 @@ class GovernorHooks:
             "- Track the argument structure\n"
             "- Exit cleanly without moral inflation or unearned conclusions"
         )
+
+    def _build_research_prompt(self) -> str:
+        """System prompt for research writing mode.
+
+        Integrates epistemic debt tracking: claims, assumptions, uncertainties,
+        typed links, and the ED score.
+        """
+        # Load ED summary if store exists
+        ed_context = ""
+        store = self._load_research_store()
+        if store is not None:
+            ed = store.compute_ed()
+            floating = ed["floating"]
+            uncertain = ed["open_uncertain"]
+            total = ed["total"]
+            ed_context = (
+                f"\n\n## Current Epistemic Debt\n"
+                f"ED Score: {total} | {floating} floating claims | "
+                f"{uncertain} open uncertainties\n"
+                f"Every unsupported claim and unresolved uncertainty adds to ED. "
+                f"Support claims with evidence links to reduce it."
+            )
+
+        return (
+            "You are a research writing assistant with epistemic debt tracking.\n\n"
+            "## Core Principle\n"
+            "Epistemic debt is like technical debt: visible, survivable, impossible "
+            "to gaslight away. Every claim starts FLOATING until supported by evidence. "
+            "Unsupported claims are liabilities, not lies — but they accumulate.\n\n"
+            "## Claim Registration\n"
+            "- Register claims explicitly. A claim without a scope is a liability.\n"
+            "- Support claims with typed links (SUPPORTS, CONTESTS, ASSUMES, "
+            "SUPERSEDES, NARROWS).\n"
+            "- FLOATING claims need evidence. CONTESTED claims need resolution.\n\n"
+            "## Assumptions & Uncertainties\n"
+            "- Surface assumptions early. Hidden assumptions are the worst debt.\n"
+            "- Log uncertainties when you find them. An acknowledged uncertainty is "
+            "better than a hidden one.\n"
+            "- Resolving uncertainty without new support is a collapse — it inflates ED.\n\n"
+            "## ED Score\n"
+            "- ED rises with floating claims, missing scopes, open uncertainties, "
+            "collapse events, and unresolved contests.\n"
+            "- Reduce ED by adding support links, filling in scopes, and resolving "
+            "uncertainties with evidence."
+            + ed_context
+        )
+
+    def _load_research_store(self) -> Any | None:
+        """Load the research store if it exists."""
+        try:
+            from .research_store import ResearchStore
+            return ResearchStore(self.context.governor_dir)
+        except Exception:
+            return None
 
 
 class ChatBridge:

@@ -282,6 +282,76 @@
       </div>
     </div>
 
+    <!-- Research Mode Panel -->
+    <div id="research-panel" class="hidden">
+      <!-- Claims -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Claims</h3>
+          <span class="count" id="claim-count">0</span>
+        </div>
+        <div class="card-body" id="claims-list">
+          <div class="empty">No claims yet.<br>Register what you're asserting.</div>
+        </div>
+        <div style="padding: 0 0.75rem 0.75rem;">
+          <button class="gov-btn" onclick="openModal('add-claim-modal')" style="width: 100%;">+ Add Claim</button>
+        </div>
+      </div>
+
+      <!-- Assumptions -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Assumptions</h3>
+          <span class="count" id="assumption-count">0</span>
+        </div>
+        <div class="card-body" id="assumptions-list">
+          <div class="empty">No assumptions yet.<br>Surface what you're taking for granted.</div>
+        </div>
+        <div style="padding: 0 0.75rem 0.75rem;">
+          <button class="gov-btn" onclick="openModal('add-assumption-modal')" style="width: 100%;">+ Add Assumption</button>
+        </div>
+      </div>
+
+      <!-- Uncertainties -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Uncertainties</h3>
+          <span class="count" id="uncertainty-count">0</span>
+        </div>
+        <div class="card-body" id="uncertainties-list">
+          <div class="empty">No uncertainties yet.<br>Log what you don't know.</div>
+        </div>
+        <div style="padding: 0 0.75rem 0.75rem;">
+          <button class="gov-btn" onclick="openModal('add-uncertainty-modal')" style="width: 100%;">+ Add Uncertainty</button>
+        </div>
+      </div>
+
+      <!-- Links -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Links</h3>
+          <span class="count" id="link-count">0</span>
+        </div>
+        <div class="card-body" id="links-list">
+          <div class="empty">No links yet.<br>Connect claims with evidence.</div>
+        </div>
+        <div style="padding: 0 0.75rem 0.75rem;">
+          <button class="gov-btn" onclick="openModal('add-link-modal')" style="width: 100%;">+ Add Link</button>
+        </div>
+      </div>
+
+      <!-- Collapse History -->
+      <div class="card">
+        <div class="card-header">
+          <h3>History</h3>
+          <span class="count" id="collapse-count">0</span>
+        </div>
+        <div class="card-body" id="collapse-list">
+          <div class="empty">No collapse events.</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Corrections Log (all modes) -->
     <div class="card">
       <div class="card-header">
@@ -384,6 +454,88 @@
     <div class="buttons">
       <button class="gov-btn" onclick="closeModal('add-constraint-modal')">Cancel</button>
       <button class="gov-btn primary" onclick="submitConstraint()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Claim Modal -->
+<div class="modal-overlay" id="add-claim-modal">
+  <div class="modal">
+    <h3>Register a Claim</h3>
+    <div class="form-group">
+      <label>What are you claiming?</label>
+      <textarea id="claim-content" placeholder="Higher temperatures increase reaction rates..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Scope (where does this apply?)</label>
+      <input type="text" id="claim-scope" placeholder="Chapter 3, Methods section...">
+    </div>
+    <div class="buttons">
+      <button class="gov-btn" onclick="closeModal('add-claim-modal')">Cancel</button>
+      <button class="gov-btn primary" onclick="submitClaim()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Assumption Modal -->
+<div class="modal-overlay" id="add-assumption-modal">
+  <div class="modal">
+    <h3>Surface an Assumption</h3>
+    <div class="form-group">
+      <label>What are you assuming?</label>
+      <textarea id="assumption-content" placeholder="Incentive structures remain stable over time..."></textarea>
+    </div>
+    <div class="buttons">
+      <button class="gov-btn" onclick="closeModal('add-assumption-modal')">Cancel</button>
+      <button class="gov-btn primary" onclick="submitAssumption()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Uncertainty Modal -->
+<div class="modal-overlay" id="add-uncertainty-modal">
+  <div class="modal">
+    <h3>Log an Uncertainty</h3>
+    <div class="form-group">
+      <label>What's uncertain?</label>
+      <textarea id="uncertainty-content" placeholder="Sample size may be insufficient for..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Attached to (claim/assumption ID)</label>
+      <input type="text" id="uncertainty-attached" placeholder="C-ABC123">
+    </div>
+    <div class="buttons">
+      <button class="gov-btn" onclick="closeModal('add-uncertainty-modal')">Cancel</button>
+      <button class="gov-btn primary" onclick="submitUncertainty()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Link Modal -->
+<div class="modal-overlay" id="add-link-modal">
+  <div class="modal">
+    <h3>Add a Link</h3>
+    <div class="form-group">
+      <label>Link Type</label>
+      <select id="link-type" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); font-size: 0.85rem;">
+        <option value="supports">Supports</option>
+        <option value="contests">Contests</option>
+        <option value="assumes">Assumes</option>
+        <option value="supersedes">Supersedes</option>
+        <option value="narrows">Narrows</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>From ID</label>
+      <input type="text" id="link-from" placeholder="C-ABC123">
+    </div>
+    <div class="form-group">
+      <label>To ID</label>
+      <input type="text" id="link-to" placeholder="C-DEF456">
+    </div>
+    <div class="buttons">
+      <button class="gov-btn" onclick="closeModal('add-link-modal')">Cancel</button>
+      <button class="gov-btn primary" onclick="submitLink()">Save</button>
     </div>
   </div>
 </div>
@@ -762,6 +914,7 @@
     document.getElementById('mode-badge').textContent = m.charAt(0).toUpperCase() + m.slice(1);
     document.getElementById('fiction-panel').classList.toggle('hidden', m !== 'fiction');
     document.getElementById('code-panel').classList.toggle('hidden', m !== 'code');
+    document.getElementById('research-panel').classList.toggle('hidden', m !== 'research');
   }
 
   function setStatus(status, text) {
@@ -835,6 +988,223 @@
     el.innerHTML = html;
   }
 
+  // ========== Research Mode Render ==========
+
+  var researchStatusIcons = {
+    floating: '\u25CB',     // ○
+    supported: '\u25CF',    // ●
+    contested: '\u25D1',    // ◑
+    retracted: '\u2715',    // ✕
+    superseded: '\u2715'    // ✕
+  };
+  var assumptionIcons = { proposed: '?', accepted: '\u2713', deprecated: '\u2715' };
+  var uncertaintyIcons = { open: '~', resolved: '\u2713', collapsed: '\u26A0' };
+
+  function renderResearchPanel(state) {
+    renderClaims(state.claims || []);
+    renderAssumptions(state.assumptions || []);
+    renderUncertainties(state.uncertainties || []);
+    renderLinks(state.links || []);
+    renderCollapseHistory(state.collapse_events || []);
+
+    // Update ED banner
+    var ed = state.ed || {};
+    var total = ed.total || 0;
+    var floating = ed.floating || 0;
+    var uncertain = ed.open_uncertain || 0;
+    setStatus(
+      total === 0 ? 'ok' : total <= 10 ? 'needs_attention' : 'block',
+      'ED: ' + total + ' | ' + floating + ' floating | ' + uncertain + ' uncertain'
+    );
+  }
+
+  function renderClaims(claims) {
+    var el = document.getElementById('claims-list');
+    document.getElementById('claim-count').textContent = claims.length;
+    if (claims.length === 0) {
+      el.innerHTML = '<div class="empty">No claims yet.<br>Register what you\'re asserting.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < claims.length; i++) {
+      var c = claims[i];
+      var icon = researchStatusIcons[c.status] || '\u25CB';
+      html += '<div class="item">';
+      html += '<div class="item-title">' + icon + ' ' + esc(c.id) + ' ' + esc(truncate(c.content, 60)) + '</div>';
+      if (c.scope) html += '<div class="item-detail">Scope: ' + esc(c.scope) + '</div>';
+      html += '<div class="item-detail" style="display:flex;gap:0.3rem;margin-top:0.3rem;">';
+      html += '<select onchange="changeResearchStatus(\'claims\',\'' + esc(c.id) + '\',this.value)" style="font-size:0.75rem;padding:0.1rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);">';
+      var statuses = ['floating','supported','contested','retracted','superseded'];
+      for (var j = 0; j < statuses.length; j++) {
+        html += '<option value="' + statuses[j] + '"' + (c.status === statuses[j] ? ' selected' : '') + '>' + statuses[j] + '</option>';
+      }
+      html += '</select>';
+      html += '<button onclick="deleteResearchItem(\'claims\',\'' + esc(c.id) + '\')" style="font-size:0.7rem;color:var(--muted);cursor:pointer;background:none;border:none;">\u2715</button>';
+      html += '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderAssumptions(assumptions) {
+    var el = document.getElementById('assumptions-list');
+    document.getElementById('assumption-count').textContent = assumptions.length;
+    if (assumptions.length === 0) {
+      el.innerHTML = '<div class="empty">No assumptions yet.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < assumptions.length; i++) {
+      var a = assumptions[i];
+      var icon = assumptionIcons[a.status] || '?';
+      html += '<div class="item">';
+      html += '<div class="item-title">' + icon + ' ' + esc(a.id) + ' ' + esc(truncate(a.content, 60)) + '</div>';
+      html += '<div class="item-detail" style="display:flex;gap:0.3rem;margin-top:0.3rem;">';
+      html += '<select onchange="changeResearchStatus(\'assumptions\',\'' + esc(a.id) + '\',this.value)" style="font-size:0.75rem;padding:0.1rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);">';
+      var aStatuses = ['proposed','accepted','deprecated'];
+      for (var j = 0; j < aStatuses.length; j++) {
+        html += '<option value="' + aStatuses[j] + '"' + (a.status === aStatuses[j] ? ' selected' : '') + '>' + aStatuses[j] + '</option>';
+      }
+      html += '</select>';
+      html += '<button onclick="deleteResearchItem(\'assumptions\',\'' + esc(a.id) + '\')" style="font-size:0.7rem;color:var(--muted);cursor:pointer;background:none;border:none;">\u2715</button>';
+      html += '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderUncertainties(uncertainties) {
+    var el = document.getElementById('uncertainties-list');
+    document.getElementById('uncertainty-count').textContent = uncertainties.length;
+    if (uncertainties.length === 0) {
+      el.innerHTML = '<div class="empty">No uncertainties yet.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < uncertainties.length; i++) {
+      var u = uncertainties[i];
+      var icon = uncertaintyIcons[u.status] || '~';
+      html += '<div class="item">';
+      html += '<div class="item-title">' + icon + ' ' + esc(u.id) + ' ' + esc(truncate(u.content, 60)) + '</div>';
+      if (u.attached_to) html += '<div class="item-detail">Attached to: ' + esc(u.attached_to) + '</div>';
+      html += '<div class="item-detail" style="display:flex;gap:0.3rem;margin-top:0.3rem;">';
+      html += '<select onchange="changeResearchStatus(\'uncertainties\',\'' + esc(u.id) + '\',this.value)" style="font-size:0.75rem;padding:0.1rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);">';
+      var uStatuses = ['open','resolved','collapsed'];
+      for (var j = 0; j < uStatuses.length; j++) {
+        html += '<option value="' + uStatuses[j] + '"' + (u.status === uStatuses[j] ? ' selected' : '') + '>' + uStatuses[j] + '</option>';
+      }
+      html += '</select>';
+      html += '<button onclick="deleteResearchItem(\'uncertainties\',\'' + esc(u.id) + '\')" style="font-size:0.7rem;color:var(--muted);cursor:pointer;background:none;border:none;">\u2715</button>';
+      html += '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderLinks(links) {
+    var el = document.getElementById('links-list');
+    document.getElementById('link-count').textContent = links.length;
+    if (links.length === 0) {
+      el.innerHTML = '<div class="empty">No links yet.</div>';
+      return;
+    }
+    var arrows = { supports: '\u2190supports\u2014', contests: '\u2190contests\u2014', assumes: '\u2190assumes\u2014', supersedes: '\u2190supersedes\u2014', narrows: '\u2190narrows\u2014' };
+    var html = '';
+    for (var i = 0; i < links.length; i++) {
+      var l = links[i];
+      var arrow = arrows[l.link_type] || l.link_type;
+      html += '<div class="item">';
+      html += '<div class="item-detail">' + esc(l.to_id) + ' ' + arrow + ' ' + esc(l.from_id) + '</div>';
+      html += '<button onclick="deleteResearchItem(\'links\',\'' + esc(l.id) + '\')" style="font-size:0.7rem;color:var(--muted);cursor:pointer;background:none;border:none;">\u2715</button>';
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderCollapseHistory(events) {
+    var el = document.getElementById('collapse-list');
+    document.getElementById('collapse-count').textContent = events.length;
+    if (events.length === 0) {
+      el.innerHTML = '<div class="empty">No collapse events.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < events.length; i++) {
+      var e = events[i];
+      html += '<div class="item"><div class="item-detail">\u26A0 ' + esc(e.description || e.claim_id) + '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  // ========== Research Actions ==========
+
+  window.submitClaim = function() {
+    var data = {
+      content: document.getElementById('claim-content').value,
+      scope: document.getElementById('claim-scope').value
+    };
+    fetch(BASE + '/governor/research/claims', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+    }).then(function() {
+      closeModal('add-claim-modal');
+      document.getElementById('claim-content').value = '';
+      document.getElementById('claim-scope').value = '';
+      refreshGovernor();
+    });
+  };
+
+  window.submitAssumption = function() {
+    fetch(BASE + '/governor/research/assumptions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: document.getElementById('assumption-content').value })
+    }).then(function() {
+      closeModal('add-assumption-modal');
+      document.getElementById('assumption-content').value = '';
+      refreshGovernor();
+    });
+  };
+
+  window.submitUncertainty = function() {
+    fetch(BASE + '/governor/research/uncertainties', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: document.getElementById('uncertainty-content').value,
+        attached_to: document.getElementById('uncertainty-attached').value
+      })
+    }).then(function() {
+      closeModal('add-uncertainty-modal');
+      document.getElementById('uncertainty-content').value = '';
+      document.getElementById('uncertainty-attached').value = '';
+      refreshGovernor();
+    });
+  };
+
+  window.submitLink = function() {
+    fetch(BASE + '/governor/research/links', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        link_type: document.getElementById('link-type').value,
+        from_id: document.getElementById('link-from').value,
+        to_id: document.getElementById('link-to').value
+      })
+    }).then(function() {
+      closeModal('add-link-modal');
+      document.getElementById('link-from').value = '';
+      document.getElementById('link-to').value = '';
+      refreshGovernor();
+    });
+  };
+
+  window.deleteResearchItem = function(type, id) {
+    if (!confirm('Delete ' + id + '?')) return;
+    fetch(BASE + '/governor/research/' + type + '/' + id, { method: 'DELETE' })
+      .then(function() { refreshGovernor(); });
+  };
+
+  window.changeResearchStatus = function(type, id, status) {
+    fetch(BASE + '/governor/research/' + type + '/' + id + '/status', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: status })
+    }).then(function() { refreshGovernor(); });
+  };
+
   function renderCorrections(list) {
     var el = document.getElementById('corrections-list');
     if (list.length === 0) {
@@ -880,6 +1250,11 @@
       ]).then(function(results) {
         renderDecisions(results[0].decisions || []);
         renderConstraints(results[1].constraints || []);
+      }).catch(function() {});
+    }
+    if (mode === 'research') {
+      fetch(BASE + '/governor/research/state').then(function(r) { return r.json(); }).then(function(state) {
+        renderResearchPanel(state);
       }).catch(function() {});
     }
 

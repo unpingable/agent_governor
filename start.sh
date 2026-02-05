@@ -65,3 +65,4 @@ docker-compose \
 echo ""
 echo "Fiction:  http://localhost:8001"
 echo "Code:     http://localhost:8002"
+echo "Research: http://localhost:8003"

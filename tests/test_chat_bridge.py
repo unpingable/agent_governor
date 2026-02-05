@@ -1651,3 +1651,95 @@ class TestCheckResponseBlocking:
         # Should return GovernorCheckResult, not ViolationPendingResponse
         assert isinstance(result, GovernorCheckResult)
         assert len(result.violations) >= 1  # Has violations but not blocking
+
+
+# ============================================================================
+# TestResearchMode
+# ============================================================================
+
+
+class TestResearchMode:
+    """Tests for research mode integration in GovernorHooks."""
+
+    def test_build_research_prompt(self, tmp_path: Path) -> None:
+        """Research mode produces a system prompt."""
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_mode_prompt()
+        assert prompt is not None
+        assert "epistemic debt" in prompt.lower()
+        assert "claim" in prompt.lower()
+
+    def test_research_prompt_includes_ed(self, tmp_path: Path) -> None:
+        """Research prompt includes ED when store has data."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        store.add_claim("Test claim")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert "ED Score:" in prompt
+
+    def test_load_research_store(self, tmp_path: Path) -> None:
+        """_load_research_store returns a ResearchStore."""
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        hooks = GovernorHooks(ctx)
+        store = hooks._load_research_store()
+        assert store is not None
+
+    def test_research_store_to_anchors(self, tmp_path: Path) -> None:
+        """Claims and assumptions become anchors."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        store.add_claim("Active claim")
+        store.add_assumption("Active assumption")
+
+        hooks = GovernorHooks(ctx)
+        anchors = hooks._load_research_anchors()
+        assert len(anchors) == 2
+        assert any("Claim:" in a.description for a in anchors)
+        assert any("Assumption:" in a.description for a in anchors)
+
+    def test_research_mode_dispatch(self, tmp_path: Path) -> None:
+        """mode='research' uses research prompt path."""
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_mode_prompt()
+        assert prompt is not None
+        assert "research" in prompt.lower()
+
+    def test_research_mode_anchors(self, tmp_path: Path) -> None:
+        """mode='research' loads research anchors via _load_mode_anchors."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        store.add_claim("Anchor claim")
+
+        hooks = GovernorHooks(ctx)
+        all_anchors = hooks._load_mode_anchors()
+        assert any("research-" in a.id for a in all_anchors)
+
+    def test_retracted_claims_excluded_from_anchors(self, tmp_path: Path) -> None:
+        """Retracted and superseded claims don't become anchors."""
+        from governor.research_store import ClaimStatus, ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        c = store.add_claim("Retracted claim")
+        store.update_claim_status(c.id, ClaimStatus.RETRACTED)
+
+        hooks = GovernorHooks(ctx)
+        anchors = hooks._load_research_anchors()
+        assert len(anchors) == 0

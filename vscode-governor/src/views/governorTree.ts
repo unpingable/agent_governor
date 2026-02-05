@@ -6,7 +6,7 @@
  */
 
 import * as vscode from "vscode";
-import { fetchState, getIntent, listOverrides, GovernorOptions } from "../governor/client";
+import { fetchState, getIntent, listOverrides, runCodeCompare, GovernorOptions } from "../governor/client";
 import type {
   GovernorViewModelV2,
   DecisionView,
@@ -17,6 +17,7 @@ import type {
   StabilityView,
   IntentResult,
   OverrideView,
+  CodeDivergenceReportView,
 } from "../governor/types";
 
 // =========================================================================
@@ -87,6 +88,7 @@ export class GovernorTreeProvider
   private state: GovernorViewModelV2 | null = null;
   private intent: IntentResult | null = null;
   private overrides: OverrideView[] = [];
+  private compareReport: CodeDivergenceReportView | null = null;
   private error: string | null = null;
 
   constructor(
@@ -109,15 +111,17 @@ export class GovernorTreeProvider
     try {
       // Fetch all state in parallel
       const opts = this.getOptions();
-      const [stateResult, intentResult, overridesResult] = await Promise.allSettled([
+      const [stateResult, intentResult, overridesResult, compareResult] = await Promise.allSettled([
         fetchState(opts),
         getIntent(opts),
         listOverrides(opts),
+        runCodeCompare(opts),
       ]);
 
       this.state = stateResult.status === "fulfilled" ? stateResult.value : null;
       this.intent = intentResult.status === "fulfilled" ? intentResult.value : null;
       this.overrides = overridesResult.status === "fulfilled" ? overridesResult.value : [];
+      this.compareReport = compareResult.status === "fulfilled" ? compareResult.value : null;
 
       // Only set error if state fetch failed (intent/overrides are optional)
       this.error = stateResult.status === "rejected"
@@ -127,6 +131,7 @@ export class GovernorTreeProvider
       this.state = null;
       this.intent = null;
       this.overrides = [];
+      this.compareReport = null;
       this.error = err instanceof Error ? err.message : String(err);
     }
     this._onDidChangeTreeData.fire();
@@ -199,6 +204,12 @@ export class GovernorTreeProvider
 
     // Code Autopilot: Intent section (prominently displayed)
     nodes.push(this.buildIntentNode());
+
+    // Code Interferometry: Compare section (if a report exists)
+    const compareNode = this.buildCompareNode();
+    if (compareNode) {
+      nodes.push(compareNode);
+    }
 
     nodes.push(this.buildDecisionsNode(this.state));
     nodes.push(this.buildClaimsNode(this.state));
@@ -525,6 +536,89 @@ export class GovernorTreeProvider
   // -----------------------------------------------------------------------
   // Code Autopilot: Intent section
   // -----------------------------------------------------------------------
+
+  // -----------------------------------------------------------------------
+  // Code Interferometry: Compare section
+  // -----------------------------------------------------------------------
+
+  buildCompareNode(): TreeNodeData | null {
+    if (!this.compareReport) {
+      return null;
+    }
+
+    const report = this.compareReport;
+    const markers = report.risk_marker_union || [];
+    const conflicts = report.anchor_conflicts || [];
+    const children: TreeNodeData[] = [];
+
+    // Tier
+    children.push({
+      kind: "compare-tier",
+      label: `Tier: ${report.tier}`,
+      collapsible: false,
+      icon: report.tier >= 1 ? "warning" : "check",
+    });
+
+    // Risk markers (union lens)
+    if (markers.length > 0) {
+      const markerChildren: TreeNodeData[] = markers.map((m) => ({
+        kind: "compare-marker",
+        label: `${m.marker_type}: ${m.message}`,
+        description: `(${m.model_id})`,
+        collapsible: false,
+        icon: m.category === "security" ? "error" : "warning",
+        tooltip: `${m.category} marker at ${m.file_path}:${m.line_number}`,
+      }));
+
+      children.push({
+        kind: "compare-markers",
+        label: `Markers (${markers.length})`,
+        collapsible: true,
+        icon: "list-unordered",
+        children: markerChildren,
+      });
+    }
+
+    // Anchor conflicts
+    if (conflicts.length > 0) {
+      const conflictChildren: TreeNodeData[] = conflicts.map((c) => ({
+        kind: "compare-conflict",
+        label: `${c.anchor_id} (${c.conflict_type})`,
+        description: c.description.slice(0, 50),
+        collapsible: false,
+        icon: c.conflict_type === "hard" ? "error" : "warning",
+      }));
+
+      children.push({
+        kind: "compare-conflicts",
+        label: `Anchor Conflicts (${conflicts.length})`,
+        collapsible: true,
+        icon: "alert",
+        children: conflictChildren,
+      });
+    }
+
+    // Tier reasons
+    if (report.tier_reasons && report.tier_reasons.length > 0) {
+      for (const reason of report.tier_reasons) {
+        children.push({
+          kind: "compare-reason",
+          label: reason,
+          collapsible: false,
+          icon: "info",
+        });
+      }
+    }
+
+    return {
+      kind: "compare",
+      label: `Compare (${markers.length} marker${markers.length !== 1 ? "s" : ""})`,
+      collapsible: true,
+      icon: "git-compare",
+      children,
+      detail: JSON.stringify(report, null, 2),
+    };
+  }
 
   buildIntentNode(): TreeNodeData {
     const children: TreeNodeData[] = [];

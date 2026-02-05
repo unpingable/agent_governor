@@ -1333,6 +1333,86 @@ async def add_constraint(request: ConstraintRequest) -> dict[str, Any]:
 
 
 # ============================================================================
+# Code Interferometry Endpoints
+# ============================================================================
+
+
+@app.get("/governor/code/compare/last")
+async def code_compare_last() -> dict[str, Any]:
+    """Get the latest code divergence report, or null if none exists."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        return {"report": None}
+
+    try:
+        from governor.interferometry import InterferometryStore
+        from governor.code_interferometry import compute_code_divergence
+        from governor.continuity import create_registry
+
+        store = InterferometryStore(ctx.governor_dir)
+        irun = store.last()
+        if irun is None:
+            return {"report": None}
+
+        try:
+            registry = create_registry(ctx.governor_dir)
+            anchors = registry.all()
+        except Exception:
+            anchors = []
+
+        report = compute_code_divergence(irun, anchors)
+        return {"report": report.to_dict()}
+    except Exception:
+        return {"report": None}
+
+
+class CompareRequest(BaseModel):
+    prompt: str
+    backends: str  # comma-separated backend:model pairs
+
+
+@app.post("/governor/code/compare")
+async def code_compare_run(request: CompareRequest) -> dict[str, Any]:
+    """Run code interferometry compare. Returns report + run_id."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        raise HTTPException(status_code=400, detail="No governor context initialized.")
+
+    import asyncio
+    from governor.interferometry import InterferometryStore, run_ensemble
+    from governor.code_interferometry import compute_code_divergence
+    from governor.continuity import create_registry
+
+    # Parse backend configs
+    backend_configs = []
+    for pair in request.backends.split(","):
+        pair = pair.strip()
+        if ":" not in pair:
+            raise HTTPException(status_code=400, detail=f"Invalid backend:model pair: {pair}")
+        bt, model = pair.split(":", 1)
+        config: dict[str, Any] = {"backend_type": bt, "model": model}
+        if bt == "ollama":
+            config["host"] = OLLAMA_HOST
+        elif bt == "anthropic":
+            config["api_key"] = ANTHROPIC_API_KEY
+        backend_configs.append(config)
+
+    irun = await run_ensemble(request.prompt, backend_configs)
+
+    store = InterferometryStore(ctx.governor_dir)
+    store.save(irun)
+
+    try:
+        registry = create_registry(ctx.governor_dir)
+        anchors = registry.all()
+    except Exception:
+        anchors = []
+
+    report = compute_code_divergence(irun, anchors)
+    return {"run_id": irun.id, "report": report.to_dict()}
+
+
+# ============================================================================
 # Research Mode Endpoints
 # ============================================================================
 

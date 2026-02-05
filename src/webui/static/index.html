@@ -293,6 +293,27 @@
           <button class="gov-btn" onclick="openModal('add-constraint-modal')" style="width: 100%;">+ Add Constraint</button>
         </div>
       </div>
+
+      <!-- Compare (Code Interferometry) -->
+      <div id="compare-banner" class="hidden" style="background: #3a2a00; border: 1px solid #b08000; border-radius: 8px; padding: 0.75rem; margin: 0.5rem; color: #ffd666;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 1.2em;">⚠️</span>
+          <span id="compare-banner-text">Models disagreed.</span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+          <button class="gov-btn" onclick="document.getElementById('compare-details').classList.toggle('hidden')" style="flex: 1; font-size: 0.8em;">View Details</button>
+          <button class="gov-btn" onclick="document.getElementById('compare-banner').classList.add('hidden')" style="flex: 1; font-size: 0.8em; background: transparent; border: 1px solid #666;">Dismiss</button>
+        </div>
+      </div>
+      <div class="card" id="compare-details" class="hidden">
+        <div class="card-header">
+          <h3>Compare</h3>
+          <span class="count" id="compare-marker-count">0</span>
+        </div>
+        <div class="card-body" id="compare-body">
+          <div class="empty">No compare results yet.</div>
+        </div>
+      </div>
     </div>
 
     <!-- Research Mode Panel -->
@@ -1037,6 +1058,68 @@
     el.innerHTML = html;
   }
 
+  // ========== Compare (Code Interferometry) ==========
+
+  function renderCompare(report) {
+    var banner = document.getElementById('compare-banner');
+    var details = document.getElementById('compare-details');
+    var body = document.getElementById('compare-body');
+    var countEl = document.getElementById('compare-marker-count');
+
+    if (!report) {
+      banner.classList.add('hidden');
+      details.classList.add('hidden');
+      body.innerHTML = '<div class="empty">No compare results yet.</div>';
+      countEl.textContent = '0';
+      return;
+    }
+
+    var markers = report.risk_marker_union || [];
+    var conflicts = report.anchor_conflicts || [];
+    countEl.textContent = markers.length;
+
+    // Show banner if tier >= 1
+    if (report.tier >= 1) {
+      var bannerParts = [];
+      var secCount = markers.filter(function(m) { return m.category === 'security'; }).length;
+      var edgeCount = markers.filter(function(m) { return m.category === 'edge_case'; }).length;
+      if (secCount) bannerParts.push(secCount + ' security marker' + (secCount !== 1 ? 's' : ''));
+      if (edgeCount) bannerParts.push(edgeCount + ' edge-case marker' + (edgeCount !== 1 ? 's' : ''));
+      if (conflicts.length) bannerParts.push(conflicts.length + ' anchor conflict' + (conflicts.length !== 1 ? 's' : ''));
+      var text = 'Models disagreed. ' + (bannerParts.length ? bannerParts.join('. ') + '.' : '');
+      document.getElementById('compare-banner-text').textContent = text;
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
+
+    // Render details card
+    details.classList.remove('hidden');
+    var html = '';
+    if (markers.length === 0 && conflicts.length === 0) {
+      html = '<div class="empty">No risk markers or anchor conflicts.</div>';
+    } else {
+      html += '<div style="font-size: 0.8em; color: #999; margin-bottom: 0.5rem;">Union lens — flagged by any model</div>';
+      for (var i = 0; i < markers.length; i++) {
+        var m = markers[i];
+        var icon = m.category === 'security' ? '🔴' : '🟡';
+        html += '<div class="item">';
+        html += '<div class="item-name">' + icon + ' ' + esc(m.marker_type) + '</div>';
+        html += '<div class="item-detail">' + esc(m.message) + ' <span style="color:#666">(' + esc(m.model_id) + ')</span></div>';
+        html += '</div>';
+      }
+      for (var j = 0; j < conflicts.length; j++) {
+        var c = conflicts[j];
+        var cIcon = c.conflict_type === 'hard' ? '⛔' : '⚠️';
+        html += '<div class="item">';
+        html += '<div class="item-name">' + cIcon + ' ' + esc(c.anchor_id) + ' (' + esc(c.conflict_type) + ')</div>';
+        html += '<div class="item-detail">' + esc(c.description) + '</div>';
+        html += '</div>';
+      }
+    }
+    body.innerHTML = html;
+  }
+
   // ========== Research Mode Render ==========
 
   var researchStatusIcons = {
@@ -1295,10 +1378,12 @@
     if (mode === 'code') {
       Promise.all([
         fetch(BASE + '/governor/code/decisions').then(function(r) { return r.json(); }),
-        fetch(BASE + '/governor/code/constraints').then(function(r) { return r.json(); })
+        fetch(BASE + '/governor/code/constraints').then(function(r) { return r.json(); }),
+        fetch(BASE + '/governor/code/compare/last').then(function(r) { return r.json(); })
       ]).then(function(results) {
         renderDecisions(results[0].decisions || []);
         renderConstraints(results[1].constraints || []);
+        renderCompare(results[2].report || null);
       }).catch(function() {});
     }
     if (mode === 'research') {

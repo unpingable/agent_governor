@@ -213,6 +213,11 @@ governor interferometry divergence             # Signal summary (disagreement ra
 governor interferometry divergence --id <id>   # Divergence for specific run
 governor interferometry accept --shared        # Promote shared claims to epistemic ledger
 governor interferometry accept --all           # Also promote unique claims at low confidence
+governor interferometry compare "prompt" --backends ollama:m1,claude:sonnet  # Code compare (risk markers + anchors)
+governor interferometry compare --last [--markers] [--json]                  # Analyze last run
+governor interferometry compare --id <run_id> [--json]                       # Analyze specific run
+governor code compare "prompt" --backends ollama:m1,claude:sonnet            # Alias for interferometry compare
+governor code compare --last [--markers] [--json]                            # Alias for interferometry compare --last
 
 # Quorum State Machine (multi-agent consensus)
 governor quorum status <proposal_id>  # Show quorum state for a proposal

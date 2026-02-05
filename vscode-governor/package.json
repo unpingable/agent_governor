@@ -75,6 +75,11 @@
       {
         "command": "governor.showIntent",
         "title": "Governor: Show Intent"
+      },
+      {
+        "command": "governor.compareModels",
+        "title": "Governor: Compare with Other Models",
+        "icon": "$(git-compare)"
       }
     ],
     "menus": {
@@ -99,6 +104,10 @@
         {
           "command": "governor.checkFile",
           "group": "governor@2"
+        },
+        {
+          "command": "governor.compareModels",
+          "group": "governor@3"
         }
       ]
     },
@@ -160,6 +169,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show quick fix suggestions for governor findings"
+        },
+        "governor.interferometry.autoCompare": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically run code compare after interferometry runs"
         }
       }
     },

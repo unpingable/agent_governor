@@ -7,7 +7,7 @@
  */
 
 import * as vscode from "vscode";
-import { checkFile, checkStdin, fetchState, getIntent, setIntent, clearIntent, GovernorOptions, SetIntentOptions } from "./governor/client";
+import { checkFile, checkStdin, fetchState, getIntent, setIntent, clearIntent, runCodeCompare, GovernorOptions, SetIntentOptions } from "./governor/client";
 import type { CheckResult, CheckInput, GovernorViewModelV2, IntentResult } from "./governor/types";
 import { DiagnosticProvider } from "./diagnostics/provider";
 import { GovernorTreeProvider } from "./views/governorTree";
@@ -317,6 +317,37 @@ export function activate(context: vscode.ExtensionContext): void {
         const msg = err instanceof Error ? err.message : String(err);
         outputChannel.appendLine(`Error fetching intent: ${msg}`);
         outputChannel.show();
+      }
+    }),
+    vscode.commands.registerCommand("governor.compareModels", async () => {
+      try {
+        outputChannel.appendLine("Running code compare...");
+        const report = await runCodeCompare(getOptions());
+        outputChannel.appendLine(JSON.stringify(report, null, 2));
+
+        if (report.tier >= 1) {
+          const markerCount = (report.risk_marker_union || []).length;
+          const conflictCount = (report.anchor_conflicts || []).length;
+          const parts: string[] = [];
+          if (markerCount) { parts.push(`${markerCount} risk marker(s)`); }
+          if (conflictCount) { parts.push(`${conflictCount} anchor conflict(s)`); }
+          vscode.window.showWarningMessage(
+            `Models disagreed. ${parts.join(", ")}. [View Details]`,
+            "View Details", "Dismiss"
+          ).then((action) => {
+            if (action === "View Details") {
+              outputChannel.show();
+            }
+          });
+        } else {
+          vscode.window.showInformationMessage("Governor: No divergence detected.");
+        }
+
+        treeProvider.refresh();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`Compare error: ${msg}`);
+        vscode.window.showErrorMessage(`Governor compare failed: ${msg}`);
       }
     })
   );

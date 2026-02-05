@@ -59,6 +59,7 @@
 **Interactive Violation Resolution (W4)** — Author-friendly chat. Blocking violations present 3 choices: fix/revise/proceed. ViolationResolver with persistent state, resolution command detection, exception logging.
 **Code Autopilot** — Intent-based governance. 5 profiles (greenfield/established/production/hotfix/refactor), intent resolution from 6 layers, constraint classes (invariant vs preference), scoped time-limited overrides with receipts, branch heuristics.
 **Interferometry** — Multi-model claim comparison with parallel + serial ("yes, and") modes. Claim extraction via SignalExtractor, Jaccard fingerprinting via taint module, claim alignment (shared/unique/conflicting), ledger promotion. JSON persistence.
+**Code Interferometry** — Code-specific divergence analysis (Tier 1 + Tier 2). 19 risk marker types (8 security, 6 edge-case, 5 architectural), anchor compatibility (hard/soft conflicts), tier determination, CheckFinding bridge for VS Code. CLI `governor interferometry compare` + `governor code compare` alias. WebUI compare card + Tier 1 warning banner. VS Code `governor.compareModels` command + TreeView Compare section.
 **WebUI Backend Toggle** — Runtime backend switching via sidebar dropdown. `GET /v1/backends`, `POST /v1/backends/switch`.
 
 ## Test Counts by Module
@@ -135,6 +136,7 @@
 | Fiction Governor | 376 |
 | Non-Fiction Governor | 281 |
 | Interferometry | 47 |
+| Code Interferometry | 43 |
 | WebUI Backend Toggle | 6 |
 
-**Total: ~7294 tests**
+**Total: ~7337 tests**

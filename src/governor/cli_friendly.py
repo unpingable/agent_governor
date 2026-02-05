@@ -894,6 +894,35 @@ def code_ledger(ctx: click.Context, recent: bool, show_decisions: bool, show_fac
         click.echo()
 
 
+# Code Compare (convenience alias for governor interferometry compare)
+@code.command("compare")
+@click.argument("prompt", required=False)
+@click.option("--backends", "-b", default=None, help="backend:model pairs")
+@click.option("--last", "show_last", is_flag=True, help="Analyze most recent run.")
+@click.option("--id", "run_id", default=None, help="Analyze specific run.")
+@click.option("--markers", "show_markers", is_flag=True, help="Show markers only.")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+@click.pass_context
+def code_compare(ctx: click.Context, prompt: str | None, backends: str | None,
+                 show_last: bool, run_id: str | None, show_markers: bool,
+                 as_json: bool) -> None:
+    """Compare code across models — risk markers + anchor conflicts.
+
+    Alias for: governor interferometry compare
+    """
+    from . import cli as main_cli
+    # Delegate to the interferometry compare command
+    ctx.invoke(
+        main_cli.interferometry_compare,
+        prompt=prompt,
+        backends=backends,
+        show_last=show_last,
+        run_id=run_id,
+        show_markers=show_markers,
+        as_json=as_json,
+    )
+
+
 # =============================================================================
 # Resolve Commands
 # =============================================================================

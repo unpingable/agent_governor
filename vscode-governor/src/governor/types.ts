@@ -18,9 +18,42 @@ export interface CheckFinding {
   code: string;
   message: string;
   severity: "error" | "warning" | "info";
-  source: "security" | "continuity";
+  source: "security" | "continuity" | "interferometry";
   range: Range;
   suggestion?: string;
+}
+
+// =========================================================================
+// Code Interferometry types
+// =========================================================================
+
+export interface RiskMarkerView {
+  marker_type: string;
+  category: "security" | "edge_case" | "architectural";
+  model_id: string;
+  file_path: string;
+  line_number: number;
+  message: string;
+  suggestion?: string;
+}
+
+export interface AnchorConflictView {
+  anchor_id: string;
+  conflict_type: "hard" | "soft";
+  model_id: string;
+  description: string;
+  evidence: string;
+}
+
+export interface CodeDivergenceReportView {
+  interferometry_run_id: string;
+  risk_markers: RiskMarkerView[];
+  anchor_conflicts: AnchorConflictView[];
+  divergence_entropy: number;
+  risk_marker_union: RiskMarkerView[];
+  risk_marker_unique: Record<string, RiskMarkerView[]>;
+  tier: number;
+  tier_reasons: string[];
 }
 
 export interface CheckResult {

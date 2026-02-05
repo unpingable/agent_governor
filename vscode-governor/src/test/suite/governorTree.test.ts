@@ -10,10 +10,12 @@ import type { GovernorViewModelV2 } from "../../governor/types";
 const mockFetchState = jest.fn();
 const mockGetIntent = jest.fn();
 const mockListOverrides = jest.fn();
+const mockRunCodeCompare = jest.fn();
 jest.mock("../../governor/client", () => ({
   fetchState: (...args: unknown[]) => mockFetchState(...args),
   getIntent: (...args: unknown[]) => mockGetIntent(...args),
   listOverrides: (...args: unknown[]) => mockListOverrides(...args),
+  runCodeCompare: (...args: unknown[]) => mockRunCodeCompare(...args),
   GovernorOptions: {},
 }));
 
@@ -170,9 +172,11 @@ describe("GovernorTreeProvider", () => {
     mockFetchState.mockReset();
     mockGetIntent.mockReset();
     mockListOverrides.mockReset();
-    // Default mocks for intent/overrides (always succeed with defaults)
+    mockRunCodeCompare.mockReset();
+    // Default mocks for intent/overrides/compare (always succeed with defaults)
     mockGetIntent.mockResolvedValue(defaultIntent());
     mockListOverrides.mockResolvedValue([]);
+    mockRunCodeCompare.mockRejectedValue(new Error("no compare data"));
     provider = new GovernorTreeProvider(createOutputChannel(), () => defaultOpts);
   });
 

@@ -11579,6 +11579,108 @@ def _print_run_summary(run: Any) -> None:
             click.echo(f"  ? {c.claim_text} (from: {', '.join(c.sources)})")
 
 
+@interferometry_cmd.command("compare")
+@click.argument("prompt", required=False)
+@click.option("--backends", "-b", default=None,
+              help="Comma-separated backend:model pairs, e.g. ollama:llama3,anthropic:claude-3-haiku")
+@click.option("--last", "show_last", is_flag=True, help="Analyze the most recent interferometry run.")
+@click.option("--id", "run_id", default=None, help="Analyze a specific run by ID.")
+@click.option("--markers", "show_markers", is_flag=True, help="Show only risk markers (union lens).")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+@click.pass_context
+def interferometry_compare(ctx: click.Context, prompt: str | None, backends: str | None,
+                           show_last: bool, run_id: str | None, show_markers: bool,
+                           as_json: bool) -> None:
+    """Code-specific interferometry compare — risk markers, anchor conflicts, tier."""
+    import asyncio
+    from .interferometry import InterferometryStore, RunMode, run_ensemble
+    from .code_interferometry import compute_code_divergence, format_tier1_banner
+    from .continuity import create_registry
+
+    gov_dir = ensure_initialized(ctx)
+    store = InterferometryStore(gov_dir)
+
+    # Resolve or create the interferometry run
+    if run_id:
+        irun = store.load(run_id)
+        if irun is None:
+            click.echo(f"Run not found: {run_id}", err=True)
+            raise SystemExit(1)
+    elif show_last:
+        irun = store.last()
+        if irun is None:
+            click.echo("No interferometry runs found.", err=True)
+            raise SystemExit(1)
+    elif prompt and backends:
+        # Run ensemble first
+        backend_configs = []
+        for pair in backends.split(","):
+            pair = pair.strip()
+            if ":" not in pair:
+                click.echo(f"Error: invalid backend:model pair: {pair}", err=True)
+                raise SystemExit(1)
+            bt, model = pair.split(":", 1)
+            config: dict = {"backend_type": bt, "model": model}
+            import os
+            if bt == "anthropic":
+                config["api_key"] = os.environ.get("ANTHROPIC_API_KEY", "")
+            elif bt == "ollama":
+                config["host"] = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+            elif bt == "claude-code":
+                config["claude_path"] = os.environ.get("CLAUDE_PATH", "claude")
+            elif bt == "codex":
+                config["codex_path"] = os.environ.get("CODEX_PATH", "codex")
+            backend_configs.append(config)
+        irun = asyncio.run(run_ensemble(prompt, backend_configs))
+        store.save(irun)
+    else:
+        click.echo("Provide a prompt + --backends, or use --last / --id.", err=True)
+        raise SystemExit(1)
+
+    # Load anchors for compatibility checking
+    try:
+        registry = create_registry(gov_dir)
+        anchors = registry.all()
+    except Exception:
+        anchors = []
+
+    report = compute_code_divergence(irun, anchors)
+
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+        return
+
+    # Human-readable output
+    click.echo(f"Code Compare — Run {irun.id} (tier {report.tier})")
+    click.echo(f"  Models: {', '.join(r.model_id for r in irun.runs)}")
+
+    if report.tier >= 1:
+        banner = format_tier1_banner(report)
+        click.echo(f"\n  ⚠️  {banner}")
+
+    if report.risk_marker_union:
+        click.echo(f"\nRisk markers (union lens — {len(report.risk_marker_union)} total):")
+        for m in report.risk_marker_union:
+            icon = "🔴" if m.category.value == "security" else "🟡"
+            click.echo(f"  {icon} [{m.category.value}] {m.marker_type.value}: {m.message}")
+            click.echo(f"     from {m.model_id} at {m.file_path}:{m.line_number}")
+
+    if not show_markers and report.anchor_conflicts:
+        click.echo(f"\nAnchor conflicts ({len(report.anchor_conflicts)}):")
+        for c in report.anchor_conflicts:
+            icon = "⛔" if c.conflict_type.value == "hard" else "⚠️"
+            click.echo(f"  {icon} [{c.conflict_type.value}] {c.anchor_id}: {c.description}")
+
+    if not report.risk_marker_union and not report.anchor_conflicts:
+        click.echo("\n  No risk markers or anchor conflicts detected.")
+
+    # Per-model unique markers
+    if report.risk_marker_unique and not show_markers:
+        click.echo("\nPer-model unique markers:")
+        for model_id, markers in report.risk_marker_unique.items():
+            click.echo(f"  {model_id}: {len(markers)} unique marker(s)")
+
+
 # =============================================================================
 # Friendly CLI Commands (layered by persona)
 # =============================================================================

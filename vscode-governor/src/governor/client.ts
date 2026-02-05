@@ -3,7 +3,7 @@
  */
 
 import { spawn } from "child_process";
-import type { CheckResult, CheckInput, GovernorViewModelV2, IntentResult, OverrideView } from "./types";
+import type { CheckResult, CheckInput, GovernorViewModelV2, IntentResult, OverrideView, CodeDivergenceReportView } from "./types";
 
 const TIMEOUT_MS = 30_000;
 
@@ -228,6 +228,28 @@ export function listOverrides(
     args.push("--all");
   }
   return runGovernorGeneric<OverrideView[]>(opts, args);
+}
+
+// =========================================================================
+// Code Interferometry: Compare
+// =========================================================================
+
+/**
+ * Run code compare on the last interferometry run.
+ * Calls `governor interferometry compare --last --json`.
+ */
+export function runCodeCompare(
+  opts: GovernorOptions,
+  runId?: string
+): Promise<CodeDivergenceReportView> {
+  const args = ["interferometry", "compare"];
+  if (runId) {
+    args.push("--id", runId);
+  } else {
+    args.push("--last");
+  }
+  args.push("--json");
+  return runGovernorGeneric<CodeDivergenceReportView>(opts, args);
 }
 
 export { GovernorOptions };

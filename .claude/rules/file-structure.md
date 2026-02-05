@@ -75,6 +75,7 @@ src/governor/
 ├── maude_lite.py     # MaudeLite, evidence-gated coding harness, claim extraction, evidence linking, custody scoring
 ├── violation_resolver.py # ViolationResolver, PendingViolation, ResolutionAction, ExceptionRecord, fix/revise/proceed actions
 ├── interferometry.py  # Interferometry: parallel + serial multi-model claim comparison, alignment, signals, ledger promotion, store
+├── code_interferometry.py # Code interferometry: risk markers (19 types), anchor conflicts, tier determination, CheckFinding bridge
 │
 # W5 Writing Modules (Deferred 2, W5):
 ├── writing_patterns.py    # 18 pattern banks for governance/tone/regime detection

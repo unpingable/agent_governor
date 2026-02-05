@@ -11683,6 +11683,255 @@ def interferometry_compare(ctx: click.Context, prompt: str | None, backends: str
 
 
 # =============================================================================
+# External Constraint Attachment
+# =============================================================================
+
+
+@cli.group("external")
+def external_cmd() -> None:
+    """External constraint attachment — bind claims to external substrates.
+
+    Attach claims to external data sources (Wikidata, Wikipedia, Scholar)
+    to create structural constraint bindings. This is NOT fact verification —
+    it logs what external sources reported at specific moments.
+
+    \b
+    Substrates (query order):
+      wikidata   Structured knowledge graph (most reliable)
+      wikipedia  Human-readable articles (dynamic)
+      scholar    Academic papers via CrossRef (DOI resolution)
+    """
+    pass
+
+
+@external_cmd.command("query")
+@click.argument("substrate_id", type=click.Choice(["wikidata", "wikipedia", "scholar"]))
+@click.argument("query")
+@click.option("--affordance", "-a", help="Query affordance (entity/search/article/doi)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def external_query(
+    substrate_id: str,
+    query: str,
+    affordance: str | None,
+    as_json: bool,
+) -> None:
+    """Query an external substrate directly.
+
+    This is for exploration — it queries the substrate and shows
+    the response without binding to any claim.
+
+    \b
+    Examples:
+      governor external query wikidata Q42
+      governor external query wikidata "Douglas Adams" --affordance search
+      governor external query wikipedia "Douglas Adams"
+      governor external query scholar "10.1000/xyz123" --affordance doi
+    """
+    from .external import get_substrate
+
+    substrate = get_substrate(substrate_id)
+    if not substrate:
+        click.echo(f"Unknown substrate: {substrate_id}", err=True)
+        raise SystemExit(1)
+
+    snapshot = substrate.query(query, affordance)
+
+    if as_json:
+        click.echo(json.dumps(snapshot.to_dict(), indent=2))
+    else:
+        click.echo(f"Substrate: {snapshot.substrate_id}")
+        click.echo(f"Query: {snapshot.query}")
+        click.echo(f"Affordance: {snapshot.affordance_used}")
+        click.echo(f"Queried at: {snapshot.queried_at.isoformat()}")
+        click.echo(f"Response hash: {snapshot.response_hash[:16]}...")
+        click.echo("\n--- Response ---")
+        # Truncate response for display
+        response = snapshot.response
+        if len(response) > 2000:
+            response = response[:2000] + "\n... (truncated)"
+        click.echo(response)
+
+
+@external_cmd.command("attach")
+@click.argument("claim_id")
+@click.option("--substrate", "-s", required=True, type=click.Choice(["wikidata", "wikipedia", "scholar"]))
+@click.option("--query", "-q", required=True, help="Query string for the substrate")
+@click.option("--affordance", "-a", help="Query affordance")
+@click.option("--claim-value", "-v", help="Claim value for discrepancy tracking")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def external_attach(
+    claim_id: str,
+    substrate: str,
+    query: str,
+    affordance: str | None,
+    claim_value: str | None,
+    as_json: bool,
+) -> None:
+    """Attach external constraint to a claim.
+
+    Queries the substrate and binds the result to the specified claim.
+    If binding type is CONTRADICTS and claim_value is provided,
+    a discrepancy record is created.
+
+    \b
+    Examples:
+      governor external attach claim_123 --substrate wikidata --query Q42
+      governor external attach claim_123 -s wikipedia -q "Douglas Adams" -v "Adams wrote in 1978"
+    """
+    from .external import ConstraintManager
+    from datetime import datetime
+
+    manager = ConstraintManager()
+
+    # In a real integration, we'd look up the claim's creation time
+    # For now, use current time minus a small delta
+    claim_created_at = datetime.utcnow()
+
+    try:
+        snapshot, binding = manager.attach_constraint(
+            claim_id=claim_id,
+            claim_created_at=claim_created_at,
+            claim_value=claim_value or "",
+            substrate_id=substrate,
+            query=query,
+            affordance=affordance,
+        )
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    if as_json:
+        click.echo(json.dumps({
+            "snapshot": snapshot.to_dict(),
+            "binding": binding.to_dict(),
+        }, indent=2))
+    else:
+        click.echo(f"Binding created: {binding.binding_id}")
+        click.echo(f"  Claim: {claim_id}")
+        click.echo(f"  Snapshot: {snapshot.snapshot_id}")
+        click.echo(f"  Type: {binding.binding_type.value}")
+        click.echo(f"  Δt: {binding.delta_t}")
+
+        discrepancies = manager.get_discrepancies()
+        if discrepancies:
+            click.echo(f"\nDiscrepancy created: {discrepancies[0].discrepancy_id}")
+
+
+@external_cmd.command("bindings")
+@click.argument("claim_id")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def external_bindings(claim_id: str, as_json: bool) -> None:
+    """List external bindings for a claim.
+
+    Shows all external constraint bindings attached to the specified claim.
+    """
+    from .external import get_manager
+
+    manager = get_manager()
+    bindings = manager.get_bindings(claim_id)
+
+    if as_json:
+        click.echo(json.dumps([b.to_dict() for b in bindings], indent=2))
+    elif not bindings:
+        click.echo(f"No bindings for claim: {claim_id}")
+    else:
+        click.echo(f"Bindings for {claim_id}:\n")
+        for binding in bindings:
+            snapshot = manager.get_snapshot(binding.snapshot_id)
+            click.echo(f"  {binding.binding_id}")
+            click.echo(f"    Type: {binding.binding_type.value}")
+            click.echo(f"    Substrate: {snapshot.substrate_id if snapshot else 'unknown'}")
+            click.echo(f"    Δt: {binding.delta_t}")
+            if binding.notes:
+                click.echo(f"    Notes: {binding.notes}")
+            click.echo()
+
+
+@external_cmd.command("discrepancies")
+@click.option("--pending", is_flag=True, help="Show only pending discrepancies")
+@click.option("--contradicts", is_flag=True, help="Alias for --pending")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def external_discrepancies(pending: bool, contradicts: bool, as_json: bool) -> None:
+    """Show discrepancies between claims and external substrates.
+
+    Discrepancies are created when a binding type is CONTRADICTS.
+    They must be resolved by human action.
+    """
+    from .external import get_manager, Resolution
+
+    manager = get_manager()
+    status = Resolution.PENDING if (pending or contradicts) else None
+    discrepancies = manager.get_discrepancies(status=status)
+
+    if as_json:
+        click.echo(json.dumps([d.to_dict() for d in discrepancies], indent=2))
+    elif not discrepancies:
+        click.echo("No discrepancies found.")
+    else:
+        for disc in discrepancies:
+            click.echo(f"{disc.discrepancy_id}")
+            click.echo(f"  Claim: {disc.claim_id}")
+            click.echo(f"  Claim value: {disc.claim_value[:60]}..." if len(disc.claim_value) > 60 else f"  Claim value: {disc.claim_value}")
+            click.echo(f"  Substrate value: {disc.substrate_value[:60]}..." if len(disc.substrate_value) > 60 else f"  Substrate value: {disc.substrate_value}")
+            click.echo(f"  Resolution: {disc.resolution.value}")
+            if disc.resolution_reason:
+                click.echo(f"  Reason: {disc.resolution_reason}")
+            click.echo()
+
+
+@external_cmd.command("resolve")
+@click.argument("discrepancy_id")
+@click.option("--resolution", "-r", required=True,
+              type=click.Choice(["claim_updated", "claim_retained", "substrate_stale", "context_differs"]))
+@click.option("--reason", required=True, help="Reason for resolution")
+def external_resolve(discrepancy_id: str, resolution: str, reason: str) -> None:
+    """Resolve a discrepancy (human action).
+
+    The governor NEVER auto-resolves discrepancies. This command
+    records the human decision about how to handle the contradiction.
+
+    \b
+    Resolution types:
+      claim_updated    Claim was revised based on external info
+      claim_retained   Claim kept despite contradiction
+      substrate_stale  External source was out of date
+      context_differs  Different contexts, both valid
+    """
+    from .external import get_manager, Resolution
+
+    manager = get_manager()
+
+    try:
+        resolved = manager.resolve_discrepancy(
+            discrepancy_id=discrepancy_id,
+            resolution=Resolution(resolution),
+            reason=reason,
+        )
+        click.echo(f"Resolved: {resolved.discrepancy_id}")
+        click.echo(f"  Resolution: {resolved.resolution.value}")
+        click.echo(f"  Reason: {resolved.resolution_reason}")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+
+@external_cmd.command("substrates")
+def external_substrates() -> None:
+    """List available external substrates."""
+    from .external import list_substrates, TRUST_PROFILES
+
+    click.echo("Available substrates:\n")
+    for substrate_id in list_substrates():
+        profile = TRUST_PROFILES.get(substrate_id)
+        if profile:
+            click.echo(f"  {substrate_id}")
+            click.echo(f"    Volatility: {profile.volatility.value}")
+            click.echo(f"    Authority: {profile.authority_type.value}")
+            click.echo(f"    TTL: {profile.snapshot_ttl}")
+            click.echo()
+
+
+# =============================================================================
 # Friendly CLI Commands (layered by persona)
 # =============================================================================
 

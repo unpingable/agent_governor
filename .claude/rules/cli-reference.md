@@ -373,6 +373,18 @@ governor session checkpoints            # List checkpoints for current session
 governor session promote <id> --confirm # Promote fork to mainline
 governor session delete <id> --confirm  # Delete a session
 
+# Git Governance (integrity invariants at commit boundaries)
+governor git-gov status               # Show config and severity by check type (--json)
+governor git-gov check                # Run all checks, exit 1 if blocking (--json)
+governor git-gov artifacts            # Check artifact integrity for staged files (--json)
+governor git-gov cross-index          # Check cross-index references (DOI, version tags) (--json)
+governor git-gov pre-commit           # Run pre-commit checks (metadata, secrets) (--json)
+governor git-gov verify-tag <tag>     # Verify tag conditions (--type, --json)
+governor git-gov set-profile <name>   # Set profile (greenfield/established/production/hotfix)
+governor git-gov allowlist list       # Show current allowlist
+governor git-gov allowlist add <path> # Add path to allowlist
+governor git-gov allowlist remove <p> # Remove path from allowlist
+
 # Unified Check (VS Code extension integration)
 governor check <path>                  # Check a file for security + continuity issues
 governor check <path> --format json    # JSON output for tooling

@@ -3,15 +3,17 @@
 ## Version 0.1 — Integrity Invariants at Commit Boundaries
 
 ```yaml
-status: gap
-implemented: false
+status: canonical
+implemented: true
+tests:
+  - tests/test_git_governance.py (~99 tests)
 depends_on:
   - KERNEL_CONSTRAINTS_SPEC.md
   - hooks.py (pre-commit integration)
+  - security.py (secrets detection)
 blocking:
-  - Release provenance verification
-  - Cross-artifact integrity checks
-estimated_scope: small
+  - Release provenance verification (future)
+  - Cross-artifact integrity checks (implemented)
 ```
 
 ---
@@ -216,24 +218,28 @@ governor git cross-index fix    # Suggest fixes for violations
 
 ---
 
-## 5. CLI Commands (Proposed)
+## 5. CLI Commands (Implemented)
 
 ```bash
-# Artifact integrity
-governor git artifacts check          # Check for policy violations
-governor git artifacts allow <path>   # Add to explicit allowlist
+# Status and configuration
+governor git-gov status              # Show config and severity by check type
+governor git-gov status --json       # JSON output
+governor git-gov set-profile <name>  # Set profile (greenfield/established/production/hotfix)
 
-# Cross-index
-governor git cross-index check        # Validate cross-references
-governor git cross-index show         # List all claimed references
+# Run all checks
+governor git-gov check               # Run all checks, exit 1 if blocking violations
+governor git-gov check --json        # JSON output
 
-# Tagging
-governor git tag check <tag>          # Verify tag conditions
-governor git tag create <tag>         # Create with verification
+# Individual checks
+governor git-gov artifacts           # Check artifact integrity for staged files
+governor git-gov cross-index         # Check cross-index references
+governor git-gov pre-commit          # Run pre-commit checks
+governor git-gov verify-tag <tag>    # Verify tag conditions
 
-# Pre-commit
-governor git pre-commit install       # Install git hooks
-governor git pre-commit run           # Run checks manually
+# Allowlist management
+governor git-gov allowlist list      # Show current allowlist
+governor git-gov allowlist add <p>   # Add path to allowlist
+governor git-gov allowlist remove <p># Remove path from allowlist
 ```
 
 ---
@@ -318,3 +324,4 @@ pre_commit:
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1 | 2026-02-05 | Initial gap spec |
+| 0.2 | 2026-02-05 | Implemented: git_governance.py (~810 lines), 99 tests, CLI commands |

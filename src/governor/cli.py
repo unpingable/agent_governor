@@ -12244,6 +12244,274 @@ def session_delete(ctx: click.Context, session_id: str, confirm: bool) -> None:
 
 
 # =============================================================================
+# Git Governance CLI
+# =============================================================================
+
+
+@cli.group("git-gov")
+def git_gov_cmd() -> None:
+    """Git governance — integrity invariants at commit boundaries.
+
+    Enforces artifact integrity, cross-index validation, and tagging discipline
+    while leaving workflow preferences to agents and humans.
+
+    \b
+    Profiles (controls severity, not whether checks run):
+      greenfield   All checks warn (new projects)
+      established  Cross-index and pre-commit block (default)
+      production   All checks block (release-ready)
+      hotfix       Tagging deferred, critical checks block
+    """
+    pass
+
+
+@git_gov_cmd.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def git_gov_status(ctx: click.Context, as_json: bool) -> None:
+    """Show git governance configuration and status."""
+    from .git_governance import GitGovernor
+
+    gov = GitGovernor()
+
+    if as_json:
+        click.echo(json.dumps(gov.config.to_dict(), indent=2))
+    else:
+        click.echo(f"Profile: {gov.config.profile.value}")
+        click.echo("\nSeverity by check type:")
+        for ct in ["artifact_integrity", "cross_index", "tagging", "pre_commit"]:
+            from .git_governance import CheckType
+            sev = gov.config.get_severity(CheckType(ct))
+            click.echo(f"  {ct}: {sev.value}")
+
+        if gov.config.severity_overrides:
+            click.echo("\nSeverity overrides:")
+            for k, v in gov.config.severity_overrides.items():
+                click.echo(f"  {k}: {v}")
+
+
+@git_gov_cmd.command("check")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def git_gov_check(ctx: click.Context, as_json: bool) -> None:
+    """Run all git governance checks.
+
+    Checks artifacts, cross-index references, and pre-commit conditions.
+    Returns exit code 1 if any blocking violations are found.
+    """
+    from .git_governance import GitGovernor
+
+    gov = GitGovernor()
+    results = gov.check_all()
+    should_block, blocking = gov.should_block()
+
+    if as_json:
+        output = {
+            "checks": {k: v.to_dict() for k, v in results.items()},
+            "should_block": should_block,
+            "blocking_count": len(blocking),
+        }
+        click.echo(json.dumps(output, indent=2))
+    else:
+        all_violations = []
+        for name, result in results.items():
+            click.echo(f"\n{name.upper()}: {'PASS' if result.passed else 'FAIL'}")
+            for v in result.violations:
+                all_violations.append(v)
+                severity_mark = "!" if v.severity.value == "block" else "~"
+                click.echo(f"  [{severity_mark}] {v.message}")
+                if v.suggestion:
+                    click.echo(f"      Suggestion: {v.suggestion}")
+
+        click.echo(f"\n{'='*40}")
+        if should_block:
+            click.echo(f"BLOCKED: {len(blocking)} blocking violation(s)")
+            ctx.exit(1)
+        elif all_violations:
+            click.echo(f"WARNINGS: {len(all_violations)} violation(s), none blocking")
+        else:
+            click.echo("PASSED: No violations")
+
+
+@git_gov_cmd.command("artifacts")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def git_gov_artifacts(ctx: click.Context, as_json: bool) -> None:
+    """Check artifact integrity for staged files."""
+    from .git_governance import GitGovernor
+
+    gov = GitGovernor()
+    result = gov.check_artifacts()
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Artifact check: {'PASS' if result.passed else 'FAIL'}")
+        for v in result.violations:
+            click.echo(f"  - {v.message}")
+            if v.suggestion:
+                click.echo(f"    Suggestion: {v.suggestion}")
+
+    if not result.passed:
+        blocking = [v for v in result.violations if v.severity.value == "block"]
+        if blocking:
+            ctx.exit(1)
+
+
+@git_gov_cmd.command("cross-index")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def git_gov_cross_index(ctx: click.Context, as_json: bool) -> None:
+    """Check cross-index references (DOI, version tags, etc.)."""
+    from .git_governance import GitGovernor
+
+    gov = GitGovernor()
+    result = gov.check_cross_index()
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Cross-index check: {'PASS' if result.passed else 'FAIL'}")
+        for v in result.violations:
+            click.echo(f"  - {v.message}")
+            if v.suggestion:
+                click.echo(f"    Suggestion: {v.suggestion}")
+
+    if not result.passed:
+        blocking = [v for v in result.violations if v.severity.value == "block"]
+        if blocking:
+            ctx.exit(1)
+
+
+@git_gov_cmd.command("pre-commit")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def git_gov_pre_commit(ctx: click.Context, as_json: bool) -> None:
+    """Run pre-commit checks (metadata, secrets)."""
+    from .git_governance import GitGovernor
+
+    gov = GitGovernor()
+    result = gov.check_pre_commit()
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Pre-commit check: {'PASS' if result.passed else 'FAIL'}")
+        for v in result.violations:
+            click.echo(f"  - {v.message}")
+            if v.suggestion:
+                click.echo(f"    Suggestion: {v.suggestion}")
+
+    if not result.passed:
+        blocking = [v for v in result.violations if v.severity.value == "block"]
+        if blocking:
+            ctx.exit(1)
+
+
+@git_gov_cmd.command("verify-tag")
+@click.argument("tag")
+@click.option("--type", "tag_type", help="Tag type (paper, release)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def git_gov_verify_tag(ctx: click.Context, tag: str, tag_type: str | None, as_json: bool) -> None:
+    """Verify conditions for a tag.
+
+    Checks that tag requirements are met before tagging.
+    For example, release tags may require updated changelog and passing tests.
+    """
+    from .git_governance import GitGovernor
+
+    gov = GitGovernor()
+    result = gov.verify_tag(tag, tag_type)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Tag '{tag}' verification: {'PASS' if result.passed else 'FAIL'}")
+        for v in result.violations:
+            click.echo(f"  - {v.message}")
+
+    if not result.passed:
+        blocking = [v for v in result.violations if v.severity.value == "block"]
+        if blocking:
+            ctx.exit(1)
+
+
+@git_gov_cmd.command("set-profile")
+@click.argument("profile", type=click.Choice(["greenfield", "established", "production", "hotfix"]))
+@click.pass_context
+def git_gov_set_profile(ctx: click.Context, profile: str) -> None:
+    """Set the git governance profile.
+
+    \b
+    Profiles:
+      greenfield   All checks warn (new projects)
+      established  Cross-index and pre-commit block (default)
+      production   All checks block (release-ready)
+      hotfix       Tagging deferred, critical checks block
+    """
+    from .git_governance import GitPolicyConfig, Profile
+    from pathlib import Path
+
+    config_path = Path(".governor/git_policy.yaml")
+
+    # Load existing config or create new
+    config = GitPolicyConfig.load(config_path)
+    config.profile = Profile(profile)
+    config.save(config_path)
+
+    click.echo(f"Profile set to: {profile}")
+
+
+@git_gov_cmd.command("allowlist")
+@click.argument("action", type=click.Choice(["add", "remove", "list"]))
+@click.argument("path", required=False)
+@click.pass_context
+def git_gov_allowlist(ctx: click.Context, action: str, path: str | None) -> None:
+    """Manage artifact allowlist.
+
+    \b
+    Actions:
+      add <path>     Add path to allowlist
+      remove <path>  Remove path from allowlist
+      list           Show current allowlist
+    """
+    from .git_governance import GitPolicyConfig
+    from pathlib import Path as PathLib
+
+    config_path = PathLib(".governor/git_policy.yaml")
+    config = GitPolicyConfig.load(config_path)
+
+    if action == "list":
+        if config.artifact_rules.allowlist:
+            click.echo("Allowlisted artifacts:")
+            for p in config.artifact_rules.allowlist:
+                click.echo(f"  - {p}")
+        else:
+            click.echo("No artifacts in allowlist")
+    elif action == "add":
+        if not path:
+            click.echo("Error: path required for 'add'", err=True)
+            ctx.exit(1)
+        if path not in config.artifact_rules.allowlist:
+            config.artifact_rules.allowlist.append(path)
+            config.save(config_path)
+            click.echo(f"Added to allowlist: {path}")
+        else:
+            click.echo(f"Already in allowlist: {path}")
+    elif action == "remove":
+        if not path:
+            click.echo("Error: path required for 'remove'", err=True)
+            ctx.exit(1)
+        if path in config.artifact_rules.allowlist:
+            config.artifact_rules.allowlist.remove(path)
+            config.save(config_path)
+            click.echo(f"Removed from allowlist: {path}")
+        else:
+            click.echo(f"Not in allowlist: {path}")
+
+
+# =============================================================================
 # Friendly CLI Commands (layered by persona)
 # =============================================================================
 

@@ -66,6 +66,7 @@
 **SDK Middleware** — Drop-in governor enforcement for Anthropic SDK. `client = GovernorMiddleware(Anthropic())`. Advisory/blocking/strict modes, claim extraction, anchor checking, security scanning, ledger integration, streaming support, async support.
 **Session Continuity** — Capsule-based session management. Resume intent + constraints + authority, NOT chat replay. Three-layer model (Ledger/Workspace/Transcript), fork/promote semantics, checkpoints, content hashing, YAML ledger persistence.
 **QA Harness** — Self-validating test infrastructure. CLI smoke tests (all commands), self-governance (governor passes own gates), serialization roundtrip sweep, cross-module lifecycle tests.
+**Git Governance** — Integrity invariants at commit boundaries. Artifact integrity, cross-index validation (DOI/version tags), tagging discipline, pre-commit provenance. Profile-based severity (greenfield→production), YAML config, secrets check integration. CLI `governor git-gov {status,check,artifacts,cross-index,pre-commit,verify-tag,set-profile,allowlist}`.
 
 ## Test Counts by Module
 
@@ -148,5 +149,6 @@
 | SDK Middleware | 36 |
 | Session Continuity | 57 |
 | QA Harness | 108 |
+| Git Governance | 99 |
 
-**Total: ~7671 tests**
+**Total: ~7770 tests**

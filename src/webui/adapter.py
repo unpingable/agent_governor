@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 import uuid
 from pathlib import Path
@@ -79,6 +80,9 @@ GOVERNOR_CONTEXT_ID = os.environ.get("GOVERNOR_CONTEXT_ID", "default")
 GOVERNOR_MODE = os.environ.get("GOVERNOR_MODE", "general")
 GOVERNOR_CONTEXTS_DIR = os.environ.get("GOVERNOR_CONTEXTS_DIR", "")
 GOVERNOR_SHOW_OK_FOOTER = os.environ.get("GOVERNOR_SHOW_OK_FOOTER", "true").lower() in ("true", "1", "yes")
+
+# Mutable backend type — starts from env, switchable at runtime via /v1/backends/switch
+_current_backend_type: str = BACKEND_TYPE
 
 # ============================================================================
 # Application setup
@@ -157,6 +161,10 @@ class ModelList(BaseModel):
     data: list[ModelInfo]
 
 
+class BackendSwitchRequest(BaseModel):
+    backend_type: str
+
+
 # ============================================================================
 # Bridge setup (lazy init on first request)
 # ============================================================================
@@ -178,15 +186,15 @@ def _get_bridge() -> ChatBridge:
     global _bridge
     if _bridge is None:
         kwargs: dict[str, Any] = {}
-        if BACKEND_TYPE == "anthropic":
+        if _current_backend_type == "anthropic":
             kwargs["api_key"] = ANTHROPIC_API_KEY
-        elif BACKEND_TYPE == "ollama":
+        elif _current_backend_type == "ollama":
             kwargs["host"] = OLLAMA_HOST
-        elif BACKEND_TYPE == "claude-code":
+        elif _current_backend_type == "claude-code":
             kwargs["claude_path"] = CLAUDE_PATH
-        elif BACKEND_TYPE == "codex":
+        elif _current_backend_type == "codex":
             kwargs["codex_path"] = CODEX_PATH
-        backend = create_backend(BACKEND_TYPE, **kwargs)
+        backend = create_backend(_current_backend_type, **kwargs)
         _bridge = ChatBridge(
             backend=backend,
             context_manager=_get_context_manager(),
@@ -235,7 +243,117 @@ async def list_models() -> ModelList:
 @app.get("/v1/models/{model_id}")
 async def get_model(model_id: str) -> ModelInfo:
     """Get info about a specific model."""
-    return ModelInfo(id=model_id, owned_by=BACKEND_TYPE)
+    return ModelInfo(id=model_id, owned_by=_current_backend_type)
+
+
+# ============================================================================
+# Backend Switching Endpoints
+# ============================================================================
+
+
+def _get_available_backends() -> list[dict[str, Any]]:
+    """Return list of available backends with availability status."""
+    backends = []
+    # Ollama — check host reachable (best-effort: just note the host)
+    backends.append({
+        "type": "ollama",
+        "available": True,  # Always structurally available
+        "config_hint": f"OLLAMA_HOST={OLLAMA_HOST}",
+    })
+    # Anthropic — needs API key
+    backends.append({
+        "type": "anthropic",
+        "available": bool(ANTHROPIC_API_KEY),
+        "config_hint": "Set ANTHROPIC_API_KEY" if not ANTHROPIC_API_KEY else "API key configured",
+    })
+    # Claude Code — needs CLI binary
+    claude_found = shutil.which(CLAUDE_PATH) is not None or Path(CLAUDE_PATH).is_file()
+    backends.append({
+        "type": "claude-code",
+        "available": claude_found,
+        "config_hint": f"CLAUDE_PATH={CLAUDE_PATH}" if claude_found else "claude CLI not found",
+    })
+    # Codex — needs CLI binary
+    codex_found = shutil.which(CODEX_PATH) is not None or Path(CODEX_PATH).is_file()
+    backends.append({
+        "type": "codex",
+        "available": codex_found,
+        "config_hint": f"CODEX_PATH={CODEX_PATH}" if codex_found else "codex CLI not found",
+    })
+    return backends
+
+
+@app.get("/v1/backends")
+async def list_backends() -> dict[str, Any]:
+    """List available backends and mark the active one."""
+    backends = _get_available_backends()
+    for b in backends:
+        b["active"] = b["type"] == _current_backend_type
+    # Check connection for active backend
+    connected = False
+    try:
+        bridge = _get_bridge()
+        await bridge.list_models()
+        connected = True
+    except Exception:
+        pass
+    return {
+        "backends": backends,
+        "active": _current_backend_type,
+        "connected": connected,
+    }
+
+
+@app.post("/v1/backends/switch")
+async def switch_backend(request: BackendSwitchRequest) -> dict[str, Any]:
+    """Switch the active backend at runtime."""
+    global _bridge, _current_backend_type
+
+    valid_types = {"ollama", "anthropic", "claude-code", "codex"}
+    if request.backend_type not in valid_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid backend type: {request.backend_type}. Valid: {sorted(valid_types)}",
+        )
+
+    # Build kwargs for the new backend
+    kwargs: dict[str, Any] = {}
+    if request.backend_type == "anthropic":
+        kwargs["api_key"] = ANTHROPIC_API_KEY
+    elif request.backend_type == "ollama":
+        kwargs["host"] = OLLAMA_HOST
+    elif request.backend_type == "claude-code":
+        kwargs["claude_path"] = CLAUDE_PATH
+    elif request.backend_type == "codex":
+        kwargs["codex_path"] = CODEX_PATH
+
+    try:
+        new_backend = create_backend(request.backend_type, **kwargs)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to create backend: {e}")
+
+    _current_backend_type = request.backend_type
+    _bridge = ChatBridge(
+        backend=new_backend,
+        context_manager=_get_context_manager(),
+        show_ok_footer=GOVERNOR_SHOW_OK_FOOTER,
+    )
+
+    # Check connection and list models
+    connected = False
+    models: list[dict[str, str]] = []
+    try:
+        models = await _bridge.list_models()
+        connected = True
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "backend_type": _current_backend_type,
+        "connected": connected,
+        "models": [m["id"] for m in models] if models else [],
+    }
 
 
 @app.post("/v1/chat/completions", response_model=None)
@@ -1444,7 +1562,7 @@ async def health() -> dict[str, Any]:
     return {
         "status": "healthy" if backend_ok else "degraded",
         "backend": {
-            "type": BACKEND_TYPE,
+            "type": _current_backend_type,
             "connected": backend_ok,
         },
         "governor": {
@@ -1608,7 +1726,7 @@ async def api_info() -> dict[str, Any]:
     return {
         "name": "Governor Chat Adapter",
         "version": "0.3.0",
-        "backend": BACKEND_TYPE,
+        "backend": _current_backend_type,
         "openai_compatible": True,
         "governor_context": GOVERNOR_CONTEXT_ID,
         "governor_mode": GOVERNOR_MODE,
@@ -1616,6 +1734,8 @@ async def api_info() -> dict[str, Any]:
             "ui": "/",
             "models": "/v1/models",
             "chat": "/v1/chat/completions",
+            "backends": "/v1/backends",
+            "backends_switch": "/v1/backends/switch",
             "health": "/health",
             "api_info": "/api/info",
             # Sessions

@@ -347,6 +347,60 @@ class TestGovernorEndpoints:
 # ============================================================================
 
 
+class TestBackendEndpoints:
+    """Tests for GET /v1/backends and POST /v1/backends/switch."""
+
+    def test_list_backends_returns_list(self, client) -> None:
+        """GET /v1/backends returns a list of backend entries."""
+        response = client.get("/v1/backends")
+        assert response.status_code == 200
+        data = response.json()
+        assert "backends" in data
+        assert isinstance(data["backends"], list)
+        assert len(data["backends"]) >= 1
+
+    def test_list_backends_has_ollama(self, client) -> None:
+        """Ollama is always present in the backends list."""
+        response = client.get("/v1/backends")
+        types = [b["type"] for b in response.json()["backends"]]
+        assert "ollama" in types
+
+    def test_list_backends_marks_active(self, client) -> None:
+        """Exactly one backend is marked active."""
+        response = client.get("/v1/backends")
+        data = response.json()
+        active_list = [b for b in data["backends"] if b.get("active")]
+        assert len(active_list) == 1
+        assert data["active"] == active_list[0]["type"]
+
+    def test_switch_invalid_type(self, client) -> None:
+        """POST /v1/backends/switch with invalid type returns 400."""
+        response = client.post(
+            "/v1/backends/switch",
+            json={"backend_type": "nonexistent"},
+        )
+        assert response.status_code == 400
+
+    def test_switch_to_same_backend(self, client) -> None:
+        """Switching to the same backend type succeeds."""
+        response = client.post(
+            "/v1/backends/switch",
+            json={"backend_type": "ollama"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["backend_type"] == "ollama"
+
+    def test_api_info_reflects_current_backend(self, client) -> None:
+        """After switch, /api/info reflects the new backend type."""
+        import webui.adapter as adapter_mod
+        adapter_mod._current_backend_type = "ollama"
+
+        info = client.get("/api/info").json()
+        assert info["backend"] == "ollama"
+
+
 class TestBackendSelection:
     """Tests for backend type selection."""
 

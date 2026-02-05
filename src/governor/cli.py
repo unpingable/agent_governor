@@ -11361,6 +11361,225 @@ def override_cleanup(ctx: click.Context) -> None:
 
 
 # =============================================================================
+# Interferometry (multi-model claim comparison)
+# =============================================================================
+
+
+@cli.group("interferometry")
+@click.pass_context
+def interferometry_cmd(ctx: click.Context) -> None:
+    """Interferometry — multi-model claim comparison (parallel + serial)."""
+    pass
+
+
+@interferometry_cmd.command("run")
+@click.argument("prompt")
+@click.option("--backends", "-b", required=True,
+              help="Comma-separated backend:model pairs, e.g. ollama:llama3,anthropic:claude-3-haiku")
+@click.option("--mode", "-m", type=click.Choice(["parallel", "serial"]), default="parallel",
+              help="Execution mode: parallel (default) or serial deliberation chain.")
+@click.option("--rounds", "-n", type=int, default=1,
+              help="Number of deliberation rounds for serial mode (default: 1).")
+@click.option("--threshold", "-t", type=float, default=0.65,
+              help="Jaccard threshold for claim matching (default: 0.65).")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+@click.pass_context
+def interferometry_run(ctx: click.Context, prompt: str, backends: str,
+                       mode: str, rounds: int, threshold: float, as_json: bool) -> None:
+    """Run interferometry on a prompt across multiple backends."""
+    import asyncio
+    from .interferometry import (
+        InterferometryStore, RunMode, run_ensemble,
+    )
+
+    gov_dir = ensure_initialized(ctx)
+
+    # Parse backend:model pairs
+    backend_configs = []
+    for pair in backends.split(","):
+        pair = pair.strip()
+        if ":" not in pair:
+            click.echo(f"Error: invalid backend:model pair: {pair}", err=True)
+            raise SystemExit(1)
+        bt, model = pair.split(":", 1)
+        config: dict = {"backend_type": bt, "model": model}
+        # Add default kwargs based on type
+        import os
+        if bt == "anthropic":
+            config["api_key"] = os.environ.get("ANTHROPIC_API_KEY", "")
+        elif bt == "ollama":
+            config["host"] = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        elif bt == "claude-code":
+            config["claude_path"] = os.environ.get("CLAUDE_PATH", "claude")
+        elif bt == "codex":
+            config["codex_path"] = os.environ.get("CODEX_PATH", "codex")
+        backend_configs.append(config)
+
+    run_mode = RunMode(mode)
+    result = asyncio.run(run_ensemble(prompt, backend_configs, run_mode, rounds, threshold))
+
+    # Save
+    store = InterferometryStore(gov_dir)
+    store.save(result)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Interferometry run {result.id} ({result.mode.value})")
+        click.echo(f"  Models: {', '.join(r.model_id for r in result.runs)}")
+        if result.mode == RunMode.SERIAL:
+            click.echo(f"  Rounds: {result.rounds}")
+        click.echo(f"  Shared claims:      {result.signals.shared_count}")
+        click.echo(f"  Unique claims:      {result.signals.unique_count}")
+        click.echo(f"  Conflicting claims: {result.signals.conflict_count}")
+        click.echo(f"  Disagreement rate:  {result.signals.disagreement_rate:.1%}")
+        if result.signals.specifics_conflict_count > 0:
+            click.echo(f"  Specifics conflicts: {result.signals.specifics_conflict_count}")
+
+
+@interferometry_cmd.command("results")
+@click.option("--last", "show_last", is_flag=True, help="Show the most recent run.")
+@click.option("--id", "run_id", default=None, help="Show a specific run by ID.")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+@click.pass_context
+def interferometry_results(ctx: click.Context, show_last: bool, run_id: str | None, as_json: bool) -> None:
+    """Show interferometry run results."""
+    from .interferometry import InterferometryStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = InterferometryStore(gov_dir)
+
+    if run_id:
+        run = store.load(run_id)
+        if run is None:
+            click.echo(f"Run not found: {run_id}", err=True)
+            raise SystemExit(1)
+        if as_json:
+            click.echo(json.dumps(run.to_dict(), indent=2))
+        else:
+            _print_run_summary(run)
+    elif show_last:
+        run = store.last()
+        if run is None:
+            click.echo("No runs found.", err=True)
+            raise SystemExit(1)
+        if as_json:
+            click.echo(json.dumps(run.to_dict(), indent=2))
+        else:
+            _print_run_summary(run)
+    else:
+        runs = store.list_runs()
+        if not runs:
+            click.echo("No interferometry runs found.")
+            return
+        if as_json:
+            click.echo(json.dumps(runs, indent=2))
+        else:
+            for r in runs:
+                sig = r.get("signals", {})
+                mode_str = r.get("mode", "parallel")
+                click.echo(
+                    f"  {r['id']}  {mode_str:8s}  "
+                    f"shared={sig.get('shared_count', 0)}  "
+                    f"unique={sig.get('unique_count', 0)}  "
+                    f"conflicts={sig.get('conflict_count', 0)}  "
+                    f"{r.get('prompt', '')[:40]}"
+                )
+
+
+@interferometry_cmd.command("divergence")
+@click.option("--last", "show_last", is_flag=True, default=True, help="Show last run divergence.")
+@click.option("--id", "run_id", default=None, help="Show divergence for a specific run.")
+@click.pass_context
+def interferometry_divergence(ctx: click.Context, show_last: bool, run_id: str | None) -> None:
+    """Show signal divergence summary."""
+    from .interferometry import InterferometryStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = InterferometryStore(gov_dir)
+
+    run = store.load(run_id) if run_id else store.last()
+    if run is None:
+        click.echo("No run found.", err=True)
+        raise SystemExit(1)
+
+    s = run.signals
+    click.echo(f"Run {run.id} ({run.mode.value}, {len(run.runs)} models)")
+    click.echo(f"  Total claims:         {s.total_claims}")
+    click.echo(f"  Shared:               {s.shared_count}")
+    click.echo(f"  Unique:               {s.unique_count}")
+    click.echo(f"  Conflicting:          {s.conflict_count}")
+    click.echo(f"  Disagreement rate:    {s.disagreement_rate:.1%}")
+    click.echo(f"  Specifics conflicts:  {s.specifics_conflict_count}")
+
+    if run.conflicts:
+        click.echo("\nConflicting claims:")
+        for c in run.conflicts:
+            click.echo(f"  - [{c.category}] {c.claim_text} (sources: {', '.join(c.sources)})")
+
+
+@interferometry_cmd.command("accept")
+@click.option("--shared", "shared_only", is_flag=True, default=True,
+              help="Promote only shared claims (default).")
+@click.option("--all", "promote_all", is_flag=True, help="Also promote unique claims at low confidence.")
+@click.option("--id", "run_id", default=None, help="Run ID to promote from.")
+@click.pass_context
+def interferometry_accept(ctx: click.Context, shared_only: bool, promote_all: bool, run_id: str | None) -> None:
+    """Promote claims from an interferometry run to the epistemic ledger."""
+    from .interferometry import InterferometryStore, promote_to_ledger
+    from .epistemic import EpistemicLedger
+
+    gov_dir = ensure_initialized(ctx)
+    store = InterferometryStore(gov_dir)
+
+    run = store.load(run_id) if run_id else store.last()
+    if run is None:
+        click.echo("No run found.", err=True)
+        raise SystemExit(1)
+
+    ledger = EpistemicLedger(gov_dir)
+    ids = promote_to_ledger(run, ledger, shared_only=not promote_all)
+    click.echo(f"Promoted {len(ids)} claim(s) to epistemic ledger.")
+    for cid in ids:
+        click.echo(f"  {cid}")
+
+
+def _print_run_summary(run: Any) -> None:
+    """Print a human-readable summary of an interferometry run."""
+    click.echo(f"Run: {run.id} ({run.mode.value})")
+    click.echo(f"Prompt: {run.prompt[:80]}")
+    if run.mode.value == "serial":
+        click.echo(f"Rounds: {run.rounds}")
+    click.echo(f"Created: {run.created_at}")
+    click.echo()
+
+    for r in run.runs:
+        round_label = f" (round {r.round_number})" if run.mode.value == "serial" else ""
+        click.echo(f"  [{r.backend_type}:{r.model_id}{round_label}] {r.latency_ms:.0f}ms")
+        if r.extraction:
+            click.echo(f"    Claims: {r.extraction.total_signals}, Assertiveness: {r.extraction.assertiveness_score:.2f}")
+        click.echo(f"    Response: {r.response[:100]}...")
+        click.echo()
+
+    s = run.signals
+    click.echo(f"Signals: shared={s.shared_count} unique={s.unique_count} conflicts={s.conflict_count}")
+    click.echo(f"Disagreement rate: {s.disagreement_rate:.1%}")
+
+    if run.shared:
+        click.echo("\nShared claims:")
+        for c in run.shared:
+            click.echo(f"  + {c.claim_text} (confidence: {c.confidence:.0%})")
+    if run.conflicts:
+        click.echo("\nConflicting claims:")
+        for c in run.conflicts:
+            click.echo(f"  ! {c.claim_text} (sources: {', '.join(c.sources)})")
+    if run.unique:
+        click.echo("\nUnique claims:")
+        for c in run.unique:
+            click.echo(f"  ? {c.claim_text} (from: {', '.join(c.sources)})")
+
+
+# =============================================================================
 # Friendly CLI Commands (layered by persona)
 # =============================================================================
 

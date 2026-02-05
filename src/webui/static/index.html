@@ -197,6 +197,19 @@
       <span class="text" id="status-text">Everything looks good.</span>
     </div>
 
+    <!-- Backend Selector -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Backend</h3>
+        <span id="backend-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;"></span>
+      </div>
+      <div class="card-body" style="display:flex;align-items:center;gap:0.5rem;">
+        <select class="model-select" id="backend-select" onchange="switchBackend(this.value)" style="flex:1;">
+          <option value="">Loading...</option>
+        </select>
+      </div>
+    </div>
+
     <!-- Export/Import Toolbar -->
     <div class="gov-toolbar">
       <button class="gov-btn primary" onclick="exportAll()">Export All</button>
@@ -907,6 +920,42 @@
     });
   }
 
+  // ========== Backends ==========
+
+  function loadBackends() {
+    fetch(BASE + '/v1/backends').then(function(r) { return r.json(); }).then(function(data) {
+      var select = document.getElementById('backend-select');
+      select.innerHTML = '';
+      var backends = data.backends || [];
+      for (var i = 0; i < backends.length; i++) {
+        var b = backends[i];
+        var opt = document.createElement('option');
+        opt.value = b.type;
+        opt.textContent = b.type + (b.available ? '' : ' (unavailable)');
+        opt.disabled = !b.available;
+        if (b.active) opt.selected = true;
+        select.appendChild(opt);
+      }
+      var dot = document.getElementById('backend-dot');
+      dot.style.background = data.connected ? '#22c55e' : '#ef4444';
+    }).catch(function() {});
+  }
+
+  window.switchBackend = function(value) {
+    if (!value) return;
+    fetch(BASE + '/v1/backends/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backend_type: value })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.success) {
+        loadModels();
+        loadBackends();
+        document.getElementById('backend-badge').textContent = data.backend_type;
+      }
+    }).catch(function() {});
+  };
+
   // ========== Governor Sidebar ==========
 
   function setMode(m) {
@@ -1543,6 +1592,7 @@
   // ========== Init ==========
 
   loadModels();
+  loadBackends();
   refreshGovernor();
   setInterval(refreshGovernor, GOV_REFRESH);
 

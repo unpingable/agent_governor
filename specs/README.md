@@ -59,6 +59,7 @@ The governor's theoretical foundation. Read in this order.
 | 13 | **EPISTEMIC_STACK_SPEC.md** | Claim lifecycle infrastructure. 11 modules, 983 tests, provenance, quorum, TTL, audit, drift. |
 | 14 | **QA_HARNESS_SPEC.md** | Self-validating test infrastructure. CLI smoke, self-governance, roundtrip, lifecycle. `status: gap` |
 | 15 | **GIT_GOVERNANCE_SPEC.md** | Integrity invariants at commit boundaries. Artifact, cross-index, tagging, pre-commit. `status: gap` |
+| 16 | **PERFORCE_SUPPORT_SPEC.md** | P4 substrate for integrity invariants. Changelist, locks, immutable releases, DOI mapping. `status: gap` |
 
 ### Reading Guidance
 

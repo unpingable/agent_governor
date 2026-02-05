@@ -63,7 +63,9 @@ This is the **Agent Governor** - a constraint system for agentic coding tools. T
 **VS Code Extension (Deferred 3, Phase V4)**: Hover tooltips (GovernorHoverProvider — decision/claim/violation context on hover), code actions (GovernorCodeActionProvider — quick fixes, suppress comments, security actions), real-time checking (RealtimeChecker — debounced on-type, configurable delay). New commands: Toggle Realtime, Check Now. Keybindings: Ctrl+Shift+G (check file), Ctrl+Shift+Alt+G (toggle realtime). 36 new TypeScript tests.
 **Interactive Violation Resolution (Deferred 2, W4)**: Author-friendly chat. Blocking violations present 3 choices: fix (rewrite compliant), revise (update anchor), proceed (log exception). State machine (PENDING_RESOLUTION→FIX/REVISE/PROCEED→NORMAL). ViolationResolver with persistent pending state. Resolution command detection (1/2/3, maude fix/revise/proceed). Mode-specific choices (fiction: canon, code: decisions). Exception logging with scope/expiry. ChatBridge check_response_blocking(), ViolationPendingResponse. Adapter integration with resolution handling. CLI (governor lite {pending,fix,revise,proceed,exceptions}). Main CLI integration: `governor check --interactive`, `governor wrap --check-continuity --interactive`, `governor hook pre-commit --check-continuity --interactive`.
 **Code Autopilot**: Intent-based governance system. Declare what you're doing (profile + scope + timebox), system configures enforcement. 5 profiles (greenfield/established/production/hotfix/refactor), intent resolution from 6 layers (CLI→env→session→config→heuristic→default), constraint classes (invariant vs preference), scoped time-limited overrides with receipts, branch heuristics. CLI (governor intent {show,set,clear}, governor override {create,list,show,revoke,cleanup}), MCP tools (get_intent, set_intent, suggest_profile, override, override_list).
-**Total: 7247 tests**
+**Interferometry**: Multi-model claim comparison with two modes — parallel (same prompt to N backends, compare extracted claims) and serial ("yes, and" deliberation chain with configurable rounds). Reuses claim_signals (extraction), taint (Jaccard fingerprinting), chat_bridge (backend calls). Claim alignment (shared/unique/conflicting), specifics conflict detection, disagreement rate signals, ledger promotion (shared→DERIVED, unique→ASSUMED). JSON file-per-run persistence. CLI (governor interferometry {run,results,divergence,accept}).
+**WebUI Backend Toggle**: Runtime backend switching via sidebar dropdown. `GET /v1/backends` (list available, mark active, connection check), `POST /v1/backends/switch` (validate, create, replace bridge). Frontend card with connection status dot.
+**Total: 7294 tests**
 
 ## Key Documents
 
@@ -82,6 +84,12 @@ governor init
 
 # Run tests
 pytest tests/ -v
+
+# WebUI with Claude Code backend
+bash start.sh
+
+# WebUI with Codex backend (auto-detects Node, arch, binary)
+bash start-codex.sh
 ```
 
 ## CLI Commands
@@ -287,6 +295,17 @@ governor override list                # List active overrides (--json)
 governor override show <id>           # Show override details
 governor override revoke <id> --because "reason"  # Revoke early
 governor override cleanup             # Remove expired overrides
+
+# Interferometry (multi-model claim comparison)
+governor interferometry run "prompt" --backends ollama:llama3,anthropic:claude-3-haiku  # Parallel mode (default)
+governor interferometry run "prompt" -b ollama:m1,ollama:m2 --mode serial --rounds 2   # Serial deliberation chain
+governor interferometry results                # List all runs
+governor interferometry results --last         # Show most recent run
+governor interferometry results --id <run_id>  # Show specific run (--json)
+governor interferometry divergence             # Signal summary (disagreement rate, conflicts)
+governor interferometry divergence --id <id>   # Divergence for specific run
+governor interferometry accept --shared        # Promote shared claims to epistemic ledger
+governor interferometry accept --all           # Also promote unique claims at low confidence
 
 # Quorum State Machine (multi-agent consensus)
 governor quorum status <proposal_id>  # Show quorum state for a proposal
@@ -552,6 +571,7 @@ src/governor/
 ├── viewmodel.py      # GovernorViewModel (schema v2), 8 section builders, read-only state derivation, V1 compat
 ├── maude_lite.py     # MaudeLite, evidence-gated coding harness, claim extraction, evidence linking, custody scoring
 ├── violation_resolver.py # ViolationResolver, PendingViolation, ResolutionAction, ExceptionRecord, fix/revise/proceed actions
+├── interferometry.py  # Interferometry: parallel + serial multi-model claim comparison, alignment, signals, ledger promotion, store
 │
 # W5 Writing Modules (Deferred 2, W5):
 ├── writing_patterns.py    # 18 pattern banks for governance/tone/regime detection
@@ -1055,6 +1075,20 @@ vscode-governor/
 | writing_code.py | Code-specific constraints from code.md spec | 86 |
 
 **W5 Writing Modules tests: 922**
+
+### Interferometry (Multi-Model Claim Comparison)
+| Module | Description | Tests |
+|--------|-------------|-------|
+| interferometry.py | RunMode (parallel/serial), ModelRun, ClaimAlignment, InterferometrySignals, InterferometryRun, InterferometryStore, extract_claims, match_claims, align_claims, compute_signals, run_parallel, run_serial, run_ensemble, promote_to_ledger | 47 |
+
+**Interferometry tests: 47**
+
+### WebUI Backend Toggle
+| Module | Description | Tests |
+|--------|-------------|-------|
+| adapter.py (+) | `GET /v1/backends`, `POST /v1/backends/switch`, `_get_available_backends()`, `BackendSwitchRequest`, `_current_backend_type` | +6 |
+
+**WebUI Backend Toggle tests: 6**
 
 **Total: 6988 tests**
 

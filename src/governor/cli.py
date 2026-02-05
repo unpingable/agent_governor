@@ -12464,6 +12464,249 @@ def context_cleanup(ctx: click.Context, max_age: int, dry_run: bool) -> None:
 
 
 # =============================================================================
+# Perforce Governance CLI
+# =============================================================================
+
+
+@cli.group("p4")
+def p4_cmd() -> None:
+    """Perforce governance — integrity invariants on explicit authority.
+
+    Applies the same integrity invariants as Git governance, but on a substrate
+    that already admits authority exists.
+
+    \b
+    Checks:
+      changelist_integrity  Metadata claims must match files in CL
+      lock_semantics        Locked files are authoritative state
+      immutable_release     Tagged release CLs cannot be modified
+      doi_mapping           DOI corresponds to depot path + changelist
+    """
+    pass
+
+
+@p4_cmd.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def p4_status(ctx: click.Context, as_json: bool) -> None:
+    """Show P4 governance status and configuration."""
+    from .perforce import P4Governor
+
+    gov = P4Governor()
+
+    if as_json:
+        output = {
+            "available": gov.is_available(),
+            "config": gov.config.to_dict(),
+        }
+        click.echo(json.dumps(output, indent=2))
+    else:
+        click.echo(f"P4 available: {gov.is_available()}")
+        click.echo(f"Governance enabled: {gov.config.enabled}")
+        if gov.config.connection.port:
+            click.echo(f"P4 port: {gov.config.connection.port}")
+        click.echo("\nCheck status:")
+        click.echo(f"  Changelist integrity: {'enabled' if gov.config.changelist_integrity.enabled else 'disabled'}")
+        click.echo(f"  Lock semantics: {'enabled' if gov.config.lock_semantics.enabled else 'disabled'}")
+        click.echo(f"  Immutable releases: {'enabled' if gov.config.immutable_releases.enabled else 'disabled'}")
+        click.echo(f"  DOI mapping: {'enabled' if gov.config.doi_mapping.enabled else 'disabled'}")
+
+
+@p4_cmd.command("check")
+@click.argument("changelist", type=int)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def p4_check(ctx: click.Context, changelist: int, as_json: bool) -> None:
+    """Run pre-submit checks on a changelist."""
+    from .perforce import P4Governor
+
+    gov = P4Governor()
+
+    if not gov.is_available():
+        click.echo("Warning: P4 not available, checks limited", err=True)
+
+    violations = gov.pre_submit_check(changelist)
+    should_block, blocking = gov.should_block(changelist)
+
+    if as_json:
+        output = {
+            "changelist": changelist,
+            "violations": [v.to_dict() for v in violations],
+            "should_block": should_block,
+            "blocking_count": len(blocking),
+        }
+        click.echo(json.dumps(output, indent=2))
+    else:
+        if not violations:
+            click.echo(f"CL {changelist}: PASSED")
+        else:
+            click.echo(f"CL {changelist}: {len(violations)} violation(s)")
+            for v in violations:
+                severity_mark = "!" if v.severity.value == "block" else "~"
+                click.echo(f"  [{severity_mark}] {v.message}")
+
+        if should_block:
+            click.echo(f"\nBLOCKED: {len(blocking)} blocking violation(s)")
+            ctx.exit(1)
+
+
+@p4_cmd.command("pre-submit")
+@click.argument("changelist", type=int)
+@click.pass_context
+def p4_pre_submit(ctx: click.Context, changelist: int) -> None:
+    """Pre-submit hook for P4 triggers.
+
+    Returns exit code 0 if OK, 1 if blocked.
+    """
+    from .perforce import P4Governor
+
+    gov = P4Governor()
+    should_block, violations = gov.should_block(changelist)
+
+    if should_block:
+        for v in violations:
+            click.echo(f"VIOLATION: {v.message}", err=True)
+        ctx.exit(1)
+
+
+@p4_cmd.command("locks")
+@click.argument("file_path", required=False)
+@click.option("--agent", help="Agent ID for lock check")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def p4_locks(ctx: click.Context, file_path: str | None, agent: str | None, as_json: bool) -> None:
+    """Check lock status for a file."""
+    from .perforce import P4Governor
+
+    if not file_path:
+        click.echo("Usage: governor p4 locks <file_path>")
+        return
+
+    gov = P4Governor()
+    result = gov.check_lock(file_path, agent_id=agent)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        if result.passed:
+            click.echo(f"Lock check PASSED for: {file_path}")
+        else:
+            click.echo(f"Lock check FAILED for: {file_path}")
+            for v in result.violations:
+                click.echo(f"  - {v.message}")
+
+
+@p4_cmd.group("release")
+def p4_release() -> None:
+    """Manage immutable releases."""
+    pass
+
+
+@p4_release.command("tag")
+@click.argument("changelist", type=int)
+@click.argument("tag")
+@click.pass_context
+def p4_release_tag(ctx: click.Context, changelist: int, tag: str) -> None:
+    """Mark a changelist as an immutable release."""
+    from .perforce import P4Governor
+
+    gov = P4Governor()
+
+    if gov.mark_release(changelist, tag):
+        click.echo(f"Marked CL {changelist} as immutable with tag: {tag}")
+    else:
+        click.echo(f"Error: '{tag}' is not a valid release tag", err=True)
+        click.echo(f"Valid tags: {', '.join(gov.config.immutable_releases.tags)}")
+        ctx.exit(1)
+
+
+@p4_release.command("check")
+@click.argument("changelist", type=int)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def p4_release_check(ctx: click.Context, changelist: int, as_json: bool) -> None:
+    """Check if a changelist is immutable."""
+    from .perforce import P4Governor
+
+    gov = P4Governor()
+    result = gov.check_immutable(changelist)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        if result.passed:
+            click.echo(f"CL {changelist} is NOT immutable (modifications allowed)")
+        else:
+            click.echo(f"CL {changelist} is IMMUTABLE (modifications blocked)")
+
+
+@p4_cmd.group("doi")
+def p4_doi() -> None:
+    """Manage DOI↔depot mappings."""
+    pass
+
+
+@p4_doi.command("map")
+@click.argument("doi")
+@click.argument("depot_path")
+@click.argument("changelist", type=int)
+@click.pass_context
+def p4_doi_map(ctx: click.Context, doi: str, depot_path: str, changelist: int) -> None:
+    """Create a DOI to depot path mapping."""
+    from .perforce import P4Governor
+
+    gov = P4Governor()
+    mapping = gov.add_doi_mapping(doi, depot_path, changelist)
+
+    click.echo(f"Mapped DOI: {doi}")
+    click.echo(f"  Depot path: {depot_path}")
+    click.echo(f"  Changelist: {changelist}")
+
+
+@p4_doi.command("verify")
+@click.argument("doi")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def p4_doi_verify(ctx: click.Context, doi: str, as_json: bool) -> None:
+    """Verify a DOI mapping."""
+    from .perforce import P4Governor
+
+    gov = P4Governor()
+    result = gov.verify_doi(doi)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        if result.passed:
+            click.echo(f"DOI mapping verified: {doi}")
+        else:
+            click.echo(f"DOI mapping INVALID: {doi}")
+            for v in result.violations:
+                click.echo(f"  - {v.message}")
+            ctx.exit(1)
+
+
+@p4_doi.command("list")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def p4_doi_list(as_json: bool) -> None:
+    """List all DOI mappings."""
+    from .perforce import P4Governor
+
+    gov = P4Governor()
+    mappings = gov.doi_checker.list_mappings()
+
+    if as_json:
+        click.echo(json.dumps([m.to_dict() for m in mappings], indent=2))
+    else:
+        if not mappings:
+            click.echo("No DOI mappings found.")
+        else:
+            click.echo(f"DOI Mappings ({len(mappings)}):")
+            for m in mappings:
+                click.echo(f"  {m.doi} -> {m.depot_path} @ CL{m.changelist}")
+
+
+# =============================================================================
 # Git Governance CLI
 # =============================================================================
 

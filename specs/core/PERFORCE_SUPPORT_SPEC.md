@@ -3,15 +3,16 @@
 ## Version 0.1 — Integrity Invariants on Explicit Authority
 
 ```yaml
-status: gap
-implemented: false
+status: canonical
+implemented: true
 depends_on:
   - KERNEL_CONSTRAINTS_SPEC.md
   - GIT_GOVERNANCE_SPEC.md
 blocking:
   - Enterprise/studio adoption
   - DoD/regulated environment support
-estimated_scope: medium
+module: src/governor/perforce.py
+tests: tests/test_perforce.py (71 tests)
 ```
 
 ---

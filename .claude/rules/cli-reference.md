@@ -392,6 +392,17 @@ governor git-gov allowlist list       # Show current allowlist
 governor git-gov allowlist add <path> # Add path to allowlist
 governor git-gov allowlist remove <p> # Remove path from allowlist
 
+# Perforce Governance (integrity invariants on explicit authority)
+governor p4 status                    # Show P4 availability and governance config
+governor p4 check <cl>                # Run all integrity checks on changelist (--profile, --json)
+governor p4 pre-submit <cl>           # Pre-submit hook for P4 triggers
+governor p4 locks <file>              # Check lock status for a file (--json)
+governor p4 release tag <cl> <tag>    # Mark changelist as immutable release
+governor p4 release check <cl>        # Check if changelist is immutable (--json)
+governor p4 doi map <doi> <depot> <cl>  # Create DOI to depot path mapping
+governor p4 doi verify <doi>          # Verify DOI mapping integrity
+governor p4 doi list                  # List all DOI mappings (--json)
+
 # Unified Check (VS Code extension integration)
 governor check <path>                  # Check a file for security + continuity issues
 governor check <path> --format json    # JSON output for tooling

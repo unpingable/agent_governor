@@ -68,6 +68,7 @@
 **QA Harness** — Self-validating test infrastructure. CLI smoke tests (all commands), self-governance (governor passes own gates), serialization roundtrip sweep, cross-module lifecycle tests.
 **Git Governance** — Integrity invariants at commit boundaries. Artifact integrity, cross-index validation (DOI/version tags), tagging discipline, pre-commit provenance. Profile-based severity (greenfield→production), YAML config, secrets check integration. CLI `governor git-gov {status,check,artifacts,cross-index,pre-commit,verify-tag,set-profile,allowlist}`.
 **Context Compact** — Loss-aware context compaction with receipts. ContextCompactor, CompactionReceipt, DroppedItem, Turn, Conversation types. SimpleSummarizer, RecoveryStore (dropped content retrieval), ReceiptStore (compaction history). Preserves decisions/anchors/constraints/authority, emits explicit loss records. CLI `governor context {status,config,receipts,recover,cleanup}`.
+**Perforce Support** — Integrity invariants on explicit authority substrate. P4Client (CLI wrapper, graceful fallback), P4Governor (changelist integrity, lock semantics, immutable releases, DOI mapping). Profile-based severity. P4 trigger integration. CLI `governor p4 {status,check,pre-submit,locks,release tag/check,doi map/verify/list}`.
 
 ## Test Counts by Module
 
@@ -152,5 +153,6 @@
 | QA Harness | 108 |
 | Git Governance | 99 |
 | Context Compact | 49 |
+| Perforce Support | 71 |
 
-**Total: ~7819 tests**
+**Total: ~7890 tests**

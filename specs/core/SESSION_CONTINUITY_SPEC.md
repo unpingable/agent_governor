@@ -3,8 +3,10 @@
 ## Version 0.2 — Capsule-Based Session Management
 
 ```yaml
-status: gap
-implemented: false
+status: canonical
+implemented: true
+module: src/governor/session_continuity.py
+tests: tests/test_session_continuity.py (57 tests)
 depends_on:
   - Fiction Governor (existing)
   - Nonfiction Governor (existing)
@@ -13,7 +15,6 @@ blocking:
   - Long-form writing workflows
   - Multi-day writing sessions
   - Fork/branch narrative experiments
-estimated_scope: medium
 ```
 
 ---
@@ -377,3 +378,4 @@ Total: ~600-800 lines of new code.
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1 | 2026-02-05 | Initial gap spec |
+| 0.2 | 2026-02-05 | Implemented: SessionStore, SessionManager, CLI commands, 57 tests |

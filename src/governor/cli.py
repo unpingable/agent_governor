@@ -11932,6 +11932,318 @@ def external_substrates() -> None:
 
 
 # =============================================================================
+# Session Continuity
+# =============================================================================
+
+
+@cli.group("session")
+@click.pass_context
+def session_group(ctx: click.Context) -> None:
+    """Session continuity: capsule-based session management.
+
+    Resume intent + constraints + authority, NOT chat replay.
+
+    \b
+    Usage:
+        governor session create <name>          Create a new session
+        governor session list                   List sessions
+        governor session resume <id>            Resume a session
+        governor session fork <name>            Fork current session
+        governor session checkpoint <name>      Create checkpoint
+        governor session promote <id>           Promote fork to mainline
+    """
+    pass
+
+
+@session_group.command("create")
+@click.argument("name")
+@click.option("--mode", "-m", type=click.Choice(["fiction", "code", "nonfiction"]), default="fiction",
+              help="Session mode")
+@click.pass_context
+def session_create(ctx: click.Context, name: str, mode: str) -> None:
+    """Create a new session."""
+    from .session_continuity import SessionManager, SessionStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = SessionStore(gov_dir / "sessions")
+    manager = SessionManager(store)
+
+    capsule = manager.create(name, mode)
+    click.echo(f"Created session: {capsule.metadata.session_id}")
+    click.echo(f"  Name: {name}")
+    click.echo(f"  Mode: {mode}")
+    click.echo(f"  Mainline: {capsule.metadata.is_mainline}")
+
+
+@session_group.command("list")
+@click.option("--mode", "-m", type=click.Choice(["fiction", "code", "nonfiction"]), help="Filter by mode")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def session_list(ctx: click.Context, mode: str | None, as_json: bool) -> None:
+    """List all sessions."""
+    from .session_continuity import SessionStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = SessionStore(gov_dir / "sessions")
+    sessions = store.list_sessions(mode)
+
+    if as_json:
+        click.echo(json.dumps(sessions, indent=2))
+        return
+
+    if not sessions:
+        click.echo("No sessions found.")
+        return
+
+    mainline_id = store.get_mainline(mode)
+    for s in sessions:
+        marker = " [mainline]" if s["session_id"] == mainline_id else ""
+        fork_marker = f" (fork of {s['parent_id'][:12]}...)" if s.get("parent_id") else ""
+        click.echo(f"  {s['session_id'][:16]}... {s['name']}{marker}{fork_marker}")
+
+
+@session_group.command("resume")
+@click.argument("session_id", required=False)
+@click.option("--last", is_flag=True, help="Resume most recent session")
+@click.pass_context
+def session_resume(ctx: click.Context, session_id: str | None, last: bool) -> None:
+    """Resume a session by ID or --last."""
+    from .session_continuity import SessionManager, SessionStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = SessionStore(gov_dir / "sessions")
+    manager = SessionManager(store)
+
+    if last:
+        capsule = manager.resume_last()
+    elif session_id:
+        capsule = manager.resume(session_id)
+    else:
+        click.echo("Error: Provide session ID or --last", err=True)
+        ctx.exit(1)
+        return
+
+    if capsule is None:
+        click.echo("Error: Session not found", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Resumed session: {capsule.metadata.session_id}")
+    click.echo(f"  Name: {capsule.metadata.name}")
+    click.echo(f"  Mode: {capsule.metadata.mode}")
+    click.echo(f"  Intent: {capsule.ledger.intent or '(none)'}")
+    click.echo(f"  Anchors: {len(capsule.ledger.anchors)}")
+    click.echo(f"  Decisions: {len(capsule.ledger.decisions)}")
+
+
+@session_group.command("show")
+@click.argument("session_id")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def session_show(ctx: click.Context, session_id: str, as_json: bool) -> None:
+    """Show session details."""
+    from .session_continuity import SessionStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = SessionStore(gov_dir / "sessions")
+    capsule = store.load_session(session_id)
+
+    if capsule is None:
+        click.echo(f"Error: Session not found: {session_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(capsule.to_dict(), indent=2, default=str))
+    else:
+        click.echo(f"Session: {capsule.metadata.session_id}")
+        click.echo(f"  Name: {capsule.metadata.name}")
+        click.echo(f"  Mode: {capsule.metadata.mode}")
+        click.echo(f"  State: {capsule.metadata.state.value}")
+        click.echo(f"  Mainline: {capsule.metadata.is_mainline}")
+        click.echo(f"  Created: {capsule.metadata.created_at}")
+        click.echo(f"  Last Active: {capsule.metadata.last_active}")
+        if capsule.metadata.parent_id:
+            click.echo(f"  Parent: {capsule.metadata.parent_id}")
+        click.echo("Ledger:")
+        click.echo(f"  Intent: {capsule.ledger.intent or '(none)'}")
+        click.echo(f"  Anchors: {len(capsule.ledger.anchors)}")
+        click.echo(f"  Decisions: {len(capsule.ledger.decisions)}")
+        click.echo(f"  Constraints: {len(capsule.ledger.constraints)}")
+        click.echo(f"  Canon Events: {len(capsule.ledger.canon_events)}")
+        click.echo("Workspace:")
+        click.echo(f"  Current Section: {capsule.workspace.current_section or '(none)'}")
+        click.echo(f"  Active Threads: {len(capsule.workspace.active_thread_ids)}")
+
+
+@session_group.command("fork")
+@click.argument("name", required=False)
+@click.option("--from", "from_session", help="Session ID to fork from (default: most recent)")
+@click.pass_context
+def session_fork(ctx: click.Context, name: str | None, from_session: str | None) -> None:
+    """Fork a session to experiment with alternatives."""
+    from .session_continuity import SessionManager, SessionStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = SessionStore(gov_dir / "sessions")
+    manager = SessionManager(store)
+
+    # Resume the session to fork
+    if from_session:
+        capsule = manager.resume(from_session)
+    else:
+        capsule = manager.resume_last()
+
+    if capsule is None:
+        click.echo("Error: No session to fork", err=True)
+        ctx.exit(1)
+        return
+
+    fork = manager.fork(name)
+    if fork is None:
+        click.echo("Error: Failed to create fork", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Created fork: {fork.metadata.session_id}")
+    click.echo(f"  Name: {fork.metadata.name}")
+    click.echo(f"  Parent: {fork.metadata.parent_id}")
+
+
+@session_group.command("checkpoint")
+@click.argument("name", required=False)
+@click.option("--session", "-s", help="Session ID (default: most recent)")
+@click.pass_context
+def session_checkpoint(ctx: click.Context, name: str | None, session: str | None) -> None:
+    """Create a checkpoint to save current state."""
+    from .session_continuity import SessionManager, SessionStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = SessionStore(gov_dir / "sessions")
+    manager = SessionManager(store)
+
+    # Resume the session
+    if session:
+        capsule = manager.resume(session)
+    else:
+        capsule = manager.resume_last()
+
+    if capsule is None:
+        click.echo("Error: No active session", err=True)
+        ctx.exit(1)
+        return
+
+    checkpoint = manager.checkpoint(name)
+    if checkpoint is None:
+        click.echo("Error: Failed to create checkpoint", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(f"Created checkpoint: {checkpoint.checkpoint_id}")
+    click.echo(f"  Name: {checkpoint.name}")
+    click.echo(f"  Ledger hash: {checkpoint.ledger_hash}")
+
+
+@session_group.command("checkpoints")
+@click.option("--session", "-s", help="Session ID (default: most recent)")
+@click.pass_context
+def session_checkpoints(ctx: click.Context, session: str | None) -> None:
+    """List checkpoints for a session."""
+    from .session_continuity import SessionManager, SessionStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = SessionStore(gov_dir / "sessions")
+    manager = SessionManager(store)
+
+    # Resume the session
+    if session:
+        manager.resume(session)
+    else:
+        manager.resume_last()
+
+    if manager.active is None:
+        click.echo("Error: No active session", err=True)
+        ctx.exit(1)
+        return
+
+    checkpoints = manager.get_checkpoints()
+    if not checkpoints:
+        click.echo("No checkpoints found.")
+        return
+
+    for cp in checkpoints:
+        click.echo(f"  {cp['checkpoint_id'][:16]}... {cp['name']} ({cp['created_at']})")
+
+
+@session_group.command("promote")
+@click.argument("session_id")
+@click.option("--confirm", is_flag=True, help="Confirm promotion")
+@click.pass_context
+def session_promote(ctx: click.Context, session_id: str, confirm: bool) -> None:
+    """Promote a fork to mainline."""
+    from .session_continuity import SessionManager, SessionStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = SessionStore(gov_dir / "sessions")
+    manager = SessionManager(store)
+
+    # Load the session to promote
+    capsule = store.load_session(session_id)
+    if capsule is None:
+        click.echo(f"Error: Session not found: {session_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if capsule.metadata.is_mainline:
+        click.echo("Session is already mainline.")
+        return
+
+    if not confirm:
+        click.echo(f"WARNING: This will make '{capsule.metadata.name}' the new mainline.")
+        click.echo(f"  Current mainline will be archived.")
+        click.echo("  Use --confirm to proceed.")
+        return
+
+    success = manager.promote(session_id)
+    if success:
+        click.echo(f"Promoted session: {session_id}")
+        click.echo(f"  {capsule.metadata.name} is now mainline.")
+    else:
+        click.echo("Error: Promotion failed", err=True)
+        ctx.exit(1)
+
+
+@session_group.command("delete")
+@click.argument("session_id")
+@click.option("--confirm", is_flag=True, help="Confirm deletion")
+@click.pass_context
+def session_delete(ctx: click.Context, session_id: str, confirm: bool) -> None:
+    """Delete a session."""
+    from .session_continuity import SessionStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = SessionStore(gov_dir / "sessions")
+
+    capsule = store.load_session(session_id)
+    if capsule is None:
+        click.echo(f"Error: Session not found: {session_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if not confirm:
+        click.echo(f"WARNING: This will delete session '{capsule.metadata.name}'.")
+        click.echo("  Use --confirm to proceed.")
+        return
+
+    success = store.delete_session(session_id)
+    if success:
+        click.echo(f"Deleted session: {session_id}")
+    else:
+        click.echo("Error: Deletion failed", err=True)
+        ctx.exit(1)
+
+
+# =============================================================================
 # Friendly CLI Commands (layered by persona)
 # =============================================================================
 

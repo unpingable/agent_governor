@@ -64,6 +64,7 @@
 **External Constraint Attachment** — Bind claims to external substrate snapshots (Wikidata/Wikipedia/Scholar). NOT fact verification — structural constraint logging. Discrepancies surfaced, never auto-corrected. Human-only resolution. CLI `governor external {query,attach,bindings,discrepancies,resolve,substrates}`.
 **MCP Safety Controls** — Self-protective infrastructure for MCP server. RateLimiter (per-client with backoff), BackpressureController (queue depth limits), CircuitBreaker (fail-fast with recovery), IdempotencyLayer (duplicate request caching), LatencyEnforcer (budget per tool), FaultHandler (sensor vs actuator classification), SafetyController (unified).
 **SDK Middleware** — Drop-in governor enforcement for Anthropic SDK. `client = GovernorMiddleware(Anthropic())`. Advisory/blocking/strict modes, claim extraction, anchor checking, security scanning, ledger integration, streaming support, async support.
+**Session Continuity** — Capsule-based session management. Resume intent + constraints + authority, NOT chat replay. Three-layer model (Ledger/Workspace/Transcript), fork/promote semantics, checkpoints, content hashing, YAML ledger persistence.
 
 ## Test Counts by Module
 
@@ -144,5 +145,6 @@
 | External Constraint Attachment | 63 |
 | MCP Safety Controls | 70 |
 | SDK Middleware | 36 |
+| Session Continuity | 57 |
 
-**Total: ~7506 tests**
+**Total: ~7563 tests**

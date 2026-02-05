@@ -361,6 +361,18 @@ governor continuity anchor remove <id>  # Remove anchor
 governor continuity check <text>        # Check text against all anchors, show report
 governor continuity import <path>       # Import anchors from JSON file
 
+# Session Continuity (capsule-based session management)
+governor session create <name>          # Create a new session (--mode fiction|code|nonfiction)
+governor session list                   # List all sessions (--mode, --json)
+governor session resume <id>            # Resume a session by ID
+governor session resume --last          # Resume most recent session
+governor session show <id>              # Show session details (--json)
+governor session fork <name>            # Fork current session (--from <id>)
+governor session checkpoint <name>      # Create named checkpoint (--session <id>)
+governor session checkpoints            # List checkpoints for current session
+governor session promote <id> --confirm # Promote fork to mainline
+governor session delete <id> --confirm  # Delete a session
+
 # Unified Check (VS Code extension integration)
 governor check <path>                  # Check a file for security + continuity issues
 governor check <path> --format json    # JSON output for tooling

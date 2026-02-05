@@ -1,17 +1,16 @@
-# Context Management Specification
+# Governed Compact Specification
 
-## Version 0.1 — Smart Context Handling and Code Intelligence
+## Version 0.2 — Loss-Aware Context Management
 
 ```yaml
 status: gap
 implemented: false
 depends_on:
-  - SESSION_RESUME_SPEC.md
-  - Routing (existing)
+  - SESSION_RESUME_SPEC.md (capsule model)
+  - Continuity (existing anchors)
   - Telemetry (existing)
 blocking:
   - Long conversations without context loss
-  - Code mode intelligence
   - Efficient model usage
 estimated_scope: medium
 ```
@@ -20,9 +19,26 @@ estimated_scope: medium
 
 ## Executive Summary
 
-As conversations approach context limits, the governor should intelligently manage context through auto-compaction. Additionally, code mode should integrate with Language Server Protocol (LSP) for code intelligence, and model routing should support task-based switching (cheap for chat, expensive for execution).
+Context compaction is dangerous. Done carelessly, it creates **representational shear** — the system believes it knows things it has silently forgotten.
 
-**Core principle**: Context is a resource. Manage it like one.
+This spec defines **governed compact**: loss-aware summarization that emits receipts, respects anchors, and never silently drops governance state.
+
+**Core principle**: If you compact without knowing what you lost, you've created a lie.
+
+---
+
+## What This Is NOT
+
+| Naive Approach | Why It Fails |
+|----------------|--------------|
+| "Summarize to save tokens" | Hope is not a strategy |
+| "Keep recent, drop old" | Old decisions may be authoritative |
+| "LLM decides what's important" | LLM can't see its own blind spots |
+| "Automatic without audit" | Silent loss = silent corruption |
+
+**The failure mode**: You compact, the system forgets a constraint, the constraint is violated, no one notices because the violation check was also compacted away.
+
+This is representational shear inside the governor itself — poetically bad.
 
 ---
 
@@ -48,49 +64,71 @@ As conversations approach context limits, the governor should intelligently mana
 
 ---
 
-## 2. Auto-Compact
+## 2. Governed Compact
 
 ### 2.1 Concept
 
-When approaching context limits, automatically generate a summary and continue with compressed context.
+When approaching context limits, generate a **loss-aware summary with receipt**.
 
 ```
 ┌─────────────────────────────────────────────┐
 │  Full Conversation (approaching limit)      │
-│  ┌─────────────────────────────────────┐   │
-│  │ Turn 1: User asks about X           │   │
-│  │ Turn 2: Assistant explains X        │   │
-│  │ Turn 3: User asks follow-up         │   │
-│  │ ...                                 │   │
-│  │ Turn 47: Getting close to limit     │   │
-│  └─────────────────────────────────────┘   │
 └─────────────────────────────────────────────┘
                     │
-                    ▼ [Auto-compact trigger]
+                    ▼ [Governed compact trigger]
 ┌─────────────────────────────────────────────┐
-│  Compacted Conversation                     │
+│  Compaction Receipt                         │
 │  ┌─────────────────────────────────────┐   │
-│  │ Summary: "We discussed X, decided   │   │
-│  │ Y, established constraints Z..."    │   │
+│  │ PRESERVED (authority state):        │   │
+│  │   - 3 decisions                     │   │
+│  │   - 7 anchors                       │   │
+│  │   - 2 active constraints            │   │
+│  │   - Intent: "complete chapter 5"    │   │
+│  ├─────────────────────────────────────┤   │
+│  │ DROPPED (with hashes):              │   │
+│  │   - 23 turns (reasoning, Q&A)       │   │
+│  │   - 4 rejected alternatives         │   │
+│  │   - Exploration history             │   │
+│  ├─────────────────────────────────────┤   │
+│  │ COMPRESSED (summary available):     │   │
+│  │   - Context leading to decisions    │   │
+│  │   - Load on demand if needed        │   │
 │  └─────────────────────────────────────┘   │
+├─────────────────────────────────────────────┤
+│  Compacted State                            │
 │  ┌─────────────────────────────────────┐   │
-│  │ Recent turns (last 5-10)            │   │
+│  │ Capsule (ledger + workspace)        │   │
+│  │ + Loss-aware summary                │   │
+│  │ + Recent turns (last 5-10)          │   │
 │  └─────────────────────────────────────┘   │
 └─────────────────────────────────────────────┘
 ```
 
-### 2.2 Compaction Strategy
+**Key insight**: The receipt tells you what was dropped. If you need it later, you know it existed and can request reload.
+
+### 2.2 Compaction Invariants
+
+Before any compaction:
+
+1. **Anchors must survive** — All active anchors preserved verbatim
+2. **Decisions must survive** — All decisions preserved verbatim
+3. **Authority state must survive** — Who approved what, with what scope
+4. **Loss must be explicit** — Receipt enumerates what was dropped
+5. **Recovery must be possible** — Dropped content hashed for later retrieval
+
+### 2.3 Compaction Strategy
 
 ```python
 @dataclass
 class CompactionConfig:
-    """Configuration for auto-compaction."""
+    """Configuration for governed compaction."""
 
     # When to trigger
     context_threshold: float = 0.8  # Trigger at 80% of limit
     min_turns_before_compact: int = 20
+    require_human_approval: bool = False  # True for strict mode
 
-    # What to keep
+    # What must survive (non-negotiable)
     recent_turns_to_keep: int = 10
     always_keep_decisions: bool = True
     always_keep_constraints: bool = True
@@ -98,9 +136,39 @@ class CompactionConfig:
     # Summary settings
     summary_max_tokens: int = 500
     include_key_facts: bool = True
+
+@dataclass
+class CompactionReceipt:
+    """Receipt proving what was preserved vs dropped."""
+
+    receipt_id: str
+    compacted_at: datetime
+
+    # What survived (verbatim)
+    preserved_decisions: list[str]
+    preserved_anchors: list[str]
+    preserved_constraints: list[str]
+    preserved_authority: dict  # Who approved what
+
+    # What was dropped (with hashes for recovery)
+    dropped_turns: list[DroppedItem]
+    dropped_reasoning: list[DroppedItem]
+
+    # What was compressed (summary available)
+    compressed_context: str
+    compressed_hash: str  # For verification
+
+@dataclass
+class DroppedItem:
+    """Record of dropped content."""
+
+    item_type: str  # "turn", "reasoning", "exploration"
+    description: str  # Brief description
+    content_hash: str  # SHA-256 for recovery lookup
+    recoverable: bool  # Can we reload if needed?
 ```
 
-### 2.3 What Goes in Summary
+### 2.4 What Survives vs What's Dropped
 
 | Category | Include | Why |
 |----------|---------|-----|
@@ -152,16 +220,31 @@ class ContextCompactor:
 
 ---
 
-## 3. LSP Integration
+## 3. LSP Integration (Optional, Orthogonal)
 
-### 3.1 Concept
+> **Note**: LSP integration is a nice-to-have enrichment, not a core governance feature.
+> It makes agents smarter. Governor exists to make them bounded.
+> These are different problems.
 
-Integrate Language Server Protocol to give the AI access to code intelligence:
-- Go to definition
-- Find references
-- Diagnostics (errors, warnings)
-- Symbol search
-- Hover documentation
+### 3.1 What LSP Provides
+
+| Capability | Benefit |
+|------------|---------|
+| Go to definition | Find symbol source |
+| Find references | See all usages |
+| Diagnostics | Errors and warnings |
+| Symbol search | Navigate codebase |
+
+### 3.2 What LSP Does NOT Provide
+
+| Missing | Why It Matters |
+|---------|----------------|
+| Authority | LSP can't tell you if a change is allowed |
+| Drift detection | LSP can't see representational shear |
+| Provenance | LSP doesn't know where claims came from |
+| Governance | LSP is about code, not constraints |
+
+**Bottom line**: LSP is a backend enrichment. Defer if needed.
 
 ### 3.2 Architecture
 

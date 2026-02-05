@@ -1,6 +1,6 @@
-# Session Resume Specification
+# Session Continuity Specification
 
-## Version 0.1 — Persistent Session Management for Writing Mode
+## Version 0.2 — Capsule-Based Session Management
 
 ```yaml
 status: gap
@@ -20,9 +20,18 @@ estimated_scope: medium
 
 ## Executive Summary
 
-Writing sessions need persistence across context windows. A novel isn't written in one conversation. Session resume enables checkpointing, forking, and resuming writing sessions with full ledger + workspace state.
+Session continuity is **not chat replay**. It is capsule-based restoration of intent, constraints, and authority state.
 
-**Core principle**: Coherence isn't optional, it's the product. Writers need to return to exactly where they left off, with all constraints intact.
+**Core distinction:**
+
+| Chat Replay | Capsule Resume |
+|-------------|----------------|
+| Resume conversation | Resume intent + constraints + authority |
+| Load transcript | Load ledger + workspace |
+| Vibe reconstruction | Explicit anchor restoration |
+| Hope context survives | Know what must survive |
+
+**Core principle**: Coherence isn't optional — it's the product. Writers need to return to exactly where they left off, with all *governance state* intact. Not just the conversation.
 
 ---
 
@@ -70,7 +79,41 @@ This makes the governor unusable for serious long-form writing.
 
 ---
 
-## 3. Session Types
+## 3. What Must Survive vs What Can Be Dropped
+
+This is the critical design decision. Get it wrong and you've built chat replay.
+
+### Must Survive (Non-Negotiable)
+
+| Item | Why |
+|------|-----|
+| Decisions | Normative — can't be re-derived from conversation |
+| Active constraints | Required for governance to function |
+| Anchors | Continuity enforcement depends on them |
+| Authority state | Who approved what, with what scope |
+| Intent | What are we trying to accomplish |
+| Active thread/character state | Current working context |
+
+### Can Be Dropped (With Receipt)
+
+| Item | Condition |
+|------|-----------|
+| Detailed reasoning | Can be re-derived if needed |
+| Rejected options | Brief summary sufficient |
+| Raw transcript | Load on demand, not by default |
+| Exploration history | Not essential for continuation |
+
+### Must Never Be Reconstructed
+
+| Anti-pattern | Why it's wrong |
+|--------------|----------------|
+| "Vibe reconstruction" | You can't infer constraints from tone |
+| "Context guessing" | Authority state must be explicit |
+| "Summary-based resume" | Summaries lose structural information |
+
+---
+
+## 4. Session Types
 
 ```python
 @dataclass

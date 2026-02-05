@@ -63,8 +63,8 @@ The governor's theoretical foundation. Read in this order.
 | 17 | **EXTERNAL_CONSTRAINT_SPEC.md** | External substrate binding (Wikidata/Wikipedia/Scholar). Constraint attachment, not truth oracle. |
 | 18 | **MCP_SAFETY_SPEC.md** | Self-protective MCP server controls. Rate limits, backpressure, circuit breakers, idempotency. |
 | 19 | **SDK_MIDDLEWARE_SPEC.md** | Drop-in governor enforcement for Anthropic SDK. `GovernorMiddleware(Anthropic())`. |
-| 20 | **SESSION_RESUME_SPEC.md** | Persistent writing sessions. Checkpoint, fork, resume, promote. `status: gap` |
-| 21 | **CONTEXT_MANAGEMENT_SPEC.md** | Auto-compact, LSP integration, task-based model routing. `status: gap` |
+| 20 | **SESSION_CONTINUITY_SPEC.md** | Capsule-based session management. Ledger + workspace, not chat replay. `status: gap` |
+| 21 | **GOVERNED_COMPACT_SPEC.md** | Loss-aware context compaction with receipts. Anchors survive, loss explicit. `status: gap` |
 
 ### Reading Guidance
 

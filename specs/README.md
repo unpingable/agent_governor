@@ -58,20 +58,20 @@ The governor's theoretical foundation. Read in this order.
 | 12 | **WRITING_MODULES_SPEC.md** | W5 implementation reference. 11 modules, 922 tests, pattern banks, scorers, constraint checkers. |
 | 13 | **EPISTEMIC_STACK_SPEC.md** | Claim lifecycle infrastructure. 11 modules, 983 tests, provenance, quorum, TTL, audit, drift. |
 | 14 | **QA_HARNESS_SPEC.md** | Self-validating test infrastructure. CLI smoke, self-governance, roundtrip, lifecycle. `status: canonical` |
-| 15 | **GIT_GOVERNANCE_SPEC.md** | Integrity invariants at commit boundaries. Artifact, cross-index, tagging, pre-commit. `status: gap` |
-| 16 | **PERFORCE_SUPPORT_SPEC.md** | P4 substrate for integrity invariants. Changelist, locks, immutable releases, DOI mapping. `status: gap` |
+| 15 | **GIT_GOVERNANCE_SPEC.md** | Integrity invariants at commit boundaries. Artifact, cross-index, tagging, pre-commit. `status: canonical` |
+| 16 | **PERFORCE_SUPPORT_SPEC.md** | P4 substrate for integrity invariants. Changelist, locks, immutable releases, DOI mapping. `status: canonical` |
 | 17 | **EXTERNAL_CONSTRAINT_SPEC.md** | External substrate binding (Wikidata/Wikipedia/Scholar). Constraint attachment, not truth oracle. `status: canonical` |
 | 18 | **MCP_SAFETY_SPEC.md** | Self-protective MCP server controls. Rate limits, backpressure, circuit breakers, idempotency. `status: canonical` |
 | 19 | **SDK_MIDDLEWARE_SPEC.md** | Drop-in governor enforcement for Anthropic SDK. `GovernorMiddleware(Anthropic())`. `status: canonical` |
 | 20 | **SESSION_CONTINUITY_SPEC.md** | Capsule-based session management. Ledger + workspace, not chat replay. `status: canonical` |
-| 21 | **GOVERNED_COMPACT_SPEC.md** | Loss-aware context compaction with receipts. Anchors survive, loss explicit. `status: gap` |
+| 21 | **GOVERNED_COMPACT_SPEC.md** | Loss-aware context compaction with receipts. Anchors survive, loss explicit. `status: canonical` |
 
 ### Reading Guidance
 
 - **Specs 1–4** give you the theory. Read these to understand *why* things work the way they do.
 - **Specs 5–7** give you the surface. Read these to understand *how* the system talks to users.
 - **Specs 8–13** give you the mechanics. Read these when you need to work on specific subsystems.
-- **Specs 14, 17–20** are now implemented (QA Harness, External Constraint, MCP Safety, SDK Middleware, Session Continuity).
+- **Specs 14–21** are now implemented (QA Harness, Git Governance, Perforce Support, External Constraint, MCP Safety, SDK Middleware, Session Continuity, Governed Compact).
 - **Specs 15–16, 21** are gap specs — features that don't exist yet but are designed.
 - You don't need all 21 to start building. Specs 1, 4, and 7 cover 80% of what matters.
 

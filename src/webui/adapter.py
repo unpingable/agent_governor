@@ -1212,6 +1212,121 @@ async def root() -> HTMLResponse:
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
+# ============================================================================
+# Export / Import
+# ============================================================================
+
+
+@app.get("/governor/export")
+async def export_governor_state() -> dict[str, Any]:
+    """Export all governor state as a single JSON object for portability."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        return {"mode": GOVERNOR_MODE, "anchors": [], "corrections": []}
+
+    from governor.continuity import AnchorType, create_registry
+
+    registry = create_registry(ctx.governor_dir)
+    anchors = registry.all()
+
+    # Serialize all anchors with full data
+    anchor_list = []
+    for a in anchors:
+        entry: dict[str, Any] = {
+            "id": a.id,
+            "anchor_type": a.anchor_type.value if hasattr(a.anchor_type, "value") else str(a.anchor_type),
+            "description": a.description,
+            "severity": a.severity.value if hasattr(a.severity, "value") else str(a.severity),
+        }
+        if a.required_patterns:
+            entry["required_patterns"] = a.required_patterns
+        if a.forbidden_patterns:
+            entry["forbidden_patterns"] = a.forbidden_patterns
+        anchor_list.append(entry)
+
+    # Corrections (exception log)
+    corrections = []
+    try:
+        from governor.violation_resolver import ViolationResolver
+
+        resolver = ViolationResolver(
+            governor_dir=ctx.governor_dir,
+            mode=ctx.mode,
+            context_id=ctx.context_id,
+        )
+        for exc in resolver.list_exceptions():
+            corrections.append({
+                "action": exc.action.value if hasattr(exc.action, "value") else str(exc.action),
+                "anchor_id": exc.anchor_id,
+                "scope": exc.scope,
+                "summary": getattr(exc, "summary", ""),
+            })
+    except Exception:
+        pass
+
+    return {
+        "version": 1,
+        "mode": GOVERNOR_MODE,
+        "exported_at": __import__("datetime").datetime.now().isoformat(),
+        "anchors": anchor_list,
+        "corrections": corrections,
+    }
+
+
+@app.post("/governor/import")
+async def import_governor_state(payload: dict[str, Any]) -> dict[str, Any]:
+    """Import governor state from an exported JSON object."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        raise HTTPException(status_code=400, detail="No governor context initialized.")
+
+    from governor.continuity import Anchor, AnchorType, Severity, create_registry
+
+    registry = create_registry(ctx.governor_dir)
+
+    anchors_data = payload.get("anchors", [])
+    imported = 0
+    skipped = 0
+
+    type_map = {t.value: t for t in AnchorType}
+    sev_map = {s.value: s for s in Severity}
+
+    for entry in anchors_data:
+        anchor_id = entry.get("id", "")
+        if not anchor_id:
+            skipped += 1
+            continue
+
+        # Skip if already exists
+        if registry.get(anchor_id) is not None:
+            skipped += 1
+            continue
+
+        anchor_type = type_map.get(entry.get("anchor_type", ""), AnchorType.CANON)
+        severity = sev_map.get(entry.get("severity", ""), Severity.REJECT)
+
+        anchor = Anchor(
+            id=anchor_id,
+            anchor_type=anchor_type,
+            description=entry.get("description", ""),
+            required_patterns=entry.get("required_patterns", []),
+            forbidden_patterns=entry.get("forbidden_patterns", []),
+            severity=severity,
+        )
+        registry.register(anchor)
+        imported += 1
+
+    if imported > 0:
+        registry.save(ctx.governor_dir / "continuity" / "anchors.json")
+
+    return {
+        "success": True,
+        "imported": imported,
+        "skipped": skipped,
+        "message": f"Imported {imported} item(s), skipped {skipped} duplicate(s).",
+    }
+
+
 @app.get("/api/info")
 async def api_info() -> dict[str, Any]:
     """JSON endpoint with API info and available endpoints."""
@@ -1251,6 +1366,9 @@ async def api_info() -> dict[str, Any]:
             # Code mode
             "code_decisions": "/governor/code/decisions",
             "code_constraints": "/governor/code/constraints",
+            # Export/Import
+            "governor_export": "/governor/export",
+            "governor_import": "/governor/import",
         },
     }
 

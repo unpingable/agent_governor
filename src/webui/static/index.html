@@ -143,6 +143,11 @@
   .session-select { padding: 0.3rem 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); font-size: 0.8rem; max-width: 200px; }
   .new-session-btn { padding: 0.3rem 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); font-size: 0.85rem; cursor: pointer; line-height: 1; }
   .new-session-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Export/Import toolbar */
+  .gov-toolbar { display: flex; gap: 0.4rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+  .gov-toolbar button { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
+  .import-file { display: none; }
 </style>
 </head>
 <body>
@@ -190,6 +195,15 @@
     <div class="status-banner ok" id="status-banner">
       <span class="icon">&#10003;</span>
       <span class="text" id="status-text">Everything looks good.</span>
+    </div>
+
+    <!-- Export/Import Toolbar -->
+    <div class="gov-toolbar">
+      <button class="gov-btn primary" onclick="exportAll()">Export All</button>
+      <button class="gov-btn" onclick="exportChatMd()">Chat .md</button>
+      <button class="gov-btn" onclick="exportChatJson()">Chat .json</button>
+      <button class="gov-btn" onclick="document.getElementById('import-file').click()">Import Bible</button>
+      <input type="file" id="import-file" class="import-file" accept=".json" onchange="importGovernorState(this)">
     </div>
 
     <!-- Fiction Mode Panel -->
@@ -950,6 +964,205 @@
 
   window.toggleSidebar = function() {
     document.getElementById('governor-panel').classList.toggle('open');
+  };
+
+  // ========== Export / Import ==========
+
+  // Minimal zip builder (store-only, no compression — keeps it dependency-free)
+  function createZip(files) {
+    // files: [{name: string, content: string}]
+    var localFiles = [];
+    var centralDir = [];
+    var offset = 0;
+
+    for (var i = 0; i < files.length; i++) {
+      var name = new TextEncoder().encode(files[i].name);
+      var data = new TextEncoder().encode(files[i].content);
+      var crc = crc32(data);
+
+      // Local file header (30 bytes + name + data)
+      var local = new Uint8Array(30 + name.length + data.length);
+      var v = new DataView(local.buffer);
+      v.setUint32(0, 0x04034b50, true);  // signature
+      v.setUint16(4, 20, true);           // version needed
+      v.setUint16(6, 0, true);            // flags
+      v.setUint16(8, 0, true);            // compression (store)
+      v.setUint16(10, 0, true);           // mod time
+      v.setUint16(12, 0, true);           // mod date
+      v.setUint32(14, crc, true);         // crc32
+      v.setUint32(18, data.length, true); // compressed size
+      v.setUint32(22, data.length, true); // uncompressed size
+      v.setUint16(26, name.length, true); // name length
+      v.setUint16(28, 0, true);           // extra length
+      local.set(name, 30);
+      local.set(data, 30 + name.length);
+      localFiles.push(local);
+
+      // Central directory entry (46 bytes + name)
+      var central = new Uint8Array(46 + name.length);
+      var cv = new DataView(central.buffer);
+      cv.setUint32(0, 0x02014b50, true);   // signature
+      cv.setUint16(4, 20, true);            // version made by
+      cv.setUint16(6, 20, true);            // version needed
+      cv.setUint16(8, 0, true);             // flags
+      cv.setUint16(10, 0, true);            // compression
+      cv.setUint16(12, 0, true);            // mod time
+      cv.setUint16(14, 0, true);            // mod date
+      cv.setUint32(16, crc, true);          // crc32
+      cv.setUint32(20, data.length, true);  // compressed size
+      cv.setUint32(24, data.length, true);  // uncompressed size
+      cv.setUint16(28, name.length, true);  // name length
+      cv.setUint16(30, 0, true);            // extra length
+      cv.setUint16(32, 0, true);            // comment length
+      cv.setUint16(34, 0, true);            // disk number
+      cv.setUint16(36, 0, true);            // internal attrs
+      cv.setUint32(38, 0, true);            // external attrs
+      cv.setUint32(42, offset, true);       // local header offset
+      central.set(name, 46);
+      centralDir.push(central);
+
+      offset += local.length;
+    }
+
+    // End of central directory (22 bytes)
+    var centralSize = centralDir.reduce(function(a, b) { return a + b.length; }, 0);
+    var eocd = new Uint8Array(22);
+    var ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 0x06054b50, true);        // signature
+    ev.setUint16(4, 0, true);                  // disk number
+    ev.setUint16(6, 0, true);                  // central dir disk
+    ev.setUint16(8, files.length, true);       // entries on disk
+    ev.setUint16(10, files.length, true);      // total entries
+    ev.setUint32(12, centralSize, true);       // central dir size
+    ev.setUint32(16, offset, true);            // central dir offset
+    ev.setUint16(20, 0, true);                 // comment length
+
+    // Concatenate all parts
+    var totalSize = offset + centralSize + 22;
+    var result = new Uint8Array(totalSize);
+    var pos = 0;
+    for (var i = 0; i < localFiles.length; i++) {
+      result.set(localFiles[i], pos);
+      pos += localFiles[i].length;
+    }
+    for (var i = 0; i < centralDir.length; i++) {
+      result.set(centralDir[i], pos);
+      pos += centralDir[i].length;
+    }
+    result.set(eocd, pos);
+    return result;
+  }
+
+  function crc32(data) {
+    var table = crc32.table;
+    if (!table) {
+      table = crc32.table = new Uint32Array(256);
+      for (var i = 0; i < 256; i++) {
+        var c = i;
+        for (var j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        table[i] = c;
+      }
+    }
+    var crc = 0xFFFFFFFF;
+    for (var i = 0; i < data.length; i++) crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function downloadBlob(blob, filename) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  function downloadText(text, filename, mime) {
+    downloadBlob(new Blob([text], { type: mime || 'text/plain' }), filename);
+  }
+
+  function sessionToMarkdown(messages, title) {
+    var lines = ['# ' + (title || 'Chat Transcript'), ''];
+    var now = new Date().toISOString().split('T')[0];
+    lines.push('*Exported ' + now + '*', '');
+    for (var i = 0; i < messages.length; i++) {
+      var m = messages[i];
+      if (m.role === 'user') {
+        lines.push('## You', '', m.content, '');
+      } else if (m.role === 'assistant') {
+        lines.push('## Assistant', '', m.content, '');
+      }
+    }
+    return lines.join('\n');
+  }
+
+  function sessionToJson() {
+    return JSON.stringify({
+      session_id: SM.currentSessionId,
+      context_id: contextId,
+      exported_at: new Date().toISOString(),
+      messages: SM.conversationMessages
+    }, null, 2);
+  }
+
+  function fetchGovernorState() {
+    return fetch(BASE + '/governor/export').then(function(r) { return r.json(); });
+  }
+
+  window.exportAll = function() {
+    var title = 'New conversation';
+    var select = document.getElementById('session-select');
+    if (select.selectedOptions[0]) title = select.selectedOptions[0].textContent;
+
+    fetchGovernorState().then(function(govState) {
+      var files = [
+        { name: 'session.md', content: sessionToMarkdown(SM.conversationMessages, title) },
+        { name: 'session.json', content: sessionToJson() },
+        { name: 'governor_state.json', content: JSON.stringify(govState, null, 2) }
+      ];
+      var zipData = createZip(files);
+      var slug = title.replace(/[^a-zA-Z0-9]+/g, '_').substring(0, 30).replace(/_+$/, '');
+      downloadBlob(new Blob([zipData], { type: 'application/zip' }), (slug || 'export') + '.zip');
+    });
+  };
+
+  window.exportChatMd = function() {
+    var title = 'New conversation';
+    var select = document.getElementById('session-select');
+    if (select.selectedOptions[0]) title = select.selectedOptions[0].textContent;
+    downloadText(sessionToMarkdown(SM.conversationMessages, title), 'session.md', 'text/markdown');
+  };
+
+  window.exportChatJson = function() {
+    downloadText(sessionToJson(), 'session.json', 'application/json');
+  };
+
+  window.importGovernorState = function(input) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var state = JSON.parse(e.target.result);
+      } catch (err) {
+        alert('Invalid JSON file.');
+        input.value = '';
+        return;
+      }
+
+      fetch(BASE + '/governor/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state)
+      }).then(function(r) { return r.json(); }).then(function(result) {
+        refreshGovernor();
+        alert(result.message || ('Imported ' + (result.imported || 0) + ' item(s).'));
+        input.value = '';
+      }).catch(function(err) {
+        alert('Import failed: ' + err.message);
+        input.value = '';
+      });
+    };
+    reader.readAsText(file);
   };
 
   // ========== Init ==========

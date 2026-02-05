@@ -1082,3 +1082,169 @@ class TestSessionEndpoints:
         response = client.post("/sessions/", json={})
         assert response.status_code == 200
         assert response.json()["title"] == "New conversation"
+
+
+# ============================================================================
+# TestExportImport
+# ============================================================================
+
+
+class TestExportImport:
+    """Tests for governor export/import endpoints."""
+
+    def test_export_empty(self, client, tmp_contexts_dir) -> None:
+        """GET /governor/export returns empty state when nothing configured."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="fiction")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/governor/export")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["version"] == 1
+        assert data["anchors"] == []
+        assert "exported_at" in data
+
+    def test_export_with_anchors(self, client, tmp_contexts_dir) -> None:
+        """GET /governor/export includes all registered anchors."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        ctx = cm.create("test-context", mode="fiction")
+        adapter_mod._context_manager = cm
+
+        # Add a character via the POST endpoint
+        client.post("/governor/fiction/characters", json={
+            "name": "Elena", "description": "Tall, green eyes", "voice": "Formal", "wont": "Show weakness"
+        })
+
+        response = client.get("/governor/export")
+        data = response.json()
+        assert len(data["anchors"]) >= 1
+        ids = [a["id"] for a in data["anchors"]]
+        assert "char-elena" in ids
+
+    def test_import_empty(self, client, tmp_contexts_dir) -> None:
+        """POST /governor/import with empty anchors imports nothing."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="fiction")
+        adapter_mod._context_manager = cm
+
+        response = client.post("/governor/import", json={"anchors": []})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["imported"] == 0
+
+    def test_import_anchors(self, client, tmp_contexts_dir) -> None:
+        """POST /governor/import creates anchors from exported data."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="fiction")
+        adapter_mod._context_manager = cm
+
+        payload = {
+            "anchors": [
+                {
+                    "id": "char-bob",
+                    "anchor_type": "canon",
+                    "description": "Appearance: Tall; Voice: Gruff",
+                    "severity": "reject",
+                },
+                {
+                    "id": "world-1",
+                    "anchor_type": "definition",
+                    "description": "Magic requires spoken words",
+                    "severity": "reject",
+                },
+            ]
+        }
+        response = client.post("/governor/import", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["imported"] == 2
+        assert data["skipped"] == 0
+
+        # Verify they show up in export
+        export = client.get("/governor/export").json()
+        ids = [a["id"] for a in export["anchors"]]
+        assert "char-bob" in ids
+        assert "world-1" in ids
+
+    def test_import_skips_duplicates(self, client, tmp_contexts_dir) -> None:
+        """POST /governor/import skips anchors that already exist."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="fiction")
+        adapter_mod._context_manager = cm
+
+        anchor = {
+            "id": "char-dup",
+            "anchor_type": "canon",
+            "description": "Test",
+            "severity": "reject",
+        }
+        # Import once
+        client.post("/governor/import", json={"anchors": [anchor]})
+        # Import again — should skip
+        response = client.post("/governor/import", json={"anchors": [anchor]})
+        data = response.json()
+        assert data["imported"] == 0
+        assert data["skipped"] == 1
+
+    def test_export_import_roundtrip(self, client, tmp_contexts_dir) -> None:
+        """Export then import into a fresh context produces the same anchors."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="fiction")
+        adapter_mod._context_manager = cm
+
+        # Add some state
+        client.post("/governor/fiction/characters", json={"name": "Alice", "description": "Brave"})
+        client.post("/governor/fiction/world-rules", json={"rule": "No flying"})
+        client.post("/governor/fiction/forbidden", json={"description": "Time travel"})
+
+        # Export
+        exported = client.get("/governor/export").json()
+        original_count = len(exported["anchors"])
+        assert original_count >= 3
+
+        # Create fresh context and import
+        cm2 = GovernorContextManager(base_dir=tmp_contexts_dir / "fresh")
+        cm2.create("test-context", mode="fiction")
+        adapter_mod._context_manager = cm2
+
+        response = client.post("/governor/import", json=exported)
+        data = response.json()
+        assert data["imported"] == original_count
+
+        # Verify export matches
+        re_exported = client.get("/governor/export").json()
+        assert len(re_exported["anchors"]) == original_count
+
+    def test_import_no_context(self, client, tmp_contexts_dir) -> None:
+        """POST /governor/import returns 400 when no context exists."""
+        import webui.adapter as adapter_mod
+        adapter_mod._context_manager = GovernorContextManager(base_dir=tmp_contexts_dir)
+
+        response = client.post("/governor/import", json={"anchors": []})
+        assert response.status_code == 400
+
+    def test_api_info_includes_export_import(self, client, tmp_contexts_dir) -> None:
+        """GET /api/info includes export/import endpoint URLs."""
+        import webui.adapter as adapter_mod
+
+        cm = GovernorContextManager(base_dir=tmp_contexts_dir)
+        cm.create("test-context", mode="general")
+        adapter_mod._context_manager = cm
+
+        response = client.get("/api/info")
+        data = response.json()
+        assert "governor_export" in data["endpoints"]
+        assert "governor_import" in data["endpoints"]

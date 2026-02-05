@@ -3,15 +3,19 @@
 ## Version 0.1 — Self-Validating Test Infrastructure
 
 ```yaml
-status: gap
-implemented: false
+status: canonical
+implemented: true
+tests:
+  - tests/test_qa_cli_smoke.py (~75 tests)
+  - tests/test_qa_self_governance.py (~15 tests)
+  - tests/test_qa_roundtrip.py (~10 tests)
+  - tests/test_qa_lifecycle.py (~18 tests)
 depends_on:
   - KERNEL_CONSTRAINTS_SPEC.md
   - EPISTEMIC_STACK_SPEC.md
 blocking:
   - CI/CD integration
   - Release confidence
-estimated_scope: medium
 ```
 
 ---
@@ -291,3 +295,4 @@ def capture_cli(args: list[str]) -> tuple[int, str, str]:
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1 | 2026-02-05 | Initial gap spec |
+| 0.2 | 2026-02-05 | Implemented: 4 test modules, ~108 tests total |

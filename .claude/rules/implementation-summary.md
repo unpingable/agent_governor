@@ -65,6 +65,7 @@
 **MCP Safety Controls** — Self-protective infrastructure for MCP server. RateLimiter (per-client with backoff), BackpressureController (queue depth limits), CircuitBreaker (fail-fast with recovery), IdempotencyLayer (duplicate request caching), LatencyEnforcer (budget per tool), FaultHandler (sensor vs actuator classification), SafetyController (unified).
 **SDK Middleware** — Drop-in governor enforcement for Anthropic SDK. `client = GovernorMiddleware(Anthropic())`. Advisory/blocking/strict modes, claim extraction, anchor checking, security scanning, ledger integration, streaming support, async support.
 **Session Continuity** — Capsule-based session management. Resume intent + constraints + authority, NOT chat replay. Three-layer model (Ledger/Workspace/Transcript), fork/promote semantics, checkpoints, content hashing, YAML ledger persistence.
+**QA Harness** — Self-validating test infrastructure. CLI smoke tests (all commands), self-governance (governor passes own gates), serialization roundtrip sweep, cross-module lifecycle tests.
 
 ## Test Counts by Module
 
@@ -146,5 +147,6 @@
 | MCP Safety Controls | 70 |
 | SDK Middleware | 36 |
 | Session Continuity | 57 |
+| QA Harness | 108 |
 
-**Total: ~7563 tests**
+**Total: ~7671 tests**

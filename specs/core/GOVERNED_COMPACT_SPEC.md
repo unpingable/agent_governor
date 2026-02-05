@@ -3,16 +3,17 @@
 ## Version 0.2 — Loss-Aware Context Management
 
 ```yaml
-status: gap
-implemented: false
+status: canonical
+implemented: true
+tests:
+  - tests/test_context_compact.py (~49 tests)
 depends_on:
   - SESSION_RESUME_SPEC.md (capsule model)
   - Continuity (existing anchors)
   - Telemetry (existing)
 blocking:
-  - Long conversations without context loss
-  - Efficient model usage
-estimated_scope: medium
+  - Long conversations without context loss (implemented)
+  - Efficient model usage (routing.py exists)
 ```
 
 ---
@@ -458,3 +459,4 @@ Total: ~800-1000 lines of new code.
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1 | 2026-02-05 | Initial gap spec |
+| 0.2 | 2026-02-05 | Implemented: context_compact.py (~600 lines), 49 tests, CLI commands. LSP deferred. |

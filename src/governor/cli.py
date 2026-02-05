@@ -12244,6 +12244,226 @@ def session_delete(ctx: click.Context, session_id: str, confirm: bool) -> None:
 
 
 # =============================================================================
+# Context Compact CLI
+# =============================================================================
+
+
+@cli.group("context")
+def context_cmd() -> None:
+    """Context management — loss-aware compaction with receipts.
+
+    Governed compaction that emits receipts, respects anchors,
+    and never silently drops governance state.
+
+    \b
+    Core principle:
+      If you compact without knowing what you lost, you've created a lie.
+    """
+    pass
+
+
+@context_cmd.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def context_status(ctx: click.Context, as_json: bool) -> None:
+    """Show context compaction status and configuration."""
+    from .context_compact import CompactionConfig
+    from pathlib import Path
+
+    gov_dir = Path(".governor")
+    config_path = gov_dir / "compaction.yaml"
+    config = CompactionConfig.load(config_path)
+
+    status = {
+        "config_exists": config_path.exists(),
+        "context_threshold": config.context_threshold,
+        "min_turns_before_compact": config.min_turns_before_compact,
+        "recent_turns_to_keep": config.recent_turns_to_keep,
+        "always_keep_decisions": config.always_keep_decisions,
+        "always_keep_anchors": config.always_keep_anchors,
+        "store_dropped_content": config.store_dropped_content,
+    }
+
+    if as_json:
+        click.echo(json.dumps(status, indent=2))
+    else:
+        click.echo("Context Compaction Configuration:")
+        click.echo(f"  Threshold: {config.context_threshold * 100}%")
+        click.echo(f"  Min turns before compact: {config.min_turns_before_compact}")
+        click.echo(f"  Recent turns to keep: {config.recent_turns_to_keep}")
+        click.echo(f"  Keep decisions: {config.always_keep_decisions}")
+        click.echo(f"  Keep anchors: {config.always_keep_anchors}")
+        click.echo(f"  Store dropped content: {config.store_dropped_content}")
+
+
+@context_cmd.command("config")
+@click.option("--threshold", type=float, help="Context threshold (0.0-1.0)")
+@click.option("--min-turns", type=int, help="Min turns before compaction")
+@click.option("--keep-turns", type=int, help="Recent turns to keep")
+@click.option("--show", is_flag=True, help="Show current config")
+@click.pass_context
+def context_config(
+    ctx: click.Context,
+    threshold: float | None,
+    min_turns: int | None,
+    keep_turns: int | None,
+    show: bool,
+) -> None:
+    """Configure context compaction settings."""
+    from .context_compact import CompactionConfig
+    from pathlib import Path
+
+    gov_dir = Path(".governor")
+    gov_dir.mkdir(exist_ok=True)
+    config_path = gov_dir / "compaction.yaml"
+    config = CompactionConfig.load(config_path)
+
+    if show or (threshold is None and min_turns is None and keep_turns is None):
+        click.echo(json.dumps(config.to_dict(), indent=2))
+        return
+
+    if threshold is not None:
+        config.context_threshold = threshold
+    if min_turns is not None:
+        config.min_turns_before_compact = min_turns
+    if keep_turns is not None:
+        config.recent_turns_to_keep = keep_turns
+
+    config.save(config_path)
+    click.echo("Configuration updated.")
+
+
+@context_cmd.command("receipts")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--last", "show_last", is_flag=True, help="Show latest receipt")
+@click.option("--id", "receipt_id", help="Show specific receipt by ID")
+@click.pass_context
+def context_receipts(ctx: click.Context, as_json: bool, show_last: bool, receipt_id: str | None) -> None:
+    """List or show compaction receipts."""
+    from .context_compact import ReceiptStore
+    from pathlib import Path
+
+    gov_dir = Path(".governor")
+    if not gov_dir.exists():
+        click.echo("No .governor directory found.")
+        return
+
+    store = ReceiptStore(gov_dir / "receipts")
+    receipts = store.list_all()
+
+    if show_last:
+        receipt = store.get_latest()
+        if receipt is None:
+            click.echo("No receipts found.")
+            return
+        if as_json:
+            click.echo(json.dumps(receipt.to_dict(), indent=2))
+        else:
+            click.echo(f"Receipt: {receipt.receipt_id}")
+            click.echo(f"  Compacted at: {receipt.compacted_at}")
+            click.echo(f"  Preserved turns: {receipt.preserved_turns_count}")
+            click.echo(f"  Dropped items: {len(receipt.dropped_items)}")
+            click.echo(f"  Dropped tokens: {receipt.total_dropped_tokens}")
+            click.echo(f"  Decisions preserved: {len(receipt.preserved_decisions)}")
+            click.echo(f"  Anchors preserved: {len(receipt.preserved_anchors)}")
+        return
+
+    if receipt_id:
+        receipt = store.load(receipt_id)
+        if receipt is None:
+            click.echo(f"Receipt not found: {receipt_id}", err=True)
+            ctx.exit(1)
+            return
+        if as_json:
+            click.echo(json.dumps(receipt.to_dict(), indent=2))
+        else:
+            click.echo(f"Receipt: {receipt.receipt_id}")
+            click.echo(f"  Compacted at: {receipt.compacted_at}")
+            click.echo(f"  Preserved intent: {receipt.preserved_intent}")
+            click.echo(f"  Summary hash: {receipt.compressed_hash[:16]}...")
+            click.echo(f"\nDropped items ({len(receipt.dropped_items)}):")
+            for item in receipt.dropped_items[:10]:
+                click.echo(f"  [{item.item_type.value}] {item.description}")
+            if len(receipt.dropped_items) > 10:
+                click.echo(f"  ... and {len(receipt.dropped_items) - 10} more")
+        return
+
+    # List all receipts
+    if not receipts:
+        click.echo("No receipts found.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(receipts, indent=2))
+    else:
+        click.echo(f"Compaction receipts ({len(receipts)}):")
+        for rid in receipts:
+            receipt = store.load(rid)
+            if receipt:
+                click.echo(f"  {rid} - {receipt.compacted_at.strftime('%Y-%m-%d %H:%M')}")
+
+
+@context_cmd.command("recover")
+@click.argument("receipt_id")
+@click.argument("content_hash")
+@click.pass_context
+def context_recover(ctx: click.Context, receipt_id: str, content_hash: str) -> None:
+    """Recover dropped content by hash."""
+    from .context_compact import RecoveryStore
+    from pathlib import Path
+
+    gov_dir = Path(".governor")
+    if not gov_dir.exists():
+        click.echo("No .governor directory found.", err=True)
+        ctx.exit(1)
+        return
+
+    store = RecoveryStore(gov_dir / "recovery")
+    content = store.recover(receipt_id, content_hash)
+
+    if content is None:
+        click.echo(f"Content not found for hash: {content_hash}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(content)
+
+
+@context_cmd.command("cleanup")
+@click.option("--max-age", type=int, default=24, help="Max age in hours (default: 24)")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted")
+@click.pass_context
+def context_cleanup(ctx: click.Context, max_age: int, dry_run: bool) -> None:
+    """Clean up old recovery stores."""
+    from .context_compact import RecoveryStore
+    from pathlib import Path
+
+    gov_dir = Path(".governor")
+    if not gov_dir.exists():
+        click.echo("No .governor directory found.")
+        return
+
+    store = RecoveryStore(gov_dir / "recovery")
+
+    if dry_run:
+        click.echo(f"Would clean up recovery stores older than {max_age} hours.")
+        # List what would be deleted
+        from datetime import timedelta
+        from governor.context_compact import _utcnow
+        cutoff = _utcnow() - timedelta(hours=max_age)
+        for store_dir in store.base_path.iterdir():
+            if store_dir.is_dir():
+                from datetime import datetime
+                mtime = datetime.fromtimestamp(store_dir.stat().st_mtime)
+                if mtime < cutoff:
+                    click.echo(f"  Would delete: {store_dir.name}")
+        return
+
+    removed = store.cleanup_old(max_age)
+    click.echo(f"Cleaned up {removed} old recovery store(s).")
+
+
+# =============================================================================
 # Git Governance CLI
 # =============================================================================
 

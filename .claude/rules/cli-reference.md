@@ -373,6 +373,13 @@ governor session checkpoints            # List checkpoints for current session
 governor session promote <id> --confirm # Promote fork to mainline
 governor session delete <id> --confirm  # Delete a session
 
+# Context Compact (loss-aware compaction with receipts)
+governor context status               # Show compaction config and status (--json)
+governor context config               # Show/update compaction settings (--threshold, --min-turns, --keep-turns, --show)
+governor context receipts             # List compaction receipts (--json, --last, --id)
+governor context recover <rid> <hash> # Recover dropped content by hash
+governor context cleanup              # Clean up old recovery stores (--max-age, --dry-run)
+
 # Git Governance (integrity invariants at commit boundaries)
 governor git-gov status               # Show config and severity by check type (--json)
 governor git-gov check                # Run all checks, exit 1 if blocking (--json)

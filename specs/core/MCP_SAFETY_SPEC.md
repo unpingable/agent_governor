@@ -3,15 +3,16 @@
 ## Version 0.1 — Self-Protective Control Infrastructure
 
 ```yaml
-status: gap
-implemented: false
+status: canonical
+implemented: true
+module: src/governor/mcp_safety.py
+tests: tests/test_mcp_safety.py (~70 tests)
 depends_on:
   - KERNEL_CONSTRAINTS_SPEC.md
   - mcp_server.py (existing 21 tools)
-blocking:
+enables:
   - Production MCP deployment
   - High-throughput agent scenarios
-estimated_scope: medium
 ```
 
 ---

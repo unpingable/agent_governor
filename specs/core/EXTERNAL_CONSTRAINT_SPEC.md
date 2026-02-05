@@ -3,16 +3,18 @@
 ## Version 0.1 — External Substrate Binding for Claim Grounding
 
 ```yaml
-status: gap
-implemented: false
+status: canonical
+implemented: true
+module: src/governor/external.py
+tests: tests/test_external.py (63 tests)
+cli: governor external {query,attach,bindings,discrepancies,resolve,substrates}
 depends_on:
   - EPISTEMIC_STACK_SPEC.md
   - KERNEL_CONSTRAINTS_SPEC.md
-blocking:
+enables:
   - Defensible factual claims in nonfiction mode
   - Research mode external grounding
   - Citation verification beyond DOI metadata
-estimated_scope: medium
 ```
 
 ---

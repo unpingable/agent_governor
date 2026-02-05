@@ -219,6 +219,19 @@ governor interferometry compare --id <run_id> [--json]                       # A
 governor code compare "prompt" --backends ollama:m1,claude:sonnet            # Alias for interferometry compare
 governor code compare --last [--markers] [--json]                            # Alias for interferometry compare --last
 
+# External Constraint Attachment (claim grounding via Wikidata/Wikipedia/Scholar)
+governor external substrates                         # List available substrates with trust profiles
+governor external query wikidata Q42                 # Query Wikidata entity
+governor external query wikidata "Douglas Adams" -a search  # Search Wikidata
+governor external query wikipedia "Douglas Adams"    # Query Wikipedia article
+governor external query scholar "10.1000/xyz" -a doi # Query DOI via CrossRef
+governor external attach <claim_id> -s wikidata -q Q42  # Attach substrate snapshot to claim
+governor external attach <claim_id> -s wikipedia -q "Douglas Adams" -v "claim value"  # With claim value
+governor external bindings <claim_id>                # List external bindings for a claim
+governor external discrepancies                      # Show all claim-substrate discrepancies
+governor external discrepancies --pending            # Show only unresolved discrepancies
+governor external resolve <disc_id> -r claim_retained --reason "Context differs"  # Resolve discrepancy
+
 # Quorum State Machine (multi-agent consensus)
 governor quorum status <proposal_id>  # Show quorum state for a proposal
 governor quorum vote <proposal_id>    # Cast a vote on a proposal

@@ -61,6 +61,7 @@
 **Interferometry** — Multi-model claim comparison with parallel + serial ("yes, and") modes. Claim extraction via SignalExtractor, Jaccard fingerprinting via taint module, claim alignment (shared/unique/conflicting), ledger promotion. JSON persistence.
 **Code Interferometry** — Code-specific divergence analysis (Tier 1 + Tier 2). 19 risk marker types (8 security, 6 edge-case, 5 architectural), anchor compatibility (hard/soft conflicts), tier determination, CheckFinding bridge for VS Code. CLI `governor interferometry compare` + `governor code compare` alias. WebUI compare card + Tier 1 warning banner. VS Code `governor.compareModels` command + TreeView Compare section.
 **WebUI Backend Toggle** — Runtime backend switching via sidebar dropdown. `GET /v1/backends`, `POST /v1/backends/switch`.
+**External Constraint Attachment** — Bind claims to external substrate snapshots (Wikidata/Wikipedia/Scholar). NOT fact verification — structural constraint logging. Discrepancies surfaced, never auto-corrected. Human-only resolution. CLI `governor external {query,attach,bindings,discrepancies,resolve,substrates}`.
 
 ## Test Counts by Module
 
@@ -138,5 +139,6 @@
 | Interferometry | 47 |
 | Code Interferometry | 43 |
 | WebUI Backend Toggle | 6 |
+| External Constraint Attachment | 63 |
 
-**Total: ~7337 tests**
+**Total: ~7400 tests**

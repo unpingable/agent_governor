@@ -3,15 +3,16 @@
 ## Version 0.1 — Governor Integration for Anthropic SDK
 
 ```yaml
-status: gap
-implemented: false
+status: canonical
+implemented: true
+module: src/governor/sdk.py
+tests: tests/test_sdk.py (36 tests)
 depends_on:
   - KERNEL_CONSTRAINTS_SPEC.md
   - EPISTEMIC_STACK_SPEC.md
-blocking:
+enables:
   - SDK-based agent builders getting governor enforcement
   - Third-party agent framework integration
-estimated_scope: small
 ```
 
 ---

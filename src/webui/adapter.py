@@ -3,8 +3,8 @@ OpenAI-compatible API adapter with Governor integration.
 
 Serves a self-contained chat + governor UI at the root URL (/), and exposes
 an OpenAI-compatible API for external clients. Supports switchable backends
-(Anthropic Claude, Ollama, Claude Code CLI) with isolated governor contexts
-per user/project.
+(Anthropic Claude, Ollama, Claude Code CLI, Codex CLI) with isolated governor
+contexts per user/project.
 
 Run with: uvicorn webui.adapter:app --host 0.0.0.0 --port 8000
 
@@ -12,15 +12,17 @@ Primary UI:  http://localhost:8000  (combined chat + governor panel)
 API info:    http://localhost:8000/api/info
 
 Configuration via environment variables:
-    BACKEND_TYPE        - "anthropic", "ollama", or "claude-code" (default: "ollama")
+    BACKEND_TYPE        - "anthropic", "ollama", "claude-code", or "codex" (default: "ollama")
     ANTHROPIC_API_KEY   - Required when BACKEND_TYPE=anthropic
     OLLAMA_HOST         - Ollama URL (default: http://localhost:11434)
     CLAUDE_PATH         - Path to claude CLI (default: "claude") for claude-code backend
+    CODEX_PATH          - Path to codex CLI (default: "codex") for codex backend
     GOVERNOR_CONTEXT_ID - Active context ID (default: "default")
     GOVERNOR_MODE       - Context mode: fiction/code/nonfiction/general (default: "general")
     GOVERNOR_CONTEXTS_DIR - Base dir for contexts (default: ~/.governor-contexts)
 
 The claude-code backend uses your Claude Max subscription instead of API credits.
+The codex backend uses your ChatGPT subscription instead of API credits.
 """
 
 from __future__ import annotations
@@ -72,6 +74,7 @@ BACKEND_TYPE = os.environ.get("BACKEND_TYPE", "ollama")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 CLAUDE_PATH = os.environ.get("CLAUDE_PATH", "claude")  # Path to claude CLI for claude-code backend
+CODEX_PATH = os.environ.get("CODEX_PATH", "codex")  # Path to codex CLI for codex backend
 GOVERNOR_CONTEXT_ID = os.environ.get("GOVERNOR_CONTEXT_ID", "default")
 GOVERNOR_MODE = os.environ.get("GOVERNOR_MODE", "general")
 GOVERNOR_CONTEXTS_DIR = os.environ.get("GOVERNOR_CONTEXTS_DIR", "")
@@ -181,6 +184,8 @@ def _get_bridge() -> ChatBridge:
             kwargs["host"] = OLLAMA_HOST
         elif BACKEND_TYPE == "claude-code":
             kwargs["claude_path"] = CLAUDE_PATH
+        elif BACKEND_TYPE == "codex":
+            kwargs["codex_path"] = CODEX_PATH
         backend = create_backend(BACKEND_TYPE, **kwargs)
         _bridge = ChatBridge(
             backend=backend,

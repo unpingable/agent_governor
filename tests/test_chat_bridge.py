@@ -14,6 +14,7 @@ from governor.chat_bridge import (
     OllamaBackend,
     AnthropicBackend,
     ClaudeCodeBackend,
+    CodexBackend,
     GovernorHooks,
     GovernorCheckResult,
     ViolationPendingResponse,
@@ -841,6 +842,15 @@ class TestCreateBackend:
         assert isinstance(backend, ClaudeCodeBackend)
         assert backend.claude_path == "/custom/path/claude"
 
+    def test_codex_backend(self) -> None:
+        backend = create_backend("codex")
+        assert isinstance(backend, CodexBackend)
+
+    def test_codex_custom_path(self) -> None:
+        backend = create_backend("codex", codex_path="/custom/path/codex")
+        assert isinstance(backend, CodexBackend)
+        assert backend.codex_path == "/custom/path/codex"
+
     def test_unknown_backend(self) -> None:
         with pytest.raises(ValueError, match="Unknown backend"):
             create_backend("unknown")
@@ -1153,6 +1163,477 @@ class TestClaudeCodeBackend:
 
         with pytest.raises((FileNotFoundError, RuntimeError)):
             await backend.chat(messages, "sonnet")
+
+
+# ============================================================================
+# TestCodexBackend
+# ============================================================================
+
+
+class TestCodexBackend:
+    """Tests for CodexBackend."""
+
+    def test_init_default_path(self) -> None:
+        backend = CodexBackend()
+        assert backend.codex_path == "codex"
+
+    def test_init_custom_path(self) -> None:
+        backend = CodexBackend(codex_path="/usr/local/bin/codex")
+        assert backend.codex_path == "/usr/local/bin/codex"
+
+    def test_extract_system_and_prompt_user_only(self) -> None:
+        backend = CodexBackend()
+        messages = [ChatMessage(role="user", content="Hello")]
+        system, prompt = backend._extract_system_and_prompt(messages)
+        assert system == ""
+        assert prompt == "Hello"
+
+    def test_extract_system_and_prompt_with_system(self) -> None:
+        """System text is extracted separately (prepended to prompt in chat/stream)."""
+        backend = CodexBackend()
+        messages = [
+            ChatMessage(role="system", content="Be helpful"),
+            ChatMessage(role="user", content="Hi"),
+        ]
+        system, prompt = backend._extract_system_and_prompt(messages)
+        assert system == "Be helpful"
+        assert prompt == "Hi"
+
+    def test_extract_system_and_prompt_conversation(self) -> None:
+        backend = CodexBackend()
+        messages = [
+            ChatMessage(role="user", content="What is 2+2?"),
+            ChatMessage(role="assistant", content="4"),
+            ChatMessage(role="user", content="Thanks!"),
+        ]
+        system, prompt = backend._extract_system_and_prompt(messages)
+        assert system == ""
+        assert "[User]: What is 2+2?" in prompt
+        assert "[Assistant]: 4" in prompt
+        assert "[User]: Thanks!" in prompt
+
+    def test_extract_system_and_prompt_multiple_system(self) -> None:
+        """Multiple system messages are concatenated."""
+        backend = CodexBackend()
+        messages = [
+            ChatMessage(role="system", content="Rule 1"),
+            ChatMessage(role="system", content="Rule 2"),
+            ChatMessage(role="user", content="Hi"),
+        ]
+        system, prompt = backend._extract_system_and_prompt(messages)
+        assert "Rule 1" in system
+        assert "Rule 2" in system
+        assert prompt == "Hi"
+
+    def test_extract_system_and_prompt_empty(self) -> None:
+        backend = CodexBackend()
+        system, prompt = backend._extract_system_and_prompt([])
+        assert system == ""
+        assert prompt == ""
+
+    def test_list_models(self) -> None:
+        backend = CodexBackend()
+        models = run_async(backend.list_models())
+        assert len(models) == 3
+        assert any(m["id"] == "o3" for m in models)
+        assert any(m["id"] == "o4-mini" for m in models)
+        assert all(m["owned_by"] == "codex" for m in models)
+
+    def test_chat_command_has_model_flag(self) -> None:
+        """Chat command should include -m flag."""
+        backend = CodexBackend()
+
+        captured_cmd = []
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            captured_cmd.extend(args)
+            proc = MagicMock()
+            # Return JSONL with agent_message + turn.completed
+            output = (
+                '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}\n'
+                '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}\n'
+            )
+            proc.communicate = AsyncMock(return_value=(
+                output.encode(), b"",
+            ))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            run_async(backend.chat(messages, "o4-mini"))
+
+        assert "-m" in captured_cmd
+        model_idx = captured_cmd.index("-m")
+        assert captured_cmd[model_idx + 1] == "o4-mini"
+
+    def test_chat_prompt_via_stdin(self) -> None:
+        """Prompt should be piped via stdin."""
+        backend = CodexBackend()
+
+        captured_input = []
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            async def mock_communicate(input=None):
+                if input:
+                    captured_input.append(input)
+                output = (
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}\n'
+                    '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}\n'
+                )
+                return (output.encode(), b"")
+            proc.communicate = mock_communicate
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            run_async(backend.chat(messages, "o3"))
+
+        assert len(captured_input) == 1
+        assert captured_input[0] == b"Hello"
+
+    def test_chat_no_system_flag(self) -> None:
+        """Codex has no --system-prompt flag; system is baked into prompt."""
+        backend = CodexBackend()
+
+        captured_cmd = []
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            captured_cmd.extend(args)
+            proc = MagicMock()
+            output = '{"type":"turn.completed","usage":{}}\n'
+            proc.communicate = AsyncMock(return_value=(output.encode(), b""))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [
+                ChatMessage(role="system", content="Be helpful"),
+                ChatMessage(role="user", content="Hello"),
+            ]
+            run_async(backend.chat(messages, "o3"))
+
+        assert "--system-prompt" not in captured_cmd
+
+    def test_chat_system_prepended_to_stdin(self) -> None:
+        """System text should be prepended to stdin prompt."""
+        backend = CodexBackend()
+
+        captured_input = []
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            async def mock_communicate(input=None):
+                if input:
+                    captured_input.append(input)
+                output = '{"type":"turn.completed","usage":{}}\n'
+                return (output.encode(), b"")
+            proc.communicate = mock_communicate
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [
+                ChatMessage(role="system", content="Be helpful"),
+                ChatMessage(role="user", content="Hello"),
+            ]
+            run_async(backend.chat(messages, "o3"))
+
+        assert len(captured_input) == 1
+        prompt = captured_input[0].decode("utf-8")
+        assert prompt.startswith("[System]: Be helpful")
+        assert "Hello" in prompt
+
+    def test_chat_parses_jsonl_content(self) -> None:
+        """Extracts content from item.completed with agent_message type."""
+        backend = CodexBackend()
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            output = (
+                '{"type":"thread.started","thread_id":"t1"}\n'
+                '{"type":"turn.started"}\n'
+                '{"type":"item.completed","item":{"id":"i0","type":"reasoning","text":"thinking..."}}\n'
+                '{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"Hello from Codex!"}}\n'
+                '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":20}}\n'
+            )
+            proc.communicate = AsyncMock(return_value=(output.encode(), b""))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            response = run_async(backend.chat(messages, "o3"))
+
+        assert response.content == "Hello from Codex!"
+
+    def test_chat_parses_usage(self) -> None:
+        """Extracts usage from turn.completed event."""
+        backend = CodexBackend()
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            output = (
+                '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}\n'
+                '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":20}}\n'
+            )
+            proc.communicate = AsyncMock(return_value=(output.encode(), b""))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            response = run_async(backend.chat(messages, "o3"))
+
+        assert response.usage["prompt_tokens"] == 100
+        assert response.usage["completion_tokens"] == 20
+        assert response.usage["total_tokens"] == 120
+
+    def test_chat_ignores_reasoning_items(self) -> None:
+        """item.type == 'reasoning' should be skipped, not included in content."""
+        backend = CodexBackend()
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            output = (
+                '{"type":"item.completed","item":{"type":"reasoning","text":"thinking..."}}\n'
+                '{"type":"item.completed","item":{"type":"agent_message","text":"answer"}}\n'
+                '{"type":"turn.completed","usage":{}}\n'
+            )
+            proc.communicate = AsyncMock(return_value=(output.encode(), b""))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            response = run_async(backend.chat(messages, "o3"))
+
+        assert response.content == "answer"
+        assert "thinking" not in response.content
+
+    def test_chat_handles_error_event(self) -> None:
+        """Error event in JSONL should raise RuntimeError."""
+        backend = CodexBackend()
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            output = '{"type":"error","message":"rate limit exceeded"}\n'
+            proc.communicate = AsyncMock(return_value=(output.encode(), b""))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            with pytest.raises(RuntimeError, match="rate limit exceeded"):
+                run_async(backend.chat(messages, "o3"))
+
+    def test_chat_handles_turn_failed(self) -> None:
+        """turn.failed event should raise RuntimeError."""
+        backend = CodexBackend()
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            proc = MagicMock()
+            output = '{"type":"turn.failed","error":{"message":"context too long"}}\n'
+            proc.communicate = AsyncMock(return_value=(output.encode(), b""))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            with pytest.raises(RuntimeError, match="context too long"):
+                run_async(backend.chat(messages, "o3"))
+
+    def test_stream_yields_content_chunks(self) -> None:
+        """Streaming yields agent_message text as chunks."""
+        backend = CodexBackend()
+
+        jsonl_lines = (
+            '{"type":"item.completed","item":{"type":"agent_message","text":"Hello "}}\n'
+            '{"type":"item.completed","item":{"type":"agent_message","text":"world!"}}\n'
+            '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}\n'
+        )
+
+        call_count = 0
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            nonlocal call_count
+            proc = MagicMock()
+            proc.stdin = MagicMock()
+            proc.stdin.write = MagicMock()
+            proc.stdin.drain = AsyncMock()
+            proc.stdin.close = MagicMock()
+
+            data = jsonl_lines.encode()
+
+            async def read_stdout(n):
+                nonlocal call_count
+                if call_count == 0:
+                    call_count += 1
+                    return data
+                return b""
+
+            proc.stdout = MagicMock()
+            proc.stdout.read = read_stdout
+
+            async def read_stderr():
+                return b""
+            proc.stderr = MagicMock()
+            proc.stderr.read = read_stderr
+            proc.returncode = 0
+            proc.wait = AsyncMock(return_value=0)
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+
+            async def collect():
+                chunks = []
+                async for chunk in backend.stream(messages, "o3"):
+                    chunks.append(chunk)
+                return chunks
+
+            collected = run_async(collect())
+
+        contents = [c.content for c in collected if c.content]
+        assert "Hello " in contents
+        assert "world!" in contents
+
+    def test_stream_sends_stop_on_turn_completed(self) -> None:
+        """turn.completed event yields a stop chunk."""
+        backend = CodexBackend()
+
+        jsonl_lines = (
+            '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}\n'
+            '{"type":"turn.completed","usage":{}}\n'
+        )
+
+        call_count = 0
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            nonlocal call_count
+            proc = MagicMock()
+            proc.stdin = MagicMock()
+            proc.stdin.write = MagicMock()
+            proc.stdin.drain = AsyncMock()
+            proc.stdin.close = MagicMock()
+
+            async def read_stdout(n):
+                nonlocal call_count
+                if call_count == 0:
+                    call_count += 1
+                    return jsonl_lines.encode()
+                return b""
+
+            proc.stdout = MagicMock()
+            proc.stdout.read = read_stdout
+
+            async def read_stderr():
+                return b""
+            proc.stderr = MagicMock()
+            proc.stderr.read = read_stderr
+            proc.returncode = 0
+            proc.wait = AsyncMock(return_value=0)
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+
+            async def collect():
+                chunks = []
+                async for chunk in backend.stream(messages, "o3"):
+                    chunks.append(chunk)
+                return chunks
+
+            collected = run_async(collect())
+
+        # Last chunk should have finish_reason="stop"
+        assert collected[-1].finish_reason == "stop"
+
+    def test_stream_handles_error_gracefully(self) -> None:
+        """Error mid-stream yields error chunk instead of crashing."""
+        backend = CodexBackend()
+
+        jsonl_lines = (
+            '{"type":"item.completed","item":{"type":"agent_message","text":"partial"}}\n'
+            '{"type":"error","message":"something broke"}\n'
+        )
+
+        call_count = 0
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            nonlocal call_count
+            proc = MagicMock()
+            proc.stdin = MagicMock()
+            proc.stdin.write = MagicMock()
+            proc.stdin.drain = AsyncMock()
+            proc.stdin.close = MagicMock()
+
+            async def read_stdout(n):
+                nonlocal call_count
+                if call_count == 0:
+                    call_count += 1
+                    return jsonl_lines.encode()
+                return b""
+
+            proc.stdout = MagicMock()
+            proc.stdout.read = read_stdout
+
+            async def read_stderr():
+                return b""
+            proc.stderr = MagicMock()
+            proc.stderr.read = read_stderr
+            proc.returncode = 0
+            proc.wait = AsyncMock(return_value=0)
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+
+            async def collect():
+                chunks = []
+                async for chunk in backend.stream(messages, "o3"):
+                    chunks.append(chunk)
+                return chunks
+
+            collected = run_async(collect())
+
+        all_content = "".join(c.content for c in collected)
+        assert "partial" in all_content
+        assert "something broke" in all_content
+
+    @pytest.mark.asyncio
+    async def test_chat_subprocess_error(self) -> None:
+        """Test that chat handles nonexistent binary gracefully."""
+        backend = CodexBackend(codex_path="/nonexistent/path")
+        messages = [ChatMessage(role="user", content="test")]
+
+        with pytest.raises((FileNotFoundError, RuntimeError)):
+            await backend.chat(messages, "o3")
+
+    def test_chat_command_has_exec_and_json_flags(self) -> None:
+        """Command should include exec, --json, and --skip-git-repo-check."""
+        backend = CodexBackend()
+
+        captured_cmd = []
+
+        async def mock_subprocess_exec(*args, **kwargs):
+            captured_cmd.extend(args)
+            proc = MagicMock()
+            output = '{"type":"turn.completed","usage":{}}\n'
+            proc.communicate = AsyncMock(return_value=(output.encode(), b""))
+            proc.returncode = 0
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
+            messages = [ChatMessage(role="user", content="Hello")]
+            run_async(backend.chat(messages, "o3"))
+
+        assert "exec" in captured_cmd
+        assert "--json" in captured_cmd
+        assert "--skip-git-repo-check" in captured_cmd
+        assert "-" in captured_cmd  # stdin marker
 
 
 # ============================================================================

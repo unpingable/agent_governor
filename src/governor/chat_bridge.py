@@ -1,5 +1,5 @@
 """
-Chat Bridge: backend abstraction over Anthropic API and Ollama.
+Chat Bridge: backend abstraction over Anthropic API, Ollama, Claude Code, and Codex.
 
 Provides a uniform interface for routing chat through different LLM backends
 with governor integration hooks. Supports both streaming and non-streaming.
@@ -7,6 +7,7 @@ with governor integration hooks. Supports both streaming and non-streaming.
 Backend selection via factory:
     backend = create_backend("anthropic", api_key="sk-...")
     backend = create_backend("ollama", host="http://localhost:11434")
+    backend = create_backend("codex", codex_path="codex")
 
 Governor hooks inject system prompts and check responses based on context mode.
 """
@@ -580,6 +581,262 @@ class ClaudeCodeBackend:
         Returns:
             (system_text, user_prompt) — system messages concatenated for
             --system-prompt flag, user/assistant turns flattened for stdin.
+        """
+        system_parts: list[str] = []
+        conversation_parts: list[str] = []
+
+        has_assistant = False
+        for msg in messages:
+            if msg.role == "system":
+                system_parts.append(msg.content)
+            elif msg.role == "user":
+                conversation_parts.append(("user", msg.content))
+            elif msg.role == "assistant":
+                conversation_parts.append(("assistant", msg.content))
+                has_assistant = True
+
+        system_text = "\n\n".join(system_parts)
+
+        # For single-turn (common case), just send the user message as-is.
+        # For multi-turn, flatten with role markers so the model sees context.
+        if len(conversation_parts) == 1 and not has_assistant:
+            user_prompt = conversation_parts[0][1]
+        elif conversation_parts:
+            parts = []
+            for role, content in conversation_parts:
+                if role == "assistant":
+                    parts.append(f"[Assistant]: {content}")
+                else:
+                    parts.append(f"[User]: {content}")
+            user_prompt = "\n\n".join(parts)
+        else:
+            user_prompt = ""
+
+        return system_text, user_prompt
+
+
+class CodexBackend:
+    """Codex CLI backend — uses ChatGPT subscription instead of API credits.
+
+    Routes chat through the `codex` CLI with exec --json mode, parsing JSONL output.
+    This lets you use your ChatGPT subscription for WebUI chat.
+
+    Key implementation details:
+    - Prompt is piped via stdin (using `-` flag) to avoid ARG_MAX limits
+    - System messages are prepended to the user prompt (no --system-prompt flag)
+    - --json flag produces JSONL output (one JSON object per line)
+    - --skip-git-repo-check avoids git repo validation
+    - -m flag passes the model selection to the CLI
+    """
+
+    MODELS = [
+        {"id": "o3", "owned_by": "codex"},
+        {"id": "o4-mini", "owned_by": "codex"},
+        {"id": "codex-mini", "owned_by": "codex"},
+    ]
+
+    def __init__(self, codex_path: str = "codex") -> None:
+        """Initialize with path to codex CLI."""
+        self.codex_path = codex_path
+
+    async def chat(
+        self, messages: list[ChatMessage], model: str, **kwargs: Any
+    ) -> ChatResponse:
+        """Send a non-streaming chat request via Codex CLI."""
+        import asyncio
+
+        system_text, user_prompt = self._extract_system_and_prompt(messages)
+
+        # Prepend system text to prompt (Codex has no --system-prompt flag)
+        if system_text:
+            combined_prompt = f"[System]: {system_text}\n\n{user_prompt}"
+        else:
+            combined_prompt = user_prompt
+
+        # Build command — `-` means read prompt from stdin
+        cmd = [
+            self.codex_path,
+            "exec",
+            "--json",
+            "--skip-git-repo-check",
+            "-m", model,
+            "-",
+        ]
+
+        # Run codex CLI — pipe prompt via stdin
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate(input=combined_prompt.encode("utf-8"))
+
+        if proc.returncode != 0:
+            error_msg = stderr.decode("utf-8", errors="replace")
+            raise RuntimeError(f"Codex CLI failed: {error_msg}")
+
+        # Parse JSONL output line by line
+        content_parts: list[str] = []
+        usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+        for line in stdout.decode("utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            event_type = data.get("type", "")
+
+            if event_type == "item.completed":
+                item = data.get("item", {})
+                if item.get("type") == "agent_message":
+                    content_parts.append(item.get("text", ""))
+
+            elif event_type == "turn.completed":
+                u = data.get("usage", {})
+                usage["prompt_tokens"] = u.get("input_tokens", 0)
+                usage["completion_tokens"] = u.get("output_tokens", 0)
+                usage["total_tokens"] = (
+                    u.get("input_tokens", 0) + u.get("output_tokens", 0)
+                )
+
+            elif event_type in ("error", "turn.failed"):
+                error_msg = data.get("message", "")
+                if not error_msg:
+                    error_msg = data.get("error", {}).get("message", "Unknown error")
+                raise RuntimeError(f"Codex CLI error: {error_msg}")
+
+        return ChatResponse(
+            content="".join(content_parts),
+            model=model,
+            usage=usage,
+            finish_reason="stop",
+        )
+
+    async def stream(
+        self, messages: list[ChatMessage], model: str, **kwargs: Any
+    ) -> AsyncIterator[ChatChunk]:
+        """Stream a chat response via Codex CLI."""
+        import asyncio
+
+        system_text, user_prompt = self._extract_system_and_prompt(messages)
+
+        # Prepend system text to prompt
+        if system_text:
+            combined_prompt = f"[System]: {system_text}\n\n{user_prompt}"
+        else:
+            combined_prompt = user_prompt
+
+        # Build command
+        cmd = [
+            self.codex_path,
+            "exec",
+            "--json",
+            "--skip-git-repo-check",
+            "-m", model,
+            "-",
+        ]
+
+        # Run codex CLI with streaming — pipe prompt via stdin
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        # Write prompt to stdin and close it so the CLI can proceed
+        proc.stdin.write(combined_prompt.encode("utf-8"))
+        await proc.stdin.drain()
+        proc.stdin.close()
+
+        # Read stdout line by line
+        buffer = ""
+        sent_stop = False
+        while True:
+            chunk = await proc.stdout.read(1024)
+            if not chunk:
+                break
+
+            buffer += chunk.decode("utf-8", errors="replace")
+
+            # Process complete lines
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                event_type = data.get("type", "")
+
+                if event_type == "item.completed":
+                    item = data.get("item", {})
+                    if item.get("type") == "agent_message":
+                        yield ChatChunk(content=item.get("text", ""))
+
+                elif event_type == "turn.completed":
+                    yield ChatChunk(content="", finish_reason="stop")
+                    sent_stop = True
+
+                elif event_type in ("error", "turn.failed"):
+                    error_msg = data.get("message", "")
+                    if not error_msg:
+                        error_msg = data.get("error", {}).get("message", "Unknown error")
+                    yield ChatChunk(content=f"\n\n[Error] Codex CLI: {error_msg}")
+
+        # Process any remaining data in buffer after EOF
+        remaining = buffer.strip()
+        if remaining:
+            try:
+                data = json.loads(remaining)
+                event_type = data.get("type", "")
+                if event_type == "item.completed":
+                    item = data.get("item", {})
+                    if item.get("type") == "agent_message":
+                        yield ChatChunk(content=item.get("text", ""))
+                elif event_type == "turn.completed":
+                    yield ChatChunk(content="", finish_reason="stop")
+                    sent_stop = True
+            except json.JSONDecodeError:
+                pass
+
+        # Wait for process to complete and check for errors
+        await proc.wait()
+
+        if proc.returncode != 0 and not sent_stop:
+            stderr_data = await proc.stderr.read()
+            error_msg = stderr_data.decode("utf-8", errors="replace").strip()
+            error_text = f"Codex CLI failed (exit {proc.returncode})"
+            if error_msg:
+                error_text += f": {error_msg}"
+            yield ChatChunk(content=f"\n\n[Error] {error_text}")
+
+        # Ensure we send a final stop chunk
+        if not sent_stop:
+            yield ChatChunk(content="", finish_reason="stop")
+
+    async def list_models(self) -> list[dict[str, str]]:
+        """Return available models for Codex."""
+        return list(self.MODELS)
+
+    def _extract_system_and_prompt(
+        self, messages: list[ChatMessage]
+    ) -> tuple[str, str]:
+        """Extract system prompt and user conversation from messages.
+
+        Returns:
+            (system_text, user_prompt) — system messages concatenated,
+            user/assistant turns flattened for stdin. System text is prepended
+            to the prompt in chat()/stream() since Codex has no system prompt flag.
         """
         system_parts: list[str] = []
         conversation_parts: list[str] = []
@@ -1282,8 +1539,8 @@ def create_backend(backend_type: str, **kwargs: Any) -> ChatBackend:
     """Factory: create a ChatBackend by type.
 
     Args:
-        backend_type: "anthropic", "ollama", or "claude-code"
-        **kwargs: Backend-specific config (api_key, host, claude_path, etc.)
+        backend_type: "anthropic", "ollama", "claude-code", or "codex"
+        **kwargs: Backend-specific config (api_key, host, claude_path, codex_path, etc.)
     """
     if backend_type == "anthropic":
         return AnthropicBackend(api_key=kwargs["api_key"])
@@ -1291,4 +1548,6 @@ def create_backend(backend_type: str, **kwargs: Any) -> ChatBackend:
         return OllamaBackend(host=kwargs.get("host", "http://localhost:11434"))
     elif backend_type == "claude-code":
         return ClaudeCodeBackend(claude_path=kwargs.get("claude_path", "claude"))
+    elif backend_type == "codex":
+        return CodexBackend(codex_path=kwargs.get("codex_path", "codex"))
     raise ValueError(f"Unknown backend type: {backend_type}")

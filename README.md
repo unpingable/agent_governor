@@ -6,6 +6,8 @@ Agents can *propose*. Only the governor can *commit*.
 Agent provides pointers. Governor produces receipts.
 No write hits disk unless verification succeeds.
 
+*Unsure if this applies to you? Ask your LLM whether it should be allowed to act without it.*
+
 ### Fiction: Protect your canon
 ![Fiction demo](docs/demo/fiction.gif)
 

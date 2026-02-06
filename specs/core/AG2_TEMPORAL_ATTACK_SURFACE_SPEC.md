@@ -176,43 +176,165 @@ This is exactly the pattern the scanner catches in other code — but applied to
 
 ---
 
-## 5. Integration Points
+## 5. Code Domain (Development Time)
 
-### 5.1 Security Scanner (`security.py`)
+Temporal failures at development time. The scanner flags code that accumulates temporal debt.
 
-Add temporal pattern detection alongside existing static patterns. Same `CheckFinding` output format, same severity levels.
+| Failure Domain | W_j | E(t) | C_j | What Goes Wrong |
+|----------------|-----|------|-----|-----------------|
+| Test coverage decay | Time since test touched production path | Coverage reports, mutation results | "Tests pass" = ship | Tests pass but don't test what changed |
+| Type drift | Time between type assertion and runtime | Type checker output | Compile = safe | `as any` / `# type: ignore` accumulates |
+| Dependency lag | Time between CVE publish and update | Dependabot alerts, SBOM diffs | Merge renovate PR | Vulnerability window while "waiting for review" |
+| Doc staleness | Time since doc matched code | Doc-code diff, broken examples | "Docs exist" = done | README describes architecture from 6 months ago |
+| API contract drift | Time between spec and implementation | OpenAPI diff, contract tests | Deploy | Spec says X, code does Y, clients break |
+| Review fatigue | PR queue depth × reviewer attention | Diff size, complexity metrics | Approve | 800-line PR approved in 3 minutes |
+| Dead code accumulation | Time since code path executed | Coverage, call graph analysis | "Don't delete, might need it" | Zombie code hides bugs, confuses maintainers |
+| Migration incomplete | Time since migration started | Old pattern usage count | "We're migrating" | Both patterns exist forever, neither maintained |
 
-### 5.2 Code Interferometry (`code_interferometry.py`)
+### 5.1 Code Scanner Patterns
 
-Temporal markers join existing 19 risk marker types. Multi-model comparison can detect temporal disagreements (one model uses transactions, another doesn't).
-
-### 5.3 Maude Lite (`maude_lite.py`)
-
-Custody scoring already measures Iₚ (invariant coupling). Temporal invariants (fail-closed, atomic check-act) are natural extensions.
-
-### 5.4 CI/CD Gates (`git_governance.py`)
-
-Pre-commit hook can flag temporal antipatterns in staged changes, same as current secrets detection.
-
-### 3.1 Security Scanner (`security.py`)
-
-Add temporal pattern detection alongside existing static patterns. Same `CheckFinding` output format, same severity levels.
-
-### 3.2 Code Interferometry (`code_interferometry.py`)
-
-Temporal markers join existing 19 risk marker types. Multi-model comparison can detect temporal disagreements (one model uses transactions, another doesn't).
-
-### 3.3 Maude Lite (`maude_lite.py`)
-
-Custody scoring already measures Iₚ (invariant coupling). Temporal invariants (fail-closed, atomic check-act) are natural extensions.
-
-### 3.4 CI/CD Gates (`git_governance.py`)
-
-Pre-commit hook can flag temporal antipatterns in staged changes, same as current secrets detection.
+```
+# Temporal debt markers (development time)
+- TODO/FIXME older than 90 days
+- `# type: ignore` without expiration/issue
+- try/except that catches too broad + continues
+- Feature flags without TTL
+- Commented-out code (dead path preservation)
+- "Temporary" workarounds with no ticket reference
+- Async operations without timeout
+- Retries without backoff/limit
+```
 
 ---
 
-## 6. Defender Instrumentation (Runtime)
+## 6. SRE/Ops Domain (Runtime)
+
+Every SLO violation is a temporal failure. Either detection was too slow, response was too slow, or commitment happened before verification. MTTR is literally T_detect + T_decide + T_respond. If any exceeds W (time until user impact crosses SLO), you lose.
+
+| Failure Domain | W_j | E(t) | C_j | What Goes Wrong |
+|----------------|-----|------|-----|-----------------|
+| Observability lag | Metric emission → alert fire | Dashboards, log aggregation | "We're monitoring" | Already down 10 min before alert |
+| Deploy verification | Deploy finish → health confirmed | Health checks, smoke tests | Rollback decision | "Deploy succeeded" but service broken |
+| Capacity headroom | 80% → 100% utilization | Capacity metrics | Scale-up action | Scaling takes longer than runway |
+| Config drift | Config change → audit | Drift detection, desired state diff | "It's working" | Drift accumulates, fixing is now risky |
+| Incident handoff | Shift end → context transfer | Runbook state, incident timeline | "I'm handing off" | Context lost, new on-call restarts from zero |
+| Runbook staleness | Last verification → now | Runbook test results | "Follow the runbook" | UI changed, runbook lies |
+| Certificate expiry | Now → cert expiration | Cert inventory, expiry alerts | Renewal | Alert fires, but renewal takes 3 days |
+| Backup validity | Last restore test → now | Restore drill results | "Backups run nightly" | Backup succeeds, restore fails |
+| Secret rotation | Rotation → all consumers updated | Secret usage audit | Rotate | 3 services still caching old creds |
+| On-call fatigue | Alert volume × shift duration | Alert frequency, ack latency | Acknowledge/resolve | Alerts become noise, real incidents missed |
+
+### 6.1 SRE Translation Table
+
+| Domain | SRE Translation | The Failure You've Seen |
+|--------|-----------------|------------------------|
+| Rate limiting | Load shedding, circuit breakers | Breaker "half-open" test lets through the request that kills you |
+| Feature flags | Rollback, canary deploys | Kill switch cached for 5 minutes while incident burns |
+| Incident response | Alerting → runbook → action | PagerDuty fires, human opens laptop, 20 min gone, blast radius 10x |
+| Backups/restore | RTO/RPO guarantees | "Backups succeeded" but nobody tested restore in 6 months |
+| Secrets rotation | Credential lifecycle | Rotated the key, 3 services still caching the old one |
+| Supply chain | Dependency updates, artifact verification | `pip install` in CI pulls unverified package, deployed before scan |
+| Approval fatigue | Change management, CAB | 47 changes queued, approver rubber-stamps, bad deploy sails through |
+
+### 6.2 Ops Scanner Patterns
+
+```
+# Temporal debt markers (infra-as-code / config)
+- Alerts with no runbook link
+- Timeouts set to 0 or MAX_INT
+- Health checks with > 60s interval
+- TTLs longer than rotation intervals
+- Grace periods longer than detection windows
+- Retry policies without circuit breakers
+- Log retention shorter than audit requirements
+- Manual-only remediation paths
+- Config without drift detection
+```
+
+### 6.3 SRE Mode (Future)
+
+The governor could have an explicit SRE mode that tracks:
+- Time from deploy → verified healthy
+- Time from alert → acknowledged → resolved
+- Time from config change → validated
+- Runbook last-verified timestamps
+
+This maps directly to the existing Ops Governor (`src/ops_governor/`), which already enforces runbook verification, time window enforcement, and blast radius limits.
+
+---
+
+## 7. Cross-Domain Patterns
+
+| Pattern | Code Manifestation | Ops Manifestation |
+|---------|-------------------|-------------------|
+| **Fail-open default** | `except: pass` | Alert → email (not page) |
+| **Verification without gate** | Lint runs but doesn't block | Monitoring exists but no auto-remediation |
+| **Commitment before evidence** | Deploy before tests finish | Scale-down before traffic confirms |
+| **Evidence decay ignored** | Stale test, still green | Last backup "succeeded" 6 months ago |
+| **Human bottleneck** | PR review queue | Change approval board |
+| **Async check without callback** | Background job, no enforcement | Scan runs, results not gated |
+
+---
+
+## 8. Unified Scanner Catalog
+
+What the governor should flag across all domains:
+
+```yaml
+TEMPORAL_DEBT_MARKERS:
+  code:
+    - waits_without_timeout
+    - retries_without_backoff
+    - catch_all_exception_continue
+    - type_ignore_without_issue
+    - todo_older_than_threshold
+    - feature_flag_without_ttl
+    - async_without_completion_gate
+
+  ops:
+    - alert_without_runbook
+    - health_check_interval_too_long
+    - ttl_exceeds_rotation_interval
+    - grace_period_exceeds_detection
+    - backup_without_restore_test
+    - manual_only_remediation
+    - config_without_drift_detection
+
+  both:
+    - fail_open_on_error
+    - verification_without_gate
+    - commitment_before_evidence
+    - human_bottleneck_without_timeout
+    - evidence_with_no_expiry
+```
+
+---
+
+## 9. Integration Points
+
+### 9.1 Security Scanner (`security.py`)
+
+Add temporal pattern detection alongside existing static patterns. Same `CheckFinding` output format, same severity levels.
+
+### 9.2 Code Interferometry (`code_interferometry.py`)
+
+Temporal markers join existing 19 risk marker types. Multi-model comparison can detect temporal disagreements (one model uses transactions, another doesn't).
+
+### 9.3 Maude Lite (`maude_lite.py`)
+
+Custody scoring already measures Iₚ (invariant coupling). Temporal invariants (fail-closed, atomic check-act) are natural extensions.
+
+### 9.4 CI/CD Gates (`git_governance.py`)
+
+Pre-commit hook can flag temporal antipatterns in staged changes, same as current secrets detection.
+
+### 9.5 Ops Governor (`src/ops_governor/`)
+
+SRE-mode temporal tracking maps to existing runbook verification and time window enforcement.
+
+---
+
+## 10. Defender Instrumentation (Runtime)
 
 Beyond static scanning, the governor could instrument runtime temporal properties:
 
@@ -227,7 +349,7 @@ This overlaps with existing telemetry (`telemetry.py`) and regime detection (`re
 
 ---
 
-## 7. Relationship to Existing Governor Concepts
+## 11. Relationship to Existing Governor Concepts
 
 | Governor Concept | Temporal Analog |
 |-----------------|-----------------|
@@ -242,9 +364,9 @@ The governor is already a temporal attack surface minimizer — it forces T_veri
 
 ---
 
-## 8. Scope Boundaries
+## 12. Scope Boundaries
 
-**In scope**: Static detection of temporal antipatterns in code. Risk markers for interferometry. Instrumentation metrics for telemetry.
+**In scope**: Static detection of temporal antipatterns in code and infra-as-code. Risk markers for interferometry. Instrumentation metrics for telemetry. SRE-mode temporal tracking.
 
 **Out of scope**: Runtime race condition detection (that's a different tool class). Formal verification of concurrent systems. Automated fixing of temporal patterns.
 
@@ -252,7 +374,7 @@ The governor is already a temporal attack surface minimizer — it forces T_veri
 
 ---
 
-## 9. References
+## 13. References
 
 - Beck, J. "The Temporal Attack Surface: A Δt Framework for Asynchronous Security Systems." See `ingest/temporal_attack_surface.md`.
 - Beck, J. "The Coherence Criterion." Zenodo, 2025. DOI: 10.5281/zenodo.17726789
@@ -266,3 +388,4 @@ The governor is already a temporal attack surface minimizer — it forces T_veri
 |---------|------|---------|
 | 0.1 | 2025-02-06 | Initial gap spec from temporal attack surface paper |
 | 0.2 | 2025-02-06 | Add 8 extended failure domains, scanner patterns, self-referential approval fatigue invariants |
+| 0.3 | 2025-02-06 | Add code domain (8 dev-time failures), SRE/ops domain (10 runtime failures), cross-domain patterns, unified scanner catalog |

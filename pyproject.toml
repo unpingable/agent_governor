@@ -40,6 +40,7 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-timeout>=2.0",
     "ruff>=0.1.0",
 ]
 webui = [
@@ -74,6 +75,7 @@ packages = ["src/governor", "src/fiction_governor", "src/nonfiction_governor", "
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+timeout = 60
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [

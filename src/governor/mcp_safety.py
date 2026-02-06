@@ -333,13 +333,20 @@ class CircuitBreaker:
             elapsed = (_utcnow() - self._last_failure_time).total_seconds()
             return max(0.0, self.config.recovery_timeout - elapsed)
 
+    def _recovery_remaining_unlocked(self) -> float:
+        """Compute recovery remaining without acquiring lock (caller must hold lock)."""
+        if self._state != CircuitState.OPEN or self._last_failure_time is None:
+            return 0.0
+        elapsed = (_utcnow() - self._last_failure_time).total_seconds()
+        return max(0.0, self.config.recovery_timeout - elapsed)
+
     def call(self, fn: Callable[[], Any]) -> Any:
         """Execute function with circuit breaker protection."""
         with self._lock:
             self._check_recovery()
 
             if self._state == CircuitState.OPEN:
-                raise CircuitOpenError(self.name, self.recovery_remaining)
+                raise CircuitOpenError(self.name, self._recovery_remaining_unlocked())
 
         try:
             result = fn()
@@ -396,7 +403,7 @@ class CircuitBreaker:
                 "state": self._state.value,
                 "failures": self._failures,
                 "failure_threshold": self.config.failure_threshold,
-                "recovery_remaining": self.recovery_remaining,
+                "recovery_remaining": self._recovery_remaining_unlocked(),
             }
 
 
@@ -604,26 +611,30 @@ class LatencyEnforcer:
             if len(self._metrics[tool]) > 100:
                 self._metrics[tool] = self._metrics[tool][-100:]
 
+    def _tool_stats_unlocked(self, tool: str) -> dict:
+        """Compute stats for a single tool (caller must hold lock)."""
+        latencies = self._metrics.get(tool, [])
+        if not latencies:
+            return {"tool": tool, "samples": 0}
+        return {
+            "tool": tool,
+            "samples": len(latencies),
+            "avg_ms": sum(latencies) / len(latencies),
+            "min_ms": min(latencies),
+            "max_ms": max(latencies),
+            "p95_ms": sorted(latencies)[int(len(latencies) * 0.95)]
+            if len(latencies) >= 20
+            else None,
+        }
+
     def get_stats(self, tool: str | None = None) -> dict:
         """Get latency stats."""
         with self._lock:
             if tool:
-                latencies = self._metrics.get(tool, [])
-                if not latencies:
-                    return {"tool": tool, "samples": 0}
-                return {
-                    "tool": tool,
-                    "samples": len(latencies),
-                    "avg_ms": sum(latencies) / len(latencies),
-                    "min_ms": min(latencies),
-                    "max_ms": max(latencies),
-                    "p95_ms": sorted(latencies)[int(len(latencies) * 0.95)]
-                    if len(latencies) >= 20
-                    else None,
-                }
+                return self._tool_stats_unlocked(tool)
             else:
                 return {
-                    tool: self.get_stats(tool) for tool in self._metrics.keys()
+                    t: self._tool_stats_unlocked(t) for t in self._metrics.keys()
                 }
 
 
@@ -794,11 +805,8 @@ class SafetyController:
         # 1. Rate limiting
         if self.config.rate_limiting_enabled:
             result = self.rate_limiter.check(client_id)
-            if result.status == RateLimitStatus.REJECTED:
+            if result.status in (RateLimitStatus.REJECTED, RateLimitStatus.THROTTLED):
                 raise RateLimitError(result)
-            elif result.status == RateLimitStatus.THROTTLED:
-                # Could sleep here, but for now just record and proceed
-                pass
 
         # 2. Backpressure
         if self.config.backpressure_enabled:

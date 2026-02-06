@@ -101,7 +101,8 @@ How surfaces behave. These reference core and interferometry specs for policy â€
 
 | Spec | What It Covers |
 |------|----------------|
-| **WEBUI_UX_SPEC.md** | Fiction and code mode panels. Violation modal. Corrections log. Empty states. Voice guidelines. |
+| **WEBUI_UX_SPEC.md** | v1 chat-centric UI. Fiction and code mode panels. Violation modal. Corrections log. Empty states. |
+| **AG2_DASHBOARD_UX_SPEC.md** | v2 governance dashboard. Controls-left/output-right. Run-centric. Streaming. Cancel contract. Templates. `status: gap` |
 | **CLI_UX_SPEC.md** | Layered command structure. `governor fiction` / `governor code` / `governor advanced`. Bare command experience. |
 | **VSCODE_UX_SPEC.md** | Gutter indicators, inline resolution, status bar, governor panel, Quick Fix integration. |
 

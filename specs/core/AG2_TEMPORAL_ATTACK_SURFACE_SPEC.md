@@ -65,9 +65,22 @@ Extend the existing 19 code interferometry risk markers with temporal markers.
 | `LONG_LIVED_CREDENTIAL` | Token/session with no expiry or long TTL | Large T_commit window |
 | `BURST_CAPACITY` | Rate limiter with large bucket/no burst limit | Single-burst objective completion |
 
-### 2.2 Detection Approach
+### 2.2 Scanner Patterns
 
-Static analysis patterns (like existing security scanner):
+The scanner flags code that **creates** failure domains, not just code that has bugs. The difference: "this SQL is injectable" vs "this architecture will fail under time pressure." The second is what nobody else catches.
+
+Grepable antipatterns:
+
+| Pattern | What It Catches | Why It's Temporal |
+|---------|-----------------|-------------------|
+| Waits without timeouts | Unbounded W_j | Race window is infinite |
+| Retries without limits/backoff | Evidence erasure | E(t) gets lost in retry noise |
+| "Warn and continue" | Fail-open C_j | Commitment despite failed verification |
+| Irreversible before check | T_commit < T_verify | The core temporal failure |
+| Async checks that don't gate | Decoupled evidence | Verification exists but doesn't govern |
+| Manual-only response | Human W_j bottleneck | Fatigue domain |
+
+Static analysis examples (same approach as existing security scanner):
 
 ```python
 # TOCTOU_RACE: check-then-act without atomicity
@@ -88,11 +101,98 @@ scan_result = sast(artifact)  # T_verify (too late)
 if not governor.approve(patch):
     logger.warning("rejected")
     apply_patch(patch)  # No gate — A_j = ∞
+
+# UNBOUNDED_RETRY: retries erase evidence
+while True:
+    try:
+        result = call_api()
+    except:
+        continue  # No backoff, no limit, no evidence trail
+
+# ASYNC_ENFORCEMENT: check result never gates anything
+background_task(verify_signature, artifact)  # Fire and forget
+deploy(artifact)  # Proceeds regardless of verification
 ```
 
 ---
 
-## 3. Integration Points
+## 3. Failure Domains
+
+The W / E(t) / C structure generalizes across security domains. Each domain produces the same temporal failure signatures; the scanner catches code that creates these domains.
+
+### 3.1 Core Five (from paper)
+
+| Domain | W_j | E(t) | C_j | Failure Signature |
+|--------|-----|------|-----|-------------------|
+| SIEM/SOC | MTTD | Log correlation | Alert vs isolate | Detection exists, response is manual-only |
+| CI/CD gates | Pipeline timeout | SAST/DAST results | Skip vs break build | Fail-open on timeout; sign before scan |
+| Authentication | Lockout window | Failed attempts | CAPTCHA vs lockout | Session granted before all checks complete |
+| Rate limiting | Rate window | Request patterns | Degrade vs deny | Burst completes objective in one window |
+| Human approval | Approval latency | Request context | Approve vs deny | Queue pressure → rubber stamps |
+
+### 3.2 Extended Domains
+
+| Domain | W_j | E(t) | C_j | Failure Signature | Scanner Hooks |
+|--------|-----|------|-----|-------------------|---------------|
+| Fraud/risk scoring | Scoring latency vs txn TTL | Device fingerprint, velocity, chargebacks | Approve/hold/step-up | Commitment before evidence; async "later" checks that never gate | `log + continue` patterns; background task without enforcement callback |
+| Incident response | Detection → containment lag | Alerts, heuristics, correlation confidence | Quarantine/cut creds/rotate | Alerting exists but containment is manual-only and queue-bound | `notify-only` paths; no automatic guard on high-confidence triggers |
+| Feature flags/kill switches | Propagation delay, cache TTL | Error rate, blast radius signals | Disable/rollback/partial | Kill switch exists but can't trip fast enough; stale caches keep it "on" | Config reads cached without TTL; flag checks after irreversible action |
+| Supply chain/dependency | Time between "available" and "verified" | Signatures, SLSA provenance, SBOM diffs | Deploy/pin/block | Verification optional; on error, proceed | `if verify fails: warn` logic; signature checks in try/except that continues |
+| Secrets/key rotation | Rotation interval vs compromise dwell | Usage anomalies, leak detectors | Revoke/rotate/force reauth | Rotation scheduled but revocation not gated; "grace period" becomes permanent | Long-lived tokens without revocation path; revocation not enforced at use sites |
+| Backups/restore | Restore-point age + RTO | Backup integrity checks, restore drills | Declare recoverable / proceed | Backups exist, restore untested (documentation-as-appearance) | "Backup succeeded" without verification; destructive ops not guarded by restore proof |
+
+---
+
+## 4. Self-Application: Governor Approval Fatigue
+
+**This is the self-referential failure domain.** The governor will create its own fatigue domain unless explicitly bounded. Same W / E(t) / C structure, applied to the governor's own approval flow.
+
+### 4.1 The Risk
+
+The governor asks humans to approve things. Under load:
+- Approvals become throughput, not decisions
+- Queue pressure degrades attention budget (κ_j exhaustion)
+- Adversary wins by exhausting human attention
+- "Approve all" drift makes the gate advisory
+
+This is exactly the pattern the scanner catches in other code — but applied to the governor itself.
+
+### 4.2 Approval Fatigue Invariants
+
+| Invariant | What It Prevents | Implementation |
+|-----------|-----------------|----------------|
+| **Batching + aggregation** | Raw log fatigue | Approvals summarize *claim deltas*, not individual events |
+| **Quorum under pressure** | Rubber-stamp risk | High-risk gates require 2-of-N when queue depth > threshold |
+| **Cooldowns** | Repeated similar approvals | N similar approvals within W → require stronger evidence or pause autopilot |
+| **Fail-closed under overload** | Approve-all drift | Queue > threshold → reduce action space, not increase throughput |
+| **Proof-carrying approvals** | Ambiguous rubber stamps | Approval receipt references exact diff/claims reviewed |
+
+### 4.3 Relationship to Existing Modules
+
+- **Quorum (`quorum.py`)**: Already supports multi-agent consensus. Extend with queue-depth-aware thresholds.
+- **Sybil resistance (`sybil.py`)**: Detects voting blocs. Fatigue-driven approvals look like sybil behavior.
+- **Boil control (`boil.py`)**: Already has named presets with dwell times. Approval fatigue is a boil signal.
+- **Receipts**: Already proof-carrying. Ensure approval receipts reference the specific claims reviewed.
+
+---
+
+## 5. Integration Points
+
+### 5.1 Security Scanner (`security.py`)
+
+Add temporal pattern detection alongside existing static patterns. Same `CheckFinding` output format, same severity levels.
+
+### 5.2 Code Interferometry (`code_interferometry.py`)
+
+Temporal markers join existing 19 risk marker types. Multi-model comparison can detect temporal disagreements (one model uses transactions, another doesn't).
+
+### 5.3 Maude Lite (`maude_lite.py`)
+
+Custody scoring already measures Iₚ (invariant coupling). Temporal invariants (fail-closed, atomic check-act) are natural extensions.
+
+### 5.4 CI/CD Gates (`git_governance.py`)
+
+Pre-commit hook can flag temporal antipatterns in staged changes, same as current secrets detection.
 
 ### 3.1 Security Scanner (`security.py`)
 
@@ -112,7 +212,7 @@ Pre-commit hook can flag temporal antipatterns in staged changes, same as curren
 
 ---
 
-## 4. Defender Instrumentation (Runtime)
+## 6. Defender Instrumentation (Runtime)
 
 Beyond static scanning, the governor could instrument runtime temporal properties:
 
@@ -127,7 +227,7 @@ This overlaps with existing telemetry (`telemetry.py`) and regime detection (`re
 
 ---
 
-## 5. Relationship to Existing Governor Concepts
+## 7. Relationship to Existing Governor Concepts
 
 | Governor Concept | Temporal Analog |
 |-----------------|-----------------|
@@ -142,7 +242,7 @@ The governor is already a temporal attack surface minimizer — it forces T_veri
 
 ---
 
-## 6. Scope Boundaries
+## 8. Scope Boundaries
 
 **In scope**: Static detection of temporal antipatterns in code. Risk markers for interferometry. Instrumentation metrics for telemetry.
 
@@ -152,7 +252,7 @@ The governor is already a temporal attack surface minimizer — it forces T_veri
 
 ---
 
-## 7. References
+## 9. References
 
 - Beck, J. "The Temporal Attack Surface: A Δt Framework for Asynchronous Security Systems." See `ingest/temporal_attack_surface.md`.
 - Beck, J. "The Coherence Criterion." Zenodo, 2025. DOI: 10.5281/zenodo.17726789
@@ -165,3 +265,4 @@ The governor is already a temporal attack surface minimizer — it forces T_veri
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1 | 2025-02-06 | Initial gap spec from temporal attack surface paper |
+| 0.2 | 2025-02-06 | Add 8 extended failure domains, scanner patterns, self-referential approval fatigue invariants |

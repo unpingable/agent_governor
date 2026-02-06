@@ -2,7 +2,7 @@
 
 ## The Map
 
-This document provides a high-level view of the Agent Governor system. For detailed subsystem documentation, see the individual docs in this directory.
+This document provides a high-level view of the Agent Governor system. For detailed subsystem specs, see `specs/core/`.
 
 ---
 
@@ -13,23 +13,23 @@ This document provides a high-level view of the Agent Governor system. For detai
 │                        AGENT GOVERNOR                           │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐       │
-│  │   WebUI     │────▶│  Adapters   │────▶│   Governor  │       │
-│  │ (built-in)  │     │ (per-user)  │     │   (kernel)  │       │
-│  └─────────────┘     └─────────────┘     └──────┬──────┘       │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐        │
+│  │   WebUI     │────▶│  Adapters   │────▶│   Governor  │        │
+│  │ (built-in)  │     │ (per-user)  │     │   (kernel)  │        │
+│  └─────────────┘     └─────────────┘     └──────┬──────┘        │
 │                                                  │              │
 │                      ┌───────────────────────────┼───────────┐  │
 │                      │                           ▼           │  │
-│                      │  ┌─────────┐  ┌─────────┐  ┌────────┐│  │
-│                      │  │ Anchors │  │ Ledger  │  │ Verify ││  │
-│                      │  └─────────┘  └─────────┘  └────────┘│  │
+│                      │  ┌─────────┐  ┌─────────┐  ┌────────┐ │  │
+│                      │  │ Anchors │  │ Ledger  │  │ Verify │ │  │
+│                      │  └─────────┘  └─────────┘  └────────┘ │  │
 │                      │           STORAGE (.governor/)        │  │
 │                      └───────────────────────────────────────┘  │
 │                                                                 │
-│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐       │
-│  │     CLI     │────▶│   Modes     │────▶│  Profiles   │       │
-│  │ (governor)  │     │(fiction/code)│    │  (presets)  │       │
-│  └─────────────┘     └─────────────┘     └─────────────┘       │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐        │
+│  │     CLI     │────▶│   Modes     │────▶│  Profiles   │        │
+│  │ (governor)  │     │(fiction/code)│    │  (presets)  │        │
+│  └─────────────┘     └─────────────┘     └─────────────┘        │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -291,28 +291,15 @@ These rules cannot be broken:
 
 ## Subsystem Documentation
 
-For detailed documentation on specific subsystems, see:
+For subsystem details, see the core specs (`specs/core/`) and the implementation summary (`.claude/rules/implementation-summary.md`). For mode-specific guides, see `docs/modes/`.
 
-- `CORE.md` - Governor kernel, verification, receipts
-- `ADAPTERS.md` - WebUI adapter, backend abstraction, streaming
-- `CONTINUITY.md` - Anchors, violations, resolution flow
-- `LEDGER.md` - Facts vs decisions, contradiction detection
-- `MODES.md` - Fiction/code/nonfiction mode differences
-- `CLI.md` - Command structure, all 50+ commands
-- `MULTI_AGENT.md` - Coordination, leases, permissions
-- `EPISTEMIC.md` - Provenance, confidence, evidence
+Key entry points:
 
----
-
-## Decision Records
-
-For understanding *why* things are the way they are, see `docs/adr/`:
-
-- `0001-proposal-commit-split.md` - Why proposals separate from commits
-- `0002-governance-polarity-flip.md` - Why governor gates rather than advises
-- `0003-fiction-vs-code-modes.md` - Why different modes exist
-- `0004-sqlite-over-postgres.md` - Why SQLite for local state
-- `0005-self-contained-webui.md` - Why self-contained UI over Open WebUI
+- `MULTI_AGENT.md` — Coordination, leases, permissions
+- `BUILD_SPEC.md` — Core kernel design, receipt types, claim lifecycle
+- `specs/core/EPISTEMIC_STACK_SPEC.md` — Provenance, confidence, evidence (11 modules)
+- `specs/core/KERNEL_CONSTRAINTS_SPEC.md` — The five non-negotiable invariants
+- `.claude/rules/cli-reference.md` — All 100+ CLI commands
 
 ---
 

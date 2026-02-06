@@ -25,6 +25,7 @@ venv/
 *.swp
 
 # Project
+.governor/
 baselines/
 *.tar.gz
 

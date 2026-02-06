@@ -12,7 +12,6 @@ The system provides write-blocking governance for AI coding agents via typed cla
 
 - `BUILD_SPEC.md` — Step-by-step build guide, receipt types, claim types, FSM
 - `MULTI_AGENT.md` — Concurrency model, conflict detection, permissions, dispatcher protocol
-- `TODO.md` — Future enhancements
 - `.claude/rules/` — Modular rules (CLI reference, file structure, domain-specific guides)
 
 ## Quick Start

@@ -6,7 +6,7 @@ The theoretical foundation and design contracts for the governor system.
 
 ## How to Read These
 
-**If you're a user**: You don't need these. See `docs/user/` for mode-specific guides (Fiction, Code, Nonfiction).
+**If you're a user**: You don't need these. See `docs/modes/` for mode-specific guides (Fiction, Code, Nonfiction).
 
 **If you're implementing**: Start with the core specs in reading order below. The UX specs tell you how surfaces should behave. The interferometry specs describe the multi-model subsystem.
 
@@ -65,6 +65,7 @@ The governor's theoretical foundation. Read in this order.
 | 19 | **SDK_MIDDLEWARE_SPEC.md** | Drop-in governor enforcement for Anthropic SDK. `GovernorMiddleware(Anthropic())`. `status: canonical` |
 | 20 | **SESSION_CONTINUITY_SPEC.md** | Capsule-based session management. Ledger + workspace, not chat replay. `status: canonical` |
 | 21 | **GOVERNED_COMPACT_SPEC.md** | Loss-aware context compaction with receipts. Anchors survive, loss explicit. `status: canonical` |
+| 22 | **AG2_DOCS_GAP_SPEC.md** | Documentation gaps: ADRs, subsystem docs, reference audit. `status: gap` |
 
 ### Reading Guidance
 
@@ -105,6 +106,7 @@ How surfaces behave. These reference core and interferometry specs for policy â€
 | **AG2_DASHBOARD_UX_SPEC.md** | v2 governance dashboard. Controls-left/output-right. Run-centric. Streaming. Cancel contract. Templates. `status: gap` |
 | **CLI_UX_SPEC.md** | Layered command structure. `governor fiction` / `governor code` / `governor advanced`. Bare command experience. |
 | **VSCODE_UX_SPEC.md** | Gutter indicators, inline resolution, status bar, governor panel, Quick Fix integration. |
+| **AG2_WEBUI_DEMO_GAP_SPEC.md** | Playwright-based WebUI demo automation. Scripted screenshots, reproducible on release. `status: gap` |
 
 ### Design Principles (All Surfaces)
 
@@ -117,7 +119,7 @@ How surfaces behave. These reference core and interferometry specs for policy â€
 
 ## Templates
 
-Reusable patterns for human-facing documentation. See `docs/templates/README.md`.
+Reusable patterns for human-facing documentation. See `templates/README.md`.
 
 | Template | Use For |
 |----------|---------|
@@ -129,7 +131,7 @@ Reusable patterns for human-facing documentation. See `docs/templates/README.md`
 
 ## User Guides
 
-Plain-language guides for each mode. See `docs/user/`.
+Plain-language guides for each mode. See `docs/modes/`.
 
 | Guide | Audience |
 |-------|----------|

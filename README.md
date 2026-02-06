@@ -1,388 +1,300 @@
 # Agent Governor
 
-**Production-oriented constraints for AI coding agents.**
+**Constraint system for AI coding agents. 8,000+ tests. Zero trust.**
+
 Agents can *propose*. Only the governor can *commit*.
-**Agent provides pointers. Governor produces receipts.**
+Agent provides pointers. Governor produces receipts.
 No write hits disk unless verification succeeds.
 
-Block unverified writes. Catch contradictions. Persist decisions.
+### Fiction: Protect your canon
+![Fiction demo](docs/demo/fiction.gif)
+
+### Code: Enforce decisions
+![Code demo](docs/demo/code.gif)
+
+### Security: Catch what agents introduce
+![Security demo](docs/demo/security.gif)
 
 ---
 
-## The Problem in 30 Seconds
+## The Problem
 
-You're using Claude Code, Cursor, or Copilot. The agent:
+You're using Claude Code, Cursor, or Codex. The agent:
 - Hallucinates APIs that don't exist
 - Contradicts itself between sessions
 - Drifts from architectural decisions you made yesterday
-- Forces you to manually review every single change
-- Gives you no audit trail for why decisions were made
+- Gives you no audit trail for why things changed
+- Requires a human babysitter for every action
 
-**You need a human babysitter for every AI action.** That's not agentic development. That's expensive remote control.
-
----
+**That's not agentic development. That's expensive remote control.**
 
 ## The Solution
 
 Agent Governor enforces the **Non-Linguistic Authority Invariant (NLAI)**:
 
 > Language is a proposal, not an authority.
-> No update to authoritative state may be performed solely on the basis of language output.
 
-**Translation:** The agent can *claim* anything. But it can't *write* anything until it provides verifiable evidence.
+The agent can *claim* anything. But it can't *write* anything until it provides verifiable evidence.
 
 - Agent says "tests pass"? Governor runs the tests and produces a receipt.
 - Agent says "file exists"? Governor checks and hashes the file.
 - Agent says "we decided on React"? Governor checks the ledger for contradictions.
 
-**Agent provides pointers. Governor produces receipts.**
+**No hallucination can fake a receipt.**
 
 ---
 
-## Key Features
-
-- **Write gate**: No file mutations without verified evidence
-- **Cryptographic receipts**: SHA-256 hashes of file state, command output, and diffs at verification time — stored in the ledger, not producible by agents
-- **Contradiction detection**: Catch when today's agent contradicts yesterday's decisions
-- **Commitment ledger**: Full provenance for every architectural decision
-- **Facts vs Decisions**: Empirical claims decay, normative decisions persist
-- **Rejection logging**: Debug why proposals failed
-- **Local-first**: SQLite storage, no external dependencies
-- **Framework-agnostic**: Works with Claude Code, Cursor, Codex, or any agent
-
----
-
-## Quick Start (60 seconds)
+## Quick Start
 
 ```bash
-pip install agent-governor
-
-# Initialize governor in your project
-cd your-project
+pip install -e .
 governor init
 
-# Record an architectural decision
+# Record a decision
 governor propose --claim "Using React for frontend" --topic framework
-governor verify 1
-governor apply 1
+governor verify 1 && governor apply 1
 
-# Now the governor will catch contradictions
+# Now try to contradict it
 governor propose --claim "Using Vue for frontend" --topic framework
-# ✗ REJECTED - Contradicts existing decision on 'framework'
+# REJECTED — Contradicts existing decision on 'framework'
 ```
 
-**That's it.** The agent now can't contradict this decision without the governor catching it.
-
-### For Writers (Fiction Mode)
+### For Writers
 
 ```bash
-# Set up a character constraint
+# Protect canon
 governor continuity anchor add \
-  --id "elena-eyes" \
-  --type canon \
+  --id "elena-eyes" --type canon \
   --description "Elena has green eyes" \
-  --forbidden-patterns "Elena's blue eyes" "her blue eyes" \
+  --forbidden "Elena's blue eyes" "her blue eyes" \
   --severity reject
 
-# Check text for violations
-governor check chapter3.txt --mode fiction
+# Check your chapter
+governor check chapter-3.md --mode fiction
 ```
 
-### For Developers (Code Mode)
+### For Developers
 
 ```bash
-# Set your working profile
-governor intent set --profile hotfix --scope "src/auth/**" --because "fixing login bug"
-
-# Check files as you work
+# Set intent and check code
+governor intent set --profile production --scope "src/auth/**"
 governor check src/auth/login.py
 
-# VS Code: Ctrl+Shift+G to check current file
+# Compare models on a task
+governor interferometry compare "Add auth middleware" \
+  --backends claude:sonnet,ollama:qwen
+```
+
+### For Operations
+
+```bash
+# Enforce runbook constraints
+ops-gov verify --runbook deploy-v2.yaml --window maintenance
 ```
 
 ---
 
-## Why This Matters
-
-### Before Agent Governor
-
-```
-Agent: "I've updated the API to use GraphQL"
-You: "Wait, didn't we decide on REST yesterday?"
-Agent: "Oh, you're right. Let me fix that."
-You: "How many other things did you change without remembering our decisions?"
-Agent: "..."
-```
-
-### After Agent Governor
-
-```
-Agent: "I propose updating the API to use GraphQL"
-Governor: "✗ REJECTED - Contradicts decision from 2024-01-15: 'API uses REST endpoints'"
-Agent: "Understood. Maintaining REST architecture."
-```
-
-### The Real Difference
-
-Most "AI memory" tools are **memory prosthetics** - they help the agent remember.
-
-Agent Governor is **epistemic security** - it doesn't trust the agent's memory at all.
-
----
-
-## How It Works
+## Architecture
 
 ```
 ┌─────────────────┐
-│  Coding Agent   │  Produces patches + pointers to evidence
+│  Coding Agent   │  Produces patches + pointers
 └────────┬────────┘
-         │ governor propose <patch>
-         ▼
+         │ propose
+         v
 ┌─────────────────┐
-│    GOVERNOR     │  ← THE CHOKE POINT
+│    GOVERNOR      │  THE CHOKE POINT
 │  ┌───────────┐  │
-│  │ Verifiers │──┼──→ Runs actual checks, produces receipts
+│  │ Verifiers │──┼──> Runs checks, produces receipts
 │  └───────────┘  │
 │  ┌───────────┐  │
-│  │  Ledgers  │──┼──→ facts/ + decisions/
+│  │  Ledgers  │──┼──> facts/ (empirical, decays)
+│  └───────────┘  │    decisions/ (normative, persists)
+│  ┌───────────┐  │
+│  │ Epistemic │──┼──> Provenance, confidence, evidence
 │  └───────────┘  │
 └────────┬────────┘
-         │ Only if verified
-         ▼
+         │ only if verified
+         v
 ┌─────────────────┐
-│   Working Tree  │  Actual file writes happen here
+│   Working Tree  │  Actual writes happen here
 └─────────────────┘
 ```
 
-**Key insight:** The agent can't provide evidence — it can only provide *pointers* to where evidence might exist. The governor does the actual verification and produces cryptographically-hashed receipts.
-
-No hallucination can fake a receipt.
-
-### Threat Model
-
-- **Agents are untrusted.** They may hallucinate, contradict prior decisions, or drift from architectural constraints.
-- **The host is trusted.** Governor runs locally with direct filesystem access.
-- **Governor defends against:** fabricated claims, unverified writes, temporal drift, epistemic amplification across agents.
-- **Governor does NOT defend against:** malicious dependencies, compromised host, adversarial model weights.
+**Threat model:**
+- Agents are untrusted. They hallucinate, contradict, drift.
+- The host is trusted. Governor runs locally.
+- Defends against: fabricated claims, unverified writes, temporal drift, epistemic amplification.
+- Does NOT defend against: malicious dependencies, compromised host.
 
 ---
 
-## Current Status
+## What's In The Box
 
-**2,000+ tests passing** — Core system, multi-agent coordination, epistemic governance, fiction/non-fiction governors, ops governor, drift detection, ultrastability.
+### Core Governance (~380 tests)
+Typed claims, cryptographic receipts, FSM lifecycle, fact/decision ledgers with decay, operating envelopes, git pre-commit hooks, MCP server.
 
-### What Works Now
+### Multi-Agent Coordination (~120 tests)
+SQLite WAL backend, agent leases, epochs, permissions, task dispatcher protocol.
 
-- Commitment ledger with full provenance (facts vs decisions)
-- File existence validation, command execution verification
-- Contradiction detection with rejection logging
-- Multi-agent coordination (SQLite WAL, leases, permissions)
-- Epistemic governance (provenance tracking, confidence modeling, evidence requirements)
-- Regime detection (ELASTIC/WARM/DUCTILE/UNSTABLE health monitoring)
-- Drift detection (temporal asymmetry defense, premise quarantine)
-- Ultrastability (Ashby-style S₁ adaptation with pathology detection)
-- MCP server for Claude Desktop, git pre-commit hook enforcement
-- Audit graph with Maltego-style transforms
-- Task management with dependencies, milestones, session handoffs
+### Epistemic Stack (~980 tests)
+Provenance tracking, confidence modeling, quorum consensus, drift detection, claim diffing, premise dependencies, agent roles, TTL enforcement, dissent ledger, taint similarity.
 
-### CLI Commands (Highlights)
+### Autonomous Execution (~230 tests)
+Spine locking, invariant specs, execution budgets, session manager, step-function executor with checkpoint/resume.
+
+### Adaptive Control (~530 tests)
+Regime detection (ELASTIC/WARM/DUCTILE/UNSTABLE), boil control presets, homeostat with exploration budgets, ultrastability (S1 adaptation), failure provenance with scars/shields, auto-tuning with Pareto analysis.
+
+### Writing Governance (~920 tests)
+11 modules: tone vectors (6D), affect regimes, governance visibility scoring, intent classification, structural constraints, prose/code ticketing, puppet mode.
+
+### Fiction Governor (~380 tests)
+Plot threads, scene proposals, canon ledger, manuscript scanning, context drift detection, consent tracking, narrative guardrails (DSI, AII).
+
+### Non-Fiction Governor (~280 tests)
+Corpus management, DOI fetching, citation verification, contextual frame intrusion detection (12-frame taxonomy).
+
+### Ops Governor (~60 tests)
+Runbook verification, time window enforcement, blast radius limits, precondition chains.
+
+### Interferometry (~90 tests)
+Multi-model claim comparison (parallel + serial modes), code-specific risk markers (19 types), anchor compatibility checking, divergence signals.
+
+### Integrations (~560 tests)
+VS Code extension, WebUI (FastAPI + chat bridge), SDK middleware, MCP safety controls, session continuity, git/Perforce governance, external constraint attachment (Wikidata/Wikipedia/Scholar).
+
+### Infrastructure (~960 tests)
+Structured telemetry, Prometheus metrics, config profiles, continuity enforcement, convergence auto-tuning, QA harness, golden-file/property-based/contract tests.
+
+**Total: ~8,000 tests across 60+ modules.**
+
+---
+
+## Modes
+
+| Mode | Mental Model | What It Governs |
+|------|-------------|-----------------|
+| **Code** | "My architectural decisions" | Decisions, constraints, API surfaces, test requirements |
+| **Fiction** | "My story bible" | Characters, world rules, canon, tone, consent |
+| **Nonfiction** | "My research corpus" | Sources, claims, citations, frame intrusion |
+| **Ops** | "My runbooks" | Blast radius, time windows, preconditions |
+
+Same engine, different constraints. The governor doesn't care what domain you're in — it cares that claims have evidence.
+
+---
+
+## Key Concepts
+
+| Concept | What It Means |
+|---------|--------------|
+| **NLAI** | Language is a proposal, not an authority |
+| **Gate, not memory** | Write-blocking, not advisory logging |
+| **Facts vs decisions** | "Tests pass" decays. "We use React" persists. |
+| **Typed claims** | `ClaimType.TESTS_PASS`, not "I think the tests pass" |
+| **Receipts** | SHA-256 hashed proof of verification at a point in time |
+| **Custody scoring** | Ap (accountability) x Ip (invariant coupling) x Fp (failure explicitness) |
+| **Interferometry** | Multi-model divergence as instrumentation, not selection |
+| **Scar tissue** | Failed actions create lasting constraints (hysteresis) |
+
+---
+
+## Comparison: Memory vs Governance
+
+| | Memory Tools | Agent Governor |
+|---|-------------|----------------|
+| **Purpose** | Help agent remember | Prevent ungrounded commits |
+| **Trust model** | Forgetful but helpful | Unreliable, require proof |
+| **Verification** | Optional | Cryptographic receipts required |
+| **Write control** | None | Write gate enforced |
+| **Architecture** | Memory prosthetic | Epistemic security |
+
+Both are useful. They solve different problems. Use memory tools for continuity. Use Agent Governor for safety.
+
+---
+
+## CLI Highlights
 
 ```bash
-# Core workflow
-governor init                   # Initialize .governor/ directory
-governor propose --claim "..."  # Create proposal with claims
-governor verify <id>            # Verify proposal, produce receipts
-governor apply <id>             # Apply verified proposal
+# Core
+governor init / propose / verify / apply
+governor facts / decisions / status
 
-# Query state
-governor facts                  # List recorded facts
-governor decisions              # List recorded decisions
-governor status                 # Show proposal statuses
+# Checking
+governor check <path>                    # Unified security + continuity
+governor lite check <text>               # Evidence-gated coding harness
 
-# Multi-agent coordination
-governor agent register --id X  # Register agent with governor
-governor task claim --agent-id X --task "..." --scope "..."
+# Profiles & Intent
+governor profile use production          # Named governance presets
+governor intent set --profile hotfix     # Intent-based governance
 
-# Epistemic & regime
-governor epistemic status       # Provenance, confidence, evidence
-governor regime status          # Operational health (ELASTIC → UNSTABLE)
-governor drift status           # Temporal asymmetry defense
+# Interferometry
+governor compare "task" --backends a,b   # Multi-model comparison
+governor interferometry divergence       # Disagreement signals
+
+# Epistemic
+governor epistemic status / claims / dangerous
+governor drift status / update
+governor quorum status <id>
+
+# Adaptive
+governor regime status                   # ELASTIC/WARM/DUCTILE/UNSTABLE
+governor boil set oolong                 # Named control presets
+governor explore enter research          # Exploration budgets
+
+# Autonomous
+governor autonomous run --task "..."     # Step-function execution
+governor spine lock <id>                 # Lock project structure
+governor invariant check                 # Mechanically verify rules
 
 # Integration
-governor hook install           # Git pre-commit enforcement
-governor mcp serve              # MCP server for Claude integration
+governor hook install                    # Git pre-commit
+governor mcp serve                       # MCP server for Claude
+governor claude-hooks install            # Claude Code hooks
 ```
 
-See **CLAUDE.md** for the full CLI reference (~50 commands across 15 subsystems).
-
----
-
-## Real-World Use Cases
-
-### Architecture Enforcement
-```python
-# Commit your architectural decisions
-governor.propose(
-    claim="Microservices communicate via message queue, not direct HTTP",
-    topic="architecture",
-    decision=True
-)
-
-# Agent can't violate this without explicit override
-```
-
-### API Validation
-```python
-# Agent claims an endpoint exists
-result = governor.propose(
-    claim="User authentication endpoint at /api/v1/auth",
-    paths=["api/routes.py", "tests/test_auth.py"]
-)
-# Governor verifies files exist and contain relevant code
-```
-
-### Test Requirements
-```python
-# Require tests to pass before accepting changes
-result = governor.propose(
-    claim="All tests pass after authentication refactor",
-    verification_cmd="pytest tests/",
-)
-# Governor runs pytest and produces receipt
-```
-
-### Session Continuity
-```python
-# Get context for your agent's next session
-context = governor.get_context(topics=["architecture", "api"])
-# Inject into system prompt - agent now knows what was decided
-```
-
-### Task Management
-```bash
-# Track work with dependencies, milestones, and session handoffs
-governor issue add "Implement auth" -p high -m "v1.0"
-governor issue block <logout-id> <login-id>
-governor issue next                          # Prioritized recommendations
-governor issue session handoff               # Resume context across sessions
-```
-
----
-
-## Demo
-
-```bash
-python demo.py
-```
-
-**Output:**
-```
-SCENARIO 2: Agent claims API file exists (HALLUCINATION)
-  Claim: API endpoint defined in api/users.py
-  Status: rejected
-  Rejection: No evidence provided and validators could not verify claim
-
-SCENARIO 3: Agent tries to use Vue (CONTRADICTION)
-  Claim: Using Vue for frontend framework
-  Status: rejected
-  Contradiction: Contradicts existing commitment: Using React for frontend framework
-```
-
----
-
-## Philosophy: Why External Constraint Beats Internal Alignment
-
-**The problem with current approaches:**
-- "Prompt engineering" - trying to make the agent more careful
-- "Retrieval-augmented generation" - giving the agent better memory
-- "Fine-tuning" - training the agent to be more accurate
-
-**All of these assume:** If we make the agent smarter/better/more careful, it will make fewer mistakes.
-
-**Agent Governor assumes:** The agent will *always* make mistakes. Build a system that catches them.
-
-This is the same philosophy as:
-- Type systems (don't trust the programmer, enforce constraints)
-- TDD (don't trust your code, write tests first)
-- Code review (don't trust yourself, require second verification)
-
-**You wouldn't let untrusted code deploy without CI/CD. Why let untrusted agents write without verification?**
-
-### The Audit Graph: Knowledge Governance
-
-The audit graph isn't intelligence gathering - it's **knowledge governance**.
-
-Where OSINT tools extract and correlate facts, Governor maps:
-- **Epistemic provenance** - why a claim exists
-- **Hypothesis stress-testing** - what supports it, what it displaced
-- **Contradiction surfacing** - what it contradicts
-- **Lineage and drift analysis** - what downstream actions depended on it
-- **"What must be true for this to be allowed"** - made visible
-
-This is research in the old sense. The kind that produces:
-- Invariants
-- Refutations
-- Stable objects
-- Reusable insight
-
-**The key insight:** Once you have that graph, LLMs stop being oracles and become junior analysts. They don't get to invent structure — they navigate one.
-
-You're not building OSINT tooling. You're building a **lab bench for reasoning under constraint**.
+Full CLI reference: 100+ commands across 30+ subsystems. See `.claude/rules/cli-reference.md`.
 
 ---
 
 ## Installation
 
 ```bash
-pip install agent-governor
-```
-
-Or from source:
-```bash
+# From source
 git clone https://github.com/unpingable/agent_governor
 cd agent_governor
-pip install -e .
+pip install -e ".[dev]"
+
+# Run tests
+python3 -m pytest tests/ -v
+
+# WebUI
+bash start.sh                            # Claude Code backend
+bash start-codex.sh                      # Codex backend
 ```
 
-> **Note:** `maude` is an alias for `governor` — same CLI, shorter to type.
-> Use whichever you prefer: `governor check` or `maude check`.
+---
+
+## Documentation
+
+| Document | Contents |
+|----------|----------|
+| `CLAUDE.md` | Architecture rules, claim types, receipt types, conventions |
+| `BUILD_SPEC.md` | Step-by-step build guide, FSM, receipt design |
+| `MULTI_AGENT.md` | Concurrency model, conflict detection, dispatcher |
+| `CONTRIBUTING.md` | Branch workflow, testing requirements |
+| `specs/` | 25+ design specs (core theory, UX, interferometry) |
+| `docs/` | User guides, architecture docs, mode-specific guides |
 
 ---
 
-## Full Documentation
+## Why "Governor"?
 
-- **BUILD_SPEC.md** - Complete architecture specification
-  - Receipt types (FileSnapshot, CmdRun, DiffReceipt)
-  - Typed claims vocabulary
-  - Facts vs Decisions ledger design
-  - FSM state machine
-  - Step-by-step build guide
+In mechanical systems, a governor limits speed to prevent damage — the spinning-ball mechanism on steam engines.
 
-- **MULTI_AGENT.md** - Multi-agent coordination
-  - SQLite WAL mode for concurrency
-  - Leases and epochs
-  - Agent permissions
-  - Dispatcher protocol
+In AI systems, the Agent Governor limits autonomy to prevent hallucination.
 
-- **CLAUDE.md** - Development guide for contributors
-
----
-
-## Comparison: Memory vs Governance
-
-| Feature | Memory Tools | Agent Governor |
-|---------|-------------|----------------|
-| **Purpose** | Help agent remember | Prevent ungrounded commits |
-| **Trust model** | Agent is helpful but forgetful | Agent is unreliable, require proof |
-| **Verification** | Optional / out of band | Cryptographic receipts required |
-| **Write control** | No blocking | Write gate enforced |
-| **Architecture** | Memory prosthetic | Epistemic security system |
-| **Use case** | Task continuity | Production safety |
-
-**Both are useful. They solve different problems.**
-
-Use memory tools when you want continuity across sessions.
-Use Agent Governor when you need production-oriented AI development with verification guarantees.
+**Speed without control is just chaos.**
 
 ---
 
@@ -392,14 +304,4 @@ Apache-2.0
 
 ---
 
-## Why "Governor"?
-
-In mechanical systems, a governor limits speed to prevent damage - like the spinning-ball mechanism on old steam engines.
-
-In AI systems, the Agent Governor limits autonomy to prevent hallucination.
-
-**Speed without control is just chaos.**
-
----
-
-*When your AI agent speaks, make it show its work.*
+*Agents propose. Governors verify. Receipts don't lie.*

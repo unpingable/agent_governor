@@ -2,6 +2,8 @@
 
 ## Version 0.1 — Preventing Silent Divergence
 
+**Status**: `ahead` — Spec describes outputs (ARCHITECTURE.md, SPEC_INDEX.md, ADR/) not yet created. See `specs/core/AG2_DOCS_GAP_SPEC.md` for tracking.
+
 ### Companion to: All specs (meta-layer)
 
 ---

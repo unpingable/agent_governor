@@ -11979,7 +11979,7 @@ def session_create(ctx: click.Context, name: str, mode: str) -> None:
 @click.option("--mode", "-m", type=click.Choice(["fiction", "code", "nonfiction"]), help="Filter by mode")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def session_list(ctx: click.Context, mode: str | None, as_json: bool) -> None:
+def session_capsule_list(ctx: click.Context, mode: str | None, as_json: bool) -> None:
     """List all sessions."""
     from .session_continuity import SessionStore
 
@@ -12200,7 +12200,7 @@ def session_promote(ctx: click.Context, session_id: str, confirm: bool) -> None:
 
     if not confirm:
         click.echo(f"WARNING: This will make '{capsule.metadata.name}' the new mainline.")
-        click.echo(f"  Current mainline will be archived.")
+        click.echo("  Current mainline will be archived.")
         click.echo("  Use --confirm to proceed.")
         return
 

@@ -96,29 +96,18 @@ ops-gov verify --runbook deploy-v2.yaml --window maintenance
 
 ## Architecture
 
-```
-┌─────────────────┐
-│  Coding Agent   │  Produces patches + pointers
-└────────┬────────┘
-         │ propose
-         v
-┌─────────────────┐
-│    GOVERNOR      │  THE CHOKE POINT
-│  ┌───────────┐  │
-│  │ Verifiers │──┼──> Runs checks, produces receipts
-│  └───────────┘  │
-│  ┌───────────┐  │
-│  │  Ledgers  │──┼──> facts/ (empirical, decays)
-│  └───────────┘  │    decisions/ (normative, persists)
-│  ┌───────────┐  │
-│  │ Epistemic │──┼──> Provenance, confidence, evidence
-│  └───────────┘  │
-└────────┬────────┘
-         │ only if verified
-         v
-┌─────────────────┐
-│   Working Tree  │  Actual writes happen here
-└─────────────────┘
+```mermaid
+graph TD
+    A["🔧 Coding Agent\nProduces patches + pointers"]
+    A -->|propose| B
+
+    subgraph B ["GOVERNOR — THE CHOKE POINT"]
+        B1["Verifiers → Runs checks, produces receipts"]
+        B2["Ledgers → facts/ (decays) · decisions/ (persists)"]
+        B3["Epistemic → Provenance, confidence, evidence"]
+    end
+
+    B -->|only if verified| C["Working Tree\nActual writes happen here"]
 ```
 
 **Threat model:**
@@ -210,6 +199,14 @@ Same engine, different constraints. The governor doesn't care what domain you're
 | **Architecture** | Memory prosthetic | Epistemic security |
 
 Both are useful. They solve different problems. Use memory tools for continuity. Use Agent Governor for safety.
+
+---
+
+## Failure Modes Observed in the Wild
+
+Industry analyses (e.g., 1Password's [*From Magic to Malware*](https://1password.com/blog/from-magic-to-malware-how-openclaws-agent-skills-become-an-attack-surface)) document how agent "skills" and tool chaining become attack surfaces when autonomy is not bounded by explicit authority, adjudication, and auditability — including supply chain attacks via skill registries where markdown documentation becomes a malware delivery vector.
+
+The mitigations proposed (default-deny execution, sandboxing, time-bound permissions, provenance logging) describe the same structural requirements the Agent Governor enforces: typed claims require receipts, writes require verified proposals, and no tool execution escapes the gate. The difference is between post-hoc remediation and pre-execution constraint enforcement.
 
 ---
 

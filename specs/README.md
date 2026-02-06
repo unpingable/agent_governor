@@ -66,6 +66,7 @@ The governor's theoretical foundation. Read in this order.
 | 20 | **SESSION_CONTINUITY_SPEC.md** | Capsule-based session management. Ledger + workspace, not chat replay. `status: canonical` |
 | 21 | **GOVERNED_COMPACT_SPEC.md** | Loss-aware context compaction with receipts. Anchors survive, loss explicit. `status: canonical` |
 | 22 | **AG2_DOCS_GAP_SPEC.md** | Documentation gaps: ADRs, subsystem docs, reference audit. `status: gap` |
+| 23 | **AG2_TEMPORAL_ATTACK_SURFACE_SPEC.md** | Δt-aware security analysis. Temporal risk markers, race windows, fail-open detection. `status: gap` |
 
 ### Reading Guidance
 

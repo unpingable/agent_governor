@@ -1,6 +1,6 @@
 # AG2 Build Order
 
-## 2.0 Implementation Sequence — 14 Gap Specs
+## 2.0 Implementation Sequence — 15 Gap Specs
 
 ```yaml
 status: planning
@@ -15,8 +15,9 @@ dogfood: use slim mode to govern 2.0 development once Layer 0 lands
 
 ```
 Layer 0 (Substrate)
-  AG2_INSTRUMENT_SPEC ──────────────────────┐
-  SLIM_MODE_SPEC ───────────────────────────┤
+  CONTROL_THEORY_SPEC ─────────────────────┐ (the math — R_t = PD/E)
+  AG2_INSTRUMENT_SPEC ─────────────────────┤
+  SLIM_MODE_SPEC ──────────────────────────┤
                                             │
 Layer 1 (Control Plane)                     │
   CONSTRAINT_COMPILER_SPEC ─────────────────┤ (emits receipts into instrument)
@@ -48,6 +49,28 @@ Parallel Track (Docs)
 ## Layer 0: Substrate
 
 **Build first. Everything else depends on these.**
+
+### 0. CONTROL_THEORY_SPEC (Large, foundational)
+
+The mathematical foundation: R_t = (P_t · D_t) / E_t. Single dimensionless ratio (Reynolds number analog) that unifies regime detection, evidence gating, capability shaping, and open-loop detection.
+
+- Defines the core inequality: P_t ≤ (τ · E_t) / D_t
+- Tool power classification (π × b × ι)
+- Evidence integrity scoring (receipts + provenance + verifiability + independence)
+- Feedback delay modeling
+- Regime thresholds derived from R̄_t
+- Glass cannon sensitivity analysis (∂R/∂E, ∂R/∂D)
+- Self-regulating open-loop detection (backlog → D_t increase → R_t increase → capability reduction)
+
+**Build this first within Layer 0.** It's the math that the instrument system logs, that slim mode simplifies, and that every subsequent layer computes over. Existing subsystems (regime.py, epistemic.py, strict.py, boil.py, scars.py) refactor to emit/consume R_t.
+
+**Key dependency edges:**
+- Instrument spec → logs (P_t, D_t, E_t, R_t) per step
+- Constraint compiler → compiles current capability envelope from R_t
+- Detector signals → modulate E_t
+- Spectral stability → coupled R_t oscillation across layers
+- Scalar collapse → R_t converging to single-metric optimization
+- Every existing subsystem → maps to R_t terms (see spec Section 9)
 
 ### 1. AG2_INSTRUMENT_SPEC (Large)
 
@@ -218,19 +241,20 @@ Missing documentation and ADR extraction. Can run anytime. Good for sessions whe
 
 | Spec | Hard Dependencies |
 |------|------------------|
-| AG2_INSTRUMENT | None (first) |
-| SLIM_MODE | None (first) |
-| CONSTRAINT_COMPILER | Instrument (receipts) |
-| DETECTOR_INTEGRATION | Instrument (artifacts) |
+| CONTROL_THEORY | None (first — the math) |
+| AG2_INSTRUMENT | Control Theory (logs R_t per step) |
+| SLIM_MODE | Control Theory (simplified R_t gates) |
+| CONSTRAINT_COMPILER | Instrument (receipts), Control Theory (capability envelope from R_t) |
+| DETECTOR_INTEGRATION | Instrument (artifacts), Control Theory (signals modulate E_t) |
 | COMMITMENT_TRANSPORT | Compiler (projection validation) |
-| SPECTRAL_STABILITY | Instrument (reports), Compiler (gating) |
-| SCALAR_COLLAPSE | Instrument (telemetry history) |
+| SPECTRAL_STABILITY | Instrument (reports), Compiler (gating), Control Theory (coupled R_t) |
+| SCALAR_COLLAPSE | Instrument (telemetry history), Control Theory (R_t metric diversity) |
 | CLI_CHAT | Compiler (constraint projection) |
 | MAUDE_RENAME | Slim Mode, CLI Chat (CLI surface stability) |
 | DOC_GOVERNANCE | Commitment Transport, Instrument |
 | AG2_DASHBOARD_UX | Instrument (run model) |
 | AG2_WEBUI_DEMO_GAP | Dashboard |
-| TEMPORAL_ATTACK_SURFACE | Instrument (parallel, incremental) |
+| TEMPORAL_ATTACK_SURFACE | Instrument (parallel, incremental), Control Theory (D_t modeling) |
 | AG2_DOCS_GAP | None (parallel, incremental) |
 
 ---
@@ -238,7 +262,7 @@ Missing documentation and ADR extraction. Can run anytime. Good for sessions whe
 ## Estimated Sequence (Complete-Per-Layer)
 
 ```
-Week(s) 1-2:  Layer 0  — Instrument + Slim Mode
+Week(s) 1-2:  Layer 0  — Control Theory + Instrument + Slim Mode
 Week(s) 3-4:  Layer 1  — Constraint Compiler + Detector Integration
 Week(s) 5-6:  Layer 2  — Commitment Transport + Spectral Stability + Scalar Collapse
 Week(s) 7:    Layer 3  — CLI Chat + Maude Rename

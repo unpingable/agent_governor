@@ -1087,6 +1087,23 @@ from .dashboard_ux import (
     make_dashboard_event,
 )
 
+# WebUI Demo (AG2 Layer 4, Item #12)
+from .webui_demo import (
+    DemoSurface,
+    StepAction,
+    DemoStatus,
+    DemoStep,
+    DemoScenario,
+    DemoManifest,
+    DemoStore,
+    BUILTIN_DEMOS,
+    FICTION_VIOLATION_DEMO,
+    CODE_GOVERNANCE_DEMO,
+    INTERFEROMETRY_DEMO,
+    generate_playwright_spec,
+    make_demo_event,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -2012,6 +2029,20 @@ __all__ = [
     "make_heartbeat",
     "make_progress",
     "make_dashboard_event",
+    # WebUI Demo (AG2 Layer 4, Item #12)
+    "DemoSurface",
+    "StepAction",
+    "DemoStatus",
+    "DemoStep",
+    "DemoScenario",
+    "DemoManifest",
+    "DemoStore",
+    "BUILTIN_DEMOS",
+    "FICTION_VIOLATION_DEMO",
+    "CODE_GOVERNANCE_DEMO",
+    "INTERFEROMETRY_DEMO",
+    "generate_playwright_spec",
+    "make_demo_event",
 ]
 
 __version__ = "0.6.0"

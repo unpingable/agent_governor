@@ -14974,6 +14974,118 @@ def advanced(ctx: click.Context) -> None:
         click.echo(ctx.get_help())
 
 
+# ---------------------------------------------------------------------------
+# WebUI Demo (AG2 Layer 4, Item #12)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("demo")
+def demo_group() -> None:
+    """WebUI demo management — scripted, reproducible screenshots."""
+    pass
+
+
+@demo_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def demo_list(ctx: click.Context, as_json: bool) -> None:
+    """List all demo scenarios (built-in + custom)."""
+    from .webui_demo import DemoStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DemoStore(governor_dir=gov_dir)
+    scenarios = store.list_scenarios()
+
+    if as_json:
+        click.echo(json.dumps([s.to_dict() for s in scenarios], indent=2))
+    else:
+        for s in scenarios:
+            shots = len(s.screenshot_paths)
+            tags = ", ".join(s.tags) if s.tags else "none"
+            click.echo(f"  {s.name} ({s.surface.value}) — {shots} screenshots, tags: {tags}")
+
+
+@demo_group.command("check")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def demo_check(ctx: click.Context, as_json: bool) -> None:
+    """Check freshness of all demo screenshots."""
+    from .webui_demo import DemoStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DemoStore(governor_dir=gov_dir)
+    results = store.check_freshness()
+
+    if as_json:
+        click.echo(json.dumps(results, indent=2))
+    else:
+        for r in results:
+            status = r["status"]
+            icon = {"fresh": "+", "stale": "~", "missing": "?", "error": "!"}.get(status, " ")
+            click.echo(f"  [{icon}] {r['name']}: {status} ({len(r['screenshots'])} screenshots)")
+
+
+@demo_group.command("spec")
+@click.argument("name")
+@click.option("--output", "-o", default=None, help="Write to file")
+@click.pass_context
+def demo_spec(ctx: click.Context, name: str, output: str | None) -> None:
+    """Generate Playwright spec for a demo scenario."""
+    from .webui_demo import DemoStore, generate_playwright_spec
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DemoStore(governor_dir=gov_dir)
+    scenarios = store.list_scenarios()
+    scenario = next((s for s in scenarios if s.name == name), None)
+
+    if not scenario:
+        click.echo(f"Unknown scenario: {name}", err=True)
+        ctx.exit(1)
+        return
+
+    spec = generate_playwright_spec(scenario)
+    if output:
+        Path(output).write_text(spec)
+        click.echo(f"Wrote Playwright spec to {output}")
+    else:
+        click.echo(spec)
+
+
+@demo_group.command("show")
+@click.argument("name")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def demo_show(ctx: click.Context, name: str, as_json: bool) -> None:
+    """Show details of a demo scenario."""
+    from .webui_demo import DemoStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DemoStore(governor_dir=gov_dir)
+    scenarios = store.list_scenarios()
+    scenario = next((s for s in scenarios if s.name == name), None)
+
+    if not scenario:
+        click.echo(f"Unknown scenario: {name}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(scenario.to_dict(), indent=2))
+    else:
+        click.echo(f"Name: {scenario.name}")
+        click.echo(f"Description: {scenario.description}")
+        click.echo(f"Surface: {scenario.surface.value}")
+        click.echo(f"Steps: {len(scenario.steps)}")
+        click.echo(f"Screenshots: {len(scenario.screenshot_paths)}")
+        if scenario.prerequisites:
+            click.echo(f"Prerequisites:")
+            for p in scenario.prerequisites:
+                click.echo(f"  - {p}")
+        if scenario.tags:
+            click.echo(f"Tags: {', '.join(scenario.tags)}")
+        click.echo(f"Content hash: {scenario.content_hash()}")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

@@ -1104,6 +1104,25 @@ from .webui_demo import (
     make_demo_event,
 )
 
+# Admissibility Gate (AG2 Layer 2.1-A)
+from .admissibility import (
+    Severity as AdmitSeverity,
+    UnknownCategory,
+    ResolvableBy,
+    PushbackMode,
+    AssumptionStatus,
+    Unknown as AdmitUnknown,
+    Assumption,
+    AdmissibilityAssessment,
+    Waiver as AdmitWaiver,
+    AdmissibilityStore,
+    select_pushback_mode,
+    select_clarifying_questions,
+    assess_task,
+    check_invariant_f,
+    make_admissibility_event,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -2043,6 +2062,22 @@ __all__ = [
     "INTERFEROMETRY_DEMO",
     "generate_playwright_spec",
     "make_demo_event",
+    # Admissibility Gate (AG2 Layer 2.1-A)
+    "AdmitSeverity",
+    "UnknownCategory",
+    "ResolvableBy",
+    "PushbackMode",
+    "AssumptionStatus",
+    "AdmitUnknown",
+    "Assumption",
+    "AdmissibilityAssessment",
+    "AdmitWaiver",
+    "AdmissibilityStore",
+    "select_pushback_mode",
+    "select_clarifying_questions",
+    "assess_task",
+    "check_invariant_f",
+    "make_admissibility_event",
 ]
 
 __version__ = "0.6.0"

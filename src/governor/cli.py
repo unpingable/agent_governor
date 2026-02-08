@@ -14975,6 +14975,143 @@ def advanced(ctx: click.Context) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Admissibility Gate (AG2 Layer 2.1-A)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("admit")
+def admit_group() -> None:
+    """Admissibility gate — push-back system for underspecified tasks."""
+    pass
+
+
+@admit_group.command("assess")
+@click.option("--setpoint", type=float, required=True, help="Setpoint score (0-1)")
+@click.option("--constraints", type=float, required=True, help="Constraint score (0-1)")
+@click.option("--observability", type=float, required=True, help="Observability score (0-1)")
+@click.option("--run-id", default="", help="Run ID to persist assessment")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def admit_assess(ctx: click.Context, setpoint: float, constraints: float,
+                 observability: float, run_id: str, as_json: bool) -> None:
+    """Assess task admissibility."""
+    from .admissibility import assess_task, AdmissibilityStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    assessment = assess_task(setpoint, constraints, observability)
+
+    if run_id:
+        store = AdmissibilityStore(governor_dir=gov_dir)
+        store.save_assessment(run_id, assessment)
+
+    if as_json:
+        click.echo(json.dumps(assessment.to_dict(), indent=2))
+    else:
+        click.echo(f"Score: {assessment.score:.3f}")
+        click.echo(f"Mode: {assessment.mode.value}")
+
+
+@admit_group.command("status")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def admit_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show admissibility status for a run."""
+    from .admissibility import AdmissibilityStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = AdmissibilityStore(governor_dir=gov_dir)
+    assessment = store.load_assessment(run_id)
+
+    if not assessment:
+        click.echo(f"No assessment found for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(assessment.to_dict(), indent=2))
+    else:
+        click.echo(f"Run: {run_id}")
+        click.echo(f"Score: {assessment.score:.3f}")
+        click.echo(f"Mode: {assessment.mode.value}")
+        click.echo(f"Unknowns: {len(assessment.unknowns)}")
+
+
+@admit_group.command("unknowns")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def admit_unknowns(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """List unknowns for a run."""
+    from .admissibility import AdmissibilityStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = AdmissibilityStore(governor_dir=gov_dir)
+    unknowns = store.load_unknowns(run_id)
+
+    if as_json:
+        click.echo(json.dumps([u.to_dict() for u in unknowns], indent=2))
+    else:
+        if not unknowns:
+            click.echo("No unknowns recorded.")
+        for u in unknowns:
+            click.echo(f"  [{u.severity.value}] {u.id}: {u.description} ({u.category.value})")
+
+
+@admit_group.command("check")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def admit_check(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Check Invariant F (no hidden assumptions) for a run."""
+    from .admissibility import AdmissibilityStore, check_invariant_f
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = AdmissibilityStore(governor_dir=gov_dir)
+    unknowns = store.load_unknowns(run_id)
+    assumptions = store.load_assumptions(run_id)
+    violations = check_invariant_f(assumptions, unknowns)
+
+    if as_json:
+        click.echo(json.dumps({"violations": violations, "compliant": len(violations) == 0}, indent=2))
+    else:
+        if violations:
+            click.echo(f"Invariant F violations ({len(violations)}):")
+            for v in violations:
+                click.echo(f"  ! {v}")
+            ctx.exit(1)
+        else:
+            click.echo("Invariant F: compliant")
+
+
+@admit_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def admit_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with admissibility assessments."""
+    from .admissibility import AdmissibilityStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = AdmissibilityStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            a = store.load_assessment(r)
+            results.append({"run_id": r, "score": a.score if a else None,
+                           "mode": a.mode.value if a else None})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No admissibility assessments found.")
+        for r in runs:
+            a = store.load_assessment(r)
+            if a:
+                click.echo(f"  {r}: score={a.score:.3f} mode={a.mode.value}")
+
+
+# ---------------------------------------------------------------------------
 # WebUI Demo (AG2 Layer 4, Item #12)
 # ---------------------------------------------------------------------------
 

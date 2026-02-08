@@ -924,6 +924,31 @@ from .slim_mode import (
 # Envelopes — re-export SLIM mode addition
 from .envelopes import EnvelopeMode, EnvelopeConfig
 
+# Constraint Compiler (AG2 Layer 1, Item #3)
+from .constraint_compiler import (
+    ConstraintKind,
+    ConstraintSeverity,
+    ScarClass,
+    OutputFormat as ConstraintOutputFormat,
+    ResolvedConstraint,
+    ConstraintSource,
+    OverrideWarrant,
+    QuorumUnsatisfiedReceipt,
+    ConstraintBlock,
+    ConstraintCache,
+    ConstraintDiff,
+    classify_scar,
+    required_quorum,
+    check_warrant_quorum,
+    make_constraint_id,
+    compute_priority as compute_constraint_priority,
+    render_prompt_prefix,
+    compile_constraints,
+    diff_constraints,
+    clear_cache as clear_constraint_cache,
+    get_cache as get_constraint_cache,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -1703,6 +1728,28 @@ __all__ = [
     "SlimStatus",
     "ContradictionError",
     "create_slim_mode",
+    # Constraint Compiler (AG2 Layer 1, Item #3)
+    "ConstraintKind",
+    "ConstraintSeverity",
+    "ScarClass",
+    "ConstraintOutputFormat",
+    "ResolvedConstraint",
+    "ConstraintSource",
+    "OverrideWarrant",
+    "QuorumUnsatisfiedReceipt",
+    "ConstraintBlock",
+    "ConstraintCache",
+    "ConstraintDiff",
+    "classify_scar",
+    "required_quorum",
+    "check_warrant_quorum",
+    "make_constraint_id",
+    "compute_constraint_priority",
+    "render_prompt_prefix",
+    "compile_constraints",
+    "diff_constraints",
+    "clear_constraint_cache",
+    "get_constraint_cache",
 ]
 
 __version__ = "0.6.0"

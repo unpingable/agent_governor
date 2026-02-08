@@ -13793,6 +13793,105 @@ def slim_status(ctx, as_json, oneliner):
         click.echo(f"\nLast check: {status.last_check}")
 
 
+# ---------------------------------------------------------------------------
+# Constraint Compiler (AG2 Layer 1, Item #3)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("constraints")
+def constraints_group() -> None:
+    """Pre-execution constraint projection.
+
+    Resolve all applicable constraints for intent + scope into a portable
+    block that any executor LLM can consume as a prompt prefix.
+    """
+
+
+@constraints_group.command("resolve")
+@click.option("--intent", "-i", default=None, help="User-declared intent (production, hotfix, etc.)")
+@click.option("--scope", "-s", default=None, help="File/directory scope (glob pattern)")
+@click.option("--mode", "-m", default=None, help="Domain mode (code, fiction, nonfiction, ops)")
+@click.option("--format", "fmt", type=click.Choice(["prompt", "json", "summary"]), default="prompt", help="Output format")
+@click.option("--no-cache", is_flag=True, help="Skip the in-memory cache")
+@click.pass_context
+def constraints_resolve(ctx: click.Context, intent: str | None, scope: str | None, mode: str | None, fmt: str, no_cache: bool) -> None:
+    """Resolve all constraints for intent + scope."""
+    from .constraint_compiler import compile_constraints
+    import json as _json
+
+    gov_dir = ctx.obj["gov_dir"]
+    block = compile_constraints(
+        intent=intent,
+        scope=scope,
+        mode=mode,
+        governor_dir=gov_dir,
+        use_cache=not no_cache,
+    )
+
+    if fmt == "json":
+        click.echo(_json.dumps(block.to_dict(), indent=2, default=str))
+    elif fmt == "summary":
+        click.echo(block.to_summary())
+    else:
+        click.echo(block.prompt_prefix)
+
+
+@constraints_group.command("diff")
+@click.option("--scope", "-s", default=None, help="File/directory scope (glob pattern)")
+@click.option("--intent", "-i", default=None, help="User-declared intent")
+@click.option("--mode", "-m", default=None, help="Domain mode")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def constraints_diff(ctx: click.Context, scope: str | None, intent: str | None, mode: str | None, as_json: bool) -> None:
+    """Diff current constraints against last cached compilation."""
+    from .constraint_compiler import compile_constraints, diff_constraints, get_cache
+    import json as _json
+
+    gov_dir = ctx.obj["gov_dir"]
+
+    # Get cached version (if any)
+    old_block = None
+    cache = get_cache()
+    # Compile fresh
+    new_block = compile_constraints(
+        intent=intent, scope=scope, mode=mode,
+        governor_dir=gov_dir, use_cache=False,
+    )
+
+    if old_block is None:
+        # No previous compilation — show current as "all new"
+        if as_json:
+            click.echo(_json.dumps({
+                "status": "no_previous",
+                "current": new_block.to_dict(),
+            }, indent=2, default=str))
+        else:
+            click.echo("No previous compilation found. Current constraints:")
+            click.echo(new_block.to_summary())
+        return
+
+    diff = diff_constraints(old_block, new_block)
+
+    if as_json:
+        click.echo(_json.dumps(diff.to_dict(), indent=2, default=str))
+    else:
+        if not diff.has_changes:
+            click.echo("No changes since last compilation.")
+        else:
+            if diff.added:
+                click.echo(f"Added ({len(diff.added)}):")
+                for c in diff.added:
+                    click.echo(f"  + [{c.severity.value}] {c.description}")
+            if diff.removed:
+                click.echo(f"Removed ({len(diff.removed)}):")
+                for c in diff.removed:
+                    click.echo(f"  - [{c.severity.value}] {c.description}")
+            if diff.changed:
+                click.echo(f"Changed ({len(diff.changed)}):")
+                for before, after in diff.changed:
+                    click.echo(f"  ~ {before.description}: {before.severity.value} → {after.severity.value}")
+
+
 # Advanced command group - pointer to existing commands
 @cli.group(invoke_without_command=True)
 @click.pass_context

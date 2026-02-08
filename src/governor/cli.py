@@ -14148,6 +14148,123 @@ def transport_stats(ctx: click.Context, as_json: bool) -> None:
         click.echo(f"Blocking count: {stats['blocking_count']}")
 
 
+# ---------------------------------------------------------------------------
+# Spectral Stability (AG2 Layer 2, Item #6)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("stability")
+def stability_group() -> None:
+    """Spectral stability gate for governance topology.
+
+    Computes ρ(M) from the governance hierarchy's coupling matrix.
+    Hard blocks when ρ(M) ≥ 1 — unstable by construction, no override.
+    """
+
+
+@stability_group.command("check")
+@click.option("--profile", "-p", default=None, help="Governance profile to check")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def stability_check(ctx: click.Context, profile: str | None, as_json: bool) -> None:
+    """Preflight stability check on governance topology."""
+    from .spectral_stability import StabilityGate
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    gate = StabilityGate(profile=profile, governor_dir=gov_dir)
+    report = gate.check()
+
+    if as_json:
+        click.echo(_json.dumps(report.to_dict(), indent=2, default=str))
+    else:
+        click.echo(report.to_summary())
+
+
+@stability_group.command("matrix")
+@click.option("--profile", "-p", default=None, help="Governance profile")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def stability_matrix(profile: str | None, as_json: bool) -> None:
+    """Show the coupling matrix details."""
+    from .spectral_stability import compute_stability
+    import json as _json
+
+    report = compute_stability(profile=profile)
+    coupling = report.coupling
+
+    if as_json:
+        click.echo(_json.dumps(coupling.to_dict(), indent=2, default=str))
+    else:
+        click.echo(f"ρ(M) = {coupling.spectral_radius:.4f}")
+        click.echo(f"\nLayers: {', '.join(l.name for l in coupling.layers)}")
+        click.echo("\nCoupling Matrix M:")
+        n = len(coupling.layers)
+        header = "           " + "  ".join(f"{l.name[:8]:>8}" for l in coupling.layers)
+        click.echo(header)
+        for i in range(n):
+            row = f"{coupling.layers[i].name[:10]:<10} " + "  ".join(
+                f"{coupling.matrix[i][j]:8.4f}" for j in range(n)
+            )
+            click.echo(row)
+
+
+@stability_group.command("hotspots")
+@click.option("--profile", "-p", default=None, help="Governance profile")
+@click.option("--top", "-n", "top_n", default=3, help="Number of hotspots")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def stability_hotspots(profile: str | None, top_n: int, as_json: bool) -> None:
+    """Show coupling hotspots and recommendations."""
+    from .spectral_stability import compute_stability
+    import json as _json
+
+    report = compute_stability(profile=profile)
+
+    if as_json:
+        click.echo(_json.dumps({
+            "hotspots": [h.to_dict() for h in report.hotspots[:top_n]],
+            "recommendations": report.recommendations,
+        }, indent=2, default=str))
+    else:
+        if not report.hotspots:
+            click.echo("No coupling hotspots detected.")
+        else:
+            click.echo("Coupling Hotspots:")
+            for h in report.hotspots[:top_n]:
+                click.echo(f"  {h.from_layer} → {h.to_layer}")
+                click.echo(f"    Strength: {h.strength:.4f}, Sensitivity: {h.sensitivity:.4f}")
+                click.echo(f"    Mitigation: {h.mitigation}")
+        if report.recommendations:
+            click.echo("\nRecommendations:")
+            for r in report.recommendations:
+                click.echo(f"  - {r}")
+
+
+@stability_group.command("region")
+@click.option("--profile", "-p", default=None, help="Governance profile")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def stability_region(profile: str | None, as_json: bool) -> None:
+    """Show kinetic region classification."""
+    from .spectral_stability import compute_stability
+    import json as _json
+
+    report = compute_stability(profile=profile)
+
+    if as_json:
+        click.echo(_json.dumps({
+            "region": report.region.value,
+            "spectral_radius": report.spectral_radius,
+            "margin": report.margin,
+            "verdict": report.verdict.value,
+            "stable": report.stable,
+        }, indent=2, default=str))
+    else:
+        click.echo(f"Region: {report.region.value}")
+        click.echo(f"ρ(M) = {report.spectral_radius:.4f}")
+        click.echo(f"Margin: {report.margin:.4f}")
+        click.echo(f"Verdict: {report.verdict.value}")
+        click.echo(f"Stable: {report.stable}")
+
+
 # Advanced command group - pointer to existing commands
 @cli.group(invoke_without_command=True)
 @click.pass_context

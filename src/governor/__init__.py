@@ -986,6 +986,24 @@ from .commitment_transport import (
     make_transport_event,
 )
 
+from .spectral_stability import (
+    KineticRegion,
+    GateVerdict,
+    GovernanceLayer,
+    CouplingHotspot,
+    AdjacencyViolation,
+    CouplingMatrix,
+    StabilityReport,
+    StabilityGate,
+    build_coupling_matrix,
+    check_adjacency,
+    classify_region,
+    determine_verdict,
+    find_hotspots,
+    compute_stability,
+    make_stability_event,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -1820,6 +1838,22 @@ __all__ = [
     "validate_bridge_transport",
     "validate_constraint_transport",
     "make_transport_event",
+    # Spectral Stability (AG2 Layer 2, Item #6)
+    "KineticRegion",
+    "GateVerdict",
+    "GovernanceLayer",
+    "CouplingHotspot",
+    "AdjacencyViolation",
+    "CouplingMatrix",
+    "StabilityReport",
+    "StabilityGate",
+    "build_coupling_matrix",
+    "check_adjacency",
+    "classify_region",
+    "determine_verdict",
+    "find_hotspots",
+    "compute_stability",
+    "make_stability_event",
 ]
 
 __version__ = "0.6.0"

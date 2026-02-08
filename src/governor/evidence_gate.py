@@ -1,5 +1,6 @@
 """
-Maude Lite: Evidence-gated coding harness — kernel-only surface.
+Evidence Gate: Evidence-gated coding harness — kernel-only surface.
+(Formerly maude_lite.py — renamed per MAUDE_RENAME_SPEC.md)
 
 The minimal surface over the governor kernel. Activates only non-negotiable
 constraints for code contexts, with no personality, no philosophy, no worldview.

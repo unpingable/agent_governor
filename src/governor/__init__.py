@@ -673,8 +673,8 @@ from .violation_resolver import (
     create_resolver as create_violation_resolver,
 )
 
-# Maude Lite (evidence-gated coding harness)
-from .maude_lite import (
+# Evidence Gate (evidence-gated coding harness, formerly maude_lite)
+from .evidence_gate import (
     MaudeLiteStatus,
     ClaimLevel,
     MaudeLiteClaim,

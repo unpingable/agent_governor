@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from governor.maude_lite import (
+from governor.evidence_gate import (
     # Enums
     MaudeLiteStatus,
     ClaimLevel,
@@ -938,13 +938,13 @@ class TestCLICommands:
 
     def test_config_command_available(self):
         """Verify config command exists in module."""
-        from governor.maude_lite import MaudeLiteConfig
+        from governor.evidence_gate import MaudeLiteConfig
         config = MaudeLiteConfig()
         assert hasattr(config, "to_dict")
 
     def test_kernel_functions_importable(self):
         """Verify all kernel functions are importable."""
-        from governor.maude_lite import (
+        from governor.evidence_gate import (
             extract_claims,
             check_evidence,
             link_evidence_to_claims,

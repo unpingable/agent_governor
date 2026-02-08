@@ -10218,22 +10218,22 @@ def continuity_import(ctx: click.Context, path: str) -> None:
 # =============================================================================
 
 
-@cli.group("lite")
+@cli.group("gate")
 @click.pass_context
-def lite_cmd(ctx):
-    """Maude Lite — evidence-gated coding harness.
+def gate_cmd(ctx):
+    """Evidence Gate — evidence-gated coding harness.
 
     Kernel-only surface: claims need evidence, contradictions persist, failures are loud.
 
     \b
     Examples:
-        governor lite check "text"
-        maude lite check "text"
+        governor gate check "text"
+        governor gate score "text"
     """
     pass
 
 
-@lite_cmd.command("check")
+@gate_cmd.command("check")
 @click.argument("text", required=False)
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
@@ -10250,7 +10250,7 @@ def lite_check(ctx, text, use_stdin, file, task, strict, fmt):
         maude lite check --stdin < output.txt
         maude lite check --file output.txt --format json
     """
-    from .maude_lite import MaudeLite, MaudeLiteConfig
+    from .evidence_gate import MaudeLite, MaudeLiteConfig
 
     # Get content to check
     if use_stdin:
@@ -10274,7 +10274,7 @@ def lite_check(ctx, text, use_stdin, file, task, strict, fmt):
         click.echo(lite.format_status(result))
 
 
-@lite_cmd.command("validate")
+@gate_cmd.command("validate")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--task", "-t", default="validate file", help="Task description")
 @click.option("--strict/--permissive", default=True, help="Strict mode or permissive")
@@ -10282,7 +10282,7 @@ def lite_check(ctx, text, use_stdin, file, task, strict, fmt):
 @click.pass_context
 def maude_lite_validate(ctx, path, task, strict, fmt):
     """Validate a file's contents against kernel constraints."""
-    from .maude_lite import MaudeLite, MaudeLiteConfig
+    from .evidence_gate import MaudeLite, MaudeLiteConfig
 
     content = Path(path).read_text()
     config = MaudeLiteConfig(strict=strict)
@@ -10304,11 +10304,11 @@ def maude_lite_validate(ctx, path, task, strict, fmt):
                 click.echo(f"  ... and {len(result.claims) - 5} more")
 
 
-@lite_cmd.command("config")
+@gate_cmd.command("config")
 @click.pass_context
 def maude_lite_config(ctx):
     """Show Maude Lite configuration."""
-    from .maude_lite import MaudeLiteConfig, CUSTODY_THRESHOLD
+    from .evidence_gate import MaudeLiteConfig, CUSTODY_THRESHOLD
 
     config = MaudeLiteConfig()
 
@@ -10326,7 +10326,7 @@ def maude_lite_config(ctx):
         click.echo(f"  - {feature}")
 
 
-@lite_cmd.command("score")
+@gate_cmd.command("score")
 @click.argument("text", required=False)
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
@@ -10334,7 +10334,7 @@ def maude_lite_config(ctx):
 @click.pass_context
 def maude_lite_score(ctx, text, use_stdin, file, fmt):
     """Score custody metrics (Ap, Ip, Fp) for content."""
-    from .maude_lite import score_custody
+    from .evidence_gate import score_custody
 
     # Get content to check
     if use_stdin:
@@ -10366,7 +10366,7 @@ def maude_lite_score(ctx, text, use_stdin, file, fmt):
                 click.echo(f"  - {reason}")
 
 
-@lite_cmd.command("extract")
+@gate_cmd.command("extract")
 @click.argument("text", required=False)
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
@@ -10374,7 +10374,7 @@ def maude_lite_score(ctx, text, use_stdin, file, fmt):
 @click.pass_context
 def maude_lite_extract(ctx, text, use_stdin, file, fmt):
     """Extract claims from content."""
-    from .maude_lite import extract_claims, check_evidence, link_evidence_to_claims
+    from .evidence_gate import extract_claims, check_evidence, link_evidence_to_claims
 
     # Get content to check
     if use_stdin:
@@ -10410,7 +10410,7 @@ def maude_lite_extract(ctx, text, use_stdin, file, fmt):
             click.echo(f"       ID: {claim.id}, Evidence: {evidence_status}")
 
 
-@lite_cmd.command("pending")
+@gate_cmd.command("pending")
 @click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
 @click.pass_context
 def maude_lite_pending(ctx, fmt):
@@ -10434,7 +10434,7 @@ def maude_lite_pending(ctx, fmt):
         click.echo(format_violation_prompt(pending.violations, pending.mode))
 
 
-@lite_cmd.command("fix")
+@gate_cmd.command("fix")
 @click.pass_context
 def maude_lite_fix(ctx):
     """Resolve pending violation by fixing the response.
@@ -10454,7 +10454,7 @@ def maude_lite_fix(ctx):
 
     # For CLI, we can't easily call async backend — note this limitation
     click.echo("[Governor] Fix action requires the web API with an LLM backend.")
-    click.echo("Use the web UI or reply '1' / 'maude fix' in chat.")
+    click.echo("Use the web UI or reply '1' / 'gate fix' in chat.")
     click.echo()
     click.echo("Pending violation:")
     for v in pending.violations:
@@ -10462,7 +10462,7 @@ def maude_lite_fix(ctx):
         click.echo(f"  - {desc}")
 
 
-@lite_cmd.command("revise")
+@gate_cmd.command("revise")
 @click.pass_context
 def maude_lite_revise(ctx):
     """Resolve pending violation by updating the anchor.
@@ -10491,7 +10491,7 @@ def maude_lite_revise(ctx):
         click.echo(f"[Governor] Revision failed: {result.message}", err=True)
 
 
-@lite_cmd.command("proceed")
+@gate_cmd.command("proceed")
 @click.option("--scope", type=click.Choice(["single_instance", "session", "project"]), default="single_instance", help="Exception scope")
 @click.option("--expiry", default=None, help="Exception expiry (ISO timestamp, or omit for permanent)")
 @click.pass_context
@@ -10522,7 +10522,7 @@ def maude_lite_proceed(ctx, scope, expiry):
         click.echo(f"[Governor] Exception logging failed: {result.message}", err=True)
 
 
-@lite_cmd.command("exceptions")
+@gate_cmd.command("exceptions")
 @click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
 @click.pass_context
 def maude_lite_exceptions(ctx, fmt):

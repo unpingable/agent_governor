@@ -1139,6 +1139,29 @@ from .mode_detection import (
     make_mode_event,
 )
 
+# Hysteresis (AG2 Layer 2.1-C)
+from .hysteresis import (
+    HysteresisMode,
+    TransitionVerdict,
+    ReplanVerdict,
+    RegressionSeverity,
+    ModeTransitionResult,
+    ReplanTracker,
+    RegressionAlert,
+    HysteresisState,
+    HysteresisStore,
+    compute_plan_hash,
+    check_mode_transition,
+    check_replan,
+    detect_regressions,
+    classify_regression_severity,
+    check_invariant_k,
+    make_hysteresis_event,
+    make_transition_event,
+    make_replan_event,
+    make_regression_event,
+)
+
 # Coherence Budget (AG2 Layer 2.1-C)
 from .coherence_budget import (
     CBIStatus,

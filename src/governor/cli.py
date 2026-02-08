@@ -15549,6 +15549,94 @@ def mode_list(ctx: click.Context, as_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Hysteresis (AG2 Layer 2.1-C)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("hysteresis")
+def hysteresis_group() -> None:
+    """Hysteresis — anti-churn mode transition control."""
+    pass
+
+
+@hysteresis_group.command("status")
+@click.option("--run-id", default="default", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def hysteresis_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show hysteresis state."""
+    from .hysteresis import HysteresisStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = HysteresisStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No hysteresis data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Mode:         {state.mode.value}")
+        click.echo(f"Admissibility: {state.last_admissibility:.3f}")
+        click.echo(f"Transitions:  {state.transition_count}")
+        click.echo(f"Suppressions: {state.suppression_count}")
+        click.echo(f"Regressions:  {state.regression_count}")
+        click.echo(f"Replans left: {state.replan_tracker.remaining()}")
+
+
+@hysteresis_group.command("check")
+@click.argument("admissibility", type=float)
+@click.option("--run-id", default="default", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def hysteresis_check(ctx: click.Context, admissibility: float, run_id: str, as_json: bool) -> None:
+    """Check mode transition for given admissibility value."""
+    from .hysteresis import HysteresisStore, HysteresisState, check_mode_transition
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = HysteresisStore(governor_dir=gov_dir)
+    state = store.load(run_id) or HysteresisState()
+
+    result = check_mode_transition(state.mode, admissibility)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Current: {result.current_mode.value}")
+        click.echo(f"Verdict: {result.verdict.value}")
+        click.echo(f"Target:  {result.target_mode.value}")
+        click.echo(f"Reason:  {result.reason}")
+
+
+@hysteresis_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def hysteresis_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with hysteresis data."""
+    from .hysteresis import HysteresisStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = HysteresisStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        click.echo(json.dumps(runs))
+    else:
+        if not runs:
+            click.echo("No hysteresis runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: {s.mode.value} (transitions={s.transition_count}, "
+                           f"suppressions={s.suppression_count})")
+
+
+# ---------------------------------------------------------------------------
 # Coherence Budget (AG2 Layer 2.1-C)
 # ---------------------------------------------------------------------------
 

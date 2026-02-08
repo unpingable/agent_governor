@@ -1037,6 +1037,32 @@ from .cli_chat import (
     make_chat_event,
 )
 
+from .doc_governance import (
+    DocScope,
+    DocStatus,
+    LinkKind,
+    CheckSeverity as DocCheckSeverity,
+    DocLink,
+    GovDoc,
+    AuthorityClaim,
+    DocFinding,
+    DocCheckResult,
+    DocReceipt,
+    StalenessReport,
+    DocStore,
+    DocGovernor,
+    ExportConfig,
+    extract_authority_claims,
+    check_authority as check_doc_authority,
+    check_adjacency as check_doc_adjacency,
+    check_links as check_doc_links,
+    check_staleness as check_doc_staleness,
+    check_doc,
+    generate_frontmatter,
+    generate_sidecar,
+    make_doc_event,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -1916,6 +1942,30 @@ __all__ = [
     "format_chat_response",
     "format_chat_compare",
     "make_chat_event",
+    # Document Governance (AG2 Layer 4, Item #10)
+    "DocScope",
+    "DocStatus",
+    "LinkKind",
+    "DocCheckSeverity",
+    "DocLink",
+    "GovDoc",
+    "AuthorityClaim",
+    "DocFinding",
+    "DocCheckResult",
+    "DocReceipt",
+    "StalenessReport",
+    "DocStore",
+    "DocGovernor",
+    "ExportConfig",
+    "extract_authority_claims",
+    "check_doc_authority",
+    "check_doc_adjacency",
+    "check_doc_links",
+    "check_doc_staleness",
+    "check_doc",
+    "generate_frontmatter",
+    "generate_sidecar",
+    "make_doc_event",
 ]
 
 __version__ = "0.6.0"

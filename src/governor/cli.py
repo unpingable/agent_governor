@@ -14395,6 +14395,267 @@ def collapse_modes(ctx: click.Context, as_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Document Governance (AG2 Layer 4, Item #10)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("doc")
+def doc_group() -> None:
+    """Document governance — docs as governed artifacts."""
+    pass
+
+
+@doc_group.command("register")
+@click.argument("path")
+@click.option("--scope", required=True, type=click.Choice(["descriptive", "procedural", "authoritative"]))
+@click.option("--link", "-l", multiple=True, help="Link as kind:target (e.g., code:src/auth/)")
+@click.option("--ttl", type=int, default=None, help="TTL in days")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_register(ctx: click.Context, path: str, scope: str, link: tuple, ttl: int | None, as_json: bool) -> None:
+    """Register a document for governance."""
+    from .doc_governance import DocGovernor, DocLink, LinkKind
+
+    links = []
+    for l_spec in link:
+        if ":" in l_spec:
+            kind_str, target = l_spec.split(":", 1)
+            try:
+                kind = LinkKind(kind_str)
+            except ValueError:
+                click.echo(f"Unknown link kind: {kind_str}. Valid: {[k.value for k in LinkKind]}", err=True)
+                ctx.exit(1)
+                return
+            links.append(DocLink(kind=kind, target=target))
+
+    gov = DocGovernor()
+    doc = gov.register(path, scope, links=links, ttl_days=ttl)
+
+    if as_json:
+        click.echo(json.dumps(doc.to_dict(), indent=2))
+    else:
+        click.echo(f"Registered: {path} [{scope}] (id: {doc.doc_id})")
+        if links:
+            click.echo(f"  Links: {len(links)}")
+        if ttl:
+            click.echo(f"  TTL: {ttl}d")
+
+
+@doc_group.command("unregister")
+@click.argument("path")
+@click.pass_context
+def doc_unregister(ctx: click.Context, path: str) -> None:
+    """Unregister a document from governance."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    if gov.unregister(path):
+        click.echo(f"Unregistered: {path}")
+    else:
+        click.echo(f"Not found: {path}", err=True)
+        ctx.exit(1)
+
+
+@doc_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_list(ctx: click.Context, as_json: bool) -> None:
+    """List registered governed documents."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    docs = gov.list_docs()
+
+    if as_json:
+        click.echo(json.dumps([d.to_dict() for d in docs], indent=2))
+    else:
+        if not docs:
+            click.echo("No governed documents registered.")
+            return
+        for doc in docs:
+            status = doc.status.value.upper()
+            click.echo(f"  {doc.path:<40} [{doc.scope.value}] {status}")
+
+
+@doc_group.command("check")
+@click.argument("path", required=False)
+@click.option("--all", "check_all", is_flag=True, help="Check all registered docs")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_check(ctx: click.Context, path: str | None, check_all: bool, as_json: bool) -> None:
+    """Check a document against governance rules."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+
+    if check_all:
+        results = gov.check_all()
+        if as_json:
+            click.echo(json.dumps([r.to_dict() for r in results], indent=2))
+        else:
+            for r in results:
+                status = "PASS" if r.passed else "FAIL"
+                click.echo(f"  {r.path:<40} [{r.scope}] {status} ({len(r.findings)} findings)")
+        return
+
+    if not path:
+        click.echo("Provide a path or use --all.", err=True)
+        ctx.exit(1)
+        return
+
+    result = gov.check(path)
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        status = "PASS" if result.passed else "FAIL"
+        click.echo(f"{result.path} [{result.scope}]: {status}")
+        for f in result.findings:
+            line = f"L{f.line_number} " if f.line_number else ""
+            click.echo(f"  [{f.severity.value}] {line}{f.message}")
+        if not result.findings:
+            click.echo("  No issues found.")
+
+
+@doc_group.command("status")
+@click.argument("path", required=False)
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_status(ctx: click.Context, path: str | None, as_json: bool) -> None:
+    """Show governance status for documents."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+
+    if path:
+        result = gov.check(path)
+        if as_json:
+            click.echo(json.dumps(result.to_dict(), indent=2))
+        else:
+            click.echo(f"{result.path} [{result.scope}]: {result.status}")
+            click.echo(f"  Authority claims: {result.authority_claims} "
+                        f"(grounded: {result.grounded_claims}, ungrounded: {result.ungrounded_claims})")
+            click.echo(f"  Links: {result.links_valid} valid, {result.links_broken} broken")
+        return
+
+    report = gov.status()
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(f"Governed documents: {report.total}")
+        click.echo(f"  Current: {report.current}")
+        click.echo(f"  Stale: {report.stale}")
+        click.echo(f"  Historical: {report.historical}")
+        click.echo(f"  Unsafe: {report.unsafe}")
+
+
+@doc_group.command("stale")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_stale(ctx: click.Context, as_json: bool) -> None:
+    """List stale and unsafe documents."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    stale = gov.stale_docs()
+
+    if as_json:
+        click.echo(json.dumps([d.to_dict() for d in stale], indent=2))
+    else:
+        if not stale:
+            click.echo("No stale or unsafe documents.")
+            return
+        for doc in stale:
+            click.echo(f"  {doc.path:<40} [{doc.status.value}] TTL: {doc.ttl_days or 'none'}d")
+
+
+@doc_group.command("verify")
+@click.argument("path")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_verify(ctx: click.Context, path: str, as_json: bool) -> None:
+    """Verify a document and produce a receipt."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    receipt = gov.verify(path)
+
+    if not receipt:
+        click.echo(f"Not found: {path}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(receipt.to_dict(), indent=2))
+    else:
+        click.echo(f"Verified: {path}")
+        click.echo(f"  Status: {receipt.status}")
+        click.echo(f"  Authority claims: {receipt.authority_claims}")
+        click.echo(f"  Links: {receipt.links_valid} valid, {receipt.links_broken} broken")
+        click.echo(f"  Hash: {receipt.content_hash}")
+
+
+@doc_group.command("demote")
+@click.argument("path")
+@click.pass_context
+def doc_demote(ctx: click.Context, path: str) -> None:
+    """Demote a document to HISTORICAL status."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    if gov.demote(path):
+        click.echo(f"Demoted: {path} → HISTORICAL")
+    else:
+        click.echo(f"Not found: {path}", err=True)
+        ctx.exit(1)
+
+
+@doc_group.command("promote")
+@click.argument("path")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_promote(ctx: click.Context, path: str, as_json: bool) -> None:
+    """Promote a HISTORICAL document back to CURRENT (requires re-check)."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    result = gov.promote(path)
+
+    if not result:
+        click.echo(f"Not found: {path}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        if result.passed:
+            click.echo(f"Promoted: {path} → CURRENT")
+        else:
+            click.echo(f"Cannot promote: {path} has {len(result.findings)} issues")
+            for f in result.findings[:3]:
+                click.echo(f"  [{f.severity.value}] {f.message}")
+
+
+@doc_group.command("export")
+@click.argument("path")
+@click.option("--format", "fmt", default="obsidian", type=click.Choice(["obsidian", "json"]))
+@click.pass_context
+def doc_export(ctx: click.Context, path: str, fmt: str) -> None:
+    """Export governance metadata for a document."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    result = gov.export_doc(path, fmt)
+
+    if not result:
+        click.echo(f"Not found: {path}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(result)
+
+
+# ---------------------------------------------------------------------------
 # CLI Chat (AG2 Layer 3, Item #8)
 # ---------------------------------------------------------------------------
 

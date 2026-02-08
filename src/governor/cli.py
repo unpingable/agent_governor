@@ -13180,6 +13180,351 @@ def risk_trajectory(ctx: click.Context, mode: str, as_json: bool) -> None:
     click.echo(f"  J_worst:      {metrics.j_worst:.4f}")
 
 
+# =============================================================================
+# Instrument (AG2 Instrumented Execution)
+# =============================================================================
+
+
+@cli.group("instrument")
+@click.pass_context
+def instrument_cmd(ctx):
+    """Instrumented execution — content-addressed runs, claims, and reports."""
+    pass
+
+
+@instrument_cmd.command("run")
+@click.option("--actor", type=click.Choice(["human", "agent", "pipeline"]), default="human")
+@click.option("--task", default="", help="Task description or ID")
+@click.option("--profile", type=click.Choice(["greenfield", "strict", "forensic"]), default="greenfield")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_run(ctx, actor, task, profile, as_json):
+    """Start a new instrumented run."""
+    from .instrument import InstrumentSystem, Actor, ActorKind, InstrumentProfile
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+
+    actor_obj = Actor(kind=ActorKind(actor), id=actor, name=actor)
+    manifest, _ = system.start_run(
+        actor=actor_obj,
+        profile=InstrumentProfile(profile),
+        task_id=task,
+    )
+
+    if as_json:
+        click.echo(json.dumps(manifest.to_dict(), indent=2))
+    else:
+        click.echo(f"Run started: {manifest.run_id}")
+        click.echo(f"Profile: {profile}")
+        if task:
+            click.echo(f"Task: {task}")
+
+
+@instrument_cmd.command("status")
+@click.option("--run-id", default=None, help="Specific run ID")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_status(ctx, run_id, as_json):
+    """Show instrument status or run details."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    status = system.status(run_id)
+
+    if as_json:
+        click.echo(json.dumps(status, indent=2))
+        return
+
+    if "error" in status:
+        click.echo(f"Error: {status['error']}", err=True)
+        ctx.exit(1)
+        return
+
+    if run_id:
+        click.echo(f"Run: {status['run_id']}")
+        click.echo(f"Created: {status['created_at']}")
+        finished = status.get('finished_at', '')
+        click.echo(f"Finished: {finished or '(in progress)'}")
+        click.echo(f"Profile: {status['profile']}")
+        click.echo(f"Events: {status['event_count']}")
+        click.echo(f"Receipts: {status['receipt_count']}")
+        click.echo(f"Claims: {status['claim_count']}")
+        integrity = click.style("PASS", fg="green") if status["integrity"] == "pass" else click.style("FAIL", fg="red")
+        click.echo(f"Integrity: {integrity}")
+        if status.get("issues"):
+            for issue in status["issues"]:
+                click.echo(f"  - {issue}")
+    else:
+        click.echo(f"Instrument system: {status['instrument_dir']}")
+        click.echo(f"Profile: {status['profile']}")
+        click.echo(f"Total runs: {status['total_runs']}")
+        if status.get("runs"):
+            click.echo("Runs:")
+            for rid in status["runs"][-10:]:
+                click.echo(f"  {rid}")
+
+
+@instrument_cmd.command("verify")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_verify(ctx, run_id, as_json):
+    """Verify run integrity."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    ok, issues = system.verify_run(run_id)
+
+    if as_json:
+        click.echo(json.dumps({"ok": ok, "issues": issues}, indent=2))
+    else:
+        if ok:
+            click.echo(click.style("PASS", fg="green") + f" — run {run_id} integrity verified")
+        else:
+            click.echo(click.style("FAIL", fg="red") + f" — run {run_id} has issues:")
+            for issue in issues:
+                click.echo(f"  - {issue}")
+            ctx.exit(1)
+
+
+@instrument_cmd.command("extract-claims")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_extract_claims(ctx, run_id, as_json):
+    """Extract claims from a run's events."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    claims = system.extract_claims(run_id)
+
+    if as_json:
+        click.echo(json.dumps([c.to_dict() for c in claims], indent=2))
+    else:
+        click.echo(f"Extracted {len(claims)} claims from run {run_id}:")
+        for c in claims:
+            click.echo(f"  [{c.modality.value}] {c.type.value}: {c.subject} — {c.predicate}")
+
+
+@instrument_cmd.command("diff")
+@click.option("--left", required=True, help="Left run ID")
+@click.option("--right", required=True, help="Right run ID")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_diff(ctx, left, right, as_json):
+    """Cross-run claim diff."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    results = system.diff_runs(left, right)
+
+    if as_json:
+        click.echo(json.dumps([r.to_dict() for r in results], indent=2))
+    else:
+        if not results:
+            click.echo("No differences found.")
+        else:
+            click.echo(f"{len(results)} finding(s):")
+            for r in results:
+                click.echo(f"  [{r.finding.value}] {r.match_key}: {r.details}")
+
+
+@instrument_cmd.command("report")
+@click.argument("run_id")
+@click.option("--diff-with", default=None, help="Run ID to diff against")
+@click.option("--json", "as_json", is_flag=True, help="Output JSON (default: markdown)")
+@click.pass_context
+def instrument_report(ctx, run_id, diff_with, as_json):
+    """Generate report for a run."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    report = system.generate_report([run_id], diff_with=diff_with)
+
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(report.to_markdown())
+
+
+@instrument_cmd.command("list")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_list(ctx, as_json):
+    """List all runs."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    runs = system.run_store.list_runs()
+
+    if as_json:
+        items = []
+        for rid in runs:
+            m = system.run_store.load_manifest(rid)
+            if m:
+                items.append(m.to_dict())
+        click.echo(json.dumps(items, indent=2))
+    else:
+        if not runs:
+            click.echo("No runs found.")
+        else:
+            click.echo(f"{len(runs)} run(s):")
+            for rid in runs:
+                m = system.run_store.load_manifest(rid)
+                status = "finished" if m and m.finished_at else "in progress"
+                profile = m.config.profile.value if m else "?"
+                click.echo(f"  {rid}  [{profile}]  {status}")
+
+
+@instrument_cmd.command("event")
+@click.argument("run_id")
+@click.argument("kind")
+@click.option("--payload", default="{}", help="JSON payload")
+@click.pass_context
+def instrument_event(ctx, run_id, kind, payload):
+    """Append an event to a run (for testing/scripting)."""
+    from .instrument import (
+        InstrumentSystem, Event, EventKind, Actor, ActorKind, _now_iso,
+    )
+    import uuid as _uuid
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+
+    try:
+        event_kind = EventKind(kind)
+    except ValueError:
+        valid = ", ".join(k.value for k in EventKind)
+        click.echo(f"Invalid event kind: {kind}. Valid: {valid}", err=True)
+        ctx.exit(1)
+        return
+
+    try:
+        payload_dict = json.loads(payload)
+    except json.JSONDecodeError as e:
+        click.echo(f"Invalid JSON payload: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    run_dir = system.instrument_dir / "runs" / run_id
+    if not run_dir.exists():
+        click.echo(f"Run not found: {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    from .instrument import EventWriter
+    writer = EventWriter(
+        run_dir, system.artifact_store, system.config.artifact_size_threshold
+    )
+    event = Event(
+        event_id=_uuid.uuid4().hex[:12],
+        ts=_now_iso(),
+        run_id=run_id,
+        kind=event_kind,
+        actor=Actor(ActorKind.HUMAN, "cli"),
+        payload=payload_dict,
+    )
+    writer.append_event(event)
+    click.echo(f"Event {event.event_id} appended to run {run_id}")
+
+
+@instrument_cmd.command("store")
+@click.argument("file_path", type=click.Path(exists=True))
+@click.pass_context
+def instrument_store(ctx, file_path):
+    """Store a file as a content-addressed artifact."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+
+    data = Path(file_path).read_bytes()
+    receipt = system.artifact_store.store(data)
+    click.echo(f"Stored: {receipt.artifact_hash} ({receipt.size_bytes} bytes)")
+
+
+@instrument_cmd.command("waiver-create")
+@click.option("--rule", required=True, help="Rule ID to waive")
+@click.option("--scope", required=True, help="Glob pattern for scope")
+@click.option("--reason", required=True, help="Reason for waiver")
+@click.option("--expires", default="", help="Expiry duration (e.g. 2h, 1d)")
+@click.option("--created-by", default="", help="Who created the waiver")
+@click.pass_context
+def instrument_waiver_create(ctx, rule, scope, reason, expires, created_by):
+    """Create a waiver for a rule."""
+    from .instrument import InstrumentSystem, Waiver, _now_iso
+    import uuid as _uuid
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+
+    expires_iso = ""
+    if expires:
+        try:
+            from .overrides import parse_duration
+            delta = parse_duration(expires)
+            expires_iso = (datetime.now(timezone.utc) + delta).isoformat()
+        except Exception:
+            # Try parsing as hours/days manually
+            if expires.endswith("h"):
+                hours = int(expires[:-1])
+                expires_iso = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
+            elif expires.endswith("d"):
+                days = int(expires[:-1])
+                expires_iso = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+            else:
+                click.echo(f"Invalid expires format: {expires}. Use '2h' or '1d'.", err=True)
+                ctx.exit(1)
+                return
+
+    waiver = Waiver(
+        waiver_id=_uuid.uuid4().hex[:12],
+        rule_id=rule,
+        scope=scope,
+        reason=reason,
+        expires=expires_iso,
+        created_by=created_by,
+    )
+    system.waiver_store.create(waiver)
+    click.echo(f"Waiver created: {waiver.waiver_id}")
+    click.echo(f"  Rule: {rule}")
+    click.echo(f"  Scope: {scope}")
+    if expires_iso:
+        click.echo(f"  Expires: {expires_iso}")
+
+
+@instrument_cmd.command("waiver-list")
+@click.option("--all", "show_all", is_flag=True, help="Show expired waivers too")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_waiver_list(ctx, show_all, as_json):
+    """List waivers."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+
+    waivers = system.waiver_store.list_all() if show_all else system.waiver_store.list_active()
+
+    if as_json:
+        click.echo(json.dumps([w.to_dict() for w in waivers], indent=2))
+    else:
+        if not waivers:
+            click.echo("No waivers found.")
+        else:
+            for w in waivers:
+                expired = " (EXPIRED)" if w.is_expired else ""
+                click.echo(f"  {w.waiver_id}  rule={w.rule_id}  scope={w.scope}{expired}")
+                click.echo(f"    Reason: {w.reason}")
+
+
 # Advanced command group - pointer to existing commands
 @cli.group(invoke_without_command=True)
 @click.pass_context

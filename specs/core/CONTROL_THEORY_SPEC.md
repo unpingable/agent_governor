@@ -3,8 +3,8 @@
 ## Version 0.1 — The Governor as a Reynolds Number
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - regime.py              # RegimeDetector → becomes R̄_t classifier
   - epistemic.py           # EpistemicLedger → E_t computation

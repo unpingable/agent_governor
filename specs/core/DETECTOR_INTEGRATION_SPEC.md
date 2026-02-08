@@ -3,8 +3,8 @@
 ## Version 0.1 — Temporal Coherence Signals as Governor Evidence
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - CONSTRAINT_COMPILER_SPEC.md
   - EPISTEMIC_STACK_SPEC.md

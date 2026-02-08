@@ -3,8 +3,8 @@
 ## Version 0.1 — Δt-Aware Security Analysis
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on: [security.py, KERNEL_CONSTRAINTS_SPEC.md]
 blocking: temporal vulnerability detection
 estimated_scope: large

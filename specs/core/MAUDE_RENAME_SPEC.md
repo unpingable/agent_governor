@@ -3,8 +3,8 @@
 ## Version 0.1 — Find Better Nomenclature for maude_lite.py
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - maude_lite.py
   - SLIM_MODE_SPEC.md

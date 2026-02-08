@@ -1,7 +1,7 @@
 # Hysteresis and Anti-Churn Specification
 
 ```yaml
-status: planning
+status: implemented
 layer: 2.1
 depends_on: [PHASE_CONTROL_SPEC, RISK_FUNCTION_SPEC, METRICS_SPEC]
 ```

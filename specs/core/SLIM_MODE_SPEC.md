@@ -3,8 +3,8 @@
 ## Version 0.1 — Single-Developer Governance for High-Iteration Workflows
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - cli.py               # Click CLI
   - ledgers.py           # FactLedger, DecisionLedger

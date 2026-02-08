@@ -3,8 +3,8 @@
 ## Version 0.1 — Eigenstructure Evaporation in Governance Chains
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - auto_tuning.py         # ThresholdTuner, Pareto analysis
   - convergence_tuning.py  # ConvergenceAnalyzer, ProposalStore

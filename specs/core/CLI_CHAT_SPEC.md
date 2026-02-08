@@ -3,8 +3,8 @@
 ## Version 0.1 — Governed Conversational CLI With Backend Switching
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - chat_bridge.py         # ChatBackend protocol, 4 backends, create_backend()
   - interferometry.py      # run_parallel(), run_serial(), multi-backend

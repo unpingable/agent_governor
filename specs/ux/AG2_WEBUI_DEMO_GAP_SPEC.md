@@ -3,8 +3,8 @@
 ## Version 0.1 — Scripted, Reproducible WebUI Screenshots
 
 ```yaml
-status: gap
-implemented: false
+status: partial
+implemented: partial  # Demo data model in webui_demo.py (475 lines, 887 test lines). Playwright scripts and live screenshot generation not yet wired.
 depends_on: [WEBUI_UX_SPEC.md]
 blocking: documentation credibility (WebUI)
 estimated_scope: medium

@@ -15423,6 +15423,118 @@ def admit_list(ctx: click.Context, as_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Deployment Profiles (AG2 Layer 2.1-B)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("deploy")
+def deploy_group() -> None:
+    """Deployment profiles — authority classes + capability tokens."""
+    pass
+
+
+@deploy_group.command("status")
+@click.option("--name", default="operator", help="Profile name")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def deploy_status(ctx: click.Context, name: str, as_json: bool) -> None:
+    """Show deployment profile details."""
+    from .deployment_profiles import DeploymentStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DeploymentStore(governor_dir=gov_dir)
+    profile = store.load_profile(name)
+
+    if profile is None:
+        click.echo(f"Profile '{name}' not found.")
+        raise SystemExit(1)
+
+    if as_json:
+        click.echo(json.dumps(profile.to_dict(), indent=2))
+    else:
+        click.echo(f"Profile: {name}")
+        click.echo(f"  Authority: {profile.authority_class.value}")
+        click.echo(f"  Audit:     {profile.audit_level.value}")
+        click.echo(f"  Whitelist: {sorted(profile.tool_whitelist)}")
+        click.echo(f"  Blacklist: {sorted(profile.tool_blacklist)}")
+        click.echo(f"  Two-phase: {sorted(profile.requires_two_phase)}")
+        click.echo(f"  Evidence:  {profile.evidence_threshold}")
+
+
+@deploy_group.command("check")
+@click.argument("tool_id")
+@click.option("--name", default="operator", help="Profile name")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def deploy_check(ctx: click.Context, tool_id: str, name: str, as_json: bool) -> None:
+    """Check if a tool is allowed under a profile."""
+    from .deployment_profiles import DeploymentStore, check_tool_access
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DeploymentStore(governor_dir=gov_dir)
+    profile = store.load_profile(name)
+
+    if profile is None:
+        click.echo(f"Profile '{name}' not found.")
+        raise SystemExit(1)
+
+    allowed, reason = check_tool_access(profile, tool_id)
+
+    if as_json:
+        click.echo(json.dumps({"tool": tool_id, "allowed": allowed, "reason": reason}))
+    else:
+        status = "ALLOWED" if allowed else "DENIED"
+        click.echo(f"{status}: {tool_id} ({reason})")
+
+
+@deploy_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def deploy_list(ctx: click.Context, as_json: bool) -> None:
+    """List available deployment profiles."""
+    from .deployment_profiles import DeploymentStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DeploymentStore(governor_dir=gov_dir)
+    names = store.list_profiles()
+
+    if as_json:
+        click.echo(json.dumps(names))
+    else:
+        click.echo("Deployment profiles:")
+        for n in names:
+            p = store.load_profile(n)
+            if p:
+                click.echo(f"  {n}: {p.authority_class.value} audit={p.audit_level.value}")
+
+
+@deploy_group.command("proposals")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def deploy_proposals(ctx: click.Context, as_json: bool) -> None:
+    """List action proposals."""
+    from .deployment_profiles import DeploymentStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DeploymentStore(governor_dir=gov_dir)
+    ids = store.list_proposals()
+
+    if as_json:
+        results = []
+        for pid in ids:
+            p = store.load_proposal(pid)
+            results.append(p.to_dict() if p else {"proposal_id": pid, "error": "load failed"})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not ids:
+            click.echo("No proposals found.")
+        for pid in ids:
+            p = store.load_proposal(pid)
+            if p:
+                click.echo(f"  {pid}: {p.action} [{p.status.value}] severity={p.severity}")
+
+
+# ---------------------------------------------------------------------------
 # WebUI Demo (AG2 Layer 4, Item #12)
 # ---------------------------------------------------------------------------
 

@@ -1104,6 +1104,29 @@ from .webui_demo import (
     make_demo_event,
 )
 
+# Deployment Profiles (AG2 Layer 2.1-B)
+from .deployment_profiles import (
+    AuthorityClass,
+    AuditLevel,
+    ProposalStatus,
+    RateLimit,
+    CapabilityToken,
+    DeploymentProfile,
+    ActionProposal,
+    DeploymentStore,
+    PUBLIC_PROFILE,
+    DELEGATED_PROFILE,
+    OPERATOR_PROFILE,
+    AUTONOMOUS_PROFILE,
+    BUILTIN_PROFILES,
+    check_tool_access,
+    check_invariant_b,
+    check_invariant_e,
+    issue_token,
+    propose_action,
+    make_deployment_event,
+)
+
 # Measurement Integrity (AG2 Layer 2.1-B)
 from .measurement_integrity import (
     TrustLevel,
@@ -2159,6 +2182,26 @@ __all__ = [
     "check_budget",
     "check_invariant_g",
     "make_phase_event",
+    # Deployment Profiles (AG2 Layer 2.1-B)
+    "AuthorityClass",
+    "AuditLevel",
+    "ProposalStatus",
+    "RateLimit",
+    "CapabilityToken",
+    "DeploymentProfile",
+    "ActionProposal",
+    "DeploymentStore",
+    "PUBLIC_PROFILE",
+    "DELEGATED_PROFILE",
+    "OPERATOR_PROFILE",
+    "AUTONOMOUS_PROFILE",
+    "BUILTIN_PROFILES",
+    "check_tool_access",
+    "check_invariant_b",
+    "check_invariant_e",
+    "issue_token",
+    "propose_action",
+    "make_deployment_event",
     # Measurement Integrity (AG2 Layer 2.1-B)
     "TrustLevel",
     "AlertType",

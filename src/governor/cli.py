@@ -15423,6 +15423,116 @@ def admit_list(ctx: click.Context, as_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Coherence Budget (AG2 Layer 2.1-C)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("cbi")
+def cbi_group() -> None:
+    """Coherence Budget Index — governor health metric."""
+    pass
+
+
+@cbi_group.command("status")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def cbi_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show CBI for a run."""
+    from .coherence_budget import CoherenceBudgetStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = CoherenceBudgetStore(governor_dir=gov_dir)
+    result = store.load(run_id)
+
+    if result is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No CBI data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"CBI:    {result.cbi:.1f}/100")
+        click.echo(f"Status: {result.status.value}")
+        click.echo(f"P_inv:  {result.p_inv:.4f}")
+        click.echo(f"S_soft: {result.s_soft:.4f}")
+        click.echo(f"D (Δt): {result.D:.2f}")
+
+
+@cbi_group.command("compute")
+@click.option("--d", "dt", type=float, default=0.0, help="Δt squeeze ratio")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def cbi_compute(dt: float, as_json: bool) -> None:
+    """Compute CBI with default healthy metrics (diagnostic)."""
+    from .coherence_budget import compute_cbi
+
+    violations = {f"S{i}": 0.0 for i in range(1, 8)}
+    metrics = {f"M{i}": 1.0 for i in range(1, 9)}
+    result = compute_cbi(violations, metrics, D=dt)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"CBI:    {result.cbi:.1f}/100")
+        click.echo(f"Status: {result.status.value}")
+
+
+@cbi_group.command("closure")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def cbi_closure(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show closure gate result for a run."""
+    from .coherence_budget import CoherenceBudgetStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = CoherenceBudgetStore(governor_dir=gov_dir)
+    result = store.load_closure(run_id)
+
+    if result is None:
+        click.echo(f"No closure gate data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Decision:    {result.decision.value}")
+        click.echo(f"Uncertainty: {result.uncertainty:.2f} (threshold: {result.threshold})")
+        click.echo(f"Unverified:  {result.unverified_claims}")
+        click.echo(f"Open unkn:   {result.open_unknowns}")
+
+
+@cbi_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def cbi_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with CBI data."""
+    from .coherence_budget import CoherenceBudgetStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = CoherenceBudgetStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            s = store.load(r)
+            results.append({"run_id": r, "cbi": round(s.cbi, 1) if s else None,
+                            "status": s.status.value if s else None})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No CBI runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: CBI={s.cbi:.1f} [{s.status.value}]")
+
+
+# ---------------------------------------------------------------------------
 # Risk Function (AG2 Layer 2.1-B)
 # ---------------------------------------------------------------------------
 

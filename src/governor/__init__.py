@@ -1104,6 +1104,23 @@ from .webui_demo import (
     make_demo_event,
 )
 
+# Phase Control (AG2 Layer 2.1-A)
+from .phase_control import (
+    Phase,
+    TransitionResult,
+    PhaseBudget,
+    PhaseUsage,
+    NoveltyDebt,
+    RunState as PhaseRunState,
+    PhaseTransitionEvent,
+    PhaseController,
+    PhaseStore,
+    can_advance,
+    check_budget,
+    check_invariant_g,
+    make_phase_event,
+)
+
 # Coverage Metrics (AG2 Layer 2.1-A)
 from .metrics import (
     MetricSeverity,
@@ -2111,6 +2128,20 @@ __all__ = [
     "compute_claim_coverage",
     "update_claim_status",
     "make_metrics_event",
+    # Phase Control (AG2 Layer 2.1-A)
+    "Phase",
+    "TransitionResult",
+    "PhaseBudget",
+    "PhaseUsage",
+    "NoveltyDebt",
+    "PhaseRunState",
+    "PhaseTransitionEvent",
+    "PhaseController",
+    "PhaseStore",
+    "can_advance",
+    "check_budget",
+    "check_invariant_g",
+    "make_phase_event",
 ]
 
 __version__ = "0.6.0"

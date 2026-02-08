@@ -14975,6 +14975,140 @@ def advanced(ctx: click.Context) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase Control (AG2 Layer 2.1-A)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("phase")
+def phase_group() -> None:
+    """Phase control — run phases with budget locks."""
+    pass
+
+
+@phase_group.command("status")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def phase_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show phase control status for a run."""
+    from .phase_control import PhaseStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = PhaseStore(governor_dir=gov_dir)
+    controller = store.load(run_id)
+
+    if not controller:
+        click.echo(f"No phase data for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(controller.to_dict(), indent=2))
+    else:
+        click.echo(f"Run: {run_id}")
+        click.echo(f"Phase: {controller.phase.name}")
+        br = controller.budget_remaining
+        click.echo(f"Budget: explore={br['explore']} draft={br['draft']} verify={br['verify']}")
+        click.echo(f"Confidence cap: {controller.confidence_cap:.2f}")
+        if controller.novelty.total > 0:
+            click.echo(f"Novelty debt: {controller.novelty.total:.2f}")
+
+
+@phase_group.command("advance")
+@click.argument("run_id")
+@click.option("--force", is_flag=True, help="Force transition")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def phase_advance(ctx: click.Context, run_id: str, force: bool, as_json: bool) -> None:
+    """Advance to next phase."""
+    from .phase_control import PhaseStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = PhaseStore(governor_dir=gov_dir)
+    controller = store.load(run_id)
+
+    if not controller:
+        click.echo(f"No phase data for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if force:
+        evt = controller.force_advance("manual force")
+    else:
+        evt = controller.advance()
+
+    store.save(controller)
+
+    if as_json:
+        click.echo(json.dumps(evt.to_dict(), indent=2))
+    else:
+        click.echo(f"{evt.from_phase.name} → {evt.to_phase.name}: {evt.result.value}")
+        click.echo(f"Reason: {evt.reason}")
+
+
+@phase_group.command("init")
+@click.argument("run_id")
+@click.option("--explore", type=int, default=None, help="Explore budget")
+@click.option("--draft", type=int, default=None, help="Draft budget")
+@click.option("--verify", type=int, default=None, help="Verify budget")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def phase_init(ctx: click.Context, run_id: str, explore: int | None,
+               draft: int | None, verify: int | None, as_json: bool) -> None:
+    """Initialize phase control for a run."""
+    from .phase_control import PhaseController, PhaseBudget, PhaseStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = PhaseStore(governor_dir=gov_dir)
+
+    budget_kwargs: dict[str, int] = {}
+    if explore is not None:
+        budget_kwargs["explore"] = explore
+    if draft is not None:
+        budget_kwargs["draft"] = draft
+    if verify is not None:
+        budget_kwargs["verify"] = verify
+
+    controller = PhaseController(
+        run_id=run_id,
+        budget=PhaseBudget(**budget_kwargs) if budget_kwargs else PhaseBudget(),
+    )
+    store.save(controller)
+
+    if as_json:
+        click.echo(json.dumps(controller.to_dict(), indent=2))
+    else:
+        click.echo(f"Phase control initialized for run {run_id}")
+        click.echo(f"Budget: explore={controller.budget.explore} draft={controller.budget.draft} verify={controller.budget.verify}")
+
+
+@phase_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def phase_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with phase control."""
+    from .phase_control import PhaseStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = PhaseStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            c = store.load(r)
+            results.append({"run_id": r, "phase": c.phase.name if c else None})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No phase-controlled runs found.")
+        for r in runs:
+            c = store.load(r)
+            if c:
+                click.echo(f"  {r}: {c.phase.name}")
+
+
+# ---------------------------------------------------------------------------
 # Coverage Metrics (AG2 Layer 2.1-A)
 # ---------------------------------------------------------------------------
 

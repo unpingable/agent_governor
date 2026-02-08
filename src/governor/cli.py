@@ -15637,6 +15637,89 @@ def hysteresis_list(ctx: click.Context, as_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Quorum Extensions (AG2 Layer 2.1-D)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("quorum-ext")
+def quorum_ext_group() -> None:
+    """Extended quorum — severity-based gating, two-man rule."""
+    pass
+
+
+@quorum_ext_group.command("check")
+@click.argument("severity", type=click.Choice(["S1", "S2", "S3"]))
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def quorum_ext_check(severity: str, as_json: bool) -> None:
+    """Check quorum requirements for a severity tier."""
+    from .quorum_ext import Severity, get_requirement
+
+    sev = Severity(severity)
+    req = get_requirement(sev)
+
+    if as_json:
+        click.echo(json.dumps({"severity": sev.value, "requirement": req.to_dict()}, indent=2))
+    else:
+        click.echo(f"Severity:        {sev.value}")
+        click.echo(f"Confirmations:   {req.min_confirmations}")
+        click.echo(f"Domains:         {req.min_evidence_domains}")
+        click.echo(f"Independence:    {req.require_independence}")
+        click.echo(f"Two-man rule:    {req.require_two_man_rule}")
+
+
+@quorum_ext_group.command("status")
+@click.option("--run-id", default="default", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def quorum_ext_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show extended quorum state."""
+    from .quorum_ext import QuorumExtStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = QuorumExtStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No quorum extension data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Checks:         {len(state.checks)}")
+        click.echo(f"  Passed:       {state.passed_count()}")
+        click.echo(f"  Failed:       {state.failed_count()}")
+        click.echo(f"Confirmations:  {len(state.confirmations)}")
+        click.echo(f"Rejections:     {len(state.rejections)}")
+        click.echo(f"Adjudications:  {len(state.adjudications)}")
+
+
+@quorum_ext_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def quorum_ext_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with quorum extension data."""
+    from .quorum_ext import QuorumExtStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = QuorumExtStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        click.echo(json.dumps(runs))
+    else:
+        if not runs:
+            click.echo("No quorum extension runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: {s.passed_count()} passed, {s.failed_count()} failed")
+
+
+# ---------------------------------------------------------------------------
 # Coherence Budget (AG2 Layer 2.1-C)
 # ---------------------------------------------------------------------------
 

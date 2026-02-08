@@ -1162,6 +1162,31 @@ from .hysteresis import (
     make_regression_event,
 )
 
+# Quorum Extensions (AG2 Layer 2.1-D)
+from .quorum_ext import (
+    Severity as QuorumSeverity,
+    QuorumCheckResult,
+    AdjudicationAction,
+    ConfirmerType,
+    QuorumRequirement,
+    Confirmation,
+    Rejection,
+    QuorumCheckDetail,
+    AdjudicationRequest,
+    QuorumExtState,
+    QuorumExtStore,
+    check_quorum as check_severity_quorum,
+    check_two_man_rule,
+    check_full_quorum,
+    handle_disagreement,
+    classify_severity,
+    compute_fault_tolerance,
+    make_quorum_ext_event,
+    make_quorum_check_event,
+    make_disagreement_event,
+    make_two_man_event,
+)
+
 # Coherence Budget (AG2 Layer 2.1-C)
 from .coherence_budget import (
     CBIStatus,

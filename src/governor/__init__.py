@@ -1104,6 +1104,28 @@ from .webui_demo import (
     make_demo_event,
 )
 
+# Risk Function (AG2 Layer 2.1-B)
+from .risk_function import (
+    RiskLevel,
+    PolicyAction,
+    RiskSignal,
+    RiskWeights,
+    RiskComponents,
+    RiskAssessment,
+    ThresholdCrossing,
+    RiskState,
+    RiskStore,
+    compute_risk,
+    classify_risk,
+    apply_risk_policy,
+    assess_risk,
+    extract_untrusted_signal,
+    extract_evidence_gap,
+    extract_scope_signal,
+    extract_irreversibility_signal,
+    make_risk_event,
+)
+
 # Deployment Profiles (AG2 Layer 2.1-B)
 from .deployment_profiles import (
     AuthorityClass,
@@ -2182,6 +2204,25 @@ __all__ = [
     "check_budget",
     "check_invariant_g",
     "make_phase_event",
+    # Risk Function (AG2 Layer 2.1-B)
+    "RiskLevel",
+    "PolicyAction",
+    "RiskSignal",
+    "RiskWeights",
+    "RiskComponents",
+    "RiskAssessment",
+    "ThresholdCrossing",
+    "RiskState",
+    "RiskStore",
+    "compute_risk",
+    "classify_risk",
+    "apply_risk_policy",
+    "assess_risk",
+    "extract_untrusted_signal",
+    "extract_evidence_gap",
+    "extract_scope_signal",
+    "extract_irreversibility_signal",
+    "make_risk_event",
     # Deployment Profiles (AG2 Layer 2.1-B)
     "AuthorityClass",
     "AuditLevel",

@@ -15423,6 +15423,110 @@ def admit_list(ctx: click.Context, as_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Risk Function (AG2 Layer 2.1-B)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("risk")
+def risk_group() -> None:
+    """Risk potential function — scalar risk V from signals."""
+    pass
+
+
+@risk_group.command("status")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def risk_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show risk state for a run."""
+    from .risk_function import RiskStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = RiskStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No risk data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Run:     {state.run_id}")
+        click.echo(f"Level:   {state.current_level.value}")
+        click.echo(f"Risk:    {state.current_risk:.4f}")
+        click.echo(f"Peak:    {state.peak_risk:.4f}")
+        click.echo(f"Profile: {state.active_profile}")
+        click.echo(f"Frozen:  {sorted(state.frozen_tools) or 'none'}")
+        click.echo(f"Ev mult: {state.evidence_multiplier}")
+
+
+@risk_group.command("assess")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--untrusted", type=float, default=0.0, help="Untrusted blob signal [0-1]")
+@click.option("--scope", type=float, default=0.0, help="Scope size signal [0-1]")
+@click.option("--irrev", type=float, default=0.0, help="Irreversibility signal [0-1]")
+@click.option("--gap", type=float, default=0.0, help="Evidence gap signal [0-1]")
+@click.option("--anomaly", type=float, default=0.0, help="Anomaly signal [0-1]")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def risk_assess(ctx: click.Context, run_id: str, untrusted: float,
+                scope: float, irrev: float, gap: float, anomaly: float,
+                as_json: bool) -> None:
+    """Assess risk from signal values."""
+    from .risk_function import RiskComponents, assess_risk
+
+    components = RiskComponents(
+        untrusted_blob_use=untrusted,
+        scope_size=scope,
+        irreversibility_intent=irrev,
+        evidence_gap=gap,
+        anomaly_score=anomaly,
+    )
+    assessment = assess_risk(run_id, components)
+
+    if as_json:
+        click.echo(json.dumps(assessment.to_dict(), indent=2))
+    else:
+        click.echo(f"Risk:    {assessment.risk_value:.4f}")
+        click.echo(f"Level:   {assessment.level.value}")
+        click.echo(f"Actions: {[a.value for a in assessment.actions_taken]}")
+        if assessment.frozen_tools:
+            click.echo(f"Frozen:  {sorted(assessment.frozen_tools)}")
+        if assessment.demoted_to:
+            click.echo(f"Demoted: {assessment.demoted_to}")
+
+
+@risk_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def risk_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with risk data."""
+    from .risk_function import RiskStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = RiskStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            s = store.load(r)
+            results.append({"run_id": r, "level": s.current_level.value if s else None})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No risk runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: {s.current_level.value} risk={s.current_risk:.4f}")
+
+
+# ---------------------------------------------------------------------------
 # Deployment Profiles (AG2 Layer 2.1-B)
 # ---------------------------------------------------------------------------
 

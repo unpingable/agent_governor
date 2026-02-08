@@ -1,6 +1,6 @@
 # AG2 Build Order
 
-## 2.0 Implementation Sequence — 15 Gap Specs
+## 2.0/2.1 Implementation Sequence — 26 Specs
 
 ```yaml
 status: planning
@@ -271,3 +271,180 @@ Ongoing:       Parallel — Temporal Attack Surface + Docs Gap
 ```
 
 Time estimates are vibes, not commitments. The governor would reject them.
+
+---
+
+## 2.1 Specs — Run-Level Governance
+
+**Added after 2.0 core.** These specs define run-level control, deployment authority, and observability. They build on the 2.0 substrate but can be sequenced independently.
+
+### Layer 2.1-A: Run Control (build after Layer 1)
+
+#### PHASE_CONTROL_SPEC (Medium)
+
+Run phases (SPECIFY→EXPLORE→DRAFT→VERIFY→COMMIT) with reserve budgets. Bell lap insight: lock B_verify until VERIFY phase. Novelty debt caps confidence for late scope changes.
+
+- Depends on: Control Theory, Instrument, Admissibility
+- Key invariant: G (Phase Budget Lock)
+
+#### ADMISSIBILITY_SPEC (Medium)
+
+Push-back system. Compute whether task is well-specified before starting. Unknown tracking as first-class objects. VoI-driven question selection.
+
+- Depends on: Control Theory, Instrument
+- Key invariant: F (No Hidden Assumptions)
+
+#### METRICS_SPEC (Small-Medium)
+
+Severity-weighted coverage and verification efficiency. Drives phase transitions and feeds CBI.
+
+- Depends on: Control Theory, Instrument
+
+### Layer 2.1-B: Authority + Security (build after Layer 2.1-A)
+
+#### DEPLOYMENT_PROFILES_SPEC (Medium)
+
+Authority classes (PUBLIC/DELEGATED/OPERATOR/AUTONOMOUS). Two-phase commit protocol. Capability token binding with scope/verbs/TTL.
+
+- Depends on: Control Theory, Instrument, Phase Control
+- Key invariants: B (Capabilities), E (Irreversible Actions)
+
+#### MEASUREMENT_INTEGRITY_SPEC (Medium)
+
+Tidepool defense. Trust predicate (sig ∧ schema). Instruction-masquerading detection. Untrusted blob quarantine. Tool freezing on adversarial disturbance.
+
+- Depends on: Control Theory, Instrument
+- Key invariant: C (Telemetry)
+
+#### RISK_FUNCTION_SPEC (Small-Medium)
+
+Scalar risk V from untrusted blobs, scope, irreversibility, evidence gap, anomalies. Risk-driven policy: profile demotion, tool freezing, evidence threshold increase.
+
+- Depends on: Control Theory, Measurement Integrity, Metrics, Deployment Profiles
+
+### Layer 2.1-C: Observability + Detection (build after Layer 2.1-B)
+
+#### COHERENCE_BUDGET_SPEC (Large)
+
+CBI ∈ [0,100]. Seven invariants (S1-S7), eight soft metrics (M1-M8), Δt squeeze multiplier. Uncertainty closure gate blocks COMMIT. Deterministic — no embeddings, no randomness.
+
+- Depends on: Control Theory, Instrument, Metrics, Phase Control
+- Key invariants: H (Passivity), I (Closure Gate)
+
+#### MODE_DETECTION_SPEC (Small-Medium)
+
+Bayesian mode posterior over CODE/RESEARCH/FICTION/TASK. Drift detection blocks COMMIT in late phases. Mode-specific verification profiles.
+
+- Depends on: Control Theory, Phase Control
+
+#### EPISTEMIC_EVASION_SPEC (Medium)
+
+11 evasion operators (Frame Router through Plausible Deniability Commit). 5 composite failure modes. Forced coupling questions. Self-audit of governor prompts.
+
+- Depends on: Coherence Budget, Metrics, Control Theory
+- Key invariant: J (Epistemic Evasion)
+
+#### HYSTERESIS_SPEC (Small)
+
+Anti-churn. Asymmetric mode transition thresholds, replan limiting (max 3), regression detection. Generalizes existing regime/boil hysteresis to all mode transitions.
+
+- Depends on: Phase Control, Risk Function, Metrics
+
+### Layer 2.1-D: Multi-Agent (build after Layer 2.1-C)
+
+#### QUORUM_SPEC (Medium)
+
+Extends existing quorum.py with severity-based gating (S1/S2/S3), Byzantine-lite model, two-man rule for S3, evidence domain independence, adjudication routing.
+
+- Depends on: Control Theory, Deployment Profiles, Metrics
+
+### Consolidated Invariants
+
+#### INVARIANTS_SPEC
+
+Reference document. 10 invariants (A through J) with formal definitions and spec cross-references. Not an implementation target — a contract.
+
+---
+
+## 2.1 Dependency Graph
+
+```
+Layer 2.1-A (Run Control) — after 2.0 Layer 1
+  ADMISSIBILITY_SPEC ─────────────────────┐
+  METRICS_SPEC ───────────────────────────┤
+  PHASE_CONTROL_SPEC ─────────────────────┤
+                                           │
+Layer 2.1-B (Authority + Security)         │
+  DEPLOYMENT_PROFILES_SPEC ───────────────┤
+  MEASUREMENT_INTEGRITY_SPEC ─────────────┤
+  RISK_FUNCTION_SPEC ─────────────────────┤
+                                           │
+Layer 2.1-C (Observability + Detection)    │
+  COHERENCE_BUDGET_SPEC ──────────────────┤
+  MODE_DETECTION_SPEC ────────────────────┤
+  EPISTEMIC_EVASION_SPEC ─────────────────┤
+  HYSTERESIS_SPEC ────────────────────────┤
+                                           │
+Layer 2.1-D (Multi-Agent)                  │
+  QUORUM_SPEC ────────────────────────────┘
+```
+
+## 2.1 Key Dependency Edges
+
+| Spec | Hard Dependencies |
+|------|------------------|
+| ADMISSIBILITY | Control Theory, Instrument |
+| METRICS | Control Theory, Instrument |
+| PHASE_CONTROL | Control Theory, Instrument, Admissibility |
+| DEPLOYMENT_PROFILES | Control Theory, Instrument, Phase Control |
+| MEASUREMENT_INTEGRITY | Control Theory, Instrument |
+| RISK_FUNCTION | Control Theory, Measurement Integrity, Metrics, Deployment Profiles |
+| COHERENCE_BUDGET | Control Theory, Instrument, Metrics, Phase Control |
+| MODE_DETECTION | Control Theory, Phase Control |
+| EPISTEMIC_EVASION | Coherence Budget, Metrics, Control Theory |
+| HYSTERESIS | Phase Control, Risk Function, Metrics |
+| QUORUM (2.1) | Control Theory, Deployment Profiles, Metrics |
+| INVARIANTS | All of the above (reference document) |
+
+## 2.1 Implementation Priority
+
+```
+1. Phase Control + Admissibility + Metrics    — Run-level budget and gating
+2. Measurement Integrity                       — Security-critical (Tidepool defense)
+3. Deployment Profiles                         — Required for multi-tenant
+4. Risk Function                               — Integrates with above
+5. Coherence Budget (CBI)                      — Observability composite
+6. Mode Detection                              — Cross-domain drift
+7. Epistemic Evasion                           — Discourse quality
+8. Hysteresis                                  — Stability polish
+9. Quorum (2.1)                                — Multi-agent future
+```
+
+---
+
+## 3.0: Coherent Self-Dogfooding (Deferred)
+
+**Do not start until 2.0 is cleared.**
+
+### SELF_GOVERNANCE_SPEC (Large)
+
+Stratified self-governance: L0 (work loop) → L1 (online governor) → L2 (meta-governor) → Apply Gate. The governor becomes part of the plant, not an external auditor.
+
+- L2 proposes θ changes out-of-band (batch, on completed runs)
+- Apply Gate verifies: schema, signature, replay tests, bounds, holdout non-regression
+- θ is immutable during runs (no in-band mutation)
+- Anti-Goodhart: shadow metrics, metric rotation, holdout traces, cross-metric sanity
+- 2.7 Waypoint: shadow mode (propose but never apply) must beat baseline first
+
+**Formal properties:** Bounded violation probability (δ), non-regression under updates (ε), bounded step (η), metric non-hackability.
+
+**Hard prerequisites from 2.0:**
+- Event schema frozen
+- Deterministic replay
+- Provenance discipline (S1/S7)
+- Regime machine with hysteresis + dwell
+- Small ruthless eval suite
+
+**8 hardening items tracked** in spec front-matter (violation estimator, fail-closed logging, scoped rotation, suite integrity, L∞ bounds per param group, liveness under LOCKED, safe action sets, regime band alignment).
+
+See: `specs/core/SELF_GOVERNANCE_SPEC.md`

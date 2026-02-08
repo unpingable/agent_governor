@@ -1850,8 +1850,416 @@ async def api_info() -> dict[str, Any]:
             # Export/Import
             "governor_export": "/governor/export",
             "governor_import": "/governor/import",
+            # V2 Dashboard
+            "v2_runs": "/v2/runs",
+            "v2_run_detail": "/v2/runs/{run_id}",
+            "v2_run_events": "/v2/runs/{run_id}/events",
+            "v2_run_claims": "/v2/runs/{run_id}/claims",
+            "v2_run_violations": "/v2/runs/{run_id}/violations",
+            "v2_run_report": "/v2/runs/{run_id}/report",
+            "v2_run_cancel": "/v2/runs/{run_id}/cancel",
+            "v2_runs_compare": "/v2/runs/compare",
+            "v2_artifacts": "/v2/artifacts",
+            "v2_artifact": "/v2/artifacts/{hash}",
+            "v2_controls_schema": "/v2/controls/schema",
+            "v2_controls_templates": "/v2/controls/templates",
+            "v2_profiles": "/v2/profiles",
+            "v2_anchors": "/v2/anchors",
+            "v2_backends": "/v2/backends",
+            "v2_dashboard_summary": "/v2/dashboard/summary",
+            "v2_dashboard_regime": "/v2/dashboard/regime",
+            "dashboard": "/dashboard",
         },
     }
+
+
+# ============================================================================
+# V2 Dashboard API — Run-centric governance dashboard
+# ============================================================================
+
+from governor.dashboard_ux import (
+    DashboardStore,
+    RunSummary,
+    RunVerdict,
+    StreamEvent,
+    StreamEventType,
+    CancelRequest,
+    build_controls_schema,
+    BUILTIN_TEMPLATES,
+    BUILTIN_ACTIONS,
+    generate_report,
+    make_heartbeat,
+)
+from governor.instrument import InstrumentSystem, RunManifest, EventWriter
+
+# Lazy-init singletons for v2 dashboard
+_dashboard_store: DashboardStore | None = None
+_instrument_system: InstrumentSystem | None = None
+
+
+def _get_dashboard_store() -> DashboardStore:
+    global _dashboard_store
+    if _dashboard_store is None:
+        cm = _get_context_manager()
+        ctx = cm.get_or_create(GOVERNOR_CONTEXT_ID, mode=GOVERNOR_MODE)
+        _dashboard_store = DashboardStore(ctx.governor_dir)
+    return _dashboard_store
+
+
+def _get_instrument_system() -> InstrumentSystem:
+    global _instrument_system
+    if _instrument_system is None:
+        cm = _get_context_manager()
+        ctx = cm.get_or_create(GOVERNOR_CONTEXT_ID, mode=GOVERNOR_MODE)
+        _instrument_system = InstrumentSystem(ctx.governor_dir)
+    return _instrument_system
+
+
+# Pydantic models for v2 API
+
+class CreateRunRequest(BaseModel):
+    task: str
+    profile: str = "established"
+    backend: str = ""
+    scope: list[str] = Field(default_factory=list)
+    seed: int | None = None
+
+
+class CancelRunResponse(BaseModel):
+    run_id: str
+    acknowledged_at: str
+
+
+# Track active cancel requests
+_cancel_requests: dict[str, CancelRequest] = {}
+
+
+# ---- Runs ----
+
+@app.post("/v2/runs")
+async def v2_create_run(request: CreateRunRequest) -> dict[str, Any]:
+    """Create a new instrumented run."""
+    from governor.instrument import Actor, ActorKind, InstrumentProfile, RunInputs
+
+    system = _get_instrument_system()
+    store = _get_dashboard_store()
+
+    # Map profile string to InstrumentProfile
+    profile_map = {
+        "greenfield": InstrumentProfile.GREENFIELD,
+        "strict": InstrumentProfile.STRICT,
+        "forensic": InstrumentProfile.FORENSIC,
+    }
+    profile = profile_map.get(request.profile, InstrumentProfile.GREENFIELD)
+
+    manifest, writer = system.start_run(
+        actor=Actor(ActorKind.HUMAN, "dashboard"),
+        profile=profile,
+        task_id=request.task,
+    )
+
+    # Record in dashboard store
+    summary = RunSummary(
+        run_id=manifest.run_id,
+        created_at=manifest.created_at,
+        model=request.backend or _current_backend_type,
+        profile=request.profile,
+        verdict=RunVerdict.PENDING,
+        task=request.task,
+    )
+    store.record_run(summary)
+
+    return {
+        "run_id": manifest.run_id,
+        "created_at": manifest.created_at,
+        "profile": request.profile,
+        "task": request.task,
+    }
+
+
+@app.get("/v2/runs")
+async def v2_list_runs(
+    profile: str = "",
+    verdict: str = "",
+    limit: int = 50,
+) -> dict[str, Any]:
+    """List runs with optional filters."""
+    store = _get_dashboard_store()
+    runs = store.list_runs(profile=profile, verdict=verdict, limit=limit)
+    return {"runs": [r.to_dict() for r in runs]}
+
+
+@app.get("/v2/runs/{run_id}")
+async def v2_get_run(run_id: str) -> dict[str, Any]:
+    """Get run detail (manifest + summary)."""
+    system = _get_instrument_system()
+    store = _get_dashboard_store()
+
+    manifest = system.run_store.load_manifest(run_id)
+    summary = store.get_run(run_id)
+
+    if manifest is None and summary is None:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+    result: dict[str, Any] = {}
+    if manifest:
+        result["manifest"] = manifest.to_dict()
+    if summary:
+        result["summary"] = summary.to_dict()
+
+    return result
+
+
+@app.get("/v2/runs/{run_id}/events")
+async def v2_run_events(run_id: str, stream: bool = False) -> Any:
+    """Get events for a run. If stream=true, returns SSE."""
+    system = _get_instrument_system()
+    run_dir = system.instrument_dir / "runs" / run_id
+
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+    writer = EventWriter(
+        run_dir, system.artifact_store, system.config.artifact_size_threshold
+    )
+
+    if stream:
+        async def event_stream():
+            events = writer.read_events()
+            for ev in events:
+                se = StreamEvent(
+                    event_type=StreamEventType.EVENT,
+                    data=ev.to_dict(),
+                )
+                yield se.to_sse() + "\n"
+            # End with heartbeat
+            yield make_heartbeat().to_sse() + "\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    events = writer.read_events()
+    return {"events": [e.to_dict() for e in events]}
+
+
+@app.get("/v2/runs/{run_id}/claims")
+async def v2_run_claims(run_id: str) -> dict[str, Any]:
+    """Get claims for a run."""
+    from governor.instrument import ClaimExtractor
+
+    system = _get_instrument_system()
+    run_dir = system.instrument_dir / "runs" / run_id
+
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+    extractor = ClaimExtractor(run_dir)
+    claims = extractor.read_claims()
+    return {"claims": [c.to_dict() for c in claims]}
+
+
+@app.get("/v2/runs/{run_id}/violations")
+async def v2_run_violations(run_id: str) -> dict[str, Any]:
+    """Get violations for a run (policy decisions with non-pass verdict)."""
+    system = _get_instrument_system()
+    run_dir = system.instrument_dir / "runs" / run_id
+
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+    from governor.instrument import EventKind
+
+    writer = EventWriter(
+        run_dir, system.artifact_store, system.config.artifact_size_threshold
+    )
+    events = writer.read_events()
+
+    violations = []
+    for ev in events:
+        if ev.kind == EventKind.POLICY_DECISION:
+            verdict = ev.payload.get("verdict", "")
+            if verdict and verdict != "pass":
+                violations.append(ev.to_dict())
+
+    return {"violations": violations}
+
+
+@app.get("/v2/runs/{run_id}/report")
+async def v2_run_report(run_id: str) -> dict[str, Any]:
+    """Generate report for a run."""
+    system = _get_instrument_system()
+    store = _get_dashboard_store()
+
+    manifest = system.run_store.load_manifest(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+
+    from governor.instrument import ClaimExtractor
+
+    run_dir = system.instrument_dir / "runs" / run_id
+    writer = EventWriter(
+        run_dir, system.artifact_store, system.config.artifact_size_threshold
+    )
+    events = writer.read_events()
+
+    extractor = ClaimExtractor(run_dir)
+    claims = extractor.read_claims()
+
+    report = generate_report(
+        run_id=run_id,
+        manifest=manifest.to_dict(),
+        events=[e.to_dict() for e in events],
+        claims=[c.to_dict() for c in claims],
+    )
+
+    store.save_report(report)
+    return report.to_dict()
+
+
+@app.post("/v2/runs/{run_id}/cancel")
+async def v2_cancel_run(run_id: str) -> dict[str, Any]:
+    """Cancel an active run."""
+    cancel = CancelRequest(run_id=run_id)
+    cancel.acknowledge()
+    _cancel_requests[run_id] = cancel
+
+    return {
+        "run_id": run_id,
+        "acknowledged_at": cancel.acknowledged_at,
+    }
+
+
+@app.post("/v2/runs/compare")
+async def v2_compare_runs() -> dict[str, Any]:
+    """Placeholder for interferometry comparison."""
+    return {"status": "not_implemented", "message": "Use /governor/code/compare instead."}
+
+
+# ---- Artifacts ----
+
+@app.get("/v2/artifacts/{artifact_hash}")
+async def v2_get_artifact(artifact_hash: str) -> Any:
+    """Retrieve a content-addressed artifact blob."""
+    system = _get_instrument_system()
+    data = system.artifact_store.retrieve(artifact_hash)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_hash}")
+
+    from fastapi.responses import Response
+    return Response(content=data, media_type="application/octet-stream")
+
+
+@app.get("/v2/artifacts")
+async def v2_list_artifacts(run_id: str = "") -> dict[str, Any]:
+    """List artifacts for a run."""
+    if not run_id:
+        return {"artifacts": []}
+
+    system = _get_instrument_system()
+    run_dir = system.instrument_dir / "runs" / run_id
+    if not run_dir.exists():
+        return {"artifacts": []}
+
+    writer = EventWriter(
+        run_dir, system.artifact_store, system.config.artifact_size_threshold
+    )
+    receipts = writer.read_receipts()
+    return {"artifacts": [r.to_dict() for r in receipts]}
+
+
+# ---- Controls ----
+
+@app.get("/v2/controls/schema")
+async def v2_controls_schema() -> dict[str, Any]:
+    """Return controls schema for the dashboard left panel."""
+    return build_controls_schema()
+
+
+@app.get("/v2/controls/templates")
+async def v2_controls_templates() -> dict[str, Any]:
+    """Return built-in run templates."""
+    return {"templates": [t.to_dict() for t in BUILTIN_TEMPLATES]}
+
+
+@app.get("/v2/profiles")
+async def v2_list_profiles() -> dict[str, Any]:
+    """Return available governance profiles."""
+    from governor.profiles import BUILTIN_PROFILES
+
+    return {"profiles": list(BUILTIN_PROFILES.keys())}
+
+
+@app.get("/v2/anchors")
+async def v2_list_anchors() -> dict[str, Any]:
+    """Return active anchors (read-only)."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        return {"anchors": []}
+
+    from governor.continuity import create_registry
+
+    try:
+        registry = create_registry(ctx.governor_dir)
+        anchors = registry.all()
+        return {
+            "anchors": [
+                {
+                    "id": a.id,
+                    "type": a.anchor_type.value if hasattr(a.anchor_type, "value") else str(a.anchor_type),
+                    "description": a.description,
+                    "severity": a.severity.value if hasattr(a.severity, "value") else str(a.severity),
+                }
+                for a in anchors
+            ]
+        }
+    except Exception:
+        return {"anchors": []}
+
+
+@app.get("/v2/backends")
+async def v2_list_backends() -> dict[str, Any]:
+    """List available backends (delegates to v1)."""
+    return await list_backends()
+
+
+@app.post("/v2/backends/switch")
+async def v2_switch_backend(request: BackendSwitchRequest) -> dict[str, Any]:
+    """Switch backend (delegates to v1)."""
+    return await switch_backend(request)
+
+
+# ---- Dashboard ----
+
+@app.get("/v2/dashboard/summary")
+async def v2_dashboard_summary() -> dict[str, Any]:
+    """Return aggregate dashboard statistics."""
+    store = _get_dashboard_store()
+    summary = store.dashboard_summary()
+    return summary.to_dict()
+
+
+@app.get("/v2/dashboard/regime")
+async def v2_dashboard_regime() -> dict[str, Any]:
+    """Return current regime state."""
+    ctx, _ = _resolve_context()
+    if ctx is None:
+        return {"regime": None}
+
+    vm = _build_vm_for_context(ctx)
+    return {
+        "regime": vm.regime.name if vm.regime else None,
+        "session": vm.session.to_dict() if vm.session else {},
+    }
+
+
+# ---- Dashboard UI ----
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_ui() -> HTMLResponse:
+    """Serve the v2 governance dashboard."""
+    html_path = _STATIC_DIR / "dashboard.html"
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="Dashboard HTML not found")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
 # ============================================================================

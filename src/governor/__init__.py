@@ -1104,6 +1104,25 @@ from .webui_demo import (
     make_demo_event,
 )
 
+# Mode Detection (AG2 Layer 2.1-C)
+from .mode_detection import (
+    DomainMode,
+    DriftAction,
+    DriftPhase,
+    Observation as ModeObservation,
+    ModePosterior,
+    DriftAlert as ModeDriftAlert,
+    ModeState,
+    ModeDetectionStore,
+    compute_mode_features,
+    update_mode_posterior,
+    compute_drift as compute_mode_drift,
+    check_mode_drift,
+    get_mode_profile,
+    observe_and_update,
+    make_mode_event,
+)
+
 # Coherence Budget (AG2 Layer 2.1-C)
 from .coherence_budget import (
     CBIStatus,
@@ -2282,6 +2301,22 @@ __all__ = [
     "check_passivity",
     "confidence_cap",
     "make_cbi_event",
+    # Mode Detection (AG2 Layer 2.1-C)
+    "DomainMode",
+    "DriftAction",
+    "DriftPhase",
+    "ModeObservation",
+    "ModePosterior",
+    "ModeDriftAlert",
+    "ModeState",
+    "ModeDetectionStore",
+    "compute_mode_features",
+    "update_mode_posterior",
+    "compute_mode_drift",
+    "check_mode_drift",
+    "get_mode_profile",
+    "observe_and_update",
+    "make_mode_event",
     # Deployment Profiles (AG2 Layer 2.1-B)
     "AuthorityClass",
     "AuditLevel",

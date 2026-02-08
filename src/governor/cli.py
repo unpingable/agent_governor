@@ -15423,6 +15423,70 @@ def admit_list(ctx: click.Context, as_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Mode Detection (AG2 Layer 2.1-C)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("mode")
+def mode_group() -> None:
+    """Mode detection — Bayesian domain mode posterior."""
+    pass
+
+
+@mode_group.command("status")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def mode_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show mode detection state."""
+    from .mode_detection import ModeDetectionStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = ModeDetectionStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No mode data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Run:       {state.run_id}")
+        click.echo(f"Mode:      {state.current_posterior.dominant_mode.value}")
+        click.echo(f"Conf:      {state.current_posterior.confidence:.2f}")
+        click.echo(f"Profile:   {state.active_profile}")
+        click.echo(f"Obs count: {state.observation_count}")
+        click.echo(f"Alerts:    {len(state.alerts)}")
+
+
+@mode_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def mode_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with mode data."""
+    from .mode_detection import ModeDetectionStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = ModeDetectionStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        click.echo(json.dumps(runs))
+    else:
+        if not runs:
+            click.echo("No mode detection runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: {s.current_posterior.dominant_mode.value} "
+                           f"(conf={s.current_posterior.confidence:.2f})")
+
+
+# ---------------------------------------------------------------------------
 # Coherence Budget (AG2 Layer 2.1-C)
 # ---------------------------------------------------------------------------
 

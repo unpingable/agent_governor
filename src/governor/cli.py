@@ -14029,6 +14029,125 @@ def detector_failure_safe(as_json: bool) -> None:
         click.echo(f"  Actions: {', '.join(a.value for a in result.actions)}")
 
 
+# ---------------------------------------------------------------------------
+# Commitment Transport (AG2 Layer 2, Item #5)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("transport")
+def transport_group() -> None:
+    """Commitment transport validation.
+
+    Checks that obligations (MUST/SHOULD/MAY/MUST_NOT) survive lossy transforms
+    like compaction, summarization, and bridge compilation.
+    """
+
+
+@transport_group.command("check")
+@click.option("--before", "-b", "before_file", required=True, type=click.Path(exists=True), help="File with original text")
+@click.option("--after", "-a", "after_file", required=True, type=click.Path(exists=True), help="File with transformed text")
+@click.option("--type", "transform_type", default="", help="Transform type label")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def transport_check(ctx: click.Context, before_file: str, after_file: str, transform_type: str, as_json: bool) -> None:
+    """Check commitment transport between two text files."""
+    from .commitment_transport import check_transport, TransportHistory
+    import json as _json
+
+    before_text = Path(before_file).read_text()
+    after_text = Path(after_file).read_text()
+    report = check_transport(before_text, after_text, transform_type)
+
+    gov_dir = ctx.obj.get("gov_dir")
+    if gov_dir:
+        history = TransportHistory(gov_dir)
+        history.save_report(report)
+
+    if as_json:
+        click.echo(_json.dumps(report.to_dict(), indent=2, default=str))
+    else:
+        click.echo(report.to_summary())
+
+
+@transport_group.command("extract")
+@click.argument("text_file", type=click.Path(exists=True))
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def transport_extract(text_file: str, as_json: bool) -> None:
+    """Extract commitments from a text file."""
+    from .commitment_transport import extract_commitments
+    import json as _json
+
+    text = Path(text_file).read_text()
+    commitments = extract_commitments(text)
+
+    if as_json:
+        click.echo(_json.dumps([c.to_dict() for c in commitments], indent=2, default=str))
+    else:
+        if not commitments:
+            click.echo("No commitments found.")
+        else:
+            click.echo(f"Found {len(commitments)} commitments:")
+            for c in commitments:
+                click.echo(f"  [{c.modality.value}] [{c.kind.value}] {c.text[:80]}")
+                if c.scope:
+                    click.echo(f"    scope: {c.scope}")
+
+
+@transport_group.command("history")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def transport_history(ctx: click.Context, as_json: bool) -> None:
+    """Show transport validation history."""
+    from .commitment_transport import TransportHistory
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    if not gov_dir:
+        click.echo("No governor directory found.")
+        return
+
+    history = TransportHistory(gov_dir)
+    reports = history.list_reports()
+
+    if as_json:
+        click.echo(_json.dumps(reports, indent=2, default=str))
+    else:
+        if not reports:
+            click.echo("No transport reports.")
+        else:
+            for r in reports:
+                blocking = " BLOCKING" if r["blocking"] else ""
+                click.echo(
+                    f"  {r['report_id']}  shear={r['shear_score']:.4f}  "
+                    f"type={r['transform_type']}{blocking}"
+                )
+
+
+@transport_group.command("stats")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def transport_stats(ctx: click.Context, as_json: bool) -> None:
+    """Show aggregate shear statistics."""
+    from .commitment_transport import TransportHistory
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    if not gov_dir:
+        click.echo("No governor directory found.")
+        return
+
+    history = TransportHistory(gov_dir)
+    stats = history.stats()
+
+    if as_json:
+        click.echo(_json.dumps(stats, indent=2, default=str))
+    else:
+        click.echo(f"Total reports: {stats['total_reports']}")
+        click.echo(f"Average shear: {stats['avg_shear']:.4f}")
+        click.echo(f"Max shear: {stats['max_shear']:.4f}")
+        click.echo(f"Blocking count: {stats['blocking_count']}")
+
+
 # Advanced command group - pointer to existing commands
 @cli.group(invoke_without_command=True)
 @click.pass_context

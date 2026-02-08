@@ -969,6 +969,23 @@ from .detector_integration import (
     save_signal_file,
 )
 
+from .commitment_transport import (
+    Modality as TransportModality,
+    CommitmentKind,
+    TransportOutcome,
+    Commitment as TransportCommitment,
+    CommitmentTransport,
+    ShearReport,
+    TransportHistory,
+    extract_commitments,
+    validate_transport,
+    check_transport,
+    validate_compaction_transport,
+    validate_bridge_transport,
+    validate_constraint_transport,
+    make_transport_event,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -1788,6 +1805,21 @@ __all__ = [
     "make_evidence_ref",
     "load_signal_file",
     "save_signal_file",
+    # Commitment Transport (AG2 Layer 2, Item #5)
+    "TransportModality",
+    "CommitmentKind",
+    "TransportOutcome",
+    "TransportCommitment",
+    "CommitmentTransport",
+    "ShearReport",
+    "TransportHistory",
+    "extract_commitments",
+    "validate_transport",
+    "check_transport",
+    "validate_compaction_transport",
+    "validate_bridge_transport",
+    "validate_constraint_transport",
+    "make_transport_event",
 ]
 
 __version__ = "0.6.0"

@@ -2060,6 +2060,265 @@ Make workflow explicit:
 
 The check for `blocker_criteria` references wrong field. Fix when implementing.
 
+### Gap 11: Auth Infrastructure (Service Boundary)
+
+When governor becomes a shared service, need:
+- Principal types (`human`, `agent`, `service_account`)
+- Capability token format + fields (`{sub, scopes, constraints, exp, nonce, proof_hash}`)
+- "No in-band authority claims" as top-level invariant
+- `/attest` endpoint (policy hash, θ hash, quorum policy version, audit log head)
+- Default bind policy + explicit "public exposure" interlock
+- Stubbed `AuthorityEvent` middleware in 2.x as 3.x seam
+
+### Gap 12: Multi-Tenant Isolation
+
+Per-tenant U_t/C_t ledgers, per-principal verification budgets, side-effect namespacing. Without this, shared deployment is a noise-coupling problem.
+
+### Gap 13: Delegation Chain Limits
+
+Forbid transitive delegation. Max one hop. Break-glass mode for emergency operator override with forced LOCKDOWN + token revocation.
+
+---
+
+## 3.x Service Boundary: Auth, Identity, and Authority
+
+Auth is the tell. It's where "library in my repo" stops and "shared plant component" begins.
+
+### The Transition
+
+**2.x (now):** Governor is a library/CLI. "Who's calling" is implicit — it's you, locally, or Claude Code in your repo. Auth is filesystem permissions. FastAPI for WebUI, no auth, localhost only.
+
+**3.x (self-governance):** Governor becomes a shared service. It needs to know:
+- Is this an **operator** (can issue waivers, constitutional revisions)?
+- Is this a **delegated agent** (trusted identity, adversarial intent)?
+- Is this a **public user** (minimal trust, strict constraints)?
+
+### Deployment Authority Tiers
+
+```
+A1: PUBLIC    — untrusted user, minimal tools, strict evidence
+A2: DELEGATED — trusted identity, untrusted intent, limited tools + two-phase commit
+A3: OPERATOR  — staff/admin, broad tools + heavy audit
+A4: RUNBOOK   — pre-approved action sets (not a role — a mode under contract)
+```
+
+The `deployment_profiles.py` spec already has the *policy* for these tiers. Implementation waits until governor becomes a shared service.
+
+**A4 clarification:** AUTONOMOUS is not a role; it's a mode under contract. It's a **runbook**: pre-approved actions + pre-approved verifiers + constraints, signed, versioned, revocable, executing as a service account with narrow capability set. A4 = "execute runbook R under profile P," not "this caller is autonomous."
+
+### Core Model: Split Identity from Authority
+
+JWT/OAuth answers "who are you," not "what are you allowed to do *right now*." Make it explicit:
+
+| Layer | Purpose | Mechanism |
+|-------|---------|-----------|
+| **Identity** | user/agent/operator principal | OAuth for humans, API keys for agents |
+| **Authority** | capability token / signed grant | Scoped, expiring, auditable |
+| **Context** | deployment profile + regime + U_t | Can *shrink* authority dynamically |
+
+**Capability tokens are the real control plane.** OAuth/JWT is merely an identity bootstrap.
+
+### Principal Types
+
+```python
+class PrincipalKind(str, Enum):
+    HUMAN = "human"            # OAuth/JWT authenticated
+    AGENT = "agent"            # API key + delegation chain
+    SERVICE_ACCOUNT = "service_account"  # Runbook executor
+```
+
+### Capability Token Format
+
+```python
+@dataclass
+class CapabilityToken:
+    """Scoped, expiring, auditable authority grant."""
+
+    sub: str                    # Principal identifier
+    scopes: list[str]           # e.g., ["can:waive[class=low,max=3/day]", "can:propose"]
+    constraints: dict[str, Any] # Bound to deployment profile, constitutional hash, toolset hash
+    exp: str                    # ISO datetime expiry (short TTL)
+    nonce: str                  # Replay protection — one-shot for admin actions
+    proof_hash: str             # Hash of {sub, scopes, constraints, exp, nonce}
+    issued_by: str              # Issuer principal
+    issued_at: str              # ISO datetime
+
+    # Context binding — token invalid if these change
+    bound_profile: str          # Deployment profile at issuance
+    bound_constitutional_hash: str  # Constitutional hash at issuance
+    bound_toolset_hash: str | None  # Optional toolset hash binding
+```
+
+### Service Boundary
+
+```
+┌─────────────────────────────────────────────┐
+│              Governor Service                │
+├─────────────────────────────────────────────┤
+│  FastAPI + Auth                              │
+│  ├── /api/v1/tasks      (submit work)        │
+│  ├── /api/v1/state      (query U_t, claims)  │
+│  ├── /api/v1/admin      (operator actions)   │
+│  ├── /api/v1/revision   (constitutional)     │
+│  └── /api/v1/attest     (remote attestation) │
+├─────────────────────────────────────────────┤
+│  Auth layer:                                 │
+│  - API keys (agents)                         │
+│  - JWT/OAuth (humans)                        │
+│  - Capability tokens (scoped permissions)    │
+│  - Operator credentials (signed, step-up)    │
+├─────────────────────────────────────────────┤
+│  ABAC decision function:                     │
+│  allow(action) iff                           │
+│    profile permits AND                       │
+│    regime permits AND                        │
+│    U_t permits AND                           │
+│    capability token permits AND              │
+│    meta-invariants permit                    │
+└─────────────────────────────────────────────┘
+```
+
+RBAC is too coarse. Use ABAC-flavored checks — this fits monotonicity rules.
+
+### /attest Endpoint
+
+Returns verifiable system state for clients and operators. Without it, trust confusion happens fast.
+
+```python
+@dataclass
+class AttestationResponse:
+    """Remote attestation lite."""
+    policy_hash: str                    # Constitutional hash
+    theta_hash: str                     # Current θ parameters hash
+    validator_quorum_policy_version: str # Quorum rules version
+    audit_log_head_hash: str            # Hash chain head
+    regime: str                         # Current regime
+    timestamp: str                      # Signed timestamp
+```
+
+### Top-Level Invariant
+
+**No in-band authority claims.** The governor never accepts "operator intent" via UI strings, prompt text, or message content. It accepts signed capabilities only.
+
+### Auth Edge Cases
+
+**Replay protection:** Capability tokens need nonce + short TTL. Admin actions should be one-shot. Otherwise "waiver" becomes a collectible.
+
+**Delegation chains:** Forbid transitive delegation (`operator → agent → agent`). One hop max, or you'll never know who owns consequences.
+
+**Step-up auth** for high-impact actions — even if you're "operator," require a fresh signature for:
+- Constitutional revisions
+- Tool-surface changes
+- Budget increases
+- Unfreezes / overrides
+
+**Break-glass mode:** An operator-only emergency credential that:
+- Forces LOCKDOWN
+- Revokes all delegated tokens
+- Rotates keys
+- Emits an unmistakable audit event
+
+### Capability Model Details
+
+**Explicit deny beats allow.** Make "deny" compositional and sticky — easiest way to preserve monotonicity.
+
+**Scopes encode constraints, not just verbs:**
+- Not only `can:waive`, but `can:waive[class=low, max=3/day]`
+
+**Context binding:** Tokens bind to deployment profile, current constitutional hash, and optionally toolset hash. If those change, tokens become invalid. Prevents "stale authority."
+
+### Multi-Tenant Deployment Realities
+
+**Per-tenant ledgers:** U_t and C_t must be per principal (or per workspace), not global. Otherwise one noisy user pushes everyone into LOCKDOWN.
+
+**Fairness / rate limiting:** Treat verification spend like CPU:
+- Per-principal budgets
+- Burst limits
+- Backpressure (already built in MCP safety controls)
+
+**Side-effect isolation:** If tools touch the outside world:
+- Per-tenant namespaces / sandboxes
+- Immutable audit + idempotency keys
+- Two-phase commit for side effects in A2/A1 tiers
+
+### DELEGATED Tier Mechanics
+
+Treat A2 as "trusted identity, adversarial intent." Make the mechanics match:
+- Always operates under **two-phase commit**
+- Any side-effect requires **operator cosign** or pre-approved action set
+- **No in-band elevation, ever**
+
+DELEGATED is where prompt injection and "helpful tool use" goes to die.
+
+### Audit Log Hardening
+
+**Tamper evidence isn't enough — make it queryable:**
+- "Show me every waiver in last 24h, grouped by principal"
+- "Show me all θ changes + witnesses"
+
+**Redaction rules:** Logs will contain secrets unless planned:
+- Strip tokens, API keys, raw tool outputs with secrets
+- Keep hashes + provenance pointers
+
+**Clock discipline:** Sign audit entries with a time source policy (or at least detect clock skew). Otherwise "today" becomes negotiable.
+
+### API Design Constraints
+
+**Idempotency keys** on `/tasks` and any side-effect path. Retries happen. Without this, double-execution makes audit ambiguous.
+
+**Version everything:**
+- θ schema
+- Proof bundle schema
+- Audit entry schema
+- Validator policy schema
+
+**Explicit commit object:** Even in 2.x, represent outputs as draft → verified → committed (or refused). Makes two-phase commit a natural extension, not a retrofit.
+
+### Threat Model Specifics
+
+**Tool-output poisoning:** Treat tool outputs as untrusted unless reproducible, provenance-verified, and signed/attested (if internal).
+
+**Confused deputy:** The UI is untrusted input. The governor never accepts "operator intent" via UI — only signed capabilities.
+
+**Model-family monoculture:** Enforce quorum across correlation classes for Δθ and for any authority operation that changes constraints. (See Gap 1.)
+
+### Operational Controls
+
+**Key rotation** as a first-class event with audit + enforced invalidation of outstanding tokens.
+
+**Safe defaults for network exposure:**
+- Bind to `127.0.0.1` by default
+- Refuse `0.0.0.0` unless explicit `--expose-network`
+- Log a screaming banner if non-localhost
+- CORS locked down by default
+- CSRF protections if cookies are ever used
+
+**Observability:** Separate "health metrics" from "policy metrics." Don't let the governor define its own SLOs without operator revision.
+
+### Authority Monotonicity Under Uncertainty (New Invariant)
+
+> If U_t is high, authority can only *shrink*, never expand — regardless of identity tier.
+
+This prevents the classic failure: "things are uncertain, so I asked for broader powers." Add to SafetyMonotonicityInvariant.
+
+### Practical 2.x Move
+
+**Make every admin-ish action require a typed, signed `AuthorityEvent` object**, even if today you generate it locally. That gives 3.x a clean seam to bolt auth onto without rewriting the control plane.
+
+```python
+@dataclass
+class AuthorityEvent:
+    """Typed authority action — 2.x stub for 3.x auth seam."""
+    event_id: str
+    action: str                # "waive", "revise", "unfreeze", "override"
+    principal: str             # "local:operator" in 2.x, JWT sub in 3.x
+    scope: dict[str, Any]      # What's being authorized
+    timestamp: str
+    signature: str             # "local" in 2.x, cryptographic in 3.x
+```
+
+Design the auth interface as a stubbed middleware now, so 3.x isn't a refactor.
+
 ---
 
 ## Summary: 3.x Architecture
@@ -2118,12 +2377,15 @@ The check for `blocker_criteria` references wrong field. Fix when implementing.
 2. **Admissible measurements** — No narrative-driven updates
 3. **Rollback controller** — First-class reversion
 4. **Hysteresis config** — Prevent oscillation
-5. **Safety monotonicity invariants** — The constitution
+5. **Safety monotonicity invariants** — The constitution (including authority monotonicity under uncertainty)
 6. **No laundering detector** — Prevent map-shrinking
 7. **Dual ledger** — Track cost alongside uncertainty
 8. **Capability discipline** — Can't expand own tools
-9. **Runtime harness** — Continuous evaluation
-10. **Adaptation test suite** — Combinatorial scenario coverage
+9. **AuthorityEvent + stubbed auth middleware** — 2.x seam for 3.x service boundary
+10. **Runtime harness** — Continuous evaluation
+11. **Adaptation test suite** — Combinatorial scenario coverage
+12. **Capability tokens + /attest endpoint** — When governor becomes a shared service
+13. **Per-tenant isolation** — When multi-user deployment happens
 
 ---
 

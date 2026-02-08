@@ -913,6 +913,17 @@ from .instrument import (
     DEFAULT_TOOL_PARSERS,
 )
 
+# Slim Mode (AG2 Layer 0, Item #2)
+from .slim_mode import (
+    SlimMode,
+    SlimStatus,
+    ContradictionError,
+    create_slim_mode,
+)
+
+# Envelopes — re-export SLIM mode addition
+from .envelopes import EnvelopeMode, EnvelopeConfig
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -1687,6 +1698,11 @@ __all__ = [
     "MypyParser",
     "RuffParser",
     "DEFAULT_TOOL_PARSERS",
+    # Slim Mode (AG2 Layer 0, Item #2)
+    "SlimMode",
+    "SlimStatus",
+    "ContradictionError",
+    "create_slim_mode",
 ]
 
 __version__ = "0.6.0"

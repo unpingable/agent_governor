@@ -28,6 +28,9 @@ class EnvelopeMode(Enum):
     STRICT = "strict"
     """All claims require receipts. Decisions committed. Full enforcement."""
 
+    SLIM = "slim"
+    """Single-dev: decisions + anchors + checks, no proposals/receipts."""
+
 
 @dataclass
 class EnvelopeConfig:
@@ -58,6 +61,20 @@ class EnvelopeConfig:
             allow_conflicts=False,
         )
 
+    @classmethod
+    def slim(cls) -> "EnvelopeConfig":
+        """Create a slim envelope configuration.
+
+        Slim mode: decisions committed, receipts not required, conflicts
+        detected but not blocked (contradiction detection handles this).
+        """
+        return cls(
+            mode=EnvelopeMode.SLIM,
+            require_receipts=False,
+            commit_decisions=True,
+            allow_conflicts=False,
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "mode": self.mode.value,
@@ -80,6 +97,7 @@ def load_envelope_config(governor_dir: Path) -> tuple[EnvelopeMode, dict[str, En
         return EnvelopeMode.STRICT, {
             "exploratory": EnvelopeConfig.exploratory(),
             "strict": EnvelopeConfig.strict(),
+            "slim": EnvelopeConfig.slim(),
         }
 
     with open(config_path, "rb") as f:
@@ -117,6 +135,17 @@ def load_envelope_config(governor_dir: Path) -> tuple[EnvelopeMode, dict[str, En
         )
     else:
         envelope_configs["strict"] = EnvelopeConfig.strict()
+
+    if "slim" in envelopes_config:
+        slim = envelopes_config["slim"]
+        envelope_configs["slim"] = EnvelopeConfig(
+            mode=EnvelopeMode.SLIM,
+            require_receipts=slim.get("require_receipts", False),
+            commit_decisions=slim.get("decisions_commit", True),
+            allow_conflicts=slim.get("allow_conflicts", False),
+        )
+    else:
+        envelope_configs["slim"] = EnvelopeConfig.slim()
 
     return default_mode, envelope_configs
 

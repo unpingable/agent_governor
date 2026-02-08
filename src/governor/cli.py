@@ -13525,6 +13525,274 @@ def instrument_waiver_list(ctx, show_all, as_json):
                 click.echo(f"    Reason: {w.reason}")
 
 
+# =============================================================================
+# Slim Mode (Single-developer governance)
+# =============================================================================
+
+
+@cli.command("decide")
+@click.argument("text")
+@click.option("--topic", "-t", default=None, help="Decision topic for grouping")
+@click.option("--retract", is_flag=True, help="Retract a previous decision")
+@click.option("--force", is_flag=True, help="Override contradiction check")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def decide_cmd(ctx, text, topic, retract, force, as_json):
+    """Record or retract an architectural decision.
+
+    \b
+    Examples:
+      governor decide "Authentication uses JWT"
+      governor decide "No ORM — raw SQL" --topic database
+      governor decide --retract "Authentication uses JWT"
+    """
+    from .slim_mode import SlimMode, ContradictionError
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+
+    if retract:
+        result = slim.retract(text, topic)
+        if result:
+            if as_json:
+                click.echo(json.dumps(result.to_dict(), indent=2))
+            else:
+                click.echo(f"Retracted: {text}")
+        else:
+            click.echo(f"No matching decision found to retract.", err=True)
+            ctx.exit(1)
+        return
+
+    try:
+        result = slim.decide(text, topic, force=force)
+    except ContradictionError as e:
+        click.echo(f"ERROR: {e}", err=True)
+        click.echo("\nUse --retract to retract the prior decision first, or --force to override.", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        topic_display = f" [topic: {result.topic}]" if result.topic else ""
+        click.echo(f"Decided: {result.choice}{topic_display}")
+
+
+@cli.command("anchor")
+@click.argument("description", required=False)
+@click.option("--type", "anchor_type", default="canon",
+              type=click.Choice(["canon", "prohibition", "requirement", "definition", "style", "persona"]))
+@click.option("--severity", default="reject", type=click.Choice(["warn", "correct", "reject"]))
+@click.option("--scope", default="", help="File glob pattern for scope")
+@click.option("--remove", "remove_id", default=None, help="Remove anchor by ID")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def anchor_cmd(ctx, description, anchor_type, severity, scope, remove_id, as_json):
+    """Create or remove a continuity anchor.
+
+    \b
+    Examples:
+      governor anchor "Elena has green eyes" --type canon
+      governor anchor "No eval() calls" --type prohibition --scope "src/**"
+      governor anchor --remove elena-has-green-eyes
+    """
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+
+    if remove_id:
+        removed = slim.remove_anchor(remove_id)
+        if removed:
+            click.echo(f"Removed anchor: {remove_id}")
+        else:
+            click.echo(f"Anchor not found: {remove_id}", err=True)
+            ctx.exit(1)
+        return
+
+    if not description:
+        # List anchors
+        anchors = slim.list_anchors()
+        if as_json:
+            items = []
+            for a in anchors:
+                items.append({
+                    "id": a.id,
+                    "type": a.anchor_type.value,
+                    "severity": a.severity.value,
+                    "description": a.description,
+                })
+            click.echo(json.dumps(items, indent=2))
+        else:
+            if not anchors:
+                click.echo("No anchors registered.")
+            else:
+                for a in anchors:
+                    click.echo(f"  [{a.severity.value}] {a.id}: {a.description} (type: {a.anchor_type.value})")
+        return
+
+    anchor = slim.add_anchor(description, anchor_type, severity, scope)
+    if as_json:
+        click.echo(json.dumps({
+            "id": anchor.id,
+            "type": anchor.anchor_type.value,
+            "severity": anchor.severity.value,
+            "description": anchor.description,
+        }, indent=2))
+    else:
+        click.echo(f"Anchor created: {anchor.id}")
+        click.echo(f"  [{anchor.severity.value}] {anchor.description}")
+
+
+@cli.command("lock")
+@click.argument("path")
+@click.option("--description", "-d", default="", help="Lock description")
+@click.option("--forbid", multiple=True, help="Forbidden file patterns")
+@click.pass_context
+def lock_cmd(ctx, path, description, forbid):
+    """Lock a directory structure via spine.
+
+    \b
+    Examples:
+      governor lock src/governor/
+      governor lock src/ --forbid "*.secret" --forbid "credentials/*"
+    """
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+    spine = slim.lock(path, description, list(forbid) if forbid else None)
+    click.echo(f"Locked: {path} (spine: {spine.id})")
+
+
+@cli.command("unlock")
+@click.argument("path")
+@click.option("--confirm", is_flag=True, required=True, help="Confirm unlock")
+@click.pass_context
+def unlock_cmd(ctx, path, confirm):
+    """Unlock a directory structure.
+
+    \b
+    Example:
+      governor unlock src/governor/ --confirm
+    """
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+    if slim.unlock(path):
+        click.echo(f"Unlocked: {path}")
+    else:
+        click.echo(f"No lock found for: {path}", err=True)
+        ctx.exit(1)
+
+
+@cli.command("must-pass")
+@click.argument("command")
+@click.pass_context
+def must_pass_cmd(ctx, command):
+    """Register a test command that must pass.
+
+    \b
+    Example:
+      governor must-pass "python3 -m pytest tests/ -x"
+    """
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+    spec = slim.must_pass(command)
+    click.echo(f"Invariant registered: {spec.id}")
+    click.echo(f"  [test] {command}")
+
+
+@cli.command("must-exist")
+@click.argument("filepath")
+@click.pass_context
+def must_exist_cmd(ctx, filepath):
+    """Register a file that must exist.
+
+    \b
+    Example:
+      governor must-exist src/governor/__init__.py
+    """
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+    spec = slim.must_exist(filepath)
+    click.echo(f"Invariant registered: {spec.id}")
+    click.echo(f"  [file-exists] {filepath}")
+
+
+@cli.group("slim")
+@click.pass_context
+def slim_cmd(ctx):
+    """Slim mode — single-developer governance."""
+    pass
+
+
+@slim_cmd.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--oneliner", is_flag=True, help="Compact one-liner for system prompts")
+@click.pass_context
+def slim_status(ctx, as_json, oneliner):
+    """Show slim mode status (one-screen view)."""
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+    status = slim.status()
+
+    if as_json:
+        click.echo(json.dumps(status.to_dict(), indent=2))
+        return
+
+    if oneliner:
+        click.echo(status.to_oneliner())
+        return
+
+    # Full one-screen view
+    click.echo(f"Envelope: {status.envelope} (single-developer)\n")
+
+    if status.decisions:
+        click.echo(f"Decisions ({len(status.decisions)}):")
+        for d in status.decisions:
+            topic_str = f" [topic: {d['topic']}]" if d.get("topic") else ""
+            click.echo(f"  * {d['choice']}{topic_str}")
+    else:
+        click.echo("Decisions: (none)")
+
+    click.echo()
+
+    if status.anchors:
+        click.echo(f"Anchors ({len(status.anchors)}):")
+        for a in status.anchors:
+            click.echo(f"  * [{a['severity']}] {a['description']} (type: {a['type']})")
+    else:
+        click.echo("Anchors: (none)")
+
+    click.echo()
+
+    if status.invariants:
+        click.echo(f"Invariants ({len(status.invariants)}):")
+        for i in status.invariants:
+            param_str = i.get("params", {}).get("command") or i.get("params", {}).get("path", "")
+            click.echo(f"  * [{i['kind']}] {param_str}")
+    else:
+        click.echo("Invariants: (none)")
+
+    click.echo()
+
+    if status.spine_locked:
+        click.echo(f"Spine: {', '.join(status.spine_locked)} (locked)")
+    else:
+        click.echo("Spine: (no locks)")
+
+    if status.last_check:
+        click.echo(f"\nLast check: {status.last_check}")
+
+
 # Advanced command group - pointer to existing commands
 @cli.group(invoke_without_command=True)
 @click.pass_context

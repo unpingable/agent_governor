@@ -1104,6 +1104,22 @@ from .webui_demo import (
     make_demo_event,
 )
 
+# Epistemic Evasion (AG2 Layer 2.1-C)
+from .epistemic_evasion import (
+    EvasionOperator,
+    FailureMode as EvasionFailureMode,
+    EvasionSeverity,
+    OperatorDetection,
+    EvasionResult,
+    EvasionState,
+    EvasionStore,
+    analyze_evasion,
+    check_invariant_j,
+    audit_governor_prompts,
+    select_coupling_question,
+    make_evasion_event,
+)
+
 # Mode Detection (AG2 Layer 2.1-C)
 from .mode_detection import (
     DomainMode,
@@ -2317,6 +2333,19 @@ __all__ = [
     "get_mode_profile",
     "observe_and_update",
     "make_mode_event",
+    # Epistemic Evasion (AG2 Layer 2.1-C)
+    "EvasionOperator",
+    "EvasionFailureMode",
+    "EvasionSeverity",
+    "OperatorDetection",
+    "EvasionResult",
+    "EvasionState",
+    "EvasionStore",
+    "analyze_evasion",
+    "check_invariant_j",
+    "audit_governor_prompts",
+    "select_coupling_question",
+    "make_evasion_event",
     # Deployment Profiles (AG2 Layer 2.1-B)
     "AuthorityClass",
     "AuditLevel",

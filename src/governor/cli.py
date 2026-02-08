@@ -15423,6 +15423,68 @@ def admit_list(ctx: click.Context, as_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Epistemic Evasion (AG2 Layer 2.1-C)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("evasion")
+def evasion_group() -> None:
+    """Epistemic evasion detection — discourse pattern analysis."""
+    pass
+
+
+@evasion_group.command("scan")
+@click.argument("text")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def evasion_scan(text: str, as_json: bool) -> None:
+    """Scan text for evasion operators."""
+    from .epistemic_evasion import analyze_evasion
+
+    result = analyze_evasion(text)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Score:    {result.score:.4f}")
+        click.echo(f"Severity: {result.severity.value}")
+        if result.operators:
+            click.echo("Operators:")
+            for op in result.operators:
+                click.echo(f"  {op.operator.value}: {op.confidence:.2f} [{', '.join(op.tells)}]")
+        if result.coupling_question:
+            click.echo(f"Question: {result.coupling_question}")
+
+
+@evasion_group.command("status")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def evasion_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show evasion state for a run."""
+    from .epistemic_evasion import EvasionStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = EvasionStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        click.echo(f"No evasion data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Run:      {state.run_id}")
+        click.echo(f"Peak:     {state.peak_score:.4f}")
+        click.echo(f"Cap:      {state.current_confidence_cap}")
+        click.echo(f"Scans:    {len(state.results)}")
+        if state.operator_counts:
+            click.echo("Operator counts:")
+            for k, v in sorted(state.operator_counts.items()):
+                click.echo(f"  {k}: {v}")
+
+
+# ---------------------------------------------------------------------------
 # Mode Detection (AG2 Layer 2.1-C)
 # ---------------------------------------------------------------------------
 

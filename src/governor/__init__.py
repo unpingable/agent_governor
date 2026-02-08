@@ -949,6 +949,26 @@ from .constraint_compiler import (
     get_cache as get_constraint_cache,
 )
 
+from .detector_integration import (
+    PhaseFlag,
+    SignalQuality,
+    GovernorAction,
+    SignalKey,
+    RawDetectorSignal,
+    CollapsedSignal,
+    SignalPolicy,
+    SignalActionResult,
+    DetectorSignalFile,
+    DetectorIntegration,
+    collapse_signal,
+    map_signal_to_actions,
+    failure_safe_signal,
+    signal_to_constraints,
+    make_evidence_ref,
+    load_signal_file,
+    save_signal_file,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -1750,6 +1770,24 @@ __all__ = [
     "diff_constraints",
     "clear_constraint_cache",
     "get_constraint_cache",
+    # Detector Integration (AG2 Layer 1, Item #4)
+    "PhaseFlag",
+    "SignalQuality",
+    "GovernorAction",
+    "SignalKey",
+    "RawDetectorSignal",
+    "CollapsedSignal",
+    "SignalPolicy",
+    "SignalActionResult",
+    "DetectorSignalFile",
+    "DetectorIntegration",
+    "collapse_signal",
+    "map_signal_to_actions",
+    "failure_safe_signal",
+    "signal_to_constraints",
+    "make_evidence_ref",
+    "load_signal_file",
+    "save_signal_file",
 ]
 
 __version__ = "0.6.0"

@@ -13892,6 +13892,143 @@ def constraints_diff(ctx: click.Context, scope: str | None, intent: str | None, 
                     click.echo(f"  ~ {before.description}: {before.severity.value} → {after.severity.value}")
 
 
+# ---------------------------------------------------------------------------
+# Detector Integration (AG2 Layer 1, Item #4)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("detector")
+def detector_group() -> None:
+    """Temporal coherence detector integration.
+
+    Sensor/controller boundary for external hallucination detector signals.
+    Collapses 19 raw dimensions into 5 control signals, maps to governor actions.
+    """
+
+
+@detector_group.command("evaluate")
+@click.argument("signal_file", type=click.Path(exists=True))
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def detector_evaluate(ctx: click.Context, signal_file: str, as_json: bool) -> None:
+    """Evaluate a detector signal file and show recommended actions."""
+    from .detector_integration import DetectorIntegration
+    import json as _json
+
+    di = DetectorIntegration()
+    result = di.process_file(Path(signal_file))
+
+    if as_json:
+        click.echo(_json.dumps(result.to_dict(), indent=2, default=str))
+    else:
+        click.echo(f"Signal quality: {result.signal_quality.value}")
+        click.echo(f"Actions: {', '.join(a.value for a in result.actions)}")
+        if result.confidence_cap is not None:
+            click.echo(f"Confidence cap: {result.confidence_cap}")
+        if result.evidence_tier:
+            click.echo(f"Evidence tier: {result.evidence_tier}")
+        click.echo(f"Reason: {result.reason}")
+
+
+@detector_group.command("collapse")
+@click.argument("signal_file", type=click.Path(exists=True))
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def detector_collapse(signal_file: str, as_json: bool) -> None:
+    """Collapse raw signal to 5 control dimensions."""
+    from .detector_integration import DetectorIntegration
+    import json as _json
+
+    di = DetectorIntegration()
+    collapsed, key, file_hash = di.load_and_collapse(Path(signal_file))
+
+    if as_json:
+        click.echo(_json.dumps({
+            "collapsed": collapsed.to_dict(),
+            "key": key.to_dict(),
+            "file_hash": file_hash,
+            "quality": collapsed.quality.value,
+        }, indent=2, default=str))
+    else:
+        click.echo(f"Quality: {collapsed.quality.value}")
+        click.echo(f"Coherence score: {collapsed.coherence_score}")
+        click.echo(f"Instability spikes: {collapsed.instability_spikes}")
+        click.echo(f"Perturbation fragility: {collapsed.perturbation_fragility}")
+        click.echo(f"Overconfidence signature: {collapsed.overconfidence_signature}")
+        click.echo(f"Phase flag: {collapsed.phase_flag.value}")
+
+
+@detector_group.command("constraints")
+@click.argument("signal_file", type=click.Path(exists=True))
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def detector_constraints(signal_file: str, as_json: bool) -> None:
+    """Show constraints produced by a detector signal."""
+    from .detector_integration import DetectorIntegration
+    import json as _json
+
+    di = DetectorIntegration()
+    collapsed, _, _ = di.load_and_collapse(Path(signal_file))
+    constraints = di.get_constraints(collapsed)
+
+    if as_json:
+        click.echo(_json.dumps(constraints, indent=2, default=str))
+    else:
+        if not constraints:
+            click.echo("No constraints (signal is clean).")
+        else:
+            for c in constraints:
+                click.echo(f"  [{c['severity']}] {c['description']}")
+
+
+@detector_group.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def detector_status(as_json: bool) -> None:
+    """Show detector integration status and policy."""
+    from .detector_integration import DetectorIntegration
+    import json as _json
+
+    di = DetectorIntegration()
+    status = di.status()
+
+    if as_json:
+        click.echo(_json.dumps(status, indent=2, default=str))
+    else:
+        click.echo("Detector Integration Status")
+        p = status["policy"]
+        click.echo(f"  Coherence threshold: {p['coherence_threshold']}")
+        click.echo(f"  Spike threshold: {p['spike_threshold']}")
+        click.echo(f"  Fragility threshold: {p['fragility_threshold']}")
+        click.echo(f"  Overconfidence threshold: {p['overconfidence_threshold']}")
+        click.echo(f"  Confab blocks writes: {p['confab_blocks_writes']}")
+        click.echo(f"  Unavailable penalty: {p['unavailable_penalty']}")
+        fs = status["failure_safe_signal"]
+        click.echo(f"  Failure-safe quality: {fs['quality']}")
+
+
+@detector_group.command("failure-safe")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def detector_failure_safe(as_json: bool) -> None:
+    """Show what happens when the detector is unavailable."""
+    from .detector_integration import DetectorIntegration
+    import json as _json
+
+    di = DetectorIntegration()
+    safe = di.failure_safe()
+    result = di.evaluate(safe)
+
+    if as_json:
+        click.echo(_json.dumps({
+            "signal": safe.to_dict(),
+            "quality": safe.quality.value,
+            "actions": result.to_dict(),
+        }, indent=2, default=str))
+    else:
+        click.echo("Failure-safe signal (detector unavailable):")
+        click.echo(f"  Coherence score: {safe.coherence_score}")
+        click.echo(f"  Overconfidence: {safe.overconfidence_signature}")
+        click.echo(f"  Quality: {safe.quality.value}")
+        click.echo(f"  Actions: {', '.join(a.value for a in result.actions)}")
+
+
 # Advanced command group - pointer to existing commands
 @cli.group(invoke_without_command=True)
 @click.pass_context

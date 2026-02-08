@@ -14265,6 +14265,135 @@ def stability_region(profile: str | None, as_json: bool) -> None:
         click.echo(f"Stable: {report.stable}")
 
 
+# ---------------------------------------------------------------------------
+# Scalar Collapse Detection (AG2 Layer 2, Item #7)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("collapse")
+def collapse_group() -> None:
+    """Scalar collapse detection.
+
+    Monitors the effective dimensionality of the governance decision space.
+    Detects eigenstructure evaporation where metrics converge to scalar behavior.
+    """
+
+
+@collapse_group.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def collapse_status(ctx: click.Context, as_json: bool) -> None:
+    """Show current collapse detection status."""
+    from .scalar_collapse import CollapseDetector
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    detector = CollapseDetector(governor_dir=gov_dir)
+    status = detector.status()
+
+    if as_json:
+        click.echo(_json.dumps(status, indent=2, default=str))
+    else:
+        click.echo(f"Sample count: {status['sample_count']}")
+        click.echo(f"Min samples needed: {status['min_samples']}")
+        click.echo(f"Sufficient data: {status['has_sufficient_data']}")
+        click.echo(f"Tracked metrics: {', '.join(status['metric_names'])}")
+        if "last_risk_score" in status:
+            click.echo(f"Last risk score: {status['last_risk_score']:.4f}")
+            click.echo(f"Last risk level: {status['last_risk_level']}")
+
+
+@collapse_group.command("analyze")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def collapse_analyze(ctx: click.Context, as_json: bool) -> None:
+    """Analyze governance metrics for collapse risk (requires telemetry data)."""
+    from .scalar_collapse import detect_collapse, MetricSample
+    import json as _json
+
+    # Check for telemetry data
+    gov_dir = ctx.obj.get("gov_dir")
+    report = detect_collapse([])  # No live data without telemetry
+
+    if as_json:
+        click.echo(_json.dumps(report.to_dict(), indent=2, default=str))
+    else:
+        click.echo(report.to_summary())
+
+
+@collapse_group.command("history")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def collapse_history(ctx: click.Context, as_json: bool) -> None:
+    """Show collapse detection history."""
+    from .scalar_collapse import CollapseHistory
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    if not gov_dir:
+        click.echo("No governor directory found.")
+        return
+
+    history = CollapseHistory(gov_dir)
+    reports = history.list_reports()
+
+    if as_json:
+        click.echo(_json.dumps(reports, indent=2, default=str))
+    else:
+        if not reports:
+            click.echo("No collapse reports.")
+        else:
+            for r in reports:
+                irr = " IRREVERSIBLE" if r.get("irreversible") else ""
+                click.echo(
+                    f"  {r['report_id']}  risk={r['risk_score']:.4f}  "
+                    f"level={r['risk_level']}  action={r['action']}{irr}"
+                )
+
+
+@collapse_group.command("modes")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def collapse_modes(ctx: click.Context, as_json: bool) -> None:
+    """Show suppressed modes from last collapse check."""
+    from .scalar_collapse import CollapseHistory
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    if not gov_dir:
+        click.echo("No governor directory found.")
+        return
+
+    history = CollapseHistory(gov_dir)
+    reports = history.list_reports()
+    if not reports:
+        click.echo("No collapse reports. Run 'governor collapse analyze' first.")
+        return
+
+    latest = history.load_report(reports[0]["report_id"])
+    if latest is None:
+        click.echo("Could not load latest report.")
+        return
+
+    if as_json:
+        click.echo(_json.dumps({
+            "dominant_metric": latest.dominant_metric,
+            "suppressed_modes": latest.suppressed_modes,
+            "effective_dimension": latest.signals.effective_dimension,
+            "max_dimension": latest.signals.max_dimension,
+        }, indent=2, default=str))
+    else:
+        if latest.dominant_metric:
+            click.echo(f"Dominant metric: {latest.dominant_metric}")
+        else:
+            click.echo("No dominant metric detected.")
+        if latest.suppressed_modes:
+            click.echo(f"Suppressed modes: {', '.join(latest.suppressed_modes)}")
+        else:
+            click.echo("No suppressed modes detected.")
+        click.echo(f"Effective dimension: {latest.signals.effective_dimension:.1f}/{latest.signals.max_dimension}")
+
+
 # Advanced command group - pointer to existing commands
 @cli.group(invoke_without_command=True)
 @click.pass_context

@@ -1004,6 +1004,23 @@ from .spectral_stability import (
     make_stability_event,
 )
 
+from .scalar_collapse import (
+    CollapseRisk,
+    CollapseAction,
+    MetricSample,
+    CollapseSignals,
+    CollapseReport,
+    CollapseHistory,
+    CollapseDetector,
+    compute_signals,
+    compute_collapse_risk,
+    classify_risk as classify_collapse_risk,
+    determine_action as determine_collapse_action,
+    detect_collapse,
+    make_collapse_event,
+    DEFAULT_METRICS,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -1854,6 +1871,21 @@ __all__ = [
     "find_hotspots",
     "compute_stability",
     "make_stability_event",
+    # Scalar Collapse (AG2 Layer 2, Item #7)
+    "CollapseRisk",
+    "CollapseAction",
+    "MetricSample",
+    "CollapseSignals",
+    "CollapseReport",
+    "CollapseHistory",
+    "CollapseDetector",
+    "compute_signals",
+    "compute_collapse_risk",
+    "classify_collapse_risk",
+    "determine_collapse_action",
+    "detect_collapse",
+    "make_collapse_event",
+    "DEFAULT_METRICS",
 ]
 
 __version__ = "0.6.0"

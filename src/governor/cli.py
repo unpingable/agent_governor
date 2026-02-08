@@ -14394,6 +14394,188 @@ def collapse_modes(ctx: click.Context, as_json: bool) -> None:
         click.echo(f"Effective dimension: {latest.signals.effective_dimension:.1f}/{latest.signals.max_dimension}")
 
 
+# ---------------------------------------------------------------------------
+# CLI Chat (AG2 Layer 3, Item #8)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("backend")
+def backend_group() -> None:
+    """Backend management for governed chat."""
+    pass
+
+
+@backend_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def backend_list(ctx: click.Context, as_json: bool) -> None:
+    """List available backends and their status."""
+    from .cli_chat import probe_backends
+
+    backends = probe_backends()
+    if as_json:
+        click.echo(json.dumps([b.to_dict() for b in backends], indent=2))
+    else:
+        for b in backends:
+            status = "available" if b.available else "not available"
+            reason = f" ({b.reason})" if b.reason else ""
+            models = f", {len(b.models)} models" if b.models else ""
+            click.echo(f"  {b.name:<14} {status}{reason}{models}")
+
+
+@backend_group.command("switch")
+@click.argument("name")
+@click.option("--model", default="", help="Default model for this backend")
+@click.pass_context
+def backend_switch(ctx: click.Context, name: str, model: str) -> None:
+    """Switch active backend."""
+    from .cli_chat import ChatConfig, KNOWN_BACKENDS, probe_backend
+
+    if name not in KNOWN_BACKENDS:
+        click.echo(f"Unknown backend: {name}. Known: {', '.join(KNOWN_BACKENDS)}", err=True)
+        ctx.exit(1)
+        return
+
+    info = probe_backend(name)
+    if not info.available:
+        click.echo(f"Warning: {name} is not available ({info.reason})", err=True)
+
+    config = ChatConfig.load()
+    config.active_backend = name
+    if model:
+        config.active_model = model
+    config.save()
+    click.echo(f"Active backend: {name}" + (f" ({model})" if model else ""))
+
+
+@backend_group.command("status")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def backend_status(ctx: click.Context, as_json: bool) -> None:
+    """Show active backend."""
+    from .cli_chat import ChatConfig, probe_backend
+
+    config = ChatConfig.load()
+    info = probe_backend(config.active_backend)
+
+    if as_json:
+        click.echo(json.dumps({
+            "active_backend": config.active_backend,
+            "active_model": config.active_model,
+            "available": info.available,
+            "reason": info.reason,
+        }, indent=2))
+    else:
+        status = "available" if info.available else "NOT available"
+        model_str = config.active_model or info.default_model or "(default)"
+        click.echo(f"Active: {config.active_backend} ({model_str}) — {status}")
+
+
+@backend_group.command("models")
+@click.pass_context
+def backend_models(ctx: click.Context) -> None:
+    """List models for active backend."""
+    from .cli_chat import ChatConfig, probe_backend
+
+    config = ChatConfig.load()
+    info = probe_backend(config.active_backend)
+    if not info.available:
+        click.echo(f"{config.active_backend} is not available: {info.reason}", err=True)
+        ctx.exit(1)
+        return
+
+    if info.models:
+        for m in info.models:
+            click.echo(f"  {m}")
+    else:
+        click.echo(f"  (model discovery not supported for {config.active_backend})")
+        if info.default_model:
+            click.echo(f"  Default: {info.default_model}")
+
+
+@cli.command("chat")
+@click.argument("prompt", required=False, default="")
+@click.option("--backend", default="", help="Backend to use (overrides config)")
+@click.option("--model", default="", help="Model to use (overrides config)")
+@click.option("--scope", default="", help="File scope for constraint projection")
+@click.option("--mode", default="code", help="Governor mode (code/fiction/nonfiction/general)")
+@click.option("--stdin", "use_stdin", is_flag=True, help="Read prompt from stdin")
+@click.option("--no-hooks", is_flag=True, help="Disable governor hooks")
+@click.option("--format", "fmt", default="text", type=click.Choice(["text", "json"]))
+@click.option("--compare", default="", help="Compare backends (e.g., ollama:llama3,anthropic:claude-3)")
+@click.pass_context
+def chat_command(
+    ctx: click.Context, prompt: str, backend: str, model: str,
+    scope: str, mode: str, use_stdin: bool, no_hooks: bool,
+    fmt: str, compare: str,
+) -> None:
+    """Governed single-turn chat with active backend.
+
+    \b
+    Examples:
+      governor chat "Refactor the auth module"
+      governor chat "Explain this" --backend ollama --model llama3
+      echo "What does this do?" | governor chat --stdin
+      governor chat "Add validation" --compare ollama:llama3,anthropic:claude-3
+    """
+    import sys as _sys
+
+    from .cli_chat import (
+        format_compare,
+        format_response,
+        parse_backend_list as parse_bl,
+        run_chat,
+        run_compare,
+    )
+
+    # Resolve prompt
+    if use_stdin:
+        prompt = _sys.stdin.read().strip()
+    if not prompt:
+        click.echo("No prompt provided. Use an argument or --stdin.", err=True)
+        ctx.exit(1)
+        return
+
+    # Compare mode
+    if compare:
+        backends = parse_bl(compare)
+        if len(backends) < 2:
+            click.echo("--compare requires at least 2 backends.", err=True)
+            ctx.exit(1)
+            return
+        try:
+            result = run_compare(prompt, backends, scope=scope, mode=mode)
+        except Exception as e:
+            click.echo(f"Error: {e}", err=True)
+            ctx.exit(1)
+            return
+
+        if fmt == "json":
+            click.echo(json.dumps(result.to_dict(), indent=2))
+        else:
+            click.echo(format_compare(result))
+        return
+
+    # Single backend chat
+    try:
+        result = run_chat(
+            prompt, backend=backend, model=model,
+            scope=scope, mode=mode, use_hooks=not no_hooks,
+        )
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    if fmt == "json":
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(format_response(result))
+
+    if not result.passed:
+        ctx.exit(1)
+
+
 # Advanced command group - pointer to existing commands
 @cli.group(invoke_without_command=True)
 @click.pass_context

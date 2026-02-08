@@ -1021,6 +1021,22 @@ from .scalar_collapse import (
     DEFAULT_METRICS,
 )
 
+from .cli_chat import (
+    ChatConfig,
+    BackendInfo,
+    ChatResult,
+    CompareResult,
+    probe_backends,
+    probe_backend,
+    run_chat,
+    run_compare,
+    parse_backend_spec,
+    parse_backend_list,
+    format_response as format_chat_response,
+    format_compare as format_chat_compare,
+    make_chat_event,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -1886,6 +1902,20 @@ __all__ = [
     "detect_collapse",
     "make_collapse_event",
     "DEFAULT_METRICS",
+    # CLI Chat (AG2 Layer 3, Item #8)
+    "ChatConfig",
+    "BackendInfo",
+    "ChatResult",
+    "CompareResult",
+    "probe_backends",
+    "probe_backend",
+    "run_chat",
+    "run_compare",
+    "parse_backend_spec",
+    "parse_backend_list",
+    "format_chat_response",
+    "format_chat_compare",
+    "make_chat_event",
 ]
 
 __version__ = "0.6.0"

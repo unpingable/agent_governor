@@ -15637,6 +15637,79 @@ def hysteresis_list(ctx: click.Context, as_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Temporal Attack Surface (AG2 Parallel Track)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("temporal")
+def temporal_group() -> None:
+    """Temporal attack surface — Δt-aware security analysis."""
+    pass
+
+
+@temporal_group.command("scan")
+@click.argument("path")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def temporal_scan(path: str, as_json: bool) -> None:
+    """Scan file or directory for temporal antipatterns."""
+    from .temporal_attack import scan_file, scan_directory
+
+    p = Path(path)
+    if p.is_dir():
+        results = scan_directory(p)
+        if as_json:
+            click.echo(json.dumps([r.to_dict() for r in results], indent=2))
+        else:
+            total = sum(r.marker_count for r in results)
+            click.echo(f"Scanned directory: {path}")
+            click.echo(f"Files with findings: {len(results)}")
+            click.echo(f"Total markers: {total}")
+            for r in results:
+                click.echo(f"\n  {r.file_path}: {r.marker_count} markers")
+                for m in r.markers:
+                    click.echo(f"    L{m.line}: [{m.severity.value}] {m.marker_type.value} — {m.description}")
+    else:
+        result = scan_file(p)
+        if as_json:
+            click.echo(json.dumps(result.to_dict(), indent=2))
+        else:
+            click.echo(f"File: {path}")
+            click.echo(f"Markers: {result.marker_count}")
+            for m in result.markers:
+                click.echo(f"  L{m.line}: [{m.severity.value}] {m.marker_type.value} — {m.description}")
+
+
+@temporal_group.command("status")
+@click.option("--run-id", default="default", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def temporal_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show temporal scan state."""
+    from .temporal_attack import TemporalAttackStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = TemporalAttackStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No temporal scan data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Total markers: {state.total_markers}")
+        click.echo(f"Files scanned: {len(state.results)}")
+        if state.marker_counts:
+            click.echo("By type:")
+            for k, v in sorted(state.marker_counts.items()):
+                click.echo(f"  {k}: {v}")
+
+
+# ---------------------------------------------------------------------------
 # Quorum Extensions (AG2 Layer 2.1-D)
 # ---------------------------------------------------------------------------
 

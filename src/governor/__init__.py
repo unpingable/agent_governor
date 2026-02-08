@@ -1187,6 +1187,29 @@ from .quorum_ext import (
     make_two_man_event,
 )
 
+# Temporal Attack Surface (AG2 Parallel Track)
+from .temporal_attack import (
+    TemporalMarkerType,
+    TemporalDomain,
+    MarkerSeverity,
+    TemporalMarker,
+    ScanResult as TemporalScanResult,
+    TemporalScanState,
+    FatigueSignals,
+    TemporalAttackStore,
+    scan_toctou,
+    scan_fail_open,
+    scan_log_not_gate,
+    scan_unbounded_retry,
+    scan_catch_all,
+    scan_type_ignore,
+    scan_text as scan_temporal_text,
+    scan_file as scan_temporal_file,
+    scan_directory as scan_temporal_directory,
+    make_temporal_event,
+    make_scan_event as make_temporal_scan_event,
+)
+
 # Coherence Budget (AG2 Layer 2.1-C)
 from .coherence_budget import (
     CBIStatus,

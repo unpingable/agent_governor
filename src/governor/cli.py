@@ -12986,6 +12986,200 @@ cli.add_command(code)
 cli.add_command(resolve)
 
 
+# ---------------------------------------------------------------------------
+# Risk controller (control theory: R_t = PD/E)
+# ---------------------------------------------------------------------------
+
+RISK_STATE_FILE = "risk_controller.json"
+
+
+def get_risk_controller(gov_dir: Path):
+    """Get or create the risk controller."""
+    from .control_theory import RiskController
+
+    state_path = gov_dir / RISK_STATE_FILE
+    if state_path.exists():
+        data = json.loads(state_path.read_text())
+        return RiskController.from_dict(data)
+    return RiskController()
+
+
+def save_risk_controller(gov_dir: Path, controller) -> None:
+    """Save the risk controller state to disk."""
+    state_path = gov_dir / RISK_STATE_FILE
+    state_path.write_text(json.dumps(controller.to_dict(), indent=2))
+
+
+@cli.group()
+@click.pass_context
+def risk(ctx: click.Context) -> None:
+    """
+    Risk index: R_t = (P * D) / E (control theory foundation).
+
+    Computes the Agent Risk Index — a dimensionless ratio like the
+    Reynolds number that classifies agent operation regime:
+    - SAFE (R̄ < 0.1): Full autonomy
+    - ELASTIC (0.1-0.4): Normal checks
+    - DANGEROUS (0.4-0.8): Heightened scrutiny
+    - RUNAWAY (≥ 0.8): Halt
+    """
+    pass
+
+
+@risk.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def risk_status(ctx: click.Context, as_json: bool) -> None:
+    """Show current R_t, R-bar, regime, and tier."""
+    gov_dir = ensure_initialized(ctx)
+    ctrl = get_risk_controller(gov_dir)
+    state = ctrl.get_state()
+
+    if as_json:
+        click.echo(json.dumps(state, indent=2))
+        return
+
+    regime_val = state["current_regime"]
+    regime_colors = {
+        "safe": "green",
+        "elastic": "blue",
+        "dangerous": "yellow",
+        "runaway": "bright_red",
+    }
+    color = regime_colors.get(regime_val, "white")
+
+    click.echo(f"Regime:    {click.style(regime_val.upper(), fg=color, bold=True)}")
+    click.echo(f"R̄ (EMA):   {state['r_bar_ema']:.4f}")
+    click.echo(f"R̄ (SMA):   {state['r_bar_sma']:.4f}")
+    click.echo(f"R̄ (worst): {state['r_bar_worst']:.4f}")
+    click.echo(f"Power:     {state['current_power']:.4f}")
+    click.echo(f"Delay:     {state['current_delay']:.4f}")
+    click.echo(f"Evidence:  {state['current_evidence']:.4f}")
+    click.echo(f"Window:    {state['window_size']} samples")
+    click.echo(f"Episode:   {state['episode_steps']} steps")
+
+    ol = state["open_loop"]
+    if ol["is_open_loop"]:
+        click.echo(click.style(f"\n⚠ OPEN LOOP: Γ={ol['gamma']:.2f}, backlog={ol['backlog']}", fg="red"))
+
+
+@risk.command("check")
+@click.argument("tool_class")
+@click.option("-e", "--evidence", type=float, default=None, help="Evidence score (0-1)")
+@click.option("-d", "--delay", type=float, default=None, help="Feedback delay")
+@click.option("-p", "--power", type=float, default=None, help="Power (override tool default)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def risk_check(
+    ctx: click.Context,
+    tool_class: str,
+    evidence: float | None,
+    delay: float | None,
+    power: float | None,
+    as_json: bool,
+) -> None:
+    """Check if a tool action is allowed given current state."""
+    gov_dir = ensure_initialized(ctx)
+    ctrl = get_risk_controller(gov_dir)
+
+    result = ctrl.check(tool_class, p_req=power, d_t=delay, e_t=evidence)
+    save_risk_controller(gov_dir, ctrl)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        return
+
+    decision_colors = {
+        "allow": "green",
+        "deny": "red",
+        "demote": "yellow",
+        "halt": "bright_red",
+    }
+    color = decision_colors.get(result.decision.value, "white")
+    click.echo(f"Decision: {click.style(result.decision.value.upper(), fg=color, bold=True)}")
+    click.echo(f"Risk:     {result.risk:.4f}")
+    click.echo(f"Regime:   {result.regime.value.upper()}")
+    click.echo(f"Reason:   {result.reason}")
+    if result.demoted_tier:
+        click.echo(f"Demoted to tier {result.demoted_tier.level} (P≤{result.demoted_tier.p_threshold})")
+
+
+@risk.command("history")
+@click.option("--limit", "-n", default=10, help="Number of entries to show")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def risk_history(ctx: click.Context, limit: int, as_json: bool) -> None:
+    """Show recent risk calculations."""
+    gov_dir = ensure_initialized(ctx)
+    ctrl = get_risk_controller(gov_dir)
+
+    entries = ctrl.history[-limit:]
+
+    if as_json:
+        click.echo(json.dumps([e.to_dict() for e in entries], indent=2))
+        return
+
+    if not entries:
+        click.echo("No risk history recorded.")
+        return
+
+    click.echo(f"Risk History (last {limit}):\n")
+    for calc in entries:
+        regime_val = calc.regime.value
+        click.echo(f"  R={calc.risk:.4f}  P={calc.power:.3f}  D={calc.delay:.3f}  E={calc.evidence:.3f}  [{regime_val.upper()}]")
+
+
+@risk.command("sensitivity")
+@click.option("-p", "--power", type=float, required=True, help="Power value")
+@click.option("-d", "--delay", type=float, required=True, help="Delay value")
+@click.option("-e", "--evidence", type=float, required=True, help="Evidence value")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def risk_sensitivity(
+    ctx: click.Context,
+    power: float,
+    delay: float,
+    evidence: float,
+    as_json: bool,
+) -> None:
+    """Compute sensitivity analysis (glass cannon detection)."""
+    from .control_theory import compute_sensitivity
+
+    s = compute_sensitivity(power, delay, evidence)
+
+    if as_json:
+        click.echo(json.dumps(s, indent=2))
+        return
+
+    click.echo(f"R_t:    {s['risk']:.4f}")
+    click.echo(f"∂R/∂D:  {s['dr_dd']:.4f}  (delay sensitivity)")
+    click.echo(f"∂R/∂E:  {s['dr_de']:.4f}  (evidence sensitivity)")
+
+    if abs(s["dr_dd"]) > 0.5 or abs(s["dr_de"]) > 0.5:
+        click.echo(click.style("\n⚠ Glass cannon region: small changes in D or E produce large R changes", fg="yellow"))
+
+
+@risk.command("trajectory")
+@click.option("--mode", type=click.Choice(["additive", "discounted", "worst_step"]), default="additive")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def risk_trajectory(ctx: click.Context, mode: str, as_json: bool) -> None:
+    """Show episode risk trajectory."""
+    gov_dir = ensure_initialized(ctx)
+    ctrl = get_risk_controller(gov_dir)
+
+    metrics = ctrl.get_episode_risk()
+
+    if as_json:
+        click.echo(json.dumps(metrics.to_dict(), indent=2))
+        return
+
+    click.echo(f"Episode Risk ({metrics.step_count} steps):\n")
+    click.echo(f"  J_additive:   {metrics.j_additive:.4f}")
+    click.echo(f"  J_discounted: {metrics.j_discounted:.4f}")
+    click.echo(f"  J_worst:      {metrics.j_worst:.4f}")
+
+
 # Advanced command group - pointer to existing commands
 @cli.group(invoke_without_command=True)
 @click.pass_context

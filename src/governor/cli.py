@@ -14975,6 +14975,91 @@ def advanced(ctx: click.Context) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Measurement Integrity (AG2 Layer 2.1-B)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("measure")
+def measure_group() -> None:
+    """Measurement integrity — tidepool defense for tool outputs."""
+    pass
+
+
+@measure_group.command("status")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def measure_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show measurement integrity status for a run."""
+    from .measurement_integrity import MeasurementStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = MeasurementStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if not state:
+        click.echo(f"No measurement data for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Run: {run_id}")
+        click.echo(f"Risk: {state.risk_score:.3f}")
+        click.echo(f"Trusted: {state.trusted_count} | Untrusted: {state.untrusted_count} | Quarantined: {state.quarantined_count}")
+        if state.frozen_tools:
+            click.echo(f"Frozen tools: {', '.join(sorted(state.frozen_tools))}")
+        click.echo(f"Alerts: {len(state.alerts)}")
+
+
+@measure_group.command("scan")
+@click.argument("text")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def measure_scan(ctx: click.Context, text: str, as_json: bool) -> None:
+    """Scan text for instruction masquerade patterns."""
+    from .measurement_integrity import detect_instruction_masquerade
+
+    matches = detect_instruction_masquerade(text)
+    if as_json:
+        click.echo(json.dumps({"patterns_matched": matches, "is_suspicious": len(matches) > 0}))
+    else:
+        if matches:
+            click.echo(f"Suspicious patterns ({len(matches)}):")
+            for m in matches:
+                click.echo(f"  ! {m}")
+        else:
+            click.echo("No suspicious patterns detected.")
+
+
+@measure_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def measure_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with measurement data."""
+    from .measurement_integrity import MeasurementStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = MeasurementStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            s = store.load(r)
+            results.append({"run_id": r, "risk_score": s.risk_score if s else None})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No measurement runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: risk={s.risk_score:.3f} frozen={len(s.frozen_tools)}")
+
+
+# ---------------------------------------------------------------------------
 # Phase Control (AG2 Layer 2.1-A)
 # ---------------------------------------------------------------------------
 

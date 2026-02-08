@@ -1104,6 +1104,23 @@ from .webui_demo import (
     make_demo_event,
 )
 
+# Measurement Integrity (AG2 Layer 2.1-B)
+from .measurement_integrity import (
+    TrustLevel,
+    AlertType,
+    FreezeReason,
+    ToolOutput,
+    TrustResult,
+    Alert as MeasurementAlert,
+    MeasurementState,
+    MeasurementStore,
+    is_trusted,
+    detect_instruction_masquerade,
+    evaluate_output,
+    check_invariant_c,
+    make_measurement_event,
+)
+
 # Phase Control (AG2 Layer 2.1-A)
 from .phase_control import (
     Phase,
@@ -2142,6 +2159,20 @@ __all__ = [
     "check_budget",
     "check_invariant_g",
     "make_phase_event",
+    # Measurement Integrity (AG2 Layer 2.1-B)
+    "TrustLevel",
+    "AlertType",
+    "FreezeReason",
+    "ToolOutput",
+    "TrustResult",
+    "MeasurementAlert",
+    "MeasurementState",
+    "MeasurementStore",
+    "is_trusted",
+    "detect_instruction_masquerade",
+    "evaluate_output",
+    "check_invariant_c",
+    "make_measurement_event",
 ]
 
 __version__ = "0.6.0"

@@ -14975,6 +14975,98 @@ def advanced(ctx: click.Context) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Coverage Metrics (AG2 Layer 2.1-A)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("metrics")
+def metrics_group() -> None:
+    """Coverage and efficiency metrics — severity-weighted verification."""
+    pass
+
+
+@metrics_group.command("status")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def metrics_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show coverage metrics for a run."""
+    from .metrics import MetricsStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = MetricsStore(governor_dir=gov_dir)
+    tracker = store.load_tracker(run_id)
+
+    if not tracker:
+        click.echo(f"No metrics found for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(tracker.to_dict(), indent=2))
+    else:
+        cc = tracker.claim_coverage
+        click.echo(f"Run: {run_id}")
+        click.echo(f"Claims: {cc.total_claims}")
+        click.echo(cc.summary())
+        if tracker.snapshots:
+            click.echo(f"Snapshots: {len(tracker.snapshots)}")
+            click.echo(f"Efficiency: {tracker.latest_efficiency():.4f}")
+
+
+@metrics_group.command("claims")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def metrics_claims(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """List claims tracked for a run."""
+    from .metrics import MetricsStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = MetricsStore(governor_dir=gov_dir)
+    tracker = store.load_tracker(run_id)
+
+    if not tracker:
+        click.echo(f"No metrics found for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps([c.to_dict() for c in tracker.claims], indent=2))
+    else:
+        for c in tracker.claims:
+            icon = {"verified": "+", "waived": "~", "refuted": "!", "pending": "?", "unknown": " "}.get(c.status.value, " ")
+            click.echo(f"  [{icon}] {c.claim_id} ({c.severity.value}): {c.description}")
+
+
+@metrics_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def metrics_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with metrics."""
+    from .metrics import MetricsStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = MetricsStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            t = store.load_tracker(r)
+            results.append({"run_id": r, "coverage": t.coverage if t else None,
+                           "claims": len(t.claims) if t else 0})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No metrics runs found.")
+        for r in runs:
+            t = store.load_tracker(r)
+            if t:
+                click.echo(f"  {r}: coverage={t.coverage:.1%} claims={len(t.claims)}")
+
+
+# ---------------------------------------------------------------------------
 # Admissibility Gate (AG2 Layer 2.1-A)
 # ---------------------------------------------------------------------------
 

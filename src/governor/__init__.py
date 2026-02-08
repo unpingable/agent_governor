@@ -1104,6 +1104,24 @@ from .webui_demo import (
     make_demo_event,
 )
 
+# Coverage Metrics (AG2 Layer 2.1-A)
+from .metrics import (
+    MetricSeverity,
+    VerificationStatus,
+    MetricClaim,
+    ClaimCoverage,
+    EfficiencyMetric,
+    CoverageSnapshot,
+    MetricsTracker,
+    MetricsStore,
+    compute_coverage,
+    compute_coverage_by_severity,
+    compute_efficiency,
+    compute_claim_coverage,
+    update_claim_status,
+    make_metrics_event,
+)
+
 # Admissibility Gate (AG2 Layer 2.1-A)
 from .admissibility import (
     Severity as AdmitSeverity,
@@ -2078,6 +2096,21 @@ __all__ = [
     "assess_task",
     "check_invariant_f",
     "make_admissibility_event",
+    # Coverage Metrics (AG2 Layer 2.1-A)
+    "MetricSeverity",
+    "VerificationStatus",
+    "MetricClaim",
+    "ClaimCoverage",
+    "EfficiencyMetric",
+    "CoverageSnapshot",
+    "MetricsTracker",
+    "MetricsStore",
+    "compute_coverage",
+    "compute_coverage_by_severity",
+    "compute_efficiency",
+    "compute_claim_coverage",
+    "update_claim_status",
+    "make_metrics_event",
 ]
 
 __version__ = "0.6.0"

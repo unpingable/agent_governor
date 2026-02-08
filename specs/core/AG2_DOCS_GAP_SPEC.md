@@ -3,8 +3,8 @@
 ## Version 0.1 — Closing Reference Gaps
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on: []
 blocking: documentation credibility
 estimated_scope: medium

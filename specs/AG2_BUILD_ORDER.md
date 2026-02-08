@@ -3,7 +3,7 @@
 ## 2.0/2.1 Implementation Sequence — 26 Specs
 
 ```yaml
-status: planning
+status: complete
 branch: dev (create before starting)
 approach: complete-per-layer (no MVPs, no half-implementations)
 dogfood: use slim mode to govern 2.0 development once Layer 0 lands

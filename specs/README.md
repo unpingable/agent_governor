@@ -67,7 +67,7 @@ The governor's theoretical foundation. Read in this order.
 | 19 | **SDK_MIDDLEWARE_SPEC.md** | Drop-in governor enforcement for Anthropic SDK. `GovernorMiddleware(Anthropic())`. `status: canonical` |
 | 20 | **SESSION_CONTINUITY_SPEC.md** | Capsule-based session management. Ledger + workspace, not chat replay. `status: canonical` |
 | 21 | **GOVERNED_COMPACT_SPEC.md** | Loss-aware context compaction with receipts. Anchors survive, loss explicit. `status: canonical` |
-| 22 | **AG2_DOCS_GAP_SPEC.md** | Documentation gaps: ADRs, subsystem docs, reference audit. `status: gap` |
+| 22 | **AG2_DOCS_GAP_SPEC.md** | Documentation gaps: ADRs, subsystem docs, reference audit. `status: implemented` |
 | 23 | **AG2_TEMPORAL_ATTACK_SURFACE_SPEC.md** | Δt-aware security analysis. Temporal risk markers, race windows, fail-open detection. `status: implemented` |
 
 ### Reading Guidance
@@ -76,7 +76,7 @@ The governor's theoretical foundation. Read in this order.
 - **Specs 5–7** give you the surface. Read these to understand *how* the system talks to users.
 - **Specs 8–13** give you the mechanics. Read these when you need to work on specific subsystems.
 - **Specs 14–21** are implemented (QA Harness, Git Governance, Perforce Support, External Constraint, MCP Safety, SDK Middleware, Session Continuity, Governed Compact).
-- **Spec 22** (AG2_DOCS_GAP) is the only remaining gap spec — ADRs not yet created.
+- **Spec 22** (AG2_DOCS_GAP) is now implemented — 5 ADRs extracted to `docs/adr/`.
 - **Spec 23** (Temporal Attack Surface) is now implemented.
 - You don't need all 23 to start building. Specs 1, 4, and 7 cover 80% of what matters.
 
@@ -157,7 +157,7 @@ The governor's v2 architecture: control theory foundation, run-centric instrumen
 
 | Spec | What It Covers | Status |
 |------|----------------|--------|
-| **INVARIANTS_SPEC.md** | 10 invariants (A-J). Formal definitions and spec cross-references. | `planning` |
+| **INVARIANTS_SPEC.md** | 10 invariants (A-J). Formal definitions, implementation cross-references. | `canonical` |
 
 ### 3.0: Self-Governance (Deferred)
 
@@ -192,7 +192,7 @@ How surfaces behave. These reference core and interferometry specs for policy �
 | Spec | What It Covers |
 |------|----------------|
 | **WEBUI_UX_SPEC.md** | v1 chat-centric UI. Fiction and code mode panels. Violation modal. Corrections log. Empty states. |
-| **AG2_DASHBOARD_UX_SPEC.md** | v2 governance dashboard. Controls-left/output-right. Run-centric. Streaming. Cancel contract. Templates. `status: partial` |
+| **AG2_DASHBOARD_UX_SPEC.md** | v2 governance dashboard. Controls-left/output-right. Run-centric. Streaming. Cancel contract. Templates. `status: implemented` |
 | **CLI_UX_SPEC.md** | Layered command structure. `governor fiction` / `governor code` / `governor advanced`. Bare command experience. |
 | **VSCODE_UX_SPEC.md** | Gutter indicators, inline resolution, status bar, governor panel, Quick Fix integration. |
 | **AG2_WEBUI_DEMO_GAP_SPEC.md** | Playwright-based WebUI demo automation. Scripted screenshots, reproducible on release. `status: partial` |

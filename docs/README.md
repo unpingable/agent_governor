@@ -167,6 +167,13 @@ Open **http://localhost:8001** (fiction) or **http://localhost:8002** (code)
 ### Architecture
 - [architecture/OVERVIEW.md](architecture/OVERVIEW.md) - System architecture
 
+### Architecture Decision Records
+- [adr/0001-proposal-commit-split.md](adr/0001-proposal-commit-split.md) - Why proposals and commits are separate stages
+- [adr/0002-gate-not-memory.md](adr/0002-gate-not-memory.md) - Why the governor blocks, not logs
+- [adr/0003-domain-specific-modes.md](adr/0003-domain-specific-modes.md) - Why fiction/code/nonfiction are separate modes
+- [adr/0004-sqlite-over-postgres.md](adr/0004-sqlite-over-postgres.md) - Why SQLite with WAL, not Postgres
+- [adr/0005-self-contained-webui.md](adr/0005-self-contained-webui.md) - Why no build step, no npm, no framework
+
 ---
 
 ## The Philosophy

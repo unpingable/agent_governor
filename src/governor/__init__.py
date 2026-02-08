@@ -1063,6 +1063,30 @@ from .doc_governance import (
     make_doc_event,
 )
 
+from .dashboard_ux import (
+    StreamEventType,
+    RunVerdict,
+    RunState,
+    ControlRender,
+    CancelRequest,
+    StreamEvent,
+    RunTemplate,
+    BUILTIN_TEMPLATES,
+    ControlField,
+    UIAction,
+    BUILTIN_ACTIONS,
+    RunSummary,
+    DashboardSummary,
+    ReportSection,
+    RunReport,
+    DashboardStore,
+    build_controls_schema,
+    generate_report as generate_run_report,
+    make_heartbeat,
+    make_progress,
+    make_dashboard_event,
+)
+
 __all__ = [
     # Legacy v0.1
     "AgentGovernor",
@@ -1966,6 +1990,28 @@ __all__ = [
     "generate_frontmatter",
     "generate_sidecar",
     "make_doc_event",
+    # Dashboard UX (AG2 Layer 4, Item #11)
+    "StreamEventType",
+    "RunVerdict",
+    "RunState",
+    "ControlRender",
+    "CancelRequest",
+    "StreamEvent",
+    "RunTemplate",
+    "BUILTIN_TEMPLATES",
+    "ControlField",
+    "UIAction",
+    "BUILTIN_ACTIONS",
+    "RunSummary",
+    "DashboardSummary",
+    "ReportSection",
+    "RunReport",
+    "DashboardStore",
+    "build_controls_schema",
+    "generate_run_report",
+    "make_heartbeat",
+    "make_progress",
+    "make_dashboard_event",
 ]
 
 __version__ = "0.6.0"

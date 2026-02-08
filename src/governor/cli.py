@@ -14395,6 +14395,118 @@ def collapse_modes(ctx: click.Context, as_json: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Dashboard UX (AG2 Layer 4, Item #11)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("dashboard-ux")
+def dashboard_ux_group() -> None:
+    """Run-centric governance dashboard backend."""
+    pass
+
+
+@dashboard_ux_group.command("summary")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def dashboard_ux_summary(ctx: click.Context, as_json: bool) -> None:
+    """Show aggregate dashboard statistics."""
+    from .dashboard_ux import DashboardStore
+
+    store = DashboardStore()
+    summary = store.dashboard_summary()
+
+    if as_json:
+        click.echo(json.dumps(summary.to_dict(), indent=2))
+    else:
+        click.echo(f"Total runs: {summary.total_runs}")
+        click.echo(f"  Passed: {summary.passed}")
+        click.echo(f"  Failed: {summary.failed}")
+        click.echo(f"  Cancelled: {summary.cancelled}")
+        click.echo(f"  Pass rate: {summary.pass_rate:.1%}")
+        click.echo(f"  Total claims: {summary.total_claims}")
+        click.echo(f"  Total violations: {summary.total_violations}")
+
+
+@dashboard_ux_group.command("runs")
+@click.option("--profile", default="", help="Filter by profile")
+@click.option("--verdict", default="", help="Filter by verdict")
+@click.option("--limit", default=20, help="Max runs to show")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def dashboard_ux_runs(ctx: click.Context, profile: str, verdict: str, limit: int, as_json: bool) -> None:
+    """List run summaries."""
+    from .dashboard_ux import DashboardStore
+
+    store = DashboardStore()
+    runs = store.list_runs(profile=profile, verdict=verdict, limit=limit)
+
+    if as_json:
+        click.echo(json.dumps([r.to_dict() for r in runs], indent=2))
+    else:
+        if not runs:
+            click.echo("No runs recorded.")
+            return
+        for r in runs:
+            click.echo(f"  {r.run_id:<14} {r.created_at[:10]:<12} "
+                        f"{r.model:<16} {r.profile:<12} "
+                        f"{r.verdict.value.upper():<10} "
+                        f"{r.claim_count} claims  {r.violation_count} violations")
+
+
+@dashboard_ux_group.command("report")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output (default: markdown)")
+@click.pass_context
+def dashboard_ux_report(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Generate report for a run."""
+    from .dashboard_ux import DashboardStore, generate_report
+
+    store = DashboardStore()
+    run = store.get_run(run_id)
+    if not run:
+        click.echo(f"Run not found: {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    report = generate_report(
+        run_id,
+        manifest={"profile": run.profile, "model": run.model},
+    )
+    store.save_report(report)
+
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(report.to_markdown())
+
+
+@dashboard_ux_group.command("templates")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def dashboard_ux_templates(ctx: click.Context, as_json: bool) -> None:
+    """List available run templates."""
+    from .dashboard_ux import BUILTIN_TEMPLATES
+
+    if as_json:
+        click.echo(json.dumps([t.to_dict() for t in BUILTIN_TEMPLATES], indent=2))
+    else:
+        for t in BUILTIN_TEMPLATES:
+            click.echo(f"  {t.name:<20} {t.description}")
+            click.echo(f"    Task: {t.example_task}")
+            click.echo(f"    Expected: {t.expected_outcome}")
+            click.echo()
+
+
+@dashboard_ux_group.command("schema")
+@click.pass_context
+def dashboard_ux_schema(ctx: click.Context) -> None:
+    """Show controls schema (JSON Schema + render hints)."""
+    from .dashboard_ux import build_controls_schema
+
+    click.echo(json.dumps(build_controls_schema(), indent=2))
+
+
+# ---------------------------------------------------------------------------
 # Document Governance (AG2 Layer 4, Item #10)
 # ---------------------------------------------------------------------------
 

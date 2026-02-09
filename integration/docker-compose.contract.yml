@@ -4,8 +4,8 @@
 services:
   governor:
     build:
-      context: ..
-      dockerfile: Dockerfile.adapter
+      context: ${GOV_WEBUI_DIR:-../../gov-webui}
+      dockerfile: Dockerfile
     environment:
       - BACKEND_TYPE=ollama
       - OLLAMA_URL=http://nowhere:11434

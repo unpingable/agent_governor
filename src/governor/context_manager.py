@@ -147,10 +147,36 @@ class GovernorContextManager:
         mode: str = "general",
         metadata: dict[str, Any] | None = None,
     ) -> GovernorContext:
-        """Get existing context or create a new one."""
+        """Get existing context or create a new one.
+
+        Handles the case where the context directory exists but the
+        metadata file is missing (e.g., from a previous partial init
+        or session store creating the directory).
+        """
         existing = self.get(context_id)
         if existing is not None:
             return existing
+
+        ctx_path = self._context_path(context_id)
+        if ctx_path.exists():
+            # Directory exists but metadata is missing — repair it
+            _validate_context_id(context_id)
+            if mode not in VALID_MODES:
+                raise ValueError(f"Invalid mode '{mode}': must be one of {VALID_MODES}")
+
+            now = datetime.now(timezone.utc).isoformat()
+            ctx = GovernorContext(
+                context_id=context_id,
+                mode=mode,
+                root=ctx_path,
+                governor_dir=ctx_path / GOVERNOR_DIR,
+                created_at=now,
+                metadata=metadata or {},
+            )
+            self._write_meta(ctx)
+            self._ensure_governor_init(ctx)
+            return ctx
+
         return self.create(context_id, mode=mode, metadata=metadata)
 
     def list_contexts(self) -> list[GovernorContext]:

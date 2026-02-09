@@ -26,6 +26,18 @@ echo ""
 
 export MAUDE_DIR
 
+# Resolve gov-webui repo location (for contract test governor container)
+GOV_WEBUI_DIR="${GOV_WEBUI_DIR:-$(cd "$SCRIPT_DIR/../../gov-webui" 2>/dev/null && pwd)}"
+if [ ! -f "$GOV_WEBUI_DIR/pyproject.toml" ]; then
+    echo "ERROR: gov-webui repo not found at $GOV_WEBUI_DIR"
+    echo "Set GOV_WEBUI_DIR to the gov-webui repo root, e.g.:"
+    echo "  GOV_WEBUI_DIR=/path/to/gov-webui bash run.sh"
+    exit 1
+fi
+export GOV_WEBUI_DIR
+echo "Gov-WebUI: $GOV_WEBUI_DIR"
+echo ""
+
 docker compose -f docker-compose.contract.yml up \
     --build \
     --abort-on-container-exit \

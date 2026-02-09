@@ -194,6 +194,32 @@ class TestGovernorContextManager:
         assert ctx.context_id == "new-ctx"
         assert ctx.mode == "code"
 
+    def test_get_or_create_repairs_missing_metadata(self, tmp_path: Path) -> None:
+        """If directory exists but metadata is missing, get_or_create repairs it."""
+        mgr = GovernorContextManager(base_dir=tmp_path)
+        # Simulate: directory exists (e.g., from session store) but no _context.json
+        ctx_dir = tmp_path / "orphan-ctx"
+        ctx_dir.mkdir(parents=True)
+        assert not (ctx_dir / CONTEXT_META_FILE).exists()
+
+        # get_or_create should repair instead of crashing
+        ctx = mgr.get_or_create("orphan-ctx", mode="fiction")
+        assert ctx.context_id == "orphan-ctx"
+        assert ctx.mode == "fiction"
+        assert (ctx_dir / CONTEXT_META_FILE).exists()
+        assert (ctx.governor_dir).exists()
+
+    def test_get_or_create_repair_is_idempotent(self, tmp_path: Path) -> None:
+        """Calling get_or_create twice on a repaired context works."""
+        mgr = GovernorContextManager(base_dir=tmp_path)
+        ctx_dir = tmp_path / "repair-twice"
+        ctx_dir.mkdir(parents=True)
+
+        ctx1 = mgr.get_or_create("repair-twice", mode="code")
+        ctx2 = mgr.get_or_create("repair-twice", mode="fiction")  # mode ignored
+        assert ctx2.mode == "code"  # first call's mode sticks
+        assert ctx1.context_id == ctx2.context_id
+
     def test_list_contexts(self, tmp_path: Path) -> None:
         mgr = GovernorContextManager(base_dir=tmp_path)
         mgr.create("alpha")

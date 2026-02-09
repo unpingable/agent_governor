@@ -464,8 +464,13 @@ class ContinuityChecker:
     Custom check callables take precedence when provided.
     """
 
-    def __init__(self, case_sensitive: bool = False) -> None:
+    def __init__(
+        self,
+        case_sensitive: bool = False,
+        receipt_system: Any | None = None,
+    ) -> None:
         self._case_sensitive = case_sensitive
+        self._receipt_system = receipt_system
 
     def check(self, output: str, anchors: list[Anchor]) -> ContinuityReport:
         """Check output text against a list of anchors."""
@@ -488,7 +493,7 @@ class ContinuityChecker:
 
         elapsed_ms = (time.monotonic() - start) * 1000.0
 
-        return ContinuityReport(
+        report = ContinuityReport(
             passed=passed,
             score=score,
             violations=violations,
@@ -497,6 +502,48 @@ class ContinuityChecker:
             checked_anchors=total,
             check_time_ms=elapsed_ms,
         )
+
+        self._emit_receipt(output, anchors, report)
+
+        return report
+
+    def _emit_receipt(
+        self,
+        output: str,
+        anchors: list[Anchor],
+        report: ContinuityReport,
+    ) -> None:
+        """Emit a gate receipt for this continuity check."""
+        if self._receipt_system is None:
+            return
+
+        verdict = "pass" if report.passed else (
+            "block" if report.has_critical else "warn"
+        )
+
+        evidence_bundle = {
+            "violations": [v.to_dict() for v in report.violations],
+            "score": report.score,
+            "checked_anchors": report.checked_anchors,
+            "recommended_action": report.recommended_action.value,
+        }
+
+        gate_config = {
+            "anchor_ids": [a.id for a in anchors],
+            "case_sensitive": self._case_sensitive,
+        }
+
+        try:
+            self._receipt_system.emit(
+                gate="continuity_checker",
+                verdict=verdict,
+                subject_kind="text",
+                subject_bytes=output.encode("utf-8"),
+                evidence_bundle=evidence_bundle,
+                gate_config=gate_config,
+            )
+        except Exception:
+            pass  # fail-open on receipt emission
 
     def _check_anchor(self, output: str, anchor: Anchor) -> list[Violation]:
         """Check a single anchor against output. Returns violations."""

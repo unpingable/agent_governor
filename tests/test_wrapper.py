@@ -471,3 +471,140 @@ class TestChangesCLI:
             assert result.exit_code == 0
             # Should show the file needs approval
             assert "test.py" in result.output or "No uncommitted" in result.output
+
+
+# =============================================================================
+# Receipt Emission
+# =============================================================================
+
+
+class TestWrapperReceipts:
+    """Test gate receipt emission from AgentWrapper."""
+
+    def test_pass_receipt_on_approved_changes(self, tmp_path):
+        """Approved changes emit a 'pass' receipt."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        root = tmp_path / "project"
+        root.mkdir()
+        gov_dir = root / ".governor"
+        gov_dir.mkdir()
+
+        # Set exploratory envelope (require_receipts=False, enables auto_approve)
+        envelope_path = gov_dir / ".envelope"
+        envelope_path.write_text("exploratory")
+
+        proposals_path = gov_dir / "proposals.json"
+        proposals_path.write_text("{}")
+
+        wrapper = AgentWrapper(
+            root=root,
+            gov_dir=gov_dir,
+            auto_approve=True,
+        )
+
+        # Simulate: create a file, then run enforcement
+        # We'll use a command that creates a file
+        script = root / "create_file.sh"
+        script.write_text('#!/bin/sh\necho "hello" > "$1/new_file.txt"')
+        script.chmod(0o755)
+
+        exit_code, message = wrapper.run_with_enforcement(
+            [str(script), str(root)]
+        )
+
+        assert "Approved" in message
+
+        system = GateReceiptSystem(gov_dir)
+        receipts = system.query(gate="wrapper")
+        assert len(receipts) == 1
+        assert receipts[0].verdict == "pass"
+
+    def test_block_receipt_on_rejected_changes(self, tmp_path):
+        """Rejected changes emit a 'block' receipt."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        root = tmp_path / "project"
+        root.mkdir()
+        gov_dir = root / ".governor"
+        gov_dir.mkdir()
+
+        # Set strict envelope (require receipts)
+        envelope_path = gov_dir / ".envelope"
+        envelope_path.write_text("strict")
+
+        proposals_path = gov_dir / "proposals.json"
+        proposals_path.write_text("{}")
+
+        wrapper = AgentWrapper(
+            root=root,
+            gov_dir=gov_dir,
+            auto_approve=False,
+            on_changes=lambda _: False,  # Always reject
+        )
+
+        # Create a file via command
+        script = root / "create_file.sh"
+        script.write_text('#!/bin/sh\necho "hello" > "$1/new_file.txt"')
+        script.chmod(0o755)
+
+        exit_code, message = wrapper.run_with_enforcement(
+            [str(script), str(root)]
+        )
+
+        assert "Blocked" in message
+
+        system = GateReceiptSystem(gov_dir)
+        receipts = system.query(gate="wrapper")
+        assert len(receipts) == 1
+        assert receipts[0].verdict == "block"
+
+    def test_receipt_evidence_has_changes(self, tmp_path):
+        """Receipt evidence contains file change details."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        root = tmp_path / "project"
+        root.mkdir()
+        gov_dir = root / ".governor"
+        gov_dir.mkdir()
+
+        envelope_path = gov_dir / ".envelope"
+        envelope_path.write_text("exploratory")
+        proposals_path = gov_dir / "proposals.json"
+        proposals_path.write_text("{}")
+
+        wrapper = AgentWrapper(
+            root=root, gov_dir=gov_dir, auto_approve=True,
+        )
+
+        script = root / "create_file.sh"
+        script.write_text('#!/bin/sh\necho "hello" > "$1/new_file.txt"')
+        script.chmod(0o755)
+
+        wrapper.run_with_enforcement([str(script), str(root)])
+
+        system = GateReceiptSystem(gov_dir)
+        receipts = system.query(gate="wrapper")
+        evidence = system.evidence_for(receipts[0])
+        assert "changes" in evidence
+        assert len(evidence["changes"]) > 0
+        assert evidence["changes"][0]["type"] == "created"
+
+    def test_no_receipt_without_changes(self, tmp_path):
+        """No receipt emitted when there are no file changes."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        root = tmp_path / "project"
+        root.mkdir()
+        gov_dir = root / ".governor"
+        gov_dir.mkdir()
+
+        wrapper = AgentWrapper(root=root, gov_dir=gov_dir)
+
+        # Command that does nothing
+        exit_code, message = wrapper.run_with_enforcement(["true"])
+        assert "No file changes" in message
+
+        system = GateReceiptSystem(gov_dir)
+        receipts = system.query(gate="wrapper")
+        assert len(receipts) == 0

@@ -548,3 +548,119 @@ class TestHookIntegration:
 
             assert result.exit_code == 1
             assert "unapproved.py" in result.output
+
+
+# =============================================================================
+# Receipt Emission
+# =============================================================================
+
+
+class TestPreCommitReceipts:
+    """Test gate receipt emission from pre-commit hook."""
+
+    def test_pass_receipt_emitted(self, tmp_path):
+        """Successful pre-commit check emits a 'pass' receipt."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        # Set up git repo
+        init_git_repo(tmp_path)
+        gov_dir = tmp_path / ".governor"
+        gov_dir.mkdir()
+
+        # Create and approve a file
+        test_file = tmp_path / "approved.py"
+        test_file.write_text("# approved")
+
+        # Stage the file
+        subprocess.run(
+            ["git", "add", "approved.py"],
+            cwd=tmp_path, capture_output=True,
+        )
+
+        # Create a recently applied proposal that approves the file
+        proposals_path = gov_dir / "proposals.json"
+        proposal_id = str(uuid4())
+        proposal_data = {
+            proposal_id: {
+                "id": proposal_id,
+                "state": "applied",
+                "claims": [{"type": "file_exists", "path": "approved.py"}],
+                "receipts": [],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "applied_at": datetime.now(timezone.utc).isoformat(),
+            }
+        }
+        proposals_path.write_text(json.dumps(proposal_data))
+
+        success, message = run_pre_commit_check(git_root=tmp_path)
+        assert success
+
+        system = GateReceiptSystem(gov_dir)
+        receipts = system.query(gate="pre_commit")
+        assert len(receipts) == 1
+        assert receipts[0].verdict == "pass"
+
+    def test_block_receipt_emitted(self, tmp_path):
+        """Blocked pre-commit check emits a 'block' receipt."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        # Set up git repo
+        init_git_repo(tmp_path)
+        gov_dir = tmp_path / ".governor"
+        gov_dir.mkdir()
+
+        # Create and stage an unapproved file
+        test_file = tmp_path / "unapproved.py"
+        test_file.write_text("# not approved")
+        subprocess.run(
+            ["git", "add", "unapproved.py"],
+            cwd=tmp_path, capture_output=True,
+        )
+
+        # Empty proposals
+        proposals_path = gov_dir / "proposals.json"
+        proposals_path.write_text("{}")
+
+        success, message = run_pre_commit_check(git_root=tmp_path)
+        assert not success
+
+        system = GateReceiptSystem(gov_dir)
+        receipts = system.query(gate="pre_commit")
+        assert len(receipts) == 1
+        assert receipts[0].verdict == "block"
+
+    def test_no_receipt_when_governor_not_initialized(self, tmp_path):
+        """No receipt emitted when .governor/ doesn't exist."""
+        init_git_repo(tmp_path)
+        # No .governor directory
+
+        success, message = run_pre_commit_check(git_root=tmp_path)
+        assert success
+        assert "not initialized" in message.lower()
+
+    def test_receipt_evidence_has_file_lists(self, tmp_path):
+        """Receipt evidence contains staged, approved, and unapproved file lists."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        init_git_repo(tmp_path)
+        gov_dir = tmp_path / ".governor"
+        gov_dir.mkdir()
+
+        test_file = tmp_path / "blocked.py"
+        test_file.write_text("# blocked")
+        subprocess.run(
+            ["git", "add", "blocked.py"],
+            cwd=tmp_path, capture_output=True,
+        )
+        proposals_path = gov_dir / "proposals.json"
+        proposals_path.write_text("{}")
+
+        run_pre_commit_check(git_root=tmp_path)
+
+        system = GateReceiptSystem(gov_dir)
+        receipts = system.query(gate="pre_commit")
+        evidence = system.evidence_for(receipts[0])
+        assert "staged_files" in evidence
+        assert "blocked.py" in evidence["staged_files"]
+        assert "unapproved_files" in evidence
+        assert "blocked.py" in evidence["unapproved_files"]

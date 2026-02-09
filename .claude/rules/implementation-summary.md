@@ -69,8 +69,8 @@
 **Git Governance** — Integrity invariants at commit boundaries. Artifact integrity, cross-index validation (DOI/version tags), tagging discipline, pre-commit provenance. Profile-based severity (greenfield→production), YAML config, secrets check integration. CLI `governor git-gov {status,check,artifacts,cross-index,pre-commit,verify-tag,set-profile,allowlist}`.
 **Context Compact** — Loss-aware context compaction with receipts. ContextCompactor, CompactionReceipt, DroppedItem, Turn, Conversation types. SimpleSummarizer, RecoveryStore (dropped content retrieval), ReceiptStore (compaction history). Preserves decisions/anchors/constraints/authority, emits explicit loss records. CLI `governor context {status,config,receipts,recover,cleanup}`.
 **Perforce Support** — Integrity invariants on explicit authority substrate. P4Client (CLI wrapper, graceful fallback), P4Governor (changelist integrity, lock semantics, immutable releases, DOI mapping). Profile-based severity. P4 trigger integration. CLI `governor p4 {status,check,pre-submit,locks,release tag/check,doi map/verify/list}`.
-**Gate Receipt System (receipt_v1)** — Content-addressed decision receipts for governor gates. GateReceipt (8 fields: receipt_id, schema_version, timestamp, gate, verdict, subject_hash, evidence_hash, policy_hash). receipt_id = H(schema_v + gate + subject_hash + evidence_hash + policy_hash) — truly content-addressed, timestamp is metadata. Canonical JSON serialization. Split store: ReceiptStore (JSONL) + EvidenceStore (content-addressed blobs, sharded by hash[:2]). EvidenceGate wired to emit on every check() or log receipt_suppressed. CLI `governor receipts {--gate,--verdict,--last,--json,--id,--evidence}`.
-**Maude Contract Tests** — Provider-side contract tests verifying Maude's Pydantic models deserialize Governor's actual HTTP responses. Docker-compose setup (governor + test runner). 21 active tests: health (3), sessions (7), governor (4), dashboard (7). Backend smoke stubs for Claude/Codex/Ollama (skipped by default). Run via `cd integration && bash run.sh`.
+**Gate Receipt System (receipt_v1)** — Content-addressed decision receipts for governor gates. GateReceipt (8 fields: receipt_id, schema_version, timestamp, gate, verdict, subject_hash, evidence_hash, policy_hash). receipt_id = H(schema_v + gate + subject_hash + evidence_hash + policy_hash) — truly content-addressed, timestamp is metadata. Canonical JSON serialization. Split store: ReceiptStore (JSONL) + EvidenceStore (content-addressed blobs, sharded by hash[:2]). All gates wired: evidence_gate, intent_compiler, pre_commit, wrapper, continuity_checker. CLI `governor receipts {--gate,--verdict,--last,--json,--id,--evidence}`.
+**Maude Contract Tests** — Provider-side contract tests verifying Maude's Pydantic models deserialize Governor's actual HTTP responses. Docker-compose setup (governor + test runner). 55 active tests: health (3), sessions (7), governor (4), dashboard (7), intent compiler (34). Backend smoke stubs for Claude/Codex/Ollama (skipped by default). Run via `cd integration && bash run.sh`.
 **Intent Compiler** — Structured hypothesis-collapse for governance sessions. IntentFormPolicy (TEMPLATE_ONLY/VALIDATED_CUSTOM/CUSTOM_OK), IntentFormSchema (content-addressed), 3 built-in templates (session_start/task_scope/verification_config), mode-gated form policy (blast radius proportional), deterministic compilation (response + schema → Intent + ConstraintBlock), escape classification (4 heuristic categories), gate receipt emission. WebUI: modal overlay with dynamic form rendering, branch visualization, confidence bars. API: `/v2/intent/{templates,schema,validate,compile,policy}`.
 
 ## Test Counts by Module
@@ -89,10 +89,10 @@
 | Conflicts | 12 |
 | Envelopes | 15 |
 | Feedback | 18 |
-| Git hooks | 33 |
-| Wrapper | 29 |
+| Git hooks | 37 |
+| Wrapper | 33 |
 | MCP server | 22 |
-| **Subtotal** | **381** |
+| **Subtotal** | **389** |
 
 ### Subsystems
 | Subsystem | Tests |
@@ -138,7 +138,7 @@
 | Invariant Store | 79 |
 | Web UI (W1-W3) | 91 |
 | Structured Telemetry | 151 |
-| Continuity Enforcement | 190 |
+| Continuity Enforcement | 196 |
 | Convergence Auto-Tuning | 145 |
 | VS Code Extension | 176 |
 | Evidence Gate | 101 |
@@ -158,7 +158,7 @@
 | Context Compact | 49 |
 | Perforce Support | 71 |
 | Gate Receipt System | 50 |
-| Maude Contract Tests | 21 (+7 skipped) |
+| Maude Contract Tests | 55 (+7 skipped) |
 | Intent Compiler | 131 |
 
-**Total: ~8090 tests**
+**Total: ~10,320 tests** (10,260 unit + 61 integration)

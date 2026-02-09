@@ -64,14 +64,14 @@ Chat with Claude through the WebUI. Write your scenes. When the AI tries to give
 2. Revise — Update the canon (maybe you changed your mind)
 3. Proceed — Log as intentional deviation (dream sequence, flashback, etc.)
 
-Reply with 1, 2, 3 or: maude fix | maude revise | maude proceed
+Reply with 1, 2, 3 or: governor fix | governor revise | governor proceed
 ```
 
 ### 4. Resolve and Continue
 
-- Type **1** (or "maude fix") → AI rewrites the passage to match your canon
-- Type **2** (or "maude revise") → Canon updates to match the new direction
-- Type **3** (or "maude proceed") → Exception logged, continues as-is (for intentional rule-breaking)
+- Type **1** (or "governor fix") → AI rewrites the passage to match your canon
+- Type **2** (or "governor revise") → Canon updates to match the new direction
+- Type **3** (or "governor proceed") → Exception logged, continues as-is (for intentional rule-breaking)
 
 That's it. Your story stays consistent.
 

@@ -2,7 +2,7 @@
 
 ## Version 0.1 — Layered Commands by Mode
 
-### Companion to: WebUI UX Spec, Maude Profile Specs
+### Companion to: WebUI UX Spec, Governor Voice Profile Specs
 
 ---
 

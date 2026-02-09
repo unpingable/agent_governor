@@ -327,9 +327,9 @@ jobs:
           fi
 ```
 
-### 4.4 Maude-Powered Review
+### 4.4 Governor-Powered Review
 
-Fancier version — have Maude do a diff-based coherence review:
+Fancier version — have the governor do a diff-based coherence review:
 
 **Input**:
 - `git diff`
@@ -356,7 +356,7 @@ Output:
 
 **Output**:
 ```
-Maude: UPDATE_REQUIRED
+Governor: UPDATE_REQUIRED
 
 Changes detected:
 - New dependency: puppet_mode → ticketing_layer (not in SYSTEM_MAP)
@@ -367,7 +367,7 @@ Required actions:
 2. Add row to State Model in ARCHITECTURE.md
 3. Consider ADR if ticketing integration is a major decision
 
-Maude: BLOCKED — architecture drift detected. To proceed: update docs or add ADR.
+Governor: BLOCKED — architecture drift detected. To proceed: update docs or add ADR.
 ```
 
 ---
@@ -431,7 +431,7 @@ All specs from this project:
 | CODE_SRE_CONTROLLER_SPEC.md | Domain |
 | TICKETING_LAYER_SPEC.md | Infrastructure |
 | PUPPET_MODE_INTEGRATION_SPEC.md | Integration |
-| MAUDE_DEFAULT_PROFILE_SPEC.md | Profile |
+| GOVERNOR_VOICE_PROFILE_SPEC.md | Profile |
 | ARCHITECTURAL_COHERENCE_SPEC.md | Meta |
 
 ### 6.3 Recommended Reading Order
@@ -441,7 +441,7 @@ All specs from this project:
 3. **STRUCTURAL_CONSTRAINTS_SPEC.md** — The meta-invariant and remaining load-bearing aspects
 4. **CODE_SRE_CONTROLLER_SPEC.md** — The polarity flip for custody contexts
 5. **PUPPET_MODE_INTEGRATION_SPEC.md** — How constraints apply through character voice
-6. **MAUDE_DEFAULT_PROFILE_SPEC.md** — The governor made legible
+6. **GOVERNOR_VOICE_PROFILE_SPEC.md** — The governor made legible
 7. **TICKETING_LAYER_SPEC.md** — Making failures first-class (optional, enable when needed)
 8. **ANCILLARY_REGIMES_SPEC.md** — Reference for specific regimes
 9. **NONFICTION_CONTROLLER_SPEC.md** — Deep dive on epistemic control

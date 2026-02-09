@@ -72,7 +72,7 @@ src/governor/
 ├── convergence_tuning.py # ConvergenceAnalyzer, ConvergenceTuner, ProposalStore, TuningProposal, admissibility checks
 ├── check.py          # Position, Range, CheckFinding, CheckResult, run_check (unified check aggregation for VS Code)
 ├── viewmodel.py      # GovernorViewModel (schema v2), 8 section builders, read-only state derivation, V1 compat
-├── maude_lite.py     # MaudeLite, evidence-gated coding harness, claim extraction, evidence linking, custody scoring
+├── evidence_gate.py  # EvidenceGate, evidence-gated coding harness, claim extraction, evidence linking, custody scoring
 ├── violation_resolver.py # ViolationResolver, PendingViolation, ResolutionAction, ExceptionRecord, fix/revise/proceed actions
 ├── interferometry.py  # Interferometry: parallel + serial multi-model claim comparison, alignment, signals, ledger promotion, store
 ├── code_interferometry.py # Code interferometry: risk markers (19 types), anchor conflicts, tier determination, CheckFinding bridge

@@ -240,7 +240,7 @@ governor continuity anchor upgrade <id> --class invariant
 | `governor lite score <text>` | Score custody metrics |
 | `governor lite extract <text>` | Extract claims |
 
-> **Chat alias**: In interactive mode, you can also type `1`/`2`/`3` or `fix`/`revise`/`proceed` (or prefix with "maude", e.g., `maude fix`).
+> **Chat alias**: In interactive mode, you can also type `1`/`2`/`3` or `fix`/`revise`/`proceed` (or prefix with "governor", e.g., `governor fix`).
 
 ### Docket & Rulings (Adjudicator)
 

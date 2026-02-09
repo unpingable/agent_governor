@@ -2,7 +2,7 @@
 
 ## Version 0.1 — Mode-Specific Dashboards
 
-### Companion to: Fiction Mode User Guide, Maude Profile Specs
+### Companion to: Fiction Mode User Guide, Governor Voice Profile Specs
 
 ---
 
@@ -20,7 +20,7 @@ The WebUI currently works but feels like a CLI with a chat window attached. User
 
 ### 1.1 Dashboard, Not CLI
 
-Users should never type `governor` or `maude` commands unless they want to. Every common action has a visual affordance.
+Users should never type `governor` commands unless they want to. Every common action has a visual affordance.
 
 ### 1.2 Mode-Specific Surfaces
 

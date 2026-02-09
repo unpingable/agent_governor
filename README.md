@@ -101,15 +101,16 @@ ops-gov verify --runbook deploy-v2.yaml --window maintenance
 ```mermaid
 graph TD
     A["🔧 Coding Agent\nProduces patches + pointers"]
-    A -->|propose| B
+    A -->|propose| GOV
 
-    subgraph B ["GOVERNOR — THE CHOKE POINT"]
-        B1["Verifiers → Runs checks, produces receipts"]
-        B2["Ledgers → facts/ (decays) · decisions/ (persists)"]
-        B3["Epistemic → Provenance, confidence, evidence"]
+    subgraph GOV ["GOVERNOR — THE CHOKE POINT"]
+        direction TB
+        B1["Verifiers\nRuns checks, produces receipts"]
+        B2["Ledgers\nfacts/ (decays) · decisions/ (persists)"]
+        B3["Epistemic\nProvenance, confidence, evidence"]
     end
 
-    B -->|only if verified| C["Working Tree\nActual writes happen here"]
+    GOV -->|only if verified| C["Working Tree\nActual writes happen here"]
 ```
 
 **Threat model:**

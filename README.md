@@ -98,27 +98,18 @@ ops-gov verify --runbook deploy-v2.yaml --window maintenance
 
 ## Architecture
 
-```
-    ┌──────────────────────────────────────────────┐
-    │           🔧  Coding Agent                   │
-    │       Produces patches + pointers            │
-    └──────────────────┬───────────────────────────┘
-                       │ propose
-                       ▼
-    ╔══════════════════════════════════════════════╗
-    ║       GOVERNOR — THE CHOKE POINT            ║
-    ║                                             ║
-    ║  Verifiers · Runs checks, produces receipts ║
-    ║  Ledgers   · facts/ (decays)                ║
-    ║             decisions/ (persists)            ║
-    ║  Epistemic · Provenance, confidence         ║
-    ╚══════════════════╤══════════════════════════╝
-                       │ only if verified
-                       ▼
-    ┌──────────────────────────────────────────────┐
-    │           Working Tree                       │
-    │       Actual writes happen here              │
-    └──────────────────────────────────────────────┘
+```mermaid
+graph TD
+    A["🔧 Coding Agent\nProduces patches + pointers"]
+    A -->|propose| B
+
+    subgraph B ["GOVERNOR"]
+        B1["Verifiers → Runs checks, produces receipts"]
+        B2["Ledgers → facts/ (decays) · decisions/ (persists)"]
+        B3["Epistemic → Provenance, confidence, evidence"]
+    end
+
+    B -->|only if verified| C["Working Tree\nActual writes happen here"]
 ```
 
 **Threat model:**

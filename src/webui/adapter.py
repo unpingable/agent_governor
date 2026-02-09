@@ -1868,6 +1868,8 @@ async def api_info() -> dict[str, Any]:
             "v2_backends": "/v2/backends",
             "v2_dashboard_summary": "/v2/dashboard/summary",
             "v2_dashboard_regime": "/v2/dashboard/regime",
+            "v2_demos": "/v2/demos",
+            "v2_demo_playwright": "/v2/demos/{name}/playwright",
             "dashboard": "/dashboard",
         },
     }
@@ -2252,6 +2254,62 @@ async def v2_dashboard_regime() -> dict[str, Any]:
 
 
 # ---- Dashboard UI ----
+
+# ---- Demos ----
+
+@app.get("/v2/demos")
+async def v2_list_demos() -> dict[str, Any]:
+    """List demo scenarios with freshness status."""
+    from governor.webui_demo import DemoStore, BUILTIN_DEMOS
+
+    cm = _get_context_manager()
+    ctx = cm.get(GOVERNOR_CONTEXT_ID)
+    gov_dir = ctx.governor_dir if ctx else Path(".governor")
+
+    store = DemoStore(governor_dir=gov_dir)
+    freshness = store.check_freshness()
+
+    demos = []
+    for demo in BUILTIN_DEMOS:
+        fr = next((f for f in freshness if f["name"] == demo.name), None)
+        demos.append({
+            "name": demo.name,
+            "description": demo.description,
+            "surface": demo.surface.value,
+            "tags": demo.tags,
+            "step_count": len(demo.steps),
+            "screenshot_count": len(demo.screenshot_paths),
+            "status": fr["status"] if fr else "missing",
+        })
+
+    return {"demos": demos}
+
+
+@app.get("/v2/demos/{name}/playwright")
+async def v2_demo_playwright(name: str) -> dict[str, Any]:
+    """Return generated Playwright spec text for a demo scenario."""
+    from governor.webui_demo import BUILTIN_DEMOS, DemoStore, generate_playwright_spec
+
+    # Search built-in demos first
+    scenario = next((d for d in BUILTIN_DEMOS if d.name == name), None)
+
+    # Fall back to custom scenarios in store
+    if scenario is None:
+        cm = _get_context_manager()
+        ctx = cm.get(GOVERNOR_CONTEXT_ID)
+        gov_dir = ctx.governor_dir if ctx else Path(".governor")
+        store = DemoStore(governor_dir=gov_dir)
+        for s in store.list_scenarios():
+            if s.name == name:
+                scenario = s
+                break
+
+    if scenario is None:
+        raise HTTPException(status_code=404, detail=f"Demo scenario not found: {name}")
+
+    spec_text = generate_playwright_spec(scenario)
+    return {"name": name, "spec": spec_text}
+
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_ui() -> HTMLResponse:

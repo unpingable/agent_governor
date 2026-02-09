@@ -343,3 +343,92 @@ class TestAPIInfo:
         assert "v2_runs" in endpoints
         assert "v2_controls_schema" in endpoints
         assert "dashboard" in endpoints
+
+    def test_api_info_has_demos(self, client):
+        res = client.get("/api/info")
+        assert res.status_code == 200
+        endpoints = res.json()["endpoints"]
+        assert "v2_demos" in endpoints
+        assert "v2_demo_playwright" in endpoints
+
+
+# =============================================================================
+# Demo Endpoints
+# =============================================================================
+
+
+class TestDemosList:
+    def test_lists_builtin_demos(self, client):
+        res = client.get("/v2/demos")
+        assert res.status_code == 200
+        data = res.json()
+        assert "demos" in data
+        demos = data["demos"]
+        assert len(demos) == 4
+        names = [d["name"] for d in demos]
+        assert "fiction_violation_flow" in names
+        assert "code_governance_flow" in names
+        assert "interferometry_flow" in names
+        assert "dashboard_run_flow" in names
+
+    def test_demo_structure(self, client):
+        res = client.get("/v2/demos")
+        demos = res.json()["demos"]
+        d = demos[0]
+        assert "name" in d
+        assert "description" in d
+        assert "surface" in d
+        assert "tags" in d
+        assert "step_count" in d
+        assert "screenshot_count" in d
+        assert "status" in d
+
+    def test_all_demos_have_status(self, client):
+        res = client.get("/v2/demos")
+        demos = res.json()["demos"]
+        for d in demos:
+            assert d["status"] in ("fresh", "stale", "missing", "error")
+
+    def test_dashboard_demo_present(self, client):
+        res = client.get("/v2/demos")
+        demos = res.json()["demos"]
+        dash = next(d for d in demos if d["name"] == "dashboard_run_flow")
+        assert dash["surface"] == "webui"
+        assert "dashboard" in dash["tags"]
+        assert dash["step_count"] == 8
+        assert dash["screenshot_count"] == 2
+
+
+class TestDemoPlaywright:
+    def test_generates_spec_for_builtin(self, client):
+        res = client.get("/v2/demos/fiction_violation_flow/playwright")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["name"] == "fiction_violation_flow"
+        assert "spec" in data
+        spec = data["spec"]
+        assert "import { test, expect }" in spec
+        assert "fiction_violation_flow" in spec
+        assert "page.goto" in spec
+
+    def test_generates_spec_for_dashboard_demo(self, client):
+        res = client.get("/v2/demos/dashboard_run_flow/playwright")
+        assert res.status_code == 200
+        spec = res.json()["spec"]
+        assert "dashboard_run_flow" in spec
+        assert "/dashboard" in spec
+        assert "page.fill" in spec
+
+    def test_not_found_for_unknown(self, client):
+        res = client.get("/v2/demos/nonexistent_demo/playwright")
+        assert res.status_code == 404
+
+    def test_all_builtins_generate_specs(self, client):
+        """Every built-in demo should produce a valid Playwright spec."""
+        list_res = client.get("/v2/demos")
+        demos = list_res.json()["demos"]
+        for d in demos:
+            res = client.get(f"/v2/demos/{d['name']}/playwright")
+            assert res.status_code == 200
+            spec = res.json()["spec"]
+            assert "test(" in spec

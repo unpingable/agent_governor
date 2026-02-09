@@ -163,10 +163,11 @@
         </select>
         <button class="new-session-btn" onclick="newSession()" title="New conversation">+</button>
       </div>
-      <select class="model-select" id="model-select">
+      <select class="model-select" id="model-select" data-testid="model-select">
         <option value="">Loading models...</option>
       </select>
       <span class="backend-badge" id="backend-badge"></span>
+      <a href="/dashboard" style="font-size:0.75rem;color:var(--muted);text-decoration:none;margin-left:0.5rem;" data-testid="nav-dashboard">Dashboard</a>
     </div>
 
     <div class="messages" id="messages">
@@ -179,8 +180,8 @@
     <div class="typing-indicator" id="typing">Generating...</div>
 
     <div class="chat-input">
-      <textarea id="input" placeholder="Type a message..." rows="1"></textarea>
-      <button id="send-btn" onclick="sendMessage()">Send</button>
+      <textarea id="input" placeholder="Type a message..." rows="1" data-testid="chat-input"></textarea>
+      <button id="send-btn" onclick="sendMessage()" data-testid="send">Send</button>
     </div>
   </div>
 
@@ -231,7 +232,7 @@
           <div class="empty">No characters yet.<br>Add one and I'll remember what's true about them.</div>
         </div>
         <div style="padding: 0 0.75rem 0.75rem;">
-          <button class="gov-btn" onclick="openModal('add-char-modal')" style="width: 100%;">+ Add Character</button>
+          <button class="gov-btn" onclick="openModal('add-char-modal')" style="width: 100%;" data-testid="add-character">+ Add Character</button>
         </div>
       </div>
 
@@ -312,6 +313,10 @@
         </div>
         <div class="card-body" id="compare-body">
           <div class="empty">No compare results yet.</div>
+        </div>
+        <div style="padding: 0 0.75rem 0.75rem; display: flex; gap: 0.5rem;">
+          <input type="text" id="compare-prompt-input" placeholder="Compare prompt..." style="flex:1;padding:0.4rem;border:1px solid var(--border);border-radius:6px;font-size:0.8rem;background:var(--bg);color:var(--fg);" data-testid="compare-prompt">
+          <button class="gov-btn primary" onclick="runCompare()" style="font-size:0.8rem;" data-testid="compare-button">Compare</button>
         </div>
       </div>
     </div>
@@ -423,7 +428,7 @@
     </div>
     <div class="buttons">
       <button class="gov-btn" onclick="closeModal('add-char-modal')">Cancel</button>
-      <button class="gov-btn primary" onclick="submitCharacter()">Save</button>
+      <button class="gov-btn primary" onclick="submitCharacter()" data-testid="save">Save</button>
     </div>
   </div>
 </div>
@@ -541,6 +546,19 @@
     <div class="buttons">
       <button class="gov-btn" onclick="closeModal('add-uncertainty-modal')">Cancel</button>
       <button class="gov-btn primary" onclick="submitUncertainty()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Violation Modal (populated dynamically when violations are detected) -->
+<div class="modal-overlay" id="violation-modal" data-testid="violation-modal">
+  <div class="modal">
+    <h3 id="violation-title">Violation Detected</h3>
+    <div id="violation-body" style="font-size:0.85rem;margin-bottom:0.75rem;"></div>
+    <div class="buttons">
+      <button class="gov-btn primary" onclick="resolveViolation('fix')" data-testid="fix-button">Fix</button>
+      <button class="gov-btn" onclick="resolveViolation('revise')" data-testid="revise-button">Revise</button>
+      <button class="gov-btn" onclick="resolveViolation('proceed')" data-testid="proceed-button">Proceed</button>
     </div>
   </div>
 </div>
@@ -1467,6 +1485,29 @@
       document.getElementById('constraint-text').value = '';
       refreshGovernor();
     });
+  };
+
+  // ========== Compare ==========
+
+  window.runCompare = function() {
+    var promptEl = document.getElementById('compare-prompt-input');
+    var prompt = promptEl ? promptEl.value.trim() : '';
+    if (!prompt) return;
+    fetch(BASE + '/governor/code/compare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: prompt, backends: '' })
+    }).then(function() { refreshGovernor(); }).catch(function() {});
+  };
+
+  // ========== Violation Resolution ==========
+
+  window.resolveViolation = function(action) {
+    closeModal('violation-modal');
+    if (action) {
+      var input = document.getElementById('input');
+      input.value = action;
+      sendMessage();
+    }
   };
 
   // ========== Sidebar Toggle (mobile) ==========

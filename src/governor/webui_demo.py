@@ -281,10 +281,65 @@ INTERFEROMETRY_DEMO = DemoScenario(
     ],
 )
 
+DASHBOARD_RUN_DEMO = DemoScenario(
+    name="dashboard_run_flow",
+    description="V2 dashboard: start a run and inspect detail view.",
+    surface=DemoSurface.WEBUI,
+    prerequisites=[
+        "WebUI running (docker-compose up -d)",
+        "Dashboard accessible at /dashboard",
+    ],
+    tags=["dashboard", "v2", "run"],
+    steps=[
+        DemoStep(
+            action=StepAction.NAVIGATE,
+            target="http://localhost:8000/dashboard",
+            description="Open v2 governance dashboard",
+        ),
+        DemoStep(
+            action=StepAction.FILL,
+            target='[data-testid="field-task"] textarea',
+            value="Run security scan on src/",
+            description="Fill task description",
+        ),
+        DemoStep(
+            action=StepAction.CLICK,
+            target='[data-testid="start-run"]',
+            description="Click Start Run",
+        ),
+        DemoStep(
+            action=StepAction.WAIT,
+            target='[data-testid="run-list"] .run-item',
+            description="Wait for run to appear in list",
+        ),
+        DemoStep(
+            action=StepAction.SCREENSHOT,
+            screenshot_path="docs/assets/webui/06-dashboard-run-list.png",
+            description="Capture: run list with new run",
+        ),
+        DemoStep(
+            action=StepAction.CLICK,
+            target='[data-testid="run-list"] .run-item',
+            description="Click run to view detail",
+        ),
+        DemoStep(
+            action=StepAction.WAIT,
+            target='[data-testid="detail-content"]',
+            description="Wait for detail view to load",
+        ),
+        DemoStep(
+            action=StepAction.SCREENSHOT,
+            screenshot_path="docs/assets/webui/07-dashboard-detail.png",
+            description="Capture: run detail view",
+        ),
+    ],
+)
+
 BUILTIN_DEMOS = [
     FICTION_VIOLATION_DEMO,
     CODE_GOVERNANCE_DEMO,
     INTERFEROMETRY_DEMO,
+    DASHBOARD_RUN_DEMO,
 ]
 
 

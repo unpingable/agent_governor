@@ -24,6 +24,7 @@ from governor.webui_demo import (
     FICTION_VIOLATION_DEMO,
     CODE_GOVERNANCE_DEMO,
     INTERFEROMETRY_DEMO,
+    DASHBOARD_RUN_DEMO,
     generate_playwright_spec,
     make_demo_event,
 )
@@ -295,7 +296,7 @@ class TestDemoScenario:
 
 class TestBuiltinDemos:
     def test_builtin_count(self):
-        assert len(BUILTIN_DEMOS) == 3
+        assert len(BUILTIN_DEMOS) == 4
 
     def test_fiction_demo(self):
         d = FICTION_VIOLATION_DEMO
@@ -320,6 +321,21 @@ class TestBuiltinDemos:
         assert len(d.steps) == 4
         assert "interferometry" in d.tags
         assert len(d.screenshot_paths) == 1
+
+    def test_dashboard_demo(self):
+        d = DASHBOARD_RUN_DEMO
+        assert d.name == "dashboard_run_flow"
+        assert d.surface == DemoSurface.WEBUI
+        assert len(d.steps) == 8
+        assert "dashboard" in d.tags
+        assert "v2" in d.tags
+        assert len(d.screenshot_paths) == 2
+
+    def test_dashboard_demo_targets_dashboard_url(self):
+        d = DASHBOARD_RUN_DEMO
+        nav_step = d.steps[0]
+        assert nav_step.action == StepAction.NAVIGATE
+        assert "/dashboard" in nav_step.target
 
     def test_all_have_unique_names(self):
         names = [d.name for d in BUILTIN_DEMOS]
@@ -479,7 +495,7 @@ class TestDemoStore:
     def test_check_freshness_all_missing(self, tmp_path):
         store = DemoStore(governor_dir=tmp_path / ".governor")
         results = store.check_freshness()
-        assert len(results) == 3
+        assert len(results) == 4
         for r in results:
             assert r["status"] == "missing"
 
@@ -525,7 +541,7 @@ class TestDemoStore:
     def test_list_scenarios_builtin_only(self, tmp_path):
         store = DemoStore(governor_dir=tmp_path / ".governor")
         scenarios = store.list_scenarios()
-        assert len(scenarios) == 3
+        assert len(scenarios) == 4
         names = [s.name for s in scenarios]
         assert "fiction_violation_flow" in names
 
@@ -538,7 +554,7 @@ class TestDemoStore:
         )
         store.save_scenario(custom)
         scenarios = store.list_scenarios()
-        assert len(scenarios) == 4
+        assert len(scenarios) == 5
         names = [s.name for s in scenarios]
         assert "my_custom" in names
 
@@ -561,14 +577,14 @@ class TestDemoStore:
         m = DemoManifest()
         store.save_manifest(m)
         scenarios = store.list_scenarios()
-        assert len(scenarios) == 3  # Only built-ins, manifest.json ignored
+        assert len(scenarios) == 4  # Only built-ins, manifest.json ignored
 
     def test_list_scenarios_ignores_invalid_json(self, tmp_path):
         store = DemoStore(governor_dir=tmp_path / ".governor")
         store.demo_dir.mkdir(parents=True)
         (store.demo_dir / "bad.json").write_text("not valid json{{{")
         scenarios = store.list_scenarios()
-        assert len(scenarios) == 3  # Only built-ins
+        assert len(scenarios) == 4  # Only built-ins
 
 
 # ---------------------------------------------------------------------------
@@ -667,6 +683,15 @@ class TestPlaywrightSpec:
     def test_interferometry_demo_spec(self):
         spec = generate_playwright_spec(INTERFEROMETRY_DEMO)
         assert "interferometry_flow" in spec
+
+    def test_dashboard_demo_spec(self):
+        spec = generate_playwright_spec(DASHBOARD_RUN_DEMO)
+        assert "dashboard_run_flow" in spec
+        assert "page.goto" in spec
+        assert "/dashboard" in spec
+        assert "page.fill" in spec
+        assert "page.screenshot" in spec
+        assert "waitForSelector" in spec
 
 
 # ---------------------------------------------------------------------------

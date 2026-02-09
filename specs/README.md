@@ -195,7 +195,7 @@ How surfaces behave. These reference core and interferometry specs for policy â€
 | **AG2_DASHBOARD_UX_SPEC.md** | v2 governance dashboard. Controls-left/output-right. Run-centric. Streaming. Cancel contract. Templates. `status: implemented` |
 | **CLI_UX_SPEC.md** | Layered command structure. `governor fiction` / `governor code` / `governor advanced`. Bare command experience. |
 | **VSCODE_UX_SPEC.md** | Gutter indicators, inline resolution, status bar, governor panel, Quick Fix integration. |
-| **AG2_WEBUI_DEMO_GAP_SPEC.md** | Playwright-based WebUI demo automation. Scripted screenshots, reproducible on release. `status: partial` |
+| **AG2_WEBUI_DEMO_GAP_SPEC.md** | Playwright-based WebUI demo automation. Scripted screenshots, reproducible on release. `status: implemented` |
 
 ### Design Principles (All Surfaces)
 

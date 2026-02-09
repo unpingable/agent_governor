@@ -117,6 +117,7 @@
     <div class="controls-header">
       <h1>Governor Dashboard</h1>
       <span class="version">v2</span>
+      <a href="/" style="font-size:0.75rem;color:var(--muted);text-decoration:none;margin-left:auto;" data-testid="nav-chat">Chat</a>
     </div>
     <div class="controls-body">
       <!-- Templates -->
@@ -131,9 +132,9 @@
 
       <!-- Actions -->
       <div class="actions">
-        <button class="btn primary" id="btn-start" onclick="startRun()">Start Run</button>
-        <button class="btn danger" id="btn-cancel" onclick="cancelRun()" disabled>Stop</button>
-        <button class="btn" id="btn-rerun" onclick="rerunLast()" disabled>Rerun Last</button>
+        <button class="btn primary" id="btn-start" onclick="startRun()" data-testid="start-run">Start Run</button>
+        <button class="btn danger" id="btn-cancel" onclick="cancelRun()" disabled data-testid="cancel-run">Stop</button>
+        <button class="btn" id="btn-rerun" onclick="rerunLast()" disabled data-testid="rerun-last">Rerun Last</button>
       </div>
 
       <!-- Active run indicator -->
@@ -163,14 +164,14 @@
           <option value="pending">Pending</option>
         </select>
       </div>
-      <ul class="run-list" id="run-list"></ul>
+      <ul class="run-list" id="run-list" data-testid="run-list"></ul>
       <div class="empty-state" id="runs-empty">No runs yet. Start one from the controls panel.</div>
     </div>
 
     <!-- Detail Tab -->
     <div class="tab-content" id="tab-detail">
       <div class="empty-state" id="detail-empty">Select a run to view details.</div>
-      <div id="detail-content" style="display: none;"></div>
+      <div id="detail-content" style="display: none;" data-testid="detail-content"></div>
     </div>
 
     <!-- Artifacts Tab -->
@@ -181,7 +182,7 @@
   </div>
 
   <!-- Status Bar -->
-  <div class="status-bar" id="status-bar">
+  <div class="status-bar" id="status-bar" data-testid="status-bar">
     <span><span class="dot ok"></span> Connected</span>
     <span id="status-regime">Regime: --</span>
     <span id="status-profile">Profile: --</span>
@@ -261,7 +262,7 @@ function renderField(name, spec) {
     input = `<input id="ctrl-${name}" type="text" value="${spec.default || ''}">`;
   }
 
-  return `<div class="field"><label>${label}</label>${desc ? `<div class="hint">${desc}</div>` : ''}${input}</div>`;
+  return `<div class="field" data-testid="field-${name}"><label>${label}</label>${desc ? `<div class="hint">${desc}</div>` : ''}${input}</div>`;
 }
 
 async function loadDynamicDropdowns(props) {
@@ -430,9 +431,23 @@ async function loadReport(runId) {
   try {
     const res = await fetch(`/v2/runs/${runId}/report`);
     const report = await res.json();
-    alert(`Report generated: ${report.verdict}\nSections: ${report.sections?.length || 0}\nHash: ${report.manifest_hash}`);
+    const content = document.getElementById('detail-content');
+    const verdictClass = report.verdict === 'pass' ? 'pass' : 'fail';
+    const sectionsHtml = (report.sections || []).map(s =>
+      `<li>${escHtml(s.title || s.name || 'Section')}</li>`
+    ).join('');
+    content.insertAdjacentHTML('beforeend', `
+      <div class="detail-section" data-testid="report-section">
+        <h3>Report <span class="verdict-badge ${verdictClass}">${report.verdict}</span></h3>
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;">Hash: <code>${escHtml(report.manifest_hash || '')}</code></div>
+        ${sectionsHtml ? `<ul style="font-size:0.85rem;margin-left:1.5rem;">${sectionsHtml}</ul>` : '<div class="empty-state">No sections</div>'}
+      </div>
+    `);
   } catch (e) {
-    alert('Failed to generate report: ' + e.message);
+    const content = document.getElementById('detail-content');
+    content.insertAdjacentHTML('beforeend', `
+      <div class="detail-section"><h3>Report</h3><div class="empty-state">Failed to generate report: ${escHtml(e.message)}</div></div>
+    `);
   }
 }
 

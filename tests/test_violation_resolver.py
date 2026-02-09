@@ -285,12 +285,12 @@ class TestIsResolutionCommand:
         ("1", ResolutionAction.FIX),
         ("2", ResolutionAction.REVISE),
         ("3", ResolutionAction.PROCEED),
-        ("maude fix", ResolutionAction.FIX),
-        ("maude revise", ResolutionAction.REVISE),
-        ("maude proceed", ResolutionAction.PROCEED),
-        ("MAUDE FIX", ResolutionAction.FIX),
-        ("Maude Revise", ResolutionAction.REVISE),
-        ("  maude proceed  ", ResolutionAction.PROCEED),
+        ("governor fix", ResolutionAction.FIX),
+        ("governor revise", ResolutionAction.REVISE),
+        ("governor proceed", ResolutionAction.PROCEED),
+        ("GOVERNOR FIX", ResolutionAction.FIX),
+        ("Governor Revise", ResolutionAction.REVISE),
+        ("  governor proceed  ", ResolutionAction.PROCEED),
         ("fix", ResolutionAction.FIX),
         ("revise", ResolutionAction.REVISE),
         ("proceed", ResolutionAction.PROCEED),
@@ -304,8 +304,8 @@ class TestIsResolutionCommand:
         "hello",
         "4",
         "0",
-        "maude",
-        "maude help",
+        "governor",
+        "governor help",
         "fix it please",
         "I want to fix",
     ])
@@ -779,7 +779,7 @@ class TestInteractiveResolutionFlow:
         assert resolver.is_resolution_command("3") == ResolutionAction.PROCEED
         assert resolver.is_resolution_command("fix") == ResolutionAction.FIX
         assert resolver.is_resolution_command("REVISE") == ResolutionAction.REVISE
-        assert resolver.is_resolution_command("maude proceed") == ResolutionAction.PROCEED
+        assert resolver.is_resolution_command("governor proceed") == ResolutionAction.PROCEED
 
         # Invalid inputs
         assert resolver.is_resolution_command("4") is None

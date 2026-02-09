@@ -320,7 +320,7 @@ Add temporal pattern detection alongside existing static patterns. Same `CheckFi
 
 Temporal markers join existing 19 risk marker types. Multi-model comparison can detect temporal disagreements (one model uses transactions, another doesn't).
 
-### 9.3 Maude Lite (`maude_lite.py`)
+### 9.3 Evidence Gate (`evidence_gate.py`)
 
 Custody scoring already measures Iₚ (invariant coupling). Temporal invariants (fail-closed, atomic check-act) are natural extensions.
 

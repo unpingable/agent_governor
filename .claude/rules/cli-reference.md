@@ -337,19 +337,19 @@ governor prometheus disable            # Disable metrics server
 governor prometheus status             # Show config and server status
 governor prometheus metrics            # Print current metrics in Prometheus text format
 
-# Maude Lite (evidence-gated coding harness)
-governor lite check <text>       # Check agent output against kernel constraints
-governor lite check --stdin      # Read from stdin
-governor lite check -f <file>    # Read from file (--strict/--permissive, --format json)
-governor lite validate <path>    # Validate file contents
-governor lite config             # Show configuration and kernel constraints
-governor lite score <text>       # Score custody metrics (Ap, Ip, Fp)
-governor lite extract <text>     # Extract claims from content
-governor lite pending            # Show pending violation requiring resolution (--format json)
-governor lite fix                # Resolve pending violation by fixing the response
-governor lite revise             # Resolve pending violation by updating the anchor
-governor lite proceed            # Resolve pending violation by logging an exception (--scope, --expiry)
-governor lite exceptions         # List logged exceptions (--format json)
+# Evidence Gate (evidence-gated coding harness)
+governor gate check <text>       # Check agent output against kernel constraints
+governor gate check --stdin      # Read from stdin
+governor gate check -f <file>    # Read from file (--strict/--permissive, --format json)
+governor gate validate <path>    # Validate file contents
+governor gate config             # Show configuration and kernel constraints
+governor gate score <text>       # Score custody metrics (Ap, Ip, Fp)
+governor gate extract <text>     # Extract claims from content
+governor gate pending            # Show pending violation requiring resolution (--format json)
+governor gate fix                # Resolve pending violation by fixing the response
+governor gate revise             # Resolve pending violation by updating the anchor
+governor gate proceed            # Resolve pending violation by logging an exception (--scope, --expiry)
+governor gate exceptions         # List logged exceptions (--format json)
 
 # Continuity Enforcement (Deferred 5: closed-loop generation control)
 governor continuity status              # Registry stats, anchor count by type

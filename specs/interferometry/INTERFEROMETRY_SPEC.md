@@ -2,7 +2,7 @@
 
 ## Version 0.1 — Divergence as Instrumentation
 
-### Companion to: All mode specs, Autopilot, Maude
+### Companion to: All mode specs, Autopilot, Evidence Gate
 
 ---
 

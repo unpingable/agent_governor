@@ -54,7 +54,7 @@
 **VS Code Extension (Deferred 3, V1-V4)** — Unified check aggregation, CLI `governor check` command, TypeScript VS Code extension (CLI wrapper, diagnostic provider, TreeView, hover tooltips, code actions, real-time checking).
 **Telemetry Dashboard** — Rich TUI for real-time regime visualization. Phase space plot, regime gauge, energy sparkline, event log, budget panel. Live/replay/demo modes.
 **Prometheus Metrics** — Optional Prometheus metrics export at /metrics. Counters, histograms, gauges. TelemetryCollector backend integration.
-**Maude Lite** — Evidence-gated coding harness — kernel-only surface. HARD claims require evidence, contradictions persist, failures are loud. Custody scoring, claim extraction, evidence linking, contradiction detection, exit shape checking.
+**Evidence Gate** — Evidence-gated coding harness — kernel-only surface. HARD claims require evidence, contradictions persist, failures are loud. Custody scoring, claim extraction, evidence linking, contradiction detection, exit shape checking.
 **W5 Writing Modules (Deferred 2, W5)** — 11 modules: writing_patterns (18 banks), writing_governance, writing_tone (ToneVector 6D, 16 regime envelopes), writing_regime (AffectRegime, RegimeHysteresis), writing_nonfiction (NfClaimLevel, PromotionGate), writing_intent (IntentClassifier, 12 scorers), writing_constraints (11 constraints + Section 14), writing_ticketing (14 prose + 11 code ticket types), writing_puppet, writing_code, writing_router.
 **Interactive Violation Resolution (W4)** — Author-friendly chat. Blocking violations present 3 choices: fix/revise/proceed. ViolationResolver with persistent state, resolution command detection, exception logging.
 **Code Autopilot** — Intent-based governance. 5 profiles (greenfield/established/production/hotfix/refactor), intent resolution from 6 layers, constraint classes (invariant vs preference), scoped time-limited overrides with receipts, branch heuristics.
@@ -138,7 +138,7 @@
 | Continuity Enforcement | 190 |
 | Convergence Auto-Tuning | 145 |
 | VS Code Extension | 176 |
-| Maude Lite | 101 |
+| Evidence Gate | 101 |
 | Interactive Violation Resolution | 82 |
 | W5 Writing Modules | 922 |
 | Fiction Governor | 376 |

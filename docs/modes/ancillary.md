@@ -13,7 +13,7 @@ These aren't full "modes" like Fiction, Code, Nonfiction, or Ops. They're govern
 | **Research Mode** | Non-convergent epistemic exploration | Nonfiction, Code |
 | **Docket & Adjudicator** | Time-bounded verification, rulings | Any mode |
 
-> **On "Maude"**: In chat/interactive mode, you can prefix resolution commands with "maude" (e.g., `maude fix`). The CLI commands are `governor lite *`.
+> **Note**: In chat/interactive mode, you can prefix resolution commands with "governor" (e.g., `governor fix`). The CLI commands are `governor gate *`.
 
 ---
 

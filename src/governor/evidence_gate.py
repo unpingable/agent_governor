@@ -20,7 +20,7 @@ Active constraints (kernel, non-negotiable):
 
 Disabled features (surface, opt-in):
 - puppet_mode: No character voice
-- persona: No Maude personality
+- persona: No persona
 - tone_modulation: No tone envelope
 - regime_detection: Custody only, always
 - ticketing: No ticket creation
@@ -46,8 +46,8 @@ from typing import Any, Callable, Protocol
 # =============================================================================
 
 
-class MaudeLiteStatus(str, Enum):
-    """Status codes for Maude Lite output validation."""
+class EvidenceGateStatus(str, Enum):
+    """Status codes for Evidence Gate output validation."""
 
     OK = "OK"
     """Output passes all checks."""
@@ -75,7 +75,7 @@ class ClaimLevel(str, Enum):
 
 
 @dataclass
-class MaudeLiteClaim:
+class EvidenceGateClaim:
     """A claim extracted from agent output."""
 
     id: str
@@ -96,7 +96,7 @@ class MaudeLiteClaim:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> MaudeLiteClaim:
+    def from_dict(cls, data: dict[str, Any]) -> EvidenceGateClaim:
         return cls(
             id=data["id"],
             text=data["text"],
@@ -108,7 +108,7 @@ class MaudeLiteClaim:
 
 
 @dataclass
-class MaudeLiteCitation:
+class EvidenceGateCitation:
     """A citation/source reference."""
 
     source: str
@@ -124,13 +124,13 @@ class MaudeLiteCitation:
 
 
 @dataclass
-class MaudeLiteInput:
-    """Input for Maude Lite validation."""
+class EvidenceGateInput:
+    """Input for Evidence Gate validation."""
 
     task: str
     context: str
     constraints: list[str] = field(default_factory=list)
-    prior_claims: list[MaudeLiteClaim] = field(default_factory=list)
+    prior_claims: list[EvidenceGateClaim] = field(default_factory=list)
     strict: bool = True
 
     def to_dict(self) -> dict[str, Any]:
@@ -144,8 +144,8 @@ class MaudeLiteInput:
 
 
 @dataclass
-class MaudeLiteOutput:
-    """Output from Maude Lite validation."""
+class EvidenceGateOutput:
+    """Output from Evidence Gate validation."""
 
     # The work
     patch: str | None = None
@@ -153,11 +153,11 @@ class MaudeLiteOutput:
 
     # The accountability
     rationale: str = ""
-    claims: list[MaudeLiteClaim] = field(default_factory=list)
-    citations: list[MaudeLiteCitation] = field(default_factory=list)
+    claims: list[EvidenceGateClaim] = field(default_factory=list)
+    citations: list[EvidenceGateCitation] = field(default_factory=list)
 
     # The status
-    status: MaudeLiteStatus = MaudeLiteStatus.OK
+    status: EvidenceGateStatus = EvidenceGateStatus.OK
     blocking_reasons: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -236,8 +236,8 @@ CUSTODY_THRESHOLD = 0.5
 
 
 @dataclass
-class MaudeLiteConfig:
-    """Configuration for Maude Lite."""
+class EvidenceGateConfig:
+    """Configuration for Evidence Gate."""
 
     # Operating mode
     strict: bool = True
@@ -343,7 +343,7 @@ def generate_claim_id(text: str) -> str:
     return f"c{h}"
 
 
-def extract_claims(text: str) -> list[MaudeLiteClaim]:
+def extract_claims(text: str) -> list[EvidenceGateClaim]:
     """
     Extract claims from text.
 
@@ -359,7 +359,7 @@ def extract_claims(text: str) -> list[MaudeLiteClaim]:
             claim_id = generate_claim_id(claim_text)
             # Check for duplicates
             if not any(c.id == claim_id for c in claims):
-                claims.append(MaudeLiteClaim(
+                claims.append(EvidenceGateClaim(
                     id=claim_id,
                     text=claim_text,
                     level=ClaimLevel.HARD,
@@ -373,7 +373,7 @@ def extract_claims(text: str) -> list[MaudeLiteClaim]:
             claim_id = generate_claim_id(claim_text)
             # Check for duplicates
             if not any(c.id == claim_id for c in claims):
-                claims.append(MaudeLiteClaim(
+                claims.append(EvidenceGateClaim(
                     id=claim_id,
                     text=claim_text,
                     level=ClaimLevel.SOFT,
@@ -397,10 +397,10 @@ def check_evidence(text: str) -> list[str]:
 
 
 def link_evidence_to_claims(
-    claims: list[MaudeLiteClaim],
+    claims: list[EvidenceGateClaim],
     evidence_indicators: list[str],
     text: str,
-) -> list[MaudeLiteClaim]:
+) -> list[EvidenceGateClaim]:
     """
     Link evidence to claims.
 
@@ -425,9 +425,9 @@ def link_evidence_to_claims(
 
 
 def detect_contradictions(
-    claims: list[MaudeLiteClaim],
-    prior_claims: list[MaudeLiteClaim],
-) -> list[MaudeLiteClaim]:
+    claims: list[EvidenceGateClaim],
+    prior_claims: list[EvidenceGateClaim],
+) -> list[EvidenceGateClaim]:
     """
     Detect contradictions between current and prior claims.
 
@@ -560,7 +560,7 @@ def check_exit_shape(text: str) -> list[str]:
 
 
 @dataclass
-class MaudeLiteEvent:
+class EvidenceGateEvent:
     """A structured event for JSONL logging."""
 
     timestamp: str
@@ -578,16 +578,16 @@ class MaudeLiteEvent:
         return json.dumps(self.to_dict())
 
 
-class MaudeLiteLogger:
-    """JSONL logger for Maude Lite events."""
+class EvidenceGateLogger:
+    """JSONL logger for Evidence Gate events."""
 
     def __init__(self, log_path: Path | None = None):
         self.log_path = log_path
-        self.events: list[MaudeLiteEvent] = []
+        self.events: list[EvidenceGateEvent] = []
 
     def log(self, event: str, **data: Any) -> None:
         """Log an event."""
-        e = MaudeLiteEvent(
+        e = EvidenceGateEvent(
             timestamp=datetime.now().isoformat(),
             event=event,
             data=data,
@@ -608,29 +608,29 @@ class MaudeLiteLogger:
 # =============================================================================
 
 
-class MaudeLite:
+class EvidenceGate:
     """
-    Maude Lite: Evidence-gated coding harness.
+    Evidence Gate: Evidence-gated coding harness.
 
     Usage:
-        lite = MaudeLite()
+        lite = EvidenceGate()
         result = lite.check(
             task="fix the null pointer in auth.py",
             context="./src/",
             output="Here's the fix...",
         )
-        if result.status == MaudeLiteStatus.BLOCKED:
+        if result.status == EvidenceGateStatus.BLOCKED:
             print("BLOCKED:", result.blocking_reasons)
     """
 
     def __init__(
         self,
-        config: MaudeLiteConfig | None = None,
+        config: EvidenceGateConfig | None = None,
         log_path: Path | None = None,
     ):
-        self.config = config or MaudeLiteConfig()
-        self.logger = MaudeLiteLogger(log_path)
-        self.prior_claims: list[MaudeLiteClaim] = []
+        self.config = config or EvidenceGateConfig()
+        self.logger = EvidenceGateLogger(log_path)
+        self.prior_claims: list[EvidenceGateClaim] = []
 
     def check(
         self,
@@ -638,8 +638,8 @@ class MaudeLite:
         context: str,
         output: str,
         constraints: list[str] | None = None,
-        prior_claims: list[MaudeLiteClaim] | None = None,
-    ) -> MaudeLiteOutput:
+        prior_claims: list[EvidenceGateClaim] | None = None,
+    ) -> EvidenceGateOutput:
         """
         Validate agent output against kernel constraints.
 
@@ -651,14 +651,14 @@ class MaudeLite:
             prior_claims: Prior claims for contradiction checking
 
         Returns:
-            MaudeLiteOutput with status, claims, and any issues
+            EvidenceGateOutput with status, claims, and any issues
         """
         self.logger.log("task_start", task=task)
 
         constraints = constraints or []
         prior = prior_claims or self.prior_claims
 
-        result = MaudeLiteOutput()
+        result = EvidenceGateOutput()
         result.response = output
 
         # 1. Extract claims from output
@@ -689,46 +689,46 @@ class MaudeLite:
             # Check HARD claims without evidence
             if claim.level == ClaimLevel.HARD and not claim.evidence:
                 if self.config.strict:
-                    result.status = MaudeLiteStatus.BLOCKED
+                    result.status = EvidenceGateStatus.BLOCKED
                     reason = f"claim lacks evidence: \"{claim.text}\""
                     result.blocking_reasons.append(reason)
                     self.logger.log("blocked", reason=reason, claim_id=claim.id)
                 else:
                     result.warnings.append(f"claim {claim.id} lacks evidence (SOFT, proceeding)")
                     self.logger.log("warn", reason="claim lacks evidence", claim_id=claim.id)
-                    if result.status == MaudeLiteStatus.OK:
-                        result.status = MaudeLiteStatus.WARN
+                    if result.status == EvidenceGateStatus.OK:
+                        result.status = EvidenceGateStatus.WARN
 
             # Check contradictions
             if claim.conflicts_with:
                 if self.config.contradiction_action == "block":
-                    result.status = MaudeLiteStatus.BLOCKED
+                    result.status = EvidenceGateStatus.BLOCKED
                     reason = f"contradicts prior claim ({', '.join(claim.conflicts_with)})"
                     result.blocking_reasons.append(reason)
                     self.logger.log("blocked", reason=reason, claim_id=claim.id)
                 else:
                     result.warnings.append(f"conflicts with prior claim {claim.conflicts_with} (recorded)")
                     self.logger.log("warn", reason="contradiction", claim_id=claim.id, conflicts=claim.conflicts_with)
-                    if result.status == MaudeLiteStatus.OK:
-                        result.status = MaudeLiteStatus.WARN
+                    if result.status == EvidenceGateStatus.OK:
+                        result.status = EvidenceGateStatus.WARN
 
         # Check custody score
         if not custody.passed:
             for reason in custody.blocking_reasons:
                 if self.config.strict:
-                    result.status = MaudeLiteStatus.BLOCKED
+                    result.status = EvidenceGateStatus.BLOCKED
                     result.blocking_reasons.append(reason)
                     self.logger.log("blocked", reason=reason)
                 else:
                     result.warnings.append(reason)
-                    if result.status == MaudeLiteStatus.OK:
-                        result.status = MaudeLiteStatus.WARN
+                    if result.status == EvidenceGateStatus.OK:
+                        result.status = EvidenceGateStatus.WARN
 
         # Check exit shape
         for bad_exit in bad_exits:
             result.warnings.append(f"bad exit pattern: \"{bad_exit}\"")
-            if result.status == MaudeLiteStatus.OK:
-                result.status = MaudeLiteStatus.WARN
+            if result.status == EvidenceGateStatus.OK:
+                result.status = EvidenceGateStatus.WARN
 
         # Finalize
         result.claims = claims
@@ -741,9 +741,9 @@ class MaudeLite:
 
         return result
 
-    def validate_input(self, input_data: MaudeLiteInput) -> MaudeLiteOutput:
+    def validate_input(self, input_data: EvidenceGateInput) -> EvidenceGateOutput:
         """
-        Validate using MaudeLiteInput structure.
+        Validate using EvidenceGateInput structure.
         """
         self.config.strict = input_data.strict
         return self.check(
@@ -754,24 +754,24 @@ class MaudeLite:
             prior_claims=input_data.prior_claims,
         )
 
-    def format_status(self, result: MaudeLiteOutput) -> str:
+    def format_status(self, result: EvidenceGateOutput) -> str:
         """
         Format status for display (no personality, bare status).
         """
         lines = []
 
-        if result.status == MaudeLiteStatus.OK:
+        if result.status == EvidenceGateStatus.OK:
             lines.append("OK: output validated")
             if result.claims:
                 lines.append(f"  - {len(result.claims)} claims made, all supported")
             lines.append("  - no contradictions with prior outputs")
 
-        elif result.status == MaudeLiteStatus.WARN:
+        elif result.status == EvidenceGateStatus.WARN:
             lines.append("WARN: output produced with concerns")
             for warning in result.warnings:
                 lines.append(f"  - {warning}")
 
-        elif result.status == MaudeLiteStatus.BLOCKED:
+        elif result.status == EvidenceGateStatus.BLOCKED:
             lines.append("BLOCKED: output suppressed")
             for reason in result.blocking_reasons:
                 lines.append(f"  - {reason}")
@@ -806,37 +806,37 @@ class AgentFn(Protocol):
 
 
 class BlockedError(Exception):
-    """Raised when Maude Lite blocks agent output."""
+    """Raised when Evidence Gate blocks agent output."""
 
     def __init__(self, reasons: list[str]):
         self.reasons = reasons
         super().__init__(f"BLOCKED: {', '.join(reasons)}")
 
 
-def maude_lite_wrapper(
+def evidence_gate_wrapper(
     agent_fn: AgentFn,
-    config: MaudeLiteConfig | None = None,
+    config: EvidenceGateConfig | None = None,
 ) -> Callable[[str, str], str]:
     """
-    Wrap any agent function with Maude Lite validation.
+    Wrap any agent function with Evidence Gate validation.
 
     Usage:
-        @maude_lite_wrapper
+        @evidence_gate_wrapper
         def my_agent(task, context, **kwargs):
             return "Here's the code..."
 
         result = my_agent("fix bug", "./src/")  # Validated!
     """
-    lite = MaudeLite(config=config)
+    lite = EvidenceGate(config=config)
 
     def wrapped(task: str, context: str, **kwargs: Any) -> str:
         # Get agent output
         output = agent_fn(task, context, **kwargs)
 
-        # Validate with Maude Lite
+        # Validate with Evidence Gate
         result = lite.check(task=task, context=context, output=output)
 
-        if result.status == MaudeLiteStatus.BLOCKED:
+        if result.status == EvidenceGateStatus.BLOCKED:
             raise BlockedError(result.blocking_reasons)
 
         return output
@@ -854,7 +854,7 @@ def check_output(
     task: str = "",
     context: str = "",
     strict: bool = True,
-) -> MaudeLiteOutput:
+) -> EvidenceGateOutput:
     """
     Quick check of agent output.
 
@@ -862,8 +862,8 @@ def check_output(
         result = check_output("Here's the code...", task="fix bug")
         print(result.status)  # OK, WARN, or BLOCKED
     """
-    config = MaudeLiteConfig(strict=strict)
-    lite = MaudeLite(config=config)
+    config = EvidenceGateConfig(strict=strict)
+    lite = EvidenceGate(config=config)
     return lite.check(task=task, context=context, output=output)
 
 

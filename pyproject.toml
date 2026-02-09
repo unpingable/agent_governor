@@ -53,7 +53,6 @@ webui = [
 
 [project.scripts]
 governor = "governor.cli:main"
-maude = "governor.cli:main"
 fiction-gov = "fiction_governor.cli:main"
 nonfiction-gov = "nonfiction_governor.cli:main"
 ops-gov = "ops_governor.cli:main"

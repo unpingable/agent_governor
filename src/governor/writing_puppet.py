@@ -1033,13 +1033,13 @@ def get_preset_character(name: str) -> CharacterDefinition | None:
 
 
 # =============================================================================
-# Maude: The Default Puppet Profile
+# Governor: The Default Voice Profile
 # =============================================================================
 #
-# "Maude is less 'personality' and more 'what happens when constraints are
+# "Governor is less 'personality' and more 'what happens when constraints are
 # surfaced cleanly.'"
 #
-# Maude is the governor made legible. Not a therapist, not an evangelist,
+# Governor is the governor made legible. Not a therapist, not an evangelist,
 # not a motivational speaker. Competent, unimpressed, constraint-forward,
 # allergic to bullshit.
 #
@@ -1047,8 +1047,8 @@ def get_preset_character(name: str) -> CharacterDefinition | None:
 # =============================================================================
 
 
-class MaudeFooterType(str, Enum):
-    """Maude's standard footer types."""
+class GovernorFooterType(str, Enum):
+    """Governor's standard footer types."""
 
     OK = "ok"           # Action completed or response delivered, no issues
     BLOCKED = "blocked"  # Cannot proceed without resolution
@@ -1058,36 +1058,36 @@ class MaudeFooterType(str, Enum):
 
 
 @dataclass
-class MaudeFooter:
-    """A Maude-style status footer."""
+class GovernorFooter:
+    """A Governor-style status footer."""
 
-    type: MaudeFooterType
+    type: GovernorFooterType
     reason: str | None = None
     fix: str | None = None
 
     def format(self) -> str:
         """Format the footer string."""
-        base = f"Maude: {self.type.value.upper()}"
-        if self.type == MaudeFooterType.OK:
+        base = f"Governor: {self.type.value.upper()}"
+        if self.type == GovernorFooterType.OK:
             return base
-        elif self.type == MaudeFooterType.BLOCKED:
+        elif self.type == GovernorFooterType.BLOCKED:
             result = f"{base} — {self.reason}"
             if self.fix:
                 result += f". To proceed: {self.fix}."
             return result
-        elif self.type == MaudeFooterType.WARN:
+        elif self.type == GovernorFooterType.WARN:
             result = f"{base} — {self.reason}"
             if self.fix:
                 result += f". Recommendation: {self.fix}."
             return result
-        elif self.type == MaudeFooterType.ASK:
+        elif self.type == GovernorFooterType.ASK:
             return f"{base} — {self.reason}"
         else:  # NOTE
             return f"{base} — {self.reason}"
 
 
-# Maude's tone envelope from spec: professional, cool, efficient, measured
-MAUDE_TONE_ENVELOPE = ToneEnvelope(
+# Governor's tone envelope from spec: professional, cool, efficient, measured
+GOVERNOR_TONE_ENVELOPE = ToneEnvelope(
     formality=(0.5, 0.7),    # professional, not stiff
     temperature=(0.2, 0.4),  # cool, matter-of-fact
     density=(0.6, 0.8),      # efficient, not verbose
@@ -1097,8 +1097,8 @@ MAUDE_TONE_ENVELOPE = ToneEnvelope(
 )
 
 
-# Maude's banned patterns (from maude.md §3.3)
-MAUDE_BANNED_PATTERNS = [
+# Governor's banned patterns (from governor-voice.md §3.3)
+GOVERNOR_BANNED_PATTERNS = [
     # Pep
     re.compile(r"great question", re.IGNORECASE),
     re.compile(r"I('d)? love to", re.IGNORECASE),
@@ -1127,26 +1127,26 @@ MAUDE_BANNED_PATTERNS = [
 ]
 
 
-def detect_maude_violations(text: str) -> list[str]:
-    """Detect patterns that violate Maude's voice constraints.
+def detect_governor_violations(text: str) -> list[str]:
+    """Detect patterns that violate Governor's voice constraints.
 
     Returns list of matched patterns.
     """
     violations = []
-    for pattern in MAUDE_BANNED_PATTERNS:
+    for pattern in GOVERNOR_BANNED_PATTERNS:
         if pattern.search(text):
             violations.append(pattern.pattern)
     return violations
 
 
-def has_maude_violation(text: str) -> bool:
-    """Check if text violates Maude's voice constraints."""
-    return len(detect_maude_violations(text)) > 0
+def has_governor_violation(text: str) -> bool:
+    """Check if text violates Governor's voice constraints."""
+    return len(detect_governor_violations(text)) > 0
 
 
 @dataclass
-class MaudeGovernanceConfig:
-    """Maude's governance configuration."""
+class GovernorVoiceConfig:
+    """Governor's voice governance configuration."""
 
     always_surface_status: bool = True
     status_footer: bool = True
@@ -1157,14 +1157,14 @@ class MaudeGovernanceConfig:
 
 
 @dataclass
-class MaudeProfile:
-    """Complete Maude profile configuration.
+class GovernorVoiceProfile:
+    """Complete Governor voice profile configuration.
 
-    Maude is the default puppet that demonstrates constraint-forward operation.
+    Governor is the default puppet that demonstrates constraint-forward operation.
     """
 
-    id: str = "maude_default"
-    display_name: str = "Maude"
+    id: str = "governor_default"
+    display_name: str = "Governor"
     tagline: str = "Proposal is cheap. Commitment isn't."
 
     # Tone
@@ -1178,14 +1178,14 @@ class MaudeProfile:
     interference: str = "low"
 
     # Governance
-    governance: MaudeGovernanceConfig = field(default_factory=MaudeGovernanceConfig)
+    governance: GovernorVoiceConfig = field(default_factory=GovernorVoiceConfig)
 
     # Formats
-    format_ok: str = "Maude: OK"
-    format_blocked: str = "Maude: BLOCKED — {reason}. To proceed: {fix}."
-    format_warn: str = "Maude: WARN — {reason}. Recommendation: {fix}."
-    format_ask: str = "Maude: ASK — {question}"
-    format_note: str = "Maude: NOTE — {info}"
+    format_ok: str = "Governor: OK"
+    format_blocked: str = "Governor: BLOCKED — {reason}. To proceed: {fix}."
+    format_warn: str = "Governor: WARN — {reason}. Recommendation: {fix}."
+    format_ask: str = "Governor: ASK — {question}"
+    format_note: str = "Governor: NOTE — {info}"
 
     # Style bans
     style_bans: list[str] = field(default_factory=lambda: [
@@ -1197,7 +1197,7 @@ class MaudeProfile:
         "motivation-speak",
     ])
 
-    # Domain affinities (what Maude is good at)
+    # Domain affinities (what Governor is good at)
     domain_affinities: list[str] = field(default_factory=lambda: [
         "debugging",
         "ops",
@@ -1207,7 +1207,7 @@ class MaudeProfile:
         "decision_logging",
     ])
 
-    # Domain deflections (what Maude should not do)
+    # Domain deflections (what Governor should not do)
     domain_deflections: list[str] = field(default_factory=lambda: [
         "therapy",
         "motivation",
@@ -1251,15 +1251,15 @@ class MaudeProfile:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> MaudeProfile:
+    def from_dict(cls, d: dict[str, Any]) -> GovernorVoiceProfile:
         tone = d.get("tone", {})
         defaults = d.get("defaults", {})
         gov = d.get("governance", {})
         formats = d.get("formats", {})
 
         return cls(
-            id=d.get("id", "maude_default"),
-            display_name=d.get("display_name", "Maude"),
+            id=d.get("id", "governor_default"),
+            display_name=d.get("display_name", "Governor"),
             tagline=d.get("tagline", "Proposal is cheap. Commitment isn't."),
             register=tone.get("register", "dry"),
             verbosity=tone.get("verbosity", "low"),
@@ -1267,7 +1267,7 @@ class MaudeProfile:
             empathy=tone.get("empathy", "matter-of-fact"),
             default_regime=defaults.get("regime", "nonfiction"),
             interference=defaults.get("interference", "low"),
-            governance=MaudeGovernanceConfig(
+            governance=GovernorVoiceConfig(
                 always_surface_status=gov.get("always_surface_status", True),
                 status_footer=gov.get("status_footer", True),
                 require_confirm_for_destructive=gov.get("require_confirm_for_destructive", True),
@@ -1275,19 +1275,19 @@ class MaudeProfile:
                 cite_decisions_when_conflicting=gov.get("cite_decisions_when_conflicting", True),
                 never_claim_execution_without_record=gov.get("never_claim_execution_without_record", True),
             ),
-            format_ok=formats.get("ok", "Maude: OK"),
-            format_blocked=formats.get("blocked", "Maude: BLOCKED — {reason}. To proceed: {fix}."),
-            format_warn=formats.get("warn", "Maude: WARN — {reason}. Recommendation: {fix}."),
-            format_ask=formats.get("ask", "Maude: ASK — {question}"),
-            format_note=formats.get("note", "Maude: NOTE — {info}"),
+            format_ok=formats.get("ok", "Governor: OK"),
+            format_blocked=formats.get("blocked", "Governor: BLOCKED — {reason}. To proceed: {fix}."),
+            format_warn=formats.get("warn", "Governor: WARN — {reason}. Recommendation: {fix}."),
+            format_ask=formats.get("ask", "Governor: ASK — {question}"),
+            format_note=formats.get("note", "Governor: NOTE — {info}"),
             style_bans=d.get("style_bans", []),
             domain_affinities=d.get("domain_affinities", []),
             domain_deflections=d.get("domain_deflections", []),
         )
 
 
-# Maude's regime affinity (debugging, ops, checklists)
-MAUDE_AFFINITY = RegimeAffinity(
+# Governor's regime affinity (debugging, ops, checklists)
+GOVERNOR_AFFINITY = RegimeAffinity(
     primary="nonfiction",
     secondary="instruction",
     forbidden=["comedy", "advocacy", "marketing", "romance"],
@@ -1295,8 +1295,8 @@ MAUDE_AFFINITY = RegimeAffinity(
 )
 
 
-# Maude's authority (experience-based, not institutional)
-MAUDE_AUTHORITY = CharacterAuthority(
+# Governor's authority (experience-based, not institutional)
+GOVERNOR_AUTHORITY = CharacterAuthority(
     primary=AuthoritySource.EXPERIENCE,
     secondary=AuthoritySource.CRAFT,
     strength=0.7,
@@ -1304,41 +1304,41 @@ MAUDE_AUTHORITY = CharacterAuthority(
 )
 
 
-# Maude as a CharacterDefinition
-MAUDE_CHARACTER = CharacterDefinition(
-    id="maude",
-    name="Maude",
+# Governor as a CharacterDefinition
+GOVERNOR_CHARACTER = CharacterDefinition(
+    id="governor",
+    name="Governor",
     description="Constraint-forward, competent, unimpressed, allergic to bullshit",
-    regime_affinity=MAUDE_AFFINITY,
-    tone_envelope=MAUDE_TONE_ENVELOPE,
-    authority=MAUDE_AUTHORITY,
+    regime_affinity=GOVERNOR_AFFINITY,
+    tone_envelope=GOVERNOR_TONE_ENVELOPE,
+    authority=GOVERNOR_AUTHORITY,
     commitment_ceiling=CommitmentCeiling(
         max_type=CommitmentType.BELIEF,
         max_intensity=0.7,
     ),
     certainty_ceiling=0.8,  # Confident where warranted
     normativity=NormativityPermission(
-        allowed=True,  # Maude can make normative claims about process
+        allowed=True,  # Governor can make normative claims about process
         requires_foundation=True,  # But needs evidence
         authority_source=AuthoritySource.EXPERIENCE,
     ),
 )
 
 
-# Add Maude to preset characters
-PRESET_CHARACTERS["maude"] = MAUDE_CHARACTER
+# Add Governor to preset characters
+PRESET_CHARACTERS["governor"] = GOVERNOR_CHARACTER
 
 
 # =============================================================================
-# Maude Response Builder
+# Governor Response Builder
 # =============================================================================
 
 
 @dataclass
-class MaudeUncertainty:
-    """Structured uncertainty for Maude.
+class GovernorUncertainty:
+    """Structured uncertainty for Governor.
 
-    Maude doesn't do "I'm not sure, but..." Instead:
+    Governor doesn't do "I'm not sure, but..." Instead:
     "Estimate: X. Confidence: Y. Missing: [specific evidence]."
     """
 
@@ -1347,7 +1347,7 @@ class MaudeUncertainty:
     missing: list[str]
 
     def format(self) -> str:
-        """Format uncertainty the Maude way."""
+        """Format uncertainty the Governor way."""
         lines = [
             f"Estimate: {self.estimate}.",
             f"Confidence: {self.confidence}.",
@@ -1358,7 +1358,7 @@ class MaudeUncertainty:
 
 
 @dataclass
-class MaudeDriftWarning:
+class GovernorDriftWarning:
     """Warning when user is drifting between topics."""
 
     threads: list[str]
@@ -1371,7 +1371,7 @@ class MaudeDriftWarning:
 
 
 @dataclass
-class MaudeDestructivePreview:
+class GovernorDestructivePreview:
     """Preview for destructive actions."""
 
     actions: list[str]
@@ -1392,7 +1392,7 @@ class MaudeDestructivePreview:
 
 
 @dataclass
-class MaudeConflictWarning:
+class GovernorConflictWarning:
     """Warning when action conflicts with prior constraint."""
 
     constraint_id: str
@@ -1415,10 +1415,10 @@ class MaudeConflictWarning:
         return "\n".join(lines)
 
 
-class MaudeResponseBuilder:
-    """Builder for Maude-style responses.
+class GovernorResponseBuilder:
+    """Builder for Governor-style responses.
 
-    Enforces Maude's behavioral contracts:
+    Enforces Governor's behavioral contracts:
     - Separate proposal from commitment
     - Expose reason for blocks in one line
     - Prefer reversibility: preview → diff → commit
@@ -1426,75 +1426,75 @@ class MaudeResponseBuilder:
     - Default to low interference
     """
 
-    def __init__(self, profile: MaudeProfile | None = None):
-        self.profile = profile or MaudeProfile()
+    def __init__(self, profile: GovernorVoiceProfile | None = None):
+        self.profile = profile or GovernorVoiceProfile()
         self._content_lines: list[str] = []
         self._notes: list[str] = []
-        self._footer: MaudeFooter | None = None
+        self._footer: GovernorFooter | None = None
 
-    def add_line(self, line: str) -> MaudeResponseBuilder:
+    def add_line(self, line: str) -> GovernorResponseBuilder:
         """Add a content line."""
         # Check for banned patterns
-        violations = detect_maude_violations(line)
+        violations = detect_governor_violations(line)
         if violations:
-            # Don't add - Maude wouldn't say this
+            # Don't add - Governor wouldn't say this
             # In strict mode, this would raise
             pass
         else:
             self._content_lines.append(line)
         return self
 
-    def add_lines(self, lines: list[str]) -> MaudeResponseBuilder:
+    def add_lines(self, lines: list[str]) -> GovernorResponseBuilder:
         """Add multiple content lines."""
         for line in lines:
             self.add_line(line)
         return self
 
-    def add_note(self, note: str) -> MaudeResponseBuilder:
+    def add_note(self, note: str) -> GovernorResponseBuilder:
         """Add a note."""
         self._notes.append(note)
         return self
 
-    def set_footer(self, footer: MaudeFooter) -> MaudeResponseBuilder:
+    def set_footer(self, footer: GovernorFooter) -> GovernorResponseBuilder:
         """Set the footer."""
         self._footer = footer
         return self
 
-    def ok(self) -> MaudeResponseBuilder:
+    def ok(self) -> GovernorResponseBuilder:
         """Set OK footer."""
-        self._footer = MaudeFooter(type=MaudeFooterType.OK)
+        self._footer = GovernorFooter(type=GovernorFooterType.OK)
         return self
 
-    def blocked(self, reason: str, fix: str | None = None) -> MaudeResponseBuilder:
+    def blocked(self, reason: str, fix: str | None = None) -> GovernorResponseBuilder:
         """Set BLOCKED footer."""
-        self._footer = MaudeFooter(
-            type=MaudeFooterType.BLOCKED,
+        self._footer = GovernorFooter(
+            type=GovernorFooterType.BLOCKED,
             reason=reason,
             fix=fix,
         )
         return self
 
-    def warn(self, reason: str, recommendation: str | None = None) -> MaudeResponseBuilder:
+    def warn(self, reason: str, recommendation: str | None = None) -> GovernorResponseBuilder:
         """Set WARN footer."""
-        self._footer = MaudeFooter(
-            type=MaudeFooterType.WARN,
+        self._footer = GovernorFooter(
+            type=GovernorFooterType.WARN,
             reason=reason,
             fix=recommendation,
         )
         return self
 
-    def ask(self, question: str) -> MaudeResponseBuilder:
+    def ask(self, question: str) -> GovernorResponseBuilder:
         """Set ASK footer."""
-        self._footer = MaudeFooter(
-            type=MaudeFooterType.ASK,
+        self._footer = GovernorFooter(
+            type=GovernorFooterType.ASK,
             reason=question,
         )
         return self
 
-    def note(self, info: str) -> MaudeResponseBuilder:
+    def note(self, info: str) -> GovernorResponseBuilder:
         """Set NOTE footer."""
-        self._footer = MaudeFooter(
-            type=MaudeFooterType.NOTE,
+        self._footer = GovernorFooter(
+            type=GovernorFooterType.NOTE,
             reason=info,
         )
         return self
@@ -1520,20 +1520,20 @@ class MaudeResponseBuilder:
         elif self.profile.governance.status_footer:
             # Default to OK if no footer set
             parts.append("")
-            parts.append("Maude: OK")
+            parts.append("Governor: OK")
 
         return "\n".join(parts)
 
 
 # =============================================================================
-# Maude Controller
+# Governor Voice Controller
 # =============================================================================
 
 
-class MaudeController:
-    """Controller for Maude-mode operation.
+class GovernorVoiceController:
+    """Controller for Governor-mode operation.
 
-    Maude is the default puppet profile that demonstrates:
+    Governor is the default puppet profile that demonstrates:
     - Constraint-forward operation
     - Visible governance
     - Proposal/commit separation
@@ -1543,40 +1543,40 @@ class MaudeController:
     This is the "oh shit, this is real" moment in puppet form.
     """
 
-    def __init__(self, profile: MaudeProfile | None = None):
-        self.profile = profile or MaudeProfile()
-        self._character = MAUDE_CHARACTER
+    def __init__(self, profile: GovernorVoiceProfile | None = None):
+        self.profile = profile or GovernorVoiceProfile()
+        self._character = GOVERNOR_CHARACTER
         self._puppet_controller = PuppetModeController(
             config=PuppetModeConfig(
                 character=self._character,
-                strict_mode=True,  # Maude doesn't cut corners
+                strict_mode=True,  # Governor doesn't cut corners
             )
         )
 
     def check_text(self, text: str) -> PuppetModeResult:
-        """Check text against Maude's constraints.
+        """Check text against Governor's constraints.
 
-        Adds Maude-specific banned pattern detection on top of
+        Adds Governor-specific banned pattern detection on top of
         standard puppet mode checks.
         """
         # First, run standard puppet mode checks
         result = self._puppet_controller.check_text(text)
 
-        # Add Maude-specific violations
-        maude_violations = detect_maude_violations(text)
-        for pattern in maude_violations:
+        # Add Governor-specific violations
+        governor_violations = detect_governor_violations(text)
+        for pattern in governor_violations:
             result.violations.append(CharacterViolation(
                 type=CharacterViolationType.TONE_ENVELOPE,
-                description="Maude banned pattern detected",
+                description="Governor banned pattern detected",
                 severity=0.5,
                 detail=pattern,
             ))
 
         return result
 
-    def create_response(self) -> MaudeResponseBuilder:
-        """Create a new Maude response builder."""
-        return MaudeResponseBuilder(self.profile)
+    def create_response(self) -> GovernorResponseBuilder:
+        """Create a new Governor response builder."""
+        return GovernorResponseBuilder(self.profile)
 
     def format_uncertainty(
         self,
@@ -1584,8 +1584,8 @@ class MaudeController:
         confidence: str,
         missing: list[str],
     ) -> str:
-        """Format uncertainty the Maude way."""
-        return MaudeUncertainty(
+        """Format uncertainty the Governor way."""
+        return GovernorUncertainty(
             estimate=estimate,
             confidence=confidence,
             missing=missing,
@@ -1593,7 +1593,7 @@ class MaudeController:
 
     def format_drift_warning(self, threads: list[str]) -> str:
         """Format a drift warning when user has multiple threads."""
-        return MaudeDriftWarning(threads=threads).format()
+        return GovernorDriftWarning(threads=threads).format()
 
     def format_destructive_preview(
         self,
@@ -1601,7 +1601,7 @@ class MaudeController:
         backup_path: str | None = None,
     ) -> str:
         """Format a preview for destructive actions."""
-        return MaudeDestructivePreview(
+        return GovernorDestructivePreview(
             actions=actions,
             backup_path=backup_path,
         ).format()
@@ -1615,7 +1615,7 @@ class MaudeController:
         options: list[str],
     ) -> str:
         """Format a warning when action conflicts with prior constraint."""
-        return MaudeConflictWarning(
+        return GovernorConflictWarning(
             constraint_id=constraint_id,
             constraint_type=constraint_type,
             constraint_date=constraint_date,
@@ -1624,13 +1624,13 @@ class MaudeController:
         ).format()
 
     def should_deflect(self, domain: str) -> bool:
-        """Check if Maude should deflect this domain."""
+        """Check if Governor should deflect this domain."""
         return domain in self.profile.domain_deflections
 
     def has_affinity(self, domain: str) -> bool:
-        """Check if Maude has affinity for this domain."""
+        """Check if Governor has affinity for this domain."""
         return domain in self.profile.domain_affinities
 
 
-# Default Maude instance
-DEFAULT_MAUDE = MaudeController()
+# Default Governor voice instance
+DEFAULT_GOVERNOR_VOICE = GovernorVoiceController()

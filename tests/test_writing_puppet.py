@@ -750,10 +750,10 @@ class TestPresetCharacters:
         assert CHEERFUL_SHOPKEEPER_CHARACTER.id == "cheerful_shopkeeper"
 
     def test_registry(self):
-        assert len(PRESET_CHARACTERS) == 5  # Including Maude
+        assert len(PRESET_CHARACTERS) == 5  # Including Governor
         assert "wise_elder" in PRESET_CHARACTERS
         assert "fool" in PRESET_CHARACTERS
-        assert "maude" in PRESET_CHARACTERS
+        assert "governor" in PRESET_CHARACTERS
 
     def test_get_preset_character(self):
         char = get_preset_character("fool")
@@ -807,155 +807,155 @@ class TestPuppetModeIntegration:
 
 
 # =============================================================================
-# Maude Profile Tests
+# Governor Voice Profile Tests
 # =============================================================================
 
 
 from governor.writing_puppet import (
-    DEFAULT_MAUDE,
-    MAUDE_AFFINITY,
-    MAUDE_AUTHORITY,
-    MAUDE_BANNED_PATTERNS,
-    MAUDE_CHARACTER,
-    MAUDE_TONE_ENVELOPE,
-    MaudeConflictWarning,
-    MaudeController,
-    MaudeDestructivePreview,
-    MaudeDriftWarning,
-    MaudeFooter,
-    MaudeFooterType,
-    MaudeGovernanceConfig,
-    MaudeProfile,
-    MaudeResponseBuilder,
-    MaudeUncertainty,
-    detect_maude_violations,
-    has_maude_violation,
+    DEFAULT_GOVERNOR_VOICE,
+    GOVERNOR_AFFINITY,
+    GOVERNOR_AUTHORITY,
+    GOVERNOR_BANNED_PATTERNS,
+    GOVERNOR_CHARACTER,
+    GOVERNOR_TONE_ENVELOPE,
+    GovernorConflictWarning,
+    GovernorVoiceController,
+    GovernorDestructivePreview,
+    GovernorDriftWarning,
+    GovernorFooter,
+    GovernorFooterType,
+    GovernorVoiceConfig,
+    GovernorVoiceProfile,
+    GovernorResponseBuilder,
+    GovernorUncertainty,
+    detect_governor_violations,
+    has_governor_violation,
 )
 
 
-class TestMaudeFooterType:
+class TestGovernorFooterType:
     def test_all_values(self):
-        assert MaudeFooterType.OK.value == "ok"
-        assert MaudeFooterType.BLOCKED.value == "blocked"
-        assert MaudeFooterType.WARN.value == "warn"
-        assert MaudeFooterType.ASK.value == "ask"
-        assert MaudeFooterType.NOTE.value == "note"
+        assert GovernorFooterType.OK.value == "ok"
+        assert GovernorFooterType.BLOCKED.value == "blocked"
+        assert GovernorFooterType.WARN.value == "warn"
+        assert GovernorFooterType.ASK.value == "ask"
+        assert GovernorFooterType.NOTE.value == "note"
 
 
-class TestMaudeFooter:
+class TestGovernorFooter:
     def test_format_ok(self):
-        footer = MaudeFooter(type=MaudeFooterType.OK)
-        assert footer.format() == "Maude: OK"
+        footer = GovernorFooter(type=GovernorFooterType.OK)
+        assert footer.format() == "Governor: OK"
 
     def test_format_blocked_with_fix(self):
-        footer = MaudeFooter(
-            type=MaudeFooterType.BLOCKED,
+        footer = GovernorFooter(
+            type=GovernorFooterType.BLOCKED,
             reason="missing evidence (citation needed)",
             fix="provide source",
         )
         result = footer.format()
-        assert "Maude: BLOCKED" in result
+        assert "Governor: BLOCKED" in result
         assert "missing evidence" in result
         assert "To proceed: provide source." in result
 
     def test_format_blocked_without_fix(self):
-        footer = MaudeFooter(
-            type=MaudeFooterType.BLOCKED,
+        footer = GovernorFooter(
+            type=GovernorFooterType.BLOCKED,
             reason="invalid config",
         )
         result = footer.format()
-        assert "Maude: BLOCKED" in result
+        assert "Governor: BLOCKED" in result
         assert "To proceed:" not in result
 
     def test_format_warn(self):
-        footer = MaudeFooter(
-            type=MaudeFooterType.WARN,
+        footer = GovernorFooter(
+            type=GovernorFooterType.WARN,
             reason="conflicts with prior constraint",
             fix="reconcile",
         )
         result = footer.format()
-        assert "Maude: WARN" in result
+        assert "Governor: WARN" in result
         assert "Recommendation: reconcile." in result
 
     def test_format_ask(self):
-        footer = MaudeFooter(
-            type=MaudeFooterType.ASK,
+        footer = GovernorFooter(
+            type=GovernorFooterType.ASK,
             reason="confirm destructive action?",
         )
         result = footer.format()
-        assert "Maude: ASK" in result
+        assert "Governor: ASK" in result
         assert "confirm" in result
 
     def test_format_note(self):
-        footer = MaudeFooter(
-            type=MaudeFooterType.NOTE,
+        footer = GovernorFooter(
+            type=GovernorFooterType.NOTE,
             reason="this approach works but see alternatives",
         )
         result = footer.format()
-        assert "Maude: NOTE" in result
+        assert "Governor: NOTE" in result
 
 
-class TestMaudeToneEnvelope:
+class TestGovernorToneEnvelope:
     def test_values(self):
-        # From maude.md spec
-        assert MAUDE_TONE_ENVELOPE.formality == (0.5, 0.7)
-        assert MAUDE_TONE_ENVELOPE.temperature == (0.2, 0.4)
-        assert MAUDE_TONE_ENVELOPE.density == (0.6, 0.8)
-        assert MAUDE_TONE_ENVELOPE.velocity == (0.4, 0.6)
-        assert MAUDE_TONE_ENVELOPE.distance == (0.5, 0.7)
-        assert MAUDE_TONE_ENVELOPE.certainty == (0.5, 0.8)
+        # From governor-voice.md spec
+        assert GOVERNOR_TONE_ENVELOPE.formality == (0.5, 0.7)
+        assert GOVERNOR_TONE_ENVELOPE.temperature == (0.2, 0.4)
+        assert GOVERNOR_TONE_ENVELOPE.density == (0.6, 0.8)
+        assert GOVERNOR_TONE_ENVELOPE.velocity == (0.4, 0.6)
+        assert GOVERNOR_TONE_ENVELOPE.distance == (0.5, 0.7)
+        assert GOVERNOR_TONE_ENVELOPE.certainty == (0.5, 0.8)
 
 
-class TestMaudeBannedPatterns:
+class TestGovernorBannedPatterns:
     def test_patterns_compiled(self):
-        assert len(MAUDE_BANNED_PATTERNS) > 0
+        assert len(GOVERNOR_BANNED_PATTERNS) > 0
 
     def test_detects_great_question(self):
-        assert has_maude_violation("Great question!")
+        assert has_governor_violation("Great question!")
 
     def test_detects_happy_to_help(self):
-        assert has_maude_violation("I'd be happy to help with that!")
+        assert has_governor_violation("I'd be happy to help with that!")
 
     def test_detects_absolutely(self):
-        assert has_maude_violation("That is absolutely correct.")
+        assert has_governor_violation("That is absolutely correct.")
 
     def test_detects_let_me(self):
-        assert has_maude_violation("Let me just check that for you.")
+        assert has_governor_violation("Let me just check that for you.")
 
     def test_detects_performed_uncertainty(self):
-        assert has_maude_violation("I'm not sure, but I think maybe it's X.")
+        assert has_governor_violation("I'm not sure, but I think maybe it's X.")
 
     def test_detects_excessive_hedging(self):
-        assert has_maude_violation("I could be wrong, but this looks off.")
+        assert has_governor_violation("I could be wrong, but this looks off.")
 
     def test_detects_motivation_speak(self):
-        assert has_maude_violation("You've got this!")
-        assert has_maude_violation("Don't worry, it'll be fine.")
+        assert has_governor_violation("You've got this!")
+        assert has_governor_violation("Don't worry, it'll be fine.")
 
     def test_clean_text_passes(self):
-        # Maude's actual voice - direct, no filler
+        # Governor's actual voice - direct, no filler
         clean_texts = [
             "The config is invalid — missing required field.",
             "Latency estimate: 30ms. Confidence: moderate.",
             "This conflicts with constraint #47.",
         ]
         for text in clean_texts:
-            assert not has_maude_violation(text), f"'{text}' should pass"
+            assert not has_governor_violation(text), f"'{text}' should pass"
 
 
-class TestDetectMaudeViolations:
+class TestDetectGovernorViolations:
     def test_returns_pattern(self):
-        violations = detect_maude_violations("Great question! Let me help.")
+        violations = detect_governor_violations("Great question! Let me help.")
         assert len(violations) >= 2
 
     def test_returns_empty_for_clean(self):
-        violations = detect_maude_violations("Check failed. Fix: add timeout.")
+        violations = detect_governor_violations("Check failed. Fix: add timeout.")
         assert len(violations) == 0
 
 
-class TestMaudeGovernanceConfig:
+class TestGovernorVoiceConfig:
     def test_defaults(self):
-        config = MaudeGovernanceConfig()
+        config = GovernorVoiceConfig()
         assert config.always_surface_status is True
         assert config.status_footer is True
         assert config.require_confirm_for_destructive is True
@@ -964,81 +964,81 @@ class TestMaudeGovernanceConfig:
         assert config.never_claim_execution_without_record is True
 
 
-class TestMaudeProfile:
+class TestGovernorVoiceProfile:
     def test_defaults(self):
-        profile = MaudeProfile()
-        assert profile.id == "maude_default"
-        assert profile.display_name == "Maude"
+        profile = GovernorVoiceProfile()
+        assert profile.id == "governor_default"
+        assert profile.display_name == "Governor"
         assert profile.tagline == "Proposal is cheap. Commitment isn't."
         assert profile.register == "dry"
         assert profile.default_regime == "nonfiction"
 
     def test_domain_affinities(self):
-        profile = MaudeProfile()
+        profile = GovernorVoiceProfile()
         assert "debugging" in profile.domain_affinities
         assert "ops" in profile.domain_affinities
 
     def test_domain_deflections(self):
-        profile = MaudeProfile()
+        profile = GovernorVoiceProfile()
         assert "therapy" in profile.domain_deflections
         assert "motivation" in profile.domain_deflections
 
     def test_to_dict(self):
-        profile = MaudeProfile()
+        profile = GovernorVoiceProfile()
         d = profile.to_dict()
-        assert d["id"] == "maude_default"
+        assert d["id"] == "governor_default"
         assert d["tagline"] == "Proposal is cheap. Commitment isn't."
         assert d["tone"]["register"] == "dry"
 
     def test_from_dict(self):
         d = {
-            "id": "custom_maude",
-            "display_name": "Custom Maude",
+            "id": "custom_governor",
+            "display_name": "Custom Governor",
             "tagline": "Custom tagline",
             "tone": {"register": "formal"},
             "style_bans": ["emoji"],
         }
-        profile = MaudeProfile.from_dict(d)
-        assert profile.id == "custom_maude"
+        profile = GovernorVoiceProfile.from_dict(d)
+        assert profile.id == "custom_governor"
         assert profile.tagline == "Custom tagline"
 
 
-class TestMaudeAffinity:
+class TestGovernorAffinity:
     def test_primary_nonfiction(self):
-        assert MAUDE_AFFINITY.primary == "nonfiction"
+        assert GOVERNOR_AFFINITY.primary == "nonfiction"
 
     def test_forbidden_regimes(self):
-        assert "comedy" in MAUDE_AFFINITY.forbidden
-        assert "advocacy" in MAUDE_AFFINITY.forbidden
-        assert "marketing" in MAUDE_AFFINITY.forbidden
+        assert "comedy" in GOVERNOR_AFFINITY.forbidden
+        assert "advocacy" in GOVERNOR_AFFINITY.forbidden
+        assert "marketing" in GOVERNOR_AFFINITY.forbidden
 
 
-class TestMaudeAuthority:
+class TestGovernorAuthority:
     def test_experience_based(self):
-        assert MAUDE_AUTHORITY.primary == AuthoritySource.EXPERIENCE
-        assert MAUDE_AUTHORITY.secondary == AuthoritySource.CRAFT
+        assert GOVERNOR_AUTHORITY.primary == AuthoritySource.EXPERIENCE
+        assert GOVERNOR_AUTHORITY.secondary == AuthoritySource.CRAFT
 
     def test_must_demonstrate(self):
-        assert MAUDE_AUTHORITY.can_claim_without_demonstration is False
+        assert GOVERNOR_AUTHORITY.can_claim_without_demonstration is False
 
 
-class TestMaudeCharacter:
+class TestGovernorCharacter:
     def test_in_preset_registry(self):
-        assert "maude" in PRESET_CHARACTERS
+        assert "governor" in PRESET_CHARACTERS
 
     def test_character_properties(self):
-        assert MAUDE_CHARACTER.id == "maude"
-        assert MAUDE_CHARACTER.name == "Maude"
-        assert MAUDE_CHARACTER.certainty_ceiling == 0.8
-        assert MAUDE_CHARACTER.normativity.allowed is True
+        assert GOVERNOR_CHARACTER.id == "governor"
+        assert GOVERNOR_CHARACTER.name == "Governor"
+        assert GOVERNOR_CHARACTER.certainty_ceiling == 0.8
+        assert GOVERNOR_CHARACTER.normativity.allowed is True
 
     def test_tone_envelope(self):
-        assert MAUDE_CHARACTER.tone_envelope == MAUDE_TONE_ENVELOPE
+        assert GOVERNOR_CHARACTER.tone_envelope == GOVERNOR_TONE_ENVELOPE
 
 
-class TestMaudeUncertainty:
+class TestGovernorUncertainty:
     def test_format(self):
-        uncertainty = MaudeUncertainty(
+        uncertainty = GovernorUncertainty(
             estimate="2-4 hours",
             confidence="low",
             missing=["row count", "index size"],
@@ -1049,7 +1049,7 @@ class TestMaudeUncertainty:
         assert "row count" in result
 
     def test_format_no_missing(self):
-        uncertainty = MaudeUncertainty(
+        uncertainty = GovernorUncertainty(
             estimate="30ms",
             confidence="high",
             missing=[],
@@ -1058,9 +1058,9 @@ class TestMaudeUncertainty:
         assert "Missing:" not in result
 
 
-class TestMaudeDriftWarning:
+class TestGovernorDriftWarning:
     def test_format(self):
-        warning = MaudeDriftWarning(
+        warning = GovernorDriftWarning(
             threads=["Redis timeout config", "Log rotation policy", "Deployment"]
         )
         result = warning.format()
@@ -1069,14 +1069,14 @@ class TestMaudeDriftWarning:
         assert "Pick one" in result
 
 
-class TestMaudeDestructivePreview:
+class TestGovernorDestructivePreview:
     def test_format(self):
-        preview = MaudeDestructivePreview(
+        preview = GovernorDestructivePreview(
             actions=[
                 "Delete 3 files in /var/log/old/",
                 "Modify permissions on /etc/app/",
             ],
-            backup_path="/tmp/maude-backup/",
+            backup_path="/tmp/governor-backup/",
         )
         result = preview.format()
         assert "This would:" in result
@@ -1084,16 +1084,16 @@ class TestMaudeDestructivePreview:
         assert "Backup will be created" in result
 
     def test_format_no_backup(self):
-        preview = MaudeDestructivePreview(
+        preview = GovernorDestructivePreview(
             actions=["Remove container"],
         )
         result = preview.format()
         assert "Backup" not in result
 
 
-class TestMaudeConflictWarning:
+class TestGovernorConflictWarning:
     def test_format(self):
-        warning = MaudeConflictWarning(
+        warning = GovernorConflictWarning(
             constraint_id="47",
             constraint_type="HARD",
             constraint_date="2026-01-15",
@@ -1111,15 +1111,15 @@ class TestMaudeConflictWarning:
         assert "Options:" in result
 
 
-class TestMaudeResponseBuilder:
+class TestGovernorResponseBuilder:
     def test_build_simple(self):
-        builder = MaudeResponseBuilder()
+        builder = GovernorResponseBuilder()
         result = builder.add_line("30 seconds in redis-py.").ok().build()
         assert "30 seconds" in result
-        assert "Maude: OK" in result
+        assert "Governor: OK" in result
 
     def test_build_with_notes(self):
-        builder = MaudeResponseBuilder()
+        builder = GovernorResponseBuilder()
         result = (
             builder
             .add_line("Config is invalid.")
@@ -1130,60 +1130,60 @@ class TestMaudeResponseBuilder:
         )
         assert "Notes:" in result
         assert "Default was 60s" in result
-        assert "Maude: BLOCKED" in result
+        assert "Governor: BLOCKED" in result
 
     def test_filters_banned_patterns(self):
-        builder = MaudeResponseBuilder()
+        builder = GovernorResponseBuilder()
         # This line has a banned pattern - should not appear
         result = builder.add_line("Great question! Here's the answer.").ok().build()
-        # Maude wouldn't say "Great question!"
+        # Governor wouldn't say "Great question!"
         assert "Great question" not in result
 
     def test_warn_footer(self):
-        builder = MaudeResponseBuilder()
+        builder = GovernorResponseBuilder()
         result = (
             builder
             .add_line("This conflicts with prior constraint.")
             .warn("conflicts with #47", "reconcile")
             .build()
         )
-        assert "Maude: WARN" in result
+        assert "Governor: WARN" in result
 
     def test_ask_footer(self):
-        builder = MaudeResponseBuilder()
+        builder = GovernorResponseBuilder()
         result = builder.ask("confirm deletion?").build()
-        assert "Maude: ASK" in result
+        assert "Governor: ASK" in result
 
 
-class TestMaudeController:
+class TestGovernorVoiceController:
     def test_init_default_profile(self):
-        controller = MaudeController()
-        assert controller.profile.id == "maude_default"
+        controller = GovernorVoiceController()
+        assert controller.profile.id == "governor_default"
 
     def test_check_clean_text(self):
-        controller = MaudeController()
+        controller = GovernorVoiceController()
         result = controller.check_text("The config is invalid. Fix: add timeout.")
         assert result.in_character is True
         assert len([v for v in result.violations if v.severity > 0.5]) == 0
 
     def test_check_detects_banned_patterns(self):
-        controller = MaudeController()
+        controller = GovernorVoiceController()
         result = controller.check_text("Great question! I'd love to help!")
         violations = [v for v in result.violations if "banned pattern" in v.description]
         assert len(violations) > 0
 
     def test_check_detects_governance_leak(self):
-        controller = MaudeController()
+        controller = GovernorVoiceController()
         result = controller.check_text("As a character, I can't do that.")
         assert result.in_character is False
 
     def test_create_response(self):
-        controller = MaudeController()
+        controller = GovernorVoiceController()
         builder = controller.create_response()
-        assert isinstance(builder, MaudeResponseBuilder)
+        assert isinstance(builder, GovernorResponseBuilder)
 
     def test_format_uncertainty(self):
-        controller = MaudeController()
+        controller = GovernorVoiceController()
         result = controller.format_uncertainty(
             estimate="30ms",
             confidence="moderate",
@@ -1193,12 +1193,12 @@ class TestMaudeController:
         assert "Confidence: moderate" in result
 
     def test_format_drift_warning(self):
-        controller = MaudeController()
+        controller = GovernorVoiceController()
         result = controller.format_drift_warning(["A", "B", "C"])
         assert "3 threads" in result
 
     def test_format_destructive_preview(self):
-        controller = MaudeController()
+        controller = GovernorVoiceController()
         result = controller.format_destructive_preview(
             actions=["Delete file"],
             backup_path="/tmp/backup",
@@ -1206,7 +1206,7 @@ class TestMaudeController:
         assert "Delete file" in result
 
     def test_format_conflict_warning(self):
-        controller = MaudeController()
+        controller = GovernorVoiceController()
         result = controller.format_conflict_warning(
             constraint_id="1",
             constraint_type="HARD",
@@ -1217,51 +1217,51 @@ class TestMaudeController:
         assert "conflicts" in result
 
     def test_should_deflect(self):
-        controller = MaudeController()
+        controller = GovernorVoiceController()
         assert controller.should_deflect("therapy") is True
         assert controller.should_deflect("motivation") is True
         assert controller.should_deflect("debugging") is False
 
     def test_has_affinity(self):
-        controller = MaudeController()
+        controller = GovernorVoiceController()
         assert controller.has_affinity("debugging") is True
         assert controller.has_affinity("ops") is True
         assert controller.has_affinity("therapy") is False
 
 
-class TestDefaultMaude:
+class TestDefaultGovernorVoice:
     def test_exists(self):
-        assert DEFAULT_MAUDE is not None
-        assert isinstance(DEFAULT_MAUDE, MaudeController)
+        assert DEFAULT_GOVERNOR_VOICE is not None
+        assert isinstance(DEFAULT_GOVERNOR_VOICE, GovernorVoiceController)
 
     def test_profile(self):
-        assert DEFAULT_MAUDE.profile.tagline == "Proposal is cheap. Commitment isn't."
+        assert DEFAULT_GOVERNOR_VOICE.profile.tagline == "Proposal is cheap. Commitment isn't."
 
 
-class TestMaudeIntegration:
-    """Integration tests for Maude as a puppet profile."""
+class TestGovernorVoiceIntegration:
+    """Integration tests for Governor voice as a puppet profile."""
 
-    def test_maude_in_puppet_controller(self):
-        """Maude character can be used in PuppetModeController."""
-        config = PuppetModeConfig(character=MAUDE_CHARACTER)
+    def test_governor_in_puppet_controller(self):
+        """Governor character can be used in PuppetModeController."""
+        config = PuppetModeConfig(character=GOVERNOR_CHARACTER)
         controller = PuppetModeController(config)
 
         result = controller.check_text("Check failed. Missing: timeout config.")
         assert result.in_character is True
 
-    def test_maude_regime_resolution(self):
-        """Maude stays in nonfiction/instruction regimes."""
+    def test_governor_regime_resolution(self):
+        """Governor stays in nonfiction/instruction regimes."""
         scene = SceneContext(regime_hint="comedy")
-        regime = resolve_regime(MAUDE_CHARACTER, scene)
-        # Comedy is forbidden for Maude
+        regime = resolve_regime(GOVERNOR_CHARACTER, scene)
+        # Comedy is forbidden for Governor
         assert regime == "nonfiction"
 
-    def test_maude_certainty_ceiling(self):
-        """Maude has high certainty ceiling (0.8) - can be confident."""
-        config = PuppetModeConfig(character=MAUDE_CHARACTER)
+    def test_governor_certainty_ceiling(self):
+        """Governor has high certainty ceiling (0.8) - can be confident."""
+        config = PuppetModeConfig(character=GOVERNOR_CHARACTER)
         controller = PuppetModeController(config)
 
-        # High certainty is OK for Maude (ceiling is 0.8)
+        # High certainty is OK for Governor (ceiling is 0.8)
         result = controller.check_text("I am certain this is correct.")
         certainty_violations = [
             v for v in result.violations
@@ -1269,9 +1269,9 @@ class TestMaudeIntegration:
         ]
         assert len(certainty_violations) == 0
 
-    def test_maude_can_make_normative_claims(self):
-        """Maude can make normative claims about process."""
-        config = PuppetModeConfig(character=MAUDE_CHARACTER)
+    def test_governor_can_make_normative_claims(self):
+        """Governor can make normative claims about process."""
+        config = PuppetModeConfig(character=GOVERNOR_CHARACTER)
         controller = PuppetModeController(config)
 
         result = controller.check_text("You should run tests before deploying.")

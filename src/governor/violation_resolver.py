@@ -11,9 +11,9 @@ The Three Moves:
 
 State Machine:
     NORMAL → [violation detected] → PENDING_RESOLUTION
-    PENDING_RESOLUTION → [maude fix] → FIX_IN_PROGRESS → NORMAL
-    PENDING_RESOLUTION → [maude revise] → REVISE_IN_PROGRESS → NORMAL
-    PENDING_RESOLUTION → [maude proceed] → EXCEPTION_LOGGED → NORMAL
+    PENDING_RESOLUTION → [governor fix] → FIX_IN_PROGRESS → NORMAL
+    PENDING_RESOLUTION → [governor revise] → REVISE_IN_PROGRESS → NORMAL
+    PENDING_RESOLUTION → [governor proceed] → EXCEPTION_LOGGED → NORMAL
     PENDING_RESOLUTION → [other input] → RE-PRESENT_CHOICES → PENDING_RESOLUTION
 """
 
@@ -197,10 +197,10 @@ class ViolationResolver:
         r"^1$": ResolutionAction.FIX,
         r"^2$": ResolutionAction.REVISE,
         r"^3$": ResolutionAction.PROCEED,
-        r"^maude\s+fix$": ResolutionAction.FIX,
-        r"^maude\s+revise$": ResolutionAction.REVISE,
-        r"^maude\s+proceed$": ResolutionAction.PROCEED,
-        # Also allow without "maude" prefix
+        r"^governor\s+fix$": ResolutionAction.FIX,
+        r"^governor\s+revise$": ResolutionAction.REVISE,
+        r"^governor\s+proceed$": ResolutionAction.PROCEED,
+        # Also allow without "governor" prefix
         r"^fix$": ResolutionAction.FIX,
         r"^revise$": ResolutionAction.REVISE,
         r"^proceed$": ResolutionAction.PROCEED,

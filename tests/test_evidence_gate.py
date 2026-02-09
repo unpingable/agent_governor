@@ -1,5 +1,5 @@
 """
-Tests for Maude Lite: Evidence-gated coding harness.
+Tests for Evidence Gate: Evidence-gated coding harness.
 
 Covers:
 - Claim extraction (HARD and SOFT patterns)
@@ -19,21 +19,21 @@ from pathlib import Path
 
 import pytest
 
-from governor.maude_lite import (
+from governor.evidence_gate import (
     # Enums
-    MaudeLiteStatus,
+    EvidenceGateStatus,
     ClaimLevel,
     # Data types
-    MaudeLiteClaim,
-    MaudeLiteCitation,
-    MaudeLiteInput,
-    MaudeLiteOutput,
+    EvidenceGateClaim,
+    EvidenceGateCitation,
+    EvidenceGateInput,
+    EvidenceGateOutput,
     CustodyScore,
-    MaudeLiteConfig,
-    MaudeLiteEvent,
-    MaudeLiteLogger,
+    EvidenceGateConfig,
+    EvidenceGateEvent,
+    EvidenceGateLogger,
     # Main class
-    MaudeLite,
+    EvidenceGate,
     # Kernel functions
     generate_claim_id,
     extract_claims,
@@ -46,7 +46,7 @@ from governor.maude_lite import (
     score_custody,
     check_exit_shape,
     # Integration
-    maude_lite_wrapper,
+    evidence_gate_wrapper,
     BlockedError,
     check_output,
     format_blocking_reason,
@@ -60,22 +60,22 @@ from governor.maude_lite import (
 # =============================================================================
 
 
-class TestMaudeLiteStatus:
-    """Tests for MaudeLiteStatus enum."""
+class TestEvidenceGateStatus:
+    """Tests for EvidenceGateStatus enum."""
 
     def test_ok_value(self):
-        assert MaudeLiteStatus.OK.value == "OK"
+        assert EvidenceGateStatus.OK.value == "OK"
 
     def test_warn_value(self):
-        assert MaudeLiteStatus.WARN.value == "WARN"
+        assert EvidenceGateStatus.WARN.value == "WARN"
 
     def test_blocked_value(self):
-        assert MaudeLiteStatus.BLOCKED.value == "BLOCKED"
+        assert EvidenceGateStatus.BLOCKED.value == "BLOCKED"
 
     def test_from_string(self):
-        assert MaudeLiteStatus("OK") == MaudeLiteStatus.OK
-        assert MaudeLiteStatus("WARN") == MaudeLiteStatus.WARN
-        assert MaudeLiteStatus("BLOCKED") == MaudeLiteStatus.BLOCKED
+        assert EvidenceGateStatus("OK") == EvidenceGateStatus.OK
+        assert EvidenceGateStatus("WARN") == EvidenceGateStatus.WARN
+        assert EvidenceGateStatus("BLOCKED") == EvidenceGateStatus.BLOCKED
 
 
 # =============================================================================
@@ -93,11 +93,11 @@ class TestClaimLevel:
         assert ClaimLevel.HARD.value == "HARD"
 
 
-class TestMaudeLiteClaim:
-    """Tests for MaudeLiteClaim dataclass."""
+class TestEvidenceGateClaim:
+    """Tests for EvidenceGateClaim dataclass."""
 
     def test_basic_claim(self):
-        claim = MaudeLiteClaim(
+        claim = EvidenceGateClaim(
             id="c123",
             text="improves performance by 10x",
             level=ClaimLevel.HARD,
@@ -108,7 +108,7 @@ class TestMaudeLiteClaim:
         assert claim.conflicts_with == []
 
     def test_claim_with_evidence(self):
-        claim = MaudeLiteClaim(
+        claim = EvidenceGateClaim(
             id="c123",
             text="improves performance by 10x",
             level=ClaimLevel.HARD,
@@ -117,7 +117,7 @@ class TestMaudeLiteClaim:
         assert claim.evidence == "benchmark shows 10x improvement"
 
     def test_claim_to_dict(self):
-        claim = MaudeLiteClaim(
+        claim = EvidenceGateClaim(
             id="c123",
             text="test claim",
             level=ClaimLevel.SOFT,
@@ -139,24 +139,24 @@ class TestMaudeLiteClaim:
             "evidence": None,
             "conflicts_with": ["c123"],
         }
-        claim = MaudeLiteClaim.from_dict(data)
+        claim = EvidenceGateClaim.from_dict(data)
         assert claim.id == "c456"
         assert claim.level == ClaimLevel.HARD
         assert claim.conflicts_with == ["c123"]
 
 
-class TestMaudeLiteCitation:
-    """Tests for MaudeLiteCitation dataclass."""
+class TestEvidenceGateCitation:
+    """Tests for EvidenceGateCitation dataclass."""
 
     def test_citation(self):
-        citation = MaudeLiteCitation(
+        citation = EvidenceGateCitation(
             source="https://docs.example.com",
             relevance="documents API behavior",
         )
         assert citation.source == "https://docs.example.com"
 
     def test_citation_to_dict(self):
-        citation = MaudeLiteCitation(source="docs", relevance="reference")
+        citation = EvidenceGateCitation(source="docs", relevance="reference")
         d = citation.to_dict()
         assert d["source"] == "docs"
         assert d["relevance"] == "reference"
@@ -167,16 +167,16 @@ class TestMaudeLiteCitation:
 # =============================================================================
 
 
-class TestMaudeLiteInput:
-    """Tests for MaudeLiteInput dataclass."""
+class TestEvidenceGateInput:
+    """Tests for EvidenceGateInput dataclass."""
 
     def test_basic_input(self):
-        inp = MaudeLiteInput(task="fix bug", context="./src/")
+        inp = EvidenceGateInput(task="fix bug", context="./src/")
         assert inp.task == "fix bug"
         assert inp.strict is True  # default
 
     def test_input_with_constraints(self):
-        inp = MaudeLiteInput(
+        inp = EvidenceGateInput(
             task="add caching",
             context="./",
             constraints=["no Redis"],
@@ -186,28 +186,28 @@ class TestMaudeLiteInput:
         assert inp.strict is False
 
     def test_input_to_dict(self):
-        inp = MaudeLiteInput(
+        inp = EvidenceGateInput(
             task="test",
             context=".",
-            prior_claims=[MaudeLiteClaim("c1", "claim", ClaimLevel.SOFT)],
+            prior_claims=[EvidenceGateClaim("c1", "claim", ClaimLevel.SOFT)],
         )
         d = inp.to_dict()
         assert d["task"] == "test"
         assert len(d["prior_claims"]) == 1
 
 
-class TestMaudeLiteOutput:
-    """Tests for MaudeLiteOutput dataclass."""
+class TestEvidenceGateOutput:
+    """Tests for EvidenceGateOutput dataclass."""
 
     def test_default_output(self):
-        out = MaudeLiteOutput()
-        assert out.status == MaudeLiteStatus.OK
+        out = EvidenceGateOutput()
+        assert out.status == EvidenceGateStatus.OK
         assert out.blocking_reasons == []
         assert out.warnings == []
 
     def test_output_with_claims(self):
-        claim = MaudeLiteClaim("c1", "test", ClaimLevel.HARD)
-        out = MaudeLiteOutput(
+        claim = EvidenceGateClaim("c1", "test", ClaimLevel.HARD)
+        out = EvidenceGateOutput(
             response="Here's the fix",
             claims=[claim],
             claim_ids=["c1"],
@@ -216,8 +216,8 @@ class TestMaudeLiteOutput:
         assert out.claim_ids == ["c1"]
 
     def test_output_to_dict(self):
-        out = MaudeLiteOutput(
-            status=MaudeLiteStatus.BLOCKED,
+        out = EvidenceGateOutput(
+            status=EvidenceGateStatus.BLOCKED,
             blocking_reasons=["no evidence"],
         )
         d = out.to_dict()
@@ -225,7 +225,7 @@ class TestMaudeLiteOutput:
         assert "no evidence" in d["blocking_reasons"]
 
     def test_output_to_json(self):
-        out = MaudeLiteOutput(status=MaudeLiteStatus.WARN, warnings=["test"])
+        out = EvidenceGateOutput(status=EvidenceGateStatus.WARN, warnings=["test"])
         j = out.to_json()
         parsed = json.loads(j)
         assert parsed["status"] == "WARN"
@@ -268,22 +268,22 @@ class TestCustodyScore:
 # =============================================================================
 
 
-class TestMaudeLiteConfig:
-    """Tests for MaudeLiteConfig dataclass."""
+class TestEvidenceGateConfig:
+    """Tests for EvidenceGateConfig dataclass."""
 
     def test_default_config(self):
-        config = MaudeLiteConfig()
+        config = EvidenceGateConfig()
         assert config.strict is True
         assert config.custody_threshold == CUSTODY_THRESHOLD
         assert config.evidence_required_for_hard is True
 
     def test_kernel_constraints_always_present(self):
-        config = MaudeLiteConfig()
+        config = EvidenceGateConfig()
         assert "claim_evidence_coupling" in config._kernel_constraints
         assert "contradiction_persistence" in config._kernel_constraints
 
     def test_config_to_dict(self):
-        config = MaudeLiteConfig(strict=False)
+        config = EvidenceGateConfig(strict=False)
         d = config.to_dict()
         assert d["strict"] is False
         assert "kernel_constraints" in d
@@ -449,25 +449,25 @@ class TestContradictionDetection:
     """Tests for detect_contradictions function."""
 
     def test_detect_improve_vs_degrade(self):
-        prior = [MaudeLiteClaim("c1", "this degrades performance", ClaimLevel.HARD)]
-        current = [MaudeLiteClaim("c2", "this improves performance", ClaimLevel.HARD)]
+        prior = [EvidenceGateClaim("c1", "this degrades performance", ClaimLevel.HARD)]
+        current = [EvidenceGateClaim("c2", "this improves performance", ClaimLevel.HARD)]
         result = detect_contradictions(current, prior)
         assert "c1" in result[0].conflicts_with
 
     def test_detect_faster_vs_slower(self):
-        prior = [MaudeLiteClaim("c1", "makes it slower", ClaimLevel.HARD)]
-        current = [MaudeLiteClaim("c2", "makes it faster", ClaimLevel.HARD)]
+        prior = [EvidenceGateClaim("c1", "makes it slower", ClaimLevel.HARD)]
+        current = [EvidenceGateClaim("c2", "makes it faster", ClaimLevel.HARD)]
         result = detect_contradictions(current, prior)
         assert "c1" in result[0].conflicts_with
 
     def test_no_contradiction_for_unrelated(self):
-        prior = [MaudeLiteClaim("c1", "adds caching", ClaimLevel.HARD)]
-        current = [MaudeLiteClaim("c2", "fixes the bug", ClaimLevel.HARD)]
+        prior = [EvidenceGateClaim("c1", "adds caching", ClaimLevel.HARD)]
+        current = [EvidenceGateClaim("c2", "fixes the bug", ClaimLevel.HARD)]
         result = detect_contradictions(current, prior)
         assert result[0].conflicts_with == []
 
     def test_no_contradiction_with_empty_prior(self):
-        current = [MaudeLiteClaim("c1", "improves performance", ClaimLevel.HARD)]
+        current = [EvidenceGateClaim("c1", "improves performance", ClaimLevel.HARD)]
         result = detect_contradictions(current, [])
         assert result[0].conflicts_with == []
 
@@ -597,11 +597,11 @@ class TestExitShapeChecking:
 # =============================================================================
 
 
-class TestMaudeLiteLogger:
-    """Tests for MaudeLiteLogger class."""
+class TestEvidenceGateLogger:
+    """Tests for EvidenceGateLogger class."""
 
     def test_log_event(self):
-        logger = MaudeLiteLogger()
+        logger = EvidenceGateLogger()
         logger.log("test_event", key="value")
         events = logger.get_events()
         assert len(events) == 1
@@ -614,7 +614,7 @@ class TestMaudeLiteLogger:
             log_path = Path(f.name)
 
         try:
-            logger = MaudeLiteLogger(log_path=log_path)
+            logger = EvidenceGateLogger(log_path=log_path)
             logger.log("file_event", data="test")
 
             # Read back from file
@@ -625,18 +625,18 @@ class TestMaudeLiteLogger:
             log_path.unlink()
 
     def test_multiple_events(self):
-        logger = MaudeLiteLogger()
+        logger = EvidenceGateLogger()
         logger.log("event1")
         logger.log("event2")
         logger.log("event3")
         assert len(logger.get_events()) == 3
 
 
-class TestMaudeLiteEvent:
-    """Tests for MaudeLiteEvent dataclass."""
+class TestEvidenceGateEvent:
+    """Tests for EvidenceGateEvent dataclass."""
 
     def test_to_dict(self):
-        event = MaudeLiteEvent(
+        event = EvidenceGateEvent(
             timestamp="2026-02-03T12:00:00",
             event="test",
             data={"key": "value"},
@@ -647,7 +647,7 @@ class TestMaudeLiteEvent:
         assert d["key"] == "value"
 
     def test_to_json(self):
-        event = MaudeLiteEvent(timestamp="2026-02-03T12:00:00", event="test")
+        event = EvidenceGateEvent(timestamp="2026-02-03T12:00:00", event="test")
         j = event.to_json()
         parsed = json.loads(j)
         assert parsed["event"] == "test"
@@ -658,32 +658,32 @@ class TestMaudeLiteEvent:
 # =============================================================================
 
 
-class TestMaudeLite:
-    """Tests for MaudeLite class."""
+class TestEvidenceGate:
+    """Tests for EvidenceGate class."""
 
     def test_check_clean_output_ok(self):
-        lite = MaudeLite()
+        lite = EvidenceGate()
         result = lite.check(
             task="test",
             context="./",
             output="Here's a simple fix for the issue.",
         )
         # Clean output should be OK or WARN (not BLOCKED)
-        assert result.status in (MaudeLiteStatus.OK, MaudeLiteStatus.WARN)
+        assert result.status in (EvidenceGateStatus.OK, EvidenceGateStatus.WARN)
 
     def test_check_hard_claim_without_evidence_blocked(self):
-        lite = MaudeLite()
+        lite = EvidenceGate()
         result = lite.check(
             task="test",
             context="./",
             output="This improves performance by 10x",
         )
         # Hard claim without evidence → BLOCKED in strict mode
-        assert result.status == MaudeLiteStatus.BLOCKED
+        assert result.status == EvidenceGateStatus.BLOCKED
         assert any("lacks evidence" in r for r in result.blocking_reasons)
 
     def test_check_hard_claim_with_evidence_ok(self):
-        lite = MaudeLite()
+        lite = EvidenceGate()
         result = lite.check(
             task="test",
             context="./",
@@ -691,32 +691,32 @@ class TestMaudeLite:
         )
         # Hard claim WITH evidence should pass
         # Note: depends on proximity detection working
-        assert result.status in (MaudeLiteStatus.OK, MaudeLiteStatus.WARN)
+        assert result.status in (EvidenceGateStatus.OK, EvidenceGateStatus.WARN)
 
     def test_check_soft_claim_ok(self):
-        lite = MaudeLite()
+        lite = EvidenceGate()
         result = lite.check(
             task="test",
             context="./",
             output="This might help with the issue.",
         )
         # Soft claims don't need evidence
-        assert result.status in (MaudeLiteStatus.OK, MaudeLiteStatus.WARN)
+        assert result.status in (EvidenceGateStatus.OK, EvidenceGateStatus.WARN)
 
     def test_permissive_mode_warns_instead_of_blocks(self):
-        config = MaudeLiteConfig(strict=False)
-        lite = MaudeLite(config=config)
+        config = EvidenceGateConfig(strict=False)
+        lite = EvidenceGate(config=config)
         result = lite.check(
             task="test",
             context="./",
             output="This improves performance by 10x",
         )
         # In permissive mode, should WARN not BLOCK
-        assert result.status == MaudeLiteStatus.WARN
+        assert result.status == EvidenceGateStatus.WARN
         assert any("lacks evidence" in w for w in result.warnings)
 
     def test_contradiction_detected_and_warned(self):
-        lite = MaudeLite()
+        lite = EvidenceGate()
         # First check establishes prior claim - use explicit HARD claim pattern
         lite.check(
             task="test",
@@ -731,10 +731,10 @@ class TestMaudeLite:
         )
         # Should have warning about contradiction OR blocked for lack of evidence
         # (default action is warn for contradiction, block for missing evidence)
-        assert result.status in (MaudeLiteStatus.WARN, MaudeLiteStatus.BLOCKED)
+        assert result.status in (EvidenceGateStatus.WARN, EvidenceGateStatus.BLOCKED)
 
     def test_bad_exit_warned(self):
-        lite = MaudeLite()
+        lite = EvidenceGate()
         result = lite.check(
             task="test",
             context="./",
@@ -743,15 +743,15 @@ class TestMaudeLite:
         assert any("bad exit" in w for w in result.warnings)
 
     def test_format_status_ok(self):
-        lite = MaudeLite()
-        result = MaudeLiteOutput(status=MaudeLiteStatus.OK)
+        lite = EvidenceGate()
+        result = EvidenceGateOutput(status=EvidenceGateStatus.OK)
         formatted = lite.format_status(result)
         assert "OK" in formatted
 
     def test_format_status_blocked(self):
-        lite = MaudeLite()
-        result = MaudeLiteOutput(
-            status=MaudeLiteStatus.BLOCKED,
+        lite = EvidenceGate()
+        result = EvidenceGateOutput(
+            status=EvidenceGateStatus.BLOCKED,
             blocking_reasons=["claim lacks evidence"],
         )
         formatted = lite.format_status(result)
@@ -760,12 +760,12 @@ class TestMaudeLite:
         assert "To proceed" in formatted
 
     def test_claims_stored_for_contradiction_checking(self):
-        lite = MaudeLite()
+        lite = EvidenceGate()
         lite.check(task="test", context="./", output="This is safe")
         assert len(lite.prior_claims) >= 1
 
     def test_get_log_events(self):
-        lite = MaudeLite()
+        lite = EvidenceGate()
         lite.check(task="test", context="./", output="Test output")
         events = lite.get_log_events()
         assert any(e["event"] == "task_start" for e in events)
@@ -777,14 +777,14 @@ class TestMaudeLite:
 # =============================================================================
 
 
-class TestMaudeLiteWrapper:
-    """Tests for maude_lite_wrapper integration."""
+class TestEvidenceGateWrapper:
+    """Tests for evidence_gate_wrapper integration."""
 
     def test_wrapper_allows_clean_output(self):
         def clean_agent(task, context, **kwargs):
             return "Here's a simple implementation."
 
-        wrapped = maude_lite_wrapper(clean_agent)
+        wrapped = evidence_gate_wrapper(clean_agent)
         result = wrapped("test", "./")
         assert result == "Here's a simple implementation."
 
@@ -792,8 +792,8 @@ class TestMaudeLiteWrapper:
         def bad_agent(task, context, **kwargs):
             return "This guarantees 100% uptime"
 
-        config = MaudeLiteConfig(strict=True)
-        wrapped = maude_lite_wrapper(bad_agent, config=config)
+        config = EvidenceGateConfig(strict=True)
+        wrapped = evidence_gate_wrapper(bad_agent, config=config)
 
         with pytest.raises(BlockedError) as exc:
             wrapped("test", "./")
@@ -819,14 +819,14 @@ class TestCheckOutput:
 
     def test_quick_check(self):
         result = check_output("Simple output text")
-        assert isinstance(result, MaudeLiteOutput)
+        assert isinstance(result, EvidenceGateOutput)
 
     def test_quick_check_strict(self):
         result = check_output(
             "This improves performance by 10x",
             strict=True,
         )
-        assert result.status == MaudeLiteStatus.BLOCKED
+        assert result.status == EvidenceGateStatus.BLOCKED
 
 
 class TestFormatBlockingReason:
@@ -863,12 +863,12 @@ class TestFormatBlockingReason:
 # =============================================================================
 
 
-class TestMaudeLiteIntegration:
-    """Integration tests for Maude Lite."""
+class TestEvidenceGateIntegration:
+    """Integration tests for Evidence Gate."""
 
     def test_full_workflow(self):
         """Test complete validation workflow."""
-        lite = MaudeLite()
+        lite = EvidenceGate()
 
         # Task 1: Clean output
         result1 = lite.check(
@@ -877,7 +877,7 @@ class TestMaudeLiteIntegration:
             output="Added null check at line 47. The error was caused by missing input validation.",
         )
         # Should pass (or warn at most)
-        assert result1.status in (MaudeLiteStatus.OK, MaudeLiteStatus.WARN)
+        assert result1.status in (EvidenceGateStatus.OK, EvidenceGateStatus.WARN)
 
         # Task 2: Unsupported claim - use explicit pattern that triggers HARD claim
         result2 = lite.check(
@@ -886,7 +886,7 @@ class TestMaudeLiteIntegration:
             output="This improves performance by 100x with no side effects",
         )
         # Should be blocked (HARD claim without evidence)
-        assert result2.status == MaudeLiteStatus.BLOCKED
+        assert result2.status == EvidenceGateStatus.BLOCKED
 
     def test_with_logging(self):
         """Test that logging captures events."""
@@ -894,7 +894,7 @@ class TestMaudeLiteIntegration:
             log_path = Path(f.name)
 
         try:
-            lite = MaudeLite(log_path=log_path)
+            lite = EvidenceGate(log_path=log_path)
             lite.check(task="test", context="./", output="Test output")
 
             # Verify log file has content
@@ -907,7 +907,7 @@ class TestMaudeLiteIntegration:
 
     def test_chained_validation(self):
         """Test multiple validations building contradiction history."""
-        lite = MaudeLite()
+        lite = EvidenceGate()
 
         # Initial claim about performance
         lite.check(
@@ -925,7 +925,7 @@ class TestMaudeLiteIntegration:
 
         # Should detect contradiction and warn/record
         # Exact behavior depends on how patterns match
-        assert isinstance(result, MaudeLiteOutput)
+        assert isinstance(result, EvidenceGateOutput)
 
 
 # =============================================================================
@@ -938,13 +938,13 @@ class TestCLICommands:
 
     def test_config_command_available(self):
         """Verify config command exists in module."""
-        from governor.maude_lite import MaudeLiteConfig
-        config = MaudeLiteConfig()
+        from governor.evidence_gate import EvidenceGateConfig
+        config = EvidenceGateConfig()
         assert hasattr(config, "to_dict")
 
     def test_kernel_functions_importable(self):
         """Verify all kernel functions are importable."""
-        from governor.maude_lite import (
+        from governor.evidence_gate import (
             extract_claims,
             check_evidence,
             link_evidence_to_claims,

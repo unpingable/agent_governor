@@ -85,7 +85,7 @@ When the governor blocks a violation, you have three choices:
 | `2` or `revise` | `governor lite revise` | Update the constraint to match new reality |
 | `3` or `proceed` | `governor lite proceed` | Log as intentional exception, continue |
 
-> **Note**: In chat/interactive mode, you can also prefix with "maude" (e.g., `maude fix`).
+> **Note**: In chat/interactive mode, you can also prefix with "governor" (e.g., `governor fix`).
 
 ### Core CLI Commands
 

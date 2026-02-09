@@ -27,6 +27,13 @@ governor receipts --json         # Machine-readable output
 governor envelope                # Get/set operating mode (strict/exploratory)
 governor decay                   # Check for stale facts
 
+# Daemon (JSON-RPC control plane)
+governor serve                           # Unix socket (default)
+governor serve --stdio                   # Stdio mode (for Electron/Guvnah)
+governor serve --socket /path/to/sock    # Custom socket path
+governor serve --print-socket-path       # Print default socket path and exit
+governor serve --mode fiction            # Set governor mode
+
 # Integration
 governor hook install            # Install git pre-commit hook
 governor hook status             # Check hook status

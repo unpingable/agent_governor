@@ -81,6 +81,7 @@ src/governor/
 ├── git_governance.py     # Git governance: artifact integrity, cross-index validation, tagging discipline, pre-commit provenance
 ├── context_compact.py    # Context compact: loss-aware compaction with receipts, recovery store, summarizer
 ├── perforce.py           # Perforce governance: P4Client, changelist integrity, lock semantics, immutable releases, DOI mapping
+├── daemon.py             # Governor daemon: JSON-RPC 2.0 over stdio/Unix socket, 21 RPC methods, DaemonState
 │
 # W5 Writing Modules (Deferred 2, W5):
 ├── writing_patterns.py    # 18 pattern banks for governance/tone/regime detection

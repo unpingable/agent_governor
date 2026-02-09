@@ -16316,6 +16316,35 @@ def demo_show(ctx: click.Context, name: str, as_json: bool) -> None:
         click.echo(f"Content hash: {scenario.content_hash()}")
 
 
+# ---------------------------------------------------------------------------
+# Daemon (governor serve)
+# ---------------------------------------------------------------------------
+
+
+@cli.command("serve")
+@click.option("--stdio", is_flag=True, help="Serve over stdin/stdout (for Electron)")
+@click.option("--socket", "socket_path", default=None, type=click.Path(),
+              help="Custom Unix socket path")
+@click.option("--print-socket-path", is_flag=True,
+              help="Print default socket path and exit")
+@click.option("--mode", default="general",
+              help="Governor mode (general, fiction, code, nonfiction)")
+@click.pass_context
+def serve(ctx: click.Context, stdio: bool, socket_path: str | None,
+          print_socket_path: bool, mode: str) -> None:
+    """Start the governor daemon (JSON-RPC 2.0 control plane)."""
+    from .daemon import run_daemon, default_socket_path
+
+    gov_dir = get_governor_dir(ctx)
+
+    if print_socket_path:
+        click.echo(str(default_socket_path(gov_dir)))
+        return
+
+    sock = Path(socket_path) if socket_path else None
+    run_daemon(gov_dir, mode=mode, stdio=stdio, socket_path=sock)
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

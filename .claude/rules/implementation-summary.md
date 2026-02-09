@@ -72,6 +72,7 @@
 **Gate Receipt System (receipt_v1)** — Content-addressed decision receipts for governor gates. GateReceipt (8 fields: receipt_id, schema_version, timestamp, gate, verdict, subject_hash, evidence_hash, policy_hash). receipt_id = H(schema_v + gate + subject_hash + evidence_hash + policy_hash) — truly content-addressed, timestamp is metadata. Canonical JSON serialization. Split store: ReceiptStore (JSONL) + EvidenceStore (content-addressed blobs, sharded by hash[:2]). All gates wired: evidence_gate, intent_compiler, pre_commit, wrapper, continuity_checker. CLI `governor receipts {--gate,--verdict,--last,--json,--id,--evidence}`.
 **Maude Contract Tests** — Provider-side contract tests verifying Maude's Pydantic models deserialize Governor's actual HTTP responses. Docker-compose setup (governor + test runner). 55 active tests: health (3), sessions (7), governor (4), dashboard (7), intent compiler (34). Backend smoke stubs for Claude/Codex/Ollama (skipped by default). Run via `cd integration && bash run.sh`.
 **Intent Compiler** — Structured hypothesis-collapse for governance sessions. IntentFormPolicy (TEMPLATE_ONLY/VALIDATED_CUSTOM/CUSTOM_OK), IntentFormSchema (content-addressed), 3 built-in templates (session_start/task_scope/verification_config), mode-gated form policy (blast radius proportional), deterministic compilation (response + schema → Intent + ConstraintBlock), escape classification (4 heuristic categories), gate receipt emission. WebUI: modal overlay with dynamic form rendering, branch visualization, confidence bars. API: `/v2/intent/{templates,schema,validate,compile,policy}`.
+**Governor Daemon** — JSON-RPC 2.0 control plane over stdio or Unix socket. Content-Length framing (same as MCP server), async dispatcher, DaemonState (lazy-initialized subsystems), 21 RPC methods: governor.{hello,now,status}, sessions.{list,create,delete,get}, intent.{templates,schema,validate,compile,policy}, receipts.{list,detail}, scars.{list,history}, commit.{pending,fix,revise,proceed,exceptions}. CLI `governor serve {--stdio,--socket,--print-socket-path,--mode}`. Guvnah integration via child process stdio (rpc-client.ts replaces HTTP governor-client.ts). Dockerfile.daemon for containerized deployment.
 
 ## Test Counts by Module
 
@@ -160,5 +161,6 @@
 | Gate Receipt System | 50 |
 | Maude Contract Tests | 55 (+7 skipped) |
 | Intent Compiler | 131 |
+| Governor Daemon | 74 |
 
-**Total: ~10,320 tests** (10,260 unit + 61 integration)
+**Total: ~10,394 tests** (10,334 unit + 61 integration)

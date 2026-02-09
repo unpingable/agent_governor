@@ -1,0 +1,24 @@
+# Governor Daemon — JSON-RPC control plane over Unix socket.
+# Usage:
+#   docker build -f Dockerfile.daemon -t governor-daemon .
+#   docker run -v /path/to/project:/project governor-daemon
+#   docker run -v /path/to/project:/project governor-daemon --mode fiction
+#
+# The daemon exposes a Unix socket at /run/governor.sock inside the container.
+# Mount it out to connect from the host:
+#   docker run -v /path/to/project:/project -v /tmp:/run governor-daemon
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install agent_gov
+COPY pyproject.toml README.md ./
+COPY src/ src/
+RUN pip install --no-cache-dir -e .
+
+# Default governor dir is /project/.governor (mount your project at /project)
+ENV GOVERNOR_DIR=/project
+
+ENTRYPOINT ["governor", "serve", "--root", "/project"]
+CMD ["--socket", "/run/governor.sock"]

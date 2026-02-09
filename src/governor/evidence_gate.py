@@ -628,10 +628,12 @@ class EvidenceGate:
         self,
         config: EvidenceGateConfig | None = None,
         log_path: Path | None = None,
+        receipt_system: Any | None = None,
     ):
         self.config = config or EvidenceGateConfig()
         self.logger = EvidenceGateLogger(log_path)
         self.prior_claims: list[EvidenceGateClaim] = []
+        self._receipt_system = receipt_system  # GateReceiptSystem or None
 
     def check(
         self,
@@ -740,7 +742,42 @@ class EvidenceGate:
 
         self.logger.log("output", status=result.status.value, warnings=result.warnings, blocking_reasons=result.blocking_reasons)
 
+        # Emit gate receipt (if receipt system is configured)
+        self._emit_receipt(output, result)
+
         return result
+
+    def _emit_receipt(self, output: str, result: EvidenceGateOutput) -> None:
+        """Emit a gate receipt for this check.
+
+        If no receipt_system is configured, logs a 'receipt_suppressed' event
+        so the absence is auditable.
+        """
+        if self._receipt_system is None:
+            self.logger.log("receipt_suppressed", reason="no receipt system configured")
+            return
+
+        verdict_map = {
+            EvidenceGateStatus.OK: "pass",
+            EvidenceGateStatus.WARN: "warn",
+            EvidenceGateStatus.BLOCKED: "block",
+        }
+
+        evidence_bundle = {
+            "claims": [c.to_dict() for c in result.claims],
+            "blocking_reasons": result.blocking_reasons,
+            "warnings": result.warnings,
+            "claim_ids": result.claim_ids,
+        }
+
+        self._receipt_system.emit(
+            gate="evidence_gate",
+            verdict=verdict_map[result.status],
+            subject_kind="text",
+            subject_bytes=output.encode("utf-8"),
+            evidence_bundle=evidence_bundle,
+            gate_config=self.config.to_dict(),
+        )
 
     def validate_input(self, input_data: EvidenceGateInput) -> EvidenceGateOutput:
         """
@@ -817,6 +854,7 @@ class BlockedError(Exception):
 def evidence_gate_wrapper(
     agent_fn: AgentFn,
     config: EvidenceGateConfig | None = None,
+    receipt_system: Any | None = None,
 ) -> Callable[[str, str], str]:
     """
     Wrap any agent function with Evidence Gate validation.
@@ -828,7 +866,7 @@ def evidence_gate_wrapper(
 
         result = my_agent("fix bug", "./src/")  # Validated!
     """
-    lite = EvidenceGate(config=config)
+    lite = EvidenceGate(config=config, receipt_system=receipt_system)
 
     def wrapped(task: str, context: str, **kwargs: Any) -> str:
         # Get agent output

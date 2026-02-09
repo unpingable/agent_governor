@@ -1,0 +1,23 @@
+# Contract test runner: installs maude at runtime (volume), runs pytest.
+
+FROM python:3.11-slim
+
+WORKDIR /tests
+
+# Install test dependencies at build time
+RUN pip install --no-cache-dir pytest pytest-asyncio httpx pydantic
+
+# Copy all test files and config
+COPY pytest.ini .
+COPY conftest.py .
+COPY test_contract_health.py .
+COPY test_contract_sessions.py .
+COPY test_contract_governor.py .
+COPY test_contract_dashboard.py .
+COPY test_contract_streaming.py .
+COPY test_backend_claude.py .
+COPY test_backend_codex.py .
+COPY test_backend_ollama.py .
+
+# maude is bind-mounted at /maude at runtime
+ENTRYPOINT ["sh", "-c", "pip install -e /maude && pytest /tests/ -v --tb=short -x"]

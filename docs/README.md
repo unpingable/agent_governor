@@ -46,6 +46,13 @@ How you interact with the governor:
 
 ---
 
+## Foundations
+
+Core design principles and how they map to real-world accountability:
+
+- [ADMISSIBILITY.md](ADMISSIBILITY.md) - Admissibility vs correctness: why receipts prove process, not outcomes
+- [COMPLIANCE.md](COMPLIANCE.md) - Fiduciary law mapping (ERISA, SEC, process-based prudence)
+
 ## Architecture
 
 For understanding the system internals:
@@ -163,6 +170,10 @@ Open **http://localhost:8001** (fiction) or **http://localhost:8002** (code)
 - [interfaces/webui.md](interfaces/webui.md) - WebUI setup and usage
 - [interfaces/vscode.md](interfaces/vscode.md) - VS Code extension
 - [interfaces/cli.md](interfaces/cli.md) - Complete CLI reference
+
+### Foundations
+- [ADMISSIBILITY.md](ADMISSIBILITY.md) - Admissibility vs correctness
+- [COMPLIANCE.md](COMPLIANCE.md) - Fiduciary and regulatory mapping
 
 ### Architecture
 - [architecture/OVERVIEW.md](architecture/OVERVIEW.md) - System architecture

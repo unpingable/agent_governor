@@ -73,6 +73,7 @@ src/governor/
 ├── check.py          # Position, Range, CheckFinding, CheckResult, run_check (unified check aggregation for VS Code)
 ├── viewmodel.py      # GovernorViewModel (schema v2), 8 section builders, read-only state derivation, V1 compat
 ├── evidence_gate.py  # EvidenceGate, evidence-gated coding harness, claim extraction, evidence linking, custody scoring
+├── gate_receipt.py   # GateReceipt, content-addressed decision receipts, EvidenceStore, ReceiptStore, canonical JSON
 ├── violation_resolver.py # ViolationResolver, PendingViolation, ResolutionAction, ExceptionRecord, fix/revise/proceed actions
 ├── interferometry.py  # Interferometry: parallel + serial multi-model claim comparison, alignment, signals, ledger promotion, store
 ├── code_interferometry.py # Code interferometry: risk markers (19 types), anchor conflicts, tier determination, CheckFinding bridge
@@ -134,6 +135,21 @@ src/ops_governor/
 ├── verifiers.py      # RunbookVerifier, TimeWindowVerifier, BlastRadiusVerifier, PreconditionChainVerifier
 ├── policy.py         # PolicyRegistry, operational policy enforcement
 └── cli.py            # ops-gov CLI
+
+integration/
+├── docker-compose.contract.yml  # Governor + test runner services
+├── Dockerfile.contract           # Test runner image (installs maude at runtime)
+├── pytest.ini                    # asyncio_mode = auto
+├── conftest.py                   # GovernorClient fixture, wait_for_governor
+├── run.sh                        # One-command entry point
+├── test_contract_health.py       # 3 tests: HealthResponse shape
+├── test_contract_sessions.py     # 7 tests: session CRUD + message append
+├── test_contract_governor.py     # 4 tests: /governor/now + /governor/status
+├── test_contract_dashboard.py    # 7 tests: v2 dashboard + runs
+├── test_contract_streaming.py    # 1 test: SSE streaming (skipped by default)
+├── test_backend_claude.py        # 2 tests: Claude Code smoke (skipped by default)
+├── test_backend_codex.py         # 2 tests: Codex smoke (skipped by default)
+└── test_backend_ollama.py        # 2 tests: Ollama smoke (skipped by default)
 
 vscode-governor/
 ├── package.json              # Extension manifest, commands, settings, TreeView contributions

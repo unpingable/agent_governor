@@ -69,6 +69,8 @@
 **Git Governance** — Integrity invariants at commit boundaries. Artifact integrity, cross-index validation (DOI/version tags), tagging discipline, pre-commit provenance. Profile-based severity (greenfield→production), YAML config, secrets check integration. CLI `governor git-gov {status,check,artifacts,cross-index,pre-commit,verify-tag,set-profile,allowlist}`.
 **Context Compact** — Loss-aware context compaction with receipts. ContextCompactor, CompactionReceipt, DroppedItem, Turn, Conversation types. SimpleSummarizer, RecoveryStore (dropped content retrieval), ReceiptStore (compaction history). Preserves decisions/anchors/constraints/authority, emits explicit loss records. CLI `governor context {status,config,receipts,recover,cleanup}`.
 **Perforce Support** — Integrity invariants on explicit authority substrate. P4Client (CLI wrapper, graceful fallback), P4Governor (changelist integrity, lock semantics, immutable releases, DOI mapping). Profile-based severity. P4 trigger integration. CLI `governor p4 {status,check,pre-submit,locks,release tag/check,doi map/verify/list}`.
+**Gate Receipt System (receipt_v1)** — Content-addressed decision receipts for governor gates. GateReceipt (8 fields: receipt_id, schema_version, timestamp, gate, verdict, subject_hash, evidence_hash, policy_hash). receipt_id = H(schema_v + gate + subject_hash + evidence_hash + policy_hash) — truly content-addressed, timestamp is metadata. Canonical JSON serialization. Split store: ReceiptStore (JSONL) + EvidenceStore (content-addressed blobs, sharded by hash[:2]). EvidenceGate wired to emit on every check() or log receipt_suppressed. CLI `governor receipts {--gate,--verdict,--last,--json,--id,--evidence}`.
+**Maude Contract Tests** — Provider-side contract tests verifying Maude's Pydantic models deserialize Governor's actual HTTP responses. Docker-compose setup (governor + test runner). 21 active tests: health (3), sessions (7), governor (4), dashboard (7). Backend smoke stubs for Claude/Codex/Ollama (skipped by default). Run via `cd integration && bash run.sh`.
 
 ## Test Counts by Module
 
@@ -154,5 +156,7 @@
 | Git Governance | 99 |
 | Context Compact | 49 |
 | Perforce Support | 71 |
+| Gate Receipt System | 50 |
+| Maude Contract Tests | 21 (+7 skipped) |
 
-**Total: ~7890 tests**
+**Total: ~7960 tests**

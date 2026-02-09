@@ -731,6 +731,77 @@ def rejections(ctx: click.Context, limit: int, json_output: bool) -> None:
 
 
 @cli.command()
+@click.option("--gate", "-g", default=None, help="Filter by gate name (e.g. evidence_gate)")
+@click.option("--verdict", "-v", default=None, type=click.Choice(["pass", "warn", "block"]),
+              help="Filter by verdict")
+@click.option("--last", "-n", default=20, help="Number of receipts to show")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--id", "receipt_id", default=None, help="Show a specific receipt by ID")
+@click.option("--evidence", is_flag=True, help="Include evidence bundle (with --id or --json)")
+@click.pass_context
+def receipts(ctx: click.Context, gate: str | None, verdict: str | None,
+             last: int, as_json: bool, receipt_id: str | None, evidence: bool) -> None:
+    """
+    Query gate receipts.
+
+    Gate receipts are content-addressed decision records emitted by governor
+    gates (evidence gate, pre-commit, wrapper, etc.).  Each receipt proves
+    that a gate checked a subject and reached a verdict.
+
+    \b
+    Examples:
+        governor receipts                           # Last 20 receipts
+        governor receipts --gate evidence_gate      # Filter by gate
+        governor receipts --verdict block --last 10 # Last 10 blocks
+        governor receipts --id abc123... --evidence # Show receipt + evidence
+        governor receipts --json                    # Machine-readable
+    """
+    gov_dir = ensure_initialized(ctx)
+
+    from .gate_receipt import GateReceiptSystem
+
+    system = GateReceiptSystem(gov_dir)
+
+    # Single receipt lookup
+    if receipt_id:
+        receipt = system.receipt_store.get_by_id(receipt_id)
+        if receipt is None:
+            click.echo(f"Receipt not found: {receipt_id}")
+            ctx.exit(1)
+            return
+        output: dict = receipt.to_dict()
+        if evidence:
+            blob = system.evidence_for(receipt)
+            output["evidence"] = blob
+        click.echo(json.dumps(output, indent=2))
+        return
+
+    results = system.query(gate=gate, verdict=verdict, limit=last)
+
+    if not results:
+        click.echo("No receipts found.")
+        return
+
+    if as_json:
+        items = []
+        for r in results:
+            item = r.to_dict()
+            if evidence:
+                item["evidence"] = system.evidence_for(r)
+            items.append(item)
+        click.echo(json.dumps(items, indent=2))
+        return
+
+    click.echo(f"Gate receipts ({len(results)}, newest first):\n")
+    for r in results:
+        verdict_icon = {"pass": "OK", "warn": "WARN", "block": "BLOCK"}
+        icon = verdict_icon.get(r.verdict, r.verdict)
+        click.echo(f"  [{icon:>5}] {r.receipt_id[:12]}...  gate={r.gate}  {r.timestamp}")
+
+    click.echo(f"\nUse --id <receipt_id> --evidence to inspect a specific receipt.")
+
+
+@cli.command()
 @click.argument("mode", type=click.Choice(["exploratory", "strict"]), required=False)
 @click.option("--clear", "-c", is_flag=True, help="Clear envelope override, use default")
 @click.pass_context
@@ -10265,7 +10336,15 @@ def lite_check(ctx, text, use_stdin, file, task, strict, fmt):
         return
 
     config = EvidenceGateConfig(strict=strict)
-    gate = EvidenceGate(config=config)
+
+    # Wire receipt system if governor is initialized
+    receipt_system = None
+    gov_dir = get_governor_dir(ctx)
+    if gov_dir.exists():
+        from .gate_receipt import GateReceiptSystem
+        receipt_system = GateReceiptSystem(gov_dir)
+
+    gate = EvidenceGate(config=config, receipt_system=receipt_system)
     result = gate.check(task=task, context="", output=content)
 
     if fmt == "json":
@@ -10286,7 +10365,14 @@ def gate_validate(ctx, path, task, strict, fmt):
 
     content = Path(path).read_text()
     config = EvidenceGateConfig(strict=strict)
-    gate = EvidenceGate(config=config)
+
+    receipt_system = None
+    gov_dir = get_governor_dir(ctx)
+    if gov_dir.exists():
+        from .gate_receipt import GateReceiptSystem
+        receipt_system = GateReceiptSystem(gov_dir)
+
+    gate = EvidenceGate(config=config, receipt_system=receipt_system)
     result = gate.check(task=task, context=str(path), output=content)
 
     if fmt == "json":

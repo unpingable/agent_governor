@@ -190,6 +190,34 @@ Same engine, different constraints. The governor doesn't care what domain you're
 
 ---
 
+## Admissibility, Not Correctness
+
+This system does not prove agents are "right." It proves whether an action was **admissible** under declared rules, evidence, and risk constraints at the time it was taken.
+
+Outcomes are stochastic. A decision can be reasonable and still fail. If correctness were defined by outcome, every losing trade would be malpractice.
+
+What a receipt proves:
+
+- **Authorization**: the agent was allowed to take this action under an explicit policy
+- **Constraints**: the action satisfied (or violated) declared limits
+- **Evidence basis**: what was checked, what remained unresolved, which gates passed
+- **Waivers**: any override was intentional, attributed, and leaves a scar
+
+When outcomes are bad, the question shifts from "why did it do that?" (storytime) to **"was this admissible under the declared rules?"** (audit). That's liability routing, not exculpation.
+
+### Constraints and Authority
+
+AI may propose constraints. Humans sign them. Enforcement is mechanical.
+
+- **AI** = generative, fallible, advisory
+- **Governor** = rigid, boring, enforceable
+
+A constraint becomes active only when pinned, scoped, and explicitly signed. Actions outside the safe envelope require an attributed waiver. There is no silent bypass.
+
+> [Full treatment: docs/ADMISSIBILITY.md](docs/ADMISSIBILITY.md) | [Compliance mapping: docs/COMPLIANCE.md](docs/COMPLIANCE.md)
+
+---
+
 ## Comparison: Memory vs Governance
 
 | | Memory Tools | Agent Governor |
@@ -282,6 +310,8 @@ bash start-codex.sh                      # Codex backend
 | `BUILD_SPEC.md` | Step-by-step build guide, FSM, receipt design |
 | `MULTI_AGENT.md` | Concurrency model, conflict detection, dispatcher |
 | `CONTRIBUTING.md` | Branch workflow, testing requirements |
+| `docs/ADMISSIBILITY.md` | Why receipts prove admissibility, not outcome correctness |
+| `docs/COMPLIANCE.md` | Fiduciary law mapping (ERISA, SEC, process-based prudence) |
 | `specs/` | 25+ design specs (core theory, UX, interferometry) |
 | `docs/` | User guides, architecture docs, mode-specific guides |
 

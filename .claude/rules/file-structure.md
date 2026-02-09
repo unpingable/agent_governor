@@ -95,16 +95,16 @@ src/governor/
 ├── writing_code.py        # Code-specific constraints from code.md spec
 ├── writing_router.py      # Writing-aware routing from specs
 │
+# Intent Compiler:
+├── intent_compiler.py     # IntentFormPolicy, IntentFormSchema, compile_intent, BUILTIN_TEMPLATES, receipt emission
+│
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
 ├── ledger.py         # Original CodebaseLedger
 ├── validators.py     # Original validators
 └── types.py          # Original type definitions
 
-src/webui/
-├── adapter.py        # FastAPI adapter with OpenAI-compatible API, governor endpoints, backend switching
-└── static/
-    └── index.html    # Combined chat + governor sidebar UI
+# WebUI extracted to separate repo: ~/git/gov-webui (github.com/unpingable/governor_webui)
 
 src/fiction_governor/
 ├── __init__.py       # Public API exports

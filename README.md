@@ -98,19 +98,27 @@ ops-gov verify --runbook deploy-v2.yaml --window maintenance
 
 ## Architecture
 
-```mermaid
-graph TD
-    A["🔧 Coding Agent\nProduces patches + pointers"]
-    A -->|propose| GOV
-
-    subgraph GOV ["GOVERNOR — THE CHOKE POINT"]
-        direction TB
-        B1["Verifiers\nRuns checks, produces receipts"]
-        B2["Ledgers\nfacts/ (decays) · decisions/ (persists)"]
-        B3["Epistemic\nProvenance, confidence, evidence"]
-    end
-
-    GOV -->|only if verified| C["Working Tree\nActual writes happen here"]
+```
+    ┌──────────────────────────────────────────────┐
+    │           🔧  Coding Agent                   │
+    │       Produces patches + pointers            │
+    └──────────────────┬───────────────────────────┘
+                       │ propose
+                       ▼
+    ╔══════════════════════════════════════════════╗
+    ║       GOVERNOR — THE CHOKE POINT            ║
+    ║                                             ║
+    ║  Verifiers · Runs checks, produces receipts ║
+    ║  Ledgers   · facts/ (decays)                ║
+    ║             decisions/ (persists)            ║
+    ║  Epistemic · Provenance, confidence         ║
+    ╚══════════════════╤══════════════════════════╝
+                       │ only if verified
+                       ▼
+    ┌──────────────────────────────────────────────┐
+    │           Working Tree                       │
+    │       Actual writes happen here              │
+    └──────────────────────────────────────────────┘
 ```
 
 **Threat model:**

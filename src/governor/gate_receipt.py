@@ -31,7 +31,7 @@ from typing import Any
 # Schema
 # =============================================================================
 
-RECEIPT_SCHEMA_VERSION = 1
+RECEIPT_SCHEMA_VERSION = 2
 
 
 # =============================================================================
@@ -106,6 +106,13 @@ class GateReceipt:
         subject_hash     H(subject_kind + \\x00 + subject_bytes)
         evidence_hash    H(canonical_json(evidence_bundle))
         policy_hash      H(canonical_json(gate_config))
+        principal_id     Who initiated the action (default "local")
+        tenant_id        Isolation boundary (default "default")
+        auth_method      How the principal was authenticated (default "none")
+
+    principal_id, tenant_id, and auth_method are metadata (like timestamp) —
+    they do NOT affect receipt_id.  They exist so the audit log has the right
+    shape before multi-tenant auth is implemented.
     """
 
     receipt_id: str
@@ -116,6 +123,9 @@ class GateReceipt:
     subject_hash: str
     evidence_hash: str
     policy_hash: str
+    principal_id: str = "local"
+    tenant_id: str = "default"
+    auth_method: str = "none"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -127,6 +137,9 @@ class GateReceipt:
             "subject_hash": self.subject_hash,
             "evidence_hash": self.evidence_hash,
             "policy_hash": self.policy_hash,
+            "principal_id": self.principal_id,
+            "tenant_id": self.tenant_id,
+            "auth_method": self.auth_method,
         }
 
     def to_json(self) -> str:
@@ -143,6 +156,9 @@ class GateReceipt:
             subject_hash=data["subject_hash"],
             evidence_hash=data["evidence_hash"],
             policy_hash=data["policy_hash"],
+            principal_id=data.get("principal_id", "local"),
+            tenant_id=data.get("tenant_id", "default"),
+            auth_method=data.get("auth_method", "none"),
         )
 
 
@@ -154,6 +170,9 @@ def create_receipt(
     evidence_bundle: dict[str, Any],
     gate_config: dict[str, Any],
     timestamp: str | None = None,
+    principal_id: str = "local",
+    tenant_id: str = "default",
+    auth_method: str = "none",
 ) -> GateReceipt:
     """Create a GateReceipt with proper content-addressed identity."""
     ts = timestamp or datetime.now(timezone.utc).isoformat()
@@ -172,6 +191,9 @@ def create_receipt(
         subject_hash=s_hash,
         evidence_hash=e_hash,
         policy_hash=p_hash,
+        principal_id=principal_id,
+        tenant_id=tenant_id,
+        auth_method=auth_method,
     )
 
 
@@ -312,6 +334,9 @@ class GateReceiptSystem:
         evidence_bundle: dict[str, Any],
         gate_config: dict[str, Any],
         timestamp: str | None = None,
+        principal_id: str = "local",
+        tenant_id: str = "default",
+        auth_method: str = "none",
     ) -> GateReceipt:
         """Create receipt, store evidence, append receipt to log."""
         # Store evidence blob (deduped by content)
@@ -325,6 +350,9 @@ class GateReceiptSystem:
             evidence_bundle=evidence_bundle,
             gate_config=gate_config,
             timestamp=timestamp,
+            principal_id=principal_id,
+            tenant_id=tenant_id,
+            auth_method=auth_method,
         )
         # Append to log
         self.receipt_store.append(receipt)

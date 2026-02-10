@@ -211,7 +211,8 @@ class TestGateReceiptSerialization:
         d = r.to_dict()
         for field in ("receipt_id", "schema_version", "timestamp",
                       "gate", "verdict", "subject_hash", "evidence_hash",
-                      "policy_hash"):
+                      "policy_hash", "principal_id", "tenant_id",
+                      "auth_method"):
             assert field in d, f"Missing field: {field}"
 
     def test_frozen(self):
@@ -221,6 +222,102 @@ class TestGateReceiptSerialization:
         )
         with pytest.raises(AttributeError):
             r.gate = "other"  # type: ignore
+
+
+# =============================================================================
+# Principal / Tenant metadata
+# =============================================================================
+
+
+class TestPrincipalTenantMetadata:
+    """Schema v2: principal_id, tenant_id, auth_method as no-op defaults."""
+
+    def test_defaults(self):
+        r = create_receipt(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+        )
+        assert r.principal_id == "local"
+        assert r.tenant_id == "default"
+        assert r.auth_method == "none"
+
+    def test_custom_values(self):
+        r = create_receipt(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+            principal_id="user:alice", tenant_id="acme-corp",
+            auth_method="api_key",
+        )
+        assert r.principal_id == "user:alice"
+        assert r.tenant_id == "acme-corp"
+        assert r.auth_method == "api_key"
+
+    def test_round_trip(self):
+        r = create_receipt(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+            principal_id="user:bob", tenant_id="tenant-42",
+            auth_method="oauth",
+        )
+        d = r.to_dict()
+        r2 = GateReceipt.from_dict(d)
+        assert r2.principal_id == "user:bob"
+        assert r2.tenant_id == "tenant-42"
+        assert r2.auth_method == "oauth"
+
+    def test_backward_compat_v1_receipt(self):
+        """v1 receipts (without principal/tenant fields) deserialize with defaults."""
+        v1_dict = {
+            "receipt_id": "abc123",
+            "schema_version": 1,
+            "timestamp": "2024-01-01T00:00:00Z",
+            "gate": "evidence_gate",
+            "verdict": "pass",
+            "subject_hash": "s",
+            "evidence_hash": "e",
+            "policy_hash": "p",
+        }
+        r = GateReceipt.from_dict(v1_dict)
+        assert r.principal_id == "local"
+        assert r.tenant_id == "default"
+        assert r.auth_method == "none"
+
+    def test_metadata_not_in_receipt_id(self):
+        """principal_id/tenant_id do NOT affect receipt_id (metadata, not identity)."""
+        base = dict(gate="g", verdict="pass", subject_kind="text",
+                    subject_bytes=b"same", evidence_bundle={}, gate_config={})
+        r1 = create_receipt(**base, principal_id="alice")
+        r2 = create_receipt(**base, principal_id="bob")
+        assert r1.receipt_id == r2.receipt_id
+
+    def test_in_serialized_json(self):
+        r = create_receipt(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+        )
+        parsed = json.loads(r.to_json())
+        assert parsed["principal_id"] == "local"
+        assert parsed["tenant_id"] == "default"
+        assert parsed["auth_method"] == "none"
+
+    def test_schema_version_is_2(self):
+        assert RECEIPT_SCHEMA_VERSION == 2
+
+    def test_emit_passes_through(self, tmp_path):
+        system = GateReceiptSystem(tmp_path)
+        receipt = system.emit(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+            principal_id="user:carol", tenant_id="org-7",
+            auth_method="mtls",
+        )
+        assert receipt.principal_id == "user:carol"
+        assert receipt.tenant_id == "org-7"
+        assert receipt.auth_method == "mtls"
+        # Verify persisted
+        found = system.receipt_store.get_by_id(receipt.receipt_id)
+        assert found is not None
+        assert found.principal_id == "user:carol"
 
 
 # =============================================================================

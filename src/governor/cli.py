@@ -10632,6 +10632,8 @@ def gate_exceptions(ctx, fmt):
             click.echo(f"  {exc.id} [{exc.scope}]")
             click.echo(f"    Created: {exc.created_at}")
             click.echo(f"    Mode: {exc.mode}")
+            if exc.receipt_id:
+                click.echo(f"    Receipt: {exc.receipt_id}")
             if exc.expiry:
                 click.echo(f"    Expiry: {exc.expiry}")
             for v in exc.violations[:2]:
@@ -16314,6 +16316,48 @@ def demo_show(ctx: click.Context, name: str, as_json: bool) -> None:
         if scenario.tags:
             click.echo(f"Tags: {', '.join(scenario.tags)}")
         click.echo(f"Content hash: {scenario.content_hash()}")
+
+
+# ---------------------------------------------------------------------------
+# Self-Check (governor selfcheck)
+# ---------------------------------------------------------------------------
+
+
+@cli.command("selfcheck")
+@click.option("--full", is_flag=True, help="Include cross-ledger consistency checks")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def selfcheck(ctx: click.Context, full: bool, as_json: bool) -> None:
+    """Run self-check on governor store integrity."""
+    from .selfcheck import run_selfcheck
+
+    gov_dir = ensure_initialized(ctx)
+    scope = "full" if full else "fast"
+    items = run_selfcheck(gov_dir, scope=scope)
+
+    if as_json:
+        click.echo(json.dumps({
+            "items": [i.to_dict() for i in items],
+            "overall": "ok" if all(i.status == "ok" for i in items) else "degraded",
+        }, indent=2))
+    else:
+        all_ok = True
+        for item in items:
+            if item.status == "ok":
+                symbol = "+"
+            elif item.status == "warn":
+                symbol = "!"
+                all_ok = False
+            else:
+                symbol = "X"
+                all_ok = False
+            click.echo(f"  [{symbol}] {item.name}: {item.detail}")
+
+        click.echo()
+        if all_ok:
+            click.echo("Self-check: OK")
+        else:
+            click.echo("Self-check: DEGRADED")
 
 
 # ---------------------------------------------------------------------------

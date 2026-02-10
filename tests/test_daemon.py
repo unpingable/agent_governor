@@ -1,4 +1,4 @@
-"""Tests for the governor daemon — protocol, dispatcher, all 25 handlers."""
+"""Tests for the governor daemon — protocol, dispatcher, all 26 handlers."""
 
 import asyncio
 import json
@@ -877,6 +877,7 @@ class TestAllMethodsRegistered:
         "governor.hello",
         "governor.now",
         "governor.status",
+        "governor.selfcheck",
         "sessions.list",
         "sessions.create",
         "sessions.delete",
@@ -911,10 +912,10 @@ class TestAllMethodsRegistered:
         for method in self.EXPECTED_STREAMING_METHODS:
             assert method in d._streaming_handlers, f"Missing streaming handler: {method}"
 
-    def test_exactly_25_methods(self, dispatcher_and_state):
+    def test_exactly_26_methods(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 25
+        assert total == 26
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1858,3 +1859,301 @@ class TestChatPendingPreCheck:
         result = resp["result"]
         assert result["pending"] is None
         assert result["content"] == "Hello from the governed LLM"
+
+
+# =============================================================================
+# Receipt-Exception Linking in Daemon
+# =============================================================================
+
+
+class TestReceiptExceptionLinkingDaemon:
+    """Tests for receipt_id threading through daemon chat flow."""
+
+    @pytest.mark.asyncio
+    async def test_block_receipt_id_in_pending(self, state_with_mock_backend):
+        """When chat triggers a block, pending violation gets receipt_id."""
+        state = state_with_mock_backend
+
+        # Set up receipt store dirs
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        # Create a pending violation with receipt_id via the resolver
+        from governor.violation_resolver import ViolationResolver
+        resolver = ViolationResolver(state.governor_dir, mode="general")
+        pending = resolver.create_pending(
+            [{"anchor_id": "a1", "description": "test violation", "severity": "reject"}],
+            "blocked content",
+            "run_001",
+            receipt_id="test_receipt_123",
+        )
+        assert pending.receipt_id == "test_receipt_123"
+
+        # Verify it persisted
+        loaded = resolver.get_pending()
+        assert loaded is not None
+        assert loaded.receipt_id == "test_receipt_123"
+
+    @pytest.mark.asyncio
+    async def test_emit_chat_receipt_returns_receipt(self, state_with_mock_backend):
+        """_emit_chat_receipt returns a GateReceipt object."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        receipt = _emit_chat_receipt(state, "pass", "test content", "run_001")
+        assert receipt is not None
+        assert hasattr(receipt, "receipt_id")
+        assert receipt.receipt_id  # non-empty
+
+    @pytest.mark.asyncio
+    async def test_emit_chat_receipt_returns_none_on_error(self):
+        """_emit_chat_receipt returns None when receipt system fails."""
+        state = MagicMock()
+        state.receipt_system.emit.side_effect = RuntimeError("boom")
+        state.mode = "general"
+
+        result = _emit_chat_receipt(state, "pass", "test", "run")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_proceed_emits_resolution_receipt(self, state_with_mock_backend):
+        """Proceeding past a violation emits a resolution receipt."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        # Create pending violation
+        from governor.violation_resolver import ViolationResolver
+        resolver = ViolationResolver(state.governor_dir, mode="general")
+        state._violation_resolver = resolver
+        pending = resolver.create_pending(
+            [{"anchor_id": "a1", "description": "test", "severity": "reject"}],
+            "blocked",
+            "run_001",
+            receipt_id="original_block_receipt",
+        )
+
+        # Register handlers and send "proceed" command
+        d = Dispatcher()
+        register_handlers(d, state)
+
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "proceed"}],
+        })
+        result = resp["result"]
+        assert result["pending"] is None  # Resolved
+
+        # Verify resolution receipt was emitted
+        receipts = state.receipt_system.query(gate="violation_resolution")
+        assert len(receipts) >= 1
+        resolution_receipt = receipts[0]
+        assert resolution_receipt.verdict == "proceed"
+
+        # Verify evidence includes original receipt reference
+        evidence = state.receipt_system.evidence_for(resolution_receipt)
+        assert evidence is not None
+        assert evidence["original_receipt_id"] == "original_block_receipt"
+        assert evidence["action"] == "proceed"
+        assert evidence["exception_id"] is not None
+
+
+# =============================================================================
+# Handler: governor.selfcheck
+# =============================================================================
+
+
+class TestGovernorSelfcheck:
+
+    @pytest.mark.asyncio
+    async def test_selfcheck_fast(self, dispatcher_and_state):
+        """governor.selfcheck returns check items in fast mode."""
+        d, state = dispatcher_and_state
+        # Create required dirs
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        resp = await roundtrip(d, "governor.selfcheck", {"scope": "fast"})
+        result = resp["result"]
+        assert "items" in result
+        assert "overall" in result
+        assert result["overall"] == "ok"
+        # Fast scope has 5 checks
+        assert len(result["items"]) == 5
+
+    @pytest.mark.asyncio
+    async def test_selfcheck_full(self, dispatcher_and_state):
+        """governor.selfcheck --full returns 7 check items."""
+        d, state = dispatcher_and_state
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        resp = await roundtrip(d, "governor.selfcheck", {"scope": "full"})
+        result = resp["result"]
+        assert len(result["items"]) == 7
+        assert result["overall"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_selfcheck_default_scope(self, dispatcher_and_state):
+        """governor.selfcheck without scope defaults to fast."""
+        d, state = dispatcher_and_state
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        resp = await roundtrip(d, "governor.selfcheck")
+        result = resp["result"]
+        assert len(result["items"]) == 5
+
+
+# =============================================================================
+# Receipt evidence provenance + principal threading
+# =============================================================================
+
+
+class TestReceiptProvenance:
+    """Tests for backend_type, model, and principal_id in receipt evidence."""
+
+    @pytest.mark.asyncio
+    async def test_pass_receipt_has_backend_and_model(self, dispatcher_with_chat):
+        """Pass receipt evidence includes backend_type and model."""
+        d, state = dispatcher_with_chat
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hello"}],
+        })
+        assert resp["result"]["pending"] is None
+
+        receipts = state.receipt_system.query(gate="chat_bridge", verdict="pass")
+        assert len(receipts) >= 1
+        evidence = state.receipt_system.evidence_for(receipts[0])
+        assert evidence is not None
+        assert "backend_type" in evidence
+        assert evidence["backend_type"] == "mock"
+        assert "model" in evidence
+        assert "run_id" in evidence
+
+    @pytest.mark.asyncio
+    async def test_resolution_receipt_has_backend_and_model(
+        self, state_with_mock_backend
+    ):
+        """Resolution receipt evidence includes backend provenance."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        from governor.violation_resolver import ViolationResolver
+        resolver = ViolationResolver(state.governor_dir, mode="general")
+        state._violation_resolver = resolver
+        resolver.create_pending(
+            [{"anchor_id": "a1", "description": "test", "severity": "reject"}],
+            "blocked", "run_001",
+        )
+
+        d = Dispatcher()
+        register_handlers(d, state)
+        await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "proceed"}],
+        })
+
+        receipts = state.receipt_system.query(gate="violation_resolution")
+        assert len(receipts) >= 1
+        evidence = state.receipt_system.evidence_for(receipts[0])
+        assert "backend_type" in evidence
+        assert "model" in evidence
+
+
+class TestPrincipalIdThreading:
+    """Tests for principal_id threading from RPC params to receipts."""
+
+    @pytest.mark.asyncio
+    async def test_default_principal_is_local(self, dispatcher_with_chat):
+        """Without principal_id param, receipt gets 'local'."""
+        d, state = dispatcher_with_chat
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hi"}],
+        })
+
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) >= 1
+        assert receipts[0].principal_id == "local"
+
+    @pytest.mark.asyncio
+    async def test_principal_ignored_without_trust(self, state_with_mock_backend):
+        """Client-provided principal_id is ignored when trust is disabled."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        d = Dispatcher()
+        register_handlers(d, state)
+
+        await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hi"}],
+            "principal_id": "erin",
+        })
+
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) >= 1
+        # Should be "local", not "erin" — trust not enabled
+        assert receipts[0].principal_id == "local"
+
+    @pytest.mark.asyncio
+    async def test_principal_accepted_with_trust(self, state_with_mock_backend):
+        """Client-provided principal_id is used when trust is enabled."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        # Enable trust
+        with patch.dict(os.environ, {"TRUST_PRINCIPAL_FROM_CLIENT": "1"}):
+            # Re-init config cache
+            state._config = None
+
+            d = Dispatcher()
+            register_handlers(d, state)
+
+            await roundtrip(d, "chat.send", {
+                "messages": [{"role": "user", "content": "Hi"}],
+                "principal_id": "erin",
+            })
+
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) >= 1
+        assert receipts[0].principal_id == "erin"
+
+
+class TestDaemonStateTrustPrincipal:
+    """Tests for resolve_principal and trust_principal_from_client."""
+
+    def test_trust_disabled_by_default(self, state):
+        assert state.trust_principal_from_client is False
+
+    def test_resolve_defaults_to_local(self, state):
+        assert state.resolve_principal(None) == "local"
+        assert state.resolve_principal("") == "local"
+
+    def test_resolve_ignores_client_without_trust(self, state):
+        assert state.resolve_principal("erin") == "local"
+
+    def test_resolve_uses_client_with_trust(self, state):
+        with patch.dict(os.environ, {"TRUST_PRINCIPAL_FROM_CLIENT": "1"}):
+            state._config = None
+            assert state.resolve_principal("erin") == "erin"
+
+    def test_trust_from_config_file(self, tmp_gov_dir):
+        conf = tmp_gov_dir / "daemon.conf"
+        conf.write_text("[daemon]\ntrust_principal_from_client = true\n")
+        s = DaemonState(tmp_gov_dir)
+        assert s.trust_principal_from_client is True
+
+    def test_env_overrides_config(self, tmp_gov_dir):
+        conf = tmp_gov_dir / "daemon.conf"
+        conf.write_text("[daemon]\ntrust_principal_from_client = true\n")
+        with patch.dict(os.environ, {"TRUST_PRINCIPAL_FROM_CLIENT": "0"}):
+            s = DaemonState(tmp_gov_dir)
+            assert s.trust_principal_from_client is False

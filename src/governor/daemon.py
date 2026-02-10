@@ -406,27 +406,77 @@ class DaemonState:
         """Default model from config/env, or empty string."""
         return self._backend_kwargs.get("default_model", "")
 
+    @property
+    def trust_principal_from_client(self) -> bool:
+        """Whether to trust principal_id from RPC callers.
+
+        When False (default), daemon overwrites client-provided principal_id
+        with "untrusted". Enable only for trusted transports (LAN dev, stdio).
+
+        Set via TRUST_PRINCIPAL_FROM_CLIENT=1 env var or
+        daemon.trust_principal_from_client=true in daemon.conf.
+        """
+        env_val = os.environ.get("TRUST_PRINCIPAL_FROM_CLIENT", "").strip()
+        if env_val:
+            return env_val in ("1", "true", "yes")
+        return self.daemon_config.get(
+            "daemon.trust_principal_from_client", ""
+        ).lower() in ("1", "true", "yes")
+
+    def resolve_principal(self, client_principal: str | None) -> str:
+        """Resolve the effective principal_id for a request.
+
+        If trust is enabled and client provides a value, use it.
+        Otherwise default to "local".
+        """
+        if client_principal and self.trust_principal_from_client:
+            return client_principal
+        if client_principal and not self.trust_principal_from_client:
+            logger.debug(
+                "principal_id=%r from client ignored (trust not enabled)",
+                client_principal,
+            )
+        return "local"
+
 
 # =============================================================================
-# Handler registration — 21 RPC methods
+# Handler registration — 26 RPC methods
 # =============================================================================
 
 
 def _emit_chat_receipt(
-    state: DaemonState, verdict: str, content: str, run_id: str
-) -> None:
-    """Emit a gate receipt for a chat generation check."""
+    state: DaemonState,
+    verdict: str,
+    content: str,
+    run_id: str,
+    model: str = "",
+    principal_id: str = "local",
+) -> "GateReceipt | None":
+    """Emit a gate receipt for a chat generation check. Returns the receipt or None."""
     try:
-        state.receipt_system.emit(
+        from .gate_receipt import GateReceipt  # noqa: F811
+        receipt = state.receipt_system.emit(
             gate="chat_bridge",
             verdict=verdict,
             subject_kind="chat_response",
             subject_bytes=content.encode("utf-8"),
-            evidence_bundle={"run_id": run_id},
+            evidence_bundle={
+                "run_id": run_id,
+                "backend_type": state.backend_type,
+                "model": model,
+            },
             gate_config={"mode": state.mode},
+            principal_id=principal_id,
         )
+        return receipt
     except Exception:
-        logger.debug("receipt_suppressed: chat_bridge gate receipt failed")
+        logger.error(
+            "receipt_emit_failed: chat_bridge gate receipt not written"
+            " — audit linkage degraded (verdict=%s, run_id=%s, mode=%s, gov_dir=%s)",
+            verdict, run_id, state.mode, state.governor_dir,
+            exc_info=True,
+        )
+        return None
 
 
 async def _resolve_violation(
@@ -435,6 +485,7 @@ async def _resolve_violation(
     action: Any,
     bridge: Any,
     model: str,
+    principal_id: str = "local",
 ) -> dict:
     """Handle a resolution action for a pending violation.
 
@@ -450,6 +501,32 @@ async def _resolve_violation(
         result = state.violation_resolver.resolve_revise(pending)
     else:  # PROCEED
         result = state.violation_resolver.resolve_proceed(pending)
+
+    # Emit resolution receipt on PROCEED for audit trail
+    if action == ResolutionAction.PROCEED and result.success:
+        try:
+            state.receipt_system.emit(
+                gate="violation_resolution",
+                verdict="proceed",
+                subject_kind="exception",
+                subject_bytes=(result.exception_id or "").encode("utf-8"),
+                evidence_bundle={
+                    "exception_id": result.exception_id,
+                    "original_receipt_id": getattr(pending, "receipt_id", None),
+                    "action": "proceed",
+                    "backend_type": state.backend_type,
+                    "model": model,
+                },
+                gate_config={"mode": state.mode},
+                principal_id=principal_id,
+            )
+        except Exception:
+            logger.error(
+                "receipt_emit_failed: violation_resolution receipt not written"
+                " — resolution audit trail broken (exception_id=%s, mode=%s)",
+                result.exception_id, state.mode,
+                exc_info=True,
+            )
 
     content = ""
     if result.success:
@@ -803,6 +880,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         messages_raw = params.get("messages", [])
         model = params.get("model", "") or state.default_model
         context_id = params.get("context_id", "default")
+        principal_id = state.resolve_principal(params.get("principal_id"))
 
         if not messages_raw:
             raise ValueError("Missing required param: messages")
@@ -813,7 +891,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             last_msg = messages_raw[-1].get("content", "") if messages_raw else ""
             action = state.violation_resolver.is_resolution_command(last_msg)
             if action:
-                result = await _resolve_violation(state, pending, action, bridge, model)
+                result = await _resolve_violation(
+                    state, pending, action, bridge, model,
+                    principal_id=principal_id,
+                )
                 return result
             else:
                 # Re-present pending violation — don't proceed with generation
@@ -850,8 +931,17 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         )
 
         if isinstance(check_result, ViolationPendingResponse):
-            # Blocking violation — return pending
-            _emit_chat_receipt(state, "block", response.content, run_id)
+            # Blocking violation — emit receipt first, then link to pending
+            receipt = _emit_chat_receipt(
+                state, "block", response.content, run_id,
+                model=model, principal_id=principal_id,
+            )
+            if receipt is not None:
+                # Update the pending violation with the receipt_id
+                pending = state.violation_resolver.get_pending()
+                if pending is not None:
+                    pending.receipt_id = receipt.receipt_id
+                    state.violation_resolver._save_pending(pending)
             return {
                 "content": response.content,
                 "model": response.model,
@@ -863,7 +953,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
         # Non-blocking — format footer
         footer = _format_governor_footer(check_result, bridge.show_ok_footer)
-        _emit_chat_receipt(state, "pass", response.content, run_id)
+        _emit_chat_receipt(
+            state, "pass", response.content, run_id,
+            model=model, principal_id=principal_id,
+        )
 
         return {
             "content": response.content,
@@ -883,6 +976,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         messages_raw = params.get("messages", [])
         model = params.get("model", "") or state.default_model
         context_id = params.get("context_id", "default")
+        principal_id = state.resolve_principal(params.get("principal_id"))
 
         if not messages_raw:
             raise ValueError("Missing required param: messages")
@@ -893,7 +987,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             last_msg = messages_raw[-1].get("content", "") if messages_raw else ""
             action = state.violation_resolver.is_resolution_command(last_msg)
             if action:
-                result = await _resolve_violation(state, pending, action, bridge, model)
+                result = await _resolve_violation(
+                    state, pending, action, bridge, model,
+                    principal_id=principal_id,
+                )
                 return result
             else:
                 return {
@@ -936,7 +1033,15 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         )
 
         if isinstance(check_result, ViolationPendingResponse):
-            _emit_chat_receipt(state, "block", full_content, run_id)
+            receipt = _emit_chat_receipt(
+                state, "block", full_content, run_id,
+                model=model, principal_id=principal_id,
+            )
+            if receipt is not None:
+                pending = state.violation_resolver.get_pending()
+                if pending is not None:
+                    pending.receipt_id = receipt.receipt_id
+                    state.violation_resolver._save_pending(pending)
             return {
                 "content": full_content,
                 "model": model,
@@ -947,7 +1052,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             }
 
         footer = _format_governor_footer(check_result, bridge.show_ok_footer)
-        _emit_chat_receipt(state, "pass", full_content, run_id)
+        _emit_chat_receipt(
+            state, "pass", full_content, run_id,
+            model=model, principal_id=principal_id,
+        )
 
         return {
             "content": full_content,
@@ -1006,6 +1114,20 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("commit.revise", commit_revise)
     dispatcher.register("commit.proceed", commit_proceed)
     dispatcher.register("commit.exceptions", commit_exceptions)
+
+    # --- Selfcheck ---
+
+    async def governor_selfcheck(params: dict) -> dict:
+        """Run self-check on governor store integrity."""
+        from .selfcheck import run_selfcheck
+        scope = params.get("scope", "fast")
+        items = run_selfcheck(state.governor_dir, scope=scope)
+        return {
+            "items": [i.to_dict() for i in items],
+            "overall": "ok" if all(i.status == "ok" for i in items) else "degraded",
+        }
+
+    dispatcher.register("governor.selfcheck", governor_selfcheck)
 
     dispatcher.register("chat.send", chat_send)
     dispatcher.register_streaming("chat.stream", chat_stream)

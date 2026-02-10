@@ -133,6 +133,49 @@ def check_staged_files(
     return approved_list, unapproved_list
 
 
+def _emit_pre_commit_receipt(
+    gov_dir: Path,
+    verdict: str,
+    staged: list[str],
+    approved: list[str],
+    unapproved: list[str],
+) -> None:
+    """Emit a gate receipt for the pre-commit check."""
+    try:
+        from .gate_receipt import GateReceiptSystem
+    except ImportError:
+        return
+
+    if not gov_dir.exists():
+        return
+
+    system = GateReceiptSystem(gov_dir)
+
+    evidence_bundle = {
+        "staged_files": staged,
+        "approved_files": approved,
+        "unapproved_files": unapproved,
+    }
+
+    gate_config = {
+        "gate": "pre_commit",
+    }
+
+    subject_bytes = "\n".join(sorted(staged)).encode("utf-8")
+
+    try:
+        system.emit(
+            gate="pre_commit",
+            verdict=verdict,
+            subject_kind="staged_files",
+            subject_bytes=subject_bytes,
+            evidence_bundle=evidence_bundle,
+            gate_config=gate_config,
+        )
+    except Exception:
+        pass  # fail-open on receipt emission
+
+
 def run_pre_commit_check(
     git_root: Path | None = None,
     bypass: bool = False,
@@ -170,7 +213,11 @@ def run_pre_commit_check(
     approved, unapproved = check_staged_files(git_root, gov_dir, max_age_hours)
 
     if not unapproved:
+        _emit_pre_commit_receipt(gov_dir, "pass", staged, approved, unapproved)
         return True, f"All {len(approved)} file(s) approved by governor"
+
+    # Emit block receipt before returning rejection
+    _emit_pre_commit_receipt(gov_dir, "block", staged, approved, unapproved)
 
     # Build rejection message
     msg_lines = [

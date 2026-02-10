@@ -3,8 +3,8 @@
 ## Version 0.1 — Pre-Execution Constraint Projection
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - continuity.py          # AnchorRegistry, ContinuityChecker
   - profiles.py            # ProfileManager, ProfileSettings

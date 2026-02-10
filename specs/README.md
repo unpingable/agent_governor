@@ -19,6 +19,8 @@ The theoretical foundation and design contracts for the governor system.
 | Status | Meaning |
 |--------|---------|
 | `canonical` | Spec matches implementation. Source of truth. |
+| `implemented` | Feature built from spec. Spec is the design contract. |
+| `partial` | Backend data models implemented, frontend/wiring incomplete. |
 | `ahead` | Spec describes features not yet implemented. Roadmap. |
 | `behind` | Implementation evolved past spec. Spec needs update. |
 | `gap` | Feature doesn't exist yet. Spec defines what to build. |
@@ -65,17 +67,103 @@ The governor's theoretical foundation. Read in this order.
 | 19 | **SDK_MIDDLEWARE_SPEC.md** | Drop-in governor enforcement for Anthropic SDK. `GovernorMiddleware(Anthropic())`. `status: canonical` |
 | 20 | **SESSION_CONTINUITY_SPEC.md** | Capsule-based session management. Ledger + workspace, not chat replay. `status: canonical` |
 | 21 | **GOVERNED_COMPACT_SPEC.md** | Loss-aware context compaction with receipts. Anchors survive, loss explicit. `status: canonical` |
-| 22 | **AG2_DOCS_GAP_SPEC.md** | Documentation gaps: ADRs, subsystem docs, reference audit. `status: gap` |
-| 23 | **AG2_TEMPORAL_ATTACK_SURFACE_SPEC.md** | Δt-aware security analysis. Temporal risk markers, race windows, fail-open detection. `status: gap` |
+| 22 | **AG2_DOCS_GAP_SPEC.md** | Documentation gaps: ADRs, subsystem docs, reference audit. `status: implemented` |
+| 23 | **AG2_TEMPORAL_ATTACK_SURFACE_SPEC.md** | Δt-aware security analysis. Temporal risk markers, race windows, fail-open detection. `status: implemented` |
 
 ### Reading Guidance
 
 - **Specs 1–4** give you the theory. Read these to understand *why* things work the way they do.
 - **Specs 5–7** give you the surface. Read these to understand *how* the system talks to users.
 - **Specs 8–13** give you the mechanics. Read these when you need to work on specific subsystems.
-- **Specs 14–21** are now implemented (QA Harness, Git Governance, Perforce Support, External Constraint, MCP Safety, SDK Middleware, Session Continuity, Governed Compact).
-- **Specs 15–16, 21** are gap specs — features that don't exist yet but are designed.
-- You don't need all 21 to start building. Specs 1, 4, and 7 cover 80% of what matters.
+- **Specs 14–21** are implemented (QA Harness, Git Governance, Perforce Support, External Constraint, MCP Safety, SDK Middleware, Session Continuity, Governed Compact).
+- **Spec 22** (AG2_DOCS_GAP) is now implemented — 5 ADRs extracted to `docs/adr/`.
+- **Spec 23** (Temporal Attack Surface) is now implemented.
+- You don't need all 23 to start building. Specs 1, 4, and 7 cover 80% of what matters.
+
+---
+
+## AG2 Core Specs (2.0 + 2.1)
+
+The governor's v2 architecture: control theory foundation, run-centric instrumentation, and run-level governance.
+
+### Layer 0: Substrate
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **CONTROL_THEORY_SPEC.md** | R_t = PD/E. Single dimensionless ratio unifying regime detection, evidence gating, capability shaping. | `implemented` |
+| **AG2_INSTRUMENT_SPEC.md** | Append-only events, content-addressed artifacts, replayable runs. | `implemented` |
+| **SLIM_MODE_SPEC.md** | Single-developer governance. `governor decide`, `governor anchor`, `governor lock`. | `implemented` |
+
+### Layer 1: Control Plane
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **CONSTRAINT_COMPILER_SPEC.md** | Pre-execution constraint projection. Override warrants. Prefix budgeting. | `implemented` |
+| **DETECTOR_INTEGRATION_SPEC.md** | Sensor/controller boundary. 19-dim signal collapse to 5 control signals. | `implemented` |
+
+### Layer 2: New Math
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **COMMITMENT_TRANSPORT_SPEC.md** | Representational invariance under compression. MUST/SHOULD/MAY transport. | `implemented` |
+| **SPECTRAL_STABILITY_SPEC.md** | Coupling matrix verification. Hard block at ρ >= 1. Five kinetic regions. | `implemented` |
+| **SCALAR_COLLAPSE_SPEC.md** | Eigenstructure evaporation detection. Freeze auto-tuning on collapse. | `implemented` |
+
+### Layer 3: Interfaces
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **CLI_CHAT_SPEC.md** | Governed conversational CLI. `governor chat`, backend switching, quick interferometry. | `implemented` |
+| **MAUDE_RENAME_SPEC.md** | Rename maude_lite → evidence_gate. Evidence-gated coding harness. | `implemented` |
+
+### Layer 4: Docs + Polish
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **DOC_GOVERNANCE_SPEC.md** | Docs as governed artifacts. Authority scope, staleness, commitment preservation. | `implemented` |
+
+### Layer 2.1-A: Run Control
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **PHASE_CONTROL_SPEC.md** | SPECIFY→EXPLORE→DRAFT→VERIFY→COMMIT phases. Reserve budgets. Novelty debt. | `implemented` |
+| **ADMISSIBILITY_SPEC.md** | Push-back system. Unknown tracking. VoI-driven question selection. | `implemented` |
+| **METRICS_SPEC.md** | Severity-weighted coverage. Verification efficiency. | `implemented` |
+
+### Layer 2.1-B: Authority + Security
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **DEPLOYMENT_PROFILES_SPEC.md** | Authority classes (A1-A4). Two-phase commit. Capability tokens. | `implemented` |
+| **MEASUREMENT_INTEGRITY_SPEC.md** | Tidepool defense. Trust predicate. Instruction-masquerading detection. | `implemented` |
+| **RISK_FUNCTION_SPEC.md** | Scalar risk V. Risk-driven policy: profile demotion, tool freezing. | `implemented` |
+
+### Layer 2.1-C: Observability + Detection
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **COHERENCE_BUDGET_SPEC.md** | CBI ∈ [0,100]. Seven invariants, eight metrics, Δt squeeze. Closure gate. | `implemented` |
+| **MODE_DETECTION_SPEC.md** | Bayesian mode posterior. Drift detection blocks late-phase COMMIT. | `implemented` |
+| **EPISTEMIC_EVASION_SPEC.md** | 11 evasion operators. 5 failure modes. Forced coupling questions. | `implemented` |
+| **HYSTERESIS_SPEC.md** | Anti-churn. Asymmetric thresholds. Replan limiting. Regression detection. | `implemented` |
+
+### Layer 2.1-D: Multi-Agent
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **QUORUM_SPEC.md** | Severity-based gating (S1/S2/S3). Byzantine-lite. Two-man rule for S3. | `implemented` |
+
+### Reference
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **INVARIANTS_SPEC.md** | 10 invariants (A-J). Formal definitions, implementation cross-references. | `canonical` |
+
+### 3.0: Self-Governance (Deferred)
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **SELF_GOVERNANCE_SPEC.md** | Executor/proposer separation. Admissible measurements. Cross-model validation. Dual ledger. | `planning (deferred)` |
 
 ---
 
@@ -104,10 +192,10 @@ How surfaces behave. These reference core and interferometry specs for policy �
 | Spec | What It Covers |
 |------|----------------|
 | **WEBUI_UX_SPEC.md** | v1 chat-centric UI. Fiction and code mode panels. Violation modal. Corrections log. Empty states. |
-| **AG2_DASHBOARD_UX_SPEC.md** | v2 governance dashboard. Controls-left/output-right. Run-centric. Streaming. Cancel contract. Templates. `status: gap` |
+| **AG2_DASHBOARD_UX_SPEC.md** | v2 governance dashboard. Controls-left/output-right. Run-centric. Streaming. Cancel contract. Templates. `status: implemented` |
 | **CLI_UX_SPEC.md** | Layered command structure. `governor fiction` / `governor code` / `governor advanced`. Bare command experience. |
 | **VSCODE_UX_SPEC.md** | Gutter indicators, inline resolution, status bar, governor panel, Quick Fix integration. |
-| **AG2_WEBUI_DEMO_GAP_SPEC.md** | Playwright-based WebUI demo automation. Scripted screenshots, reproducible on release. `status: gap` |
+| **AG2_WEBUI_DEMO_GAP_SPEC.md** | Playwright-based WebUI demo automation. Scripted screenshots, reproducible on release. `status: implemented` |
 
 ### Design Principles (All Surfaces)
 

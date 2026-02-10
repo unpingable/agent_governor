@@ -817,3 +817,199 @@ class TestInteractiveResolutionFlow:
         # Verify we got an error
         assert result.status == "error"
         assert any(f.severity == "error" for f in result.findings)
+
+
+# =============================================================================
+# Receipt-Exception Linking Tests
+# =============================================================================
+
+
+class TestReceiptExceptionLinking:
+    """Tests for receipt_id linking between pending violations and exceptions."""
+
+    def test_pending_receipt_id_default_none(self):
+        """PendingViolation defaults to receipt_id=None."""
+        pv = PendingViolation(
+            id="pend_test",
+            context_id="ctx",
+            run_id="run",
+            violations=[{"anchor_id": "a1"}],
+            blocked_response="blocked",
+            timestamp="2025-01-01T00:00:00Z",
+            mode="code",
+        )
+        assert pv.receipt_id is None
+
+    def test_pending_receipt_id_set(self):
+        """PendingViolation can be created with receipt_id."""
+        pv = PendingViolation(
+            id="pend_test",
+            context_id="ctx",
+            run_id="run",
+            violations=[{"anchor_id": "a1"}],
+            blocked_response="blocked",
+            timestamp="2025-01-01T00:00:00Z",
+            mode="code",
+            receipt_id="abc123def456",
+        )
+        assert pv.receipt_id == "abc123def456"
+
+    def test_pending_receipt_id_round_trip(self):
+        """PendingViolation receipt_id survives to_dict/from_dict."""
+        pv = PendingViolation(
+            id="pend_test",
+            context_id="ctx",
+            run_id="run",
+            violations=[{"anchor_id": "a1"}],
+            blocked_response="blocked",
+            timestamp="2025-01-01T00:00:00Z",
+            mode="code",
+            receipt_id="receipt_xyz",
+        )
+        d = pv.to_dict()
+        assert d["receipt_id"] == "receipt_xyz"
+        restored = PendingViolation.from_dict(d)
+        assert restored.receipt_id == "receipt_xyz"
+
+    def test_pending_receipt_id_absent_in_dict_when_none(self):
+        """PendingViolation omits receipt_id from dict when None."""
+        pv = PendingViolation(
+            id="pend_test",
+            context_id="ctx",
+            run_id="run",
+            violations=[],
+            blocked_response="blocked",
+            timestamp="2025-01-01T00:00:00Z",
+            mode="code",
+        )
+        d = pv.to_dict()
+        assert "receipt_id" not in d
+
+    def test_pending_from_dict_missing_receipt_id(self):
+        """from_dict handles missing receipt_id gracefully (backward compat)."""
+        data = {
+            "id": "pend_test",
+            "context_id": "ctx",
+            "run_id": "run",
+            "violations": [],
+            "blocked_response": "blocked",
+            "timestamp": "2025-01-01T00:00:00Z",
+            "mode": "code",
+            "status": "pending",
+        }
+        pv = PendingViolation.from_dict(data)
+        assert pv.receipt_id is None
+
+    def test_exception_receipt_id_default_none(self):
+        """ExceptionRecord defaults to receipt_id=None."""
+        exc = ExceptionRecord(
+            id="exc_test",
+            violations=[],
+            blocked_response_preview="test",
+            scope="single_instance",
+            expiry=None,
+            created_at="2025-01-01T00:00:00Z",
+            mode="code",
+        )
+        assert exc.receipt_id is None
+
+    def test_exception_receipt_id_round_trip(self):
+        """ExceptionRecord receipt_id survives to_dict/from_dict."""
+        exc = ExceptionRecord(
+            id="exc_test",
+            violations=[{"anchor_id": "a1"}],
+            blocked_response_preview="test",
+            scope="project",
+            expiry=None,
+            created_at="2025-01-01T00:00:00Z",
+            mode="code",
+            receipt_id="receipt_abc",
+        )
+        d = exc.to_dict()
+        assert d["receipt_id"] == "receipt_abc"
+        restored = ExceptionRecord.from_dict(d)
+        assert restored.receipt_id == "receipt_abc"
+
+    def test_exception_receipt_id_absent_when_none(self):
+        """ExceptionRecord omits receipt_id from dict when None."""
+        exc = ExceptionRecord(
+            id="exc_test",
+            violations=[],
+            blocked_response_preview="test",
+            scope="single_instance",
+            expiry=None,
+            created_at="2025-01-01T00:00:00Z",
+            mode="code",
+        )
+        d = exc.to_dict()
+        assert "receipt_id" not in d
+
+    def test_exception_from_dict_missing_receipt_id(self):
+        """from_dict handles missing receipt_id gracefully (backward compat)."""
+        data = {
+            "id": "exc_test",
+            "violations": [],
+            "blocked_response_preview": "test",
+            "scope": "single_instance",
+            "expiry": None,
+            "created_at": "2025-01-01T00:00:00Z",
+            "mode": "code",
+        }
+        exc = ExceptionRecord.from_dict(data)
+        assert exc.receipt_id is None
+
+    def test_create_pending_with_receipt_id(self, temp_governor_dir):
+        """create_pending accepts and stores receipt_id."""
+        resolver = ViolationResolver(temp_governor_dir)
+        pending = resolver.create_pending(
+            [{"anchor_id": "a1", "description": "test"}],
+            "blocked",
+            "run_001",
+            receipt_id="rcpt_12345",
+        )
+        assert pending.receipt_id == "rcpt_12345"
+        # Verify it round-trips through file storage
+        loaded = resolver.get_pending()
+        assert loaded is not None
+        assert loaded.receipt_id == "rcpt_12345"
+
+    def test_create_pending_without_receipt_id(self, temp_governor_dir):
+        """create_pending without receipt_id defaults to None."""
+        resolver = ViolationResolver(temp_governor_dir)
+        pending = resolver.create_pending(
+            [{"anchor_id": "a1"}],
+            "blocked",
+            "run",
+        )
+        assert pending.receipt_id is None
+
+    def test_proceed_copies_receipt_id_to_exception(self, temp_governor_dir):
+        """resolve_proceed copies receipt_id from pending to exception."""
+        resolver = ViolationResolver(temp_governor_dir)
+        pending = resolver.create_pending(
+            [{"anchor_id": "a1", "description": "test"}],
+            "blocked response",
+            "run_001",
+            receipt_id="rcpt_linked",
+        )
+
+        result = resolver.resolve_proceed(pending)
+        assert result.success
+
+        exc = resolver.get_exception(result.exception_id)
+        assert exc is not None
+        assert exc.receipt_id == "rcpt_linked"
+
+    def test_proceed_none_receipt_id(self, temp_governor_dir):
+        """resolve_proceed with None receipt_id creates exception with None."""
+        resolver = ViolationResolver(temp_governor_dir)
+        pending = resolver.create_pending(
+            [{"anchor_id": "a1"}],
+            "blocked",
+            "run",
+        )
+
+        result = resolver.resolve_proceed(pending)
+        exc = resolver.get_exception(result.exception_id)
+        assert exc is not None
+        assert exc.receipt_id is None

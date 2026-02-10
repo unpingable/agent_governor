@@ -285,6 +285,52 @@ class AgentWrapper:
 
         return result.returncode, changes
 
+    def _emit_receipt(
+        self,
+        verdict: str,
+        changes: list[FileChange],
+        command: list[str],
+    ) -> None:
+        """Emit a gate receipt for wrapper enforcement."""
+        try:
+            from .gate_receipt import GateReceiptSystem
+        except ImportError:
+            return
+
+        if not self.gov_dir.exists():
+            return
+
+        system = GateReceiptSystem(self.gov_dir)
+
+        evidence_bundle = {
+            "changes": [
+                {"path": c.path, "type": c.change_type}
+                for c in changes
+            ],
+            "command": command[:5],  # Truncate to avoid huge receipts
+        }
+
+        gate_config = {
+            "gate": "wrapper",
+            "auto_approve": self.auto_approve,
+        }
+
+        subject_bytes = "\n".join(
+            sorted(c.path for c in changes)
+        ).encode("utf-8")
+
+        try:
+            system.emit(
+                gate="wrapper",
+                verdict=verdict,
+                subject_kind="file_changes",
+                subject_bytes=subject_bytes,
+                evidence_bundle=evidence_bundle,
+                gate_config=gate_config,
+            )
+        except Exception:
+            pass  # fail-open on receipt emission
+
     def run_with_enforcement(
         self,
         command: list[str],
@@ -339,10 +385,12 @@ class AgentWrapper:
                 # Save proposal
                 self._save_proposal(fsm.proposal)
 
+                self._emit_receipt("pass", changes, command)
                 return exit_code, f"Approved {len(changes)} file change(s)"
 
         # Not approved - rollback
         rollback_changes(self.root, changes)
+        self._emit_receipt("block", changes, command)
         return 1, f"Blocked {len(changes)} file change(s) - not approved by governor"
 
     def _save_proposal(self, proposal: Proposal) -> None:

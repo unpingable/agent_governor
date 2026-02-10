@@ -3,8 +3,8 @@
 ## Version 0.1 — Coupling Matrix Verification for Governance Topology
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - regime.py            # RegimeDetector, RegimeSignals
   - coupling.py          # GovernorCoupling, Homeostat→Ultrastability

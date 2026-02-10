@@ -1,7 +1,7 @@
 # Coherence Budget Index (CBI) Specification
 
 ```yaml
-status: planning
+status: implemented
 layer: 2.1
 depends_on: [CONTROL_THEORY_SPEC, AG2_INSTRUMENT_SPEC, METRICS_SPEC, PHASE_CONTROL_SPEC]
 ```

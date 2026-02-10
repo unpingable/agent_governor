@@ -1,0 +1,38 @@
+# Contract tests: verify Maude's Pydantic models deserialize Governor daemon responses.
+# Usage: cd integration && bash run.sh
+
+services:
+  governor:
+    build:
+      context: ..
+      dockerfile: Dockerfile.daemon
+    environment:
+      - BACKEND_TYPE=ollama
+      - OLLAMA_URL=http://nowhere:11434
+      - GOVERNOR_CONTEXT_ID=contract-test
+      - GOVERNOR_MODE=code
+    volumes:
+      - governor-socket:/run
+    command: ["--socket", "/run/governor.sock"]
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/governor.sock"]
+      interval: 2s
+      timeout: 3s
+      start_period: 5s
+      retries: 10
+
+  contract-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.contract
+    environment:
+      - GOVERNOR_SOCKET=/run/governor.sock
+    volumes:
+      - ${MAUDE_DIR:-../../maude}:/maude:ro
+      - governor-socket:/run
+    depends_on:
+      governor:
+        condition: service_healthy
+
+volumes:
+  governor-socket:

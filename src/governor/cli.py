@@ -731,6 +731,77 @@ def rejections(ctx: click.Context, limit: int, json_output: bool) -> None:
 
 
 @cli.command()
+@click.option("--gate", "-g", default=None, help="Filter by gate name (e.g. evidence_gate)")
+@click.option("--verdict", "-v", default=None, type=click.Choice(["pass", "warn", "block"]),
+              help="Filter by verdict")
+@click.option("--last", "-n", default=20, help="Number of receipts to show")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--id", "receipt_id", default=None, help="Show a specific receipt by ID")
+@click.option("--evidence", is_flag=True, help="Include evidence bundle (with --id or --json)")
+@click.pass_context
+def receipts(ctx: click.Context, gate: str | None, verdict: str | None,
+             last: int, as_json: bool, receipt_id: str | None, evidence: bool) -> None:
+    """
+    Query gate receipts.
+
+    Gate receipts are content-addressed decision records emitted by governor
+    gates (evidence gate, pre-commit, wrapper, etc.).  Each receipt proves
+    that a gate checked a subject and reached a verdict.
+
+    \b
+    Examples:
+        governor receipts                           # Last 20 receipts
+        governor receipts --gate evidence_gate      # Filter by gate
+        governor receipts --verdict block --last 10 # Last 10 blocks
+        governor receipts --id abc123... --evidence # Show receipt + evidence
+        governor receipts --json                    # Machine-readable
+    """
+    gov_dir = ensure_initialized(ctx)
+
+    from .gate_receipt import GateReceiptSystem
+
+    system = GateReceiptSystem(gov_dir)
+
+    # Single receipt lookup
+    if receipt_id:
+        receipt = system.receipt_store.get_by_id(receipt_id)
+        if receipt is None:
+            click.echo(f"Receipt not found: {receipt_id}")
+            ctx.exit(1)
+            return
+        output: dict = receipt.to_dict()
+        if evidence:
+            blob = system.evidence_for(receipt)
+            output["evidence"] = blob
+        click.echo(json.dumps(output, indent=2))
+        return
+
+    results = system.query(gate=gate, verdict=verdict, limit=last)
+
+    if not results:
+        click.echo("No receipts found.")
+        return
+
+    if as_json:
+        items = []
+        for r in results:
+            item = r.to_dict()
+            if evidence:
+                item["evidence"] = system.evidence_for(r)
+            items.append(item)
+        click.echo(json.dumps(items, indent=2))
+        return
+
+    click.echo(f"Gate receipts ({len(results)}, newest first):\n")
+    for r in results:
+        verdict_icon = {"pass": "OK", "warn": "WARN", "block": "BLOCK"}
+        icon = verdict_icon.get(r.verdict, r.verdict)
+        click.echo(f"  [{icon:>5}] {r.receipt_id[:12]}...  gate={r.gate}  {r.timestamp}")
+
+    click.echo(f"\nUse --id <receipt_id> --evidence to inspect a specific receipt.")
+
+
+@cli.command()
 @click.argument("mode", type=click.Choice(["exploratory", "strict"]), required=False)
 @click.option("--clear", "-c", is_flag=True, help="Clear envelope override, use default")
 @click.pass_context
@@ -10218,22 +10289,22 @@ def continuity_import(ctx: click.Context, path: str) -> None:
 # =============================================================================
 
 
-@cli.group("lite")
+@cli.group("gate")
 @click.pass_context
-def lite_cmd(ctx):
+def gate_cmd(ctx):
     """Evidence Gate — evidence-gated coding harness.
 
     Kernel-only surface: claims need evidence, contradictions persist, failures are loud.
 
     \b
     Examples:
-        governor lite check "text"
         governor gate check "text"
+        governor gate score "text"
     """
     pass
 
 
-@lite_cmd.command("check")
+@gate_cmd.command("check")
 @click.argument("text", required=False)
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
@@ -10265,7 +10336,15 @@ def lite_check(ctx, text, use_stdin, file, task, strict, fmt):
         return
 
     config = EvidenceGateConfig(strict=strict)
-    gate = EvidenceGate(config=config)
+
+    # Wire receipt system if governor is initialized
+    receipt_system = None
+    gov_dir = get_governor_dir(ctx)
+    if gov_dir.exists():
+        from .gate_receipt import GateReceiptSystem
+        receipt_system = GateReceiptSystem(gov_dir)
+
+    gate = EvidenceGate(config=config, receipt_system=receipt_system)
     result = gate.check(task=task, context="", output=content)
 
     if fmt == "json":
@@ -10274,7 +10353,7 @@ def lite_check(ctx, text, use_stdin, file, task, strict, fmt):
         click.echo(gate.format_status(result))
 
 
-@lite_cmd.command("validate")
+@gate_cmd.command("validate")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--task", "-t", default="validate file", help="Task description")
 @click.option("--strict/--permissive", default=True, help="Strict mode or permissive")
@@ -10286,7 +10365,14 @@ def gate_validate(ctx, path, task, strict, fmt):
 
     content = Path(path).read_text()
     config = EvidenceGateConfig(strict=strict)
-    gate = EvidenceGate(config=config)
+
+    receipt_system = None
+    gov_dir = get_governor_dir(ctx)
+    if gov_dir.exists():
+        from .gate_receipt import GateReceiptSystem
+        receipt_system = GateReceiptSystem(gov_dir)
+
+    gate = EvidenceGate(config=config, receipt_system=receipt_system)
     result = gate.check(task=task, context=str(path), output=content)
 
     if fmt == "json":
@@ -10304,7 +10390,7 @@ def gate_validate(ctx, path, task, strict, fmt):
                 click.echo(f"  ... and {len(result.claims) - 5} more")
 
 
-@lite_cmd.command("config")
+@gate_cmd.command("config")
 @click.pass_context
 def gate_config(ctx):
     """Show Evidence Gate configuration."""
@@ -10326,7 +10412,7 @@ def gate_config(ctx):
         click.echo(f"  - {feature}")
 
 
-@lite_cmd.command("score")
+@gate_cmd.command("score")
 @click.argument("text", required=False)
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
@@ -10366,7 +10452,7 @@ def gate_score(ctx, text, use_stdin, file, fmt):
                 click.echo(f"  - {reason}")
 
 
-@lite_cmd.command("extract")
+@gate_cmd.command("extract")
 @click.argument("text", required=False)
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--file", "-f", type=click.Path(exists=True), help="Read content from file")
@@ -10410,7 +10496,7 @@ def gate_extract(ctx, text, use_stdin, file, fmt):
             click.echo(f"       ID: {claim.id}, Evidence: {evidence_status}")
 
 
-@lite_cmd.command("pending")
+@gate_cmd.command("pending")
 @click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
 @click.pass_context
 def gate_pending(ctx, fmt):
@@ -10434,7 +10520,7 @@ def gate_pending(ctx, fmt):
         click.echo(format_violation_prompt(pending.violations, pending.mode))
 
 
-@lite_cmd.command("fix")
+@gate_cmd.command("fix")
 @click.pass_context
 def gate_fix(ctx):
     """Resolve pending violation by fixing the response.
@@ -10462,7 +10548,7 @@ def gate_fix(ctx):
         click.echo(f"  - {desc}")
 
 
-@lite_cmd.command("revise")
+@gate_cmd.command("revise")
 @click.pass_context
 def gate_revise(ctx):
     """Resolve pending violation by updating the anchor.
@@ -10491,7 +10577,7 @@ def gate_revise(ctx):
         click.echo(f"[Governor] Revision failed: {result.message}", err=True)
 
 
-@lite_cmd.command("proceed")
+@gate_cmd.command("proceed")
 @click.option("--scope", type=click.Choice(["single_instance", "session", "project"]), default="single_instance", help="Exception scope")
 @click.option("--expiry", default=None, help="Exception expiry (ISO timestamp, or omit for permanent)")
 @click.pass_context
@@ -10522,7 +10608,7 @@ def gate_proceed(ctx, scope, expiry):
         click.echo(f"[Governor] Exception logging failed: {result.message}", err=True)
 
 
-@lite_cmd.command("exceptions")
+@gate_cmd.command("exceptions")
 @click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
 @click.pass_context
 def gate_exceptions(ctx, fmt):
@@ -10546,6 +10632,8 @@ def gate_exceptions(ctx, fmt):
             click.echo(f"  {exc.id} [{exc.scope}]")
             click.echo(f"    Created: {exc.created_at}")
             click.echo(f"    Mode: {exc.mode}")
+            if exc.receipt_id:
+                click.echo(f"    Receipt: {exc.receipt_id}")
             if exc.expiry:
                 click.echo(f"    Expiry: {exc.expiry}")
             for v in exc.violations[:2]:
@@ -12986,6 +13074,1969 @@ cli.add_command(code)
 cli.add_command(resolve)
 
 
+# ---------------------------------------------------------------------------
+# Risk controller (control theory: R_t = PD/E)
+# ---------------------------------------------------------------------------
+
+RISK_STATE_FILE = "risk_controller.json"
+
+
+def get_risk_controller(gov_dir: Path):
+    """Get or create the risk controller."""
+    from .control_theory import RiskController
+
+    state_path = gov_dir / RISK_STATE_FILE
+    if state_path.exists():
+        data = json.loads(state_path.read_text())
+        return RiskController.from_dict(data)
+    return RiskController()
+
+
+def save_risk_controller(gov_dir: Path, controller) -> None:
+    """Save the risk controller state to disk."""
+    state_path = gov_dir / RISK_STATE_FILE
+    state_path.write_text(json.dumps(controller.to_dict(), indent=2))
+
+
+@cli.group()
+@click.pass_context
+def risk(ctx: click.Context) -> None:
+    """
+    Risk index: R_t = (P * D) / E (control theory foundation).
+
+    Computes the Agent Risk Index — a dimensionless ratio like the
+    Reynolds number that classifies agent operation regime:
+    - SAFE (R̄ < 0.1): Full autonomy
+    - ELASTIC (0.1-0.4): Normal checks
+    - DANGEROUS (0.4-0.8): Heightened scrutiny
+    - RUNAWAY (≥ 0.8): Halt
+    """
+    pass
+
+
+@risk.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def risk_status(ctx: click.Context, as_json: bool) -> None:
+    """Show current R_t, R-bar, regime, and tier."""
+    gov_dir = ensure_initialized(ctx)
+    ctrl = get_risk_controller(gov_dir)
+    state = ctrl.get_state()
+
+    if as_json:
+        click.echo(json.dumps(state, indent=2))
+        return
+
+    regime_val = state["current_regime"]
+    regime_colors = {
+        "safe": "green",
+        "elastic": "blue",
+        "dangerous": "yellow",
+        "runaway": "bright_red",
+    }
+    color = regime_colors.get(regime_val, "white")
+
+    click.echo(f"Regime:    {click.style(regime_val.upper(), fg=color, bold=True)}")
+    click.echo(f"R̄ (EMA):   {state['r_bar_ema']:.4f}")
+    click.echo(f"R̄ (SMA):   {state['r_bar_sma']:.4f}")
+    click.echo(f"R̄ (worst): {state['r_bar_worst']:.4f}")
+    click.echo(f"Power:     {state['current_power']:.4f}")
+    click.echo(f"Delay:     {state['current_delay']:.4f}")
+    click.echo(f"Evidence:  {state['current_evidence']:.4f}")
+    click.echo(f"Window:    {state['window_size']} samples")
+    click.echo(f"Episode:   {state['episode_steps']} steps")
+
+    ol = state["open_loop"]
+    if ol["is_open_loop"]:
+        click.echo(click.style(f"\n⚠ OPEN LOOP: Γ={ol['gamma']:.2f}, backlog={ol['backlog']}", fg="red"))
+
+
+@risk.command("check")
+@click.argument("tool_class")
+@click.option("-e", "--evidence", type=float, default=None, help="Evidence score (0-1)")
+@click.option("-d", "--delay", type=float, default=None, help="Feedback delay")
+@click.option("-p", "--power", type=float, default=None, help="Power (override tool default)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def risk_check(
+    ctx: click.Context,
+    tool_class: str,
+    evidence: float | None,
+    delay: float | None,
+    power: float | None,
+    as_json: bool,
+) -> None:
+    """Check if a tool action is allowed given current state."""
+    gov_dir = ensure_initialized(ctx)
+    ctrl = get_risk_controller(gov_dir)
+
+    result = ctrl.check(tool_class, p_req=power, d_t=delay, e_t=evidence)
+    save_risk_controller(gov_dir, ctrl)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        return
+
+    decision_colors = {
+        "allow": "green",
+        "deny": "red",
+        "demote": "yellow",
+        "halt": "bright_red",
+    }
+    color = decision_colors.get(result.decision.value, "white")
+    click.echo(f"Decision: {click.style(result.decision.value.upper(), fg=color, bold=True)}")
+    click.echo(f"Risk:     {result.risk:.4f}")
+    click.echo(f"Regime:   {result.regime.value.upper()}")
+    click.echo(f"Reason:   {result.reason}")
+    if result.demoted_tier:
+        click.echo(f"Demoted to tier {result.demoted_tier.level} (P≤{result.demoted_tier.p_threshold})")
+
+
+@risk.command("history")
+@click.option("--limit", "-n", default=10, help="Number of entries to show")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def risk_history(ctx: click.Context, limit: int, as_json: bool) -> None:
+    """Show recent risk calculations."""
+    gov_dir = ensure_initialized(ctx)
+    ctrl = get_risk_controller(gov_dir)
+
+    entries = ctrl.history[-limit:]
+
+    if as_json:
+        click.echo(json.dumps([e.to_dict() for e in entries], indent=2))
+        return
+
+    if not entries:
+        click.echo("No risk history recorded.")
+        return
+
+    click.echo(f"Risk History (last {limit}):\n")
+    for calc in entries:
+        regime_val = calc.regime.value
+        click.echo(f"  R={calc.risk:.4f}  P={calc.power:.3f}  D={calc.delay:.3f}  E={calc.evidence:.3f}  [{regime_val.upper()}]")
+
+
+@risk.command("sensitivity")
+@click.option("-p", "--power", type=float, required=True, help="Power value")
+@click.option("-d", "--delay", type=float, required=True, help="Delay value")
+@click.option("-e", "--evidence", type=float, required=True, help="Evidence value")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def risk_sensitivity(
+    ctx: click.Context,
+    power: float,
+    delay: float,
+    evidence: float,
+    as_json: bool,
+) -> None:
+    """Compute sensitivity analysis (glass cannon detection)."""
+    from .control_theory import compute_sensitivity
+
+    s = compute_sensitivity(power, delay, evidence)
+
+    if as_json:
+        click.echo(json.dumps(s, indent=2))
+        return
+
+    click.echo(f"R_t:    {s['risk']:.4f}")
+    click.echo(f"∂R/∂D:  {s['dr_dd']:.4f}  (delay sensitivity)")
+    click.echo(f"∂R/∂E:  {s['dr_de']:.4f}  (evidence sensitivity)")
+
+    if abs(s["dr_dd"]) > 0.5 or abs(s["dr_de"]) > 0.5:
+        click.echo(click.style("\n⚠ Glass cannon region: small changes in D or E produce large R changes", fg="yellow"))
+
+
+@risk.command("trajectory")
+@click.option("--mode", type=click.Choice(["additive", "discounted", "worst_step"]), default="additive")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def risk_trajectory(ctx: click.Context, mode: str, as_json: bool) -> None:
+    """Show episode risk trajectory."""
+    gov_dir = ensure_initialized(ctx)
+    ctrl = get_risk_controller(gov_dir)
+
+    metrics = ctrl.get_episode_risk()
+
+    if as_json:
+        click.echo(json.dumps(metrics.to_dict(), indent=2))
+        return
+
+    click.echo(f"Episode Risk ({metrics.step_count} steps):\n")
+    click.echo(f"  J_additive:   {metrics.j_additive:.4f}")
+    click.echo(f"  J_discounted: {metrics.j_discounted:.4f}")
+    click.echo(f"  J_worst:      {metrics.j_worst:.4f}")
+
+
+# =============================================================================
+# Instrument (AG2 Instrumented Execution)
+# =============================================================================
+
+
+@cli.group("instrument")
+@click.pass_context
+def instrument_cmd(ctx):
+    """Instrumented execution — content-addressed runs, claims, and reports."""
+    pass
+
+
+@instrument_cmd.command("run")
+@click.option("--actor", type=click.Choice(["human", "agent", "pipeline"]), default="human")
+@click.option("--task", default="", help="Task description or ID")
+@click.option("--profile", type=click.Choice(["greenfield", "strict", "forensic"]), default="greenfield")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_run(ctx, actor, task, profile, as_json):
+    """Start a new instrumented run."""
+    from .instrument import InstrumentSystem, Actor, ActorKind, InstrumentProfile
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+
+    actor_obj = Actor(kind=ActorKind(actor), id=actor, name=actor)
+    manifest, _ = system.start_run(
+        actor=actor_obj,
+        profile=InstrumentProfile(profile),
+        task_id=task,
+    )
+
+    if as_json:
+        click.echo(json.dumps(manifest.to_dict(), indent=2))
+    else:
+        click.echo(f"Run started: {manifest.run_id}")
+        click.echo(f"Profile: {profile}")
+        if task:
+            click.echo(f"Task: {task}")
+
+
+@instrument_cmd.command("status")
+@click.option("--run-id", default=None, help="Specific run ID")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_status(ctx, run_id, as_json):
+    """Show instrument status or run details."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    status = system.status(run_id)
+
+    if as_json:
+        click.echo(json.dumps(status, indent=2))
+        return
+
+    if "error" in status:
+        click.echo(f"Error: {status['error']}", err=True)
+        ctx.exit(1)
+        return
+
+    if run_id:
+        click.echo(f"Run: {status['run_id']}")
+        click.echo(f"Created: {status['created_at']}")
+        finished = status.get('finished_at', '')
+        click.echo(f"Finished: {finished or '(in progress)'}")
+        click.echo(f"Profile: {status['profile']}")
+        click.echo(f"Events: {status['event_count']}")
+        click.echo(f"Receipts: {status['receipt_count']}")
+        click.echo(f"Claims: {status['claim_count']}")
+        integrity = click.style("PASS", fg="green") if status["integrity"] == "pass" else click.style("FAIL", fg="red")
+        click.echo(f"Integrity: {integrity}")
+        if status.get("issues"):
+            for issue in status["issues"]:
+                click.echo(f"  - {issue}")
+    else:
+        click.echo(f"Instrument system: {status['instrument_dir']}")
+        click.echo(f"Profile: {status['profile']}")
+        click.echo(f"Total runs: {status['total_runs']}")
+        if status.get("runs"):
+            click.echo("Runs:")
+            for rid in status["runs"][-10:]:
+                click.echo(f"  {rid}")
+
+
+@instrument_cmd.command("verify")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_verify(ctx, run_id, as_json):
+    """Verify run integrity."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    ok, issues = system.verify_run(run_id)
+
+    if as_json:
+        click.echo(json.dumps({"ok": ok, "issues": issues}, indent=2))
+    else:
+        if ok:
+            click.echo(click.style("PASS", fg="green") + f" — run {run_id} integrity verified")
+        else:
+            click.echo(click.style("FAIL", fg="red") + f" — run {run_id} has issues:")
+            for issue in issues:
+                click.echo(f"  - {issue}")
+            ctx.exit(1)
+
+
+@instrument_cmd.command("extract-claims")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_extract_claims(ctx, run_id, as_json):
+    """Extract claims from a run's events."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    claims = system.extract_claims(run_id)
+
+    if as_json:
+        click.echo(json.dumps([c.to_dict() for c in claims], indent=2))
+    else:
+        click.echo(f"Extracted {len(claims)} claims from run {run_id}:")
+        for c in claims:
+            click.echo(f"  [{c.modality.value}] {c.type.value}: {c.subject} — {c.predicate}")
+
+
+@instrument_cmd.command("diff")
+@click.option("--left", required=True, help="Left run ID")
+@click.option("--right", required=True, help="Right run ID")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_diff(ctx, left, right, as_json):
+    """Cross-run claim diff."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    results = system.diff_runs(left, right)
+
+    if as_json:
+        click.echo(json.dumps([r.to_dict() for r in results], indent=2))
+    else:
+        if not results:
+            click.echo("No differences found.")
+        else:
+            click.echo(f"{len(results)} finding(s):")
+            for r in results:
+                click.echo(f"  [{r.finding.value}] {r.match_key}: {r.details}")
+
+
+@instrument_cmd.command("report")
+@click.argument("run_id")
+@click.option("--diff-with", default=None, help="Run ID to diff against")
+@click.option("--json", "as_json", is_flag=True, help="Output JSON (default: markdown)")
+@click.pass_context
+def instrument_report(ctx, run_id, diff_with, as_json):
+    """Generate report for a run."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    report = system.generate_report([run_id], diff_with=diff_with)
+
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(report.to_markdown())
+
+
+@instrument_cmd.command("list")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_list(ctx, as_json):
+    """List all runs."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+    runs = system.run_store.list_runs()
+
+    if as_json:
+        items = []
+        for rid in runs:
+            m = system.run_store.load_manifest(rid)
+            if m:
+                items.append(m.to_dict())
+        click.echo(json.dumps(items, indent=2))
+    else:
+        if not runs:
+            click.echo("No runs found.")
+        else:
+            click.echo(f"{len(runs)} run(s):")
+            for rid in runs:
+                m = system.run_store.load_manifest(rid)
+                status = "finished" if m and m.finished_at else "in progress"
+                profile = m.config.profile.value if m else "?"
+                click.echo(f"  {rid}  [{profile}]  {status}")
+
+
+@instrument_cmd.command("event")
+@click.argument("run_id")
+@click.argument("kind")
+@click.option("--payload", default="{}", help="JSON payload")
+@click.pass_context
+def instrument_event(ctx, run_id, kind, payload):
+    """Append an event to a run (for testing/scripting)."""
+    from .instrument import (
+        InstrumentSystem, Event, EventKind, Actor, ActorKind, _now_iso,
+    )
+    import uuid as _uuid
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+
+    try:
+        event_kind = EventKind(kind)
+    except ValueError:
+        valid = ", ".join(k.value for k in EventKind)
+        click.echo(f"Invalid event kind: {kind}. Valid: {valid}", err=True)
+        ctx.exit(1)
+        return
+
+    try:
+        payload_dict = json.loads(payload)
+    except json.JSONDecodeError as e:
+        click.echo(f"Invalid JSON payload: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    run_dir = system.instrument_dir / "runs" / run_id
+    if not run_dir.exists():
+        click.echo(f"Run not found: {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    from .instrument import EventWriter
+    writer = EventWriter(
+        run_dir, system.artifact_store, system.config.artifact_size_threshold
+    )
+    event = Event(
+        event_id=_uuid.uuid4().hex[:12],
+        ts=_now_iso(),
+        run_id=run_id,
+        kind=event_kind,
+        actor=Actor(ActorKind.HUMAN, "cli"),
+        payload=payload_dict,
+    )
+    writer.append_event(event)
+    click.echo(f"Event {event.event_id} appended to run {run_id}")
+
+
+@instrument_cmd.command("store")
+@click.argument("file_path", type=click.Path(exists=True))
+@click.pass_context
+def instrument_store(ctx, file_path):
+    """Store a file as a content-addressed artifact."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+
+    data = Path(file_path).read_bytes()
+    receipt = system.artifact_store.store(data)
+    click.echo(f"Stored: {receipt.artifact_hash} ({receipt.size_bytes} bytes)")
+
+
+@instrument_cmd.command("waiver-create")
+@click.option("--rule", required=True, help="Rule ID to waive")
+@click.option("--scope", required=True, help="Glob pattern for scope")
+@click.option("--reason", required=True, help="Reason for waiver")
+@click.option("--expires", default="", help="Expiry duration (e.g. 2h, 1d)")
+@click.option("--created-by", default="", help="Who created the waiver")
+@click.pass_context
+def instrument_waiver_create(ctx, rule, scope, reason, expires, created_by):
+    """Create a waiver for a rule."""
+    from .instrument import InstrumentSystem, Waiver, _now_iso
+    import uuid as _uuid
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+
+    expires_iso = ""
+    if expires:
+        try:
+            from .overrides import parse_duration
+            delta = parse_duration(expires)
+            expires_iso = (datetime.now(timezone.utc) + delta).isoformat()
+        except Exception:
+            # Try parsing as hours/days manually
+            if expires.endswith("h"):
+                hours = int(expires[:-1])
+                expires_iso = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
+            elif expires.endswith("d"):
+                days = int(expires[:-1])
+                expires_iso = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+            else:
+                click.echo(f"Invalid expires format: {expires}. Use '2h' or '1d'.", err=True)
+                ctx.exit(1)
+                return
+
+    waiver = Waiver(
+        waiver_id=_uuid.uuid4().hex[:12],
+        rule_id=rule,
+        scope=scope,
+        reason=reason,
+        expires=expires_iso,
+        created_by=created_by,
+    )
+    system.waiver_store.create(waiver)
+    click.echo(f"Waiver created: {waiver.waiver_id}")
+    click.echo(f"  Rule: {rule}")
+    click.echo(f"  Scope: {scope}")
+    if expires_iso:
+        click.echo(f"  Expires: {expires_iso}")
+
+
+@instrument_cmd.command("waiver-list")
+@click.option("--all", "show_all", is_flag=True, help="Show expired waivers too")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def instrument_waiver_list(ctx, show_all, as_json):
+    """List waivers."""
+    from .instrument import InstrumentSystem
+
+    gov_dir = ensure_initialized(ctx)
+    system = InstrumentSystem(gov_dir)
+
+    waivers = system.waiver_store.list_all() if show_all else system.waiver_store.list_active()
+
+    if as_json:
+        click.echo(json.dumps([w.to_dict() for w in waivers], indent=2))
+    else:
+        if not waivers:
+            click.echo("No waivers found.")
+        else:
+            for w in waivers:
+                expired = " (EXPIRED)" if w.is_expired else ""
+                click.echo(f"  {w.waiver_id}  rule={w.rule_id}  scope={w.scope}{expired}")
+                click.echo(f"    Reason: {w.reason}")
+
+
+# =============================================================================
+# Slim Mode (Single-developer governance)
+# =============================================================================
+
+
+@cli.command("decide")
+@click.argument("text")
+@click.option("--topic", "-t", default=None, help="Decision topic for grouping")
+@click.option("--retract", is_flag=True, help="Retract a previous decision")
+@click.option("--force", is_flag=True, help="Override contradiction check")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def decide_cmd(ctx, text, topic, retract, force, as_json):
+    """Record or retract an architectural decision.
+
+    \b
+    Examples:
+      governor decide "Authentication uses JWT"
+      governor decide "No ORM — raw SQL" --topic database
+      governor decide --retract "Authentication uses JWT"
+    """
+    from .slim_mode import SlimMode, ContradictionError
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+
+    if retract:
+        result = slim.retract(text, topic)
+        if result:
+            if as_json:
+                click.echo(json.dumps(result.to_dict(), indent=2))
+            else:
+                click.echo(f"Retracted: {text}")
+        else:
+            click.echo(f"No matching decision found to retract.", err=True)
+            ctx.exit(1)
+        return
+
+    try:
+        result = slim.decide(text, topic, force=force)
+    except ContradictionError as e:
+        click.echo(f"ERROR: {e}", err=True)
+        click.echo("\nUse --retract to retract the prior decision first, or --force to override.", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        topic_display = f" [topic: {result.topic}]" if result.topic else ""
+        click.echo(f"Decided: {result.choice}{topic_display}")
+
+
+@cli.command("anchor")
+@click.argument("description", required=False)
+@click.option("--type", "anchor_type", default="canon",
+              type=click.Choice(["canon", "prohibition", "requirement", "definition", "style", "persona"]))
+@click.option("--severity", default="reject", type=click.Choice(["warn", "correct", "reject"]))
+@click.option("--scope", default="", help="File glob pattern for scope")
+@click.option("--remove", "remove_id", default=None, help="Remove anchor by ID")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def anchor_cmd(ctx, description, anchor_type, severity, scope, remove_id, as_json):
+    """Create or remove a continuity anchor.
+
+    \b
+    Examples:
+      governor anchor "Elena has green eyes" --type canon
+      governor anchor "No eval() calls" --type prohibition --scope "src/**"
+      governor anchor --remove elena-has-green-eyes
+    """
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+
+    if remove_id:
+        removed = slim.remove_anchor(remove_id)
+        if removed:
+            click.echo(f"Removed anchor: {remove_id}")
+        else:
+            click.echo(f"Anchor not found: {remove_id}", err=True)
+            ctx.exit(1)
+        return
+
+    if not description:
+        # List anchors
+        anchors = slim.list_anchors()
+        if as_json:
+            items = []
+            for a in anchors:
+                items.append({
+                    "id": a.id,
+                    "type": a.anchor_type.value,
+                    "severity": a.severity.value,
+                    "description": a.description,
+                })
+            click.echo(json.dumps(items, indent=2))
+        else:
+            if not anchors:
+                click.echo("No anchors registered.")
+            else:
+                for a in anchors:
+                    click.echo(f"  [{a.severity.value}] {a.id}: {a.description} (type: {a.anchor_type.value})")
+        return
+
+    anchor = slim.add_anchor(description, anchor_type, severity, scope)
+    if as_json:
+        click.echo(json.dumps({
+            "id": anchor.id,
+            "type": anchor.anchor_type.value,
+            "severity": anchor.severity.value,
+            "description": anchor.description,
+        }, indent=2))
+    else:
+        click.echo(f"Anchor created: {anchor.id}")
+        click.echo(f"  [{anchor.severity.value}] {anchor.description}")
+
+
+@cli.command("lock")
+@click.argument("path")
+@click.option("--description", "-d", default="", help="Lock description")
+@click.option("--forbid", multiple=True, help="Forbidden file patterns")
+@click.pass_context
+def lock_cmd(ctx, path, description, forbid):
+    """Lock a directory structure via spine.
+
+    \b
+    Examples:
+      governor lock src/governor/
+      governor lock src/ --forbid "*.secret" --forbid "credentials/*"
+    """
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+    spine = slim.lock(path, description, list(forbid) if forbid else None)
+    click.echo(f"Locked: {path} (spine: {spine.id})")
+
+
+@cli.command("unlock")
+@click.argument("path")
+@click.option("--confirm", is_flag=True, required=True, help="Confirm unlock")
+@click.pass_context
+def unlock_cmd(ctx, path, confirm):
+    """Unlock a directory structure.
+
+    \b
+    Example:
+      governor unlock src/governor/ --confirm
+    """
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+    if slim.unlock(path):
+        click.echo(f"Unlocked: {path}")
+    else:
+        click.echo(f"No lock found for: {path}", err=True)
+        ctx.exit(1)
+
+
+@cli.command("must-pass")
+@click.argument("command")
+@click.pass_context
+def must_pass_cmd(ctx, command):
+    """Register a test command that must pass.
+
+    \b
+    Example:
+      governor must-pass "python3 -m pytest tests/ -x"
+    """
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+    spec = slim.must_pass(command)
+    click.echo(f"Invariant registered: {spec.id}")
+    click.echo(f"  [test] {command}")
+
+
+@cli.command("must-exist")
+@click.argument("filepath")
+@click.pass_context
+def must_exist_cmd(ctx, filepath):
+    """Register a file that must exist.
+
+    \b
+    Example:
+      governor must-exist src/governor/__init__.py
+    """
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+    spec = slim.must_exist(filepath)
+    click.echo(f"Invariant registered: {spec.id}")
+    click.echo(f"  [file-exists] {filepath}")
+
+
+@cli.group("slim")
+@click.pass_context
+def slim_cmd(ctx):
+    """Slim mode — single-developer governance."""
+    pass
+
+
+@slim_cmd.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--oneliner", is_flag=True, help="Compact one-liner for system prompts")
+@click.pass_context
+def slim_status(ctx, as_json, oneliner):
+    """Show slim mode status (one-screen view)."""
+    from .slim_mode import SlimMode
+
+    gov_dir = ensure_initialized(ctx)
+    slim = SlimMode(gov_dir)
+    status = slim.status()
+
+    if as_json:
+        click.echo(json.dumps(status.to_dict(), indent=2))
+        return
+
+    if oneliner:
+        click.echo(status.to_oneliner())
+        return
+
+    # Full one-screen view
+    click.echo(f"Envelope: {status.envelope} (single-developer)\n")
+
+    if status.decisions:
+        click.echo(f"Decisions ({len(status.decisions)}):")
+        for d in status.decisions:
+            topic_str = f" [topic: {d['topic']}]" if d.get("topic") else ""
+            click.echo(f"  * {d['choice']}{topic_str}")
+    else:
+        click.echo("Decisions: (none)")
+
+    click.echo()
+
+    if status.anchors:
+        click.echo(f"Anchors ({len(status.anchors)}):")
+        for a in status.anchors:
+            click.echo(f"  * [{a['severity']}] {a['description']} (type: {a['type']})")
+    else:
+        click.echo("Anchors: (none)")
+
+    click.echo()
+
+    if status.invariants:
+        click.echo(f"Invariants ({len(status.invariants)}):")
+        for i in status.invariants:
+            param_str = i.get("params", {}).get("command") or i.get("params", {}).get("path", "")
+            click.echo(f"  * [{i['kind']}] {param_str}")
+    else:
+        click.echo("Invariants: (none)")
+
+    click.echo()
+
+    if status.spine_locked:
+        click.echo(f"Spine: {', '.join(status.spine_locked)} (locked)")
+    else:
+        click.echo("Spine: (no locks)")
+
+    if status.last_check:
+        click.echo(f"\nLast check: {status.last_check}")
+
+
+# ---------------------------------------------------------------------------
+# Constraint Compiler (AG2 Layer 1, Item #3)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("constraints")
+def constraints_group() -> None:
+    """Pre-execution constraint projection.
+
+    Resolve all applicable constraints for intent + scope into a portable
+    block that any executor LLM can consume as a prompt prefix.
+    """
+
+
+@constraints_group.command("resolve")
+@click.option("--intent", "-i", default=None, help="User-declared intent (production, hotfix, etc.)")
+@click.option("--scope", "-s", default=None, help="File/directory scope (glob pattern)")
+@click.option("--mode", "-m", default=None, help="Domain mode (code, fiction, nonfiction, ops)")
+@click.option("--format", "fmt", type=click.Choice(["prompt", "json", "summary"]), default="prompt", help="Output format")
+@click.option("--no-cache", is_flag=True, help="Skip the in-memory cache")
+@click.pass_context
+def constraints_resolve(ctx: click.Context, intent: str | None, scope: str | None, mode: str | None, fmt: str, no_cache: bool) -> None:
+    """Resolve all constraints for intent + scope."""
+    from .constraint_compiler import compile_constraints
+    import json as _json
+
+    gov_dir = ctx.obj["gov_dir"]
+    block = compile_constraints(
+        intent=intent,
+        scope=scope,
+        mode=mode,
+        governor_dir=gov_dir,
+        use_cache=not no_cache,
+    )
+
+    if fmt == "json":
+        click.echo(_json.dumps(block.to_dict(), indent=2, default=str))
+    elif fmt == "summary":
+        click.echo(block.to_summary())
+    else:
+        click.echo(block.prompt_prefix)
+
+
+@constraints_group.command("diff")
+@click.option("--scope", "-s", default=None, help="File/directory scope (glob pattern)")
+@click.option("--intent", "-i", default=None, help="User-declared intent")
+@click.option("--mode", "-m", default=None, help="Domain mode")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def constraints_diff(ctx: click.Context, scope: str | None, intent: str | None, mode: str | None, as_json: bool) -> None:
+    """Diff current constraints against last cached compilation."""
+    from .constraint_compiler import compile_constraints, diff_constraints, get_cache
+    import json as _json
+
+    gov_dir = ctx.obj["gov_dir"]
+
+    # Get cached version (if any)
+    old_block = None
+    cache = get_cache()
+    # Compile fresh
+    new_block = compile_constraints(
+        intent=intent, scope=scope, mode=mode,
+        governor_dir=gov_dir, use_cache=False,
+    )
+
+    if old_block is None:
+        # No previous compilation — show current as "all new"
+        if as_json:
+            click.echo(_json.dumps({
+                "status": "no_previous",
+                "current": new_block.to_dict(),
+            }, indent=2, default=str))
+        else:
+            click.echo("No previous compilation found. Current constraints:")
+            click.echo(new_block.to_summary())
+        return
+
+    diff = diff_constraints(old_block, new_block)
+
+    if as_json:
+        click.echo(_json.dumps(diff.to_dict(), indent=2, default=str))
+    else:
+        if not diff.has_changes:
+            click.echo("No changes since last compilation.")
+        else:
+            if diff.added:
+                click.echo(f"Added ({len(diff.added)}):")
+                for c in diff.added:
+                    click.echo(f"  + [{c.severity.value}] {c.description}")
+            if diff.removed:
+                click.echo(f"Removed ({len(diff.removed)}):")
+                for c in diff.removed:
+                    click.echo(f"  - [{c.severity.value}] {c.description}")
+            if diff.changed:
+                click.echo(f"Changed ({len(diff.changed)}):")
+                for before, after in diff.changed:
+                    click.echo(f"  ~ {before.description}: {before.severity.value} → {after.severity.value}")
+
+
+# ---------------------------------------------------------------------------
+# Detector Integration (AG2 Layer 1, Item #4)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("detector")
+def detector_group() -> None:
+    """Temporal coherence detector integration.
+
+    Sensor/controller boundary for external hallucination detector signals.
+    Collapses 19 raw dimensions into 5 control signals, maps to governor actions.
+    """
+
+
+@detector_group.command("evaluate")
+@click.argument("signal_file", type=click.Path(exists=True))
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def detector_evaluate(ctx: click.Context, signal_file: str, as_json: bool) -> None:
+    """Evaluate a detector signal file and show recommended actions."""
+    from .detector_integration import DetectorIntegration
+    import json as _json
+
+    di = DetectorIntegration()
+    result = di.process_file(Path(signal_file))
+
+    if as_json:
+        click.echo(_json.dumps(result.to_dict(), indent=2, default=str))
+    else:
+        click.echo(f"Signal quality: {result.signal_quality.value}")
+        click.echo(f"Actions: {', '.join(a.value for a in result.actions)}")
+        if result.confidence_cap is not None:
+            click.echo(f"Confidence cap: {result.confidence_cap}")
+        if result.evidence_tier:
+            click.echo(f"Evidence tier: {result.evidence_tier}")
+        click.echo(f"Reason: {result.reason}")
+
+
+@detector_group.command("collapse")
+@click.argument("signal_file", type=click.Path(exists=True))
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def detector_collapse(signal_file: str, as_json: bool) -> None:
+    """Collapse raw signal to 5 control dimensions."""
+    from .detector_integration import DetectorIntegration
+    import json as _json
+
+    di = DetectorIntegration()
+    collapsed, key, file_hash = di.load_and_collapse(Path(signal_file))
+
+    if as_json:
+        click.echo(_json.dumps({
+            "collapsed": collapsed.to_dict(),
+            "key": key.to_dict(),
+            "file_hash": file_hash,
+            "quality": collapsed.quality.value,
+        }, indent=2, default=str))
+    else:
+        click.echo(f"Quality: {collapsed.quality.value}")
+        click.echo(f"Coherence score: {collapsed.coherence_score}")
+        click.echo(f"Instability spikes: {collapsed.instability_spikes}")
+        click.echo(f"Perturbation fragility: {collapsed.perturbation_fragility}")
+        click.echo(f"Overconfidence signature: {collapsed.overconfidence_signature}")
+        click.echo(f"Phase flag: {collapsed.phase_flag.value}")
+
+
+@detector_group.command("constraints")
+@click.argument("signal_file", type=click.Path(exists=True))
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def detector_constraints(signal_file: str, as_json: bool) -> None:
+    """Show constraints produced by a detector signal."""
+    from .detector_integration import DetectorIntegration
+    import json as _json
+
+    di = DetectorIntegration()
+    collapsed, _, _ = di.load_and_collapse(Path(signal_file))
+    constraints = di.get_constraints(collapsed)
+
+    if as_json:
+        click.echo(_json.dumps(constraints, indent=2, default=str))
+    else:
+        if not constraints:
+            click.echo("No constraints (signal is clean).")
+        else:
+            for c in constraints:
+                click.echo(f"  [{c['severity']}] {c['description']}")
+
+
+@detector_group.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def detector_status(as_json: bool) -> None:
+    """Show detector integration status and policy."""
+    from .detector_integration import DetectorIntegration
+    import json as _json
+
+    di = DetectorIntegration()
+    status = di.status()
+
+    if as_json:
+        click.echo(_json.dumps(status, indent=2, default=str))
+    else:
+        click.echo("Detector Integration Status")
+        p = status["policy"]
+        click.echo(f"  Coherence threshold: {p['coherence_threshold']}")
+        click.echo(f"  Spike threshold: {p['spike_threshold']}")
+        click.echo(f"  Fragility threshold: {p['fragility_threshold']}")
+        click.echo(f"  Overconfidence threshold: {p['overconfidence_threshold']}")
+        click.echo(f"  Confab blocks writes: {p['confab_blocks_writes']}")
+        click.echo(f"  Unavailable penalty: {p['unavailable_penalty']}")
+        fs = status["failure_safe_signal"]
+        click.echo(f"  Failure-safe quality: {fs['quality']}")
+
+
+@detector_group.command("failure-safe")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def detector_failure_safe(as_json: bool) -> None:
+    """Show what happens when the detector is unavailable."""
+    from .detector_integration import DetectorIntegration
+    import json as _json
+
+    di = DetectorIntegration()
+    safe = di.failure_safe()
+    result = di.evaluate(safe)
+
+    if as_json:
+        click.echo(_json.dumps({
+            "signal": safe.to_dict(),
+            "quality": safe.quality.value,
+            "actions": result.to_dict(),
+        }, indent=2, default=str))
+    else:
+        click.echo("Failure-safe signal (detector unavailable):")
+        click.echo(f"  Coherence score: {safe.coherence_score}")
+        click.echo(f"  Overconfidence: {safe.overconfidence_signature}")
+        click.echo(f"  Quality: {safe.quality.value}")
+        click.echo(f"  Actions: {', '.join(a.value for a in result.actions)}")
+
+
+# ---------------------------------------------------------------------------
+# Commitment Transport (AG2 Layer 2, Item #5)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("transport")
+def transport_group() -> None:
+    """Commitment transport validation.
+
+    Checks that obligations (MUST/SHOULD/MAY/MUST_NOT) survive lossy transforms
+    like compaction, summarization, and bridge compilation.
+    """
+
+
+@transport_group.command("check")
+@click.option("--before", "-b", "before_file", required=True, type=click.Path(exists=True), help="File with original text")
+@click.option("--after", "-a", "after_file", required=True, type=click.Path(exists=True), help="File with transformed text")
+@click.option("--type", "transform_type", default="", help="Transform type label")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def transport_check(ctx: click.Context, before_file: str, after_file: str, transform_type: str, as_json: bool) -> None:
+    """Check commitment transport between two text files."""
+    from .commitment_transport import check_transport, TransportHistory
+    import json as _json
+
+    before_text = Path(before_file).read_text()
+    after_text = Path(after_file).read_text()
+    report = check_transport(before_text, after_text, transform_type)
+
+    gov_dir = ctx.obj.get("gov_dir")
+    if gov_dir:
+        history = TransportHistory(gov_dir)
+        history.save_report(report)
+
+    if as_json:
+        click.echo(_json.dumps(report.to_dict(), indent=2, default=str))
+    else:
+        click.echo(report.to_summary())
+
+
+@transport_group.command("extract")
+@click.argument("text_file", type=click.Path(exists=True))
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def transport_extract(text_file: str, as_json: bool) -> None:
+    """Extract commitments from a text file."""
+    from .commitment_transport import extract_commitments
+    import json as _json
+
+    text = Path(text_file).read_text()
+    commitments = extract_commitments(text)
+
+    if as_json:
+        click.echo(_json.dumps([c.to_dict() for c in commitments], indent=2, default=str))
+    else:
+        if not commitments:
+            click.echo("No commitments found.")
+        else:
+            click.echo(f"Found {len(commitments)} commitments:")
+            for c in commitments:
+                click.echo(f"  [{c.modality.value}] [{c.kind.value}] {c.text[:80]}")
+                if c.scope:
+                    click.echo(f"    scope: {c.scope}")
+
+
+@transport_group.command("history")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def transport_history(ctx: click.Context, as_json: bool) -> None:
+    """Show transport validation history."""
+    from .commitment_transport import TransportHistory
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    if not gov_dir:
+        click.echo("No governor directory found.")
+        return
+
+    history = TransportHistory(gov_dir)
+    reports = history.list_reports()
+
+    if as_json:
+        click.echo(_json.dumps(reports, indent=2, default=str))
+    else:
+        if not reports:
+            click.echo("No transport reports.")
+        else:
+            for r in reports:
+                blocking = " BLOCKING" if r["blocking"] else ""
+                click.echo(
+                    f"  {r['report_id']}  shear={r['shear_score']:.4f}  "
+                    f"type={r['transform_type']}{blocking}"
+                )
+
+
+@transport_group.command("stats")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def transport_stats(ctx: click.Context, as_json: bool) -> None:
+    """Show aggregate shear statistics."""
+    from .commitment_transport import TransportHistory
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    if not gov_dir:
+        click.echo("No governor directory found.")
+        return
+
+    history = TransportHistory(gov_dir)
+    stats = history.stats()
+
+    if as_json:
+        click.echo(_json.dumps(stats, indent=2, default=str))
+    else:
+        click.echo(f"Total reports: {stats['total_reports']}")
+        click.echo(f"Average shear: {stats['avg_shear']:.4f}")
+        click.echo(f"Max shear: {stats['max_shear']:.4f}")
+        click.echo(f"Blocking count: {stats['blocking_count']}")
+
+
+# ---------------------------------------------------------------------------
+# Spectral Stability (AG2 Layer 2, Item #6)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("stability")
+def stability_group() -> None:
+    """Spectral stability gate for governance topology.
+
+    Computes ρ(M) from the governance hierarchy's coupling matrix.
+    Hard blocks when ρ(M) ≥ 1 — unstable by construction, no override.
+    """
+
+
+@stability_group.command("check")
+@click.option("--profile", "-p", default=None, help="Governance profile to check")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def stability_check(ctx: click.Context, profile: str | None, as_json: bool) -> None:
+    """Preflight stability check on governance topology."""
+    from .spectral_stability import StabilityGate
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    gate = StabilityGate(profile=profile, governor_dir=gov_dir)
+    report = gate.check()
+
+    if as_json:
+        click.echo(_json.dumps(report.to_dict(), indent=2, default=str))
+    else:
+        click.echo(report.to_summary())
+
+
+@stability_group.command("matrix")
+@click.option("--profile", "-p", default=None, help="Governance profile")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def stability_matrix(profile: str | None, as_json: bool) -> None:
+    """Show the coupling matrix details."""
+    from .spectral_stability import compute_stability
+    import json as _json
+
+    report = compute_stability(profile=profile)
+    coupling = report.coupling
+
+    if as_json:
+        click.echo(_json.dumps(coupling.to_dict(), indent=2, default=str))
+    else:
+        click.echo(f"ρ(M) = {coupling.spectral_radius:.4f}")
+        click.echo(f"\nLayers: {', '.join(l.name for l in coupling.layers)}")
+        click.echo("\nCoupling Matrix M:")
+        n = len(coupling.layers)
+        header = "           " + "  ".join(f"{l.name[:8]:>8}" for l in coupling.layers)
+        click.echo(header)
+        for i in range(n):
+            row = f"{coupling.layers[i].name[:10]:<10} " + "  ".join(
+                f"{coupling.matrix[i][j]:8.4f}" for j in range(n)
+            )
+            click.echo(row)
+
+
+@stability_group.command("hotspots")
+@click.option("--profile", "-p", default=None, help="Governance profile")
+@click.option("--top", "-n", "top_n", default=3, help="Number of hotspots")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def stability_hotspots(profile: str | None, top_n: int, as_json: bool) -> None:
+    """Show coupling hotspots and recommendations."""
+    from .spectral_stability import compute_stability
+    import json as _json
+
+    report = compute_stability(profile=profile)
+
+    if as_json:
+        click.echo(_json.dumps({
+            "hotspots": [h.to_dict() for h in report.hotspots[:top_n]],
+            "recommendations": report.recommendations,
+        }, indent=2, default=str))
+    else:
+        if not report.hotspots:
+            click.echo("No coupling hotspots detected.")
+        else:
+            click.echo("Coupling Hotspots:")
+            for h in report.hotspots[:top_n]:
+                click.echo(f"  {h.from_layer} → {h.to_layer}")
+                click.echo(f"    Strength: {h.strength:.4f}, Sensitivity: {h.sensitivity:.4f}")
+                click.echo(f"    Mitigation: {h.mitigation}")
+        if report.recommendations:
+            click.echo("\nRecommendations:")
+            for r in report.recommendations:
+                click.echo(f"  - {r}")
+
+
+@stability_group.command("region")
+@click.option("--profile", "-p", default=None, help="Governance profile")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def stability_region(profile: str | None, as_json: bool) -> None:
+    """Show kinetic region classification."""
+    from .spectral_stability import compute_stability
+    import json as _json
+
+    report = compute_stability(profile=profile)
+
+    if as_json:
+        click.echo(_json.dumps({
+            "region": report.region.value,
+            "spectral_radius": report.spectral_radius,
+            "margin": report.margin,
+            "verdict": report.verdict.value,
+            "stable": report.stable,
+        }, indent=2, default=str))
+    else:
+        click.echo(f"Region: {report.region.value}")
+        click.echo(f"ρ(M) = {report.spectral_radius:.4f}")
+        click.echo(f"Margin: {report.margin:.4f}")
+        click.echo(f"Verdict: {report.verdict.value}")
+        click.echo(f"Stable: {report.stable}")
+
+
+# ---------------------------------------------------------------------------
+# Scalar Collapse Detection (AG2 Layer 2, Item #7)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("collapse")
+def collapse_group() -> None:
+    """Scalar collapse detection.
+
+    Monitors the effective dimensionality of the governance decision space.
+    Detects eigenstructure evaporation where metrics converge to scalar behavior.
+    """
+
+
+@collapse_group.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def collapse_status(ctx: click.Context, as_json: bool) -> None:
+    """Show current collapse detection status."""
+    from .scalar_collapse import CollapseDetector
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    detector = CollapseDetector(governor_dir=gov_dir)
+    status = detector.status()
+
+    if as_json:
+        click.echo(_json.dumps(status, indent=2, default=str))
+    else:
+        click.echo(f"Sample count: {status['sample_count']}")
+        click.echo(f"Min samples needed: {status['min_samples']}")
+        click.echo(f"Sufficient data: {status['has_sufficient_data']}")
+        click.echo(f"Tracked metrics: {', '.join(status['metric_names'])}")
+        if "last_risk_score" in status:
+            click.echo(f"Last risk score: {status['last_risk_score']:.4f}")
+            click.echo(f"Last risk level: {status['last_risk_level']}")
+
+
+@collapse_group.command("analyze")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def collapse_analyze(ctx: click.Context, as_json: bool) -> None:
+    """Analyze governance metrics for collapse risk (requires telemetry data)."""
+    from .scalar_collapse import detect_collapse, MetricSample
+    import json as _json
+
+    # Check for telemetry data
+    gov_dir = ctx.obj.get("gov_dir")
+    report = detect_collapse([])  # No live data without telemetry
+
+    if as_json:
+        click.echo(_json.dumps(report.to_dict(), indent=2, default=str))
+    else:
+        click.echo(report.to_summary())
+
+
+@collapse_group.command("history")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def collapse_history(ctx: click.Context, as_json: bool) -> None:
+    """Show collapse detection history."""
+    from .scalar_collapse import CollapseHistory
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    if not gov_dir:
+        click.echo("No governor directory found.")
+        return
+
+    history = CollapseHistory(gov_dir)
+    reports = history.list_reports()
+
+    if as_json:
+        click.echo(_json.dumps(reports, indent=2, default=str))
+    else:
+        if not reports:
+            click.echo("No collapse reports.")
+        else:
+            for r in reports:
+                irr = " IRREVERSIBLE" if r.get("irreversible") else ""
+                click.echo(
+                    f"  {r['report_id']}  risk={r['risk_score']:.4f}  "
+                    f"level={r['risk_level']}  action={r['action']}{irr}"
+                )
+
+
+@collapse_group.command("modes")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def collapse_modes(ctx: click.Context, as_json: bool) -> None:
+    """Show suppressed modes from last collapse check."""
+    from .scalar_collapse import CollapseHistory
+    import json as _json
+
+    gov_dir = ctx.obj.get("gov_dir")
+    if not gov_dir:
+        click.echo("No governor directory found.")
+        return
+
+    history = CollapseHistory(gov_dir)
+    reports = history.list_reports()
+    if not reports:
+        click.echo("No collapse reports. Run 'governor collapse analyze' first.")
+        return
+
+    latest = history.load_report(reports[0]["report_id"])
+    if latest is None:
+        click.echo("Could not load latest report.")
+        return
+
+    if as_json:
+        click.echo(_json.dumps({
+            "dominant_metric": latest.dominant_metric,
+            "suppressed_modes": latest.suppressed_modes,
+            "effective_dimension": latest.signals.effective_dimension,
+            "max_dimension": latest.signals.max_dimension,
+        }, indent=2, default=str))
+    else:
+        if latest.dominant_metric:
+            click.echo(f"Dominant metric: {latest.dominant_metric}")
+        else:
+            click.echo("No dominant metric detected.")
+        if latest.suppressed_modes:
+            click.echo(f"Suppressed modes: {', '.join(latest.suppressed_modes)}")
+        else:
+            click.echo("No suppressed modes detected.")
+        click.echo(f"Effective dimension: {latest.signals.effective_dimension:.1f}/{latest.signals.max_dimension}")
+
+
+# ---------------------------------------------------------------------------
+# Dashboard UX (AG2 Layer 4, Item #11)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("dashboard-ux")
+def dashboard_ux_group() -> None:
+    """Run-centric governance dashboard backend."""
+    pass
+
+
+@dashboard_ux_group.command("summary")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def dashboard_ux_summary(ctx: click.Context, as_json: bool) -> None:
+    """Show aggregate dashboard statistics."""
+    from .dashboard_ux import DashboardStore
+
+    store = DashboardStore()
+    summary = store.dashboard_summary()
+
+    if as_json:
+        click.echo(json.dumps(summary.to_dict(), indent=2))
+    else:
+        click.echo(f"Total runs: {summary.total_runs}")
+        click.echo(f"  Passed: {summary.passed}")
+        click.echo(f"  Failed: {summary.failed}")
+        click.echo(f"  Cancelled: {summary.cancelled}")
+        click.echo(f"  Pass rate: {summary.pass_rate:.1%}")
+        click.echo(f"  Total claims: {summary.total_claims}")
+        click.echo(f"  Total violations: {summary.total_violations}")
+
+
+@dashboard_ux_group.command("runs")
+@click.option("--profile", default="", help="Filter by profile")
+@click.option("--verdict", default="", help="Filter by verdict")
+@click.option("--limit", default=20, help="Max runs to show")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def dashboard_ux_runs(ctx: click.Context, profile: str, verdict: str, limit: int, as_json: bool) -> None:
+    """List run summaries."""
+    from .dashboard_ux import DashboardStore
+
+    store = DashboardStore()
+    runs = store.list_runs(profile=profile, verdict=verdict, limit=limit)
+
+    if as_json:
+        click.echo(json.dumps([r.to_dict() for r in runs], indent=2))
+    else:
+        if not runs:
+            click.echo("No runs recorded.")
+            return
+        for r in runs:
+            click.echo(f"  {r.run_id:<14} {r.created_at[:10]:<12} "
+                        f"{r.model:<16} {r.profile:<12} "
+                        f"{r.verdict.value.upper():<10} "
+                        f"{r.claim_count} claims  {r.violation_count} violations")
+
+
+@dashboard_ux_group.command("report")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output (default: markdown)")
+@click.pass_context
+def dashboard_ux_report(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Generate report for a run."""
+    from .dashboard_ux import DashboardStore, generate_report
+
+    store = DashboardStore()
+    run = store.get_run(run_id)
+    if not run:
+        click.echo(f"Run not found: {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    report = generate_report(
+        run_id,
+        manifest={"profile": run.profile, "model": run.model},
+    )
+    store.save_report(report)
+
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(report.to_markdown())
+
+
+@dashboard_ux_group.command("templates")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def dashboard_ux_templates(ctx: click.Context, as_json: bool) -> None:
+    """List available run templates."""
+    from .dashboard_ux import BUILTIN_TEMPLATES
+
+    if as_json:
+        click.echo(json.dumps([t.to_dict() for t in BUILTIN_TEMPLATES], indent=2))
+    else:
+        for t in BUILTIN_TEMPLATES:
+            click.echo(f"  {t.name:<20} {t.description}")
+            click.echo(f"    Task: {t.example_task}")
+            click.echo(f"    Expected: {t.expected_outcome}")
+            click.echo()
+
+
+@dashboard_ux_group.command("schema")
+@click.pass_context
+def dashboard_ux_schema(ctx: click.Context) -> None:
+    """Show controls schema (JSON Schema + render hints)."""
+    from .dashboard_ux import build_controls_schema
+
+    click.echo(json.dumps(build_controls_schema(), indent=2))
+
+
+# ---------------------------------------------------------------------------
+# Document Governance (AG2 Layer 4, Item #10)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("doc")
+def doc_group() -> None:
+    """Document governance — docs as governed artifacts."""
+    pass
+
+
+@doc_group.command("register")
+@click.argument("path")
+@click.option("--scope", required=True, type=click.Choice(["descriptive", "procedural", "authoritative"]))
+@click.option("--link", "-l", multiple=True, help="Link as kind:target (e.g., code:src/auth/)")
+@click.option("--ttl", type=int, default=None, help="TTL in days")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_register(ctx: click.Context, path: str, scope: str, link: tuple, ttl: int | None, as_json: bool) -> None:
+    """Register a document for governance."""
+    from .doc_governance import DocGovernor, DocLink, LinkKind
+
+    links = []
+    for l_spec in link:
+        if ":" in l_spec:
+            kind_str, target = l_spec.split(":", 1)
+            try:
+                kind = LinkKind(kind_str)
+            except ValueError:
+                click.echo(f"Unknown link kind: {kind_str}. Valid: {[k.value for k in LinkKind]}", err=True)
+                ctx.exit(1)
+                return
+            links.append(DocLink(kind=kind, target=target))
+
+    gov = DocGovernor()
+    doc = gov.register(path, scope, links=links, ttl_days=ttl)
+
+    if as_json:
+        click.echo(json.dumps(doc.to_dict(), indent=2))
+    else:
+        click.echo(f"Registered: {path} [{scope}] (id: {doc.doc_id})")
+        if links:
+            click.echo(f"  Links: {len(links)}")
+        if ttl:
+            click.echo(f"  TTL: {ttl}d")
+
+
+@doc_group.command("unregister")
+@click.argument("path")
+@click.pass_context
+def doc_unregister(ctx: click.Context, path: str) -> None:
+    """Unregister a document from governance."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    if gov.unregister(path):
+        click.echo(f"Unregistered: {path}")
+    else:
+        click.echo(f"Not found: {path}", err=True)
+        ctx.exit(1)
+
+
+@doc_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_list(ctx: click.Context, as_json: bool) -> None:
+    """List registered governed documents."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    docs = gov.list_docs()
+
+    if as_json:
+        click.echo(json.dumps([d.to_dict() for d in docs], indent=2))
+    else:
+        if not docs:
+            click.echo("No governed documents registered.")
+            return
+        for doc in docs:
+            status = doc.status.value.upper()
+            click.echo(f"  {doc.path:<40} [{doc.scope.value}] {status}")
+
+
+@doc_group.command("check")
+@click.argument("path", required=False)
+@click.option("--all", "check_all", is_flag=True, help="Check all registered docs")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_check(ctx: click.Context, path: str | None, check_all: bool, as_json: bool) -> None:
+    """Check a document against governance rules."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+
+    if check_all:
+        results = gov.check_all()
+        if as_json:
+            click.echo(json.dumps([r.to_dict() for r in results], indent=2))
+        else:
+            for r in results:
+                status = "PASS" if r.passed else "FAIL"
+                click.echo(f"  {r.path:<40} [{r.scope}] {status} ({len(r.findings)} findings)")
+        return
+
+    if not path:
+        click.echo("Provide a path or use --all.", err=True)
+        ctx.exit(1)
+        return
+
+    result = gov.check(path)
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        status = "PASS" if result.passed else "FAIL"
+        click.echo(f"{result.path} [{result.scope}]: {status}")
+        for f in result.findings:
+            line = f"L{f.line_number} " if f.line_number else ""
+            click.echo(f"  [{f.severity.value}] {line}{f.message}")
+        if not result.findings:
+            click.echo("  No issues found.")
+
+
+@doc_group.command("status")
+@click.argument("path", required=False)
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_status(ctx: click.Context, path: str | None, as_json: bool) -> None:
+    """Show governance status for documents."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+
+    if path:
+        result = gov.check(path)
+        if as_json:
+            click.echo(json.dumps(result.to_dict(), indent=2))
+        else:
+            click.echo(f"{result.path} [{result.scope}]: {result.status}")
+            click.echo(f"  Authority claims: {result.authority_claims} "
+                        f"(grounded: {result.grounded_claims}, ungrounded: {result.ungrounded_claims})")
+            click.echo(f"  Links: {result.links_valid} valid, {result.links_broken} broken")
+        return
+
+    report = gov.status()
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(f"Governed documents: {report.total}")
+        click.echo(f"  Current: {report.current}")
+        click.echo(f"  Stale: {report.stale}")
+        click.echo(f"  Historical: {report.historical}")
+        click.echo(f"  Unsafe: {report.unsafe}")
+
+
+@doc_group.command("stale")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_stale(ctx: click.Context, as_json: bool) -> None:
+    """List stale and unsafe documents."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    stale = gov.stale_docs()
+
+    if as_json:
+        click.echo(json.dumps([d.to_dict() for d in stale], indent=2))
+    else:
+        if not stale:
+            click.echo("No stale or unsafe documents.")
+            return
+        for doc in stale:
+            click.echo(f"  {doc.path:<40} [{doc.status.value}] TTL: {doc.ttl_days or 'none'}d")
+
+
+@doc_group.command("verify")
+@click.argument("path")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_verify(ctx: click.Context, path: str, as_json: bool) -> None:
+    """Verify a document and produce a receipt."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    receipt = gov.verify(path)
+
+    if not receipt:
+        click.echo(f"Not found: {path}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(receipt.to_dict(), indent=2))
+    else:
+        click.echo(f"Verified: {path}")
+        click.echo(f"  Status: {receipt.status}")
+        click.echo(f"  Authority claims: {receipt.authority_claims}")
+        click.echo(f"  Links: {receipt.links_valid} valid, {receipt.links_broken} broken")
+        click.echo(f"  Hash: {receipt.content_hash}")
+
+
+@doc_group.command("demote")
+@click.argument("path")
+@click.pass_context
+def doc_demote(ctx: click.Context, path: str) -> None:
+    """Demote a document to HISTORICAL status."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    if gov.demote(path):
+        click.echo(f"Demoted: {path} → HISTORICAL")
+    else:
+        click.echo(f"Not found: {path}", err=True)
+        ctx.exit(1)
+
+
+@doc_group.command("promote")
+@click.argument("path")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def doc_promote(ctx: click.Context, path: str, as_json: bool) -> None:
+    """Promote a HISTORICAL document back to CURRENT (requires re-check)."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    result = gov.promote(path)
+
+    if not result:
+        click.echo(f"Not found: {path}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        if result.passed:
+            click.echo(f"Promoted: {path} → CURRENT")
+        else:
+            click.echo(f"Cannot promote: {path} has {len(result.findings)} issues")
+            for f in result.findings[:3]:
+                click.echo(f"  [{f.severity.value}] {f.message}")
+
+
+@doc_group.command("export")
+@click.argument("path")
+@click.option("--format", "fmt", default="obsidian", type=click.Choice(["obsidian", "json"]))
+@click.pass_context
+def doc_export(ctx: click.Context, path: str, fmt: str) -> None:
+    """Export governance metadata for a document."""
+    from .doc_governance import DocGovernor
+
+    gov = DocGovernor()
+    result = gov.export_doc(path, fmt)
+
+    if not result:
+        click.echo(f"Not found: {path}", err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(result)
+
+
+# ---------------------------------------------------------------------------
+# CLI Chat (AG2 Layer 3, Item #8)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("backend")
+def backend_group() -> None:
+    """Backend management for governed chat."""
+    pass
+
+
+@backend_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def backend_list(ctx: click.Context, as_json: bool) -> None:
+    """List available backends and their status."""
+    from .cli_chat import probe_backends
+
+    backends = probe_backends()
+    if as_json:
+        click.echo(json.dumps([b.to_dict() for b in backends], indent=2))
+    else:
+        for b in backends:
+            status = "available" if b.available else "not available"
+            reason = f" ({b.reason})" if b.reason else ""
+            models = f", {len(b.models)} models" if b.models else ""
+            click.echo(f"  {b.name:<14} {status}{reason}{models}")
+
+
+@backend_group.command("switch")
+@click.argument("name")
+@click.option("--model", default="", help="Default model for this backend")
+@click.pass_context
+def backend_switch(ctx: click.Context, name: str, model: str) -> None:
+    """Switch active backend."""
+    from .cli_chat import ChatConfig, KNOWN_BACKENDS, probe_backend
+
+    if name not in KNOWN_BACKENDS:
+        click.echo(f"Unknown backend: {name}. Known: {', '.join(KNOWN_BACKENDS)}", err=True)
+        ctx.exit(1)
+        return
+
+    info = probe_backend(name)
+    if not info.available:
+        click.echo(f"Warning: {name} is not available ({info.reason})", err=True)
+
+    config = ChatConfig.load()
+    config.active_backend = name
+    if model:
+        config.active_model = model
+    config.save()
+    click.echo(f"Active backend: {name}" + (f" ({model})" if model else ""))
+
+
+@backend_group.command("status")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def backend_status(ctx: click.Context, as_json: bool) -> None:
+    """Show active backend."""
+    from .cli_chat import ChatConfig, probe_backend
+
+    config = ChatConfig.load()
+    info = probe_backend(config.active_backend)
+
+    if as_json:
+        click.echo(json.dumps({
+            "active_backend": config.active_backend,
+            "active_model": config.active_model,
+            "available": info.available,
+            "reason": info.reason,
+        }, indent=2))
+    else:
+        status = "available" if info.available else "NOT available"
+        model_str = config.active_model or info.default_model or "(default)"
+        click.echo(f"Active: {config.active_backend} ({model_str}) — {status}")
+
+
+@backend_group.command("models")
+@click.pass_context
+def backend_models(ctx: click.Context) -> None:
+    """List models for active backend."""
+    from .cli_chat import ChatConfig, probe_backend
+
+    config = ChatConfig.load()
+    info = probe_backend(config.active_backend)
+    if not info.available:
+        click.echo(f"{config.active_backend} is not available: {info.reason}", err=True)
+        ctx.exit(1)
+        return
+
+    if info.models:
+        for m in info.models:
+            click.echo(f"  {m}")
+    else:
+        click.echo(f"  (model discovery not supported for {config.active_backend})")
+        if info.default_model:
+            click.echo(f"  Default: {info.default_model}")
+
+
+@cli.command("chat")
+@click.argument("prompt", required=False, default="")
+@click.option("--backend", default="", help="Backend to use (overrides config)")
+@click.option("--model", default="", help="Model to use (overrides config)")
+@click.option("--scope", default="", help="File scope for constraint projection")
+@click.option("--mode", default="code", help="Governor mode (code/fiction/nonfiction/general)")
+@click.option("--stdin", "use_stdin", is_flag=True, help="Read prompt from stdin")
+@click.option("--no-hooks", is_flag=True, help="Disable governor hooks")
+@click.option("--format", "fmt", default="text", type=click.Choice(["text", "json"]))
+@click.option("--compare", default="", help="Compare backends (e.g., ollama:llama3,anthropic:claude-3)")
+@click.pass_context
+def chat_command(
+    ctx: click.Context, prompt: str, backend: str, model: str,
+    scope: str, mode: str, use_stdin: bool, no_hooks: bool,
+    fmt: str, compare: str,
+) -> None:
+    """Governed single-turn chat with active backend.
+
+    \b
+    Examples:
+      governor chat "Refactor the auth module"
+      governor chat "Explain this" --backend ollama --model llama3
+      echo "What does this do?" | governor chat --stdin
+      governor chat "Add validation" --compare ollama:llama3,anthropic:claude-3
+    """
+    import sys as _sys
+
+    from .cli_chat import (
+        format_compare,
+        format_response,
+        parse_backend_list as parse_bl,
+        run_chat,
+        run_compare,
+    )
+
+    # Resolve prompt
+    if use_stdin:
+        prompt = _sys.stdin.read().strip()
+    if not prompt:
+        click.echo("No prompt provided. Use an argument or --stdin.", err=True)
+        ctx.exit(1)
+        return
+
+    # Compare mode
+    if compare:
+        backends = parse_bl(compare)
+        if len(backends) < 2:
+            click.echo("--compare requires at least 2 backends.", err=True)
+            ctx.exit(1)
+            return
+        try:
+            result = run_compare(prompt, backends, scope=scope, mode=mode)
+        except Exception as e:
+            click.echo(f"Error: {e}", err=True)
+            ctx.exit(1)
+            return
+
+        if fmt == "json":
+            click.echo(json.dumps(result.to_dict(), indent=2))
+        else:
+            click.echo(format_compare(result))
+        return
+
+    # Single backend chat
+    try:
+        result = run_chat(
+            prompt, backend=backend, model=model,
+            scope=scope, mode=mode, use_hooks=not no_hooks,
+        )
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    if fmt == "json":
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(format_response(result))
+
+    if not result.passed:
+        ctx.exit(1)
+
+
 # Advanced command group - pointer to existing commands
 @cli.group(invoke_without_command=True)
 @click.pass_context
@@ -13009,6 +15060,1333 @@ def advanced(ctx: click.Context) -> None:
     """
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
+
+
+# ---------------------------------------------------------------------------
+# Measurement Integrity (AG2 Layer 2.1-B)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("measure")
+def measure_group() -> None:
+    """Measurement integrity — tidepool defense for tool outputs."""
+    pass
+
+
+@measure_group.command("status")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def measure_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show measurement integrity status for a run."""
+    from .measurement_integrity import MeasurementStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = MeasurementStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if not state:
+        click.echo(f"No measurement data for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Run: {run_id}")
+        click.echo(f"Risk: {state.risk_score:.3f}")
+        click.echo(f"Trusted: {state.trusted_count} | Untrusted: {state.untrusted_count} | Quarantined: {state.quarantined_count}")
+        if state.frozen_tools:
+            click.echo(f"Frozen tools: {', '.join(sorted(state.frozen_tools))}")
+        click.echo(f"Alerts: {len(state.alerts)}")
+
+
+@measure_group.command("scan")
+@click.argument("text")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def measure_scan(ctx: click.Context, text: str, as_json: bool) -> None:
+    """Scan text for instruction masquerade patterns."""
+    from .measurement_integrity import detect_instruction_masquerade
+
+    matches = detect_instruction_masquerade(text)
+    if as_json:
+        click.echo(json.dumps({"patterns_matched": matches, "is_suspicious": len(matches) > 0}))
+    else:
+        if matches:
+            click.echo(f"Suspicious patterns ({len(matches)}):")
+            for m in matches:
+                click.echo(f"  ! {m}")
+        else:
+            click.echo("No suspicious patterns detected.")
+
+
+@measure_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def measure_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with measurement data."""
+    from .measurement_integrity import MeasurementStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = MeasurementStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            s = store.load(r)
+            results.append({"run_id": r, "risk_score": s.risk_score if s else None})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No measurement runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: risk={s.risk_score:.3f} frozen={len(s.frozen_tools)}")
+
+
+# ---------------------------------------------------------------------------
+# Phase Control (AG2 Layer 2.1-A)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("phase")
+def phase_group() -> None:
+    """Phase control — run phases with budget locks."""
+    pass
+
+
+@phase_group.command("status")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def phase_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show phase control status for a run."""
+    from .phase_control import PhaseStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = PhaseStore(governor_dir=gov_dir)
+    controller = store.load(run_id)
+
+    if not controller:
+        click.echo(f"No phase data for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(controller.to_dict(), indent=2))
+    else:
+        click.echo(f"Run: {run_id}")
+        click.echo(f"Phase: {controller.phase.name}")
+        br = controller.budget_remaining
+        click.echo(f"Budget: explore={br['explore']} draft={br['draft']} verify={br['verify']}")
+        click.echo(f"Confidence cap: {controller.confidence_cap:.2f}")
+        if controller.novelty.total > 0:
+            click.echo(f"Novelty debt: {controller.novelty.total:.2f}")
+
+
+@phase_group.command("advance")
+@click.argument("run_id")
+@click.option("--force", is_flag=True, help="Force transition")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def phase_advance(ctx: click.Context, run_id: str, force: bool, as_json: bool) -> None:
+    """Advance to next phase."""
+    from .phase_control import PhaseStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = PhaseStore(governor_dir=gov_dir)
+    controller = store.load(run_id)
+
+    if not controller:
+        click.echo(f"No phase data for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if force:
+        evt = controller.force_advance("manual force")
+    else:
+        evt = controller.advance()
+
+    store.save(controller)
+
+    if as_json:
+        click.echo(json.dumps(evt.to_dict(), indent=2))
+    else:
+        click.echo(f"{evt.from_phase.name} → {evt.to_phase.name}: {evt.result.value}")
+        click.echo(f"Reason: {evt.reason}")
+
+
+@phase_group.command("init")
+@click.argument("run_id")
+@click.option("--explore", type=int, default=None, help="Explore budget")
+@click.option("--draft", type=int, default=None, help="Draft budget")
+@click.option("--verify", type=int, default=None, help="Verify budget")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def phase_init(ctx: click.Context, run_id: str, explore: int | None,
+               draft: int | None, verify: int | None, as_json: bool) -> None:
+    """Initialize phase control for a run."""
+    from .phase_control import PhaseController, PhaseBudget, PhaseStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = PhaseStore(governor_dir=gov_dir)
+
+    budget_kwargs: dict[str, int] = {}
+    if explore is not None:
+        budget_kwargs["explore"] = explore
+    if draft is not None:
+        budget_kwargs["draft"] = draft
+    if verify is not None:
+        budget_kwargs["verify"] = verify
+
+    controller = PhaseController(
+        run_id=run_id,
+        budget=PhaseBudget(**budget_kwargs) if budget_kwargs else PhaseBudget(),
+    )
+    store.save(controller)
+
+    if as_json:
+        click.echo(json.dumps(controller.to_dict(), indent=2))
+    else:
+        click.echo(f"Phase control initialized for run {run_id}")
+        click.echo(f"Budget: explore={controller.budget.explore} draft={controller.budget.draft} verify={controller.budget.verify}")
+
+
+@phase_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def phase_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with phase control."""
+    from .phase_control import PhaseStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = PhaseStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            c = store.load(r)
+            results.append({"run_id": r, "phase": c.phase.name if c else None})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No phase-controlled runs found.")
+        for r in runs:
+            c = store.load(r)
+            if c:
+                click.echo(f"  {r}: {c.phase.name}")
+
+
+# ---------------------------------------------------------------------------
+# Coverage Metrics (AG2 Layer 2.1-A)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("metrics")
+def metrics_group() -> None:
+    """Coverage and efficiency metrics — severity-weighted verification."""
+    pass
+
+
+@metrics_group.command("status")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def metrics_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show coverage metrics for a run."""
+    from .metrics import MetricsStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = MetricsStore(governor_dir=gov_dir)
+    tracker = store.load_tracker(run_id)
+
+    if not tracker:
+        click.echo(f"No metrics found for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(tracker.to_dict(), indent=2))
+    else:
+        cc = tracker.claim_coverage
+        click.echo(f"Run: {run_id}")
+        click.echo(f"Claims: {cc.total_claims}")
+        click.echo(cc.summary())
+        if tracker.snapshots:
+            click.echo(f"Snapshots: {len(tracker.snapshots)}")
+            click.echo(f"Efficiency: {tracker.latest_efficiency():.4f}")
+
+
+@metrics_group.command("claims")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def metrics_claims(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """List claims tracked for a run."""
+    from .metrics import MetricsStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = MetricsStore(governor_dir=gov_dir)
+    tracker = store.load_tracker(run_id)
+
+    if not tracker:
+        click.echo(f"No metrics found for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps([c.to_dict() for c in tracker.claims], indent=2))
+    else:
+        for c in tracker.claims:
+            icon = {"verified": "+", "waived": "~", "refuted": "!", "pending": "?", "unknown": " "}.get(c.status.value, " ")
+            click.echo(f"  [{icon}] {c.claim_id} ({c.severity.value}): {c.description}")
+
+
+@metrics_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def metrics_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with metrics."""
+    from .metrics import MetricsStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = MetricsStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            t = store.load_tracker(r)
+            results.append({"run_id": r, "coverage": t.coverage if t else None,
+                           "claims": len(t.claims) if t else 0})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No metrics runs found.")
+        for r in runs:
+            t = store.load_tracker(r)
+            if t:
+                click.echo(f"  {r}: coverage={t.coverage:.1%} claims={len(t.claims)}")
+
+
+# ---------------------------------------------------------------------------
+# Admissibility Gate (AG2 Layer 2.1-A)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("admit")
+def admit_group() -> None:
+    """Admissibility gate — push-back system for underspecified tasks."""
+    pass
+
+
+@admit_group.command("assess")
+@click.option("--setpoint", type=float, required=True, help="Setpoint score (0-1)")
+@click.option("--constraints", type=float, required=True, help="Constraint score (0-1)")
+@click.option("--observability", type=float, required=True, help="Observability score (0-1)")
+@click.option("--run-id", default="", help="Run ID to persist assessment")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def admit_assess(ctx: click.Context, setpoint: float, constraints: float,
+                 observability: float, run_id: str, as_json: bool) -> None:
+    """Assess task admissibility."""
+    from .admissibility import assess_task, AdmissibilityStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    assessment = assess_task(setpoint, constraints, observability)
+
+    if run_id:
+        store = AdmissibilityStore(governor_dir=gov_dir)
+        store.save_assessment(run_id, assessment)
+
+    if as_json:
+        click.echo(json.dumps(assessment.to_dict(), indent=2))
+    else:
+        click.echo(f"Score: {assessment.score:.3f}")
+        click.echo(f"Mode: {assessment.mode.value}")
+
+
+@admit_group.command("status")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def admit_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show admissibility status for a run."""
+    from .admissibility import AdmissibilityStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = AdmissibilityStore(governor_dir=gov_dir)
+    assessment = store.load_assessment(run_id)
+
+    if not assessment:
+        click.echo(f"No assessment found for run {run_id}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(assessment.to_dict(), indent=2))
+    else:
+        click.echo(f"Run: {run_id}")
+        click.echo(f"Score: {assessment.score:.3f}")
+        click.echo(f"Mode: {assessment.mode.value}")
+        click.echo(f"Unknowns: {len(assessment.unknowns)}")
+
+
+@admit_group.command("unknowns")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def admit_unknowns(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """List unknowns for a run."""
+    from .admissibility import AdmissibilityStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = AdmissibilityStore(governor_dir=gov_dir)
+    unknowns = store.load_unknowns(run_id)
+
+    if as_json:
+        click.echo(json.dumps([u.to_dict() for u in unknowns], indent=2))
+    else:
+        if not unknowns:
+            click.echo("No unknowns recorded.")
+        for u in unknowns:
+            click.echo(f"  [{u.severity.value}] {u.id}: {u.description} ({u.category.value})")
+
+
+@admit_group.command("check")
+@click.argument("run_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def admit_check(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Check Invariant F (no hidden assumptions) for a run."""
+    from .admissibility import AdmissibilityStore, check_invariant_f
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = AdmissibilityStore(governor_dir=gov_dir)
+    unknowns = store.load_unknowns(run_id)
+    assumptions = store.load_assumptions(run_id)
+    violations = check_invariant_f(assumptions, unknowns)
+
+    if as_json:
+        click.echo(json.dumps({"violations": violations, "compliant": len(violations) == 0}, indent=2))
+    else:
+        if violations:
+            click.echo(f"Invariant F violations ({len(violations)}):")
+            for v in violations:
+                click.echo(f"  ! {v}")
+            ctx.exit(1)
+        else:
+            click.echo("Invariant F: compliant")
+
+
+@admit_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def admit_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with admissibility assessments."""
+    from .admissibility import AdmissibilityStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = AdmissibilityStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            a = store.load_assessment(r)
+            results.append({"run_id": r, "score": a.score if a else None,
+                           "mode": a.mode.value if a else None})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No admissibility assessments found.")
+        for r in runs:
+            a = store.load_assessment(r)
+            if a:
+                click.echo(f"  {r}: score={a.score:.3f} mode={a.mode.value}")
+
+
+# ---------------------------------------------------------------------------
+# Epistemic Evasion (AG2 Layer 2.1-C)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("evasion")
+def evasion_group() -> None:
+    """Epistemic evasion detection — discourse pattern analysis."""
+    pass
+
+
+@evasion_group.command("scan")
+@click.argument("text")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def evasion_scan(text: str, as_json: bool) -> None:
+    """Scan text for evasion operators."""
+    from .epistemic_evasion import analyze_evasion
+
+    result = analyze_evasion(text)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Score:    {result.score:.4f}")
+        click.echo(f"Severity: {result.severity.value}")
+        if result.operators:
+            click.echo("Operators:")
+            for op in result.operators:
+                click.echo(f"  {op.operator.value}: {op.confidence:.2f} [{', '.join(op.tells)}]")
+        if result.coupling_question:
+            click.echo(f"Question: {result.coupling_question}")
+
+
+@evasion_group.command("status")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def evasion_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show evasion state for a run."""
+    from .epistemic_evasion import EvasionStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = EvasionStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        click.echo(f"No evasion data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Run:      {state.run_id}")
+        click.echo(f"Peak:     {state.peak_score:.4f}")
+        click.echo(f"Cap:      {state.current_confidence_cap}")
+        click.echo(f"Scans:    {len(state.results)}")
+        if state.operator_counts:
+            click.echo("Operator counts:")
+            for k, v in sorted(state.operator_counts.items()):
+                click.echo(f"  {k}: {v}")
+
+
+# ---------------------------------------------------------------------------
+# Mode Detection (AG2 Layer 2.1-C)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("mode")
+def mode_group() -> None:
+    """Mode detection — Bayesian domain mode posterior."""
+    pass
+
+
+@mode_group.command("status")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def mode_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show mode detection state."""
+    from .mode_detection import ModeDetectionStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = ModeDetectionStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No mode data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Run:       {state.run_id}")
+        click.echo(f"Mode:      {state.current_posterior.dominant_mode.value}")
+        click.echo(f"Conf:      {state.current_posterior.confidence:.2f}")
+        click.echo(f"Profile:   {state.active_profile}")
+        click.echo(f"Obs count: {state.observation_count}")
+        click.echo(f"Alerts:    {len(state.alerts)}")
+
+
+@mode_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def mode_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with mode data."""
+    from .mode_detection import ModeDetectionStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = ModeDetectionStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        click.echo(json.dumps(runs))
+    else:
+        if not runs:
+            click.echo("No mode detection runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: {s.current_posterior.dominant_mode.value} "
+                           f"(conf={s.current_posterior.confidence:.2f})")
+
+
+# ---------------------------------------------------------------------------
+# Hysteresis (AG2 Layer 2.1-C)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("hysteresis")
+def hysteresis_group() -> None:
+    """Hysteresis — anti-churn mode transition control."""
+    pass
+
+
+@hysteresis_group.command("status")
+@click.option("--run-id", default="default", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def hysteresis_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show hysteresis state."""
+    from .hysteresis import HysteresisStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = HysteresisStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No hysteresis data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Mode:         {state.mode.value}")
+        click.echo(f"Admissibility: {state.last_admissibility:.3f}")
+        click.echo(f"Transitions:  {state.transition_count}")
+        click.echo(f"Suppressions: {state.suppression_count}")
+        click.echo(f"Regressions:  {state.regression_count}")
+        click.echo(f"Replans left: {state.replan_tracker.remaining()}")
+
+
+@hysteresis_group.command("check")
+@click.argument("admissibility", type=float)
+@click.option("--run-id", default="default", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def hysteresis_check(ctx: click.Context, admissibility: float, run_id: str, as_json: bool) -> None:
+    """Check mode transition for given admissibility value."""
+    from .hysteresis import HysteresisStore, HysteresisState, check_mode_transition
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = HysteresisStore(governor_dir=gov_dir)
+    state = store.load(run_id) or HysteresisState()
+
+    result = check_mode_transition(state.mode, admissibility)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Current: {result.current_mode.value}")
+        click.echo(f"Verdict: {result.verdict.value}")
+        click.echo(f"Target:  {result.target_mode.value}")
+        click.echo(f"Reason:  {result.reason}")
+
+
+@hysteresis_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def hysteresis_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with hysteresis data."""
+    from .hysteresis import HysteresisStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = HysteresisStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        click.echo(json.dumps(runs))
+    else:
+        if not runs:
+            click.echo("No hysteresis runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: {s.mode.value} (transitions={s.transition_count}, "
+                           f"suppressions={s.suppression_count})")
+
+
+# ---------------------------------------------------------------------------
+# Temporal Attack Surface (AG2 Parallel Track)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("temporal")
+def temporal_group() -> None:
+    """Temporal attack surface — Δt-aware security analysis."""
+    pass
+
+
+@temporal_group.command("scan")
+@click.argument("path")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def temporal_scan(path: str, as_json: bool) -> None:
+    """Scan file or directory for temporal antipatterns."""
+    from .temporal_attack import scan_file, scan_directory
+
+    p = Path(path)
+    if p.is_dir():
+        results = scan_directory(p)
+        if as_json:
+            click.echo(json.dumps([r.to_dict() for r in results], indent=2))
+        else:
+            total = sum(r.marker_count for r in results)
+            click.echo(f"Scanned directory: {path}")
+            click.echo(f"Files with findings: {len(results)}")
+            click.echo(f"Total markers: {total}")
+            for r in results:
+                click.echo(f"\n  {r.file_path}: {r.marker_count} markers")
+                for m in r.markers:
+                    click.echo(f"    L{m.line}: [{m.severity.value}] {m.marker_type.value} — {m.description}")
+    else:
+        result = scan_file(p)
+        if as_json:
+            click.echo(json.dumps(result.to_dict(), indent=2))
+        else:
+            click.echo(f"File: {path}")
+            click.echo(f"Markers: {result.marker_count}")
+            for m in result.markers:
+                click.echo(f"  L{m.line}: [{m.severity.value}] {m.marker_type.value} — {m.description}")
+
+
+@temporal_group.command("status")
+@click.option("--run-id", default="default", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def temporal_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show temporal scan state."""
+    from .temporal_attack import TemporalAttackStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = TemporalAttackStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No temporal scan data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Total markers: {state.total_markers}")
+        click.echo(f"Files scanned: {len(state.results)}")
+        if state.marker_counts:
+            click.echo("By type:")
+            for k, v in sorted(state.marker_counts.items()):
+                click.echo(f"  {k}: {v}")
+
+
+# ---------------------------------------------------------------------------
+# Quorum Extensions (AG2 Layer 2.1-D)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("quorum-ext")
+def quorum_ext_group() -> None:
+    """Extended quorum — severity-based gating, two-man rule."""
+    pass
+
+
+@quorum_ext_group.command("check")
+@click.argument("severity", type=click.Choice(["S1", "S2", "S3"]))
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def quorum_ext_check(severity: str, as_json: bool) -> None:
+    """Check quorum requirements for a severity tier."""
+    from .quorum_ext import Severity, get_requirement
+
+    sev = Severity(severity)
+    req = get_requirement(sev)
+
+    if as_json:
+        click.echo(json.dumps({"severity": sev.value, "requirement": req.to_dict()}, indent=2))
+    else:
+        click.echo(f"Severity:        {sev.value}")
+        click.echo(f"Confirmations:   {req.min_confirmations}")
+        click.echo(f"Domains:         {req.min_evidence_domains}")
+        click.echo(f"Independence:    {req.require_independence}")
+        click.echo(f"Two-man rule:    {req.require_two_man_rule}")
+
+
+@quorum_ext_group.command("status")
+@click.option("--run-id", default="default", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def quorum_ext_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show extended quorum state."""
+    from .quorum_ext import QuorumExtStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = QuorumExtStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No quorum extension data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Checks:         {len(state.checks)}")
+        click.echo(f"  Passed:       {state.passed_count()}")
+        click.echo(f"  Failed:       {state.failed_count()}")
+        click.echo(f"Confirmations:  {len(state.confirmations)}")
+        click.echo(f"Rejections:     {len(state.rejections)}")
+        click.echo(f"Adjudications:  {len(state.adjudications)}")
+
+
+@quorum_ext_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def quorum_ext_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with quorum extension data."""
+    from .quorum_ext import QuorumExtStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = QuorumExtStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        click.echo(json.dumps(runs))
+    else:
+        if not runs:
+            click.echo("No quorum extension runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: {s.passed_count()} passed, {s.failed_count()} failed")
+
+
+# ---------------------------------------------------------------------------
+# Coherence Budget (AG2 Layer 2.1-C)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("cbi")
+def cbi_group() -> None:
+    """Coherence Budget Index — governor health metric."""
+    pass
+
+
+@cbi_group.command("status")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def cbi_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show CBI for a run."""
+    from .coherence_budget import CoherenceBudgetStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = CoherenceBudgetStore(governor_dir=gov_dir)
+    result = store.load(run_id)
+
+    if result is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No CBI data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"CBI:    {result.cbi:.1f}/100")
+        click.echo(f"Status: {result.status.value}")
+        click.echo(f"P_inv:  {result.p_inv:.4f}")
+        click.echo(f"S_soft: {result.s_soft:.4f}")
+        click.echo(f"D (Δt): {result.D:.2f}")
+
+
+@cbi_group.command("compute")
+@click.option("--d", "dt", type=float, default=0.0, help="Δt squeeze ratio")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def cbi_compute(dt: float, as_json: bool) -> None:
+    """Compute CBI with default healthy metrics (diagnostic)."""
+    from .coherence_budget import compute_cbi
+
+    violations = {f"S{i}": 0.0 for i in range(1, 8)}
+    metrics = {f"M{i}": 1.0 for i in range(1, 9)}
+    result = compute_cbi(violations, metrics, D=dt)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"CBI:    {result.cbi:.1f}/100")
+        click.echo(f"Status: {result.status.value}")
+
+
+@cbi_group.command("closure")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def cbi_closure(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show closure gate result for a run."""
+    from .coherence_budget import CoherenceBudgetStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = CoherenceBudgetStore(governor_dir=gov_dir)
+    result = store.load_closure(run_id)
+
+    if result is None:
+        click.echo(f"No closure gate data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"Decision:    {result.decision.value}")
+        click.echo(f"Uncertainty: {result.uncertainty:.2f} (threshold: {result.threshold})")
+        click.echo(f"Unverified:  {result.unverified_claims}")
+        click.echo(f"Open unkn:   {result.open_unknowns}")
+
+
+@cbi_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def cbi_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with CBI data."""
+    from .coherence_budget import CoherenceBudgetStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = CoherenceBudgetStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            s = store.load(r)
+            results.append({"run_id": r, "cbi": round(s.cbi, 1) if s else None,
+                            "status": s.status.value if s else None})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No CBI runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: CBI={s.cbi:.1f} [{s.status.value}]")
+
+
+# ---------------------------------------------------------------------------
+# Risk Function (AG2 Layer 2.1-B)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("risk")
+def risk_group() -> None:
+    """Risk potential function — scalar risk V from signals."""
+    pass
+
+
+@risk_group.command("status")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def risk_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Show risk state for a run."""
+    from .risk_function import RiskStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = RiskStore(governor_dir=gov_dir)
+    state = store.load(run_id)
+
+    if state is None:
+        if as_json:
+            click.echo(json.dumps({"run_id": run_id, "status": "no data"}))
+        else:
+            click.echo(f"No risk data for run '{run_id}'.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(state.to_dict(), indent=2))
+    else:
+        click.echo(f"Run:     {state.run_id}")
+        click.echo(f"Level:   {state.current_level.value}")
+        click.echo(f"Risk:    {state.current_risk:.4f}")
+        click.echo(f"Peak:    {state.peak_risk:.4f}")
+        click.echo(f"Profile: {state.active_profile}")
+        click.echo(f"Frozen:  {sorted(state.frozen_tools) or 'none'}")
+        click.echo(f"Ev mult: {state.evidence_multiplier}")
+
+
+@risk_group.command("assess")
+@click.option("--run-id", default="current", help="Run ID")
+@click.option("--untrusted", type=float, default=0.0, help="Untrusted blob signal [0-1]")
+@click.option("--scope", type=float, default=0.0, help="Scope size signal [0-1]")
+@click.option("--irrev", type=float, default=0.0, help="Irreversibility signal [0-1]")
+@click.option("--gap", type=float, default=0.0, help="Evidence gap signal [0-1]")
+@click.option("--anomaly", type=float, default=0.0, help="Anomaly signal [0-1]")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def risk_assess(ctx: click.Context, run_id: str, untrusted: float,
+                scope: float, irrev: float, gap: float, anomaly: float,
+                as_json: bool) -> None:
+    """Assess risk from signal values."""
+    from .risk_function import RiskComponents, assess_risk
+
+    components = RiskComponents(
+        untrusted_blob_use=untrusted,
+        scope_size=scope,
+        irreversibility_intent=irrev,
+        evidence_gap=gap,
+        anomaly_score=anomaly,
+    )
+    assessment = assess_risk(run_id, components)
+
+    if as_json:
+        click.echo(json.dumps(assessment.to_dict(), indent=2))
+    else:
+        click.echo(f"Risk:    {assessment.risk_value:.4f}")
+        click.echo(f"Level:   {assessment.level.value}")
+        click.echo(f"Actions: {[a.value for a in assessment.actions_taken]}")
+        if assessment.frozen_tools:
+            click.echo(f"Frozen:  {sorted(assessment.frozen_tools)}")
+        if assessment.demoted_to:
+            click.echo(f"Demoted: {assessment.demoted_to}")
+
+
+@risk_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def risk_list(ctx: click.Context, as_json: bool) -> None:
+    """List runs with risk data."""
+    from .risk_function import RiskStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = RiskStore(governor_dir=gov_dir)
+    runs = store.list_runs()
+
+    if as_json:
+        results = []
+        for r in runs:
+            s = store.load(r)
+            results.append({"run_id": r, "level": s.current_level.value if s else None})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not runs:
+            click.echo("No risk runs found.")
+        for r in runs:
+            s = store.load(r)
+            if s:
+                click.echo(f"  {r}: {s.current_level.value} risk={s.current_risk:.4f}")
+
+
+# ---------------------------------------------------------------------------
+# Deployment Profiles (AG2 Layer 2.1-B)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("deploy")
+def deploy_group() -> None:
+    """Deployment profiles — authority classes + capability tokens."""
+    pass
+
+
+@deploy_group.command("status")
+@click.option("--name", default="operator", help="Profile name")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def deploy_status(ctx: click.Context, name: str, as_json: bool) -> None:
+    """Show deployment profile details."""
+    from .deployment_profiles import DeploymentStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DeploymentStore(governor_dir=gov_dir)
+    profile = store.load_profile(name)
+
+    if profile is None:
+        click.echo(f"Profile '{name}' not found.")
+        raise SystemExit(1)
+
+    if as_json:
+        click.echo(json.dumps(profile.to_dict(), indent=2))
+    else:
+        click.echo(f"Profile: {name}")
+        click.echo(f"  Authority: {profile.authority_class.value}")
+        click.echo(f"  Audit:     {profile.audit_level.value}")
+        click.echo(f"  Whitelist: {sorted(profile.tool_whitelist)}")
+        click.echo(f"  Blacklist: {sorted(profile.tool_blacklist)}")
+        click.echo(f"  Two-phase: {sorted(profile.requires_two_phase)}")
+        click.echo(f"  Evidence:  {profile.evidence_threshold}")
+
+
+@deploy_group.command("check")
+@click.argument("tool_id")
+@click.option("--name", default="operator", help="Profile name")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def deploy_check(ctx: click.Context, tool_id: str, name: str, as_json: bool) -> None:
+    """Check if a tool is allowed under a profile."""
+    from .deployment_profiles import DeploymentStore, check_tool_access
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DeploymentStore(governor_dir=gov_dir)
+    profile = store.load_profile(name)
+
+    if profile is None:
+        click.echo(f"Profile '{name}' not found.")
+        raise SystemExit(1)
+
+    allowed, reason = check_tool_access(profile, tool_id)
+
+    if as_json:
+        click.echo(json.dumps({"tool": tool_id, "allowed": allowed, "reason": reason}))
+    else:
+        status = "ALLOWED" if allowed else "DENIED"
+        click.echo(f"{status}: {tool_id} ({reason})")
+
+
+@deploy_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def deploy_list(ctx: click.Context, as_json: bool) -> None:
+    """List available deployment profiles."""
+    from .deployment_profiles import DeploymentStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DeploymentStore(governor_dir=gov_dir)
+    names = store.list_profiles()
+
+    if as_json:
+        click.echo(json.dumps(names))
+    else:
+        click.echo("Deployment profiles:")
+        for n in names:
+            p = store.load_profile(n)
+            if p:
+                click.echo(f"  {n}: {p.authority_class.value} audit={p.audit_level.value}")
+
+
+@deploy_group.command("proposals")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def deploy_proposals(ctx: click.Context, as_json: bool) -> None:
+    """List action proposals."""
+    from .deployment_profiles import DeploymentStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DeploymentStore(governor_dir=gov_dir)
+    ids = store.list_proposals()
+
+    if as_json:
+        results = []
+        for pid in ids:
+            p = store.load_proposal(pid)
+            results.append(p.to_dict() if p else {"proposal_id": pid, "error": "load failed"})
+        click.echo(json.dumps(results, indent=2))
+    else:
+        if not ids:
+            click.echo("No proposals found.")
+        for pid in ids:
+            p = store.load_proposal(pid)
+            if p:
+                click.echo(f"  {pid}: {p.action} [{p.status.value}] severity={p.severity}")
+
+
+# ---------------------------------------------------------------------------
+# WebUI Demo (AG2 Layer 4, Item #12)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("demo")
+def demo_group() -> None:
+    """WebUI demo management — scripted, reproducible screenshots."""
+    pass
+
+
+@demo_group.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def demo_list(ctx: click.Context, as_json: bool) -> None:
+    """List all demo scenarios (built-in + custom)."""
+    from .webui_demo import DemoStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DemoStore(governor_dir=gov_dir)
+    scenarios = store.list_scenarios()
+
+    if as_json:
+        click.echo(json.dumps([s.to_dict() for s in scenarios], indent=2))
+    else:
+        for s in scenarios:
+            shots = len(s.screenshot_paths)
+            tags = ", ".join(s.tags) if s.tags else "none"
+            click.echo(f"  {s.name} ({s.surface.value}) — {shots} screenshots, tags: {tags}")
+
+
+@demo_group.command("check")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def demo_check(ctx: click.Context, as_json: bool) -> None:
+    """Check freshness of all demo screenshots."""
+    from .webui_demo import DemoStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DemoStore(governor_dir=gov_dir)
+    results = store.check_freshness()
+
+    if as_json:
+        click.echo(json.dumps(results, indent=2))
+    else:
+        for r in results:
+            status = r["status"]
+            icon = {"fresh": "+", "stale": "~", "missing": "?", "error": "!"}.get(status, " ")
+            click.echo(f"  [{icon}] {r['name']}: {status} ({len(r['screenshots'])} screenshots)")
+
+
+@demo_group.command("spec")
+@click.argument("name")
+@click.option("--output", "-o", default=None, help="Write to file")
+@click.pass_context
+def demo_spec(ctx: click.Context, name: str, output: str | None) -> None:
+    """Generate Playwright spec for a demo scenario."""
+    from .webui_demo import DemoStore, generate_playwright_spec
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DemoStore(governor_dir=gov_dir)
+    scenarios = store.list_scenarios()
+    scenario = next((s for s in scenarios if s.name == name), None)
+
+    if not scenario:
+        click.echo(f"Unknown scenario: {name}", err=True)
+        ctx.exit(1)
+        return
+
+    spec = generate_playwright_spec(scenario)
+    if output:
+        Path(output).write_text(spec)
+        click.echo(f"Wrote Playwright spec to {output}")
+    else:
+        click.echo(spec)
+
+
+@demo_group.command("show")
+@click.argument("name")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def demo_show(ctx: click.Context, name: str, as_json: bool) -> None:
+    """Show details of a demo scenario."""
+    from .webui_demo import DemoStore
+
+    gov_dir = Path(ctx.obj or ".governor")
+    store = DemoStore(governor_dir=gov_dir)
+    scenarios = store.list_scenarios()
+    scenario = next((s for s in scenarios if s.name == name), None)
+
+    if not scenario:
+        click.echo(f"Unknown scenario: {name}", err=True)
+        ctx.exit(1)
+        return
+
+    if as_json:
+        click.echo(json.dumps(scenario.to_dict(), indent=2))
+    else:
+        click.echo(f"Name: {scenario.name}")
+        click.echo(f"Description: {scenario.description}")
+        click.echo(f"Surface: {scenario.surface.value}")
+        click.echo(f"Steps: {len(scenario.steps)}")
+        click.echo(f"Screenshots: {len(scenario.screenshot_paths)}")
+        if scenario.prerequisites:
+            click.echo(f"Prerequisites:")
+            for p in scenario.prerequisites:
+                click.echo(f"  - {p}")
+        if scenario.tags:
+            click.echo(f"Tags: {', '.join(scenario.tags)}")
+        click.echo(f"Content hash: {scenario.content_hash()}")
+
+
+# ---------------------------------------------------------------------------
+# Self-Check (governor selfcheck)
+# ---------------------------------------------------------------------------
+
+
+@cli.command("selfcheck")
+@click.option("--full", is_flag=True, help="Include cross-ledger consistency checks")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def selfcheck(ctx: click.Context, full: bool, as_json: bool) -> None:
+    """Run self-check on governor store integrity."""
+    from .selfcheck import run_selfcheck
+
+    gov_dir = ensure_initialized(ctx)
+    scope = "full" if full else "fast"
+    items = run_selfcheck(gov_dir, scope=scope)
+
+    if as_json:
+        click.echo(json.dumps({
+            "items": [i.to_dict() for i in items],
+            "overall": "ok" if all(i.status == "ok" for i in items) else "degraded",
+        }, indent=2))
+    else:
+        all_ok = True
+        for item in items:
+            if item.status == "ok":
+                symbol = "+"
+            elif item.status == "warn":
+                symbol = "!"
+                all_ok = False
+            else:
+                symbol = "X"
+                all_ok = False
+            click.echo(f"  [{symbol}] {item.name}: {item.detail}")
+
+        click.echo()
+        if all_ok:
+            click.echo("Self-check: OK")
+        else:
+            click.echo("Self-check: DEGRADED")
+
+
+# ---------------------------------------------------------------------------
+# Daemon (governor serve)
+# ---------------------------------------------------------------------------
+
+
+@cli.command("serve")
+@click.option("--stdio", is_flag=True, help="Serve over stdin/stdout (for Electron)")
+@click.option("--socket", "socket_path", default=None, type=click.Path(),
+              help="Custom Unix socket path")
+@click.option("--print-socket-path", is_flag=True,
+              help="Print default socket path and exit")
+@click.option("--mode", default="general",
+              help="Governor mode (general, fiction, code, nonfiction)")
+@click.pass_context
+def serve(ctx: click.Context, stdio: bool, socket_path: str | None,
+          print_socket_path: bool, mode: str) -> None:
+    """Start the governor daemon (JSON-RPC 2.0 control plane)."""
+    from .daemon import run_daemon, default_socket_path
+
+    gov_dir = get_governor_dir(ctx)
+
+    if print_socket_path:
+        click.echo(str(default_socket_path(gov_dir)))
+        return
+
+    sock = Path(socket_path) if socket_path else None
+    run_daemon(gov_dir, mode=mode, stdio=stdio, socket_path=sock)
 
 
 def main() -> None:

@@ -1356,3 +1356,135 @@ class TestGenerationProviderProtocol:
 
         provider = SimpleProvider()
         assert isinstance(provider, GenerationProvider)
+
+
+# =============================================================================
+# Receipt Emission
+# =============================================================================
+
+
+class TestContinuityCheckerReceipts:
+    """Test gate receipt emission from ContinuityChecker."""
+
+    def test_receipt_emitted_on_pass(self, tmp_path):
+        """Passing check emits a 'pass' receipt."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        system = GateReceiptSystem(tmp_path)
+        checker = ContinuityChecker(receipt_system=system)
+        anchor = Anchor(
+            id="test_anchor",
+            anchor_type=AnchorType.PROHIBITION,
+            description="No secrets",
+            forbidden_patterns=["password123"],
+            severity=Severity.REJECT,
+        )
+
+        report = checker.check("This is safe content.", [anchor])
+        assert report.passed
+
+        receipts = system.query(gate="continuity_checker")
+        assert len(receipts) == 1
+        assert receipts[0].verdict == "pass"
+        assert receipts[0].gate == "continuity_checker"
+
+    def test_receipt_emitted_on_block(self, tmp_path):
+        """Violation with REJECT severity emits a 'block' receipt."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        system = GateReceiptSystem(tmp_path)
+        checker = ContinuityChecker(receipt_system=system)
+        anchor = Anchor(
+            id="secret_anchor",
+            anchor_type=AnchorType.PROHIBITION,
+            description="No secrets",
+            forbidden_patterns=["password123"],
+            severity=Severity.REJECT,
+        )
+
+        report = checker.check("The password123 is leaked.", [anchor])
+        assert not report.passed
+
+        receipts = system.query(gate="continuity_checker")
+        assert len(receipts) == 1
+        assert receipts[0].verdict == "block"
+
+    def test_receipt_emitted_on_warn(self, tmp_path):
+        """Violation with WARN severity emits a 'warn' receipt."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        system = GateReceiptSystem(tmp_path)
+        checker = ContinuityChecker(receipt_system=system)
+        anchor = Anchor(
+            id="style_anchor",
+            anchor_type=AnchorType.STYLE,
+            description="Avoid passive voice",
+            forbidden_patterns=["was done"],
+            severity=Severity.WARN,
+        )
+
+        report = checker.check("The work was done yesterday.", [anchor])
+        assert not report.passed
+
+        receipts = system.query(gate="continuity_checker")
+        assert len(receipts) == 1
+        assert receipts[0].verdict == "warn"
+
+    def test_no_receipt_without_system(self):
+        """No error when receipt_system is None."""
+        checker = ContinuityChecker(receipt_system=None)
+        anchor = Anchor(
+            id="a1",
+            anchor_type=AnchorType.PROHIBITION,
+            description="test",
+            forbidden_patterns=["bad"],
+            severity=Severity.REJECT,
+        )
+
+        # Should not raise
+        report = checker.check("bad content", [anchor])
+        assert not report.passed
+
+    def test_receipt_evidence_has_violations(self, tmp_path):
+        """Receipt evidence bundle contains violation details."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        system = GateReceiptSystem(tmp_path)
+        checker = ContinuityChecker(receipt_system=system)
+        anchor = Anchor(
+            id="v_anchor",
+            anchor_type=AnchorType.PROHIBITION,
+            description="No secrets",
+            forbidden_patterns=["secret_key"],
+            severity=Severity.REJECT,
+        )
+
+        checker.check("Found secret_key in output.", [anchor])
+
+        receipts = system.query(gate="continuity_checker")
+        evidence = system.evidence_for(receipts[0])
+        assert "violations" in evidence
+        assert len(evidence["violations"]) > 0
+        assert evidence["violations"][0]["anchor_id"] == "v_anchor"
+
+    def test_receipt_deterministic_for_same_input(self, tmp_path):
+        """Same input produces same receipt_id (content-addressed)."""
+        from governor.gate_receipt import GateReceiptSystem
+
+        system = GateReceiptSystem(tmp_path)
+        checker = ContinuityChecker(receipt_system=system)
+        anchor = Anchor(
+            id="det_anchor",
+            anchor_type=AnchorType.PROHIBITION,
+            description="test",
+            forbidden_patterns=["bad"],
+            severity=Severity.REJECT,
+        )
+
+        checker.check("good text", [anchor])
+        checker.check("good text", [anchor])
+
+        receipts = system.query(gate="continuity_checker")
+        assert len(receipts) == 2
+        # Same inputs → same receipt_id (content-addressed)
+        assert receipts[0].receipt_id == receipts[1].receipt_id

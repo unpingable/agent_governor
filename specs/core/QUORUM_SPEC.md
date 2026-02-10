@@ -1,7 +1,7 @@
 # Multi-Agent Quorum Specification (2.1)
 
 ```yaml
-status: planning
+status: implemented
 layer: 2.1
 depends_on: [CONTROL_THEORY_SPEC, DEPLOYMENT_PROFILES_SPEC, METRICS_SPEC]
 note: Extends existing quorum.py with severity-based gating, Byzantine-lite model, two-man rule

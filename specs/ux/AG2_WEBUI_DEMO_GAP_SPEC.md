@@ -3,8 +3,8 @@
 ## Version 0.1 — Scripted, Reproducible WebUI Screenshots
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: implemented  # Demo data model, Playwright config/runner, data-testid attributes, v2 dashboard scenario, /v2/demos API, cross-nav links, inline report display.
 depends_on: [WEBUI_UX_SPEC.md]
 blocking: documentation credibility (WebUI)
 estimated_scope: medium

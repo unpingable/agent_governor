@@ -72,9 +72,10 @@ class PendingViolation:
     timestamp: str                     # ISO format
     mode: str                          # fiction/code/nonfiction
     status: ResolutionStatus = ResolutionStatus.PENDING
+    receipt_id: str | None = None      # Gate receipt that triggered this
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "id": self.id,
             "context_id": self.context_id,
             "run_id": self.run_id,
@@ -84,6 +85,9 @@ class PendingViolation:
             "mode": self.mode,
             "status": self.status.value,
         }
+        if self.receipt_id is not None:
+            d["receipt_id"] = self.receipt_id
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PendingViolation:
@@ -96,6 +100,7 @@ class PendingViolation:
             timestamp=data["timestamp"],
             mode=data["mode"],
             status=ResolutionStatus(data.get("status", "pending")),
+            receipt_id=data.get("receipt_id"),
         )
 
 
@@ -132,9 +137,10 @@ class ExceptionRecord:
     expiry: str | None            # ISO timestamp or None for permanent
     created_at: str
     mode: str
+    receipt_id: str | None = None  # Gate receipt that triggered the original block
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "id": self.id,
             "violations": self.violations,
             "blocked_response_preview": self.blocked_response_preview,
@@ -143,6 +149,9 @@ class ExceptionRecord:
             "created_at": self.created_at,
             "mode": self.mode,
         }
+        if self.receipt_id is not None:
+            d["receipt_id"] = self.receipt_id
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ExceptionRecord:
@@ -154,6 +163,7 @@ class ExceptionRecord:
             expiry=data.get("expiry"),
             created_at=data["created_at"],
             mode=data["mode"],
+            receipt_id=data.get("receipt_id"),
         )
 
 
@@ -223,6 +233,7 @@ class ViolationResolver:
         violations: list[Violation] | list[dict[str, Any]],
         blocked_response: str,
         run_id: str,
+        receipt_id: str | None = None,
     ) -> PendingViolation:
         """
         Create a pending violation from detected violations.
@@ -231,6 +242,7 @@ class ViolationResolver:
             violations: List of Violation objects or dicts
             blocked_response: The response that was blocked
             run_id: Identifier for the generation run
+            receipt_id: Gate receipt ID that triggered this violation
 
         Returns:
             The created PendingViolation
@@ -258,6 +270,7 @@ class ViolationResolver:
             timestamp=datetime.now(timezone.utc).isoformat(),
             mode=self.mode,
             status=ResolutionStatus.PENDING,
+            receipt_id=receipt_id,
         )
 
         self._save_pending(pending)
@@ -435,6 +448,7 @@ Rewrite the response to comply with these constraints. Preserve the intent and u
             expiry=expiry,
             created_at=datetime.now(timezone.utc).isoformat(),
             mode=pending.mode,
+            receipt_id=pending.receipt_id,
         )
 
         self._store_exception(exception)

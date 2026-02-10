@@ -176,10 +176,20 @@ Detailed reference material is in `.claude/rules/`:
 | `nonfiction-governor.md` | Non-fiction governor details | `src/nonfiction_governor/**` |
 | `ops-governor.md` | Ops governor details | `src/ops_governor/**` |
 | `vscode-extension.md` | VS Code extension details | `vscode-governor/**` |
-| `webui.md` | WebUI, chat bridge, interferometry | `src/webui/**`, `chat_bridge`, etc. |
+| `webui.md` | WebUI (extracted to gov-webui), chat bridge, interferometry | `chat_bridge`, etc. |
 | `writing-modules.md` | W5 writing modules (11 modules) | `src/governor/writing_*.py` |
 
 Path-scoped rules only load when Claude is working on matching files, reducing context overhead.
+
+## Authority Boundary
+
+This file is **guidance for Claude Code**, not enforcement. The governor is enforcement.
+
+- This file and `.claude/rules/` shape Claude's behavior (travel guide)
+- The governor determines admissibility (constitution)
+- See `AGENTS.md` for the agent-neutral version of these conventions
+
+> Instruction files shape behavior; the governor determines admissibility.
 
 ## The Meta-Constraint
 

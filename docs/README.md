@@ -46,6 +46,15 @@ How you interact with the governor:
 
 ---
 
+## Foundations
+
+Core design principles and how they map to real-world accountability:
+
+- [ADMISSIBILITY.md](ADMISSIBILITY.md) - Admissibility vs correctness: why receipts prove process, not outcomes
+- [COMPLIANCE.md](COMPLIANCE.md) - Fiduciary law mapping (ERISA, SEC, process-based prudence)
+- [DEPLOYMENT_MODES.md](DEPLOYMENT_MODES.md) - Transport security: local, private network, public (TLS, auth, threat models)
+- [SECURITY_MODEL.md](SECURITY_MODEL.md) - Trust boundaries, threat model, design principles (stub — fill at freeze)
+
 ## Architecture
 
 For understanding the system internals:
@@ -81,9 +90,9 @@ When the governor blocks a violation, you have three choices:
 
 | In Chat | CLI Equivalent | Action |
 |---------|----------------|--------|
-| `1` or `fix` | `governor lite fix` | Regenerate to comply with constraint |
-| `2` or `revise` | `governor lite revise` | Update the constraint to match new reality |
-| `3` or `proceed` | `governor lite proceed` | Log as intentional exception, continue |
+| `1` or `fix` | `governor gate fix` | Regenerate to comply with constraint |
+| `2` or `revise` | `governor gate revise` | Update the constraint to match new reality |
+| `3` or `proceed` | `governor gate proceed` | Log as intentional exception, continue |
 
 > **Note**: In chat/interactive mode, you can also prefix with "governor" (e.g., `governor fix`).
 
@@ -115,11 +124,11 @@ governor continuity check <text>
 governor check <file> --interactive --mode <mode>
 
 # Resolve violations
-governor lite pending
-governor lite fix
-governor lite revise
-governor lite proceed
-governor lite exceptions
+governor gate pending
+governor gate fix
+governor gate revise
+governor gate proceed
+governor gate exceptions
 
 # Status
 governor status
@@ -128,18 +137,19 @@ governor continuity status
 
 ### WebUI
 
+The WebUI lives in a separate repo: [gov-webui](https://github.com/unpingable/governor_webui). It is an **untrusted cockpit** — it renders governor state but cannot override it. All governance logic stays in this package.
+
 ```bash
-# Standard (API credits)
-docker-compose up -d
+# Install and run
+cd ~/git/gov-webui
+pip install -e .
+governor-webui                    # http://127.0.0.1:8000
 
-# With Claude Max subscription
-docker-compose -f docker-compose.yml -f docker-compose.claude-code.yml up -d
-
-# With Ollama (local)
-docker-compose -f docker-compose.yml -f docker-compose.ollama.yml up -d
+# Or with environment overrides
+BACKEND_TYPE=ollama GOVERNOR_MODE=fiction governor-webui
 ```
 
-Open **http://localhost:8001** (fiction) or **http://localhost:8002** (code)
+See [interfaces/webui.md](interfaces/webui.md) for Docker setup and backend configuration.
 
 ### VS Code
 
@@ -164,8 +174,21 @@ Open **http://localhost:8001** (fiction) or **http://localhost:8002** (code)
 - [interfaces/vscode.md](interfaces/vscode.md) - VS Code extension
 - [interfaces/cli.md](interfaces/cli.md) - Complete CLI reference
 
+### Foundations
+- [ADMISSIBILITY.md](ADMISSIBILITY.md) - Admissibility vs correctness
+- [COMPLIANCE.md](COMPLIANCE.md) - Fiduciary and regulatory mapping
+- [DEPLOYMENT_MODES.md](DEPLOYMENT_MODES.md) - Transport security and deployment patterns
+- [SECURITY_MODEL.md](SECURITY_MODEL.md) - Trust boundaries, threat model, why receipts are content-addressed (stub)
+
 ### Architecture
 - [architecture/OVERVIEW.md](architecture/OVERVIEW.md) - System architecture
+
+### Architecture Decision Records
+- [adr/0001-proposal-commit-split.md](adr/0001-proposal-commit-split.md) - Why proposals and commits are separate stages
+- [adr/0002-gate-not-memory.md](adr/0002-gate-not-memory.md) - Why the governor blocks, not logs
+- [adr/0003-domain-specific-modes.md](adr/0003-domain-specific-modes.md) - Why fiction/code/nonfiction are separate modes
+- [adr/0004-sqlite-over-postgres.md](adr/0004-sqlite-over-postgres.md) - Why SQLite with WAL, not Postgres
+- [adr/0005-self-contained-webui.md](adr/0005-self-contained-webui.md) - Why no build step, no npm, no framework
 
 ---
 

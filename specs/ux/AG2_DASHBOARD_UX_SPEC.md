@@ -3,8 +3,8 @@
 ## Version 0.1 — Governance Dashboard with Optional Chat
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true  # Backend data models in dashboard_ux.py, v2 API routes in adapter.py, dashboard.html frontend, 30 API tests.
 depends_on:
   - core/AG2_INSTRUMENT_SPEC.md
   - ux/WEBUI_UX_SPEC.md

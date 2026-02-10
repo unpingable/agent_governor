@@ -3,8 +3,8 @@
 ## Version 0.1 — Representational Invariance Under Compression
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - context_compact.py      # CompactionReceipt, DroppedItem, SimpleSummarizer
   - continuity.py            # AnchorRegistry, ContinuityChecker

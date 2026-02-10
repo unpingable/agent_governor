@@ -17,10 +17,22 @@ governor state --json            # Aggregated state as JSON (schema v2 default)
 governor state --json --schema v1  # Legacy v1 format (proposals/facts/decisions/tasks/regime/boil/autonomous)
 governor state --json --schema v2  # Canonical ViewModel (session/regime/decisions/claims/evidence/violations/execution/stability)
 governor rejections              # Show rejection history
+governor receipts                # List gate receipts (newest first)
+governor receipts --gate evidence_gate  # Filter by gate
+governor receipts --verdict block --last 10  # Last 10 blocks
+governor receipts --id <receipt_id> --evidence  # Show receipt + evidence bundle
+governor receipts --json         # Machine-readable output
 
 # Configuration
 governor envelope                # Get/set operating mode (strict/exploratory)
 governor decay                   # Check for stale facts
+
+# Daemon (JSON-RPC control plane)
+governor serve                           # Unix socket (default)
+governor serve --stdio                   # Stdio mode (for Electron/Guvnah)
+governor serve --socket /path/to/sock    # Custom socket path
+governor serve --print-socket-path       # Print default socket path and exit
+governor serve --mode fiction            # Set governor mode
 
 # Integration
 governor hook install            # Install git pre-commit hook

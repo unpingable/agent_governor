@@ -69,6 +69,10 @@
 **Git Governance** — Integrity invariants at commit boundaries. Artifact integrity, cross-index validation (DOI/version tags), tagging discipline, pre-commit provenance. Profile-based severity (greenfield→production), YAML config, secrets check integration. CLI `governor git-gov {status,check,artifacts,cross-index,pre-commit,verify-tag,set-profile,allowlist}`.
 **Context Compact** — Loss-aware context compaction with receipts. ContextCompactor, CompactionReceipt, DroppedItem, Turn, Conversation types. SimpleSummarizer, RecoveryStore (dropped content retrieval), ReceiptStore (compaction history). Preserves decisions/anchors/constraints/authority, emits explicit loss records. CLI `governor context {status,config,receipts,recover,cleanup}`.
 **Perforce Support** — Integrity invariants on explicit authority substrate. P4Client (CLI wrapper, graceful fallback), P4Governor (changelist integrity, lock semantics, immutable releases, DOI mapping). Profile-based severity. P4 trigger integration. CLI `governor p4 {status,check,pre-submit,locks,release tag/check,doi map/verify/list}`.
+**Gate Receipt System (receipt_v1)** — Content-addressed decision receipts for governor gates. GateReceipt (8 fields: receipt_id, schema_version, timestamp, gate, verdict, subject_hash, evidence_hash, policy_hash). receipt_id = H(schema_v + gate + subject_hash + evidence_hash + policy_hash) — truly content-addressed, timestamp is metadata. Canonical JSON serialization. Split store: ReceiptStore (JSONL) + EvidenceStore (content-addressed blobs, sharded by hash[:2]). All gates wired: evidence_gate, intent_compiler, pre_commit, wrapper, continuity_checker. CLI `governor receipts {--gate,--verdict,--last,--json,--id,--evidence}`.
+**Maude Contract Tests** — Provider-side contract tests verifying Maude's Pydantic models deserialize Governor daemon's actual RPC responses. Docker-compose setup (daemon + test runner, shared Unix socket volume). 19 active tests: health (3), sessions (6), governor (4), dashboard stubs (3), intent compiler (via daemon RPC), streaming (1 skipped). Backend smoke stubs for Claude/Codex/Ollama (skipped by default). Run via `cd integration && bash run.sh`.
+**Intent Compiler** — Structured hypothesis-collapse for governance sessions. IntentFormPolicy (TEMPLATE_ONLY/VALIDATED_CUSTOM/CUSTOM_OK), IntentFormSchema (content-addressed), 3 built-in templates (session_start/task_scope/verification_config), mode-gated form policy (blast radius proportional), deterministic compilation (response + schema → Intent + ConstraintBlock), escape classification (4 heuristic categories), gate receipt emission. WebUI: modal overlay with dynamic form rendering, branch visualization, confidence bars. API: `/v2/intent/{templates,schema,validate,compile,policy}`.
+**Governor Daemon** — JSON-RPC 2.0 control plane over stdio or Unix socket. Content-Length framing (same as MCP server), async dispatcher, DaemonState (lazy-initialized subsystems), 25 RPC methods: governor.{hello,now,status}, sessions.{list,create,delete,get}, intent.{templates,schema,validate,compile,policy}, receipts.{list,detail}, scars.{list,history}, commit.{pending,fix,revise,proceed,exceptions}, chat.{send,stream,models,backend}. ChatBridge integration with backend auto-detection (env → config file → detection order), streaming via JSON-RPC notifications (chat.delta), GovernorHooks for governed generation, gate receipt emission. Config file support ($GOVERNOR_DIR/daemon.conf, INI format). CLI `governor serve {--stdio,--socket,--print-socket-path,--mode}`. Guvnah integration via child process stdio. Maude integration via Unix socket (RPC client replaces HTTP client). Dockerfile.daemon for containerized deployment.
 
 ## Test Counts by Module
 
@@ -86,10 +90,10 @@
 | Conflicts | 12 |
 | Envelopes | 15 |
 | Feedback | 18 |
-| Git hooks | 33 |
-| Wrapper | 29 |
+| Git hooks | 37 |
+| Wrapper | 33 |
 | MCP server | 22 |
-| **Subtotal** | **381** |
+| **Subtotal** | **389** |
 
 ### Subsystems
 | Subsystem | Tests |
@@ -135,7 +139,7 @@
 | Invariant Store | 79 |
 | Web UI (W1-W3) | 91 |
 | Structured Telemetry | 151 |
-| Continuity Enforcement | 190 |
+| Continuity Enforcement | 196 |
 | Convergence Auto-Tuning | 145 |
 | VS Code Extension | 176 |
 | Evidence Gate | 101 |
@@ -154,5 +158,9 @@
 | Git Governance | 99 |
 | Context Compact | 49 |
 | Perforce Support | 71 |
+| Gate Receipt System | 50 |
+| Maude Contract Tests | 19 (+7 skipped) |
+| Intent Compiler | 131 |
+| Governor Daemon | 124 |
 
-**Total: ~7890 tests**
+**Total: ~10,408 tests** (10,384 unit + 24 integration)

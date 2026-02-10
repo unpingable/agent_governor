@@ -3,8 +3,8 @@
 ## Version 0.1 — Append-Only Evidence System
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - claims.py
   - receipts.py

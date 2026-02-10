@@ -3,8 +3,8 @@
 ## Version 0.1 — Docs as Governed Artifacts
 
 ```yaml
-status: gap
-implemented: false
+status: implemented
+implemented: true
 depends_on:
   - continuity.py            # AnchorRegistry, ContinuityChecker
   - claim_signals.py         # SignalExtractor, assertiveness scoring

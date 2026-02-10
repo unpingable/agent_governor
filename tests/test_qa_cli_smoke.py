@@ -94,7 +94,7 @@ GOVERNOR_COMMANDS = [
     "governor prometheus --help",
     # Continuity
     "governor continuity --help",
-    "governor lite --help",
+    "governor gate --help",
     # Check
     "governor check --help",
     # Intent/Override

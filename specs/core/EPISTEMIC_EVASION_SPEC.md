@@ -1,7 +1,7 @@
 # Epistemic Evasion Detection Specification
 
 ```yaml
-status: planning
+status: implemented
 layer: 2.1
 depends_on: [COHERENCE_BUDGET_SPEC, METRICS_SPEC, CONTROL_THEORY_SPEC]
 ```

@@ -1,7 +1,7 @@
 # Risk Potential Function Specification
 
 ```yaml
-status: planning
+status: implemented
 layer: 2.1
 depends_on: [CONTROL_THEORY_SPEC, MEASUREMENT_INTEGRITY_SPEC, METRICS_SPEC, DEPLOYMENT_PROFILES_SPEC]
 ```

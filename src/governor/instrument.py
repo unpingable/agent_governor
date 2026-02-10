@@ -849,7 +849,7 @@ class AG2Report:
                 lines.append(f"- {inv}")
             lines.append("")
 
-        lines.append(f"---")
+        lines.append("---")
         lines.append(f"Spec: {self.provenance.spec_version} | Generator: {self.provenance.generator_version}")
         return "\n".join(lines)
 

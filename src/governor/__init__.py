@@ -1243,7 +1243,6 @@ from .coherence_budget import (
 
 # Risk Function (AG2 Layer 2.1-B)
 from .risk_function import (
-    RiskLevel,
     PolicyAction,
     RiskSignal,
     RiskWeights,
@@ -1252,7 +1251,6 @@ from .risk_function import (
     ThresholdCrossing,
     RiskState,
     RiskStore,
-    compute_risk,
     classify_risk,
     apply_risk_policy,
     assess_risk,
@@ -1277,7 +1275,6 @@ from .deployment_profiles import (
     DELEGATED_PROFILE,
     OPERATOR_PROFILE,
     AUTONOMOUS_PROFILE,
-    BUILTIN_PROFILES,
     check_tool_access,
     check_invariant_b,
     check_invariant_e,
@@ -1306,7 +1303,6 @@ from .measurement_integrity import (
 # Phase Control (AG2 Layer 2.1-A)
 from .phase_control import (
     Phase,
-    TransitionResult,
     PhaseBudget,
     PhaseUsage,
     NoveltyDebt,

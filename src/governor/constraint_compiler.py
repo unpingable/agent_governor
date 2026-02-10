@@ -1008,7 +1008,7 @@ def render_prompt_prefix(block: ConstraintBlock) -> str:
     security = block.security_constraints
 
     if non_security_hard:
-        lines.append(f"HARD CONSTRAINTS (violation = rejection):")
+        lines.append("HARD CONSTRAINTS (violation = rejection):")
         for c in sorted(non_security_hard, key=lambda x: -x.projection_priority):
             lines.append(f"- {c.kind.value.title()}: {c.description}")
         lines.append("")
@@ -1016,14 +1016,14 @@ def render_prompt_prefix(block: ConstraintBlock) -> str:
     # Soft constraints
     soft = block.soft_constraints
     if soft:
-        lines.append(f"SOFT CONSTRAINTS (violation = warning):")
+        lines.append("SOFT CONSTRAINTS (violation = warning):")
         for c in sorted(soft, key=lambda x: -x.projection_priority):
             lines.append(f"- {c.kind.value.title()}: {c.description}")
         lines.append("")
 
     # Security patterns
     if security:
-        lines.append(f"SECURITY (known patterns to avoid):")
+        lines.append("SECURITY (known patterns to avoid):")
         for c in security:
             lines.append(f"- {c.description}")
         lines.append("")

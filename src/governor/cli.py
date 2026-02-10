@@ -798,7 +798,7 @@ def receipts(ctx: click.Context, gate: str | None, verdict: str | None,
         icon = verdict_icon.get(r.verdict, r.verdict)
         click.echo(f"  [{icon:>5}] {r.receipt_id[:12]}...  gate={r.gate}  {r.timestamp}")
 
-    click.echo(f"\nUse --id <receipt_id> --evidence to inspect a specific receipt.")
+    click.echo("\nUse --id <receipt_id> --evidence to inspect a specific receipt.")
 
 
 @cli.command()
@@ -13647,7 +13647,7 @@ def decide_cmd(ctx, text, topic, retract, force, as_json):
             else:
                 click.echo(f"Retracted: {text}")
         else:
-            click.echo(f"No matching decision found to retract.", err=True)
+            click.echo("No matching decision found to retract.", err=True)
             ctx.exit(1)
         return
 
@@ -16005,7 +16005,7 @@ def risk_group() -> None:
 @click.option("--run-id", default="current", help="Run ID")
 @click.option("--json", "as_json", is_flag=True, help="JSON output")
 @click.pass_context
-def risk_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
+def risk_run_status(ctx: click.Context, run_id: str, as_json: bool) -> None:
     """Show risk state for a run."""
     from .risk_function import RiskStore
 
@@ -16310,7 +16310,7 @@ def demo_show(ctx: click.Context, name: str, as_json: bool) -> None:
         click.echo(f"Steps: {len(scenario.steps)}")
         click.echo(f"Screenshots: {len(scenario.screenshot_paths)}")
         if scenario.prerequisites:
-            click.echo(f"Prerequisites:")
+            click.echo("Prerequisites:")
             for p in scenario.prerequisites:
                 click.echo(f"  - {p}")
         if scenario.tags:

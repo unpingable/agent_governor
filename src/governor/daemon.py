@@ -429,6 +429,47 @@ def _emit_chat_receipt(
         logger.debug("receipt_suppressed: chat_bridge gate receipt failed")
 
 
+async def _resolve_violation(
+    state: DaemonState,
+    pending: Any,
+    action: Any,
+    bridge: Any,
+    model: str,
+) -> dict:
+    """Handle a resolution action for a pending violation.
+
+    Returns a chat-send-shaped result dict.
+    """
+    from .violation_resolver import ResolutionAction
+
+    if action == ResolutionAction.FIX:
+        result = await state.violation_resolver.resolve_fix(
+            pending, bridge.backend, model
+        )
+    elif action == ResolutionAction.REVISE:
+        result = state.violation_resolver.resolve_revise(pending)
+    else:  # PROCEED
+        result = state.violation_resolver.resolve_proceed(pending)
+
+    content = ""
+    if result.success:
+        if result.new_content:
+            content = result.new_content
+        else:
+            content = f"[Governor] {result.message}"
+    else:
+        content = f"[Governor] Resolution failed: {result.message}"
+
+    return {
+        "content": content,
+        "model": model,
+        "usage": {},
+        "violations": [],
+        "footer": None,
+        "pending": None,
+    }
+
+
 def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     """Register all daemon RPC handlers."""
 
@@ -754,7 +795,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     # --- Chat ---
 
     async def chat_send(params: dict) -> dict:
-        """Non-streaming governed chat. Full pipeline: augment → generate → check → receipt."""
+        """Non-streaming governed chat. Full pipeline: pending check → augment → generate → check → receipt."""
         bridge = state.chat_bridge
         if bridge is None:
             raise RuntimeError("No chat backend configured")
@@ -765,6 +806,26 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
         if not messages_raw:
             raise ValueError("Missing required param: messages")
+
+        # Check for pre-existing pending violation BEFORE generation
+        pending = state.violation_resolver.get_pending()
+        if pending:
+            last_msg = messages_raw[-1].get("content", "") if messages_raw else ""
+            action = state.violation_resolver.is_resolution_command(last_msg)
+            if action:
+                result = await _resolve_violation(state, pending, action, bridge, model)
+                return result
+            else:
+                # Re-present pending violation — don't proceed with generation
+                from .violation_resolver import format_violation_prompt
+                return {
+                    "content": "",
+                    "model": model,
+                    "usage": {},
+                    "violations": pending.violations,
+                    "footer": None,
+                    "pending": pending.to_dict(),
+                }
 
         from .chat_bridge import ChatMessage, ChatResponse, ViolationPendingResponse
 
@@ -825,6 +886,24 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
         if not messages_raw:
             raise ValueError("Missing required param: messages")
+
+        # Check for pre-existing pending violation BEFORE generation
+        pending = state.violation_resolver.get_pending()
+        if pending:
+            last_msg = messages_raw[-1].get("content", "") if messages_raw else ""
+            action = state.violation_resolver.is_resolution_command(last_msg)
+            if action:
+                result = await _resolve_violation(state, pending, action, bridge, model)
+                return result
+            else:
+                return {
+                    "content": "",
+                    "model": model,
+                    "usage": {},
+                    "violations": pending.violations,
+                    "footer": None,
+                    "pending": pending.to_dict(),
+                }
 
         from .chat_bridge import ChatMessage, ViolationPendingResponse
 

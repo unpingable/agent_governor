@@ -1705,3 +1705,156 @@ class TestChatModelsWithBackend:
         result = resp["result"]
         assert result["type"] == "mock"
         assert result["connected"] is True
+
+
+# =============================================================================
+# Pending violation pre-check in chat.send / chat.stream
+# =============================================================================
+
+
+class TestChatPendingPreCheck:
+    """When a pending violation exists, chat.send/chat.stream must not generate."""
+
+    @pytest.fixture
+    def state_with_pending(self, tmp_gov_dir):
+        """DaemonState with a mock backend AND a pre-existing pending violation."""
+        import json as _json
+        from governor.violation_resolver import PendingViolation, ResolutionStatus
+
+        state = DaemonState(tmp_gov_dir, mode="general")
+
+        # Wire up mock backend
+        mock_backend = MockChatBackend("Should NOT appear")
+        from governor.chat_bridge import ChatBridge
+        from governor.context_manager import GovernorContextManager
+
+        ctx_mgr = GovernorContextManager(tmp_gov_dir)
+        state._chat_bridge = ChatBridge(
+            backend=mock_backend,
+            context_manager=ctx_mgr,
+            show_ok_footer=True,
+        )
+        state._backend_type = "mock"
+        state._backend_kwargs = {}
+        state._context_manager = ctx_mgr
+
+        # Write a pending violation to disk
+        pending = PendingViolation(
+            id="pending_test_1",
+            context_id="default",
+            run_id="run_abc",
+            violations=[
+                {"anchor_id": "anchor-1", "severity": "reject",
+                 "description": "Tone violation"}
+            ],
+            blocked_response="The blocked text",
+            timestamp="2025-01-01T00:00:00Z",
+            mode="general",
+            status=ResolutionStatus.PENDING,
+        )
+        (tmp_gov_dir / "pending_violations.json").write_text(
+            _json.dumps(pending.to_dict())
+        )
+
+        return state
+
+    @pytest.fixture
+    def dispatcher_with_pending(self, state_with_pending):
+        d = Dispatcher()
+        register_handlers(d, state_with_pending)
+        return d, state_with_pending
+
+    @pytest.mark.asyncio
+    async def test_send_returns_pending_without_generating(
+        self, dispatcher_with_pending
+    ):
+        """chat.send must return pending violation instead of calling backend."""
+        d, state = dispatcher_with_pending
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hello"}],
+        })
+        result = resp["result"]
+        # Should return pending, NOT the mock backend response
+        assert result["pending"] is not None
+        assert result["pending"]["id"] == "pending_test_1"
+        assert result["content"] == ""
+        assert len(result["violations"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_stream_returns_pending_without_generating(
+        self, dispatcher_with_pending
+    ):
+        """chat.stream must return pending violation without streaming."""
+        d, _ = dispatcher_with_pending
+        notifications: list[dict] = []
+
+        async def collect(method: str, params: dict) -> None:
+            notifications.append({"method": method, "params": params})
+
+        handler = d._streaming_handlers["chat.stream"]
+        result = await handler(
+            {"messages": [{"role": "user", "content": "Hello"}]},
+            collect,
+        )
+        # Should return pending, not stream content
+        assert result["pending"] is not None
+        assert result["content"] == ""
+        # No delta notifications sent
+        assert len(notifications) == 0
+
+    @pytest.mark.asyncio
+    async def test_send_resolution_command_resolves(
+        self, dispatcher_with_pending
+    ):
+        """When pending exists and user sends 'proceed', resolve the violation."""
+        d, state = dispatcher_with_pending
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "proceed"}],
+        })
+        result = resp["result"]
+        # Should be resolved — no more pending
+        assert result["pending"] is None
+        assert "Governor" in result["content"] or "Proceed" in result["content"].lower() or result["content"]
+
+    @pytest.mark.asyncio
+    async def test_stream_resolution_command_resolves(
+        self, dispatcher_with_pending
+    ):
+        """When pending exists and user sends 'revise', resolve via stream path."""
+        d, _ = dispatcher_with_pending
+
+        async def noop(method: str, params: dict) -> None:
+            pass
+
+        handler = d._streaming_handlers["chat.stream"]
+        result = await handler(
+            {"messages": [{"role": "user", "content": "revise"}]},
+            noop,
+        )
+        assert result["pending"] is None
+
+    @pytest.mark.asyncio
+    async def test_send_non_resolution_message_re_presents_pending(
+        self, dispatcher_with_pending
+    ):
+        """Non-resolution messages should re-present the pending violation."""
+        d, _ = dispatcher_with_pending
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "tell me a joke"}],
+        })
+        result = resp["result"]
+        assert result["pending"] is not None
+        assert result["pending"]["id"] == "pending_test_1"
+
+    @pytest.mark.asyncio
+    async def test_send_without_pending_generates_normally(
+        self, dispatcher_with_chat
+    ):
+        """When no pending violation, chat.send generates as usual."""
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hi"}],
+        })
+        result = resp["result"]
+        assert result["pending"] is None
+        assert result["content"] == "Hello from the governed LLM"

@@ -5,7 +5,7 @@ FROM python:3.11-slim
 WORKDIR /tests
 
 # Install test dependencies at build time
-RUN pip install --no-cache-dir pytest pytest-asyncio httpx pydantic
+RUN pip install --no-cache-dir pytest pytest-asyncio pydantic
 
 # Copy all test files and config
 COPY pytest.ini .

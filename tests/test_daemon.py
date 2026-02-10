@@ -1,4 +1,4 @@
-"""Tests for the governor daemon — protocol, dispatcher, all 21 handlers."""
+"""Tests for the governor daemon — protocol, dispatcher, all 25 handlers."""
 
 import asyncio
 import json
@@ -6,7 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -19,7 +19,10 @@ from governor.daemon import (
     PROTOCOL_VERSION,
     DaemonState,
     Dispatcher,
+    _emit_chat_receipt,
     default_socket_path,
+    detect_backend,
+    load_daemon_config,
     read_message,
     register_handlers,
     write_message,
@@ -892,16 +895,26 @@ class TestAllMethodsRegistered:
         "commit.revise",
         "commit.proceed",
         "commit.exceptions",
+        "chat.send",
+        "chat.models",
+        "chat.backend",
+    ]
+
+    EXPECTED_STREAMING_METHODS = [
+        "chat.stream",
     ]
 
     def test_all_registered(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         for method in self.EXPECTED_METHODS:
             assert method in d._handlers, f"Missing handler: {method}"
+        for method in self.EXPECTED_STREAMING_METHODS:
+            assert method in d._streaming_handlers, f"Missing streaming handler: {method}"
 
-    def test_exactly_21_methods(self, dispatcher_and_state):
+    def test_exactly_25_methods(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
-        assert len(d._handlers) == 21
+        total = len(d._handlers) + len(d._streaming_handlers)
+        assert total == 25
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -957,3 +970,738 @@ class TestEndToEnd:
         assert "protocol_version" in r1["result"]
         assert "pill" in r2["result"]
         assert isinstance(r3["result"], list)
+
+
+# =============================================================================
+# Config file loading
+# =============================================================================
+
+
+class TestLoadDaemonConfig:
+
+    def test_no_config_file(self, tmp_path):
+        result = load_daemon_config(tmp_path)
+        assert result == {}
+
+    def test_basic_config(self, tmp_path):
+        conf = tmp_path / "daemon.conf"
+        conf.write_text("[backend]\ntype = anthropic\nmodel = sonnet\n")
+        result = load_daemon_config(tmp_path)
+        assert result["backend.type"] == "anthropic"
+        assert result["backend.model"] == "sonnet"
+
+    def test_nested_sections(self, tmp_path):
+        conf = tmp_path / "daemon.conf"
+        conf.write_text(
+            "[backend.anthropic]\n"
+            "api_key = sk-test\n"
+            "[backend.ollama]\n"
+            "url = http://myhost:11434\n"
+            "[daemon]\n"
+            "mode = fiction\n"
+        )
+        result = load_daemon_config(tmp_path)
+        assert result["backend.anthropic.api_key"] == "sk-test"
+        assert result["backend.ollama.url"] == "http://myhost:11434"
+        assert result["daemon.mode"] == "fiction"
+
+    def test_malformed_config(self, tmp_path):
+        conf = tmp_path / "daemon.conf"
+        conf.write_text("this is not valid ini\n\x00\x01")
+        result = load_daemon_config(tmp_path)
+        # Should not crash, just return partial or empty
+        assert isinstance(result, dict)
+
+
+# =============================================================================
+# Backend auto-detection
+# =============================================================================
+
+
+class TestDetectBackend:
+
+    def test_explicit_backend_type_env(self):
+        with patch.dict(os.environ, {"BACKEND_TYPE": "anthropic",
+                                     "ANTHROPIC_API_KEY": "sk-x"}):
+            bt, kwargs = detect_backend()
+            assert bt == "anthropic"
+            assert kwargs["api_key"] == "sk-x"
+
+    def test_explicit_ollama_type(self):
+        with patch.dict(os.environ, {"BACKEND_TYPE": "ollama"}, clear=False):
+            bt, kwargs = detect_backend()
+            assert bt == "ollama"
+            assert "host" in kwargs
+
+    def test_config_file_fallback(self):
+        config = {"backend.type": "codex"}
+        env = os.environ.copy()
+        env.pop("BACKEND_TYPE", None)
+        env.pop("ANTHROPIC_API_KEY", None)
+        with patch.dict(os.environ, env, clear=True):
+            bt, kwargs = detect_backend(config)
+            assert bt == "codex"
+
+    def test_auto_detect_anthropic_key(self):
+        env = os.environ.copy()
+        env.pop("BACKEND_TYPE", None)
+        env["ANTHROPIC_API_KEY"] = "sk-ant-test"
+        with patch.dict(os.environ, env, clear=True):
+            bt, kwargs = detect_backend()
+            assert bt == "anthropic"
+            assert kwargs["api_key"] == "sk-ant-test"
+
+    def test_auto_detect_claude_cli(self):
+        env = os.environ.copy()
+        env.pop("BACKEND_TYPE", None)
+        env.pop("ANTHROPIC_API_KEY", None)
+        with patch.dict(os.environ, env, clear=True), \
+             patch("shutil.which", side_effect=lambda x: "/usr/bin/claude" if x == "claude" else None):
+            bt, kwargs = detect_backend()
+            assert bt == "claude-code"
+            assert kwargs["claude_path"] == "claude"
+
+    def test_auto_detect_codex_cli(self):
+        env = os.environ.copy()
+        env.pop("BACKEND_TYPE", None)
+        env.pop("ANTHROPIC_API_KEY", None)
+        with patch.dict(os.environ, env, clear=True), \
+             patch("shutil.which", side_effect=lambda x: "/usr/bin/codex" if x == "codex" else None):
+            bt, kwargs = detect_backend()
+            assert bt == "codex"
+
+    def test_fallback_to_ollama(self):
+        env = os.environ.copy()
+        env.pop("BACKEND_TYPE", None)
+        env.pop("ANTHROPIC_API_KEY", None)
+        with patch.dict(os.environ, env, clear=True), \
+             patch("shutil.which", return_value=None):
+            bt, kwargs = detect_backend()
+            assert bt == "ollama"
+
+    def test_env_overrides_config(self):
+        config = {"backend.type": "ollama"}
+        with patch.dict(os.environ, {"BACKEND_TYPE": "anthropic",
+                                     "ANTHROPIC_API_KEY": "key"}):
+            bt, kwargs = detect_backend(config)
+            assert bt == "anthropic"
+
+    def test_default_model_from_env(self):
+        with patch.dict(os.environ, {"BACKEND_TYPE": "ollama",
+                                     "GOVERNOR_MODEL": "llama3"}):
+            bt, kwargs = detect_backend()
+            assert kwargs["default_model"] == "llama3"
+
+    def test_default_model_from_config(self):
+        config = {"backend.type": "ollama", "backend.model": "mistral"}
+        env = os.environ.copy()
+        env.pop("BACKEND_TYPE", None)
+        env.pop("GOVERNOR_MODEL", None)
+        env.pop("ANTHROPIC_API_KEY", None)
+        with patch.dict(os.environ, env, clear=True), \
+             patch("shutil.which", return_value=None):
+            bt, kwargs = detect_backend(config)
+            assert kwargs.get("default_model") == "mistral"
+
+    def test_ollama_custom_host(self):
+        with patch.dict(os.environ, {"BACKEND_TYPE": "ollama",
+                                     "OLLAMA_HOST": "http://gpu:11434"}):
+            bt, kwargs = detect_backend()
+            assert kwargs["host"] == "http://gpu:11434"
+
+
+# =============================================================================
+# DaemonState: ChatBridge + context manager
+# =============================================================================
+
+
+class TestDaemonStateChatBridge:
+
+    def test_chat_bridge_none_on_failure(self, state):
+        """When backend creation fails, chat_bridge returns None."""
+        with patch("governor.daemon.detect_backend",
+                   return_value=("anthropic", {"api_key": ""})):
+            # Anthropic backend with empty key raises ValueError
+            bridge = state.chat_bridge
+            assert bridge is None
+
+    def test_backend_type_lazy(self, state):
+        """backend_type triggers detection on first access."""
+        with patch("governor.daemon.detect_backend",
+                   return_value=("ollama", {"host": "http://localhost:11434"})):
+            assert state.backend_type == "ollama"
+
+    def test_default_model_empty(self, state):
+        assert state.default_model == ""
+
+    def test_context_manager_lazy(self, state):
+        assert state._context_manager is None
+        cm = state.context_manager
+        assert cm is not None
+        assert state.context_manager is cm
+
+    def test_daemon_config_lazy(self, state):
+        assert state._config is None
+        cfg = state.daemon_config
+        assert isinstance(cfg, dict)
+        assert state.daemon_config is cfg
+
+
+# =============================================================================
+# Handler: governor.hello — updated capabilities
+# =============================================================================
+
+
+class TestGovernorHelloChat:
+
+    @pytest.mark.asyncio
+    async def test_hello_includes_chat_capability(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "governor.hello")
+        caps = resp["result"]["capabilities"]
+        assert "chat" in caps
+        assert "streaming" in caps
+        assert "backend" in caps
+        assert isinstance(caps["backend"], dict)
+        assert "type" in caps["backend"]
+        assert "connected" in caps["backend"]
+
+    @pytest.mark.asyncio
+    async def test_hello_chat_false_when_no_backend(self, dispatcher_and_state):
+        """Chat capability is False when no backend can be created."""
+        d, state = dispatcher_and_state
+        # Force no backend
+        state._chat_bridge = None
+        state._backend_type = "none"
+        with patch.object(DaemonState, "chat_bridge", new_callable=lambda: property(lambda self: None)):
+            d2 = Dispatcher()
+            register_handlers(d2, state)
+            resp = await roundtrip(d2, "governor.hello")
+            caps = resp["result"]["capabilities"]
+            assert caps["chat"] is False
+
+
+# =============================================================================
+# Handler: chat.backend
+# =============================================================================
+
+
+class TestChatBackend:
+
+    @pytest.mark.asyncio
+    async def test_backend_returns_type(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        resp = await roundtrip(d, "chat.backend")
+        result = resp["result"]
+        assert "type" in result
+        assert "connected" in result
+
+    @pytest.mark.asyncio
+    async def test_backend_no_model_by_default(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "chat.backend")
+        # No default_model set in test fixture
+        assert "model" not in resp["result"]
+
+
+# =============================================================================
+# Handler: chat.models
+# =============================================================================
+
+
+class TestChatModels:
+
+    @pytest.mark.asyncio
+    async def test_models_empty_when_no_backend(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        # No backend configured in test environment
+        resp = await roundtrip(d, "chat.models")
+        result = resp["result"]
+        assert "models" in result
+        assert isinstance(result["models"], list)
+
+
+# =============================================================================
+# Handler: chat.send — with mock backend
+# =============================================================================
+
+
+class MockChatBackend:
+    """Minimal mock backend for testing chat handlers."""
+
+    def __init__(self, response_content: str = "Hello from mock"):
+        self.response_content = response_content
+        self.last_messages = None
+        self.last_model = None
+
+    async def chat(self, messages, model, **kwargs):
+        from governor.chat_bridge import ChatResponse
+        self.last_messages = messages
+        self.last_model = model
+        return ChatResponse(
+            content=self.response_content,
+            model=model or "mock-model",
+            usage={"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+        )
+
+    async def stream(self, messages, model, **kwargs):
+        from governor.chat_bridge import ChatChunk
+        self.last_messages = messages
+        self.last_model = model
+        # Yield content in chunks
+        words = self.response_content.split()
+        for word in words:
+            yield ChatChunk(content=word + " ")
+        yield ChatChunk(content="", finish_reason="stop")
+
+    async def list_models(self):
+        return [{"id": "mock-model", "owned_by": "test"}]
+
+
+@pytest.fixture
+def state_with_mock_backend(tmp_gov_dir):
+    """DaemonState with a mock chat backend pre-wired."""
+    state = DaemonState(tmp_gov_dir, mode="general")
+    mock_backend = MockChatBackend("Hello from the governed LLM")
+    from governor.chat_bridge import ChatBridge
+    from governor.context_manager import GovernorContextManager
+    ctx_mgr = GovernorContextManager(tmp_gov_dir)
+    state._chat_bridge = ChatBridge(
+        backend=mock_backend,
+        context_manager=ctx_mgr,
+        show_ok_footer=True,
+    )
+    state._backend_type = "mock"
+    state._backend_kwargs = {}
+    state._context_manager = ctx_mgr
+    return state
+
+
+@pytest.fixture
+def dispatcher_with_chat(state_with_mock_backend):
+    d = Dispatcher()
+    register_handlers(d, state_with_mock_backend)
+    return d, state_with_mock_backend
+
+
+class TestChatSend:
+
+    @pytest.mark.asyncio
+    async def test_send_basic(self, dispatcher_with_chat):
+        d, state = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hi"}],
+        })
+        result = resp["result"]
+        assert "content" in result
+        assert result["content"] == "Hello from the governed LLM"
+        assert result["model"] == "mock-model"
+        assert "usage" in result
+        assert "violations" in result
+        assert result["pending"] is None
+
+    @pytest.mark.asyncio
+    async def test_send_with_model(self, dispatcher_with_chat):
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hi"}],
+            "model": "custom-model",
+        })
+        assert resp["result"]["model"] == "custom-model"
+
+    @pytest.mark.asyncio
+    async def test_send_missing_messages(self, dispatcher_with_chat):
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {})
+        assert resp["error"]["code"] == GOVERNOR_ERROR
+
+    @pytest.mark.asyncio
+    async def test_send_empty_messages(self, dispatcher_with_chat):
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {"messages": []})
+        assert resp["error"]["code"] == GOVERNOR_ERROR
+
+    @pytest.mark.asyncio
+    async def test_send_no_backend(self, tmp_gov_dir):
+        """chat.send fails gracefully when no backend is configured."""
+        state = DaemonState(tmp_gov_dir, mode="general")
+        # Force chat_bridge to None by setting a failed state
+        state._chat_bridge = None
+        state._backend_type = "none"
+
+        # Prevent lazy init from auto-detecting a real backend
+        with patch.object(DaemonState, "chat_bridge",
+                          new_callable=lambda: property(lambda self: None)):
+            d = Dispatcher()
+            register_handlers(d, state)
+            resp = await roundtrip(d, "chat.send", {
+                "messages": [{"role": "user", "content": "Hi"}],
+            })
+            assert resp["error"]["code"] == GOVERNOR_ERROR
+            assert "No chat backend" in resp["error"]["message"]
+
+    @pytest.mark.asyncio
+    async def test_send_footer_included(self, dispatcher_with_chat):
+        """Non-blocking response includes governor footer."""
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "test"}],
+        })
+        result = resp["result"]
+        # With no anchors, footer may be None or OK depending on checked_anchors
+        assert "footer" in result
+
+    @pytest.mark.asyncio
+    async def test_send_multi_message(self, dispatcher_with_chat):
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [
+                {"role": "system", "content": "You are helpful"},
+                {"role": "user", "content": "Hi"},
+                {"role": "assistant", "content": "Hello"},
+                {"role": "user", "content": "How are you?"},
+            ],
+        })
+        result = resp["result"]
+        assert "content" in result
+
+    @pytest.mark.asyncio
+    async def test_send_with_context_id(self, dispatcher_with_chat):
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hi"}],
+            "context_id": "test-ctx",
+        })
+        result = resp["result"]
+        assert result["pending"] is None
+
+    @pytest.mark.asyncio
+    async def test_send_emits_receipt(self, dispatcher_with_chat):
+        d, state = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "test"}],
+        })
+        assert resp["result"]["content"]  # Got a response
+        # Check receipt was emitted
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) >= 1
+        assert receipts[0].verdict == "pass"
+
+
+# =============================================================================
+# Handler: chat.stream — streaming with notifications
+# =============================================================================
+
+
+class TestChatStream:
+
+    @pytest.mark.asyncio
+    async def test_stream_dispatches(self, dispatcher_with_chat):
+        """chat.stream handler is found and executes."""
+        d, state = dispatcher_with_chat
+        notifications: list[dict] = []
+
+        async def mock_notify(method: str, params: dict) -> None:
+            notifications.append({"method": method, "params": params})
+
+        # Call the streaming handler directly through the dispatcher
+        handler = d._streaming_handlers["chat.stream"]
+        result = await handler({
+            "messages": [{"role": "user", "content": "Hello"}],
+        }, mock_notify)
+
+        assert "content" in result
+        assert result["content"] == "Hello from the governed LLM "
+        # Should have received delta notifications
+        assert len(notifications) > 0
+        for n in notifications:
+            assert n["method"] == "chat.delta"
+            assert "content" in n["params"]
+
+    @pytest.mark.asyncio
+    async def test_stream_final_response(self, dispatcher_with_chat):
+        d, _ = dispatcher_with_chat
+        notifications: list[dict] = []
+
+        async def mock_notify(method: str, params: dict) -> None:
+            notifications.append({"method": method, "params": params})
+
+        handler = d._streaming_handlers["chat.stream"]
+        result = await handler({
+            "messages": [{"role": "user", "content": "Hi"}],
+        }, mock_notify)
+
+        # Final result has all required fields
+        assert "content" in result
+        assert "model" in result
+        assert "violations" in result
+        assert "footer" in result
+        assert "pending" in result
+
+    @pytest.mark.asyncio
+    async def test_stream_no_backend(self, tmp_gov_dir):
+        state = DaemonState(tmp_gov_dir, mode="general")
+        with patch.object(DaemonState, "chat_bridge",
+                          new_callable=lambda: property(lambda self: None)):
+            d = Dispatcher()
+            register_handlers(d, state)
+            req = rpc_request("chat.stream", {
+                "messages": [{"role": "user", "content": "Hi"}],
+            })
+            resp = await d.dispatch(req)
+            assert resp["error"]["code"] == GOVERNOR_ERROR
+
+    @pytest.mark.asyncio
+    async def test_stream_emits_receipt(self, dispatcher_with_chat):
+        d, state = dispatcher_with_chat
+        handler = d._streaming_handlers["chat.stream"]
+
+        async def noop_notify(method: str, params: dict) -> None:
+            pass
+
+        await handler({
+            "messages": [{"role": "user", "content": "test"}],
+        }, noop_notify)
+
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) >= 1
+
+    @pytest.mark.asyncio
+    async def test_stream_missing_messages(self, dispatcher_with_chat):
+        d, _ = dispatcher_with_chat
+
+        async def noop_notify(method: str, params: dict) -> None:
+            pass
+
+        handler = d._streaming_handlers["chat.stream"]
+        with pytest.raises(ValueError, match="Missing required param"):
+            await handler({}, noop_notify)
+
+    @pytest.mark.asyncio
+    async def test_stream_delta_content_matches(self, dispatcher_with_chat):
+        """All delta content concatenated equals the final content."""
+        d, _ = dispatcher_with_chat
+        chunks: list[str] = []
+
+        async def collect_notify(method: str, params: dict) -> None:
+            if method == "chat.delta":
+                chunks.append(params["content"])
+
+        handler = d._streaming_handlers["chat.stream"]
+        result = await handler({
+            "messages": [{"role": "user", "content": "Hi"}],
+        }, collect_notify)
+
+        streamed = "".join(chunks)
+        assert streamed == result["content"]
+
+
+# =============================================================================
+# Streaming dispatch integration (writer passthrough)
+# =============================================================================
+
+
+class TestStreamingDispatch:
+
+    @pytest.mark.asyncio
+    async def test_dispatch_passes_writer_to_streaming_handler(self):
+        """Verify dispatch plumbs the writer into streaming handlers."""
+        d = Dispatcher()
+        received_notify = []
+
+        async def streaming_echo(params: dict, notify) -> dict:
+            await notify("test.delta", {"chunk": "A"})
+            await notify("test.delta", {"chunk": "B"})
+            return {"result": "done"}
+
+        d.register_streaming("test.echo", streaming_echo)
+
+        # Create a mock writer
+        written: list[bytes] = []
+        writer = MagicMock()
+        writer.write = lambda data: written.append(data)
+
+        async def mock_drain():
+            pass
+        writer.drain = mock_drain
+
+        req = {"jsonrpc": "2.0", "method": "test.echo", "id": 1, "params": {}}
+        resp = await d.dispatch(req, writer=writer)
+
+        assert resp["result"] == {"result": "done"}
+        # Two notifications should have been written
+        assert len(written) == 2
+
+        # Parse the written notifications
+        for data in written:
+            text = data.decode("utf-8")
+            assert "Content-Length:" in text
+            _, _, body = text.partition("\r\n\r\n")
+            msg = json.loads(body)
+            assert msg["method"] == "test.delta"
+
+    @pytest.mark.asyncio
+    async def test_streaming_handler_without_writer(self):
+        """When no writer, notify is a no-op (doesn't crash)."""
+        d = Dispatcher()
+
+        async def streaming_handler(params, notify):
+            await notify("delta", {"x": 1})
+            return {"ok": True}
+
+        d.register_streaming("test.stream", streaming_handler)
+        req = {"jsonrpc": "2.0", "method": "test.stream", "id": 1, "params": {}}
+        resp = await d.dispatch(req, writer=None)
+        assert resp["result"] == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_streaming_handler_error(self):
+        d = Dispatcher()
+
+        async def bad_stream(params, notify):
+            raise RuntimeError("stream failed")
+
+        d.register_streaming("test.fail", bad_stream)
+        req = {"jsonrpc": "2.0", "method": "test.fail", "id": 1, "params": {}}
+        resp = await d.dispatch(req)
+        assert resp["error"]["code"] == GOVERNOR_ERROR
+        assert "stream failed" in resp["error"]["message"]
+
+
+# =============================================================================
+# _emit_chat_receipt helper
+# =============================================================================
+
+
+class TestEmitChatReceipt:
+
+    def test_emit_pass(self, state_with_mock_backend):
+        state = state_with_mock_backend
+        _emit_chat_receipt(state, "pass", "Hello world", "run_1")
+        receipts = state.receipt_system.query(gate="chat_bridge", verdict="pass")
+        assert len(receipts) == 1
+
+    def test_emit_block(self, state_with_mock_backend):
+        state = state_with_mock_backend
+        _emit_chat_receipt(state, "block", "Bad content", "run_2")
+        receipts = state.receipt_system.query(gate="chat_bridge", verdict="block")
+        assert len(receipts) == 1
+
+    def test_emit_receipt_failure_silent(self, state):
+        """Receipt emission failure should not propagate."""
+        # state has no chat bridge, but _emit_chat_receipt should not crash
+        _emit_chat_receipt(state, "pass", "content", "run_3")
+        # No exception raised — that's the test
+
+
+# =============================================================================
+# Chat with blocking violations
+# =============================================================================
+
+
+class TestChatBlockingViolation:
+
+    @pytest.mark.asyncio
+    async def test_send_with_violation_returns_pending(self, tmp_gov_dir):
+        """When governor check finds REJECT violations, pending is returned."""
+        state = DaemonState(tmp_gov_dir, mode="general")
+        mock_backend = MockChatBackend("This violates everything")
+
+        from governor.chat_bridge import ChatBridge, GovernorCheckResult, ViolationPendingResponse
+        from governor.context_manager import GovernorContextManager
+
+        ctx_mgr = GovernorContextManager(tmp_gov_dir)
+        state._chat_bridge = ChatBridge(
+            backend=mock_backend,
+            context_manager=ctx_mgr,
+            show_ok_footer=True,
+        )
+        state._backend_type = "mock"
+        state._backend_kwargs = {}
+        state._context_manager = ctx_mgr
+
+        d = Dispatcher()
+        register_handlers(d, state)
+
+        # Mock check_response_blocking to return a ViolationPendingResponse
+        violation_resp = ViolationPendingResponse(
+            blocked_response="This violates everything",
+            violations=[{"anchor_id": "a1", "severity": "reject", "message": "Bad"}],
+            choices=["fix", "revise", "proceed"],
+            prompt="Violation detected",
+            run_id="test_run",
+            pending_id="pending_1",
+        )
+
+        with patch("governor.chat_bridge.GovernorHooks.check_response_blocking",
+                    return_value=violation_resp):
+            resp = await roundtrip(d, "chat.send", {
+                "messages": [{"role": "user", "content": "Do bad thing"}],
+            })
+            result = resp["result"]
+            assert result["pending"] is not None
+            assert result["pending"]["blocked_response"] == "This violates everything"
+            assert len(result["violations"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_stream_with_violation_returns_pending(self, tmp_gov_dir):
+        state = DaemonState(tmp_gov_dir, mode="general")
+        mock_backend = MockChatBackend("Violating content")
+
+        from governor.chat_bridge import ChatBridge, ViolationPendingResponse
+        from governor.context_manager import GovernorContextManager
+
+        ctx_mgr = GovernorContextManager(tmp_gov_dir)
+        state._chat_bridge = ChatBridge(
+            backend=mock_backend,
+            context_manager=ctx_mgr,
+        )
+        state._backend_type = "mock"
+        state._backend_kwargs = {}
+        state._context_manager = ctx_mgr
+
+        d = Dispatcher()
+        register_handlers(d, state)
+
+        violation_resp = ViolationPendingResponse(
+            blocked_response="Violating content",
+            violations=[{"anchor_id": "a1", "severity": "reject"}],
+            choices=["fix"],
+            prompt="Fix it",
+            run_id="run_x",
+        )
+
+        async def noop_notify(method, params):
+            pass
+
+        with patch("governor.chat_bridge.GovernorHooks.check_response_blocking",
+                    return_value=violation_resp):
+            handler = d._streaming_handlers["chat.stream"]
+            result = await handler({
+                "messages": [{"role": "user", "content": "test"}],
+            }, noop_notify)
+            assert result["pending"] is not None
+
+
+# =============================================================================
+# Chat with mock backend: models listing
+# =============================================================================
+
+
+class TestChatModelsWithBackend:
+
+    @pytest.mark.asyncio
+    async def test_models_from_mock_backend(self, dispatcher_with_chat):
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.models")
+        models = resp["result"]["models"]
+        assert len(models) == 1
+        assert models[0]["id"] == "mock-model"
+
+    @pytest.mark.asyncio
+    async def test_backend_info_with_mock(self, dispatcher_with_chat):
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.backend")
+        result = resp["result"]
+        assert result["type"] == "mock"
+        assert result["connected"] is True

@@ -11,12 +11,15 @@ Secondary: Unix socket ($XDG_RUNTIME_DIR/governor-<hash>.sock).
 """
 
 import asyncio
+import configparser
 import hashlib
 import json
 import logging
 import os
+import shutil
 import signal
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Awaitable
@@ -79,17 +82,31 @@ async def write_message(writer: asyncio.StreamWriter, msg: dict) -> None:
 # Handler type: async function taking params dict, returning result dict
 Handler = Callable[[dict[str, Any]], Awaitable[Any]]
 
+# Streaming handler: takes (params, notify_callback), returns final result
+# The notify_callback sends JSON-RPC notifications to the client
+NotifyFn = Callable[[str, dict[str, Any]], Awaitable[None]]
+StreamingHandler = Callable[[dict[str, Any], NotifyFn], Awaitable[Any]]
+
 
 class Dispatcher:
     """JSON-RPC 2.0 method dispatcher."""
 
     def __init__(self) -> None:
         self._handlers: dict[str, Handler] = {}
+        self._streaming_handlers: dict[str, StreamingHandler] = {}
 
     def register(self, method: str, handler: Handler) -> None:
         self._handlers[method] = handler
 
-    async def dispatch(self, request: dict) -> dict | None:
+    def register_streaming(self, method: str, handler: StreamingHandler) -> None:
+        """Register a streaming handler that can send notifications during execution."""
+        self._streaming_handlers[method] = handler
+
+    async def dispatch(
+        self,
+        request: dict,
+        writer: asyncio.StreamWriter | None = None,
+    ) -> dict | None:
         """Dispatch a JSON-RPC request. Returns response dict or None for notifications."""
         if not isinstance(request, dict):
             return _error_response(None, PARSE_ERROR, "Parse error")
@@ -111,6 +128,36 @@ class Dispatcher:
 
         # Notifications (no id) don't get responses
         is_notification = "id" not in request
+
+        # Check streaming handlers first
+        streaming_handler = self._streaming_handlers.get(method)
+        if streaming_handler is not None:
+            try:
+                if not isinstance(params, dict):
+                    params = {}
+
+                async def notify(notify_method: str, notify_params: dict[str, Any]) -> None:
+                    """Send a JSON-RPC notification to the client."""
+                    if writer is not None:
+                        msg = {
+                            "jsonrpc": "2.0",
+                            "method": notify_method,
+                            "params": notify_params,
+                        }
+                        await write_message(writer, msg)
+
+                result = await streaming_handler(params, notify)
+                if is_notification:
+                    return None
+                return {"jsonrpc": "2.0", "id": request_id, "result": result}
+            except TypeError as e:
+                if is_notification:
+                    return None
+                return _error_response(request_id, INVALID_PARAMS, str(e))
+            except Exception as e:
+                if is_notification:
+                    return None
+                return _error_response(request_id, GOVERNOR_ERROR, str(e))
 
         handler = self._handlers.get(method)
         if handler is None:
@@ -150,6 +197,109 @@ def _error_response(request_id: Any, code: int, message: str) -> dict:
 # =============================================================================
 
 
+def load_daemon_config(governor_dir: Path) -> dict[str, str]:
+    """Load daemon config from $GOVERNOR_DIR/daemon.conf if it exists.
+
+    Returns a flat dict of key-value pairs. Env vars override config file.
+    Config file is INI format with [backend] and [daemon] sections.
+    """
+    config_path = governor_dir / "daemon.conf"
+    result: dict[str, str] = {}
+
+    if config_path.exists():
+        cp = configparser.ConfigParser()
+        try:
+            cp.read(str(config_path))
+        except configparser.Error:
+            logger.warning("Failed to parse %s", config_path)
+            return result
+
+        # Flatten sections into dot-separated keys
+        for section in cp.sections():
+            for key, value in cp.items(section):
+                result[f"{section}.{key}"] = value
+
+    return result
+
+
+def detect_backend(
+    config: dict[str, str] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Auto-detect the best available backend from env vars and config.
+
+    Priority: BACKEND_TYPE env → config file → detection order
+    (Anthropic key → Ollama URL → Claude Code binary → none).
+
+    Returns (backend_type, kwargs) for create_backend(), or ("none", {})
+    if no backend is available.
+    """
+    cfg = config or {}
+
+    # 1. Explicit BACKEND_TYPE env var (highest priority)
+    backend_type = os.environ.get("BACKEND_TYPE", "").strip()
+
+    # 2. Config file fallback
+    if not backend_type:
+        backend_type = cfg.get("backend.type", "").strip()
+
+    # Build kwargs from env + config (env wins)
+    anthropic_key = os.environ.get(
+        "ANTHROPIC_API_KEY", cfg.get("backend.anthropic.api_key", "")
+    )
+    ollama_host = os.environ.get(
+        "OLLAMA_HOST", cfg.get("backend.ollama.url", "http://localhost:11434")
+    )
+    claude_path = os.environ.get(
+        "CLAUDE_PATH", cfg.get("backend.claude_code.path", "claude")
+    )
+    codex_path = os.environ.get(
+        "CODEX_PATH", cfg.get("backend.codex.path", "codex")
+    )
+    default_model = os.environ.get(
+        "GOVERNOR_MODEL", cfg.get("backend.model", "")
+    )
+
+    if backend_type:
+        # Explicit type — build kwargs for it
+        kwargs: dict[str, Any] = {}
+        if backend_type == "anthropic":
+            kwargs["api_key"] = anthropic_key
+        elif backend_type == "ollama":
+            kwargs["host"] = ollama_host
+        elif backend_type == "claude-code":
+            kwargs["claude_path"] = claude_path
+        elif backend_type == "codex":
+            kwargs["codex_path"] = codex_path
+        if default_model:
+            kwargs["default_model"] = default_model
+        return backend_type, kwargs
+
+    # 3. Auto-detection order: Anthropic key → Claude CLI → Codex CLI → Ollama → none
+    if anthropic_key:
+        kwargs = {"api_key": anthropic_key}
+        if default_model:
+            kwargs["default_model"] = default_model
+        return "anthropic", kwargs
+
+    if shutil.which(claude_path):
+        kwargs = {"claude_path": claude_path}
+        if default_model:
+            kwargs["default_model"] = default_model
+        return "claude-code", kwargs
+
+    if shutil.which(codex_path):
+        kwargs = {"codex_path": codex_path}
+        if default_model:
+            kwargs["default_model"] = default_model
+        return "codex", kwargs
+
+    # Ollama is always structurally available (may fail at connection time)
+    kwargs = {"host": ollama_host}
+    if default_model:
+        kwargs["default_model"] = default_model
+    return "ollama", kwargs
+
+
 class DaemonState:
     """Lazy wrapper around governor subsystems for daemon handlers."""
 
@@ -157,10 +307,15 @@ class DaemonState:
         self.governor_dir = governor_dir
         self.root = governor_dir.parent
         self.mode = mode
+        self._config: dict[str, str] | None = None
         self._session_store = None
         self._receipt_system = None
         self._scar_ledger = None
         self._violation_resolver = None
+        self._chat_bridge = None
+        self._backend_type: str = "none"
+        self._backend_kwargs: dict[str, Any] = {}
+        self._context_manager = None
 
     @property
     def session_store(self):
@@ -198,10 +353,80 @@ class DaemonState:
             )
         return self._violation_resolver
 
+    @property
+    def daemon_config(self) -> dict[str, str]:
+        if self._config is None:
+            self._config = load_daemon_config(self.governor_dir)
+        return self._config
+
+    @property
+    def context_manager(self):
+        if self._context_manager is None:
+            from .context_manager import GovernorContextManager
+            self._context_manager = GovernorContextManager(self.governor_dir)
+        return self._context_manager
+
+    @property
+    def backend_type(self) -> str:
+        """Detected backend type (lazy — runs detection on first access)."""
+        if self._backend_type == "none" and not self._chat_bridge:
+            self._backend_type, self._backend_kwargs = detect_backend(
+                self.daemon_config
+            )
+        return self._backend_type
+
+    @property
+    def chat_bridge(self):
+        """Lazy-initialized ChatBridge with auto-detected backend.
+
+        Returns None if no backend can be created (e.g. missing API key).
+        """
+        if self._chat_bridge is None:
+            bt, kwargs = detect_backend(self.daemon_config)
+            self._backend_type = bt
+            self._backend_kwargs = kwargs
+
+            try:
+                from .chat_bridge import ChatBridge, create_backend
+                # Pop default_model — it's not a create_backend kwarg
+                kwargs.pop("default_model", None)
+                backend = create_backend(bt, **kwargs)
+                self._chat_bridge = ChatBridge(
+                    backend=backend,
+                    context_manager=self.context_manager,
+                    show_ok_footer=True,
+                )
+            except Exception as e:
+                logger.warning("Failed to create chat backend (%s): %s", bt, e)
+                return None
+        return self._chat_bridge
+
+    @property
+    def default_model(self) -> str:
+        """Default model from config/env, or empty string."""
+        return self._backend_kwargs.get("default_model", "")
+
 
 # =============================================================================
 # Handler registration — 21 RPC methods
 # =============================================================================
+
+
+def _emit_chat_receipt(
+    state: DaemonState, verdict: str, content: str, run_id: str
+) -> None:
+    """Emit a gate receipt for a chat generation check."""
+    try:
+        state.receipt_system.emit(
+            gate="chat_bridge",
+            verdict=verdict,
+            subject_kind="chat_response",
+            subject_bytes=content.encode("utf-8"),
+            evidence_bundle={"run_id": run_id},
+            gate_config={"mode": state.mode},
+        )
+    except Exception:
+        logger.debug("receipt_suppressed: chat_bridge gate receipt failed")
 
 
 def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
@@ -211,15 +436,26 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
     async def governor_hello(params: dict) -> dict:
         initialized = state.governor_dir.exists()
+        bridge = state.chat_bridge
+        has_chat = bridge is not None
+        backend_info: dict[str, Any] = {
+            "type": state.backend_type,
+            "connected": has_chat,
+        }
+        if state.default_model:
+            backend_info["model"] = state.default_model
         return {
             "protocol_version": PROTOCOL_VERSION,
             "capabilities": {
+                "chat": has_chat,
+                "streaming": has_chat,
                 "fix_mode": "candidate_only",
                 "sessions": True,
                 "intent": True,
                 "receipts": True,
                 "scars": True,
                 "commit": True,
+                "backend": backend_info,
             },
             "governor": {
                 "context_id": state.governor_dir.name
@@ -515,6 +751,154 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         exceptions = state.violation_resolver.list_exceptions()
         return [e.to_dict() for e in exceptions]
 
+    # --- Chat ---
+
+    async def chat_send(params: dict) -> dict:
+        """Non-streaming governed chat. Full pipeline: augment → generate → check → receipt."""
+        bridge = state.chat_bridge
+        if bridge is None:
+            raise RuntimeError("No chat backend configured")
+
+        messages_raw = params.get("messages", [])
+        model = params.get("model", "") or state.default_model
+        context_id = params.get("context_id", "default")
+
+        if not messages_raw:
+            raise ValueError("Missing required param: messages")
+
+        from .chat_bridge import ChatMessage, ChatResponse, ViolationPendingResponse
+
+        messages = [
+            ChatMessage(role=m.get("role", "user"), content=m.get("content", ""))
+            for m in messages_raw
+        ]
+
+        # Get hooks for violation checking
+        ctx = state.context_manager.get_or_create(context_id, mode=state.mode)
+        from .chat_bridge import GovernorHooks, _format_governor_footer
+        hooks = GovernorHooks(ctx)
+        augmented = hooks.augment_messages(messages)
+
+        # Generate
+        response = await bridge.backend.chat(augmented, model)
+        run_id = uuid.uuid4().hex[:12]
+
+        # Check for blocking violations
+        check_result = hooks.check_response_blocking(
+            response.content, run_id=run_id
+        )
+
+        if isinstance(check_result, ViolationPendingResponse):
+            # Blocking violation — return pending
+            _emit_chat_receipt(state, "block", response.content, run_id)
+            return {
+                "content": response.content,
+                "model": response.model,
+                "usage": response.usage,
+                "violations": check_result.violations,
+                "footer": None,
+                "pending": check_result.to_dict(),
+            }
+
+        # Non-blocking — format footer
+        footer = _format_governor_footer(check_result, bridge.show_ok_footer)
+        _emit_chat_receipt(state, "pass", response.content, run_id)
+
+        return {
+            "content": response.content,
+            "model": response.model,
+            "usage": response.usage,
+            "violations": check_result.violations,
+            "footer": footer,
+            "pending": None,
+        }
+
+    async def chat_stream(params: dict, notify: NotifyFn) -> dict:
+        """Streaming governed chat. Sends chat.delta notifications, then final result."""
+        bridge = state.chat_bridge
+        if bridge is None:
+            raise RuntimeError("No chat backend configured")
+
+        messages_raw = params.get("messages", [])
+        model = params.get("model", "") or state.default_model
+        context_id = params.get("context_id", "default")
+
+        if not messages_raw:
+            raise ValueError("Missing required param: messages")
+
+        from .chat_bridge import ChatMessage, ViolationPendingResponse
+
+        messages = [
+            ChatMessage(role=m.get("role", "user"), content=m.get("content", ""))
+            for m in messages_raw
+        ]
+
+        # Get hooks
+        ctx = state.context_manager.get_or_create(context_id, mode=state.mode)
+        from .chat_bridge import GovernorHooks, _format_governor_footer
+        hooks = GovernorHooks(ctx)
+        augmented = hooks.augment_messages(messages)
+
+        # Stream generation, sending deltas as notifications
+        accumulated: list[str] = []
+        async for chunk in bridge.backend.stream(augmented, model):
+            if chunk.content:
+                accumulated.append(chunk.content)
+                await notify("chat.delta", {"content": chunk.content})
+            if chunk.finish_reason is not None:
+                break
+
+        full_content = "".join(accumulated)
+        run_id = uuid.uuid4().hex[:12]
+
+        # Run governance check on accumulated content
+        check_result = hooks.check_response_blocking(
+            full_content, run_id=run_id
+        )
+
+        if isinstance(check_result, ViolationPendingResponse):
+            _emit_chat_receipt(state, "block", full_content, run_id)
+            return {
+                "content": full_content,
+                "model": model,
+                "usage": {},
+                "violations": check_result.violations,
+                "footer": None,
+                "pending": check_result.to_dict(),
+            }
+
+        footer = _format_governor_footer(check_result, bridge.show_ok_footer)
+        _emit_chat_receipt(state, "pass", full_content, run_id)
+
+        return {
+            "content": full_content,
+            "model": model,
+            "usage": {},
+            "violations": check_result.violations,
+            "footer": footer,
+            "pending": None,
+        }
+
+    async def chat_models(params: dict) -> dict:
+        """List available models from the current backend."""
+        bridge = state.chat_bridge
+        if bridge is None:
+            return {"models": []}
+        models = await bridge.list_models()
+        return {"models": models}
+
+    async def chat_backend(params: dict) -> dict:
+        """Return current backend info."""
+        bridge = state.chat_bridge
+        connected = bridge is not None
+        result: dict[str, Any] = {
+            "type": state.backend_type,
+            "connected": connected,
+        }
+        if state.default_model:
+            result["model"] = state.default_model
+        return result
+
     # --- Register all ---
 
     dispatcher.register("governor.hello", governor_hello)
@@ -543,6 +927,11 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("commit.revise", commit_revise)
     dispatcher.register("commit.proceed", commit_proceed)
     dispatcher.register("commit.exceptions", commit_exceptions)
+
+    dispatcher.register("chat.send", chat_send)
+    dispatcher.register_streaming("chat.stream", chat_stream)
+    dispatcher.register("chat.models", chat_models)
+    dispatcher.register("chat.backend", chat_backend)
 
 
 # =============================================================================
@@ -575,7 +964,7 @@ async def serve_stdio(state: DaemonState) -> None:
             msg = await read_message(reader)
             if msg is None:
                 break  # EOF
-            response = await dispatcher.dispatch(msg)
+            response = await dispatcher.dispatch(msg, writer=writer)
             if response is not None:
                 await write_message(writer, response)
     except (asyncio.IncompleteReadError, ConnectionResetError):
@@ -600,7 +989,7 @@ async def serve_unix(socket_path: Path, state: DaemonState) -> None:
                 msg = await read_message(reader)
                 if msg is None:
                     break
-                response = await dispatcher.dispatch(msg)
+                response = await dispatcher.dispatch(msg, writer=writer)
                 if response is not None:
                     await write_message(writer, response)
         except (asyncio.IncompleteReadError, ConnectionResetError):

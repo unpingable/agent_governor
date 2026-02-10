@@ -1,4 +1,4 @@
-"""Contract test for SSE streaming via /v1/chat/completions.
+"""Contract test for RPC streaming via chat.stream.
 
 Skipped by default — requires a live chat backend.
 Set CONTRACT_SKIP_STREAMING=0 to enable.

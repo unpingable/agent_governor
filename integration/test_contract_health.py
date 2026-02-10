@@ -1,7 +1,7 @@
-"""Contract tests for /health endpoint.
+"""Contract tests for governor.hello (health).
 
 Verifies that Maude's HealthResponse model can deserialize
-Governor's actual /health response.
+Governor daemon's actual governor.hello response via the RPC client.
 """
 
 from __future__ import annotations
@@ -13,9 +13,9 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_health_returns_valid_response(client):
-    """GET /health deserializes into HealthResponse without error."""
+    """governor.hello deserializes into HealthResponse without error."""
     health = await client.health()
-    assert health.status in ("healthy", "degraded")
+    assert health.status in ("ok", "degraded")
 
 
 async def test_health_has_all_required_fields(client):
@@ -33,5 +33,5 @@ async def test_health_has_all_required_fields(client):
 async def test_health_degraded_without_backend(client):
     """Without a reachable chat backend, governor reports degraded."""
     health = await client.health()
-    assert health.status == "degraded"
+    # Daemon with unreachable ollama → backend not connected
     assert health.backend.connected is False

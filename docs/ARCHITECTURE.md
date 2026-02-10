@@ -412,74 +412,51 @@ Watch for these in future PRs:
 ## 8. Parity Audit: WebUI vs Daemon Governance Path
 
 **Date:** 2026-02-10
-**Verdict:** ❌ WebUI bypasses governance at 2 critical points
+**Status:** RESOLVED — Split-brain fix shipped
 
-Traced the exact code path for a chat message through both entrypoints.
-Source files: `gov-webui/src/gov_webui/adapter.py` and `src/governor/daemon.py`.
+The original audit (pre-fix) found that gov-webui imported `ChatBridge` directly, bypassing
+daemon augmentation and receipt emission. This has been fixed.
 
-### Pipeline Step Comparison
+### Resolution: WebUI Chat Delegates to Daemon
+
+Gov-WebUI's chat path now delegates to the governor daemon via Unix socket RPC:
+
+- `gov-webui/src/gov_webui/daemon_client.py`: `DaemonChatClient` (chat_send, chat_stream, commit_pending)
+- `adapter.py`: `_get_daemon_client()` lazy-init, socket from `GOVERNOR_SOCKET` or `default_socket_path`
+- Non-chat endpoints (sessions, governor/status, dashboard, etc.) still use direct imports
+
+This is **Option A** from the original audit: WebUI becomes a daemon client for chat.
+
+### Current Pipeline Step Comparison
 
 | Step | WebUI | Daemon | Parity |
 |------|-------|--------|--------|
 | 1. Load GovernorContext | `_get_context_manager()` | `state.context_manager` | ✅ |
-| 2. Check pending violation | `resolver.get_pending()` | *not implemented* | ⚠️ WebUI-only |
-| 3. **augment_messages()** | **SKIPPED** — messages go naked to backend | `hooks.augment_messages()` before generation | ❌ **GAP** |
-| 4. Generate via backend | `bridge.chat()` | `bridge.backend.chat(augmented)` | ✅ (but different input) |
-| 5. check_response_blocking() | `hooks.check_response_blocking()` | `hooks.check_response_blocking()` | ✅ |
-| 6. **Emit gate receipt** | **NOT CALLED** (non-streaming path) | `_emit_chat_receipt()` on every verdict | ❌ **GAP** |
-| 7. ViolationResolver | Interactive fix/revise/proceed | Stateless per-call | ⚠️ Different model |
-| 8. Return response | OpenAI-compatible JSON | JSON-RPC result | ✅ (format differs, semantics match) |
+| 2. Check pending violation | Daemon handles via `_resolve_violation()` | `_resolve_violation()` | ✅ |
+| 3. augment_messages() | Daemon handles via `hooks.augment_messages()` | `hooks.augment_messages()` | ✅ |
+| 4. Generate via backend | Daemon handles via `ChatBridge` | `ChatBridge` | ✅ |
+| 5. check_response_blocking() | Daemon handles | Daemon handles | ✅ |
+| 6. Emit gate receipt | Daemon emits `_emit_chat_receipt()` | `_emit_chat_receipt()` | ✅ |
+| 7. ViolationResolver | Daemon's `ViolationResolver` | Same | ✅ |
+| 8. Return response | DaemonChatClient → OpenAI-compat JSON | JSON-RPC result | ✅ |
 
-### Gap 1: Augmentation Bypass
+### Tripwire Tests
 
-WebUI sends raw user messages directly to the backend (`adapter.py` line ~430).
-Daemon calls `hooks.augment_messages()` (`daemon.py` line ~780) which injects:
-- Mode-specific system prompt (fiction/code/nonfiction/research)
-- Continuity anchors
-- Active puppet profile constraints
+`gov-webui/tests/test_parity.py` contains 5 tripwire tests verifying that the chat path
+delegates to the daemon (ChatBridge is NOT called directly for chat operations).
 
-**Impact:** Same user, same prompt → different governance context depending on entrypoint.
+### Remaining Divergence (Accepted)
 
-### Gap 2: Receipt Emission
+Non-chat endpoints (sessions, governor/status, dashboard, fiction/code panels) still use
+direct governor imports rather than daemon RPC. This is acceptable because:
+- These are read-only state queries, not governance-relevant actions
+- The daemon's RPC methods for these call the same underlying code
+- Migrating them would add latency without improving correctness
 
-WebUI non-streaming path (`_non_streaming_response_with_blocking()`) emits zero receipts.
-Daemon emits on every verdict:
-- `_emit_chat_receipt(state, "block", ...)` for blocking violations
-- `_emit_chat_receipt(state, "pass", ...)` for clean responses
+### Invariant (enforced)
 
-**Note:** WebUI *streaming* path does emit receipts. Someone started the work and didn't finish.
-
-### Gap 3: Pending Violation Pre-Check (WebUI-only)
-
-WebUI checks `resolver.get_pending()` before generation and implements interactive resolution.
-Daemon treats each `chat.send` / `chat.stream` as stateless — no pending check.
-This is a feature gap in the daemon, not a bypass.
-
-### Root Cause
-
-Gov-WebUI imports `ChatBridge` and `GovernorContextManager` directly instead of routing
-through the daemon. It was built first (before the daemon existed) and was never migrated.
-The daemon added augmentation and receipts as core features; webui was not updated.
-
-### Resolution Options
-
-**Option A: WebUI becomes daemon client (recommended)**
-WebUI talks JSON-RPC to daemon like Maude/Guvnah. Relays `chat.delta` notifications
-over SSE/WebSocket to the browser. One authority surface, one code path.
-
-**Option B: "Embedded daemon" pattern**
-WebUI imports the daemon's dispatcher/state and routes HTTP → same JSON-RPC handlers
-in-process. Semantics stay identical; transport is the only difference.
-
-**Option C: Fix webui in place (quick patch, doesn't fix root cause)**
-Add `augment_messages()` call before generation and `_emit_chat_receipt()` after checking.
-Reduces immediate gap but preserves the structural divergence.
-
-### Invariant (proposed)
-
-> All governance-relevant actions go through one authority surface.
-> Whether that surface is "daemon RPC" or "core library + thin adapters" is a choice,
-> but it must be one.
+> All governance-relevant actions (chat generation, violation resolution, receipt emission)
+> go through the daemon as the single authority surface.
 
 ---
 

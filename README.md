@@ -306,6 +306,7 @@ bash start-codex.sh                      # Codex backend
 
 | Document | Contents |
 |----------|----------|
+| `docs/WHY.md` | Motivation and field context — why structural governance, not advisory |
 | `CLAUDE.md` | Architecture rules, claim types, receipt types, conventions |
 | `BUILD_SPEC.md` | Step-by-step build guide, FSM, receipt design |
 | `MULTI_AGENT.md` | Concurrency model, conflict detection, dispatcher |

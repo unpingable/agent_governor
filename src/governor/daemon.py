@@ -1071,7 +1071,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         bridge = state.chat_bridge
         if bridge is None:
             return {"models": []}
-        models = await bridge.list_models()
+        try:
+            models = await bridge.list_models()
+        except Exception:
+            return {"models": []}
         return {"models": models}
 
     async def chat_backend(params: dict) -> dict:

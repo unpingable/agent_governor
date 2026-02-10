@@ -43,6 +43,10 @@ dev = [
     "pytest-timeout>=2.0",
     "ruff>=0.1.0",
 ]
+webui = [
+    "httpx>=0.24.0",
+    "pyyaml>=6.0",
+]
 
 [project.scripts]
 governor = "governor.cli:main"

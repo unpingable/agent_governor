@@ -159,6 +159,12 @@ The governor's v2 architecture: control theory foundation, run-centric instrumen
 |------|----------------|--------|
 | **INVARIANTS_SPEC.md** | 10 invariants (A-J). Formal definitions, implementation cross-references. | `canonical` |
 
+### 2.1.0: Workspaces
+
+| Spec | What It Covers | Status |
+|------|----------------|--------|
+| **WORKSPACE_SPEC.md** | Multi-project via filesystem partitioning. Workspace resolver, socket-per-workspace, CLI wiring. | `ahead` |
+
 ### 3.0: Self-Governance (Deferred)
 
 | Spec | What It Covers | Status |

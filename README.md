@@ -313,6 +313,7 @@ bash start-codex.sh                      # Codex backend
 | `CONTRIBUTING.md` | Branch workflow, testing requirements |
 | `docs/ADMISSIBILITY.md` | Why receipts prove admissibility, not outcome correctness |
 | `docs/COMPLIANCE.md` | Fiduciary law mapping (ERISA, SEC, process-based prudence) |
+| `docs/CLIENT_ECOSYSTEM.md` | Client roles, transport posture, v2/v3 boundary, fleet primitive |
 | `specs/` | 25+ design specs (core theory, UX, interferometry) |
 | `docs/` | User guides, architecture docs, mode-specific guides |
 

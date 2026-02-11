@@ -10,6 +10,17 @@ The governor doesn't compete on agent features. It competes on **invariants**: r
 
 ---
 
+## Invariants (do not regress)
+
+- Single authority pipeline (no split-brain semantics)
+- Every gated decision is receipted
+- Provenance is recorded (`backend_type`, `model`, `run_id`)
+- Identity is recorded (`principal_id`, `tenant_id`) with explicit trust boundary
+- "Stop the line" works through all entrypoints (pending-violation latch)
+- Selfcheck exists and can be run remotely (integrity verification, not monitoring)
+
+---
+
 ## Clients
 
 ### VS Code Extension
@@ -40,10 +51,33 @@ The governor doesn't compete on agent features. It competes on **invariants**: r
 
 **Repo:** [github.com/unpingable/governor_webui](https://github.com/unpingable/governor_webui)
 
-**Role:** Admin console / remote access escape hatch / demo surface.
+**Role:** Workflow console — three opinionated panels, not a generic admin UI.
 
-- v2: The only client that *should* feel "remote" — it's already HTTP and meant for "I'm not on my dev box." Health/status/receipts viewer. Chat bridge delegates to daemon via Unix socket RPC.
-- v3: Graduates to canonical "service UI" — OIDC/session/tenant-aware. Fleet dashboard if that concept earns its keep.
+Gov-WebUI is three workflow panels that map to the governor's major operating modes. Each panel runs the same authority pipeline: augmentation, gating, receipts, stop-the-line latch.
+
+#### Panel: Fiction
+
+- **Purpose:** Fiction drafting / story work with governance constraints.
+- **Typical outputs:** Drafted text + receipts (backend/model provenance).
+- Core invariants: augmentation → gating → receipts; violation latch applies.
+
+#### Panel: Nonfiction / Research
+
+- **Purpose:** Research + synthesis workflows — evidence handling, citation discipline, iterative claims.
+- **Typical outputs:** Research notes, claim structures, citations, receipts/selfcheck signals.
+- Stronger emphasis on provenance and evidence artifacts.
+
+#### Panel: Coding
+
+- **Purpose:** Code-assist workflows as a convenience surface.
+- **Typical outputs:** Same authority pipeline; receipts capture backend/model + principal_id.
+- Coding mode exists mainly for parity and remote fallback; editor integrations are the intended daily driver.
+
+**Notes:**
+- WebUI remains a daemon client (no bypass paths). Chat delegates to daemon via Unix socket RPC.
+- v2: Local-first workflows; the only client that *should* feel "remote" since it's already HTTP. Also serves as demo surface.
+- v3: Graduates to canonical service UI — OIDC/session/tenant-aware.
+- A separate private research app may exist later; if so, it orbits the same daemon authority.
 
 ### Maude
 

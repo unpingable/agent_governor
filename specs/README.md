@@ -165,11 +165,12 @@ The governor's v2 architecture: control theory foundation, run-centric instrumen
 |------|----------------|--------|
 | **WORKSPACE_SPEC.md** | Multi-project via filesystem partitioning. Workspace resolver, socket-per-workspace, CLI wiring. | `ahead` |
 
-### 3.0: Self-Governance (Deferred)
+### 3.0: Self-Governance + MCP (Deferred)
 
 | Spec | What It Covers | Status |
 |------|----------------|--------|
 | **SELF_GOVERNANCE_SPEC.md** | Executor/proposer separation. Admissible measurements. Cross-model validation. Dual ledger. | `planning (deferred)` |
+| **MCP_V3_SPEC.md** | MCP as transport boundary. Governor-as-server, receipt hooks, security posture, abuse harness. | `planning (deferred)` |
 
 ---
 

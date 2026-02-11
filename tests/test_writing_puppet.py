@@ -897,7 +897,7 @@ class TestGovernorFooter:
 
 class TestGovernorToneEnvelope:
     def test_values(self):
-        # From governor voice spec
+        # From governor-voice.md spec
         assert GOVERNOR_TONE_ENVELOPE.formality == (0.5, 0.7)
         assert GOVERNOR_TONE_ENVELOPE.temperature == (0.2, 0.4)
         assert GOVERNOR_TONE_ENVELOPE.density == (0.6, 0.8)
@@ -1241,7 +1241,7 @@ class TestDefaultGovernorVoice:
 class TestGovernorVoiceIntegration:
     """Integration tests for Governor voice as a puppet profile."""
 
-    def test_governor_voice_in_puppet_controller(self):
+    def test_governor_in_puppet_controller(self):
         """Governor character can be used in PuppetModeController."""
         config = PuppetModeConfig(character=GOVERNOR_CHARACTER)
         controller = PuppetModeController(config)
@@ -1249,14 +1249,14 @@ class TestGovernorVoiceIntegration:
         result = controller.check_text("Check failed. Missing: timeout config.")
         assert result.in_character is True
 
-    def test_governor_voice_regime_resolution(self):
+    def test_governor_regime_resolution(self):
         """Governor stays in nonfiction/instruction regimes."""
         scene = SceneContext(regime_hint="comedy")
         regime = resolve_regime(GOVERNOR_CHARACTER, scene)
         # Comedy is forbidden for Governor
         assert regime == "nonfiction"
 
-    def test_governor_voice_certainty_ceiling(self):
+    def test_governor_certainty_ceiling(self):
         """Governor has high certainty ceiling (0.8) - can be confident."""
         config = PuppetModeConfig(character=GOVERNOR_CHARACTER)
         controller = PuppetModeController(config)
@@ -1269,7 +1269,7 @@ class TestGovernorVoiceIntegration:
         ]
         assert len(certainty_violations) == 0
 
-    def test_governor_voice_can_make_normative_claims(self):
+    def test_governor_can_make_normative_claims(self):
         """Governor can make normative claims about process."""
         config = PuppetModeConfig(character=GOVERNOR_CHARACTER)
         controller = PuppetModeController(config)

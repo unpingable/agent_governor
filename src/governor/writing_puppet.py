@@ -1146,7 +1146,7 @@ def has_governor_violation(text: str) -> bool:
 
 @dataclass
 class GovernorVoiceConfig:
-    """Governor's governance configuration."""
+    """Governor's voice governance configuration."""
 
     always_surface_status: bool = True
     status_footer: bool = True
@@ -1158,7 +1158,7 @@ class GovernorVoiceConfig:
 
 @dataclass
 class GovernorVoiceProfile:
-    """Complete Governor profile configuration.
+    """Complete Governor voice profile configuration.
 
     Governor is the default puppet that demonstrates constraint-forward operation.
     """
@@ -1632,5 +1632,5 @@ class GovernorVoiceController:
         return domain in self.profile.domain_affinities
 
 
-# Default Governor Voice instance
+# Default Governor voice instance
 DEFAULT_GOVERNOR_VOICE = GovernorVoiceController()

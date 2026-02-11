@@ -153,7 +153,7 @@ Runbook verification, time window enforcement, blast radius limits, precondition
 Multi-model claim comparison (parallel + serial modes), code-specific risk markers (19 types), anchor compatibility checking, divergence signals.
 
 ### Integrations (~560 tests)
-VS Code extension, WebUI (FastAPI + chat bridge), SDK middleware, MCP safety controls, session continuity, git/Perforce governance, external constraint attachment (Wikidata/Wikipedia/Scholar).
+[VS Code extension](https://github.com/unpingable/vscode-governor), [WebUI](https://github.com/unpingable/governor_webui) (FastAPI + chat bridge), SDK middleware, MCP safety controls, session continuity, git/Perforce governance, external constraint attachment (Wikidata/Wikipedia/Scholar).
 
 ### Infrastructure (~960 tests)
 Structured telemetry, Prometheus metrics, config profiles, continuity enforcement, convergence auto-tuning, QA harness, golden-file/property-based/contract tests.

@@ -152,23 +152,7 @@ integration/
 ├── test_backend_codex.py         # 2 tests: Codex smoke (skipped by default)
 └── test_backend_ollama.py        # 2 tests: Ollama smoke (skipped by default)
 
-vscode-governor/
-├── package.json              # Extension manifest, commands, settings, TreeView contributions
-├── tsconfig.json             # TypeScript config
-├── esbuild.mjs               # Bundler (esbuild, not webpack)
-├── .vscodeignore              # Publish ignore
-├── src/
-│   ├── extension.ts           # Entry point: activate, commands, status bar, TreeView, on-save
-│   ├── governor/
-│   │   ├── client.ts          # CLI wrapper: spawn governor, parse JSON, fetchState
-│   │   └── types.ts           # TypeScript interfaces for CheckResult/CheckFinding/GovernorState
-│   ├── views/
-│   │   └── governorTree.ts    # GovernorTreeProvider: TreeDataProvider for state panel
-│   └── diagnostics/
-│       └── provider.ts        # DiagnosticCollection management
-└── src/test/
-    └── suite/
-        ├── client.test.ts     # Client unit tests (mock child_process)
-        ├── provider.test.ts   # Provider unit tests (mock vscode API)
-        └── governorTree.test.ts # TreeDataProvider tests (mock fetchState)
+# Extracted repos (separate GitHub repositories):
+# vscode-governor → github.com/unpingable/vscode-governor
+# gov-webui       → github.com/unpingable/governor_webui
 ```

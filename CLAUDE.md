@@ -175,7 +175,7 @@ Detailed reference material is in `.claude/rules/`:
 | `fiction-governor.md` | Fiction governor details | `src/fiction_governor/**` |
 | `nonfiction-governor.md` | Non-fiction governor details | `src/nonfiction_governor/**` |
 | `ops-governor.md` | Ops governor details | `src/ops_governor/**` |
-| `vscode-extension.md` | VS Code extension details | `vscode-governor/**` |
+| `vscode-extension.md` | VS Code extension details (extracted to separate repo) | N/A |
 | `webui.md` | WebUI (extracted to gov-webui), chat bridge, interferometry | `chat_bridge`, etc. |
 | `writing-modules.md` | W5 writing modules (11 modules) | `src/governor/writing_*.py` |
 

@@ -51,7 +51,7 @@
 **Structured Telemetry (Deferred 4, B2)** — TelemetryCollector (pluggable backends, fail-safe), StructuredLogger (JSONL, date-partitioned, size/retention rotation), TelemetryEvent with typed field helpers, cost/performance/convergence analysis, CSV/JSON export, CLI, executor integration. Convergence telemetry: CONTINUITY_TRACE/CONTINUITY_RESULT events, ConvergenceExecutor + one-shot gate instrumentation, ConvergenceReport.
 **Continuity Enforcement (Deferred 5)** — Closed-loop generation control. AnchorRegistry, ContinuityChecker, CorrectionLadder, ConvergenceExecutor, GenerationProvider Protocol, adapter integration, CLI. Continuity Bridges: mode-specific anchor factories, GovernorHooks integration (one-shot gating with telemetry, system prompt enrichment).
 **Convergence Auto-Tuning (Deferred 6)** — Offline system identification over convergence traces. ConvergenceAnalyzer, TuningProposal artifacts (28 dataclass types, HardGuards forced-True, Approval forced-requires_human), ProposalStore, 5 admissibility checks, ConvergenceTuner orchestrator, 10 footgun guardrails.
-**VS Code Extension (Deferred 3, V1-V4)** — Unified check aggregation, CLI `governor check` command, TypeScript VS Code extension (CLI wrapper, diagnostic provider, TreeView, hover tooltips, code actions, real-time checking).
+**VS Code Extension (Deferred 3, V1-V4)** — Extracted to [github.com/unpingable/vscode-governor](https://github.com/unpingable/vscode-governor). CLI `governor check` command remains in core. Extension uses CLI wrapper (CLI-based, not daemon-dependent).
 **Telemetry Dashboard** — Rich TUI for real-time regime visualization. Phase space plot, regime gauge, energy sparkline, event log, budget panel. Live/replay/demo modes.
 **Prometheus Metrics** — Optional Prometheus metrics export at /metrics. Counters, histograms, gauges. TelemetryCollector backend integration.
 **Evidence Gate** — Evidence-gated coding harness — kernel-only surface. HARD claims require evidence, contradictions persist, failures are loud. Custody scoring, claim extraction, evidence linking, contradiction detection, exit shape checking.
@@ -141,7 +141,7 @@
 | Structured Telemetry | 151 |
 | Continuity Enforcement | 196 |
 | Convergence Auto-Tuning | 145 |
-| VS Code Extension | 176 |
+| VS Code Extension (extracted repo) | 176 |
 | Evidence Gate | 101 |
 | Interactive Violation Resolution | 82 |
 | W5 Writing Modules | 922 |

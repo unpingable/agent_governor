@@ -1,13 +1,12 @@
 ---
 paths:
-  - "vscode-governor/**"
   - "src/governor/check.py"
   - "src/governor/viewmodel.py"
   - "tests/test_check*"
   - "tests/test_viewmodel*"
   - "tests/test_state_cmd*"
 ---
-# VS Code Extension
+# VS Code Extension (extracted to github.com/unpingable/vscode-governor)
 
 ## Architecture
 

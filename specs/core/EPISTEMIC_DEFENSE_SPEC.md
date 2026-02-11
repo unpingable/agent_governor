@@ -334,6 +334,57 @@ This is generalized defense against:
 
 ---
 
+## Philosophical Foundation
+
+### What This Actually Is
+
+> **You're not deciding what's true. You're deciding what gets to count as a valid move.**
+
+This is the quiet inversion most people miss:
+
+| Debate Bot | Epistemic Infrastructure |
+|------------|-------------------------|
+| Optimizes rhetorical throughput | Optimizes admissibility |
+| Resolves disputes | Refuses malformed ones |
+| Persuasion tech | Procedural epistemics |
+| Classifies beliefs | Enforces process invariants |
+
+### The Core Reframes
+
+- **Free speech ≠ free execution.** Inputs still need a schema.
+- **The governor doesn't resolve disputes; it refuses malformed ones.**
+- **This isn't content moderation. It's protocol enforcement.**
+- **Due process is how you prevent capture without predicting attackers.**
+
+### Why This Works Better Than Alternatives
+
+| Alternative | Failure Mode |
+|-------------|--------------|
+| Content moderation | Becomes political, arms race with evasion |
+| Vibe checks | Inconsistent, unauditable, gameable |
+| Alignment theater | Addresses symptoms, not structure |
+| Cultural norms | Fragile under adversarial pressure |
+
+**Epistemic due process** works because:
+- Receipts matter → due process without records is vibes
+- Budgets matter → infinite demands are coercion
+- Refusals must be legible → opaque refusal looks like power
+- Mode escalation must be automatic → manual escalation becomes politics
+
+### The Steelman for Skeptics
+
+> "We're not filtering ideas. We're enforcing the same procedural constraints we already accept everywhere else—contracts, courts, packet routing—because epistemics without due process collapses under load."
+
+**That's not radical. That's plumbing.**
+
+### Why LessWrong-Style Norms Were Fragile
+
+They lived in **culture**, not **infrastructure**. You're taking the same insights and hardening them into something that survives adversarial pressure.
+
+The difference between "please argue in good faith" and `QueryGate.verdict = REFUSE` is the difference between asking nicely and enforcing a protocol.
+
+---
+
 ## References
 
 - LessWrong: "Objective Questions" (Jan 2026)
@@ -341,6 +392,134 @@ This is generalized defense against:
 - LessWrong: "Setting the Zero Point"
 - Wikipedia: Sealioning
 - Governor 2.x gate infrastructure
+
+---
+
+## Appendix: Multilingual Hardening
+
+### The Problem
+
+Non-English input creates a new attack surface: **semantic drift injection**. Translation can make things sound more certain, more accusatory, less conditional. If translation is invisible, you can't audit it.
+
+### Design Principle
+
+> **Treat translation as an untrusted sensor with calibration receipts.**
+
+### What Changes
+
+| English Assumption | Multilingual Reality |
+|--------------------|----------------------|
+| Text is the artifact | Original + translation(s) are artifacts |
+| Keywords detect patterns | Structure detectors must be language-agnostic |
+| One representation | Multiple representations, each logged |
+
+### Receipt Structure for Multilingual
+
+```python
+@dataclass
+class MultilingualArtifact:
+    text_original: str              # Immutable, as received
+    text_original_digest: str       # HMAC'd
+    lang_detected: str              # ISO 639-1
+    lang_asserted: str | None       # User-provided
+    unicode_normalization: str      # "NFC" | "NFKC"
+
+@dataclass
+class TranslationReceipt(GateReceipt):
+    gate_id: str = "translation"
+    input_digest: str               # Hash of original
+    engine: str                     # "gpt-4" | "google" | "deepl"
+    engine_version: str
+    output_text: str
+    output_digest: str
+    confidence: float | None        # If available
+    purpose: str                    # "gate_evaluation" | "user_display"
+    flags: list[str]                # Warnings from engine
+```
+
+### Translation Interferometry (Strict/Adversarial Mode)
+
+When stakes are high, don't trust a single translation:
+
+```python
+@dataclass
+class TranslationInterferometry:
+    translation_a: TranslationReceipt
+    translation_b: TranslationReceipt  # Different engine
+    divergence_score: float             # 0-1
+    divergence_signals: list[str]       # What differed
+
+    # Cheap heuristics for divergence:
+    # - Length ratio > 1.3
+    # - Named entity mismatch
+    # - Negation/modality disagreement
+    # - Number/date discrepancy
+```
+
+**If divergence is high:**
+- `DEFER` content-level engagement
+- Request user-provided translation, OR
+- Request minimal structured claim (short, declarative)
+
+### Mode-Dependent Policy
+
+```yaml
+translation_policy:
+  open:
+    method: single
+    log: true
+
+  normal:
+    method: single
+    log: true
+    flag_low_confidence: true
+
+  strict:
+    method: dual_interferometry
+    divergence_threshold: 0.3
+    on_high_divergence: require_clarification
+
+  adversarial:
+    method: dual_interferometry
+    divergence_threshold: 0.2
+    on_high_divergence: refuse_content_engagement
+    require_structured_claim: true
+```
+
+### Language-Agnostic Pattern Detection
+
+Don't build lexeme detectors ("just asking questions" varies by language). Build structure detectors:
+
+| Pattern | Detection Method |
+|---------|------------------|
+| Missing closure condition | Parse for question + no completion criteria |
+| Thread-splitting | Count open threads, measure topic drift |
+| Burden shifting | Detect "prove X doesn't exist" structure |
+| Claim refusal | Questions without commitments |
+| Prior-ignoring | Semantic similarity to already-answered |
+
+These survive translation because they're structural, not lexical.
+
+### Evidence Handling
+
+For non-English sources:
+- Keep quotes in **original + translated snippet**
+- Log which snippet was used for reasoning
+- Flag when conclusion depends on translation
+
+```python
+@dataclass
+class MultilingualEvidence:
+    quote_original: str
+    quote_original_lang: str
+    quote_translated: str
+    translation_receipt_id: str     # Links to TranslationReceipt
+    reasoning_used: str             # "original" | "translated" | "both"
+```
+
+---
+
+*"Treat translation as an untrusted sensor with calibration receipts."*
 
 ---
 

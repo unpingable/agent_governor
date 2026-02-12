@@ -5587,6 +5587,158 @@ def claude_hooks_block(ctx: click.Context, pattern: str) -> None:
 
 
 # ============================================================================
+# Preflight Command
+# ============================================================================
+
+@cli.command("preflight")
+@click.option("--agent", type=click.Choice(["claude", "codex"]), default=None, help="Agent type (auto-detect if omitted).")
+@click.option("--strict", is_flag=True, help="Fail if envelope is not strict.")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable JSON output.")
+@click.pass_context
+def preflight(ctx: click.Context, agent: str | None, strict: bool, as_json: bool) -> None:
+    """Prove governor enforcement is live before an agent session."""
+    from .preflight import run_preflight
+
+    root = Path(ctx.obj["root"])
+    result = run_preflight(root, agent=agent, strict=strict)
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo("Governor Preflight:")
+        for check in result.checks:
+            tag = {"pass": "PASS", "warn": "WARN", "fail": "FAIL"}[check.status]
+            color = {"pass": "green", "warn": "yellow", "fail": "red"}[check.status]
+            click.echo(f"  [{click.style(tag, fg=color)}] {check.detail}")
+            if check.fix and check.status != "pass":
+                click.echo(f"         Fix: {check.fix}")
+
+        counts = {"pass": 0, "warn": 0, "fail": 0}
+        for check in result.checks:
+            counts[check.status] += 1
+        click.echo()
+        overall_color = {"pass": "green", "warn": "yellow", "fail": "red"}[result.overall]
+        click.echo(
+            f"Result: {click.style(result.overall.upper(), fg=overall_color)} "
+            f"({counts['pass']} pass, {counts['warn']} warn, {counts['fail']} fail)"
+        )
+
+    if result.overall == "fail":
+        ctx.exit(2)
+
+
+# ============================================================================
+# Codex Hooks Commands
+# ============================================================================
+
+@cli.group("codex-hooks")
+def codex_hooks_group() -> None:
+    """Codex CLI integration hooks."""
+    pass
+
+
+@codex_hooks_group.command("install")
+@click.option("-m", "--model", default="o4-mini", help="Default model for codex exec.")
+@click.option("--codex-path", default="codex", help="Path to codex binary.")
+@click.pass_context
+def codex_hooks_install_cmd(ctx: click.Context, model: str, codex_path: str) -> None:
+    """Install Codex hooks configuration."""
+    from .codex_hooks import install_codex_config, CodexHookConfig
+
+    root = Path(ctx.obj["root"])
+    config = CodexHookConfig(model=model, codex_path=codex_path)
+    success, message = install_codex_config(root, config)
+
+    if success:
+        click.echo(click.style("Codex hooks configured.", fg="green"))
+        click.echo(f"  {message}")
+    else:
+        click.echo(click.style(f"Failed: {message}", fg="red"))
+        ctx.exit(1)
+
+
+@codex_hooks_group.command("uninstall")
+@click.pass_context
+def codex_hooks_uninstall_cmd(ctx: click.Context) -> None:
+    """Remove Codex hooks configuration."""
+    from .codex_hooks import uninstall_codex_config
+
+    root = Path(ctx.obj["root"])
+    success, message = uninstall_codex_config(root)
+
+    if success:
+        click.echo(click.style("Codex hooks removed.", fg="green"))
+        click.echo(f"  {message}")
+    else:
+        click.echo(click.style(f"Failed: {message}", fg="red"))
+
+
+@codex_hooks_group.command("status")
+@click.option("--fail-if-missing", is_flag=True, help="Exit non-zero if not configured.")
+@click.pass_context
+def codex_hooks_status_cmd(ctx: click.Context, fail_if_missing: bool) -> None:
+    """Show Codex hooks status."""
+    from .codex_hooks import get_codex_status
+
+    root = Path(ctx.obj["root"])
+    status = get_codex_status(root)
+
+    click.echo("Codex Hooks Status:")
+    click.echo(f"  Config exists: {'yes' if status['config_exists'] else 'no'}")
+    click.echo(f"  Codex binary available: {'yes' if status['codex_available'] else 'no'}")
+
+    if status.get("config"):
+        click.echo(f"  Model: {status['config'].get('model', 'unknown')}")
+
+    if status["audit_files"]:
+        click.echo(f"  Audit files: {', '.join(status['audit_files'])}")
+
+    if fail_if_missing and not status["config_exists"]:
+        click.echo(click.style("\nCodex hooks not configured. Run: governor codex-hooks install", fg="red"))
+        ctx.exit(1)
+
+
+@cli.command("codex-exec")
+@click.argument("prompt")
+@click.option("-m", "--model", default=None, help="Model to use (overrides config).")
+@click.pass_context
+def codex_exec_cmd(ctx: click.Context, prompt: str, model: str | None) -> None:
+    """Run Codex CLI with governor instrumentation."""
+    from .codex_hooks import run_codex_governed, CodexHookConfig
+
+    root = Path(ctx.obj["root"])
+    gov_dir = root / ".governor"
+
+    # Load config if exists
+    config = CodexHookConfig()
+    config_path = gov_dir / "codex_hooks.json"
+    if config_path.exists():
+        try:
+            config = CodexHookConfig.from_dict(json.loads(config_path.read_text()))
+        except Exception:
+            pass
+
+    if model:
+        config.model = model
+
+    click.echo(f"Running codex exec (model={config.model})...")
+    click.echo(click.style("ENFORCEMENT: post-hoc only (no pre-tool blocking, no rollback)", fg="yellow"))
+    exit_code, response, changes = run_codex_governed(root, prompt, config=config)
+
+    if response:
+        click.echo(response)
+
+    if changes:
+        click.echo(f"\nFile changes detected ({len(changes)}):")
+        for change in changes:
+            click.echo(f"  [{change.change_type}] {change.path}")
+    else:
+        click.echo("\nNo file changes detected.")
+
+    ctx.exit(exit_code)
+
+
+# ============================================================================
 # Routing Commands
 # ============================================================================
 

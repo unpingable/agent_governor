@@ -37,6 +37,7 @@ Validates tool calls before execution:
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 def get_governor_dir() -> Path | None:
@@ -47,6 +48,24 @@ def get_governor_dir() -> Path | None:
         if gov_dir.exists():
             return gov_dir
     return None
+
+def stamp_invocation(gov_dir: Path | None, tool_name: str, decision: str, detail: str = "") -> None:
+    """Record that the hook was invoked. Proves hooks are live."""
+    if not gov_dir:
+        return
+    try:
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "hook": "pre_tool_use",
+            "tool": tool_name,
+            "decision": decision,
+        }
+        if detail:
+            entry["detail"] = detail
+        with (gov_dir / "hook_invocations.jsonl").open("a") as f:
+            f.write(json.dumps(entry) + "\\n")
+    except Exception:
+        pass  # Stamp must never break the hook
 
 def load_permissions(gov_dir: Path) -> dict:
     """Load governor permissions."""
@@ -73,22 +92,26 @@ def check_file_operation(tool_name: str, tool_input: dict) -> tuple[bool, str]:
     if not file_path:
         return True, "No file path in operation"
 
+    # Determine envelope mode
+    mode = "strict"  # default to strict if no envelope found
+    envelope_txt = gov_dir / ".envelope"
+    envelope_json = gov_dir / "envelope.json"
+    if envelope_txt.exists():
+        mode = envelope_txt.read_text().strip()
+    elif envelope_json.exists():
+        mode = json.loads(envelope_json.read_text()).get("mode", "strict")
+
     # Check against approved files
     approved_file = gov_dir / "approved_files.json"
     if approved_file.exists():
         approved = set(json.loads(approved_file.read_text()))
         if file_path not in approved:
-            # Check envelope mode — unapproved files allowed in exploratory mode
-            # Governor writes plain text to .envelope; envelope.json is legacy fallback
-            mode = "strict"  # default to strict if no envelope found
-            envelope_txt = gov_dir / ".envelope"
-            envelope_json = gov_dir / "envelope.json"
-            if envelope_txt.exists():
-                mode = envelope_txt.read_text().strip()
-            elif envelope_json.exists():
-                mode = json.loads(envelope_json.read_text()).get("mode", "strict")
             if mode == "strict":
                 return False, f"File not pre-approved: {file_path}"
+    else:
+        # No approved list: in strict mode, block all file writes
+        if mode == "strict":
+            return False, f"No approved_files.json — all writes blocked in strict mode: {file_path}"
 
     return True, "Allowed"
 
@@ -112,11 +135,15 @@ def check_command(tool_name: str, tool_input: dict) -> tuple[bool, str]:
 
 def main():
     """Main hook entry point."""
+    gov_dir = get_governor_dir()
+
     # Read hook input from stdin
+    raw_input = sys.stdin.read()
     try:
-        input_data = json.loads(sys.stdin.read())
+        input_data = json.loads(raw_input)
     except json.JSONDecodeError:
-        # No input or invalid JSON - allow
+        # No input or invalid JSON - allow but log the fail-open
+        stamp_invocation(gov_dir, "unknown", "allow", "fail-open: invalid/empty stdin")
         sys.exit(0)
 
     tool_name = input_data.get("tool_name", "")
@@ -137,9 +164,11 @@ def main():
             "reason": reason,
             "message": f"Governor blocked {tool_name}: {reason}",
         }
+        stamp_invocation(gov_dir, tool_name, "block", reason)
         print(json.dumps(result))
         sys.exit(2)  # Non-zero to block
 
+    stamp_invocation(gov_dir, tool_name, "allow")
     sys.exit(0)  # Allow
 
 if __name__ == "__main__":

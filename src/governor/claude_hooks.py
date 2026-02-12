@@ -78,12 +78,17 @@ def check_file_operation(tool_name: str, tool_input: dict) -> tuple[bool, str]:
     if approved_file.exists():
         approved = set(json.loads(approved_file.read_text()))
         if file_path not in approved:
-            # Check if it's a new file (allowed in exploratory mode)
-            mode_file = gov_dir / "envelope.json"
-            if mode_file.exists():
-                mode = json.loads(mode_file.read_text()).get("mode", "strict")
-                if mode == "strict":
-                    return False, f"File not pre-approved: {file_path}"
+            # Check envelope mode — unapproved files allowed in exploratory mode
+            # Governor writes plain text to .envelope; envelope.json is legacy fallback
+            mode = "strict"  # default to strict if no envelope found
+            envelope_txt = gov_dir / ".envelope"
+            envelope_json = gov_dir / "envelope.json"
+            if envelope_txt.exists():
+                mode = envelope_txt.read_text().strip()
+            elif envelope_json.exists():
+                mode = json.loads(envelope_json.read_text()).get("mode", "strict")
+            if mode == "strict":
+                return False, f"File not pre-approved: {file_path}"
 
     return True, "Allowed"
 
@@ -463,7 +468,10 @@ def install_claude_hooks(
     except Exception as e:
         return False, f"Failed to write settings: {e}"
 
-    return True, f"Installed {len(scripts)} hook scripts and updated {settings_path}"
+    return True, (
+        f"Installed {len(scripts)} hook scripts and updated {settings_path}\n"
+        "Note: Restart Claude Code for hooks to take effect (hooks are loaded at startup)."
+    )
 
 
 def uninstall_claude_hooks(project_dir: Path) -> tuple[bool, str]:

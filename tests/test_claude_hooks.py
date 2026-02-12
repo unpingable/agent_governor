@@ -291,6 +291,107 @@ class TestApprovedFiles:
         assert approved == files
 
 
+class TestEnvelopePathInTemplate:
+    """Tests for envelope path handling in the generated hook template."""
+
+    def test_template_reads_plain_text_envelope(self, tmp_path):
+        """Test that hook template reads .envelope (plain text) correctly."""
+        from governor.claude_hooks import PRE_TOOL_USE_SCRIPT
+
+        # The template should reference .envelope, not envelope.json
+        assert '".envelope"' in PRE_TOOL_USE_SCRIPT
+        assert 'envelope_txt = gov_dir / ".envelope"' in PRE_TOOL_USE_SCRIPT
+
+    def test_template_has_json_fallback(self, tmp_path):
+        """Test that hook template falls back to envelope.json."""
+        from governor.claude_hooks import PRE_TOOL_USE_SCRIPT
+
+        assert 'envelope_json = gov_dir / "envelope.json"' in PRE_TOOL_USE_SCRIPT
+
+    def test_template_prefers_plain_text_over_json(self, tmp_path):
+        """Test that .envelope is checked before envelope.json."""
+        from governor.claude_hooks import PRE_TOOL_USE_SCRIPT
+
+        txt_pos = PRE_TOOL_USE_SCRIPT.index("envelope_txt.exists()")
+        json_pos = PRE_TOOL_USE_SCRIPT.index("envelope_json.exists()")
+        assert txt_pos < json_pos, ".envelope should be checked before envelope.json"
+
+    def test_template_defaults_to_strict(self, tmp_path):
+        """Test that hook defaults to strict when no envelope file exists."""
+        from governor.claude_hooks import PRE_TOOL_USE_SCRIPT
+
+        assert 'mode = "strict"' in PRE_TOOL_USE_SCRIPT
+
+    def test_installed_hook_reads_plain_text_envelope(self, tmp_path):
+        """Test that installed hook script actually reads .envelope correctly."""
+        # Install hooks
+        install_hook_scripts(tmp_path)
+
+        # Read the generated script
+        hooks_dir = get_hooks_dir(tmp_path)
+        script_content = (hooks_dir / "pre_tool_use.py").read_text()
+
+        # Should reference .envelope (plain text), not just envelope.json
+        assert '.envelope"' in script_content
+        assert "envelope_txt" in script_content
+
+
+class TestInstallMessage:
+    """Tests for install output message."""
+
+    def test_install_message_includes_restart_warning(self, tmp_path):
+        """Test that install message warns about restarting Claude Code."""
+        success, message = install_claude_hooks(tmp_path)
+
+        assert success is True
+        assert "restart" in message.lower()
+        assert "claude code" in message.lower() or "Claude Code" in message
+
+    def test_install_message_mentions_hooks_loaded_at_startup(self, tmp_path):
+        """Test that install message explains why restart is needed."""
+        _, message = install_claude_hooks(tmp_path)
+
+        assert "startup" in message.lower()
+
+
+class TestFailIfMissing:
+    """Tests for --fail-if-missing flag on hooks status."""
+
+    def test_fail_if_missing_exits_nonzero_when_not_installed(self, tmp_path):
+        """Test that --fail-if-missing exits 1 when hooks not installed."""
+        from click.testing import CliRunner
+        from governor.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--root", str(tmp_path), "claude-hooks", "status", "--fail-if-missing"])
+
+        assert result.exit_code != 0
+        assert "not fully installed" in result.output.lower()
+
+    def test_fail_if_missing_exits_zero_when_installed(self, tmp_path):
+        """Test that --fail-if-missing exits 0 when hooks are installed."""
+        from click.testing import CliRunner
+        from governor.cli import cli
+
+        # Install hooks first
+        install_claude_hooks(tmp_path)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--root", str(tmp_path), "claude-hooks", "status", "--fail-if-missing"])
+
+        assert result.exit_code == 0
+
+    def test_status_without_flag_always_exits_zero(self, tmp_path):
+        """Test that status without --fail-if-missing always exits 0."""
+        from click.testing import CliRunner
+        from governor.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--root", str(tmp_path), "claude-hooks", "status"])
+
+        assert result.exit_code == 0
+
+
 class TestHelperFunctions:
     """Tests for helper functions."""
 

@@ -5506,8 +5506,9 @@ def claude_hooks_uninstall(ctx: click.Context) -> None:
 
 
 @claude_hooks.command("status")
+@click.option("--fail-if-missing", is_flag=True, help="Exit non-zero if hooks are not fully installed.")
 @click.pass_context
-def claude_hooks_status(ctx: click.Context) -> None:
+def claude_hooks_status(ctx: click.Context, fail_if_missing: bool) -> None:
     """Show Claude Code hooks status."""
     from .claude_hooks import get_hook_status
 
@@ -5528,6 +5529,13 @@ def claude_hooks_status(ctx: click.Context) -> None:
         click.echo(f"  Hooks configured: {', '.join(status['hooks_configured'])}")
     else:
         click.echo("  Hooks configured: none")
+
+    if fail_if_missing:
+        installed = status["hooks_dir_exists"] and len(status["scripts_installed"]) > 0
+        configured = status["claude_settings_exists"] and len(status["hooks_configured"]) > 0
+        if not (installed and configured):
+            click.echo(click.style("\nHooks are not fully installed. Run: governor claude-hooks install", fg="red"))
+            ctx.exit(1)
 
 
 @claude_hooks.command("approve")

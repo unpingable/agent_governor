@@ -1,5 +1,7 @@
 # Workspace Spec (v2.1)
 
+status: ahead
+
 | Field | Value |
 |-------|-------|
 | Status | `ahead` |

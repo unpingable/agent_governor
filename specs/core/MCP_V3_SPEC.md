@@ -1,5 +1,7 @@
 # MCP Integration (v3)
 
+status: planning (deferred)
+
 | Field | Value |
 |-------|-------|
 | Status | `planning (deferred)` |

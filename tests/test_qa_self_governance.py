@@ -11,6 +11,7 @@ Scenarios:
 """
 
 import pytest
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -167,6 +168,40 @@ class TestSelfGovernanceDocQuality:
     def test_specs_readme_exists(self):
         """Specs README must exist."""
         assert Path("specs/README.md").exists()
+
+    def test_pyproject_version_matches_latest_git_tag(self):
+        """pyproject.toml version must match the latest git release tag."""
+        pyproject = Path("pyproject.toml")
+        if not pyproject.exists():
+            pytest.skip("pyproject.toml not found")
+
+        # Extract version from pyproject.toml
+        content = pyproject.read_text()
+        pyproject_version = None
+        for line in content.splitlines():
+            if line.strip().startswith("version"):
+                # version = "2.0.1"
+                pyproject_version = line.split("=", 1)[1].strip().strip('"').strip("'")
+                break
+
+        assert pyproject_version is not None, "No version field in pyproject.toml"
+
+        # Get latest git tag (vX.Y.Z format)
+        try:
+            result = subprocess.run(
+                ["git", "describe", "--tags", "--abbrev=0"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode != 0:
+                pytest.skip("No git tags found")
+            latest_tag = result.stdout.strip().lstrip("v")
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pytest.skip("git not available")
+
+        assert pyproject_version == latest_tag, (
+            f"pyproject.toml version ({pyproject_version}) does not match "
+            f"latest git tag (v{latest_tag}). Bump pyproject.toml on release."
+        )
 
     def test_spec_files_have_status(self):
         """Gap/canonical specs should have a status field."""

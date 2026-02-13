@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-governor"
-version = "2.0.1"
+version = "2.0.2"
 description = "Agent Governor - constraint system that makes AI coding agents production-safe"
 readme = "README.md"
 license = "Apache-2.0"
@@ -32,6 +32,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Quality Assurance",
 ]
 
@@ -75,6 +76,8 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
     "asyncio: mark test as async",
+    "smoke: fresh-clone smoke tests (subprocess + real git)",
+    "scale: performance and scale tests (generous bounds)",
 ]
 
 [tool.ruff]

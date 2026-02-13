@@ -73,6 +73,7 @@
 **Maude Contract Tests** — Provider-side contract tests verifying Maude's Pydantic models deserialize Governor daemon's actual RPC responses. Docker-compose setup (daemon + test runner, shared Unix socket volume). 19 active tests: health (3), sessions (6), governor (4), dashboard stubs (3), intent compiler (via daemon RPC), streaming (1 skipped). Backend smoke stubs for Claude/Codex/Ollama (skipped by default). Run via `cd integration && bash run.sh`.
 **Intent Compiler** — Structured hypothesis-collapse for governance sessions. IntentFormPolicy (TEMPLATE_ONLY/VALIDATED_CUSTOM/CUSTOM_OK), IntentFormSchema (content-addressed), 3 built-in templates (session_start/task_scope/verification_config), mode-gated form policy (blast radius proportional), deterministic compilation (response + schema → Intent + ConstraintBlock), escape classification (4 heuristic categories), gate receipt emission. WebUI: modal overlay with dynamic form rendering, branch visualization, confidence bars. API: `/v2/intent/{templates,schema,validate,compile,policy}`.
 **Governor Daemon** — JSON-RPC 2.0 control plane over stdio or Unix socket. Content-Length framing (same as MCP server), async dispatcher, DaemonState (lazy-initialized subsystems), 25 RPC methods: governor.{hello,now,status}, sessions.{list,create,delete,get}, intent.{templates,schema,validate,compile,policy}, receipts.{list,detail}, scars.{list,history}, commit.{pending,fix,revise,proceed,exceptions}, chat.{send,stream,models,backend}. ChatBridge integration with backend auto-detection (env → config file → detection order), streaming via JSON-RPC notifications (chat.delta), GovernorHooks for governed generation, gate receipt emission. Config file support ($GOVERNOR_DIR/daemon.conf, INI format). CLI `governor serve {--stdio,--socket,--print-socket-path,--mode}`. Guvnah integration via child process stdio. Maude integration via Unix socket (RPC client replaces HTTP client). Dockerfile.daemon for containerized deployment.
+**Test Hardening (v2.0.2)** — Fresh-clone smoke tests (CLI happy path + daemon stdio via subprocess, @smoke marker). Adversarial hook bypass tests (symlinks, script tampering, malformed payloads, unicode tricks, --no-verify documentation). Upgrade path tests (SQLite V1/V3/V5→V6 migration, receipt forward compat, session capsule compat, from_dict robustness). Scale/performance tests (10k receipts, 1k claims, SQLite concurrency with 20 threads, 1MB security scan, 100-anchor continuity check, @scale marker). CI matrix expanded to macOS + Python 3.13.
 
 ## Test Counts by Module
 
@@ -162,5 +163,9 @@
 | Maude Contract Tests | 19 (+7 skipped) |
 | Intent Compiler | 131 |
 | Governor Daemon | 124 |
+| Fresh-Clone Smoke (test_fresh_clone.py) | 8 |
+| Hook Bypass (test_hook_bypass.py) | 19 |
+| Upgrade Path (test_upgrade_path.py) | 18 |
+| Scale / Performance (test_scale.py) | 12 |
 
-**Total: ~10,408 tests** (10,384 unit + 24 integration)
+**Total: ~10,465 tests** (10,441 unit + 24 integration)

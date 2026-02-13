@@ -154,6 +154,8 @@ DiffReceipt    # Proves changeset content
 pytest tests/ -v                   # Run all tests
 pytest tests/test_claims.py -v     # Run specific module
 pytest tests/ --cov=governor       # Run with coverage
+pytest -m smoke tests/ -v          # Fresh-clone smoke tests (subprocess + real git)
+pytest -m scale tests/ -v          # Performance/scale tests (generous bounds)
 ```
 
 ## Code Conventions

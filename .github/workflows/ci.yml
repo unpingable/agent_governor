@@ -8,13 +8,17 @@ on:
 
 jobs:
   test-python:
-    name: Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Python ${{ matrix.python-version }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - os: macos-latest
+            python-version: "3.12"
 
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +31,7 @@ jobs:
       - name: Cache pip packages
         uses: actions/cache@v4
         with:
-          path: ~/.cache/pip
+          path: ${{ runner.os == 'macOS' && '~/Library/Caches/pip' || '~/.cache/pip' }}
           key: ${{ runner.os }}-pip-v2-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-pip-v2-${{ matrix.python-version }}-

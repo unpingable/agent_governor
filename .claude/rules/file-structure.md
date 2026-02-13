@@ -137,6 +137,12 @@ src/ops_governor/
 ├── policy.py         # PolicyRegistry, operational policy enforcement
 └── cli.py            # ops-gov CLI
 
+# End-to-end / hardening tests (v2.0.2):
+# tests/test_fresh_clone.py      # 8 tests: CLI happy path + daemon smoke (@smoke)
+# tests/test_hook_bypass.py      # 19 tests: symlink, tampering, malformed, unicode, --no-verify
+# tests/test_upgrade_path.py     # 18 tests: SQLite migration, receipt compat, from_dict robustness
+# tests/test_scale.py            # 12 tests: 10k receipts, 1k claims, SQLite concurrency, 1MB scan (@scale)
+
 integration/
 ├── docker-compose.contract.yml  # Governor + test runner services
 ├── Dockerfile.contract           # Test runner image (installs maude at runtime)

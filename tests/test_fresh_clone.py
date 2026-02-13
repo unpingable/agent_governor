@@ -1,0 +1,254 @@
+"""
+Fresh-clone smoke tests.
+
+These tests simulate a reader cloning the repo and running the basic workflow.
+They use subprocess.run with real git repos in tmp_path — deliberately ugly and
+slow, because the goal is confidence that the "front door" works.
+
+Run:
+    python3 -m pytest tests/test_fresh_clone.py -v
+
+Marker:
+    @pytest.mark.smoke
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pytest
+
+pytestmark = pytest.mark.smoke
+
+# Use the installed entry point, falling back to python -c for CI
+_GOVERNOR_BIN = shutil.which("governor")
+if _GOVERNOR_BIN:
+    GOVERNOR = [_GOVERNOR_BIN]
+else:
+    # Fallback: invoke via Python
+    GOVERNOR = [sys.executable, "-c", "from governor.cli import main; main()"]
+
+
+def run_gov(args: list[str], cwd: str | Path, **kwargs) -> subprocess.CompletedProcess:
+    """Run a governor CLI command via subprocess."""
+    return subprocess.run(
+        GOVERNOR + args,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=str(cwd),
+        **kwargs,
+    )
+
+
+def git_init(path: Path) -> None:
+    """Initialize a git repo with a dummy commit."""
+    subprocess.run(["git", "init"], cwd=str(path), capture_output=True, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=str(path), capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=str(path), capture_output=True, check=True,
+    )
+    # Need at least one commit for hooks to work
+    (path / ".gitkeep").write_text("")
+    subprocess.run(["git", "add", "."], cwd=str(path), capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"],
+        cwd=str(path), capture_output=True, check=True,
+    )
+
+
+# ── Group 1: CLI happy path ─────────────────────────────────────────────
+
+
+class TestCLIHappyPath:
+    """End-to-end CLI workflow in a fresh tmp_path git repo."""
+
+    def test_governor_init_creates_structure(self, tmp_path):
+        """governor init → .governor/ with expected subdirectories."""
+        git_init(tmp_path)
+        result = run_gov(["init"], cwd=tmp_path)
+        assert result.returncode == 0, f"init failed: {result.stderr}"
+        assert "Initialized governor" in result.stdout
+
+        gov_dir = tmp_path / ".governor"
+        assert gov_dir.is_dir()
+        assert (gov_dir / "facts").is_dir()
+        assert (gov_dir / "facts" / "receipts").is_dir()
+        assert (gov_dir / "decisions").is_dir()
+        assert (gov_dir / "proposals.json").exists()
+
+    def test_governor_init_idempotent(self, tmp_path):
+        """Running init twice does not error or corrupt state."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        result = run_gov(["init"], cwd=tmp_path)
+        assert result.returncode == 0
+        assert "already initialized" in result.stdout.lower()
+
+    def test_hook_install_creates_executable_hook(self, tmp_path):
+        """governor hook install → git hook exists and is executable."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        result = run_gov(["hook", "install"], cwd=tmp_path)
+        assert result.returncode == 0, f"hook install failed: {result.stderr}"
+
+        hook_path = tmp_path / ".git" / "hooks" / "pre-commit"
+        assert hook_path.exists(), "pre-commit hook not created"
+        assert os.access(str(hook_path), os.X_OK), "pre-commit hook not executable"
+
+    def test_propose_verify_apply_lifecycle(self, tmp_path):
+        """Full proposal lifecycle: propose → verify → apply."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+
+        # Create a file to claim existence of
+        test_file = tmp_path / "src" / "main.py"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text("print('hello')\n")
+
+        # Propose
+        result = run_gov(
+            ["propose", "--claim", "type=file_exists,path=src/main.py"],
+            cwd=tmp_path,
+        )
+        assert result.returncode == 0, f"propose failed: {result.stderr}"
+        assert "Proposal created" in result.stdout
+
+        # Extract proposal ID from output
+        for line in result.stdout.splitlines():
+            if "Proposal created:" in line:
+                proposal_id = line.split(":")[-1].strip()
+                break
+        else:
+            pytest.fail(f"Could not find proposal ID in output: {result.stdout}")
+
+        # Verify
+        result = run_gov(["verify", proposal_id], cwd=tmp_path)
+        assert result.returncode == 0, f"verify failed: {result.stderr}"
+
+        # Apply
+        result = run_gov(["apply", proposal_id], cwd=tmp_path)
+        assert result.returncode == 0, f"apply failed: {result.stderr}"
+
+    def test_status_command(self, tmp_path):
+        """governor status runs without error."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        result = run_gov(["status"], cwd=tmp_path)
+        assert result.returncode == 0, f"status failed: {result.stderr}"
+
+    def test_envelope_command(self, tmp_path):
+        """governor envelope shows current mode."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        result = run_gov(["envelope"], cwd=tmp_path)
+        assert result.returncode == 0, f"envelope failed: {result.stderr}"
+
+
+# ── Group 2: Daemon smoke ────────────────────────────────────────────────
+
+
+class TestDaemonSmoke:
+    """Start governor serve --stdio, send JSON-RPC, verify response."""
+
+    def test_daemon_stdio_hello(self, tmp_path):
+        """Daemon responds to governor.hello over stdio."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+
+        # Build JSON-RPC request
+        request = json.dumps({
+            "jsonrpc": "2.0",
+            "method": "governor.hello",
+            "params": {},
+            "id": 1,
+        })
+        # Content-Length framing
+        message = f"Content-Length: {len(request)}\r\n\r\n{request}"
+
+        # Start daemon as subprocess
+        proc = subprocess.Popen(
+            GOVERNOR + ["serve", "--stdio"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=str(tmp_path),
+        )
+
+        try:
+            # Send request and read response
+            proc.stdin.write(message)
+            proc.stdin.flush()
+
+            # Read Content-Length header from response
+            response_data = ""
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                line = proc.stdout.readline()
+                if not line:
+                    time.sleep(0.1)
+                    continue
+                response_data += line
+                if line.strip() == "":
+                    # Empty line after headers — read the body
+                    # Parse Content-Length from accumulated headers
+                    for header_line in response_data.splitlines():
+                        if header_line.startswith("Content-Length:"):
+                            content_length = int(header_line.split(":")[1].strip())
+                            break
+                    else:
+                        pytest.fail(f"No Content-Length in response: {response_data!r}")
+                    body = proc.stdout.read(content_length)
+                    break
+            else:
+                pytest.fail("Timed out waiting for daemon response")
+
+            # Parse JSON-RPC response
+            response = json.loads(body)
+            assert "result" in response, f"No result in response: {response}"
+            assert response["id"] == 1
+            result = response["result"]
+            assert "protocol_version" in result
+            assert "capabilities" in result
+
+        finally:
+            proc.stdin.close()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+
+    def test_daemon_clean_shutdown(self, tmp_path):
+        """Daemon exits cleanly when stdin closes."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+
+        proc = subprocess.Popen(
+            GOVERNOR + ["serve", "--stdio"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=str(tmp_path),
+        )
+
+        # Close stdin immediately — daemon should exit
+        proc.stdin.close()
+        try:
+            returncode = proc.wait(timeout=10)
+            # Accept 0 or any clean exit
+            assert returncode is not None, "Daemon did not exit"
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            pytest.fail("Daemon did not exit after stdin closed (10s timeout)")

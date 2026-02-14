@@ -31,6 +31,70 @@ The uncomfortable ratio: **~30% is plumbing** (add fields, tables, CLI) and
 This is the keystone. Phase gating makes every subsequent v3 feature
 stage-gatable, preventing the Rome-in-a-day problem on the governor itself.
 
+### Stage Contract (What Makes It Keystone, Not Just a File)
+
+A stage register without semantic rules is a label + history log. These
+rules make it a control surface:
+
+**Transition rules:**
+- Advancement requires `--reason` and emits a gate receipt
+- Retreat requires `--reason`, emits a warning receipt, and logs to scar ledger
+- Only humans can advance/retreat (agents cannot self-advance)
+- No skip: advancing from `alpha` to `production` requires passing through `beta`
+- Concurrent advance attempts: first writer wins (SQLite leases)
+
+**Stage-scoped mutability:**
+- Each stage defines a `freeze_set`: fields that become immutable from that
+  stage onward
+- Example: at `beta`, receipt schema version is frozen. At `production`,
+  tool schema allowlist is frozen.
+- Mutations to frozen fields require stage retreat first (receipted, logged)
+
+**Stage-scoped invariant precedence:**
+- When multiple stage-gated invariants apply to the same subject, **deny
+  overrides allow** (same as firewall semantics)
+- Most-specific-stage wins for conflicting guidance (a `beta` invariant
+  overrides an `alpha` invariant on the same subject)
+- Conflicts are logged, not silently resolved
+
+**Provisional stage sequence:**
+```
+scaffold → alpha → beta → production → hardened
+```
+
+**Test surface for Tier 0 (what "~50 tests" actually covers):**
+- Transition validity: allowed/disallowed sequences (8 tests)
+- History monotonicity: history is append-only, survives restart (4 tests)
+- Rollback semantics: retreat emits warning, requires reason (4 tests)
+- Concurrency: two callers racing `governor stage advance` (3 tests)
+- Persistence: restart daemon, stage stays consistent (3 tests)
+- Stage-scoped invariant activation: dormant/active transitions (8 tests)
+- Dormancy classification: `details["classification"]` is correct (4 tests)
+- CLI smoke: all 5 commands produce expected output (5 tests)
+- Gate receipt emission: advance/retreat produce receipts (4 tests)
+- Serialization roundtrip: `to_dict`/`from_dict` preserves state (3 tests)
+- Edge cases: unknown stage name → ValueError, empty history, etc. (4 tests)
+
+---
+
+## Threat Model
+
+This doc implicitly assumes a cooperative environment. It shouldn't. Who's
+the adversary, and what does each tier mitigate?
+
+| Adversary | Description | Mitigated By |
+|-----------|-------------|-------------|
+| **Agent bypass** | Agent code under user control attempts to skip governor | Tier 1b (enforcement boundary) |
+| **Operator misconfig** | Wrong model loaded, wrong policy version, stale config | Tier 1a (artifact binding), Tier 1c (substrate expiry) |
+| **Log tampering** | After-the-fact modification of receipts or run history | Tier 2d (hash chaining, append-only audit log) |
+| **Substrate drift** | Model/tool/corpus changes silently, receipts become stale | Tier 1a (regime hash), Tier 1c (substrate-conditional expiry) |
+| **Cathedral creep** | Agent builds toward gap specs without authorization | Tier 0 (stage register, anti-cathedral guard) |
+| **Budget gaming** | Agent consumes resources beyond allocation | Tier 2e (hard-stop enforcement, not advisory) |
+
+**Library wrappers are advisory.** If v3 keeps the library wrapper as the
+enforcement boundary, call it "training wheels," not enforcement. Real teeth
+require the daemon (sidecar/gateway) between agent and tools.
+
 ---
 
 ## Tier 1: V3 Critical (Enables "Real Teeth")
@@ -59,10 +123,35 @@ produced the evidence. A receipt says "evidence_gate passed" but not
 **Receipt schema v2 (proposed):**
 ```
 Everything from v1, plus:
-model_artifact_id   # H(backend_type + model_name + config)
-regime_hash         # H(canonical_json(regime_signals + thresholds))
-valid_until         # explicit expiry (time or substrate-change)
+model_artifact_id   # H(backend_type + model_name + config + provider_revision)
+regime_hash         # H(canonical_json(regime_signals + thresholds + tool_schemas))
+valid_until         # explicit expiry (substrate-change; separate from freshness)
+stale_after         # time-based freshness budget (orthogonal to valid_until)
 ```
+
+**Honesty about `model_artifact_id`:** For API-served models (Anthropic,
+OpenAI), we cannot hash weights. `model_artifact_id` is a **conventional ID**
+(`H(backend_type + model_name + config + provider_reported_revision)`), not
+cryptographic truth about the substrate. This is acceptable — it catches
+model swaps and config changes — but it cannot detect silent provider-side
+weight updates. Say so explicitly; don't pretend it's a content hash.
+
+For self-hosted models (Ollama), include the model digest from the Ollama
+API, which *is* a content hash.
+
+**`regime_hash` canonicalization:** Must follow the same canonical JSON
+pattern as `gate_receipt.py` (`json.dumps(sort_keys=True, separators=(',',':'),
+ensure_ascii=True)`). Include a `regime_schema_v` field so hash changes
+from schema evolution don't look like regime changes. Included fields:
+regime name, all 10 signal values (rounded to 6 decimal places for float
+stability), threshold values, tool schema digests, corpus digest. Excluded:
+timestamps, transition history (those are metadata, not regime identity).
+
+**Freshness vs validity are separate axes:**
+- `valid_until`: receipt becomes invalid when substrate changes (regime hash
+  mismatch, model artifact mismatch). This is structural.
+- `stale_after`: receipt is "old" even if substrate unchanged. Time-based.
+  Orthogonal. Don't blend them in one TTL field.
 
 ### 1b. Enforcement Boundary (Daemon as Gatekeeper)
 
@@ -82,6 +171,22 @@ async dispatcher, DaemonState with lazy init, SQLite leases table.
 **v2 is missing:** The daemon doesn't *enforce* — it *advises*. Agents can
 still bypass it. v3 needs the daemon between the agent and every tool/file
 operation.
+
+**Enforcement boundary decision (must pick one):**
+
+| Model | Bypass resistance | Ops cost | Adoption friction |
+|-------|------------------|----------|-------------------|
+| Library wrapper | Low (agent imports governor; can skip) | None | None |
+| Sidecar / local gateway | Medium (all tool calls via Unix socket) | Moderate | Moderate |
+| OS-level mediation (seccomp/AppArmor) | High (kernel enforced) | High | High |
+
+v2 is a library wrapper. That's fine for research (A). For production (B),
+the minimum viable enforcement boundary is **sidecar**: the daemon owns the
+Unix socket, and all tool calls must traverse it. The agent process has no
+direct filesystem/network access except through the daemon.
+
+This is a v3 architectural decision, not a code change. It must be made
+before Tier 1b implementation begins.
 
 ### 1c. Substrate-Conditional Expiry
 
@@ -227,17 +332,22 @@ v3 implementation begins.** See spec for details.
 If you want to start v2.0.3:
 
 1. Create `src/governor/stages.py` — Stage, StageRegister, StageTransition
-2. Add `active_from_stage` to `InvariantSpec`
-3. Add dormancy classification to `InvariantResult`
-4. CLI: `governor stage {status,list,advance,retreat,history}`
-5. Tests: `tests/test_stages.py` (~50 tests)
-6. Smoke: add stage CLI to `tests/test_fresh_clone.py`
+2. Define the stage contract (transition rules, freeze sets, precedence)
+3. Add `active_from_stage` to `InvariantSpec` with deny-overrides-allow precedence
+4. Add dormancy classification to `InvariantResult`
+5. CLI: `governor stage {status,list,advance,retreat,history}`
+6. Tests: `tests/test_stages.py` (~50 tests, see test surface breakdown above)
+7. Smoke: add stage CLI to `tests/test_fresh_clone.py`
 
 If you want to start v3 planning:
 
 1. Review the 8 hardening items in SELF_GOVERNANCE_SPEC
-2. Decide enforcement boundary (library wrapper vs sidecar vs gateway)
-3. Define canonical identifier computation (model_artifact_id, regime_hash)
-4. Write receipt schema v2 spec
+2. **Decide enforcement boundary** (library wrapper vs sidecar vs gateway) —
+   this is the most consequential architectural decision for v3
+3. Define `regime_hash` canonicalization (fields, rounding, schema version)
+4. Define `model_artifact_id` computation (conventional for API models,
+   content-addressed for self-hosted)
+5. Write receipt schema v2 spec with separate `valid_until` / `stale_after`
+6. Write threat model for v3 (expand the table above into adversary scenarios)
 
 Everything else follows from those decisions.

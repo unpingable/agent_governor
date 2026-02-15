@@ -16,6 +16,7 @@ import json
 import math
 import os
 import statistics
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -1910,3 +1911,258 @@ class TestCanaryFixtures:
         assert restored.fingerprint.stiffness == result.fingerprint.stiffness
         assert restored.recommendation == result.recommendation
         assert restored.perturbations == result.perturbations
+
+
+# =============================================================================
+# TestReplayability (fingerprint re-derivation from stored data)
+# =============================================================================
+
+
+class TestReplayability:
+    """Verify that stored audit data is sufficient to re-derive fingerprint
+    components deterministically.  If this fails, a stored record can't be
+    explained — it's a trust gap."""
+
+    def test_fingerprint_re_derived_from_stored_fields(self):
+        """Given stored divergences, magnitudes, kinds, and outputs:
+        re-calling compute_fingerprint produces the same result."""
+        config = StabilityConfig(
+            n_perturbations=5, noise_floor_samples=2,
+            max_generate_calls=50, sample_rate=1.0, seed=42,
+        )
+        auditor = StabilityAuditor(config)
+
+        # Use echo fn: perturbed prompt becomes the output
+        result = auditor.audit(
+            "You are a coder. Write Python.",
+            "Here is some Python code.",
+            _echo_fn,
+        )
+
+        # Now re-derive fingerprint from the stored fields
+        re_derived = compute_fingerprint(
+            stripped_divergences=result.stripped_divergences,
+            magnitudes=result.magnitudes,
+            kinds=result.perturbation_kinds,
+            noise_floor=result.fingerprint.noise_floor,
+            commutator_drift=result.fingerprint.commutator_drift,
+            commutator_kinds=result.fingerprint.commutator_kinds,
+            baseline_output="Here is some Python code.",
+            perturbed_outputs=[_echo_fn(p) for p in [
+                generate_perturbation(
+                    "You are a coder. Write Python.",
+                    result.perturbations[i]["kind"],
+                    result.perturbations[i]["seed"],
+                )[0]
+                for i in range(len(result.perturbations))
+            ]],
+            control_divergence=result.fingerprint.control_divergence,
+            basin_threshold=config.basin_threshold,
+            method=config.divergence_method,
+        )
+
+        assert re_derived.stiffness == pytest.approx(result.fingerprint.stiffness)
+        assert re_derived.anisotropy == pytest.approx(result.fingerprint.anisotropy)
+        assert re_derived.basin_entropy == pytest.approx(result.fingerprint.basin_entropy)
+        assert re_derived.escape_rate == pytest.approx(result.fingerprint.escape_rate)
+        assert re_derived.escape_count == result.fingerprint.escape_count
+
+    def test_perturbation_seeds_reproduce_same_text(self):
+        """Stored (kind, seed) pairs reproduce the exact same perturbed text."""
+        prompt = "You are a helpful assistant. Answer questions clearly."
+        config = StabilityConfig(
+            n_perturbations=5, noise_floor_samples=2,
+            max_generate_calls=50, sample_rate=1.0, seed=42,
+        )
+        auditor = StabilityAuditor(config)
+        result = auditor.audit(prompt, "Output.", _echo_fn)
+
+        for rec in result.perturbations:
+            replayed_text, replayed_mag = generate_perturbation(
+                prompt, rec["kind"], rec["seed"],
+            )
+            replayed_hash = _content_hash(replayed_text.encode("utf-8"))
+            assert replayed_hash == rec["perturbed_hash"], (
+                f"Replay mismatch for {rec['kind']} seed={rec['seed']}"
+            )
+            assert replayed_mag == pytest.approx(rec["magnitude"])
+
+    def test_config_hash_reproducible(self):
+        """Config hash is deterministic from config dict."""
+        config = StabilityConfig(seed=42, n_perturbations=5)
+        h1 = _content_hash(_canonical_json(config.to_dict()))
+        h2 = _content_hash(_canonical_json(config.to_dict()))
+        assert h1 == h2
+
+    def test_stored_fields_survive_serialization_roundtrip(self):
+        """All fields needed for replay survive to_dict→from_dict."""
+        config = StabilityConfig(
+            n_perturbations=4, noise_floor_samples=2,
+            max_generate_calls=50, sample_rate=1.0, seed=99,
+        )
+        auditor = StabilityAuditor(config)
+        result = auditor.audit(
+            "You are a coder. Write Python.",
+            "Code output.",
+            _echo_fn,
+        )
+        d = result.to_dict()
+        restored = StabilityAuditResult.from_dict(d)
+
+        # All replay-critical fields preserved
+        assert restored.stripped_divergences == result.stripped_divergences
+        assert restored.raw_divergences == result.raw_divergences
+        assert restored.magnitudes == result.magnitudes
+        assert restored.perturbation_kinds == result.perturbation_kinds
+        assert restored.perturbations == result.perturbations
+        assert restored.prompt_hash == result.prompt_hash
+        assert restored.output_hash == result.output_hash
+        assert restored.config_hash == result.config_hash
+        assert restored.n_attempted == result.n_attempted
+        assert restored.n_completed == result.n_completed
+        assert restored.fingerprint.noise_floor == result.fingerprint.noise_floor
+        assert restored.fingerprint.commutator_drift == result.fingerprint.commutator_drift
+        assert restored.fingerprint.commutator_kinds == result.fingerprint.commutator_kinds
+
+
+# =============================================================================
+# TestStoreContention (concurrent write safety)
+# =============================================================================
+
+
+class TestStoreContention:
+    """Hammer test: concurrent writers to JSONL store.
+    Verifies no interleaved lines, no partials, no deadlocks."""
+
+    def _make_result(self, tag: str = "default"):
+        fp = StabilityFingerprint(
+            stiffness=1.0, anisotropy=2.0, basin_entropy=1.0,
+            commutator_drift=0.1, noise_floor=0.05, control_divergence=0.5,
+            stiffness_by_kind={"format_jitter": 1.0},
+            commutator_kinds=("role_rewrap", "clause_reorder"),
+        )
+        return StabilityAuditResult(
+            fingerprint=fp,
+            excess_divergences=[0.1],
+            raw_divergences=[0.15],
+            stripped_divergences=[0.1],
+            perturbation_kinds=["format_jitter"],
+            magnitudes=[0.05],
+            perturbations=[{"kind": "format_jitter", "seed": 42, "perturbed_hash": tag, "magnitude": 0.05}],
+            prompt_hash=f"ph_{tag}",
+            output_hash=f"oh_{tag}",
+            envelope_hash="eh",
+            timestamp="2026-01-01T00:00:00Z",
+            config_hash="ch",
+            n_attempted=8,
+            n_completed=1,
+        )
+
+    def test_concurrent_writers_no_corruption(self, tmp_gov_dir):
+        """10 threads each write 10 records.  All 100 must survive intact."""
+        store = StabilityStore(tmp_gov_dir)
+        n_threads = 10
+        n_writes = 10
+        errors: list[Exception] = []
+
+        def writer(thread_id: int) -> None:
+            try:
+                for i in range(n_writes):
+                    store.append(self._make_result(f"t{thread_id}_w{i}"))
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=writer, args=(t,)) for t in range(n_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert not errors, f"Writer errors: {errors}"
+
+        # Verify all records readable and count is correct
+        results = store.query(limit=10000)
+        assert len(results) == n_threads * n_writes
+
+    def test_no_interleaved_lines(self, tmp_gov_dir):
+        """Each line in the JSONL file must be valid JSON (no interleaving)."""
+        store = StabilityStore(tmp_gov_dir)
+        n_threads = 8
+        n_writes = 5
+
+        def writer(thread_id: int) -> None:
+            for i in range(n_writes):
+                store.append(self._make_result(f"t{thread_id}_w{i}"))
+
+        threads = [threading.Thread(target=writer, args=(t,)) for t in range(n_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        # Read raw file and verify every non-empty line is valid JSON
+        text = store.log_path.read_text(encoding="utf-8")
+        lines = [l for l in text.split("\n") if l.strip()]
+        assert len(lines) == n_threads * n_writes
+
+        for i, line in enumerate(lines):
+            try:
+                d = json.loads(line)
+                assert "schema_version" in d, f"Line {i} missing schema_version"
+            except json.JSONDecodeError as e:
+                pytest.fail(f"Interleaved/corrupted line {i}: {e}\n{line[:200]}")
+
+    def test_query_tolerates_concurrent_write(self, tmp_gov_dir):
+        """query() returns valid results even while writes are in-flight."""
+        store = StabilityStore(tmp_gov_dir)
+        # Pre-populate with some data
+        for i in range(5):
+            store.append(self._make_result(f"pre_{i}"))
+
+        read_errors: list[Exception] = []
+        read_counts: list[int] = []
+
+        def reader() -> None:
+            try:
+                for _ in range(20):
+                    results = store.query(limit=10000)
+                    read_counts.append(len(results))
+            except Exception as e:
+                read_errors.append(e)
+
+        def writer() -> None:
+            for i in range(10):
+                store.append(self._make_result(f"concurrent_{i}"))
+
+        t_read = threading.Thread(target=reader)
+        t_write = threading.Thread(target=writer)
+        t_read.start()
+        t_write.start()
+        t_read.join(timeout=30)
+        t_write.join(timeout=30)
+
+        assert not read_errors, f"Reader errors: {read_errors}"
+        # Every read should return at least the pre-populated 5
+        assert all(c >= 5 for c in read_counts)
+        # Final count should be 15
+        assert store.count() == 15
+
+    def test_count_consistent_after_contention(self, tmp_gov_dir):
+        """count() matches actual line count after concurrent writes."""
+        store = StabilityStore(tmp_gov_dir)
+        n_threads = 5
+        n_writes = 20
+
+        def writer(tid: int) -> None:
+            for i in range(n_writes):
+                store.append(self._make_result(f"t{tid}_w{i}"))
+
+        threads = [threading.Thread(target=writer, args=(t,)) for t in range(n_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        expected = n_threads * n_writes
+        assert store.count() == expected
+        assert len(store.query(limit=10000)) == expected

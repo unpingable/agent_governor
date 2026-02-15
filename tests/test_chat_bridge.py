@@ -21,6 +21,9 @@ from governor.chat_bridge import (
     ChatBridge,
     create_backend,
     _format_governor_footer,
+    FORMAT_LEAK_CANARY,
+    _has_format_leak,
+    _build_multiturn_prompt,
 )
 from governor.context_manager import GovernorContext, GovernorContextManager
 
@@ -904,8 +907,10 @@ class TestClaudeCodeBackend:
         assert "<user>\nWhat is 2+2?\n</user>" in prompt
         assert "<assistant>\n4\n</assistant>" in prompt
         assert "<user>\nThanks!\n</user>" in prompt
-        assert "<conversation_history>" in prompt
+        assert "<conversation_history" in prompt
         assert "Do not echo" in prompt
+        # Canary token for format leak detection
+        assert FORMAT_LEAK_CANARY in prompt
         # Regression: old markers caused model to echo [User]/[Assistant] in fiction
         assert "[User]" not in prompt
         assert "[Assistant]" not in prompt
@@ -1218,8 +1223,10 @@ class TestCodexBackend:
         assert "<user>\nWhat is 2+2?\n</user>" in prompt
         assert "<assistant>\n4\n</assistant>" in prompt
         assert "<user>\nThanks!\n</user>" in prompt
-        assert "<conversation_history>" in prompt
+        assert "<conversation_history" in prompt
         assert "Do not echo" in prompt
+        # Canary token for format leak detection
+        assert FORMAT_LEAK_CANARY in prompt
         # Regression: old markers caused model to echo [User]/[Assistant] in fiction
         assert "[User]" not in prompt
         assert "[Assistant]" not in prompt
@@ -1646,6 +1653,161 @@ class TestCodexBackend:
         assert "--json" in captured_cmd
         assert "--skip-git-repo-check" in captured_cmd
         assert "-" in captured_cmd  # stdin marker
+
+
+# ============================================================================
+# TestFormatLeakDetection
+# ============================================================================
+
+
+class TestFormatLeakDetection:
+    """Tests for format leak canary and detection."""
+
+    def test_canary_is_non_natural(self) -> None:
+        """Canary token should never appear in normal text."""
+        assert "__CANARY_" in FORMAT_LEAK_CANARY
+        assert FORMAT_LEAK_CANARY == "__CANARY_9f3c1a__"
+
+    def test_has_format_leak_detects_canary(self) -> None:
+        assert _has_format_leak(f"Here is some text {FORMAT_LEAK_CANARY} oops")
+
+    def test_has_format_leak_detects_xml_tags(self) -> None:
+        assert _has_format_leak("blah <user> blah")
+        assert _has_format_leak("blah </assistant> blah")
+        assert _has_format_leak("<conversation_history> stuff")
+
+    def test_has_format_leak_clean_output(self) -> None:
+        assert not _has_format_leak("The answer is 42.")
+        assert not _has_format_leak("Once upon a time, in a land far away...")
+        assert not _has_format_leak("")
+
+    def test_has_format_leak_partial_markers(self) -> None:
+        """Substrings of markers that aren't exact shouldn't trigger."""
+        assert not _has_format_leak("the conversation history was long")
+        assert not _has_format_leak("a user walked into a bar")
+
+    def test_build_multiturn_prompt_contains_canary(self) -> None:
+        parts = [("user", "hi"), ("assistant", "hello"), ("user", "bye")]
+        prompt = _build_multiturn_prompt(parts)
+        assert FORMAT_LEAK_CANARY in prompt
+        assert "<user>" in prompt
+        assert "</user>" in prompt
+
+    def test_build_multiturn_prompt_strict_mode(self) -> None:
+        parts = [("user", "hi"), ("assistant", "hello")]
+        normal = _build_multiturn_prompt(parts)
+        strict = _build_multiturn_prompt(parts, strict=True)
+        assert "Do not reproduce any XML" in strict
+        assert "Do not echo" in normal
+        # Both have canary
+        assert FORMAT_LEAK_CANARY in normal
+        assert FORMAT_LEAK_CANARY in strict
+
+    def test_claude_code_retry_on_leak(self) -> None:
+        """ClaudeCodeBackend.chat() retries once if format leak detected."""
+        backend = ClaudeCodeBackend()
+        call_count = 0
+
+        async def mock_run_cli(system_text, user_prompt, model):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First call: response contains leaked markers
+                return ChatResponse(
+                    content=f"<user>\nleaked\n</user>\nActual response",
+                    model=model,
+                )
+            else:
+                # Retry: clean response
+                return ChatResponse(content="Clean response", model=model)
+
+        backend._run_cli = mock_run_cli
+        messages = [
+            ChatMessage(role="user", content="Tell me a story"),
+            ChatMessage(role="assistant", content="Once upon a time"),
+            ChatMessage(role="user", content="Continue"),
+        ]
+        result = run_async(backend.chat(messages, "sonnet"))
+        assert call_count == 2
+        assert result.content == "Clean response"
+
+    def test_claude_code_no_retry_when_clean(self) -> None:
+        """ClaudeCodeBackend.chat() does not retry clean responses."""
+        backend = ClaudeCodeBackend()
+        call_count = 0
+
+        async def mock_run_cli(system_text, user_prompt, model):
+            nonlocal call_count
+            call_count += 1
+            return ChatResponse(content="A clean story", model=model)
+
+        backend._run_cli = mock_run_cli
+        messages = [
+            ChatMessage(role="user", content="Tell me a story"),
+            ChatMessage(role="assistant", content="Once upon a time"),
+            ChatMessage(role="user", content="Continue"),
+        ]
+        result = run_async(backend.chat(messages, "sonnet"))
+        assert call_count == 1
+        assert result.content == "A clean story"
+
+    def test_claude_code_max_one_retry(self) -> None:
+        """Only one retry — if retry also leaks, return it anyway."""
+        backend = ClaudeCodeBackend()
+        call_count = 0
+
+        async def mock_run_cli(system_text, user_prompt, model):
+            nonlocal call_count
+            call_count += 1
+            # Both calls leak — should still return after 2
+            return ChatResponse(
+                content="<assistant>still leaking</assistant>",
+                model=model,
+            )
+
+        backend._run_cli = mock_run_cli
+        messages = [
+            ChatMessage(role="user", content="Hi"),
+            ChatMessage(role="assistant", content="Hey"),
+            ChatMessage(role="user", content="More"),
+        ]
+        result = run_async(backend.chat(messages, "sonnet"))
+        assert call_count == 2  # One original + one retry, no infinite loop
+        assert "<assistant>" in result.content  # Leak returned, not stripped
+
+    def test_codex_retry_on_leak(self) -> None:
+        """CodexBackend.chat() retries once if format leak detected."""
+        backend = CodexBackend()
+        call_count = 0
+
+        async def mock_run_cli(combined_prompt, model):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return ChatResponse(
+                    content=f"<user>\nleaked\n</user>\nResult",
+                    model=model,
+                )
+            else:
+                return ChatResponse(content="Clean result", model=model)
+
+        backend._run_cli = mock_run_cli
+        messages = [
+            ChatMessage(role="user", content="Question"),
+            ChatMessage(role="assistant", content="Answer"),
+            ChatMessage(role="user", content="Follow-up"),
+        ]
+        result = run_async(backend.chat(messages, "o3"))
+        assert call_count == 2
+        assert result.content == "Clean result"
+
+    def test_single_turn_no_canary(self) -> None:
+        """Single-turn messages skip the multi-turn wrapper entirely."""
+        backend = ClaudeCodeBackend()
+        messages = [ChatMessage(role="user", content="Just one message")]
+        system, prompt = backend._extract_system_and_prompt(messages)
+        assert FORMAT_LEAK_CANARY not in prompt
+        assert prompt == "Just one message"
 
 
 # ============================================================================

@@ -16,8 +16,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import time
 import uuid
+
+logger = logging.getLogger(__name__)
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
@@ -423,6 +426,62 @@ class AnthropicBackend:
         return list(self.MODELS)
 
 
+# ---------------------------------------------------------------------------
+# Format-leak detection for CLI backends (ClaudeCode + Codex)
+#
+# When multi-turn conversations are flattened into a single prompt, the model
+# may echo structural markers back into its response. A canary token embedded
+# in the conversation wrapper lets us detect this cheaply.
+# ---------------------------------------------------------------------------
+
+FORMAT_LEAK_CANARY = "__CANARY_9f3c1a__"
+
+_FORMAT_LEAK_MARKERS = (
+    FORMAT_LEAK_CANARY,
+    "<conversation_history>",
+    "</conversation_history>",
+    "<user>",
+    "</user>",
+    "<assistant>",
+    "</assistant>",
+)
+
+
+def _has_format_leak(content: str) -> bool:
+    """Return True if model output contains transcript structure markers."""
+    return any(marker in content for marker in _FORMAT_LEAK_MARKERS)
+
+
+def _build_multiturn_prompt(
+    conversation_parts: list[tuple[str, str]], *, strict: bool = False,
+) -> str:
+    """Flatten multi-turn conversation into a single prompt with XML structure.
+
+    Args:
+        conversation_parts: list of (role, content) tuples.
+        strict: if True, use stronger no-echo instruction (retry attempt).
+    """
+    parts = []
+    for role, content in conversation_parts:
+        parts.append(f"<{role}>\n{content}\n</{role}>")
+
+    instruction = (
+        "Respond to the last user message above. "
+        "Do not reproduce any XML tags, role markers, or transcript "
+        "formatting in your response — output only the assistant reply."
+        if strict
+        else "Respond to the last user message above. Do not echo the "
+        "conversation structure or role tags in your response."
+    )
+
+    return (
+        f"<conversation_history {FORMAT_LEAK_CANARY}>\n"
+        + "\n".join(parts)
+        + "\n</conversation_history>\n\n"
+        + instruction
+    )
+
+
 class ClaudeCodeBackend:
     """Claude Code CLI backend — uses Max subscription instead of API credits.
 
@@ -448,16 +507,12 @@ class ClaudeCodeBackend:
         """Initialize with path to claude CLI."""
         self.claude_path = claude_path
 
-    async def chat(
-        self, messages: list[ChatMessage], model: str, **kwargs: Any
+    async def _run_cli(
+        self, system_text: str, user_prompt: str, model: str,
     ) -> ChatResponse:
-        """Send a non-streaming chat request via Claude Code CLI."""
+        """Run claude CLI once and parse the response."""
         import asyncio
 
-        system_text, user_prompt = self._extract_system_and_prompt(messages)
-
-        # Build command — prompt goes via stdin, not args
-        # Note: --print mode doesn't execute tools, so no permissions flag needed
         cmd = [
             self.claude_path,
             "--print",
@@ -468,7 +523,6 @@ class ClaudeCodeBackend:
         if system_text:
             cmd.extend(["--system-prompt", system_text])
 
-        # Run claude CLI — pipe prompt via stdin
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=asyncio.subprocess.PIPE,
@@ -483,17 +537,12 @@ class ClaudeCodeBackend:
                 raise ClaudeCodeAuthError(error_msg)
             raise RuntimeError(f"Claude Code CLI failed: {error_msg}")
 
-        # Parse JSON output
         try:
             data = json.loads(stdout.decode("utf-8"))
         except json.JSONDecodeError:
-            # Fall back to treating stdout as plain text
             content = stdout.decode("utf-8").strip()
             return ChatResponse(content=content, model=model)
 
-        # --verbose + --output-format json returns a JSON array of messages:
-        # [{type:"system",...}, {type:"assistant",...}, {type:"result",...}]
-        # Find the "result" item if data is a list.
         if isinstance(data, list):
             result_item = next(
                 (item for item in data if isinstance(item, dict) and item.get("type") == "result"),
@@ -501,7 +550,6 @@ class ClaudeCodeBackend:
             )
             data = result_item if result_item is not None else {}
 
-        # Extract content — data["result"] is the content string
         content = data.get("result", "")
         if not isinstance(content, str):
             content = str(content)
@@ -519,6 +567,24 @@ class ClaudeCodeBackend:
             },
             finish_reason="stop",
         )
+
+    async def chat(
+        self, messages: list[ChatMessage], model: str, **kwargs: Any
+    ) -> ChatResponse:
+        """Send a non-streaming chat request via Claude Code CLI."""
+        system_text, user_prompt = self._extract_system_and_prompt(messages)
+        response = await self._run_cli(system_text, user_prompt, model)
+
+        # Format leak post-check: if the model echoed transcript markers,
+        # retry once with a stronger no-echo instruction.
+        if _has_format_leak(response.content):
+            logger.warning("FormatLeak detected in ClaudeCode response, retrying with strict prompt")
+            strict_prompt = _build_multiturn_prompt(
+                self._conversation_parts(messages), strict=True,
+            )
+            response = await self._run_cli(system_text, strict_prompt, model)
+
+        return response
 
     async def stream(
         self, messages: list[ChatMessage], model: str, **kwargs: Any
@@ -639,6 +705,13 @@ class ClaudeCodeBackend:
         """Return available models for Claude Code."""
         return list(self.MODELS)
 
+    @staticmethod
+    def _conversation_parts(messages: list[ChatMessage]) -> list[tuple[str, str]]:
+        """Extract (role, content) pairs for non-system messages."""
+        return [
+            (m.role, m.content) for m in messages if m.role != "system"
+        ]
+
     def _extract_system_and_prompt(
         self, messages: list[ChatMessage]
     ) -> tuple[str, str]:
@@ -669,17 +742,7 @@ class ClaudeCodeBackend:
         if len(conversation_parts) == 1 and not has_assistant:
             user_prompt = conversation_parts[0][1]
         elif conversation_parts:
-            parts = []
-            for role, content in conversation_parts:
-                parts.append(f"<{role}>\n{content}\n</{role}>")
-            # Frame so the model responds to the last user message
-            user_prompt = (
-                "<conversation_history>\n"
-                + "\n".join(parts)
-                + "\n</conversation_history>\n\n"
-                "Respond to the last user message above. Do not echo the "
-                "conversation structure or role tags in your response."
-            )
+            user_prompt = _build_multiturn_prompt(conversation_parts)
         else:
             user_prompt = ""
 
@@ -710,21 +773,12 @@ class CodexBackend:
         """Initialize with path to codex CLI."""
         self.codex_path = codex_path
 
-    async def chat(
-        self, messages: list[ChatMessage], model: str, **kwargs: Any
+    async def _run_cli(
+        self, combined_prompt: str, model: str,
     ) -> ChatResponse:
-        """Send a non-streaming chat request via Codex CLI."""
+        """Run codex CLI once and parse the response."""
         import asyncio
 
-        system_text, user_prompt = self._extract_system_and_prompt(messages)
-
-        # Prepend system text to prompt (Codex has no --system-prompt flag)
-        if system_text:
-            combined_prompt = f"[System]: {system_text}\n\n{user_prompt}"
-        else:
-            combined_prompt = user_prompt
-
-        # Build command — `-` means read prompt from stdin
         cmd = [
             self.codex_path,
             "exec",
@@ -734,7 +788,6 @@ class CodexBackend:
             "-",
         ]
 
-        # Run codex CLI — pipe prompt via stdin
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=asyncio.subprocess.PIPE,
@@ -749,7 +802,6 @@ class CodexBackend:
                 raise CodexAuthError(error_msg)
             raise RuntimeError(f"Codex CLI failed: {error_msg}")
 
-        # Parse JSONL output line by line
         content_parts: list[str] = []
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
@@ -789,6 +841,32 @@ class CodexBackend:
             usage=usage,
             finish_reason="stop",
         )
+
+    async def chat(
+        self, messages: list[ChatMessage], model: str, **kwargs: Any
+    ) -> ChatResponse:
+        """Send a non-streaming chat request via Codex CLI."""
+        system_text, user_prompt = self._extract_system_and_prompt(messages)
+
+        if system_text:
+            combined_prompt = f"[System]: {system_text}\n\n{user_prompt}"
+        else:
+            combined_prompt = user_prompt
+
+        response = await self._run_cli(combined_prompt, model)
+
+        # Format leak post-check: if the model echoed transcript markers,
+        # retry once with a stronger no-echo instruction.
+        if _has_format_leak(response.content):
+            logger.warning("FormatLeak detected in Codex response, retrying with strict prompt")
+            strict_prompt = _build_multiturn_prompt(
+                self._conversation_parts(messages), strict=True,
+            )
+            if system_text:
+                strict_prompt = f"[System]: {system_text}\n\n{strict_prompt}"
+            response = await self._run_cli(strict_prompt, model)
+
+        return response
 
     async def stream(
         self, messages: list[ChatMessage], model: str, **kwargs: Any
@@ -907,6 +985,13 @@ class CodexBackend:
         """Return available models for Codex."""
         return list(self.MODELS)
 
+    @staticmethod
+    def _conversation_parts(messages: list[ChatMessage]) -> list[tuple[str, str]]:
+        """Extract (role, content) pairs for non-system messages."""
+        return [
+            (m.role, m.content) for m in messages if m.role != "system"
+        ]
+
     def _extract_system_and_prompt(
         self, messages: list[ChatMessage]
     ) -> tuple[str, str]:
@@ -938,17 +1023,7 @@ class CodexBackend:
         if len(conversation_parts) == 1 and not has_assistant:
             user_prompt = conversation_parts[0][1]
         elif conversation_parts:
-            parts = []
-            for role, content in conversation_parts:
-                parts.append(f"<{role}>\n{content}\n</{role}>")
-            # Frame so the model responds to the last user message
-            user_prompt = (
-                "<conversation_history>\n"
-                + "\n".join(parts)
-                + "\n</conversation_history>\n\n"
-                "Respond to the last user message above. Do not echo the "
-                "conversation structure or role tags in your response."
-            )
+            user_prompt = _build_multiturn_prompt(conversation_parts)
         else:
             user_prompt = ""
 

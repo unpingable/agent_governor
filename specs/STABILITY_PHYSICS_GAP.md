@@ -3,6 +3,16 @@
 Gap spec for physics-inspired metrics not yet implemented in `semantic_stability.py`.
 Filed alongside escape rate implementation (v2 schema).
 
+## Versioning
+
+All features here are **v2.x** (additive audit signals, offline analytics, schema bumps)
+unless they require a new backend interface or enforcement boundary:
+
+- **2.1**: Susceptibility curve + T_eff usage
+- **2.2**: Hysteresis (after canonicalizer)
+- **2.3**: Critical slowing down + fluctuation-dissipation stats
+- **3.0**: Streaming/Lyapunov + stability-as-hard-gate (enforce, not just observe)
+
 ## Status
 
 | Feature | Status | Blocker | Priority |
@@ -27,8 +37,12 @@ Implementing without canonicalization measures "path dependence of random seeds"
 - Normalizes whitespace, bullets, indentation
 - Normalizes role wrapper to a canonical form
 - Strips inserted hedges (only the ones we add)
-- Preserves atomic segments verbatim
+- Preserves atomic segments verbatim (code fences, JSON, XML — same list as perturbation engine)
 - Clause order canonicalization is the hardest part (can punt initially)
+- **Must be deterministic**: same input → same output, no randomness
+- **Must be idempotent**: `canonicalize(canonicalize(x)) == canonicalize(x)`
+
+Without determinism + idempotency, hysteresis measures "canonicalizer noise" not "model memory."
 
 **Clean implementation plan**:
 1. Ramp protocol: `P0 → P1 → ... → PS` (progressive perturbation)

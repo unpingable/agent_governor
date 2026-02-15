@@ -16655,8 +16655,13 @@ def conditioning_status(ctx, as_json):
     store = StabilityStore(gov_dir)
     auditor = StabilityAuditor()
 
-    results = store.query(limit=1)
-    dist_stiffness = store.get_distribution("stiffness")
+    all_results = store.query()
+    results = all_results[:1] if all_results else []
+    dist_stiffness = [r.fingerprint.stiffness for r in all_results]
+    # Only include escape_rate from records that actually measured it (v2+)
+    dist_escape = [
+        r.fingerprint.escape_rate for r in all_results if r.n_completed > 0
+    ]
 
     def _p90(values: list[float]) -> float | None:
         if len(values) < 2:
@@ -16666,12 +16671,17 @@ def conditioning_status(ctx, as_json):
     if as_json:
         data = {
             "config": auditor.config.to_dict(),
-            "total_audits": store.count(),
+            "total_audits": len(all_results),
             "latest": results[0].to_dict() if results else None,
             "stiffness_distribution": {
                 "count": len(dist_stiffness),
                 "median": statistics.median(dist_stiffness) if dist_stiffness else None,
                 "p90": _p90(dist_stiffness),
+            },
+            "escape_rate_distribution": {
+                "count": len(dist_escape),
+                "median": statistics.median(dist_escape) if dist_escape else None,
+                "p90": _p90(dist_escape),
             },
         }
         click.echo(json.dumps(data, indent=2))
@@ -16682,8 +16692,7 @@ def conditioning_status(ctx, as_json):
     click.echo(f"  Sample rate: {auditor.config.sample_rate}")
     click.echo(f"  Max calls: {auditor.config.max_generate_calls}")
 
-    total = store.count()
-    click.echo(f"  Total audits: {total}")
+    click.echo(f"  Total audits: {len(all_results)}")
 
     if results:
         r = results[0]
@@ -16691,6 +16700,10 @@ def conditioning_status(ctx, as_json):
         fp = r.fingerprint
         click.echo(f"    stiffness={fp.stiffness:.2f} anisotropy={fp.anisotropy:.2f} "
                     f"basins={fp.basin_entropy:.0f} comm_drift={fp.commutator_drift:.2f}")
+        if r.n_completed > 0:
+            click.echo(f"    escape_rate={fp.escape_rate:.2f} "
+                        f"({fp.escape_count}/{r.n_completed} perturbations)")
+        click.echo(f"    completed={r.n_completed}/{r.n_attempted}")
 
 
 @conditioning.command("history")

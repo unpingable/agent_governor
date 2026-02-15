@@ -9,8 +9,9 @@ increment the version number.
 
 ### Governor Daemon
 
-JSON-RPC 2.0 control plane over stdio or Unix socket. 25 RPC methods across 7
-namespaces (governor, sessions, intent, receipts, scars, commit, chat).
+JSON-RPC 2.0 control plane over stdio or Unix socket. 36 RPC methods across 11
+namespaces (governor, sessions, intent, receipts, scars, correlator, scope,
+stability, commit, chat).
 Content-Length framing. Config file support (`daemon.conf`). Backend
 auto-detection (Anthropic, Ollama, Claude CLI, Codex CLI). Streaming via
 `chat.delta` notifications.

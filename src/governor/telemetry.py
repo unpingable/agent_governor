@@ -41,6 +41,8 @@ class TelemetryEventType(str, Enum):
     PROFILE_CHANGE = "profile_change"
     CONTINUITY_TRACE = "continuity_trace"      # One per generation attempt
     CONTINUITY_RESULT = "continuity_result"     # One per convergence run
+    CORRELATOR_OBSERVATION = "correlator_observation"  # Per-window correlator diagnostic
+    CAPTURE_DETECTED = "capture_detected"              # Capture regime declared
 
 
 class TelemetryLevel(str, Enum):
@@ -1130,6 +1132,60 @@ class TelemetryCollector:
             agent_id=agent_id,
             session_id=session_id,
             duration_ms=total_latency_ms,
+        )
+        self._emit(event)
+
+    def record_correlator_observation(
+        self,
+        regime: str = "",
+        window_step: int = 0,
+        confidence: float = 0.0,
+        gate_met: bool = False,
+        capacity_degraded: bool = False,
+        indicators: list[str] | None = None,
+        k_throughput: float = 0.0,
+        k_authority: str = "",
+        k_cost: float = 0.0,
+    ) -> None:
+        """Record a correlator observation event."""
+        fields = {
+            "regime": regime,
+            "window_step": window_step,
+            "confidence": confidence,
+            "gate_met": gate_met,
+            "capacity_degraded": capacity_degraded,
+            "indicators": indicators or [],
+            "k_throughput": k_throughput,
+            "k_authority": k_authority,
+            "k_cost": k_cost,
+        }
+        event = TelemetryEvent(
+            timestamp=self._now_iso(),
+            event_type=TelemetryEventType.CORRELATOR_OBSERVATION,
+            level=TelemetryLevel.INFO,
+            fields=fields,
+        )
+        self._emit(event)
+
+    def record_capture_detected(
+        self,
+        regime: str = "",
+        confidence: float = 0.0,
+        indicators: list[str] | None = None,
+        window_step: int = 0,
+    ) -> None:
+        """Record a capture regime detection event."""
+        fields = {
+            "regime": regime,
+            "confidence": confidence,
+            "indicators": indicators or [],
+            "window_step": window_step,
+        }
+        event = TelemetryEvent(
+            timestamp=self._now_iso(),
+            event_type=TelemetryEventType.CAPTURE_DETECTED,
+            level=TelemetryLevel.WARN,
+            fields=fields,
         )
         self._emit(event)
 

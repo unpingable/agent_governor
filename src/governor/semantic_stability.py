@@ -1,0 +1,1455 @@
+"""
+Semantic Stability — Perturbation-based conditioning audit.
+
+Measures how stable the prompt→output mapping is by applying mechanical
+perturbations to the prompt and measuring divergence of outputs.  A model
+can produce a correct answer that's on a knife-edge — one synonym swap away
+from a completely different output.  That's a conditioning problem.
+
+Four signals:
+  stiffness        median(excess_divergence / magnitude) — dimensionless,
+                   how much output changes per unit of input change.
+  anisotropy       p90/p10 excess divergence ratio — is sensitivity directional?
+  basin_entropy    count of distinct output clusters — multimodal detection.
+  commutator_drift divergence(out_AB, out_BA) − noise_floor — order-dependence.
+
+Key design decisions:
+1. Mechanical perturbations only (no LLM calls for perturbation generation).
+2. Noise floor baseline: run same prompt k times, subtract temperature noise.
+3. Negation probe is a positive CONTROL — excluded from stiffness, reported
+   separately as control_divergence.  Low control = model not reading prompt.
+4. Observational receipts only (verdict always "observe").
+5. Code blocks / JSON / XML treated as atomic segments — never scrambled.
+6. Call budget guardrail: returns partial result, never raises.
+7. Dual divergence: raw + stripped (boilerplate stripped for stiffness).
+8. Deterministic sampling via sha256(prompt), never Python hash().
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+import math
+import os
+import random
+import re
+import statistics
+import unicodedata
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from pathlib import Path
+from typing import Any, Callable
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore[assignment]  # Windows — no file locking
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Schema
+# =============================================================================
+
+STABILITY_SCHEMA_VERSION = 1
+
+
+# =============================================================================
+# Enums
+# =============================================================================
+
+
+class PerturbationKind(str, Enum):
+    """Mechanical perturbation types applied to prompts."""
+
+    FORMAT_JITTER = "format_jitter"
+    """Whitespace, bullet/numbered swaps, indentation changes."""
+
+    CLAUSE_REORDER = "clause_reorder"
+    """Sentence-boundary shuffle of prose segments."""
+
+    ROLE_REWRAP = "role_rewrap"
+    """'You are X. Do Y.' ↔ 'Task: Y. Context: X.' framing rotation."""
+
+    HEDGE_INSERT = "hedge_insert"
+    """Semantically inert hedge words ('please', 'if possible')."""
+
+    NEGATION_PROBE = "negation_probe"
+    """Positive CONTROL — should produce high divergence."""
+
+
+class DivergenceMethod(str, Enum):
+    """Divergence proxy between two text outputs."""
+
+    JACCARD = "jaccard"
+    """Token-set Jaccard divergence: 1 − |A∩B|/|A∪B|.  Order-blind, cheap."""
+
+    SHINGLED_JACCARD = "shingled_jaccard"
+    """3-gram shingle Jaccard.  Order-aware, catches rearrangement."""
+
+    EDIT_DISTANCE = "edit_distance"
+    """Normalized character-level Levenshtein.  Short texts only (< 2000 chars)."""
+
+
+# =============================================================================
+# Canonical JSON (local copy of gate_receipt pattern)
+# =============================================================================
+
+
+def _round_floats(obj: Any) -> Any:
+    """Round floats to 6 decimal places for canonical hashing stability."""
+    if isinstance(obj, float):
+        return round(obj, 6)
+    if isinstance(obj, dict):
+        return {k: _round_floats(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_round_floats(v) for v in obj]
+    return obj
+
+
+def _canonical_json(obj: dict[str, Any]) -> bytes:
+    """Deterministic JSON: sorted keys, compact separators, ASCII-safe.
+
+    Floats rounded to 6 decimal places to prevent hash drift from
+    trivial representation differences (0.7 vs 0.6999999999999999).
+    """
+    return json.dumps(
+        _round_floats(obj),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+
+
+def _content_hash(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+# =============================================================================
+# Dataclasses
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class Perturbation:
+    """Record of a single prompt perturbation (for replay)."""
+
+    kind: str
+    original_hash: str
+    perturbed_hash: str
+    magnitude: float  # token-set Jaccard between original and perturbed prompt
+    seed: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "original_hash": self.original_hash,
+            "perturbed_hash": self.perturbed_hash,
+            "magnitude": self.magnitude,
+            "seed": self.seed,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Perturbation:
+        return cls(
+            kind=d["kind"],
+            original_hash=d["original_hash"],
+            perturbed_hash=d["perturbed_hash"],
+            magnitude=d["magnitude"],
+            seed=d["seed"],
+        )
+
+
+@dataclass(frozen=True)
+class StabilityFingerprint:
+    """Four-signal conditioning fingerprint.
+
+    stiffness:        median(excess_d / magnitude), dimensionless.
+                      High = output changes faster than input.
+    anisotropy:       p90 / p10 of excess divergence.
+                      High = sensitivity is directional (some perturbation kinds
+                      cause disproportionate change).
+    basin_entropy:    count of distinct output clusters.
+                      >1 = multimodal (prompt sits near a decision boundary).
+    commutator_drift: divergence(out_AB, out_BA) − noise_floor.
+                      High = perturbation order matters (non-commutative).
+    noise_floor:      intrinsic temperature variance baseline.
+    control_divergence: negation probe excess divergence (sanity check).
+                        Low = model may not be reading the prompt.
+    """
+
+    stiffness: float
+    anisotropy: float
+    basin_entropy: float
+    commutator_drift: float
+    noise_floor: float
+    control_divergence: float
+    stiffness_by_kind: dict[str, float]
+    commutator_kinds: tuple[str, str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "stiffness": self.stiffness,
+            "anisotropy": self.anisotropy,
+            "basin_entropy": self.basin_entropy,
+            "commutator_drift": self.commutator_drift,
+            "noise_floor": self.noise_floor,
+            "control_divergence": self.control_divergence,
+            "stiffness_by_kind": dict(self.stiffness_by_kind),
+            "commutator_kinds": list(self.commutator_kinds),
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> StabilityFingerprint:
+        return cls(
+            stiffness=d["stiffness"],
+            anisotropy=d["anisotropy"],
+            basin_entropy=d["basin_entropy"],
+            commutator_drift=d["commutator_drift"],
+            noise_floor=d["noise_floor"],
+            control_divergence=d["control_divergence"],
+            stiffness_by_kind=d.get("stiffness_by_kind", {}),
+            commutator_kinds=tuple(
+                d.get("commutator_kinds", ("role_rewrap", "clause_reorder"))
+            ),
+        )
+
+
+@dataclass
+class StabilityConfig:
+    """Configuration for the stability auditor."""
+
+    n_perturbations: int = 8
+    kinds: list[str] = field(
+        default_factory=lambda: [k.value for k in PerturbationKind]
+    )
+    divergence_method: str = "jaccard"
+    noise_floor_samples: int = 3
+    basin_threshold: float = 0.3
+    seed: int = 42
+    store_raw_outputs: bool = False
+    sample_rate: float = 0.1  # <=0 never, >=1 always
+    max_generate_calls: int = 20
+    commutator_pair: tuple[str, str] = ("role_rewrap", "clause_reorder")
+    decoding_params: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "n_perturbations": self.n_perturbations,
+            "kinds": list(self.kinds),
+            "divergence_method": self.divergence_method,
+            "noise_floor_samples": self.noise_floor_samples,
+            "basin_threshold": self.basin_threshold,
+            "seed": self.seed,
+            "store_raw_outputs": self.store_raw_outputs,
+            "sample_rate": self.sample_rate,
+            "max_generate_calls": self.max_generate_calls,
+            "commutator_pair": list(self.commutator_pair),
+            "decoding_params": self.decoding_params,
+            "schema_version": STABILITY_SCHEMA_VERSION,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> StabilityConfig:
+        return cls(
+            n_perturbations=d.get("n_perturbations", 8),
+            kinds=d.get("kinds", [k.value for k in PerturbationKind]),
+            divergence_method=d.get("divergence_method", "jaccard"),
+            noise_floor_samples=d.get("noise_floor_samples", 3),
+            basin_threshold=d.get("basin_threshold", 0.3),
+            seed=d.get("seed", 42),
+            store_raw_outputs=d.get("store_raw_outputs", False),
+            sample_rate=d.get("sample_rate", 0.1),
+            max_generate_calls=d.get("max_generate_calls", 20),
+            commutator_pair=tuple(
+                d.get("commutator_pair", ("role_rewrap", "clause_reorder"))
+            ),
+            decoding_params=d.get("decoding_params"),
+        )
+
+
+@dataclass
+class StabilityAuditResult:
+    """Result of a single stability audit run."""
+
+    fingerprint: StabilityFingerprint
+    excess_divergences: list[float]
+    raw_divergences: list[float]
+    stripped_divergences: list[float]
+    perturbation_kinds: list[str]
+    magnitudes: list[float]
+    perturbations: list[dict[str, Any]]  # for replay: kind, seed, perturbed_hash
+    prompt_hash: str
+    output_hash: str
+    envelope_hash: str
+    timestamp: str
+    config_hash: str
+    mode: str = "observational"
+    recommendation: str = "calibrating"
+    recommendation_reason: str = ""
+    budget_exceeded: bool = False
+    calls_used: int = 0
+    receipt_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": STABILITY_SCHEMA_VERSION,
+            "fingerprint": self.fingerprint.to_dict(),
+            "excess_divergences": self.excess_divergences,
+            "raw_divergences": self.raw_divergences,
+            "stripped_divergences": self.stripped_divergences,
+            "perturbation_kinds": self.perturbation_kinds,
+            "magnitudes": self.magnitudes,
+            "perturbations": self.perturbations,
+            "prompt_hash": self.prompt_hash,
+            "output_hash": self.output_hash,
+            "envelope_hash": self.envelope_hash,
+            "timestamp": self.timestamp,
+            "config_hash": self.config_hash,
+            "mode": self.mode,
+            "recommendation": self.recommendation,
+            "recommendation_reason": self.recommendation_reason,
+            "budget_exceeded": self.budget_exceeded,
+            "calls_used": self.calls_used,
+            "receipt_id": self.receipt_id,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> StabilityAuditResult:
+        version = d.get("schema_version", 1)
+        if version != STABILITY_SCHEMA_VERSION:
+            raise ValueError(f"Unknown stability schema version: {version}")
+        return cls(
+            fingerprint=StabilityFingerprint.from_dict(d["fingerprint"]),
+            excess_divergences=d["excess_divergences"],
+            raw_divergences=d["raw_divergences"],
+            stripped_divergences=d.get("stripped_divergences", []),
+            perturbation_kinds=d["perturbation_kinds"],
+            magnitudes=d["magnitudes"],
+            perturbations=d.get("perturbations", []),
+            prompt_hash=d["prompt_hash"],
+            output_hash=d["output_hash"],
+            envelope_hash=d.get("envelope_hash", ""),
+            timestamp=d["timestamp"],
+            config_hash=d["config_hash"],
+            mode=d.get("mode", "observational"),
+            recommendation=d.get("recommendation", "calibrating"),
+            recommendation_reason=d.get("recommendation_reason", ""),
+            budget_exceeded=d.get("budget_exceeded", False),
+            calls_used=d.get("calls_used", 0),
+            receipt_id=d.get("receipt_id"),
+        )
+
+
+# =============================================================================
+# Helpers: Atomic segment detection
+# =============================================================================
+
+# Fenced code blocks: ```...``` with optional language tag
+_CODE_FENCE_RE = re.compile(r"^```[^\n]*\n.*?^```", re.MULTILINE | re.DOTALL)
+
+# Multi-line JSON blocks: { ... } with newlines (conservative — single-line is prose)
+_JSON_BLOCK_RE = re.compile(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", re.DOTALL)
+
+# Multi-line XML/HTML: <tag>...</tag>
+_XML_BLOCK_RE = re.compile(r"<(\w+)[^>]*>.*?</\1>", re.DOTALL)
+
+
+def find_atomic_segments(text: str) -> list[tuple[int, int]]:
+    """Find spans of structured content that should not be perturbed.
+
+    Conservative: fenced code blocks always; JSON/XML only when multi-line.
+    False positives are worse than false negatives — when in doubt, treat as prose.
+    """
+    segments: list[tuple[int, int]] = []
+
+    for m in _CODE_FENCE_RE.finditer(text):
+        segments.append((m.start(), m.end()))
+
+    for m in _JSON_BLOCK_RE.finditer(text):
+        if "\n" in m.group():
+            segments.append((m.start(), m.end()))
+
+    for m in _XML_BLOCK_RE.finditer(text):
+        if "\n" in m.group():
+            segments.append((m.start(), m.end()))
+
+    if not segments:
+        return []
+    segments.sort()
+    merged: list[tuple[int, int]] = [segments[0]]
+    for start, end in segments[1:]:
+        if start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _extract_prose_regions(text: str) -> list[tuple[int, int, str]]:
+    """Return (start, end, content) for each prose (non-atomic) region."""
+    segments = find_atomic_segments(text)
+    if not segments:
+        return [(0, len(text), text)]
+
+    regions: list[tuple[int, int, str]] = []
+    pos = 0
+    for seg_start, seg_end in segments:
+        if pos < seg_start:
+            regions.append((pos, seg_start, text[pos:seg_start]))
+        pos = seg_end
+    if pos < len(text):
+        regions.append((pos, len(text), text[pos:]))
+    return regions
+
+
+def _reconstruct_with_prose(
+    text: str, new_prose: list[str]
+) -> str:
+    """Rebuild text: perturbed prose interleaved with original atomic segments."""
+    segments = find_atomic_segments(text)
+    if not segments:
+        return "".join(new_prose)
+
+    parts: list[str] = []
+    pos = 0
+    prose_idx = 0
+    for seg_start, seg_end in segments:
+        if pos < seg_start and prose_idx < len(new_prose):
+            parts.append(new_prose[prose_idx])
+            prose_idx += 1
+        parts.append(text[seg_start:seg_end])
+        pos = seg_end
+    if prose_idx < len(new_prose):
+        parts.append(new_prose[prose_idx])
+    return "".join(parts)
+
+
+# =============================================================================
+# Helpers: Boilerplate stripping
+# =============================================================================
+
+# Allowlist-driven — only strip patterns known to be common LLM pleasantries.
+# Never guess.  False negatives preferred over removing meaningful content.
+_BOILERPLATE_PREFIXES = [
+    "sure, i can help with that.",
+    "sure! here's",
+    "here's the answer:",
+    "here is the answer:",
+    "of course! ",
+    "of course, ",
+    "certainly! ",
+    "certainly, ",
+    "absolutely! ",
+    "great question! ",
+    "i'd be happy to help.",
+    "i'd be happy to help!",
+    "let me help you with that.",
+]
+
+_BOILERPLATE_SUFFIXES = [
+    "let me know if you have any questions!",
+    "let me know if you need anything else!",
+    "hope this helps!",
+    "feel free to ask if you have any questions.",
+    "i hope this helps!",
+    "is there anything else i can help with?",
+    "is there anything else you'd like to know?",
+]
+
+
+def strip_boilerplate(text: str) -> str:
+    """Strip known boilerplate prefixes and suffixes (allowlist-driven)."""
+    stripped = text.strip()
+    lower = stripped.lower()
+
+    for prefix in _BOILERPLATE_PREFIXES:
+        if lower.startswith(prefix):
+            stripped = stripped[len(prefix):].lstrip()
+            break
+
+    lower = stripped.lower()
+    for suffix in _BOILERPLATE_SUFFIXES:
+        if lower.endswith(suffix):
+            stripped = stripped[: -len(suffix)].rstrip()
+            break
+
+    return stripped
+
+
+# =============================================================================
+# Tokenization + Divergence
+# =============================================================================
+
+_PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
+_WS_RE = re.compile(r"\s+")
+
+
+def tokenize_normalize(text: str) -> list[str]:
+    """Normalize and tokenize for divergence.  Same pattern as taint.py."""
+    text = unicodedata.normalize("NFKC", text)
+    text = text.lower()
+    text = _PUNCT_RE.sub(" ", text)
+    text = _WS_RE.sub(" ", text).strip()
+    return text.split()
+
+
+def _jaccard_divergence(tokens_a: list[str], tokens_b: list[str]) -> float:
+    """Token-set Jaccard divergence: 1 − |A∩B| / |A∪B|.  Order-blind."""
+    set_a = frozenset(tokens_a)
+    set_b = frozenset(tokens_b)
+    union = set_a | set_b
+    if not union:
+        return 0.0
+    return 1.0 - len(set_a & set_b) / len(union)
+
+
+def _shingled_jaccard(
+    tokens_a: list[str], tokens_b: list[str], n: int = 3
+) -> float:
+    """Shingled Jaccard divergence: 3-gram shingles, order-aware."""
+
+    def shingles(tokens: list[str]) -> frozenset[tuple[str, ...]]:
+        if len(tokens) < n:
+            return frozenset([tuple(tokens)]) if tokens else frozenset()
+        return frozenset(
+            tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)
+        )
+
+    sa = shingles(tokens_a)
+    sb = shingles(tokens_b)
+    union = sa | sb
+    if not union:
+        return 0.0
+    return 1.0 - len(sa & sb) / len(union)
+
+
+def _edit_distance_normalized(text_a: str, text_b: str) -> float:
+    """Normalized character-level Levenshtein.  Raises on texts > 2000 chars."""
+    max_len = max(len(text_a), len(text_b))
+    if max_len > 2000:
+        raise ValueError(
+            f"Edit distance not supported for texts > 2000 chars "
+            f"(got {len(text_a)}, {len(text_b)})"
+        )
+    if max_len == 0:
+        return 0.0
+
+    # Standard DP with O(min(m,n)) space
+    if len(text_a) < len(text_b):
+        text_a, text_b = text_b, text_a
+
+    prev = list(range(len(text_b) + 1))
+    for i in range(1, len(text_a) + 1):
+        curr = [i] + [0] * len(text_b)
+        for j in range(1, len(text_b) + 1):
+            cost = 0 if text_a[i - 1] == text_b[j - 1] else 1
+            curr[j] = min(
+                curr[j - 1] + 1,
+                prev[j] + 1,
+                prev[j - 1] + cost,
+            )
+        prev = curr
+
+    return prev[len(text_b)] / max_len
+
+
+def compute_divergence(
+    output_a: str, output_b: str, method: str = "jaccard"
+) -> float:
+    """Compute divergence (0=identical, 1=disjoint) between two outputs.
+
+    For edit_distance on texts > 2000 chars, falls back to jaccard (never crashes).
+    """
+    if method == DivergenceMethod.EDIT_DISTANCE.value:
+        try:
+            return _edit_distance_normalized(output_a, output_b)
+        except ValueError:
+            logger.warning(
+                "Edit distance text too long (%d/%d chars), falling back to jaccard",
+                len(output_a),
+                len(output_b),
+            )
+            method = DivergenceMethod.JACCARD.value
+
+    tokens_a = tokenize_normalize(output_a)
+    tokens_b = tokenize_normalize(output_b)
+
+    if method == DivergenceMethod.SHINGLED_JACCARD.value:
+        return _shingled_jaccard(tokens_a, tokens_b)
+
+    return _jaccard_divergence(tokens_a, tokens_b)
+
+
+# =============================================================================
+# Perturbation Generators
+# =============================================================================
+
+_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
+
+_HEDGES = [
+    "please",
+    "if possible",
+    "I think",
+    "perhaps",
+    "kindly",
+    "I believe",
+    "it seems like",
+    "maybe",
+    "ideally",
+]
+
+_NEGATION_PAIRS = [
+    ("should", "should not"),
+    ("must", "must not"),
+    ("always", "never"),
+    ("do", "do not"),
+    ("can", "cannot"),
+    ("will", "will not"),
+    ("is", "is not"),
+    ("are", "are not"),
+]
+
+
+def perturb_format_jitter(text: str, seed: int) -> tuple[str, float]:
+    """Swap bullets ↔ numbered, add/remove trailing newlines, change indentation."""
+    rng = random.Random(seed)
+
+    prose_regions = _extract_prose_regions(text)
+    if not prose_regions:
+        return text, 0.0
+
+    new_prose: list[str] = []
+    for _, _, content in prose_regions:
+        lines = content.split("\n")
+        result_lines: list[str] = []
+        counter = 1
+        for line in lines:
+            if line.lstrip().startswith("- ") and rng.random() > 0.5:
+                indent = len(line) - len(line.lstrip())
+                line = " " * indent + f"{counter}. " + line.lstrip()[2:]
+                counter += 1
+            elif re.match(r"\s*\d+\.\s", line) and rng.random() > 0.5:
+                indent = len(line) - len(line.lstrip())
+                content_part = re.sub(r"^\s*\d+\.\s", "", line)
+                line = " " * indent + "- " + content_part
+
+            if rng.random() > 0.7:
+                if line.startswith("  "):
+                    line = line[2:]
+                elif line and not line.startswith(" "):
+                    line = "  " + line
+
+            result_lines.append(line)
+
+        result = "\n".join(result_lines)
+        if rng.random() > 0.5:
+            result = result.rstrip("\n") + "\n\n"
+        else:
+            result = result.rstrip("\n")
+        new_prose.append(result)
+
+    perturbed = _reconstruct_with_prose(text, new_prose)
+    magnitude = compute_divergence(text, perturbed, "jaccard")
+    return perturbed, magnitude
+
+
+def perturb_clause_reorder(text: str, seed: int) -> tuple[str, float]:
+    """Split on sentence boundaries and shuffle segments."""
+    rng = random.Random(seed)
+
+    prose_regions = _extract_prose_regions(text)
+    if not prose_regions:
+        return text, 0.0
+
+    new_prose: list[str] = []
+    for _, _, content in prose_regions:
+        sentences = _SENTENCE_RE.split(content)
+        if len(sentences) <= 1:
+            new_prose.append(content)
+            continue
+
+        shuffleable = [s for s in sentences if len(s.split()) >= 3]
+        fixed = [s for s in sentences if len(s.split()) < 3]
+
+        if len(shuffleable) > 1:
+            rng.shuffle(shuffleable)
+
+        new_prose.append(" ".join(shuffleable + fixed))
+
+    perturbed = _reconstruct_with_prose(text, new_prose)
+    magnitude = compute_divergence(text, perturbed, "jaccard")
+    return perturbed, magnitude
+
+
+def perturb_role_rewrap(text: str, seed: int) -> tuple[str, float]:
+    """Rotate between different role/instruction framing patterns."""
+    rng = random.Random(seed)
+
+    prose_regions = _extract_prose_regions(text)
+    if not prose_regions:
+        return text, 0.0
+
+    new_prose: list[str] = []
+    for _, _, content in prose_regions:
+        transformed = False
+
+        m = re.match(r"^You are (.+?)\.\s*(.+)$", content, re.DOTALL)
+        if m:
+            role, task = m.group(1), m.group(2)
+            templates = [
+                f"Task: {task} Context: {role}",
+                f"As {role}, {task}",
+                f"Acting as {role}, please: {task}",
+            ]
+            new_prose.append(rng.choice(templates))
+            transformed = True
+
+        if not transformed:
+            m = re.match(r"^As (.+?),\s*(.+)$", content, re.DOTALL)
+            if m:
+                role, task = m.group(1), m.group(2)
+                templates = [
+                    f"You are {role}. {task}",
+                    f"Task: {task} Context: {role}",
+                ]
+                new_prose.append(rng.choice(templates))
+                transformed = True
+
+        if not transformed:
+            m = re.match(r"^Task:\s*(.+?)\s*Context:\s*(.+)$", content, re.DOTALL)
+            if m:
+                task, role = m.group(1), m.group(2)
+                templates = [
+                    f"You are {role}. {task}",
+                    f"As {role}, {task}",
+                ]
+                new_prose.append(rng.choice(templates))
+                transformed = True
+
+        if not transformed:
+            templates = [
+                f"Please respond to: {content}",
+                f"Consider the following: {content}",
+                f"Given the prompt: {content}",
+            ]
+            new_prose.append(rng.choice(templates))
+
+    perturbed = _reconstruct_with_prose(text, new_prose)
+    magnitude = compute_divergence(text, perturbed, "jaccard")
+    return perturbed, magnitude
+
+
+def perturb_hedge_insert(text: str, seed: int) -> tuple[str, float]:
+    """Insert semantically inert hedge words at random positions."""
+    rng = random.Random(seed)
+
+    prose_regions = _extract_prose_regions(text)
+    if not prose_regions:
+        return text, 0.0
+
+    new_prose: list[str] = []
+    for _, _, content in prose_regions:
+        words = content.split()
+        if not words:
+            new_prose.append(content)
+            continue
+
+        n_hedges = rng.randint(1, min(3, max(1, len(words) // 5)))
+        result_words = list(words)
+        for _ in range(n_hedges):
+            pos = rng.randint(0, len(result_words))
+            hedge = rng.choice(_HEDGES)
+            if 0 < pos < len(result_words):
+                hedge = hedge + ","
+            result_words.insert(pos, hedge)
+
+        new_prose.append(" ".join(result_words))
+
+    perturbed = _reconstruct_with_prose(text, new_prose)
+    magnitude = compute_divergence(text, perturbed, "jaccard")
+    return perturbed, magnitude
+
+
+def perturb_negation_probe(text: str, seed: int) -> tuple[str, float]:
+    """Negate a clause — positive control, SHOULD produce high divergence."""
+    rng = random.Random(seed)
+
+    prose_regions = _extract_prose_regions(text)
+    if not prose_regions:
+        return text, 0.0
+
+    new_prose: list[str] = []
+    negated = False
+
+    for _, _, content in prose_regions:
+        if negated:
+            new_prose.append(content)
+            continue
+
+        words = content.split()
+
+        # Find all negation targets
+        targets: list[tuple[int, str, str]] = []
+        for i, w in enumerate(words):
+            w_lower = w.lower().rstrip(".,;:!?")
+            for word_orig, word_neg in _NEGATION_PAIRS:
+                if w_lower == word_orig:
+                    targets.append((i, word_orig, word_neg))
+
+        if targets:
+            idx, _, word_neg = rng.choice(targets)
+            w = words[idx]
+            trailing = ""
+            stripped_w = w.rstrip(".,;:!?")
+            if len(w) > len(stripped_w):
+                trailing = w[len(stripped_w):]
+            words[idx] = word_neg + trailing
+            negated = True
+        elif words:
+            words.insert(0, "Do not")
+            negated = True
+
+        new_prose.append(" ".join(words))
+
+    perturbed = _reconstruct_with_prose(text, new_prose)
+    magnitude = compute_divergence(text, perturbed, "jaccard")
+    return perturbed, magnitude
+
+
+_PERTURBATION_FNS: dict[str, Callable[[str, int], tuple[str, float]]] = {
+    PerturbationKind.FORMAT_JITTER.value: perturb_format_jitter,
+    PerturbationKind.CLAUSE_REORDER.value: perturb_clause_reorder,
+    PerturbationKind.ROLE_REWRAP.value: perturb_role_rewrap,
+    PerturbationKind.HEDGE_INSERT.value: perturb_hedge_insert,
+    PerturbationKind.NEGATION_PROBE.value: perturb_negation_probe,
+}
+
+
+def generate_perturbation(text: str, kind: str, seed: int) -> tuple[str, float]:
+    """Generate a single perturbation of the given kind."""
+    fn = _PERTURBATION_FNS.get(kind)
+    if fn is None:
+        raise ValueError(f"Unknown perturbation kind: {kind}")
+    return fn(text, seed)
+
+
+# =============================================================================
+# Basin Clustering (distance-to-baseline)
+# =============================================================================
+
+
+def compute_basin_entropy(
+    baseline_output: str,
+    perturbed_outputs: list[str],
+    threshold: float = 0.3,
+    method: str = "jaccard",
+) -> float:
+    """Count distinct output basins via distance-to-baseline clustering.
+
+    1. Outputs within threshold of baseline = near-baseline basin (count 1).
+    2. Far-from-baseline outputs clustered greedily among themselves.
+    3. Returns total basin count.
+    """
+    if not perturbed_outputs:
+        return 1.0
+
+    far_from_baseline: list[str] = []
+
+    for output in perturbed_outputs:
+        d = compute_divergence(baseline_output, output, method)
+        if d > threshold:
+            far_from_baseline.append(output)
+
+    # Near-baseline basin always exists (the baseline itself)
+    basin_count = 1
+
+    # Greedy clustering of far-from-baseline outputs
+    clusters: list[str] = []
+    for output in far_from_baseline:
+        assigned = False
+        for rep in clusters:
+            if compute_divergence(rep, output, method) <= threshold:
+                assigned = True
+                break
+        if not assigned:
+            clusters.append(output)
+
+    basin_count += len(clusters)
+    return float(basin_count)
+
+
+# =============================================================================
+# Noise Floor
+# =============================================================================
+
+
+def compute_noise_floor(
+    prompt: str,
+    generate_fn: Callable[[str], str],
+    n: int = 3,
+    method: str = "jaccard",
+) -> float:
+    """Intrinsic variance: median pairwise divergence of n identical runs."""
+    if n < 2:
+        return 0.0
+
+    outputs = [generate_fn(prompt) for _ in range(n)]
+
+    pairwise: list[float] = []
+    for i in range(len(outputs)):
+        for j in range(i + 1, len(outputs)):
+            pairwise.append(compute_divergence(outputs[i], outputs[j], method))
+
+    return statistics.median(pairwise) if pairwise else 0.0
+
+
+# =============================================================================
+# Commutator Drift
+# =============================================================================
+
+
+def compute_commutator_drift(
+    prompt: str,
+    kind_a: str,
+    kind_b: str,
+    generate_fn: Callable[[str], str],
+    seed: int,
+    noise_floor: float,
+    method: str = "jaccard",
+) -> float:
+    """Non-commutativity: divergence(out_AB, out_BA) − noise_floor.
+
+    Apply A then B → generate.  Apply B then A → generate.
+    Positive result = perturbation order matters.
+    """
+    text_a, _ = generate_perturbation(prompt, kind_a, seed)
+    text_ab, _ = generate_perturbation(text_a, kind_b, seed + 1)
+    out_ab = generate_fn(text_ab)
+
+    text_b, _ = generate_perturbation(prompt, kind_b, seed)
+    text_ba, _ = generate_perturbation(text_b, kind_a, seed + 1)
+    out_ba = generate_fn(text_ba)
+
+    d = compute_divergence(out_ab, out_ba, method)
+    return max(0.0, d - noise_floor)
+
+
+# =============================================================================
+# Fingerprint Computation
+# =============================================================================
+
+
+def compute_fingerprint(
+    stripped_divergences: list[float],
+    magnitudes: list[float],
+    kinds: list[str],
+    noise_floor: float,
+    commutator_drift: float,
+    commutator_kinds: tuple[str, str],
+    baseline_output: str,
+    perturbed_outputs: list[str],
+    control_divergence: float,
+    basin_threshold: float = 0.3,
+    method: str = "jaccard",
+) -> StabilityFingerprint:
+    """Compute stability fingerprint from audit data.
+
+    Uses stripped_divergences (boilerplate removed) for stiffness/anisotropy
+    so that irrelevant preamble changes don't mask real shifts.
+    """
+    neg_kind = PerturbationKind.NEGATION_PROBE.value
+
+    excess_d = [max(0.0, d - noise_floor) for d in stripped_divergences]
+
+    # Filter to non-negation entries
+    non_neg_excess: list[float] = []
+    non_neg_magnitudes: list[float] = []
+    non_neg_kinds: list[str] = []
+    for i, kind in enumerate(kinds):
+        if kind != neg_kind:
+            non_neg_excess.append(excess_d[i])
+            non_neg_magnitudes.append(magnitudes[i])
+            non_neg_kinds.append(kind)
+
+    # stiffness = median(excess_d / magnitude), dimensionless
+    stiffness_values: list[float] = []
+    for ed, mag in zip(non_neg_excess, non_neg_magnitudes):
+        if mag > 0:
+            stiffness_values.append(ed / mag)
+    stiffness = statistics.median(stiffness_values) if stiffness_values else 0.0
+
+    # anisotropy = p90 / p10 — directional sensitivity
+    if len(non_neg_excess) >= 2:
+        sorted_ed = sorted(non_neg_excess)
+        p10_idx = max(0, int(len(sorted_ed) * 0.1))
+        p90_idx = min(len(sorted_ed) - 1, int(len(sorted_ed) * 0.9))
+        p10 = sorted_ed[p10_idx]
+        p90 = sorted_ed[p90_idx]
+        anisotropy = p90 / max(p10, 1e-6)
+    else:
+        anisotropy = 1.0
+
+    basin_entropy = compute_basin_entropy(
+        baseline_output, perturbed_outputs, basin_threshold, method
+    )
+
+    # Per-kind stiffness vector
+    kind_stiffness: dict[str, list[float]] = {}
+    for i, kind in enumerate(non_neg_kinds):
+        if non_neg_magnitudes[i] > 0:
+            kind_stiffness.setdefault(kind, []).append(
+                non_neg_excess[i] / non_neg_magnitudes[i]
+            )
+    stiffness_by_kind = {
+        k: statistics.median(v) for k, v in kind_stiffness.items()
+    }
+
+    return StabilityFingerprint(
+        stiffness=stiffness,
+        anisotropy=anisotropy,
+        basin_entropy=basin_entropy,
+        commutator_drift=commutator_drift,
+        noise_floor=noise_floor,
+        control_divergence=control_divergence,
+        stiffness_by_kind=stiffness_by_kind,
+        commutator_kinds=commutator_kinds,
+    )
+
+
+# =============================================================================
+# Auditor
+# =============================================================================
+
+# Recommendation thresholds (placeholders — calibrate from data)
+_STIFFNESS_BRITTLE = 2.0
+_ANISOTROPY_HIGH = 3.0
+_BASIN_MULTIMODAL = 3
+_STIFFNESS_STABLE = 0.5
+_ANISOTROPY_STABLE = 3.0
+_BASIN_STABLE = 1.5
+
+
+class StabilityAuditor:
+    """Runs perturbation-based conditioning audits on prompt→output mappings.
+
+    Audit-mode, not inline gate.  Runs on sampled generations (configurable rate).
+    Returns StabilityAuditResult with four-signal fingerprint.
+    """
+
+    def __init__(self, config: StabilityConfig | None = None) -> None:
+        self.config = config or StabilityConfig()
+
+    def should_audit(self, prompt: str) -> bool:
+        """Deterministic sampling: sha256(prompt) mod divisor == 0.
+
+        Clamped: sample_rate<=0 → never, >=1 → always.
+        Uses sha256, never Python hash() (non-deterministic across runs).
+        """
+        rate = self.config.sample_rate
+        if rate <= 0:
+            return False
+        if rate >= 1:
+            return True
+        divisor = max(1, round(1 / rate))
+        digest = hashlib.sha256(prompt.encode("utf-8")).digest()
+        value = int.from_bytes(digest[:8], "big")
+        return value % divisor == 0
+
+    def audit(
+        self,
+        prompt: str,
+        output: str,
+        generate_fn: Callable[[str], str],
+        receipt_system: Any | None = None,
+        envelope: dict | None = None,
+    ) -> StabilityAuditResult:
+        """Run stability audit.  Returns result, never raises."""
+        config = self.config
+        method = config.divergence_method
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        # Call budget
+        call_count = 0
+        budget = config.max_generate_calls
+        budget_exceeded = False
+
+        def counted_generate(p: str) -> str:
+            nonlocal call_count, budget_exceeded
+            call_count += 1
+            if call_count > budget:
+                budget_exceeded = True
+                return ""
+            return generate_fn(p)
+
+        # Hashes
+        prompt_hash = _content_hash(prompt.encode("utf-8"))
+        output_hash = _content_hash(output.encode("utf-8"))
+
+        envelope_data = dict(envelope) if envelope else {}
+        envelope_data["user_prompt_hash"] = prompt_hash
+        envelope_hash = _content_hash(_canonical_json(envelope_data))
+        config_hash = _content_hash(_canonical_json(config.to_dict()))
+
+        # Noise floor
+        noise_val = compute_noise_floor(
+            prompt, counted_generate, config.noise_floor_samples, method
+        )
+
+        if budget_exceeded:
+            return self._partial_result(
+                prompt_hash, output_hash, envelope_hash, config_hash,
+                timestamp, call_count, noise_val,
+            )
+
+        # Run perturbations
+        raw_divergences: list[float] = []
+        stripped_divergences: list[float] = []
+        perturbation_kinds: list[str] = []
+        magnitudes_list: list[float] = []
+        perturbed_outputs: list[str] = []
+        perturbation_records: list[dict[str, Any]] = []
+        control_divergence = 0.0
+
+        rng_seed = config.seed
+        for i in range(config.n_perturbations):
+            if budget_exceeded:
+                break
+
+            kind = config.kinds[i % len(config.kinds)]
+            this_seed = rng_seed + i
+            perturbed_text, mag = generate_perturbation(prompt, kind, this_seed)
+            perturbed_output = counted_generate(perturbed_text)
+
+            if budget_exceeded:
+                break
+
+            raw_d = compute_divergence(output, perturbed_output, method)
+            stripped_d = compute_divergence(
+                strip_boilerplate(output),
+                strip_boilerplate(perturbed_output),
+                method,
+            )
+
+            raw_divergences.append(raw_d)
+            stripped_divergences.append(stripped_d)
+            perturbation_kinds.append(kind)
+            magnitudes_list.append(mag)
+            perturbed_outputs.append(perturbed_output)
+
+            perturbation_records.append({
+                "kind": kind,
+                "seed": this_seed,
+                "perturbed_hash": _content_hash(
+                    perturbed_text.encode("utf-8")
+                ),
+                "magnitude": mag,
+            })
+
+            if kind == PerturbationKind.NEGATION_PROBE.value:
+                control_divergence = max(0.0, raw_d - noise_val)
+
+        if budget_exceeded or not raw_divergences:
+            return self._partial_result(
+                prompt_hash, output_hash, envelope_hash, config_hash,
+                timestamp, call_count, noise_val,
+            )
+
+        # Commutator drift
+        comm_drift = 0.0
+        if not budget_exceeded:
+            comm_drift = compute_commutator_drift(
+                prompt,
+                config.commutator_pair[0],
+                config.commutator_pair[1],
+                counted_generate,
+                config.seed + 1000,
+                noise_val,
+                method,
+            )
+
+        # Fingerprint
+        fingerprint = compute_fingerprint(
+            stripped_divergences,
+            magnitudes_list,
+            perturbation_kinds,
+            noise_val,
+            comm_drift,
+            config.commutator_pair,
+            output,
+            perturbed_outputs,
+            control_divergence,
+            config.basin_threshold,
+            method,
+        )
+
+        excess_d = [max(0.0, d - noise_val) for d in stripped_divergences]
+        recommendation, reason = self._classify_recommendation(fingerprint)
+
+        result = StabilityAuditResult(
+            fingerprint=fingerprint,
+            excess_divergences=excess_d,
+            raw_divergences=raw_divergences,
+            stripped_divergences=stripped_divergences,
+            perturbation_kinds=perturbation_kinds,
+            magnitudes=magnitudes_list,
+            perturbations=perturbation_records,
+            prompt_hash=prompt_hash,
+            output_hash=output_hash,
+            envelope_hash=envelope_hash,
+            timestamp=timestamp,
+            config_hash=config_hash,
+            mode="observational",
+            recommendation=recommendation,
+            recommendation_reason=reason,
+            budget_exceeded=budget_exceeded,
+            calls_used=call_count,
+        )
+
+        if receipt_system is not None:
+            try:
+                result = self._emit_receipt(result, receipt_system, config)
+            except Exception:
+                logger.warning("Failed to emit stability receipt", exc_info=True)
+
+        return result
+
+    def _partial_result(
+        self,
+        prompt_hash: str,
+        output_hash: str,
+        envelope_hash: str,
+        config_hash: str,
+        timestamp: str,
+        calls_used: int,
+        noise_floor: float,
+    ) -> StabilityAuditResult:
+        """Return partial result when budget exceeded."""
+        fp = StabilityFingerprint(
+            stiffness=0.0,
+            anisotropy=1.0,
+            basin_entropy=1.0,
+            commutator_drift=0.0,
+            noise_floor=noise_floor,
+            control_divergence=0.0,
+            stiffness_by_kind={},
+            commutator_kinds=self.config.commutator_pair,
+        )
+        return StabilityAuditResult(
+            fingerprint=fp,
+            excess_divergences=[],
+            raw_divergences=[],
+            stripped_divergences=[],
+            perturbation_kinds=[],
+            magnitudes=[],
+            perturbations=[],
+            prompt_hash=prompt_hash,
+            output_hash=output_hash,
+            envelope_hash=envelope_hash,
+            timestamp=timestamp,
+            config_hash=config_hash,
+            mode="observational",
+            recommendation="calibrating",
+            recommendation_reason="budget_exceeded: insufficient data",
+            budget_exceeded=True,
+            calls_used=calls_used,
+        )
+
+    def _classify_recommendation(
+        self, fp: StabilityFingerprint
+    ) -> tuple[str, str]:
+        """Classify stability and return (recommendation, reason).
+
+        Thresholds are calibration placeholders — calibrate from data.
+        """
+        if fp.basin_entropy >= _BASIN_MULTIMODAL:
+            return (
+                "multimodal",
+                f"basin_entropy={fp.basin_entropy:.1f} >= {_BASIN_MULTIMODAL}"
+                f" (prompt near decision boundary)",
+            )
+        if fp.stiffness > _STIFFNESS_BRITTLE:
+            return (
+                "brittle",
+                f"stiffness={fp.stiffness:.2f} > {_STIFFNESS_BRITTLE}"
+                f" and anisotropy={fp.anisotropy:.2f}",
+            )
+        if (
+            fp.stiffness < _STIFFNESS_STABLE
+            and fp.anisotropy < _ANISOTROPY_STABLE
+            and fp.basin_entropy <= _BASIN_STABLE
+        ):
+            return (
+                "stable",
+                f"stiffness={fp.stiffness:.2f} < {_STIFFNESS_STABLE},"
+                f" anisotropy={fp.anisotropy:.2f} < {_ANISOTROPY_STABLE},"
+                f" basins={fp.basin_entropy:.1f} <= {_BASIN_STABLE}",
+            )
+        return (
+            "calibrating",
+            f"stiffness={fp.stiffness:.2f},"
+            f" anisotropy={fp.anisotropy:.2f},"
+            f" basins={fp.basin_entropy:.1f}"
+            f" (no threshold triggered)",
+        )
+
+    def _emit_receipt(
+        self,
+        result: StabilityAuditResult,
+        receipt_system: Any,
+        config: StabilityConfig,
+    ) -> StabilityAuditResult:
+        """Emit an observational gate receipt (verdict always 'observe').
+
+        Uses GateReceiptSystem.emit() which handles evidence storage,
+        receipt creation, and content-addressed hashing internally.
+        """
+        from .gate_receipt import canonical_json
+
+        subject_bytes = canonical_json({
+            "prompt_hash": result.prompt_hash,
+            "output_hash": result.output_hash,
+            "envelope_hash": result.envelope_hash,
+        })
+
+        evidence_dict = {
+            "stiffness": result.fingerprint.stiffness,
+            "anisotropy": result.fingerprint.anisotropy,
+            "basin_entropy": result.fingerprint.basin_entropy,
+            "commutator_drift": result.fingerprint.commutator_drift,
+            "noise_floor": result.fingerprint.noise_floor,
+            "control_divergence": result.fingerprint.control_divergence,
+            "recommendation": result.recommendation,
+            "recommendation_reason": result.recommendation_reason,
+            "mode": result.mode,
+        }
+
+        receipt = receipt_system.emit(
+            gate="semantic_stability",
+            verdict="observe",
+            subject_kind="stability_audit",
+            subject_bytes=subject_bytes,
+            evidence_bundle=evidence_dict,
+            gate_config=config.to_dict(),
+        )
+
+        # Return result with receipt_id attached
+        return StabilityAuditResult(
+            fingerprint=result.fingerprint,
+            excess_divergences=result.excess_divergences,
+            raw_divergences=result.raw_divergences,
+            stripped_divergences=result.stripped_divergences,
+            perturbation_kinds=result.perturbation_kinds,
+            magnitudes=result.magnitudes,
+            perturbations=result.perturbations,
+            prompt_hash=result.prompt_hash,
+            output_hash=result.output_hash,
+            envelope_hash=result.envelope_hash,
+            timestamp=result.timestamp,
+            config_hash=result.config_hash,
+            mode=result.mode,
+            recommendation=result.recommendation,
+            recommendation_reason=result.recommendation_reason,
+            budget_exceeded=result.budget_exceeded,
+            calls_used=result.calls_used,
+            receipt_id=receipt.receipt_id,
+        )
+
+
+# =============================================================================
+# Store + Persistence
+# =============================================================================
+
+
+class StabilityStore:
+    """JSONL persistence for stability audit results.
+
+    Append: O_APPEND + os.write() single newline-terminated line.
+    File lock: fcntl.flock() on Linux/macOS, no-op on platforms without fcntl.
+    Tolerates partial last line on read (drops it, logs warning).
+    """
+
+    def __init__(self, gov_dir: Path) -> None:
+        self.dir = gov_dir / "stability"
+        self.log_path = self.dir / "audit_log.jsonl"
+
+    def _ensure_dir(self) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True)
+
+    def append(self, result: StabilityAuditResult) -> None:
+        """Append a single audit result as a JSONL line."""
+        self._ensure_dir()
+        line = (
+            json.dumps(result.to_dict(), separators=(",", ":"), sort_keys=True)
+            + "\n"
+        )
+        data = line.encode("utf-8")
+
+        fd = os.open(
+            str(self.log_path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644
+        )
+        try:
+            if fcntl is not None:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            try:
+                os.write(fd, data)
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+    def query(self, limit: int = 50) -> list[StabilityAuditResult]:
+        """Read audit results, newest first.  Tolerates partial/corrupted lines."""
+        if not self.log_path.exists():
+            return []
+
+        results: list[StabilityAuditResult] = []
+        try:
+            text = self.log_path.read_text(encoding="utf-8")
+        except Exception:
+            logger.warning("Failed to read stability log", exc_info=True)
+            return []
+
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                d = json.loads(line)
+                results.append(StabilityAuditResult.from_dict(d))
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                if i == len(lines) - 1:
+                    logger.debug("Dropping partial last line in stability log")
+                else:
+                    logger.warning(
+                        "Skipping corrupted line %d in stability log: %s", i, e
+                    )
+
+        results.reverse()
+        return results[:limit]
+
+    def count(self) -> int:
+        """Count audit results without deserializing.  O(lines), not O(parse)."""
+        if not self.log_path.exists():
+            return 0
+        try:
+            text = self.log_path.read_text(encoding="utf-8")
+        except Exception:
+            return 0
+        return sum(1 for line in text.split("\n") if line.strip())
+
+    def get_distribution(self, metric: str, limit: int = 10000) -> list[float]:
+        """Extract a specific metric from audit results."""
+        results = self.query(limit=limit)
+        values: list[float] = []
+        for r in results:
+            fp = r.fingerprint
+            val = getattr(fp, metric, None)
+            if isinstance(val, (int, float)):
+                values.append(float(val))
+        return values

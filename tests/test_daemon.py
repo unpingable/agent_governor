@@ -900,6 +900,16 @@ class TestAllMethodsRegistered:
         "chat.send",
         "chat.models",
         "chat.backend",
+        "correlator.status",
+        "correlator.history",
+        "correlator.kvector",
+        "scope.status",
+        "scope.check",
+        "scope.escalate",
+        "scope.grants",
+        "stability.status",
+        "stability.audit",
+        "stability.history",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -913,10 +923,10 @@ class TestAllMethodsRegistered:
         for method in self.EXPECTED_STREAMING_METHODS:
             assert method in d._streaming_handlers, f"Missing streaming handler: {method}"
 
-    def test_exactly_26_methods(self, dispatcher_and_state):
+    def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 26
+        assert total == 36
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -2227,3 +2237,164 @@ class TestAuthErrorPropagation:
         notif = rpc_notification("test.auth_notify")
         result = await d.dispatch(notif)
         assert result is None
+
+
+# =============================================================================
+# Thin integration: new RPC handlers (correlator, scope, stability)
+# =============================================================================
+
+
+class TestNewRPCHandlerIntegration:
+    """End-to-end: DaemonState → handler → response shape.
+
+    These catch wiring bugs that unit tests of individual modules miss.
+    """
+
+    @pytest.mark.asyncio
+    async def test_correlator_status(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("correlator.status")
+        resp = await d.dispatch(req)
+        result = resp["result"]
+        assert "metrics" in result
+        assert "regime" in result["metrics"]
+
+    @pytest.mark.asyncio
+    async def test_correlator_history(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("correlator.history", {"limit": 5})
+        resp = await d.dispatch(req)
+        assert isinstance(resp["result"], list)
+
+    @pytest.mark.asyncio
+    async def test_correlator_kvector(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("correlator.kvector")
+        resp = await d.dispatch(req)
+        # No observations yet → None
+        assert resp["result"] is None
+
+    @pytest.mark.asyncio
+    async def test_scope_status(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("scope.status")
+        resp = await d.dispatch(req)
+        result = resp["result"]
+        assert "contracts_count" in result
+        assert "grants_active" in result
+
+    @pytest.mark.asyncio
+    async def test_scope_check_rejects_empty_tool_id(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("scope.check", {"tool_id": "", "scope": {}})
+        resp = await d.dispatch(req)
+        result = resp["result"]
+        assert result["allowed"] is False
+        assert "required" in result["reason"]
+
+    @pytest.mark.asyncio
+    async def test_scope_check_with_tool_id(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("scope.check", {"tool_id": "test_tool", "scope": {}})
+        resp = await d.dispatch(req)
+        result = resp["result"]
+        assert "allowed" in result
+        assert "reason" in result
+
+    @pytest.mark.asyncio
+    async def test_scope_grants(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("scope.grants")
+        resp = await d.dispatch(req)
+        assert isinstance(resp["result"], list)
+
+    @pytest.mark.asyncio
+    async def test_stability_status(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("stability.status")
+        resp = await d.dispatch(req)
+        result = resp["result"]
+        assert "config" in result
+        assert "total_audits" in result
+        assert result["total_audits"] == 0
+
+    @pytest.mark.asyncio
+    async def test_stability_audit_requires_text(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("stability.audit", {"text": ""})
+        resp = await d.dispatch(req)
+        assert "error" in resp["result"]
+
+    @pytest.mark.asyncio
+    async def test_stability_audit_with_text(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("stability.audit", {"text": "Test prompt for audit."})
+        resp = await d.dispatch(req)
+        result = resp["result"]
+        assert "fingerprint" in result
+        assert result["backend"] == "none"  # identity fallback flagged
+
+    @pytest.mark.asyncio
+    async def test_stability_history(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("stability.history", {"limit": 10})
+        resp = await d.dispatch(req)
+        assert isinstance(resp["result"], list)
+
+    @pytest.mark.asyncio
+    async def test_stability_history_clamps_limit(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        # Negative limit should be clamped to 1
+        req = rpc_request("stability.history", {"limit": -5})
+        resp = await d.dispatch(req)
+        assert isinstance(resp["result"], list)
+
+    @pytest.mark.asyncio
+    async def test_stability_audit_rejects_oversized_text(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        req = rpc_request("stability.audit", {"text": "x" * 200_000})
+        resp = await d.dispatch(req)
+        assert "error" in resp["result"]
+        assert "100KB" in resp["result"]["error"]
+
+
+class TestWireRoundtrip:
+    """One test that exercises Content-Length framing → dispatch → response
+    for a new RPC method.  Catches wire-format routing bugs."""
+
+    @pytest.mark.asyncio
+    async def test_correlator_status_over_wire(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        # Frame a request as if it arrived over stdio/socket
+        req = rpc_request("correlator.status")
+        wire_bytes = frame(req)
+
+        # Parse back through the transport layer
+        reader = asyncio.StreamReader()
+        reader.feed_data(wire_bytes)
+        reader.feed_eof()
+        parsed = await read_message(reader)
+        assert parsed is not None
+
+        # Dispatch through the real handler registry
+        resp = await d.dispatch(parsed)
+        assert "result" in resp
+        assert "metrics" in resp["result"]
+        assert resp["id"] == req["id"]
+
+        # Verify framing the response doesn't corrupt it
+        writer = MagicMock()
+        written = bytearray()
+        writer.write = lambda data: written.extend(data)
+
+        async def _noop_drain():
+            pass
+
+        writer.drain = _noop_drain
+        await write_message(writer, resp)
+        # Parse the framed response back
+        resp_reader = asyncio.StreamReader()
+        resp_reader.feed_data(bytes(written))
+        resp_reader.feed_eof()
+        roundtripped = await read_message(resp_reader)
+        assert roundtripped["result"]["metrics"]["regime"] == "unknown"

@@ -132,6 +132,28 @@ governor scar record <region>         # Record a failure event
 governor scar anneal --region <r>     # Record evidence and relax stiffness
 governor scar check <region>          # Check if action is admissible
 
+# Correlator Telemetry (capture detection)
+governor correlator status            # Show regime, K-vector, active indicators (--json)
+governor correlator history           # Show diagnostic history (--limit, --json)
+governor correlator thresholds        # Show detection thresholds (--json)
+governor correlator reset --confirm   # Reset correlator state
+
+# Semantic Stability (perturbation-based conditioning audit)
+governor conditioning status         # Show config, last audit, distribution stats (--json)
+governor conditioning history        # Show audit history (--limit, --json)
+governor conditioning config         # Show configuration (--json)
+governor conditioning reset --confirm  # Reset audit history
+
+# Scope Governor (locality-first policy)
+governor scope status              # Run scope, grants, contracts (--json)
+governor scope contracts           # List tool scope contracts (--json)
+governor scope grants              # List active grants (--json, --all for expired)
+governor scope history             # Escalation history (--limit, --json)
+governor scope usages              # Grant usage log (--grant-id, --json)
+governor scope check <tool_id>     # Check if tool within scope (--axis key=value)
+governor scope set                 # Set run scope (--axis key=value, repeatable)
+governor scope reset --confirm     # Reset scope governor state
+
 # Grounding Audit Pipeline (hallucination detection)
 governor audit run <assertion_id>     # Run grounding audit on assertion
 governor audit history                # Show recent audit history

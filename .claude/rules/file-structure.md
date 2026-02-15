@@ -77,11 +77,14 @@ src/governor/
 ├── violation_resolver.py # ViolationResolver, PendingViolation, ResolutionAction, ExceptionRecord, fix/revise/proceed actions
 ├── interferometry.py  # Interferometry: parallel + serial multi-model claim comparison, alignment, signals, ledger promotion, store
 ├── code_interferometry.py # Code interferometry: risk markers (19 types), anchor conflicts, tier determination, CheckFinding bridge
+├── correlator_telemetry.py # Correlator telemetry: capture detection, K-vector (T,F,A,C), regime classification, hysteresis
 ├── session_continuity.py # Session continuity: capsule-based session management, fork/promote, checkpoints, ledger/workspace persistence
 ├── git_governance.py     # Git governance: artifact integrity, cross-index validation, tagging discipline, pre-commit provenance
 ├── context_compact.py    # Context compact: loss-aware compaction with receipts, recovery store, summarizer
 ├── perforce.py           # Perforce governance: P4Client, changelist integrity, lock semantics, immutable releases, DOI mapping
-├── daemon.py             # Governor daemon: JSON-RPC 2.0 over stdio/Unix socket, 21 RPC methods, DaemonState
+├── daemon.py             # Governor daemon: JSON-RPC 2.0 over stdio/Unix socket, 36 RPC methods, DaemonState
+├── scope.py              # Scope Governor: locality-first policy, escalation receipts, tool contracts, absence-restrictive containment
+├── semantic_stability.py # Semantic stability: perturbation-based conditioning audit, 4 signals, noise floor, basin clustering, JSONL store
 │
 # W5 Writing Modules (Deferred 2, W5):
 ├── writing_patterns.py    # 18 pattern banks for governance/tone/regime detection

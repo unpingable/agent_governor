@@ -11,6 +11,7 @@ Commands:
 """
 
 import json
+import statistics
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -16518,6 +16519,474 @@ def selfcheck(ctx: click.Context, full: bool, as_json: bool) -> None:
             click.echo("Self-check: OK")
         else:
             click.echo("Self-check: DEGRADED")
+
+
+# ---------------------------------------------------------------------------
+# Correlator Telemetry (capture detection)
+# ---------------------------------------------------------------------------
+
+
+@cli.group()
+def correlator():
+    """Correlator telemetry: capture detection for the governor."""
+    pass
+
+
+@correlator.command("status")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def correlator_status(ctx, as_json):
+    """Show correlator regime, K-vector, and active indicators."""
+    from .correlator_telemetry import CorrelatorTelemetry
+
+    gov_dir = ensure_initialized(ctx)
+    ct = CorrelatorTelemetry.load(gov_dir)
+    metrics = ct.get_metrics()
+
+    if as_json:
+        result = {"metrics": metrics}
+        diag = ct.get_latest_diagnostic()
+        if diag:
+            result["latest"] = diag.to_dict()
+        click.echo(json.dumps(result, indent=2))
+        return
+
+    click.echo(f"Regime: {metrics['regime'].upper()}")
+    click.echo(f"Observations: {metrics['total_observations']}")
+    click.echo(f"  Leverage: {metrics['leverage_count']}")
+    click.echo(f"  Shear: {metrics['shear_count']}")
+    click.echo(f"  Capture: {metrics['capture_count']}")
+
+    diag = ct.get_latest_diagnostic()
+    if diag:
+        indicators = diag.indicators_triggered
+        if indicators:
+            binding = "binding" if diag.gate_met else "non-binding"
+            click.echo(f"Active indicators ({binding}):")
+            for ind in indicators:
+                click.echo(f"  - {ind.value}")
+        if diag.capacity_degraded:
+            click.echo("  [DEGRADED_CAPACITY]")
+        kv = diag.k_vector
+        click.echo(f"K-vector: T={kv.throughput:.1f} A={kv.authority.value} C={kv.cost_budget:.2f}")
+
+
+@correlator.command("history")
+@click.option("--limit", default=20, help="Number of entries to show")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def correlator_history(ctx, limit, as_json):
+    """Show diagnostic history (newest first)."""
+    from .correlator_telemetry import CorrelatorTelemetry
+
+    gov_dir = ensure_initialized(ctx)
+    ct = CorrelatorTelemetry.load(gov_dir)
+    history = ct.get_history(limit=limit)
+
+    if as_json:
+        click.echo(json.dumps([d.to_dict() for d in history], indent=2))
+        return
+
+    if not history:
+        click.echo("No observations recorded.")
+        return
+
+    for diag in history:
+        indicators = ", ".join(i.value for i in diag.indicators_triggered) or "none"
+        binding = "" if diag.gate_met else " (non-binding)"
+        click.echo(
+            f"  [{diag.window_step}] {diag.regime.value.upper():8s} "
+            f"indicators=[{indicators}]{binding} "
+            f"conf={diag.confidence:.2f}"
+        )
+
+
+@correlator.command("thresholds")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def correlator_thresholds(ctx, as_json):
+    """Show capture detection thresholds."""
+    from .correlator_telemetry import CorrelatorTelemetry
+
+    gov_dir = ensure_initialized(ctx)
+    ct = CorrelatorTelemetry.load(gov_dir)
+    thresholds = ct.thresholds.to_dict()
+
+    if as_json:
+        click.echo(json.dumps(thresholds, indent=2))
+        return
+
+    for key, value in thresholds.items():
+        click.echo(f"  {key}: {value}")
+
+
+@correlator.command("reset")
+@click.option("--confirm", is_flag=True, required=True, help="Confirm reset")
+@click.pass_context
+def correlator_reset(ctx, confirm):
+    """Reset correlator state."""
+    from .correlator_telemetry import CorrelatorTelemetry
+
+    gov_dir = ensure_initialized(ctx)
+    ct = CorrelatorTelemetry()
+    ct.save(gov_dir)
+    click.echo("Correlator state reset.")
+
+
+# ---------------------------------------------------------------------------
+# Semantic Stability (perturbation-based conditioning audit)
+# ---------------------------------------------------------------------------
+
+
+@cli.group()
+def conditioning():
+    """Semantic stability — perturbation-based conditioning audit."""
+    pass
+
+
+@conditioning.command("status")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def conditioning_status(ctx, as_json):
+    """Show config, last audit, distribution stats."""
+    from .semantic_stability import StabilityAuditor, StabilityStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = StabilityStore(gov_dir)
+    auditor = StabilityAuditor()
+
+    results = store.query(limit=1)
+    dist_stiffness = store.get_distribution("stiffness")
+
+    def _p90(values: list[float]) -> float | None:
+        if len(values) < 2:
+            return values[0] if values else None
+        return statistics.quantiles(values, n=10, method="inclusive")[8]
+
+    if as_json:
+        data = {
+            "config": auditor.config.to_dict(),
+            "total_audits": store.count(),
+            "latest": results[0].to_dict() if results else None,
+            "stiffness_distribution": {
+                "count": len(dist_stiffness),
+                "median": statistics.median(dist_stiffness) if dist_stiffness else None,
+                "p90": _p90(dist_stiffness),
+            },
+        }
+        click.echo(json.dumps(data, indent=2))
+        return
+
+    click.echo("Semantic Stability — Conditioning Audit")
+    click.echo(f"  Method: {auditor.config.divergence_method}")
+    click.echo(f"  Sample rate: {auditor.config.sample_rate}")
+    click.echo(f"  Max calls: {auditor.config.max_generate_calls}")
+
+    total = store.count()
+    click.echo(f"  Total audits: {total}")
+
+    if results:
+        r = results[0]
+        click.echo(f"  Last audit: {r.recommendation} ({r.recommendation_reason})")
+        fp = r.fingerprint
+        click.echo(f"    stiffness={fp.stiffness:.2f} anisotropy={fp.anisotropy:.2f} "
+                    f"basins={fp.basin_entropy:.0f} comm_drift={fp.commutator_drift:.2f}")
+
+
+@conditioning.command("history")
+@click.option("--limit", default=20, help="Number of entries")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def conditioning_history(ctx, limit, as_json):
+    """Show audit history (newest first)."""
+    from .semantic_stability import StabilityStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = StabilityStore(gov_dir)
+    results = store.query(limit=limit)
+
+    if as_json:
+        click.echo(json.dumps([r.to_dict() for r in results], indent=2))
+        return
+
+    if not results:
+        click.echo("No audits recorded.")
+        return
+
+    for r in results:
+        fp = r.fingerprint
+        click.echo(
+            f"  [{r.timestamp[:19]}] {r.recommendation:12s} "
+            f"stiffness={fp.stiffness:.2f} basins={fp.basin_entropy:.0f} "
+            f"noise={fp.noise_floor:.3f}"
+        )
+
+
+@conditioning.command("config")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def conditioning_config(ctx, as_json):
+    """Show current configuration."""
+    from .semantic_stability import StabilityConfig
+
+    config = StabilityConfig()
+    d = config.to_dict()
+
+    if as_json:
+        click.echo(json.dumps(d, indent=2))
+        return
+
+    for key, value in d.items():
+        click.echo(f"  {key}: {value}")
+
+
+@conditioning.command("reset")
+@click.option("--confirm", is_flag=True, required=True, help="Confirm reset")
+@click.pass_context
+def conditioning_reset(ctx, confirm):
+    """Reset audit history."""
+    from .semantic_stability import StabilityStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = StabilityStore(gov_dir)
+    if store.log_path.exists():
+        store.log_path.unlink()
+    click.echo("Conditioning audit history reset.")
+
+
+# ---------------------------------------------------------------------------
+# Scope Governor (locality-first policy)
+# ---------------------------------------------------------------------------
+
+
+@cli.group()
+def scope():
+    """Scope governor — locality-first policy with escalation receipts."""
+    pass
+
+
+@scope.command("status")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def scope_status(ctx, as_json):
+    """Show run scope, grants, contracts."""
+    from .scope import ScopeGovernor
+
+    gov_dir = ensure_initialized(ctx)
+    sg = ScopeGovernor.load(gov_dir)
+    metrics = sg.get_metrics()
+
+    if as_json:
+        click.echo(json.dumps(metrics, indent=2))
+        return
+
+    run_scope = sg.get_run_scope()
+    if run_scope:
+        click.echo(f"Run scope: {run_scope.to_dict()}")
+        click.echo(f"  Level: {metrics['run_scope_level']}")
+    else:
+        click.echo("Run scope: (not set)")
+
+    click.echo(f"Contracts: {metrics['contracts_count']}")
+    click.echo(f"Grants: {metrics['grants_active']} active, "
+               f"{metrics['grants_total']} total")
+    click.echo(f"Escalations: {metrics['escalations_allowed']} allowed, "
+               f"{metrics['escalations_denied']} denied, "
+               f"{metrics['escalations_readonly']} readonly")
+    click.echo(f"Usages: {metrics['usages_total']}")
+
+
+@scope.command("contracts")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def scope_contracts(ctx, as_json):
+    """List tool scope contracts."""
+    from .scope import ScopeGovernor
+
+    gov_dir = ensure_initialized(ctx)
+    sg = ScopeGovernor.load(gov_dir)
+    contracts = sg.get_contracts()
+
+    if as_json:
+        click.echo(json.dumps([c.to_dict() for c in contracts], indent=2))
+        return
+
+    if not contracts:
+        click.echo("No tool contracts registered.")
+        return
+
+    click.echo(f"\nTOOL CONTRACTS ({len(contracts)}):")
+    click.echo("-" * 60)
+    for c in contracts:
+        click.echo(f"  {c.tool_id} [{c.mutability.value}]")
+        click.echo(f"    required: {c.required_axes}")
+        click.echo(f"    allowed:  {c.allowed_axes}")
+        if c.description:
+            click.echo(f"    desc: {c.description}")
+        click.echo()
+
+
+@scope.command("grants")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.option("--all", "show_all", is_flag=True, help="Include expired/revoked")
+@click.pass_context
+def scope_grants(ctx, as_json, show_all):
+    """List scope grants."""
+    from .scope import ScopeGovernor
+
+    gov_dir = ensure_initialized(ctx)
+    sg = ScopeGovernor.load(gov_dir)
+    grants = sg.get_all_grants() if show_all else sg.get_active_grants()
+
+    if as_json:
+        click.echo(json.dumps([g.to_dict() for g in grants], indent=2))
+        return
+
+    label = "ALL" if show_all else "ACTIVE"
+    if not grants:
+        click.echo(f"No {label.lower()} grants.")
+        return
+
+    click.echo(f"\n{label} GRANTS ({len(grants)}):")
+    click.echo("-" * 60)
+    for g in grants:
+        status = "ACTIVE" if g.is_active() else ("EXPIRED" if g.is_expired() else "REVOKED")
+        click.echo(f"  {g.grant_id[:12]}... [{status}] {g.access_mode.value}")
+        click.echo(f"    scope: {g.scope.to_dict()}")
+        click.echo(f"    axis widened: {g.axis_widened}")
+        click.echo(f"    uses: {g.use_count}  expires: {g.expires_at}")
+        click.echo()
+
+
+@scope.command("history")
+@click.option("--limit", "-n", type=int, default=20, help="Max entries")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def scope_history(ctx, limit, as_json):
+    """Show escalation history."""
+    from .scope import ScopeGovernor
+
+    gov_dir = ensure_initialized(ctx)
+    sg = ScopeGovernor.load(gov_dir)
+    history = sg.get_escalation_history()[-limit:]
+
+    if as_json:
+        click.echo(json.dumps([h.to_dict() for h in history], indent=2))
+        return
+
+    if not history:
+        click.echo("No escalation history.")
+        return
+
+    click.echo(f"\nESCALATION HISTORY (last {len(history)}):")
+    click.echo("-" * 60)
+    for h in history:
+        verdict_str = h.verdict.value.upper()
+        click.echo(f"  [{verdict_str}] axis={h.axis_widened or '?'}")
+        click.echo(f"    reason: {h.reason[:80]}")
+        if h.receipt_id:
+            click.echo(f"    receipt: {h.receipt_id[:16]}...")
+        click.echo()
+
+
+@scope.command("usages")
+@click.option("--grant-id", default=None, help="Filter by grant ID")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def scope_usages(ctx, grant_id, as_json):
+    """Show grant usage log."""
+    from .scope import ScopeGovernor
+
+    gov_dir = ensure_initialized(ctx)
+    sg = ScopeGovernor.load(gov_dir)
+    usages = sg.get_grant_usages(grant_id)
+
+    if as_json:
+        click.echo(json.dumps([u.to_dict() for u in usages], indent=2))
+        return
+
+    if not usages:
+        click.echo("No grant usages recorded.")
+        return
+
+    click.echo(f"\nGRANT USAGES ({len(usages)}):")
+    click.echo("-" * 60)
+    for u in usages:
+        click.echo(f"  {u.used_at} grant={u.grant_id[:12]}... "
+                   f"tool={u.tool_id} [{u.access_mode}]")
+
+
+@scope.command("check")
+@click.argument("tool_id")
+@click.option("--axis", "-a", multiple=True, help="Scope axes (key=value)")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def scope_check(ctx, tool_id, axis, as_json):
+    """Check if a tool call is within scope."""
+    from .scope import ScopeGovernor, Scope
+
+    gov_dir = ensure_initialized(ctx)
+    sg = ScopeGovernor.load(gov_dir)
+
+    scope_dict = {}
+    for a in axis:
+        if "=" not in a:
+            click.echo(f"Error: axis must be key=value, got: {a}", err=True)
+            ctx.exit(1)
+        k, v = a.split("=", 1)
+        scope_dict[k] = v
+
+    requested = Scope.from_dict(scope_dict)
+    ok, err = sg.check_tool(tool_id, requested)
+
+    if as_json:
+        click.echo(json.dumps({"allowed": ok, "reason": err}, indent=2))
+        ctx.exit(0 if ok else 1)
+
+    if ok:
+        click.echo(f"ALLOWED: tool '{tool_id}' within scope")
+    else:
+        click.echo(f"DENIED: {err}")
+    ctx.exit(0 if ok else 1)
+
+
+@scope.command("set")
+@click.option("--axis", "-a", multiple=True, required=True,
+              help="Scope axes (key=value, repeatable)")
+@click.pass_context
+def scope_set(ctx, axis):
+    """Set the run scope."""
+    from .scope import ScopeGovernor, Scope
+
+    gov_dir = ensure_initialized(ctx)
+    sg = ScopeGovernor.load(gov_dir)
+
+    scope_dict = {}
+    for a in axis:
+        if "=" not in a:
+            click.echo(f"Error: axis must be key=value, got: {a}", err=True)
+            ctx.exit(1)
+        k, v = a.split("=", 1)
+        scope_dict[k] = v
+
+    sg.set_run_scope(Scope.from_dict(scope_dict))
+    sg.save(gov_dir)
+    click.echo(f"Run scope set: {scope_dict}")
+
+
+@scope.command("reset")
+@click.option("--confirm", is_flag=True, required=True,
+              help="Confirm reset")
+@click.pass_context
+def scope_reset(ctx, confirm):
+    """Reset scope governor state."""
+    from .scope import ScopeGovernor
+
+    gov_dir = ensure_initialized(ctx)
+    sg = ScopeGovernor.load(gov_dir)
+    sg.reset()
+    sg.save(gov_dir)
+    click.echo("Scope governor state reset.")
 
 
 # ---------------------------------------------------------------------------

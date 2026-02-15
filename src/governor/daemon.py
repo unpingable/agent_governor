@@ -321,6 +321,10 @@ class DaemonState:
         self._backend_type: str = "none"
         self._backend_kwargs: dict[str, Any] = {}
         self._context_manager = None
+        self._correlator_telemetry = None
+        self._scope_governor = None
+        self._stability_store = None
+        self._stability_auditor = None
 
     @property
     def session_store(self):
@@ -370,6 +374,36 @@ class DaemonState:
             from .context_manager import GovernorContextManager
             self._context_manager = GovernorContextManager(self.governor_dir)
         return self._context_manager
+
+    @property
+    def correlator_telemetry(self):
+        if self._correlator_telemetry is None:
+            from .correlator_telemetry import CorrelatorTelemetry
+            self._correlator_telemetry = CorrelatorTelemetry.load(
+                self.governor_dir
+            )
+        return self._correlator_telemetry
+
+    @property
+    def scope_governor(self):
+        if self._scope_governor is None:
+            from .scope import ScopeGovernor
+            self._scope_governor = ScopeGovernor.load(self.governor_dir)
+        return self._scope_governor
+
+    @property
+    def stability_store(self):
+        if self._stability_store is None:
+            from .semantic_stability import StabilityStore
+            self._stability_store = StabilityStore(self.governor_dir)
+        return self._stability_store
+
+    @property
+    def stability_auditor(self):
+        if self._stability_auditor is None:
+            from .semantic_stability import StabilityAuditor
+            self._stability_auditor = StabilityAuditor()
+        return self._stability_auditor
 
     @property
     def backend_type(self) -> str:
@@ -447,7 +481,7 @@ class DaemonState:
 
 
 # =============================================================================
-# Handler registration — 26 RPC methods
+# Handler registration — 36 RPC methods
 # =============================================================================
 
 
@@ -1119,6 +1153,33 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("scars.list", scars_list)
     dispatcher.register("scars.history", scars_history)
 
+    # --- Correlator ---
+
+    async def correlator_status(params: dict) -> dict:
+        ct = state.correlator_telemetry
+        metrics = ct.get_metrics()
+        result: dict[str, Any] = {"metrics": metrics}
+        diag = ct.get_latest_diagnostic()
+        if diag:
+            result["latest"] = diag.to_dict()
+        return result
+
+    async def correlator_history(params: dict) -> list:
+        limit = min(max(int(params.get("limit", 50)), 1), 1000)
+        ct = state.correlator_telemetry
+        return [d.to_dict() for d in ct.get_history(limit=limit)]
+
+    async def correlator_kvector(params: dict) -> dict | None:
+        ct = state.correlator_telemetry
+        kv = ct.get_latest_k_vector()
+        if kv is None:
+            return None
+        return kv.to_dict()
+
+    dispatcher.register("correlator.status", correlator_status)
+    dispatcher.register("correlator.history", correlator_history)
+    dispatcher.register("correlator.kvector", correlator_kvector)
+
     dispatcher.register("commit.pending", commit_pending)
     dispatcher.register("commit.fix", commit_fix)
     dispatcher.register("commit.revise", commit_revise)
@@ -1138,6 +1199,86 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         }
 
     dispatcher.register("governor.selfcheck", governor_selfcheck)
+
+    # --- Scope ---
+
+    async def scope_status(params: dict) -> dict:
+        sg = state.scope_governor
+        return sg.get_metrics()
+
+    async def scope_check(params: dict) -> dict:
+        from .scope import Scope
+        sg = state.scope_governor
+        tool_id = params.get("tool_id", "")
+        if not tool_id:
+            return {"allowed": False, "reason": "tool_id is required"}
+        scope_dict = params.get("scope", {})
+        requested = Scope.from_dict(scope_dict)
+        ok, err = sg.check_tool(tool_id, requested)
+        return {"allowed": ok, "reason": err}
+
+    async def scope_escalate(params: dict) -> dict:
+        from .scope import EscalationRequest
+        sg = state.scope_governor
+        req = EscalationRequest.from_dict(params.get("request", params))
+        result = sg.escalate(req, receipt_system=state.receipt_system)
+        sg.save(state.governor_dir)
+        return result.to_dict()
+
+    async def scope_grants(params: dict) -> list:
+        sg = state.scope_governor
+        show_all = params.get("all", False)
+        grants = sg.get_all_grants() if show_all else sg.get_active_grants()
+        return [g.to_dict() for g in grants]
+
+    dispatcher.register("scope.status", scope_status)
+    dispatcher.register("scope.check", scope_check)
+    dispatcher.register("scope.escalate", scope_escalate)
+    dispatcher.register("scope.grants", scope_grants)
+
+    # --- Semantic Stability ---
+
+    async def stability_status(params: dict) -> dict:
+        store = state.stability_store
+        auditor = state.stability_auditor
+        results = store.query(limit=1)
+        return {
+            "config": auditor.config.to_dict(),
+            "total_audits": store.count(),
+            "latest": results[0].to_dict() if results else None,
+        }
+
+    async def stability_audit(params: dict) -> dict:
+        from .semantic_stability import StabilityAuditor, StabilityConfig
+        text = params.get("text", "")
+        if not text:
+            return {"error": "text parameter required"}
+        if len(text) > 100_000:
+            return {"error": "text exceeds 100KB limit"}
+        config_dict = params.get("config", {})
+        config = StabilityConfig.from_dict(config_dict) if config_dict else StabilityConfig()
+        config.sample_rate = 1.0  # Force audit when explicitly requested
+        auditor = StabilityAuditor(config)
+
+        # Identity function: produces a baseline audit (zero divergence).
+        # A real audit requires a backend generate function.
+        def echo_fn(p: str) -> str:
+            return p
+
+        result = auditor.audit(text, text, echo_fn, receipt_system=state.receipt_system)
+        result_dict = result.to_dict()
+        result_dict["backend"] = "none"  # Flag: identity fallback, not real audit
+        state.stability_store.append(result)
+        return result_dict
+
+    async def stability_history(params: dict) -> list:
+        limit = min(max(int(params.get("limit", 50)), 1), 1000)
+        store = state.stability_store
+        return [r.to_dict() for r in store.query(limit=limit)]
+
+    dispatcher.register("stability.status", stability_status)
+    dispatcher.register("stability.audit", stability_audit)
+    dispatcher.register("stability.history", stability_history)
 
     dispatcher.register("chat.send", chat_send)
     dispatcher.register_streaming("chat.stream", chat_stream)

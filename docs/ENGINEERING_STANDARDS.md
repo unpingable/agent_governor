@@ -106,7 +106,17 @@ def from_dict(cls, d: dict[str, Any]) -> MyModule:
 These rules are mechanically enforced by `tests/test_standards.py`:
 
 - **Schema version tripwire**: Any module with a `_SCHEMA_VERSION` constant must be registered in the test. The test verifies `to_dict()` emits it and `from_dict()` rejects future versions.
-- **Authority default guard**: Kernel modules are scanned for `.get()` calls on authority-bearing fields (`verdict`, `allowed`, `severity`, `required`, `forbidden`, `constraint_class`, `risk_level`). Unreviewed defaults fail the test; reviewed-safe usages go in an explicit allowlist with dates.
+- **Authority default guard**: Kernel modules are scanned for `.get()` calls on authority-bearing fields (`verdict`, `allowed`, `severity`, `required`, `forbidden`, `constraint_class`, `risk_level`). Unreviewed defaults fail the test; reviewed-safe usages go in an explicit allowlist with expiry dates. Expired allowlist entries fail until re-reviewed.
+- **Doc-test sync**: The test verifies this doc mentions every registered versioned type and has a Known Gaps section.
+
+### Versioned Types (enforced)
+
+| Module | Constant | Class |
+|--------|----------|-------|
+| `gate_receipt` | `RECEIPT_SCHEMA_VERSION` | `GateReceipt` |
+| `correlator_telemetry` | `CORRELATOR_SCHEMA_VERSION` | `CorrelatorTelemetry` |
+| `scope` | `SCOPE_SCHEMA_VERSION` | `ScopeGovernor` |
+| `semantic_stability` | `STABILITY_SCHEMA_VERSION` | `StabilityAuditResult` |
 
 ### Known Gaps
 

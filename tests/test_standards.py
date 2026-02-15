@@ -4,15 +4,17 @@ These tests enforce invariants from docs/ENGINEERING_STANDARDS.md mechanically.
 If a test here fails, either the code or the standard needs updating — not
 both silently.
 
-Two sections:
+Three sections:
   1. Schema version discipline: every persisted type emits and validates schema_version.
   2. Authority default guard: no .get() defaults on authority-bearing fields in kernel modules.
+  3. Doc-test sync: the standards doc and test registry stay in agreement.
 """
 
 from __future__ import annotations
 
 import importlib
 import re
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -142,21 +144,30 @@ KERNEL_MODULES = [
     "violation_resolver.py",
 ]
 
-# Known-safe allowlist: (filename, line_content_substring) pairs.
+# Known-safe allowlist: (filename, line_substring, reason, review_until).
 # Each entry is a .get() usage that has been reviewed and confirmed safe.
-AUTHORITY_GET_ALLOWLIST = [
+# review_until: the allowlist entry expires on this date and must be re-reviewed.
+# Set to None for permanent exceptions (truly cannot affect a gate verdict).
+AUTHORITY_GET_ALLOWLIST: list[tuple[str, str, str, date | None]] = [
     # gate_receipt: schema_version default is intentional (legacy compat)
-    ("gate_receipt.py", '"schema_version", 1'),
+    ("gate_receipt.py", '"schema_version", 1',
+     "legacy compat default", None),
     # gate_receipt: these are metadata, not authority
-    ("gate_receipt.py", '"principal_id", "local"'),
-    ("gate_receipt.py", '"tenant_id", "default"'),
-    ("gate_receipt.py", '"auth_method", "none"'),
+    ("gate_receipt.py", '"principal_id", "local"',
+     "metadata, not authority", None),
+    ("gate_receipt.py", '"tenant_id", "default"',
+     "metadata, not authority", None),
+    ("gate_receipt.py", '"auth_method", "none"',
+     "metadata, not authority", None),
     # daemon: verdict here is a query filter (None = no filter), not a gate default
-    ("daemon.py", 'verdict = params.get("verdict")'),
-    # continuity: legacy Anchor deserialization — defaults to least-restrictive values
-    # (preference, not invariant; correct, not critical). Reviewed 2026-02-15.
-    ("continuity.py", '"severity", "correct"'),
-    ("continuity.py", '"constraint_class", "preference"'),
+    ("daemon.py", 'verdict = params.get("verdict")',
+     "query filter, not gate default", None),
+    # continuity: legacy Anchor deserialization — defaults to least-restrictive values.
+    # These should be revisited when Anchor gets schema_version (backlog item).
+    ("continuity.py", '"severity", "correct"',
+     "legacy default, least-restrictive", date(2026, 8, 15)),
+    ("continuity.py", '"constraint_class", "preference"',
+     "legacy default, least-restrictive", date(2026, 8, 15)),
 ]
 
 
@@ -181,7 +192,7 @@ class TestAuthorityDefaultGuard:
                     # Check allowlist
                     if any(
                         module_name == al_file and al_substr in line
-                        for al_file, al_substr in AUTHORITY_GET_ALLOWLIST
+                        for al_file, al_substr, _reason, _expiry in AUTHORITY_GET_ALLOWLIST
                     ):
                         continue
                     violations.append(f"{module_name}:{i}: {line.strip()}")
@@ -190,4 +201,54 @@ class TestAuthorityDefaultGuard:
             f"Found .get() defaults on authority-bearing fields in kernel modules. "
             f"Either make these explicit (no default) or add to AUTHORITY_GET_ALLOWLIST "
             f"in test_standards.py after review:\n" + "\n".join(violations)
+        )
+
+    def test_allowlist_not_expired(self):
+        """Allowlist entries with review_until must be re-reviewed before expiry."""
+        today = date.today()
+        expired = []
+        for filename, substr, reason, review_until in AUTHORITY_GET_ALLOWLIST:
+            if review_until is not None and today > review_until:
+                expired.append(
+                    f"{filename}: {substr!r} — {reason} "
+                    f"(expired {review_until.isoformat()})"
+                )
+        assert not expired, (
+            f"Allowlist entries have expired and need re-review. Either fix the "
+            f"underlying code, extend the date, or promote to permanent (None):\n"
+            + "\n".join(expired)
+        )
+
+
+# =============================================================================
+# 3. Doc ↔ Test Sync
+# =============================================================================
+
+
+class TestDocTestSync:
+    """The standards doc and test registry must stay in agreement."""
+
+    def test_versioned_types_listed_in_doc(self):
+        """Every type in SCHEMA_VERSIONED_TYPES must appear in ENGINEERING_STANDARDS.md."""
+        doc_path = Path(__file__).parent.parent / "docs" / "ENGINEERING_STANDARDS.md"
+        doc_text = doc_path.read_text(encoding="utf-8")
+
+        missing = []
+        for entry in SCHEMA_VERSIONED_TYPES:
+            # Check that the constant name appears in the doc
+            if entry["constant"] not in doc_text and entry["class_name"] not in doc_text:
+                missing.append(f"{entry['class_name']} ({entry['constant']})")
+
+        assert not missing, (
+            f"Schema-versioned types registered in test_standards.py but not mentioned "
+            f"in docs/ENGINEERING_STANDARDS.md: {missing}"
+        )
+
+    def test_doc_known_gaps_section_exists(self):
+        """The doc must have a Known Gaps section listing unversioned persisted types."""
+        doc_path = Path(__file__).parent.parent / "docs" / "ENGINEERING_STANDARDS.md"
+        doc_text = doc_path.read_text(encoding="utf-8")
+        assert "Known Gaps" in doc_text, (
+            "docs/ENGINEERING_STANDARDS.md must have a 'Known Gaps' section "
+            "listing persisted types without schema_version"
         )

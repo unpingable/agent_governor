@@ -1488,6 +1488,33 @@ class TestCorrelatorState:
         assert ct.window_step == 0
         assert ct.thresholds.throughput_min == 5.0
 
+    def test_to_dict_includes_schema_version(self):
+        from governor.correlator_telemetry import CORRELATOR_SCHEMA_VERSION
+        ct = CorrelatorTelemetry()
+        d = ct.to_dict()
+        assert d["schema_version"] == CORRELATOR_SCHEMA_VERSION
+
+    def test_from_dict_accepts_legacy_no_version(self):
+        """Legacy blobs (no schema_version key) treated as v0, loaded OK."""
+        d = {"thresholds": {}, "max_history": 50, "history": [], "window_step": 3}
+        ct = CorrelatorTelemetry.from_dict(d)
+        assert ct.window_step == 3
+
+    def test_from_dict_rejects_future_version(self):
+        from governor.correlator_telemetry import CORRELATOR_SCHEMA_VERSION
+        d = {"schema_version": CORRELATOR_SCHEMA_VERSION + 1}
+        with pytest.raises(ValueError, match="newer than supported"):
+            CorrelatorTelemetry.from_dict(d)
+
+    def test_save_load_roundtrip_preserves_version(self, tmp_path):
+        ct = CorrelatorTelemetry()
+        ct.observe(exposure=5)
+        ct.save(tmp_path)
+        data = json.loads((tmp_path / "correlator.json").read_text())
+        assert "schema_version" in data
+        ct2 = CorrelatorTelemetry.load(tmp_path)
+        assert ct2.window_step == 1
+
 
 # =============================================================================
 # Scenario Tests (multi-indicator, end-to-end)

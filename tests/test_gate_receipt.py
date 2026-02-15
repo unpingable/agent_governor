@@ -616,3 +616,51 @@ class TestEvidenceGateIntegration:
         receipts = system.query()
         assert len(receipts) == 1
         assert receipts[0].verdict == "pass"
+
+
+# =============================================================================
+# Schema Version Enforcement
+# =============================================================================
+
+
+class TestSchemaVersionEnforcement:
+    """from_dict must reject future versions and handle legacy gracefully."""
+
+    def _make_receipt_dict(self, **overrides: object) -> dict:
+        base = {
+            "receipt_id": "abc123",
+            "schema_version": RECEIPT_SCHEMA_VERSION,
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "gate": "evidence_gate",
+            "verdict": "pass",
+            "subject_hash": "a" * 64,
+            "evidence_hash": "b" * 64,
+            "policy_hash": "c" * 64,
+        }
+        base.update(overrides)
+        return base
+
+    def test_legacy_missing_schema_version(self):
+        """Missing schema_version → defaults to 1, loads fine."""
+        d = self._make_receipt_dict()
+        del d["schema_version"]
+        r = GateReceipt.from_dict(d)
+        assert r.schema_version == 1
+
+    def test_future_schema_version_rejected(self):
+        """schema_version > current → ValueError."""
+        d = self._make_receipt_dict(schema_version=RECEIPT_SCHEMA_VERSION + 1)
+        with pytest.raises(ValueError, match="newer than supported"):
+            GateReceipt.from_dict(d)
+
+    def test_current_version_accepted(self):
+        """Current schema_version loads without error."""
+        d = self._make_receipt_dict(schema_version=RECEIPT_SCHEMA_VERSION)
+        r = GateReceipt.from_dict(d)
+        assert r.schema_version == RECEIPT_SCHEMA_VERSION
+
+    def test_old_version_accepted(self):
+        """schema_version < current loads fine (forward compat)."""
+        d = self._make_receipt_dict(schema_version=1)
+        r = GateReceipt.from_dict(d)
+        assert r.schema_version == 1

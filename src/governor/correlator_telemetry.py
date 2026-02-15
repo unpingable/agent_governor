@@ -33,6 +33,7 @@ Architecture:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 from dataclasses import dataclass, field
@@ -40,6 +41,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+CORRELATOR_SCHEMA_VERSION = 1
 
 
 # =============================================================================
@@ -1046,6 +1051,7 @@ class CorrelatorTelemetry:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "schema_version": CORRELATOR_SCHEMA_VERSION,
             "thresholds": self.thresholds.to_dict(),
             "max_history": self.max_history,
             "history": [d.to_dict() for d in self._history],
@@ -1055,6 +1061,14 @@ class CorrelatorTelemetry:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> CorrelatorTelemetry:
+        v = d.get("schema_version", 0)  # Missing → legacy v0
+        if v > CORRELATOR_SCHEMA_VERSION:
+            raise ValueError(
+                f"correlator.json schema version {v} is newer than supported "
+                f"({CORRELATOR_SCHEMA_VERSION}). Upgrade governor."
+            )
+        if v < CORRELATOR_SCHEMA_VERSION:
+            logger.debug("Migrating correlator state from v%d to v%d", v, CORRELATOR_SCHEMA_VERSION)
         thresholds = CaptureThresholds.from_dict(d.get("thresholds", {}))
         ct = cls(
             thresholds=thresholds,

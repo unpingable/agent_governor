@@ -147,9 +147,15 @@ class GateReceipt:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> GateReceipt:
+        v = data.get("schema_version", 1)  # Missing → legacy v1
+        if v > RECEIPT_SCHEMA_VERSION:
+            raise ValueError(
+                f"Receipt schema version {v} is newer than supported "
+                f"({RECEIPT_SCHEMA_VERSION}). Upgrade governor."
+            )
         return cls(
             receipt_id=data["receipt_id"],
-            schema_version=data["schema_version"],
+            schema_version=v,
             timestamp=data["timestamp"],
             gate=data["gate"],
             verdict=data["verdict"],

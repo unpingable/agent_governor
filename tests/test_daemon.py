@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from governor.daemon import (
+    AUTH_ERROR,
     GOVERNOR_ERROR,
     INVALID_PARAMS,
     INVALID_REQUEST,
@@ -2157,3 +2158,72 @@ class TestDaemonStateTrustPrincipal:
         with patch.dict(os.environ, {"TRUST_PRINCIPAL_FROM_CLIENT": "0"}):
             s = DaemonState(tmp_gov_dir)
             assert s.trust_principal_from_client is False
+
+
+# =============================================================================
+# Auth error propagation — ClaudeCodeAuthError → AUTH_ERROR code
+# =============================================================================
+
+
+class TestAuthErrorPropagation:
+    """Verify that ClaudeCodeAuthError is surfaced with AUTH_ERROR code."""
+
+    @pytest.mark.asyncio
+    async def test_claude_auth_error_code_in_response(self, tmp_gov_dir):
+        """Handler raising ClaudeCodeAuthError produces AUTH_ERROR code."""
+        from governor.chat_bridge import ClaudeCodeAuthError
+
+        d = Dispatcher()
+
+        async def _handler(params):
+            raise ClaudeCodeAuthError("not logged in")
+
+        d.register("test.auth_fail", _handler)
+        resp = await roundtrip(d, "test.auth_fail")
+        assert resp["error"]["code"] == AUTH_ERROR
+        assert "not logged in" in resp["error"]["message"]
+        assert "claude /login" in resp["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_codex_auth_error_code_in_response(self, tmp_gov_dir):
+        """Handler raising CodexAuthError also produces AUTH_ERROR code."""
+        from governor.chat_bridge import CodexAuthError
+
+        d = Dispatcher()
+
+        async def _handler(params):
+            raise CodexAuthError("unauthorized")
+
+        d.register("test.codex_auth_fail", _handler)
+        resp = await roundtrip(d, "test.codex_auth_fail")
+        assert resp["error"]["code"] == AUTH_ERROR
+        assert "codex auth login" in resp["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_non_auth_error_uses_governor_code(self, tmp_gov_dir):
+        """Non-auth errors still use GOVERNOR_ERROR code."""
+        d = Dispatcher()
+
+        async def _handler(params):
+            raise RuntimeError("something else broke")
+
+        d.register("test.generic_fail", _handler)
+        resp = await roundtrip(d, "test.generic_fail")
+        assert resp["error"]["code"] == GOVERNOR_ERROR
+        assert "something else broke" in resp["error"]["message"]
+
+    @pytest.mark.asyncio
+    async def test_auth_error_not_swallowed_for_notifications(self, tmp_gov_dir):
+        """Notifications silently discard errors (including auth), returning None."""
+        from governor.chat_bridge import ClaudeCodeAuthError
+
+        d = Dispatcher()
+
+        async def _handler(params):
+            raise ClaudeCodeAuthError("expired")
+
+        d.register("test.auth_notify", _handler)
+        # Notifications have no id
+        notif = rpc_notification("test.auth_notify")
+        result = await d.dispatch(notif)
+        assert result is None

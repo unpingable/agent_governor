@@ -27,6 +27,64 @@ import httpx
 from .context_manager import GovernorContext, GovernorContextManager
 
 
+class BackendAuthError(RuntimeError):
+    """Base class for backend authentication failures.
+
+    Subclasses provide backend-specific login instructions.
+    """
+
+    def __init__(self, message: str, stderr_text: str = "") -> None:
+        super().__init__(message)
+        self.stderr_text = stderr_text
+
+
+class ClaudeCodeAuthError(BackendAuthError):
+    """Raised when the Claude Code CLI reports an authentication failure."""
+
+    def __init__(self, stderr_text: str = "") -> None:
+        detail = stderr_text.strip() if stderr_text.strip() else "authentication required"
+        super().__init__(
+            f"Claude Code is not logged in: {detail}. "
+            "Run `claude /login` in a terminal to re-authenticate.",
+            stderr_text=stderr_text,
+        )
+
+
+class CodexAuthError(BackendAuthError):
+    """Raised when the Codex CLI reports an authentication failure."""
+
+    def __init__(self, stderr_text: str = "") -> None:
+        detail = stderr_text.strip() if stderr_text.strip() else "authentication required"
+        super().__init__(
+            f"Codex is not logged in: {detail}. "
+            "Run `codex auth login` in a terminal to re-authenticate.",
+            stderr_text=stderr_text,
+        )
+
+
+# Patterns in CLI stderr that indicate auth failure (shared across backends)
+_AUTH_FAILURE_PATTERNS = [
+    "not logged in",
+    "login required",
+    "authentication",
+    "unauthorized",
+    "auth token",
+    "expired",
+    "credential",
+    "please log in",
+    "api key",
+    "/login",
+    "403",
+    "401",
+]
+
+
+def _is_auth_error(stderr_text: str) -> bool:
+    """Detect whether CLI stderr indicates an authentication failure."""
+    lower = stderr_text.lower()
+    return any(pattern in lower for pattern in _AUTH_FAILURE_PATTERNS)
+
+
 @dataclass
 class ChatMessage:
     """A chat message in the conversation."""
@@ -421,6 +479,8 @@ class ClaudeCodeBackend:
 
         if proc.returncode != 0:
             error_msg = stderr.decode("utf-8", errors="replace")
+            if _is_auth_error(error_msg):
+                raise ClaudeCodeAuthError(error_msg)
             raise RuntimeError(f"Claude Code CLI failed: {error_msg}")
 
         # Parse JSON output
@@ -560,10 +620,16 @@ class ClaudeCodeBackend:
         if proc.returncode != 0 and not sent_stop:
             stderr_data = await proc.stderr.read()
             error_msg = stderr_data.decode("utf-8", errors="replace").strip()
-            error_text = f"Claude Code CLI failed (exit {proc.returncode})"
-            if error_msg:
-                error_text += f": {error_msg}"
-            yield ChatChunk(content=f"\n\n[Error] {error_text}")
+            if _is_auth_error(error_msg):
+                yield ChatChunk(
+                    content="\n\n[Error] Claude Code is not logged in. "
+                    "Run `claude /login` in a terminal to re-authenticate."
+                )
+            else:
+                error_text = f"Claude Code CLI failed (exit {proc.returncode})"
+                if error_msg:
+                    error_text += f": {error_msg}"
+                yield ChatChunk(content=f"\n\n[Error] {error_text}")
 
         # Ensure we send a final stop chunk
         if not sent_stop:
@@ -674,6 +740,8 @@ class CodexBackend:
 
         if proc.returncode != 0:
             error_msg = stderr.decode("utf-8", errors="replace")
+            if _is_auth_error(error_msg):
+                raise CodexAuthError(error_msg)
             raise RuntimeError(f"Codex CLI failed: {error_msg}")
 
         # Parse JSONL output line by line
@@ -815,10 +883,16 @@ class CodexBackend:
         if proc.returncode != 0 and not sent_stop:
             stderr_data = await proc.stderr.read()
             error_msg = stderr_data.decode("utf-8", errors="replace").strip()
-            error_text = f"Codex CLI failed (exit {proc.returncode})"
-            if error_msg:
-                error_text += f": {error_msg}"
-            yield ChatChunk(content=f"\n\n[Error] {error_text}")
+            if _is_auth_error(error_msg):
+                yield ChatChunk(
+                    content="\n\n[Error] Codex is not logged in. "
+                    "Run `codex auth login` in a terminal to re-authenticate."
+                )
+            else:
+                error_text = f"Codex CLI failed (exit {proc.returncode})"
+                if error_msg:
+                    error_text += f": {error_msg}"
+                yield ChatChunk(content=f"\n\n[Error] {error_text}")
 
         # Ensure we send a final stop chunk
         if not sent_stop:

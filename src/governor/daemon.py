@@ -35,6 +35,7 @@ INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 GOVERNOR_ERROR = -32000
+AUTH_ERROR = -32001
 
 PROTOCOL_VERSION = "1.0"
 
@@ -181,6 +182,10 @@ class Dispatcher:
         except Exception as e:
             if is_notification:
                 return None
+            # Surface auth errors with a specific code so clients can detect them
+            from .chat_bridge import BackendAuthError
+            if isinstance(e, BackendAuthError):
+                return _error_response(request_id, AUTH_ERROR, str(e))
             return _error_response(request_id, GOVERNOR_ERROR, str(e))
 
 

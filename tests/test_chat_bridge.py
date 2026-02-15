@@ -2224,3 +2224,92 @@ class TestResearchMode:
         hooks = GovernorHooks(ctx)
         anchors = hooks._load_research_anchors()
         assert len(anchors) == 0
+
+
+# =============================================================================
+# Auth error detection — ClaudeCodeAuthError + _is_auth_error
+# =============================================================================
+
+
+class TestClaudeCodeAuthError:
+    """Tests for authentication error detection in ClaudeCodeBackend."""
+
+    def test_is_auth_error_detects_not_logged_in(self) -> None:
+        from governor.chat_bridge import _is_auth_error
+        assert _is_auth_error("Error: not logged in")
+
+    def test_is_auth_error_detects_401(self) -> None:
+        from governor.chat_bridge import _is_auth_error
+        assert _is_auth_error("HTTP 401: Unauthorized")
+
+    def test_is_auth_error_detects_expired(self) -> None:
+        from governor.chat_bridge import _is_auth_error
+        assert _is_auth_error("Your session has expired, please re-authenticate")
+
+    def test_is_auth_error_detects_login_required(self) -> None:
+        from governor.chat_bridge import _is_auth_error
+        assert _is_auth_error("Login required")
+
+    def test_is_auth_error_detects_credential(self) -> None:
+        from governor.chat_bridge import _is_auth_error
+        assert _is_auth_error("Invalid credential provided")
+
+    def test_is_auth_error_detects_please_login(self) -> None:
+        from governor.chat_bridge import _is_auth_error
+        assert _is_auth_error("Please log in at claude.ai")
+
+    def test_is_auth_error_negative_case(self) -> None:
+        from governor.chat_bridge import _is_auth_error
+        assert not _is_auth_error("Model not found: claude-4-opus")
+
+    def test_is_auth_error_negative_network(self) -> None:
+        from governor.chat_bridge import _is_auth_error
+        assert not _is_auth_error("Connection refused")
+
+    def test_is_auth_error_case_insensitive(self) -> None:
+        from governor.chat_bridge import _is_auth_error
+        assert _is_auth_error("NOT LOGGED IN")
+
+    def test_exception_message_includes_login_hint(self) -> None:
+        from governor.chat_bridge import ClaudeCodeAuthError
+        err = ClaudeCodeAuthError("token expired")
+        assert "claude /login" in str(err)
+
+    def test_exception_stores_stderr(self) -> None:
+        from governor.chat_bridge import ClaudeCodeAuthError
+        err = ClaudeCodeAuthError("some stderr output")
+        assert err.stderr_text == "some stderr output"
+
+    def test_exception_default_message(self) -> None:
+        from governor.chat_bridge import ClaudeCodeAuthError
+        err = ClaudeCodeAuthError("")
+        assert "authentication required" in str(err)
+
+    def test_codex_auth_error_message(self) -> None:
+        from governor.chat_bridge import CodexAuthError
+        err = CodexAuthError("unauthorized")
+        assert "codex auth login" in str(err)
+
+    def test_codex_auth_error_stores_stderr(self) -> None:
+        from governor.chat_bridge import CodexAuthError
+        err = CodexAuthError("some output")
+        assert err.stderr_text == "some output"
+
+    def test_codex_auth_error_default_message(self) -> None:
+        from governor.chat_bridge import CodexAuthError
+        err = CodexAuthError("")
+        assert "authentication required" in str(err)
+
+    def test_backend_auth_error_is_base(self) -> None:
+        from governor.chat_bridge import BackendAuthError, ClaudeCodeAuthError, CodexAuthError
+        assert issubclass(ClaudeCodeAuthError, BackendAuthError)
+        assert issubclass(CodexAuthError, BackendAuthError)
+        assert issubclass(BackendAuthError, RuntimeError)
+
+    def test_both_caught_by_base(self) -> None:
+        from governor.chat_bridge import BackendAuthError, ClaudeCodeAuthError, CodexAuthError
+        for exc_class in (ClaudeCodeAuthError, CodexAuthError):
+            try:
+                raise exc_class("test")
+            except BackendAuthError:
+                pass  # expected

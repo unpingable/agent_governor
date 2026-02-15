@@ -198,9 +198,9 @@ class TestAuthorityDefaultGuard:
                     violations.append(f"{module_name}:{i}: {line.strip()}")
 
         assert not violations, (
-            f"Found .get() defaults on authority-bearing fields in kernel modules. "
-            f"Either make these explicit (no default) or add to AUTHORITY_GET_ALLOWLIST "
-            f"in test_standards.py after review:\n" + "\n".join(violations)
+            "Found .get() defaults on authority-bearing fields in kernel modules. "
+            "Either make these explicit (no default) or add to AUTHORITY_GET_ALLOWLIST "
+            "in test_standards.py after review:\n" + "\n".join(violations)
         )
 
     def test_allowlist_not_expired(self):
@@ -214,8 +214,8 @@ class TestAuthorityDefaultGuard:
                     f"(expired {review_until.isoformat()})"
                 )
         assert not expired, (
-            f"Allowlist entries have expired and need re-review. Either fix the "
-            f"underlying code, extend the date, or promote to permanent (None):\n"
+            "Allowlist entries have expired and need re-review. Either fix the "
+            "underlying code, extend the date, or promote to permanent (None):\n"
             + "\n".join(expired)
         )
 

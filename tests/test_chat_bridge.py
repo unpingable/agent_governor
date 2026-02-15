@@ -1714,7 +1714,7 @@ class TestFormatLeakDetection:
             if call_count == 1:
                 # First call: response contains leaked markers
                 return ChatResponse(
-                    content=f"<user>\nleaked\n</user>\nActual response",
+                    content="<user>\nleaked\n</user>\nActual response",
                     model=model,
                 )
             else:
@@ -1785,7 +1785,7 @@ class TestFormatLeakDetection:
             call_count += 1
             if call_count == 1:
                 return ChatResponse(
-                    content=f"<user>\nleaked\n</user>\nResult",
+                    content="<user>\nleaked\n</user>\nResult",
                     model=model,
                 )
             else:

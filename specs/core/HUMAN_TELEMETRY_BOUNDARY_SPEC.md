@@ -10,6 +10,8 @@
 
 The governor gates **agent** proposals against evidence. It is not a human performance analytics tool. This boundary is structural, not political: applying governance instrumentation to human operators collapses the proposal/commitment separation that makes the governor work.
 
+status: canonical
+
 **Status**: `canonical` (design constraint, not feature spec)
 
 ---

@@ -148,6 +148,9 @@ class GateReceipt:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> GateReceipt:
         v = data.get("schema_version", 1)  # Missing → legacy v1
+        # Legacy receipts stored schema_version as string ("receipt_v1")
+        if isinstance(v, str):
+            v = 1
         if v > RECEIPT_SCHEMA_VERSION:
             raise ValueError(
                 f"Receipt schema version {v} is newer than supported "

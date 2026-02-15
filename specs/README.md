@@ -69,6 +69,7 @@ The governor's theoretical foundation. Read in this order.
 | 21 | **GOVERNED_COMPACT_SPEC.md** | Loss-aware context compaction with receipts. Anchors survive, loss explicit. `status: canonical` |
 | 22 | **AG2_DOCS_GAP_SPEC.md** | Documentation gaps: ADRs, subsystem docs, reference audit. `status: implemented` |
 | 23 | **AG2_TEMPORAL_ATTACK_SURFACE_SPEC.md** | Δt-aware security analysis. Temporal risk markers, race windows, fail-open detection. `status: implemented` |
+| 24 | **HUMAN_TELEMETRY_BOUNDARY_SPEC.md** | The governor is not a human performance tool. Structural argument, not policy. `status: canonical` |
 
 ### Reading Guidance
 

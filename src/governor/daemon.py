@@ -396,10 +396,12 @@ class DaemonState:
                 # Pop default_model — it's not a create_backend kwarg
                 kwargs.pop("default_model", None)
                 backend = create_backend(bt, **kwargs)
+                # Fiction mode: governance must never surface in-band
+                show_ok = self.mode not in ("fiction",)
                 self._chat_bridge = ChatBridge(
                     backend=backend,
                     context_manager=self.context_manager,
-                    show_ok_footer=True,
+                    show_ok_footer=show_ok,
                 )
             except Exception as e:
                 logger.warning("Failed to create chat backend (%s): %s", bt, e)

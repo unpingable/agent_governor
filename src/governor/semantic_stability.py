@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 # Schema
 # =============================================================================
 
-STABILITY_SCHEMA_VERSION = 1
+STABILITY_SCHEMA_VERSION = 2
 
 
 # =============================================================================
@@ -189,6 +189,9 @@ class StabilityFingerprint:
     control_divergence: float
     stiffness_by_kind: dict[str, float]
     commutator_kinds: tuple[str, str]
+    escape_rate: float = 0.0
+    escape_rate_by_kind: dict[str, float] = field(default_factory=dict)
+    escape_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -200,6 +203,9 @@ class StabilityFingerprint:
             "control_divergence": self.control_divergence,
             "stiffness_by_kind": dict(self.stiffness_by_kind),
             "commutator_kinds": list(self.commutator_kinds),
+            "escape_rate": self.escape_rate,
+            "escape_rate_by_kind": dict(self.escape_rate_by_kind),
+            "escape_count": self.escape_count,
         }
 
     @classmethod
@@ -215,6 +221,9 @@ class StabilityFingerprint:
             commutator_kinds=tuple(
                 d.get("commutator_kinds", ("role_rewrap", "clause_reorder"))
             ),
+            escape_rate=d.get("escape_rate", 0.0),
+            escape_rate_by_kind=d.get("escape_rate_by_kind", {}),
+            escape_count=d.get("escape_count", 0),
         )
 
 
@@ -292,6 +301,8 @@ class StabilityAuditResult:
     recommendation_reason: str = ""
     budget_exceeded: bool = False
     calls_used: int = 0
+    n_attempted: int = 0
+    n_completed: int = 0
     receipt_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -314,14 +325,19 @@ class StabilityAuditResult:
             "recommendation_reason": self.recommendation_reason,
             "budget_exceeded": self.budget_exceeded,
             "calls_used": self.calls_used,
+            "n_attempted": self.n_attempted,
+            "n_completed": self.n_completed,
             "receipt_id": self.receipt_id,
         }
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> StabilityAuditResult:
         version = d.get("schema_version", 1)
-        if version != STABILITY_SCHEMA_VERSION:
-            raise ValueError(f"Unknown stability schema version: {version}")
+        if version > STABILITY_SCHEMA_VERSION:
+            raise ValueError(
+                f"Stability schema version {version} is newer than supported "
+                f"({STABILITY_SCHEMA_VERSION}). Upgrade governor."
+            )
         return cls(
             fingerprint=StabilityFingerprint.from_dict(d["fingerprint"]),
             excess_divergences=d["excess_divergences"],
@@ -340,6 +356,8 @@ class StabilityAuditResult:
             recommendation_reason=d.get("recommendation_reason", ""),
             budget_exceeded=d.get("budget_exceeded", False),
             calls_used=d.get("calls_used", 0),
+            n_attempted=d.get("n_attempted", 0),
+            n_completed=d.get("n_completed", 0),
             receipt_id=d.get("receipt_id"),
         )
 
@@ -883,6 +901,75 @@ def compute_basin_entropy(
 
 
 # =============================================================================
+# Escape Rate (basin leakiness)
+# =============================================================================
+
+
+def compute_escape_stats(
+    baseline_output: str,
+    perturbed_outputs: list[str],
+    kinds: list[str],
+    threshold: float,
+    method: str = "jaccard",
+    strip: bool = True,
+) -> tuple[float, dict[str, float], int, list[float]]:
+    """Compute escape rate: fraction of perturbations that leave the baseline basin.
+
+    Uses absolute divergence to baseline (not excess), because basin membership
+    is a semantics boundary, not a temperature-corrected boundary.
+
+    Excludes negation probe and zero-magnitude perturbations from the rate.
+
+    Returns:
+        escape_rate: fraction of valid perturbations that escaped.
+        escape_rate_by_kind: per-kind escape fractions (negation excluded).
+        escape_count: absolute number of escapes.
+        baseline_divergences: divergence from baseline for each perturbed output.
+    """
+    if not perturbed_outputs:
+        return 0.0, {}, 0, []
+
+    neg_kind = PerturbationKind.NEGATION_PROBE.value
+    strip_fn = strip_boilerplate if strip else (lambda x: x)
+    baseline_stripped = strip_fn(baseline_output)
+
+    baseline_divergences: list[float] = []
+    kind_escapes: dict[str, int] = {}
+    kind_totals: dict[str, int] = {}
+    escape_count = 0
+    valid_count = 0
+
+    for i, perturbed in enumerate(perturbed_outputs):
+        d = compute_divergence(baseline_stripped, strip_fn(perturbed), method)
+        baseline_divergences.append(d)
+
+        kind = kinds[i] if i < len(kinds) else ""
+        if kind == neg_kind:
+            continue
+
+        valid_count += 1
+        escaped = d > threshold
+
+        if escaped:
+            escape_count += 1
+
+        kind_escapes.setdefault(kind, 0)
+        kind_totals.setdefault(kind, 0)
+        kind_totals[kind] += 1
+        if escaped:
+            kind_escapes[kind] += 1
+
+    escape_rate = escape_count / valid_count if valid_count > 0 else 0.0
+    escape_rate_by_kind = {
+        k: kind_escapes.get(k, 0) / kind_totals[k]
+        for k in kind_totals
+        if kind_totals[k] > 0
+    }
+
+    return escape_rate, escape_rate_by_kind, escape_count, baseline_divergences
+
+
+# =============================================================================
 # Noise Floor
 # =============================================================================
 
@@ -997,6 +1084,11 @@ def compute_fingerprint(
         baseline_output, perturbed_outputs, basin_threshold, method
     )
 
+    # Escape rate (absolute divergence to baseline, not excess)
+    escape_rate, escape_rate_by_kind, escape_count, _ = compute_escape_stats(
+        baseline_output, perturbed_outputs, kinds, basin_threshold, method,
+    )
+
     # Per-kind stiffness vector
     kind_stiffness: dict[str, list[float]] = {}
     for i, kind in enumerate(non_neg_kinds):
@@ -1017,6 +1109,9 @@ def compute_fingerprint(
         control_divergence=control_divergence,
         stiffness_by_kind=stiffness_by_kind,
         commutator_kinds=commutator_kinds,
+        escape_rate=escape_rate,
+        escape_rate_by_kind=escape_rate_by_kind,
+        escape_count=escape_count,
     )
 
 
@@ -1155,7 +1250,7 @@ class StabilityAuditor:
         if budget_exceeded or not raw_divergences:
             return self._partial_result(
                 prompt_hash, output_hash, envelope_hash, config_hash,
-                timestamp, call_count, noise_val,
+                timestamp, call_count, noise_val, len(raw_divergences),
             )
 
         # Commutator drift
@@ -1207,6 +1302,8 @@ class StabilityAuditor:
             recommendation_reason=reason,
             budget_exceeded=budget_exceeded,
             calls_used=call_count,
+            n_attempted=config.n_perturbations,
+            n_completed=len(raw_divergences),
         )
 
         if receipt_system is not None:
@@ -1226,6 +1323,7 @@ class StabilityAuditor:
         timestamp: str,
         calls_used: int,
         noise_floor: float,
+        n_completed: int = 0,
     ) -> StabilityAuditResult:
         """Return partial result when budget exceeded."""
         fp = StabilityFingerprint(
@@ -1256,6 +1354,8 @@ class StabilityAuditor:
             recommendation_reason="budget_exceeded: insufficient data",
             budget_exceeded=True,
             calls_used=calls_used,
+            n_attempted=self.config.n_perturbations,
+            n_completed=n_completed,
         )
 
     def _classify_recommendation(

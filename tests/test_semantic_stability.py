@@ -32,6 +32,7 @@ from governor.semantic_stability import (
     StabilityAuditor,
     StabilityStore,
     compute_basin_entropy,
+    compute_escape_stats,
     compute_commutator_drift,
     compute_divergence,
     compute_fingerprint,
@@ -546,6 +547,118 @@ class TestBasinEntropy:
 
 
 # =============================================================================
+# TestEscapeRate
+# =============================================================================
+
+
+class TestEscapeRate:
+    """Tests for compute_escape_stats — basin leakiness measurement."""
+
+    def test_identical_outputs_zero_escape(self):
+        """All outputs identical to baseline → escape_rate == 0."""
+        rate, by_kind, count, divs = compute_escape_stats(
+            "the answer is 42",
+            ["the answer is 42"] * 4,
+            ["format_jitter", "clause_reorder", "role_rewrap", "hedge_insert"],
+            threshold=0.3,
+        )
+        assert rate == 0.0
+        assert count == 0
+        assert all(v == 0.0 for v in by_kind.values())
+
+    def test_all_different_full_escape(self):
+        """All outputs completely different → escape_rate == 1."""
+        rate, by_kind, count, divs = compute_escape_stats(
+            "aaa",
+            ["bbb ccc", "ddd eee", "fff ggg"],
+            ["format_jitter", "clause_reorder", "role_rewrap"],
+            threshold=0.1,
+        )
+        assert rate == 1.0
+        assert count == 3
+
+    def test_threshold_sensitivity(self):
+        """Higher threshold → fewer escapes."""
+        baseline = "the quick brown fox"
+        outputs = ["the quick brown dog", "totally different text here"]
+        kinds = ["format_jitter", "clause_reorder"]
+        rate_tight, _, count_tight, _ = compute_escape_stats(
+            baseline, outputs, kinds, threshold=0.05,
+        )
+        rate_loose, _, count_loose, _ = compute_escape_stats(
+            baseline, outputs, kinds, threshold=0.95,
+        )
+        assert rate_tight >= rate_loose
+        assert count_tight >= count_loose
+
+    def test_per_kind_split(self):
+        """Different kinds produce different escape rates."""
+        baseline = "aaa"
+        outputs = [
+            "aaa",       # format_jitter: stays in basin
+            "bbb ccc",   # role_rewrap: escapes
+            "aaa",       # format_jitter: stays
+            "ddd eee",   # role_rewrap: escapes
+        ]
+        kinds = ["format_jitter", "role_rewrap", "format_jitter", "role_rewrap"]
+        rate, by_kind, count, _ = compute_escape_stats(
+            baseline, outputs, kinds, threshold=0.3,
+        )
+        assert by_kind.get("format_jitter", 0.0) == 0.0
+        assert by_kind.get("role_rewrap", 0.0) == 1.0
+        assert count == 2
+
+    def test_negation_probe_excluded(self):
+        """Negation probe outputs are excluded from escape rate."""
+        baseline = "aaa"
+        outputs = ["bbb ccc", "ddd eee"]  # both would escape
+        kinds = ["format_jitter", "negation_probe"]
+        rate, by_kind, count, divs = compute_escape_stats(
+            baseline, outputs, kinds, threshold=0.1,
+        )
+        # Only format_jitter counts (1 escape out of 1 valid)
+        assert rate == 1.0
+        assert count == 1
+        assert "negation_probe" not in by_kind
+        # But divergence is still computed for all outputs
+        assert len(divs) == 2
+
+    def test_empty_outputs(self):
+        rate, by_kind, count, divs = compute_escape_stats(
+            "baseline", [], [], threshold=0.3,
+        )
+        assert rate == 0.0
+        assert count == 0
+        assert by_kind == {}
+        assert divs == []
+
+    def test_strip_boilerplate_applied(self):
+        """With strip=True, boilerplate shouldn't cause spurious escapes."""
+        baseline = "the answer is 42"
+        outputs = ["Sure, I can help with that. the answer is 42"]
+        kinds = ["format_jitter"]
+        rate_strip, _, _, _ = compute_escape_stats(
+            baseline, outputs, kinds, threshold=0.3, strip=True,
+        )
+        rate_raw, _, _, _ = compute_escape_stats(
+            baseline, outputs, kinds, threshold=0.3, strip=False,
+        )
+        # Stripping should reduce or equal the raw escape rate
+        assert rate_strip <= rate_raw
+
+    def test_baseline_divergences_returned(self):
+        """baseline_divergences list is aligned with perturbed_outputs."""
+        baseline = "aaa"
+        outputs = ["bbb", "ccc"]
+        kinds = ["format_jitter", "clause_reorder"]
+        _, _, _, divs = compute_escape_stats(
+            baseline, outputs, kinds, threshold=0.3,
+        )
+        assert len(divs) == 2
+        assert all(isinstance(d, float) for d in divs)
+
+
+# =============================================================================
 # TestCommutatorDrift
 # =============================================================================
 
@@ -866,11 +979,37 @@ class TestStabilityAuditResult:
         d = result.to_dict()
         assert "stiffness" in d["recommendation_reason"]
 
-    def test_unknown_schema_version_rejected(self):
+    def test_future_schema_version_rejected(self):
         d = self._make_result().to_dict()
-        d["schema_version"] = 999
-        with pytest.raises(ValueError, match="Unknown stability schema version"):
+        d["schema_version"] = STABILITY_SCHEMA_VERSION + 1
+        with pytest.raises(ValueError, match="newer than supported"):
             StabilityAuditResult.from_dict(d)
+
+    def test_v1_schema_loads_with_defaults(self):
+        """v1 records (no escape_rate, no n_attempted) load with safe defaults."""
+        d = self._make_result().to_dict()
+        d["schema_version"] = 1
+        # Remove v2 fields to simulate a v1 record
+        d.pop("n_attempted", None)
+        d.pop("n_completed", None)
+        d["fingerprint"].pop("escape_rate", None)
+        d["fingerprint"].pop("escape_rate_by_kind", None)
+        d["fingerprint"].pop("escape_count", None)
+        result = StabilityAuditResult.from_dict(d)
+        assert result.n_attempted == 0
+        assert result.n_completed == 0
+        assert result.fingerprint.escape_rate == 0.0
+        assert result.fingerprint.escape_rate_by_kind == {}
+        assert result.fingerprint.escape_count == 0
+
+    def test_n_attempted_n_completed_roundtrip(self):
+        result = self._make_result(n_attempted=8, n_completed=6)
+        d = result.to_dict()
+        assert d["n_attempted"] == 8
+        assert d["n_completed"] == 6
+        restored = StabilityAuditResult.from_dict(d)
+        assert restored.n_attempted == 8
+        assert restored.n_completed == 6
 
 
 # =============================================================================
@@ -938,6 +1077,28 @@ class TestStabilityFingerprint:
         fp = StabilityFingerprint.from_dict(d)
         assert fp.stiffness_by_kind == {}
         assert fp.commutator_kinds == ("role_rewrap", "clause_reorder")
+        # v1 defaults for escape fields
+        assert fp.escape_rate == 0.0
+        assert fp.escape_rate_by_kind == {}
+        assert fp.escape_count == 0
+
+    def test_escape_rate_roundtrip(self):
+        fp = StabilityFingerprint(
+            stiffness=1.0, anisotropy=1.0, basin_entropy=2.0,
+            commutator_drift=0.0, noise_floor=0.05, control_divergence=0.0,
+            stiffness_by_kind={},
+            commutator_kinds=("role_rewrap", "clause_reorder"),
+            escape_rate=0.75,
+            escape_rate_by_kind={"format_jitter": 0.5, "role_rewrap": 1.0},
+            escape_count=3,
+        )
+        d = fp.to_dict()
+        assert d["escape_rate"] == 0.75
+        assert d["escape_count"] == 3
+        restored = StabilityFingerprint.from_dict(d)
+        assert restored.escape_rate == 0.75
+        assert restored.escape_rate_by_kind == {"format_jitter": 0.5, "role_rewrap": 1.0}
+        assert restored.escape_count == 3
 
 
 # =============================================================================

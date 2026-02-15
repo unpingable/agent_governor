@@ -664,17 +664,22 @@ class ClaudeCodeBackend:
         system_text = "\n\n".join(system_parts)
 
         # For single-turn (common case), just send the user message as-is.
-        # For multi-turn, flatten with role markers so the model sees context.
+        # For multi-turn, flatten with XML tags so the model sees context
+        # without echoing role markers in fiction/creative output.
         if len(conversation_parts) == 1 and not has_assistant:
             user_prompt = conversation_parts[0][1]
         elif conversation_parts:
             parts = []
             for role, content in conversation_parts:
-                if role == "assistant":
-                    parts.append(f"[Assistant]: {content}")
-                else:
-                    parts.append(f"[User]: {content}")
-            user_prompt = "\n\n".join(parts)
+                parts.append(f"<{role}>\n{content}\n</{role}>")
+            # Frame so the model responds to the last user message
+            user_prompt = (
+                "<conversation_history>\n"
+                + "\n".join(parts)
+                + "\n</conversation_history>\n\n"
+                "Respond to the last user message above. Do not echo the "
+                "conversation structure or role tags in your response."
+            )
         else:
             user_prompt = ""
 
@@ -928,17 +933,22 @@ class CodexBackend:
         system_text = "\n\n".join(system_parts)
 
         # For single-turn (common case), just send the user message as-is.
-        # For multi-turn, flatten with role markers so the model sees context.
+        # For multi-turn, flatten with XML tags so the model sees context
+        # without echoing role markers in fiction/creative output.
         if len(conversation_parts) == 1 and not has_assistant:
             user_prompt = conversation_parts[0][1]
         elif conversation_parts:
             parts = []
             for role, content in conversation_parts:
-                if role == "assistant":
-                    parts.append(f"[Assistant]: {content}")
-                else:
-                    parts.append(f"[User]: {content}")
-            user_prompt = "\n\n".join(parts)
+                parts.append(f"<{role}>\n{content}\n</{role}>")
+            # Frame so the model responds to the last user message
+            user_prompt = (
+                "<conversation_history>\n"
+                + "\n".join(parts)
+                + "\n</conversation_history>\n\n"
+                "Respond to the last user message above. Do not echo the "
+                "conversation structure or role tags in your response."
+            )
         else:
             user_prompt = ""
 

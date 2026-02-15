@@ -900,9 +900,15 @@ class TestClaudeCodeBackend:
         ]
         system, prompt = backend._extract_system_and_prompt(messages)
         assert system == ""
-        assert "[User]: What is 2+2?" in prompt
-        assert "[Assistant]: 4" in prompt
-        assert "[User]: Thanks!" in prompt
+        # Multi-turn uses XML tags to avoid role markers leaking into output
+        assert "<user>\nWhat is 2+2?\n</user>" in prompt
+        assert "<assistant>\n4\n</assistant>" in prompt
+        assert "<user>\nThanks!\n</user>" in prompt
+        assert "<conversation_history>" in prompt
+        assert "Do not echo" in prompt
+        # Regression: old markers caused model to echo [User]/[Assistant] in fiction
+        assert "[User]" not in prompt
+        assert "[Assistant]" not in prompt
 
     def test_extract_system_and_prompt_multiple_system(self) -> None:
         """Multiple system messages are concatenated."""
@@ -1208,9 +1214,15 @@ class TestCodexBackend:
         ]
         system, prompt = backend._extract_system_and_prompt(messages)
         assert system == ""
-        assert "[User]: What is 2+2?" in prompt
-        assert "[Assistant]: 4" in prompt
-        assert "[User]: Thanks!" in prompt
+        # Multi-turn uses XML tags to avoid role markers leaking into output
+        assert "<user>\nWhat is 2+2?\n</user>" in prompt
+        assert "<assistant>\n4\n</assistant>" in prompt
+        assert "<user>\nThanks!\n</user>" in prompt
+        assert "<conversation_history>" in prompt
+        assert "Do not echo" in prompt
+        # Regression: old markers caused model to echo [User]/[Assistant] in fiction
+        assert "[User]" not in prompt
+        assert "[Assistant]" not in prompt
 
     def test_extract_system_and_prompt_multiple_system(self) -> None:
         """Multiple system messages are concatenated."""

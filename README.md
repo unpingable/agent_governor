@@ -1,21 +1,51 @@
 # Agent Governor
 
-**Constraint system for AI coding agents. 8,000+ tests. Zero trust.**
+**Enforcement kernel for tool-using LLM workflows.** Constrains capabilities over time, detects failure modes (loops, drift, hallucinated completion), and produces tamper-evident receipts for audit and replay.
 
-Agents can *propose*. Only the governor can *commit*.
-Agent provides pointers. Governor produces receipts.
-No write hits disk unless verification succeeds.
+11,000+ tests. Zero trust. Agents propose — only the governor commits.
 
-*Unsure if this applies to you? Ask your LLM whether it should be allowed to act without it.*
+## What Actually Happens
 
-### Fiction: Protect your canon
-![Fiction demo](docs/demo/fiction.gif)
+```
+Agent proposes:  web.search("auth bypass techniques")  (attempt 4, same query class)
+Governor sees:   tool churn + low novelty + budget burn
+Governor acts:   DENY + DOWNGRADE (strip web tool, force local reasoning)
+Agent receives:  {reason: "tool_churn_detected", allowed_next: ["read_file", "propose_plan"], expiry: "3 turns"}
+Agent replans:   continues with reduced capability set
+```
 
-### Code: Enforce decisions
-![Code demo](docs/demo/code.gif)
+This is the difference between a **validator** (checks if a call is well-formed) and a **governor** (decides whether this call should exist *at this point in the run*, given observed behavior, constraints, and prior evidence).
 
-### Security: Catch what agents introduce
-![Security demo](docs/demo/security.gif)
+A governor doesn't just say "no." It **denies, downgrades, forces replan, strips tools, caps retries, expires tasks, and emits a machine-readable receipt explaining why.**
+
+## Non-Goals
+
+- Not an agent framework. Does not run your agent.
+- Not "alignment." Does not make models good.
+- Not a confidence-score system. Confidence without evidence is theater.
+- Not a policy document. It's an enforcement boundary with teeth.
+
+---
+
+## The Enforcement Loop
+
+```
+propose → observe → evaluate → enforce → feedback → replan → continue
+          ↑                                                    ↓
+          └────────────────── receipts ─────────────────────────┘
+```
+
+Five verbs make a governor:
+
+| Verb | What It Does |
+|------|-------------|
+| **Observe** | Track signals across time: looping, divergence, novelty decay, cost slope, tool churn |
+| **Decide** | Apply policy over state, regime, stage, and accumulated evidence |
+| **Enforce** | Allow / deny / strip / expire / throttle / downgrade |
+| **Redirect** | Require replan with fewer degrees of freedom (tool stripping, stage shift) |
+| **Prove** | Emit receipts that bind claims, actions, and evidence into a tamper-evident chain |
+
+"Tool gateway" is a leaf of this system, not its center.
 
 ---
 
@@ -26,6 +56,7 @@ You're using Claude Code, Cursor, or Codex. The agent:
 - Contradicts itself between sessions
 - Drifts from architectural decisions you made yesterday
 - Gives you no audit trail for why things changed
+- Burns money on retry loops nobody notices
 - Requires a human babysitter for every action
 
 **That's not agentic development. That's expensive remote control.**
@@ -46,6 +77,23 @@ The agent can *claim* anything. But it can't *write* anything until it provides 
 
 ---
 
+## Failure Modes We Detect
+
+Not abstract risks. Specific signals with specific enforcement actions.
+
+| Failure Mode | Signal | Enforcement |
+|---|---|---|
+| Infinite research loop | Low novelty, high tool churn | Strip tools, force local reasoning |
+| Hallucinated completion | "Done" claim without evidence | DENY, require oracle evidence |
+| Tool misuse / escalation | Out-of-scope tool calls | Scope governor blocks, escalation receipt |
+| Silent downgrade | Agent skips work, claims success | Exit shape checking, custody scoring |
+| Prompt leakage / evasion | Policy-violating output | Continuity checker, violation resolver |
+| Temporal drift | Contradicts prior decisions | Claim diff, premise quarantine |
+| Review theater | Rubber-stamp merge patterns | Comprehension gate, throughput coupling |
+| Retry spiral | Same action, same failure, burning budget | Scar tissue (hysteresis), budget caps |
+
+---
+
 ## Quick Start
 
 ```bash
@@ -61,24 +109,21 @@ governor propose --claim "Using Vue for frontend" --topic framework
 # REJECTED — Contradicts existing decision on 'framework'
 ```
 
-### For Writers
+### Fiction: Protect Your Canon
 
 ```bash
-# Protect canon
 governor continuity anchor add \
   --id "elena-eyes" --type canon \
   --description "Elena has green eyes" \
   --forbidden "Elena's blue eyes" "her blue eyes" \
   --severity reject
 
-# Check your chapter
 governor check chapter-3.md --mode fiction
 ```
 
-### For Developers
+### Code: Enforce Decisions
 
 ```bash
-# Set intent and check code
 governor intent set --profile production --scope "src/auth/**"
 governor check src/auth/login.py
 
@@ -87,11 +132,22 @@ governor interferometry compare "Add auth middleware" \
   --backends claude:sonnet,ollama:qwen
 ```
 
-### For Operations
+### Operations: Enforce Runbooks
 
 ```bash
-# Enforce runbook constraints
 ops-gov verify --runbook deploy-v2.yaml --window maintenance
+```
+
+### Evidence Gate: Kernel-Only Surface
+
+```bash
+# Check agent output against kernel constraints
+governor gate check "All tests pass. The auth module is thread-safe."
+# → HARD claim "thread-safe" flagged: no oracle evidence
+
+# Verify a kernel run
+governor kernel verify --run <id>
+# → Verdict: FAIL | confidence.sanity: HIGH_CONFIDENCE_WEAK_EVIDENCE
 ```
 
 ---
@@ -100,29 +156,45 @@ ops-gov verify --runbook deploy-v2.yaml --window maintenance
 
 ```mermaid
 graph TD
-    A["🔧 Coding Agent\nProduces patches + pointers"]
+    A["Agent\n(untrusted)"]
     A -->|propose| B
 
-    subgraph B ["GOVERNOR"]
-        B1["Verifiers → Runs checks, produces receipts"]
-        B2["Ledgers → facts/ (decays) · decisions/ (persists)"]
-        B3["Epistemic → Provenance, confidence, evidence"]
+    subgraph B ["GOVERNOR (enforcement kernel)"]
+        B1["Observe: signals, churn, drift"]
+        B2["Evaluate: policy + evidence + regime"]
+        B3["Enforce: allow/deny/strip/redirect"]
+        B4["Prove: hash-chained receipts"]
+        B1 --> B2 --> B3 --> B4
     end
 
-    B -->|only if verified| C["Working Tree\nActual writes happen here"]
+    B3 -->|allow + receipt| C["Working Tree"]
+    B3 -->|deny + next moves| A
 ```
 
 **Threat model:**
-- Agents are untrusted. They hallucinate, contradict, drift.
+- Agents are untrusted. They hallucinate, contradict, drift, loop, escalate.
 - The host is trusted. Governor runs locally.
-- Defends against: fabricated claims, unverified writes, temporal drift, epistemic amplification.
-- Does NOT defend against: malicious dependencies, compromised host.
+- Defends against: fabricated claims, unverified writes, temporal drift, epistemic amplification, retry spirals, capability creep, silent downgrades.
+- Does NOT defend against: compromised host, malicious dependencies (see [ETHICAL_HARDENING.md](specs/gaps/ETHICAL_HARDENING.md)).
+
+---
+
+## Modes
+
+| Mode | Mental Model | What It Governs |
+|------|-------------|-----------------|
+| **Code** | "My architectural decisions" | Decisions, constraints, API surfaces, test requirements |
+| **Fiction** | "My story bible" | Characters, world rules, canon, tone, consent |
+| **Nonfiction** | "My research corpus" | Sources, claims, citations, frame intrusion |
+| **Ops** | "My runbooks" | Blast radius, time windows, preconditions |
+
+Same engine, different constraints. The governor doesn't care what domain you're in — it cares that claims have evidence.
 
 ---
 
 ## What's In The Box
 
-### Core Governance (~380 tests)
+### Core Governance (~390 tests)
 Typed claims, cryptographic receipts, FSM lifecycle, fact/decision ledgers with decay, operating envelopes, git pre-commit hooks, MCP server.
 
 ### Multi-Agent Coordination (~120 tests)
@@ -136,6 +208,9 @@ Spine locking, invariant specs, execution budgets, session manager, step-functio
 
 ### Adaptive Control (~530 tests)
 Regime detection (ELASTIC/WARM/DUCTILE/UNSTABLE), boil control presets, homeostat with exploration budgets, ultrastability (S1 adaptation), failure provenance with scars/shields, auto-tuning with Pareto analysis.
+
+### Evidence Gate + Receipt Kernel (~240 tests)
+Evidence-gated coding harness, claim extraction, custody scoring, hash-chained kernel runs with 12 constitutional invariants, verdict ceiling, oracle evidence classes.
 
 ### Writing Governance (~920 tests)
 11 modules: tone vectors (6D), affect regimes, governance visibility scoring, intent classification, structural constraints, prose/code ticketing, puppet mode.
@@ -158,20 +233,7 @@ Multi-model claim comparison (parallel + serial modes), code-specific risk marke
 ### Infrastructure (~960 tests)
 Structured telemetry, Prometheus metrics, config profiles, continuity enforcement, convergence auto-tuning, QA harness, golden-file/property-based/contract tests.
 
-**Total: ~8,000 tests across 60+ modules.**
-
----
-
-## Modes
-
-| Mode | Mental Model | What It Governs |
-|------|-------------|-----------------|
-| **Code** | "My architectural decisions" | Decisions, constraints, API surfaces, test requirements |
-| **Fiction** | "My story bible" | Characters, world rules, canon, tone, consent |
-| **Nonfiction** | "My research corpus" | Sources, claims, citations, frame intrusion |
-| **Ops** | "My runbooks" | Blast radius, time windows, preconditions |
-
-Same engine, different constraints. The governor doesn't care what domain you're in — it cares that claims have evidence.
+**Total: ~11,000 tests across 60+ modules.**
 
 ---
 
@@ -183,18 +245,17 @@ Same engine, different constraints. The governor doesn't care what domain you're
 | **Gate, not memory** | Write-blocking, not advisory logging |
 | **Facts vs decisions** | "Tests pass" decays. "We use React" persists. |
 | **Typed claims** | `ClaimType.TESTS_PASS`, not "I think the tests pass" |
-| **Receipts** | SHA-256 hashed proof of verification at a point in time |
+| **Receipts** | Content-addressed, hash-chained proof of verification |
 | **Custody scoring** | Ap (accountability) x Ip (invariant coupling) x Fp (failure explicitness) |
-| **Interferometry** | Multi-model divergence as instrumentation, not selection |
 | **Scar tissue** | Failed actions create lasting constraints (hysteresis) |
+| **Regime detection** | ELASTIC/WARM/DUCTILE/UNSTABLE — not vibes, measured signals |
+| **Verdict ceiling** | Structural invariant failure caps the best possible verdict |
 
 ---
 
 ## Admissibility, Not Correctness
 
 This system does not prove agents are "right." It proves whether an action was **admissible** under declared rules, evidence, and risk constraints at the time it was taken.
-
-Outcomes are stochastic. A decision can be reasonable and still fail. If correctness were defined by outcome, every losing trade would be malpractice.
 
 What a receipt proves:
 
@@ -203,40 +264,25 @@ What a receipt proves:
 - **Evidence basis**: what was checked, what remained unresolved, which gates passed
 - **Waivers**: any override was intentional, attributed, and leaves a scar
 
-When outcomes are bad, the question shifts from "why did it do that?" (storytime) to **"was this admissible under the declared rules?"** (audit). That's liability routing, not exculpation.
-
-### Constraints and Authority
-
-AI may propose constraints. Humans sign them. Enforcement is mechanical.
-
-- **AI** = generative, fallible, advisory
-- **Governor** = rigid, boring, enforceable
-
-A constraint becomes active only when pinned, scoped, and explicitly signed. Actions outside the safe envelope require an attributed waiver. There is no silent bypass.
+When outcomes are bad, the question shifts from "why did it do that?" (storytime) to **"was this admissible under the declared rules?"** (audit).
 
 > [Full treatment: docs/ADMISSIBILITY.md](docs/ADMISSIBILITY.md) | [Compliance mapping: docs/COMPLIANCE.md](docs/COMPLIANCE.md)
 
 ---
 
-## Comparison: Memory vs Governance
+## Comparison: Validators vs Governors
 
-| | Memory Tools | Agent Governor |
-|---|-------------|----------------|
-| **Purpose** | Help agent remember | Prevent ungrounded commits |
-| **Trust model** | Forgetful but helpful | Unreliable, require proof |
-| **Verification** | Optional | Cryptographic receipts required |
+| | Validator / Middleware | Agent Governor |
+|---|---|---|
+| **Scope** | Single call | Full run lifecycle |
+| **State** | Stateless | Tracks signals, regimes, budgets over time |
+| **Denial** | Exception / retry | Structured downgrade + allowed next moves |
+| **Evidence** | Optional | Cryptographic receipts required |
 | **Write control** | None | Write gate enforced |
-| **Architecture** | Memory prosthetic | Epistemic security |
+| **Failure detection** | Schema validation | Loops, drift, hallucinated completion, escalation |
+| **Architecture** | I/O filter | Enforcement kernel with policy, regime, and stage |
 
-Both are useful. They solve different problems. Use memory tools for continuity. Use Agent Governor for safety.
-
----
-
-## Failure Modes Observed in the Wild
-
-Industry analyses (e.g., 1Password's [*From Magic to Malware*](https://1password.com/blog/from-magic-to-malware-how-openclaws-agent-skills-become-an-attack-surface)) document how agent "skills" and tool chaining become attack surfaces when autonomy is not bounded by explicit authority, adjudication, and auditability — including supply chain attacks via skill registries where markdown documentation becomes a malware delivery vector.
-
-The mitigations proposed (default-deny execution, sandboxing, time-bound permissions, provenance logging) describe the same structural requirements the Agent Governor enforces: typed claims require receipts, writes require verified proposals, and no tool execution escapes the gate. The difference is between post-hoc remediation and pre-execution constraint enforcement.
+Both are useful. Validators check shape. Governors constrain behavior over time.
 
 ---
 
@@ -247,17 +293,20 @@ The mitigations proposed (default-deny execution, sandboxing, time-bound permiss
 governor init / propose / verify / apply
 governor facts / decisions / status
 
+# Evidence gate
+governor gate check <text>              # Evidence-gated coding harness
+governor kernel verify --run <id>       # Verify kernel run (12 invariants)
+
 # Checking
-governor check <path>                    # Unified security + continuity
-governor lite check <text>               # Evidence-gated coding harness
+governor check <path>                   # Unified security + continuity
 
 # Profiles & Intent
-governor profile use production          # Named governance presets
-governor intent set --profile hotfix     # Intent-based governance
+governor profile use production         # Named governance presets
+governor intent set --profile hotfix    # Intent-based governance
 
 # Interferometry
-governor compare "task" --backends a,b   # Multi-model comparison
-governor interferometry divergence       # Disagreement signals
+governor compare "task" --backends a,b  # Multi-model comparison
+governor interferometry divergence      # Disagreement signals
 
 # Epistemic
 governor epistemic status / claims / dangerous
@@ -265,19 +314,19 @@ governor drift status / update
 governor quorum status <id>
 
 # Adaptive
-governor regime status                   # ELASTIC/WARM/DUCTILE/UNSTABLE
-governor boil set oolong                 # Named control presets
-governor explore enter research          # Exploration budgets
+governor regime status                  # ELASTIC/WARM/DUCTILE/UNSTABLE
+governor boil set oolong                # Named control presets
+governor explore enter research         # Exploration budgets
 
 # Autonomous
-governor autonomous run --task "..."     # Step-function execution
-governor spine lock <id>                 # Lock project structure
-governor invariant check                 # Mechanically verify rules
+governor autonomous run --task "..."    # Step-function execution
+governor spine lock <id>                # Lock project structure
+governor invariant check                # Mechanically verify rules
 
 # Integration
-governor hook install                    # Git pre-commit
-governor mcp serve                       # MCP server for Claude
-governor claude-hooks install            # Claude Code hooks
+governor hook install                   # Git pre-commit
+governor mcp serve                      # MCP server for Claude
+governor claude-hooks install           # Claude Code hooks
 ```
 
 Full CLI reference: 100+ commands across 30+ subsystems. See `.claude/rules/cli-reference.md`.
@@ -296,8 +345,8 @@ pip install -e ".[dev]"
 python3 -m pytest tests/ -v
 
 # WebUI
-bash start.sh                            # Claude Code backend
-bash start-codex.sh                      # Codex backend
+bash start.sh                           # Claude Code backend
+bash start-codex.sh                     # Codex backend
 ```
 
 ---
@@ -306,16 +355,15 @@ bash start-codex.sh                      # Codex backend
 
 | Document | Contents |
 |----------|----------|
-| `docs/WHY.md` | Motivation and field context — why structural governance, not advisory |
-| `CLAUDE.md` | Architecture rules, claim types, receipt types, conventions |
+| `docs/WHY.md` | Motivation and field context |
+| `CLAUDE.md` | Architecture rules, claim types, receipt types |
 | `BUILD_SPEC.md` | Step-by-step build guide, FSM, receipt design |
 | `MULTI_AGENT.md` | Concurrency model, conflict detection, dispatcher |
-| `CONTRIBUTING.md` | Branch workflow, testing requirements |
-| `docs/ADMISSIBILITY.md` | Why receipts prove admissibility, not outcome correctness |
+| `docs/ADMISSIBILITY.md` | Why receipts prove admissibility, not correctness |
 | `docs/COMPLIANCE.md` | Fiduciary law mapping (ERISA, SEC, process-based prudence) |
-| `docs/CLIENT_ECOSYSTEM.md` | Client roles, transport posture, v2/v3 boundary, fleet primitive |
-| `specs/` | 25+ design specs (core theory, UX, interferometry) |
-| `docs/` | User guides, architecture docs, mode-specific guides |
+| `docs/CLIENT_ECOSYSTEM.md` | Client roles, transport posture, fleet primitives |
+| `specs/gaps/ETHICAL_HARDENING.md` | Ethical failure modes + enforceable invariants |
+| `specs/` | 25+ design specs |
 
 ---
 
@@ -325,7 +373,7 @@ In mechanical systems, a governor limits speed to prevent damage — the spinnin
 
 In AI systems, the Agent Governor limits autonomy to prevent hallucination.
 
-**Speed without control is just chaos.**
+A validator is a bouncer. A governor is the **building inspector + fire marshal + accounting department**, and it can shut down floors mid-event.
 
 ---
 

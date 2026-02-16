@@ -30,6 +30,40 @@ _CANDIDATE_PATTERN = re.compile(
 )
 
 
+# arXiv DOI prefix — doi:10.48550/arXiv.XXXX.XXXXX is the same paper as arxiv:XXXX.XXXXX
+_ARXIV_DOI_PREFIX = "10.48550/arxiv."
+
+
+def canonicalize_ref(ref_type: str, identifier: str) -> tuple[str, str]:
+    """Canonicalize a source ref to prevent alias mismatches.
+
+    doi:10.48550/arXiv.2001.08361 → arxiv:2001.08361
+    Keeps the original form in SourceRef.raw for display.
+    """
+    if ref_type == "doi" and identifier.lower().startswith(_ARXIV_DOI_PREFIX):
+        # Extract the arXiv ID from the DOI
+        arxiv_id = identifier[len(_ARXIV_DOI_PREFIX):]
+        return ("arxiv", arxiv_id)
+    return (ref_type, identifier)
+
+
+def canonical_form(ref_string: str) -> str:
+    """Canonicalize a 'type:identifier' string for comparison.
+
+    Returns a fully lowercased canonical form. DOIs are case-insensitive per spec.
+
+    >>> canonical_form("doi:10.48550/arXiv.2001.08361")
+    'arxiv:2001.08361'
+    >>> canonical_form("doi:10.1234/FOO")
+    'doi:10.1234/foo'
+    """
+    if ":" not in ref_string:
+        return ref_string.lower()
+    ref_type, identifier = ref_string.split(":", 1)
+    ref_type, identifier = canonicalize_ref(ref_type.strip().lower(), identifier.strip())
+    return f"{ref_type}:{identifier}".lower()
+
+
 @dataclass
 class SourceRef:
     """A source reference found in text."""
@@ -39,8 +73,12 @@ class SourceRef:
 
     @property
     def normalized(self) -> str:
-        """Normalized form for comparison (e.g., 'doi:10.1234/foo')."""
-        return f"{self.ref_type}:{self.identifier}"
+        """Normalized form for comparison (e.g., 'doi:10.1234/foo').
+
+        arXiv DOIs are canonicalized: doi:10.48550/arXiv.X → arxiv:X
+        """
+        canon_type, canon_id = canonicalize_ref(self.ref_type, self.identifier)
+        return f"{canon_type}:{canon_id}"
 
 
 @dataclass
@@ -92,15 +130,21 @@ class WhyOverlay:
 
 
 def extract_source_refs(text: str) -> list[SourceRef]:
-    """Extract all source reference tokens from text."""
+    """Extract all source reference tokens from text.
+
+    Deduplicates using canonical form — doi:10.48550/arXiv.2001.08361 and
+    arxiv:2001.08361 are treated as the same ref (the first occurrence wins).
+    """
     refs: list[SourceRef] = []
     seen: set[str] = set()
     for ref_type, pattern in _SOURCE_REF_PATTERNS:
         for m in pattern.finditer(text):
             identifier = m.group(1).rstrip(".,;:")
-            normalized = f"{ref_type}:{identifier}"
-            if normalized.lower() not in seen:
-                seen.add(normalized.lower())
+            # Dedup on canonical form so arXiv DOIs and arXiv IDs collapse
+            canon_type, canon_id = canonicalize_ref(ref_type, identifier)
+            canonical = f"{canon_type}:{canon_id}".lower()
+            if canonical not in seen:
+                seen.add(canonical)
                 refs.append(SourceRef(
                     ref_type=ref_type,
                     identifier=identifier,
@@ -148,16 +192,16 @@ def build_why_overlay(
     overlay.referenced_sources = extract_source_refs(assistant_text)
     overlay.candidate_sources = extract_candidate_sources(assistant_text)
 
-    # Normalize accepted sources for comparison
-    accepted_lower = {s.lower() for s in accepted_sources}
-    candidate_lower = {c.lower() for c in overlay.candidate_sources}
+    # Canonicalize accepted sources for comparison (handles arXiv/DOI aliases)
+    accepted_canonical = {canonical_form(s) for s in accepted_sources}
+    candidate_canonical = {canonical_form(c) for c in overlay.candidate_sources}
 
     # Classify each referenced source
     for ref in overlay.referenced_sources:
-        normalized = ref.normalized.lower()
-        if normalized in accepted_lower:
+        canonical = ref.normalized.lower()
+        if canonical in accepted_canonical:
             overlay.matched_refs.append(ref)
-        elif normalized not in candidate_lower:
+        elif canonical not in candidate_canonical:
             overlay.floating_refs.append(ref)
 
     return overlay

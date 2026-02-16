@@ -5,9 +5,65 @@ from __future__ import annotations
 from governor.research_why import (
     WhyOverlay,
     build_why_overlay,
+    canonical_form,
+    canonicalize_ref,
     extract_candidate_sources,
     extract_source_refs,
 )
+
+
+# ============================================================================
+# canonicalize_ref / canonical_form
+# ============================================================================
+
+
+class TestCanonicalization:
+    """Tests for arXiv/DOI alias canonicalization."""
+
+    def test_arxiv_doi_to_arxiv(self) -> None:
+        """doi:10.48550/arXiv.2001.08361 → arxiv:2001.08361."""
+        ref_type, identifier = canonicalize_ref("doi", "10.48550/arXiv.2001.08361")
+        assert ref_type == "arxiv"
+        assert identifier == "2001.08361"
+
+    def test_arxiv_doi_case_insensitive(self) -> None:
+        """DOI prefix match is case-insensitive."""
+        ref_type, identifier = canonicalize_ref("doi", "10.48550/ARXIV.2203.15556")
+        assert ref_type == "arxiv"
+        assert identifier == "2203.15556"
+
+    def test_non_arxiv_doi_unchanged(self) -> None:
+        """Regular DOIs are not touched."""
+        ref_type, identifier = canonicalize_ref("doi", "10.1038/nature12373")
+        assert ref_type == "doi"
+        assert identifier == "10.1038/nature12373"
+
+    def test_arxiv_ref_unchanged(self) -> None:
+        """Already-arxiv refs pass through."""
+        ref_type, identifier = canonicalize_ref("arxiv", "2001.08361")
+        assert ref_type == "arxiv"
+        assert identifier == "2001.08361"
+
+    def test_canonical_form_arxiv_doi(self) -> None:
+        """canonical_form handles the full string form."""
+        assert canonical_form("doi:10.48550/arXiv.2001.08361") == "arxiv:2001.08361"
+
+    def test_canonical_form_regular_doi(self) -> None:
+        assert canonical_form("doi:10.1234/foo") == "doi:10.1234/foo"
+
+    def test_canonical_form_no_colon(self) -> None:
+        """Strings without colon are lowercased."""
+        assert canonical_form("SOMETHING") == "something"
+
+    def test_canonical_form_preserves_version(self) -> None:
+        """arXiv DOI with version suffix."""
+        assert canonical_form("doi:10.48550/arXiv.2301.07041v2") == "arxiv:2301.07041v2"
+
+    def test_source_ref_normalized_property(self) -> None:
+        """SourceRef.normalized uses canonicalization."""
+        from governor.research_why import SourceRef
+        ref = SourceRef(ref_type="doi", identifier="10.48550/arXiv.2001.08361", raw="doi:10.48550/arXiv.2001.08361")
+        assert ref.normalized == "arxiv:2001.08361"
 
 
 # ============================================================================
@@ -122,6 +178,32 @@ class TestExtractSourceRefs:
         refs = extract_source_refs("You can pip install flask-cors for CORS support.")
         assert len(refs) == 1
         assert refs[0].identifier == "flask-cors"
+
+    # -- arXiv/DOI canonicalization --
+
+    def test_arxiv_doi_dedup_with_arxiv_id(self) -> None:
+        """doi:10.48550/arXiv.X and arxiv:X in same text dedup to one ref."""
+        text = (
+            "Kaplan et al. (doi:10.48550/arXiv.2001.08361) showed scaling laws. "
+            "See also arxiv:2001.08361 for the full paper."
+        )
+        refs = extract_source_refs(text)
+        assert len(refs) == 1  # deduped via canonical form
+
+    def test_arxiv_doi_first_occurrence_wins(self) -> None:
+        """When deduping, the first occurrence in text wins."""
+        text = "doi:10.48550/arXiv.2001.08361 and arxiv:2001.08361"
+        refs = extract_source_refs(text)
+        assert len(refs) == 1
+        # DOI pattern comes first in _SOURCE_REF_PATTERNS
+        assert refs[0].ref_type == "doi"
+        assert refs[0].identifier == "10.48550/arXiv.2001.08361"
+
+    def test_two_different_arxiv_dois_not_deduped(self) -> None:
+        """Different arXiv DOIs are not deduped."""
+        text = "doi:10.48550/arXiv.2001.08361 and doi:10.48550/arXiv.2203.15556"
+        refs = extract_source_refs(text)
+        assert len(refs) == 2
 
 
 # ============================================================================
@@ -297,3 +379,50 @@ class TestBuildWhyOverlay:
         )
         assert len(overlay.matched_refs) == 2
         assert len(overlay.floating_refs) == 0
+
+    # -- arXiv/DOI alias matching --
+
+    def test_arxiv_doi_accepted_matches_arxiv_ref(self) -> None:
+        """Accepted as doi:10.48550/arXiv.X matches assistant's arxiv:X."""
+        overlay = build_why_overlay(
+            "See arxiv:2001.08361 for details.",
+            accepted_sources=["doi:10.48550/arXiv.2001.08361"],
+            accepted_claim_ids=[],
+        )
+        assert len(overlay.matched_refs) == 1
+        assert len(overlay.floating_refs) == 0
+
+    def test_arxiv_accepted_matches_doi_ref(self) -> None:
+        """Accepted as arxiv:X matches assistant's doi:10.48550/arXiv.X."""
+        overlay = build_why_overlay(
+            "Kaplan et al. (doi:10.48550/arXiv.2001.08361) showed...",
+            accepted_sources=["arxiv:2001.08361"],
+            accepted_claim_ids=[],
+        )
+        assert len(overlay.matched_refs) == 1
+        assert len(overlay.floating_refs) == 0
+
+    def test_arxiv_doi_alias_not_floating(self) -> None:
+        """The exact scenario from the screenshots: arXiv DOI accepted, same paper not flagged floating."""
+        overlay = build_why_overlay(
+            "The foundational work is Kaplan et al. (doi:10.48550/arXiv.2001.08361). "
+            "Hoffmann et al. (doi:10.48550/arXiv.2203.15556) revised the allocation.",
+            accepted_sources=[
+                "doi:10.48550/arXiv.2001.08361",
+                "doi:10.48550/arXiv.2203.15556",
+            ],
+            accepted_claim_ids=["C-DEMO01", "C-DEMO02"],
+        )
+        assert len(overlay.matched_refs) == 2
+        assert len(overlay.floating_refs) == 0
+
+    def test_mixed_arxiv_alias_and_regular_doi(self) -> None:
+        """arXiv DOI and regular DOI in same overlay."""
+        overlay = build_why_overlay(
+            "See doi:10.48550/arXiv.2001.08361 and doi:10.1038/nature12373.",
+            accepted_sources=["arxiv:2001.08361"],  # only arXiv accepted
+            accepted_claim_ids=[],
+        )
+        assert len(overlay.matched_refs) == 1  # arXiv alias matches
+        assert len(overlay.floating_refs) == 1  # nature DOI is floating
+        assert overlay.floating_refs[0].identifier == "10.1038/nature12373"

@@ -175,15 +175,15 @@ governor kernel verify --run <id>
 ## Architecture
 
 ```mermaid
-graph TD
-    A["Agent\n(untrusted)"]
+flowchart TD
+    A["Agent<br/>(untrusted)"]
     A -->|propose| B
 
-    subgraph B ["GOVERNOR (enforcement kernel)"]
-        B1["Observe: signals, churn, drift"]
-        B2["Evaluate: policy + evidence + regime"]
-        B3["Enforce: allow/deny/strip/redirect"]
-        B4["Prove: hash-chained receipts"]
+    subgraph B["GOVERNOR<br/>(enforcement kernel)"]
+        B1["Observe: signals, churn,<br/>drift"]
+        B2["Evaluate: policy + evidence<br/>+ regime"]
+        B3["Enforce: allow/deny/strip/<br/>redirect"]
+        B4["Prove: hash-chained<br/>receipts"]
         B1 --> B2 --> B3 --> B4
     end
 

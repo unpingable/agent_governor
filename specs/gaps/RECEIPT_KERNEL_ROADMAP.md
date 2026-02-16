@@ -176,11 +176,9 @@ status: canonical
 **Spec**: `specs/gaps/PROBLEM_SOLVING_MODE.md`
 **Depends on**: Event envelope (done), evidence provenance model (done), stage graphs (done), bridge wiring (done)
 
-### 16. `governor receipt verify` CLI Command
-**What**: `governor receipt verify --run <id>` — runs the 12 invariants (6 structural + 6 hallucination), prints single-line verdict + pointers. Makes the kernel touchable without full integration.
-**Why deferred**: Kernel needs to be wired first. Small feature.
-**When**: Shortly after bridge is wired to a real workflow.
-**Gap risk**: Low. Invariants can be run programmatically today.
+### 16. `governor kernel verify` CLI Command — DONE (v0.4)
+**What**: `governor kernel verify --run <id>` — runs all 13 invariants, prints single-line verdict + pointers. `governor kernel runs` lists runs.
+**Status**: Shipped. Wired to all 13 invariants (6 structural + 6 hallucination + 1 oracle).
 
 ---
 
@@ -214,7 +212,16 @@ DONE: wire bridge to evidence_gate.check() — one kernel run per check invocati
       + custody scores + evaluation + decision + finalize in proper stage sequence
       + kernel write failures caught + logged (kernel_ok=False prevents silent green)
       + 41 integration tests (12 invariants run against real evidence_gate output)
-NEXT: governor receipt verify CLI command (#16)
+DONE: oracle:pytest_log — first real HARD→PASS evidence path
+      + PytestRunner, OraclePytestLog (content-addressed), JUnit XML parsing
+      + oracle_class metadata on EVIDENCE_PUT, wired through to claims_map
+      + `governor gate check --oracle pytest` CLI
+DONE: governor kernel verify CLI command (#16) + governor kernel runs
+DONE: oracle.independence_minimum invariant (13th invariant)
+      + policy table: (mode, claim_level) → minimum oracle class
+      + defaults to class 0 (inert today), enforceable by config change
+      + build_blob_class_map helper, 26 tests
+NEXT: release taint on class 0 oracle evidence (no publish from local-only)
       + external anchoring — minimal anchor file (#13)
 THEN: gating flip (parallel → enforcement, #15), remediation runner (#2), cost evidence (#5)
 LATER: regression farming (#4), replay tiers (#9), executor swap prep (#14, build_id in envelopes)
@@ -230,3 +237,4 @@ LATER: regression farming (#4), replay tiers (#9), executor swap prep (#14, buil
 | 0.1 | 2026-02-15 | Initial roadmap. Redaction + retention + envelope as first build. |
 | 0.2 | 2026-02-15 | 12 invariants complete (6 structural + 6 hallucination). Evidence provenance model. Tool output binding. |
 | 0.3 | 2026-02-15 | Bridge wired to evidence_gate.check(). First real workflow emitting kernel runs. 41 integration tests. |
+| 0.4 | 2026-02-16 | oracle:pytest_log (HARD→PASS path). oracle.independence_minimum invariant. CLI verify/runs. 13 invariants, 172 kernel tests. |

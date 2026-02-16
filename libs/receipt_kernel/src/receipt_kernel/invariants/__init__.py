@@ -1,6 +1,6 @@
 """Constitutional invariants for the receipt kernel.
 
-Nine invariants in two groups:
+Invariants in three groups:
 
 Structural (ledger integrity):
 - ledger.chain_valid — hash chain verification
@@ -17,6 +17,9 @@ Hallucination (claims ↔ evidence binding):
 - refs.closed_world — evidence refs must come from this run's ledger
 - output.bound_to_claims — claims_map must bind to final output blob
 - confidence.sanity — confidence levels must match evidence strength
+
+Oracle (evidence provenance):
+- oracle.independence_minimum — oracle evidence meets minimum class for mode
 """
 
 from receipt_kernel.invariants.claims_evidence_binding import ClaimsEvidenceBindingInvariant
@@ -25,6 +28,7 @@ from receipt_kernel.invariants.epistemic_mode_requirements import EpistemicModeR
 from receipt_kernel.invariants.evaluation_completeness import EvaluationCompletenessInvariant
 from receipt_kernel.invariants.finalization_completeness import FinalizationCompletenessInvariant
 from receipt_kernel.invariants.ledger_chain_valid import LedgerChainValidInvariant
+from receipt_kernel.invariants.oracle_independence import OracleIndependenceInvariant
 from receipt_kernel.invariants.output_bound_to_claims import OutputBoundToClaimsInvariant
 from receipt_kernel.invariants.receipt_completeness import ReceiptCompletenessInvariant
 from receipt_kernel.invariants.refs_closed_world import RefsClosedWorldInvariant
@@ -46,4 +50,6 @@ __all__ = [
     "RefsClosedWorldInvariant",
     "OutputBoundToClaimsInvariant",
     "ConfidenceSanityInvariant",
+    # Oracle
+    "OracleIndependenceInvariant",
 ]

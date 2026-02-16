@@ -166,7 +166,13 @@ claims in strict mode.**
 - Policy table regression tests
 - "class 0 not sufficient for strict/high-confidence" tests
 
-#### Relationship to existing work
+#### Implementation status
+
+**Plumbed.** The `oracle.independence_minimum` invariant exists in the receipt
+kernel (`libs/receipt_kernel/src/receipt_kernel/invariants/oracle_independence.py`)
+with a configurable policy table `(mode, claim_level) → min_required_class`.
+All defaults are currently class 0 (inert). To enforce class 1 for strict + high,
+pass `policy={("factual", "high"): 1}` to the constructor. 26 tests.
 
 The `confidence.sanity` invariant in receipt_kernel already flags HARD claims
 with weak evidence. Oracle independence classes refine *what counts as strong*

@@ -85,6 +85,26 @@ def build_blob_kind_map(store: Any, run_id: str) -> dict[str, str]:
     return result
 
 
+def build_blob_class_map(store: Any, run_id: str) -> dict[str, int]:
+    """Build a mapping from blob ref → oracle_class for a run.
+
+    Scans all EVIDENCE_PUT events and extracts meta.oracle_class.
+    Returns {blob_ref: oracle_class} for all blobs with oracle_class.
+    Blobs without oracle_class are excluded (they are not oracle evidence).
+    """
+    events = store.get_events(run_id, event_type="EVIDENCE_PUT")
+    result: dict[str, int] = {}
+    for ev in events:
+        payload = ev.get("payload") or {}
+        evidence = payload.get("evidence") or {}
+        ref = evidence.get("ref")
+        meta = payload.get("meta") or {}
+        oracle_class = meta.get("oracle_class")
+        if isinstance(ref, str) and isinstance(oracle_class, int):
+            result[ref] = oracle_class
+    return result
+
+
 def collect_run_blob_refs(store: Any, run_id: str) -> set[str]:
     """Collect all blob refs produced by EVIDENCE_PUT events in a run.
 

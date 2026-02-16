@@ -86,6 +86,10 @@ class ResearchClaim:
     content: str
     status: ClaimStatus = ClaimStatus.FLOATING
     scope: str = ""
+    source_ref: str = ""
+    """Structured source reference (e.g., 'doi:10.1038/x', 'pypi:numpy', 'cve:CVE-2021-1234')."""
+    captured_from: str = ""
+    """Capture ID or turn ID that produced this claim."""
     created_at: str = ""
 
     def __post_init__(self) -> None:
@@ -93,13 +97,18 @@ class ResearchClaim:
             self.created_at = datetime.now(timezone.utc).isoformat()
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "id": self.id,
             "content": self.content,
             "status": self.status.value,
             "scope": self.scope,
             "created_at": self.created_at,
         }
+        if self.source_ref:
+            d["source_ref"] = self.source_ref
+        if self.captured_from:
+            d["captured_from"] = self.captured_from
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ResearchClaim:
@@ -108,6 +117,8 @@ class ResearchClaim:
             content=data["content"],
             status=ClaimStatus(data.get("status", "floating")),
             scope=data.get("scope", ""),
+            source_ref=data.get("source_ref", ""),
+            captured_from=data.get("captured_from", ""),
             created_at=data.get("created_at", ""),
         )
 
@@ -267,10 +278,22 @@ class ResearchStore:
 
     # ── CRUD: Claims ────────────────────────────────────────────────────
 
-    def add_claim(self, content: str, scope: str = "") -> ResearchClaim:
+    def add_claim(
+        self,
+        content: str,
+        scope: str = "",
+        source_ref: str = "",
+        captured_from: str = "",
+    ) -> ResearchClaim:
         """Add a new research claim."""
         claim_id = f"C-{uuid.uuid4().hex[:6].upper()}"
-        claim = ResearchClaim(id=claim_id, content=content, scope=scope)
+        claim = ResearchClaim(
+            id=claim_id,
+            content=content,
+            scope=scope,
+            source_ref=source_ref,
+            captured_from=captured_from,
+        )
         self.claims[claim_id] = claim
         self._save()
         return claim

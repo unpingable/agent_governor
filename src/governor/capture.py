@@ -471,11 +471,17 @@ def dedup_captures(items: list[CapturedItem]) -> list[CapturedItem]:
     """Merge captures with same kind+subject_guess.
 
     Keeps highest confidence, merges spans, concatenates statements.
+    When subject_guess is absent, falls back to statement text for the key
+    so that distinct source refs (e.g., two different DOIs) stay separate.
     """
     seen: dict[str, CapturedItem] = {}
 
     for item in items:
-        key = f"{item.kind}:{(item.subject_guess or '').lower()}"
+        subject_key = (item.subject_guess or "").lower()
+        if not subject_key:
+            # No subject → use statement as identity (prevents merging distinct refs)
+            subject_key = item.statement.strip().lower()
+        key = f"{item.kind}:{subject_key}"
 
         if key in seen:
             existing = seen[key]
@@ -864,6 +870,80 @@ def _research_patterns() -> list[PatternDef]:
         draft_fields={"assumption": "$statement"},
     ))
 
+    # --- SOURCE_REF (structured identifiers: DOI, PyPI, CVE, RFC, arXiv) ---
+    # These use statement_group (not subject_group) because identifiers are
+    # technical strings, not proper nouns — extract_subject requires uppercase.
+
+    patterns.append(PatternDef(
+        name="doi_ref",
+        category="source_ref",
+        regex=re.compile(
+            r"(?:doi:\s*|DOI:\s*|https?://doi\.org/)(10\.\d{4,}/[^\s,;)\]]+)",
+        ),
+        kind=ResearchCaptureKind.CITATION,
+        confidence=0.95,
+        field_guess="source_ref",
+        subject_group=None,
+        statement_group=0,
+        draft_fields={"source_ref": "doi:$statement", "ref_type": "doi"},
+    ))
+
+    patterns.append(PatternDef(
+        name="pypi_ref",
+        category="source_ref",
+        regex=re.compile(
+            r"(?:pypi:|pip\s+install\s+)([a-zA-Z0-9][\w.-]*(?:[>=<]=?\d[\w.]*)?)",
+        ),
+        kind=ResearchCaptureKind.CITATION,
+        confidence=0.92,
+        field_guess="source_ref",
+        subject_group=None,
+        statement_group=0,
+        draft_fields={"source_ref": "pypi:$statement", "ref_type": "pypi"},
+    ))
+
+    patterns.append(PatternDef(
+        name="cve_ref",
+        category="source_ref",
+        regex=re.compile(
+            r"(CVE-\d{4}-\d{4,})",
+        ),
+        kind=ResearchCaptureKind.CITATION,
+        confidence=0.95,
+        field_guess="source_ref",
+        subject_group=None,
+        statement_group=0,
+        draft_fields={"source_ref": "cve:$statement", "ref_type": "cve"},
+    ))
+
+    patterns.append(PatternDef(
+        name="rfc_ref",
+        category="source_ref",
+        regex=re.compile(
+            r"(?i)RFC\s*(\d{3,})",
+        ),
+        kind=ResearchCaptureKind.CITATION,
+        confidence=0.90,
+        field_guess="source_ref",
+        subject_group=None,
+        statement_group=0,
+        draft_fields={"source_ref": "rfc:$statement", "ref_type": "rfc"},
+    ))
+
+    patterns.append(PatternDef(
+        name="arxiv_ref",
+        category="source_ref",
+        regex=re.compile(
+            r"(?:arXiv:|arxiv\.org/abs/)(\d{4}\.\d{4,})",
+        ),
+        kind=ResearchCaptureKind.CITATION,
+        confidence=0.95,
+        field_guess="source_ref",
+        subject_group=None,
+        statement_group=0,
+        draft_fields={"source_ref": "arxiv:$statement", "ref_type": "arxiv"},
+    ))
+
     return patterns
 
 
@@ -874,7 +954,7 @@ class ResearchCaptureClassifier(CaptureClassifier):
     """Detect claims, citations, experiments, and assumptions in research chat."""
 
     def _get_version(self) -> str:
-        return "research@1.0.0"
+        return "research@1.1.0"
 
     def _get_patterns(self) -> list[PatternDef]:
         return _RESEARCH_PATTERNS

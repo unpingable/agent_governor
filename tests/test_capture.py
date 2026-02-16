@@ -430,7 +430,7 @@ class TestResearchCapture:
 
     def test_forensic_version(self, classifier):
         _, receipt = classifier.scan("Claim: X is true")
-        assert receipt.classifier_version == "research@1.0.0"
+        assert receipt.classifier_version == "research@1.1.0"
 
     def test_receipt_deterministic(self, classifier):
         text = "Evidence suggests X causes Y"
@@ -471,3 +471,91 @@ class TestRegistry:
     def test_max_captures_passed_through(self):
         clf = get_classifier("code", max_captures=3)
         assert clf.max_captures == 3
+
+
+# =============================================================================
+# Source Ref Patterns (DOI, PyPI, CVE, RFC, arXiv)
+# =============================================================================
+
+
+class TestSourceRefCapture:
+    """Test structured identifier extraction from research chat."""
+
+    @pytest.fixture
+    def classifier(self):
+        return ResearchCaptureClassifier()
+
+    def test_doi_extracted(self, classifier):
+        items, _ = classifier.scan("See doi:10.1038/nature12373 for details.")
+        refs = [i for i in items if i.draft_payload.get("ref_type") == "doi"]
+        assert len(refs) >= 1
+        assert "10.1038/nature12373" in refs[0].statement
+
+    def test_doi_url_format(self, classifier):
+        items, _ = classifier.scan("Published at https://doi.org/10.5281/zenodo.18039927")
+        refs = [i for i in items if i.draft_payload.get("ref_type") == "doi"]
+        assert len(refs) >= 1
+        assert "10.5281/zenodo.18039927" in refs[0].statement
+
+    def test_pypi_ref(self, classifier):
+        items, _ = classifier.scan("Uses pypi:numpy>=1.21.0 for arrays.")
+        refs = [i for i in items if i.draft_payload.get("ref_type") == "pypi"]
+        assert len(refs) >= 1
+        assert "numpy" in refs[0].statement
+
+    def test_pip_install_ref(self, classifier):
+        items, _ = classifier.scan("Run pip install requests to fetch data.")
+        refs = [i for i in items if i.draft_payload.get("ref_type") == "pypi"]
+        assert len(refs) >= 1
+        assert "requests" in refs[0].statement
+
+    def test_cve_ref(self, classifier):
+        items, _ = classifier.scan("Affected by CVE-2021-44228 (Log4Shell).")
+        refs = [i for i in items if i.draft_payload.get("ref_type") == "cve"]
+        assert len(refs) >= 1
+        assert "CVE-2021-44228" in refs[0].statement
+
+    def test_rfc_ref(self, classifier):
+        items, _ = classifier.scan("Implements RFC 6749 (OAuth 2.0).")
+        refs = [i for i in items if i.draft_payload.get("ref_type") == "rfc"]
+        assert len(refs) >= 1
+        assert "6749" in refs[0].statement
+
+    def test_arxiv_ref(self, classifier):
+        items, _ = classifier.scan("Based on arXiv:2501.00001 transformer work.")
+        refs = [i for i in items if i.draft_payload.get("ref_type") == "arxiv"]
+        assert len(refs) >= 1
+        assert "2501.00001" in refs[0].statement
+
+    def test_source_ref_high_confidence(self, classifier):
+        """Source refs should have high confidence (>= 0.90)."""
+        items, _ = classifier.scan("See doi:10.1038/nature12373 and CVE-2021-44228")
+        refs = [i for i in items if i.draft_payload.get("ref_type")]
+        assert all(r.confidence >= 0.90 for r in refs)
+
+    def test_source_ref_kind_is_citation(self, classifier):
+        """All source refs should be classified as citations."""
+        items, _ = classifier.scan("doi:10.1038/x pypi:numpy CVE-2021-1234 RFC 6749 arXiv:2501.00001")
+        refs = [i for i in items if i.draft_payload.get("ref_type")]
+        assert all(r.kind == ResearchCaptureKind.CITATION for r in refs)
+
+    def test_multiple_refs_in_one_text(self, classifier):
+        text = "Uses doi:10.1038/nature12373 and CVE-2021-44228 per RFC 6749."
+        items, receipt = classifier.scan(text)
+        ref_types = {i.draft_payload.get("ref_type") for i in items if i.draft_payload.get("ref_type")}
+        assert "doi" in ref_types
+        assert "cve" in ref_types
+        assert "rfc" in ref_types
+
+    def test_draft_payload_has_source_ref(self, classifier):
+        """Draft payload should contain the structured source_ref string."""
+        items, _ = classifier.scan("See doi:10.1038/nature12373")
+        refs = [i for i in items if i.draft_payload.get("ref_type") == "doi"]
+        assert len(refs) >= 1
+        assert refs[0].draft_payload["source_ref"].startswith("doi:")
+
+    def test_no_false_positive_on_plain_numbers(self, classifier):
+        """Plain numbers should not trigger source_ref patterns."""
+        items, _ = classifier.scan("The value is 10.5 and the count is 2021.")
+        refs = [i for i in items if i.draft_payload.get("ref_type")]
+        assert len(refs) == 0

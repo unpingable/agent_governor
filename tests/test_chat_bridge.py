@@ -719,6 +719,18 @@ class TestGovernorHooksContinuity:
         # Should have governance/tone/constraint anchors
         assert "Governance" in system or "PROHIBITED" in system or "STYLE" in system
 
+    def test_fiction_canon_authority_in_prompt(self, tmp_path: Path) -> None:
+        """Fiction prompt includes canon authority section (canon vs draft)."""
+        ctx = self._make_context(tmp_path, mode="fiction")
+        hooks = GovernorHooks(ctx)
+        messages = [ChatMessage(role="user", content="Write a scene")]
+        result = hooks.augment_messages(messages)
+        system = result[0].content
+        assert "Canon Authority" in system
+        assert "provisional" in system.lower()
+        assert "Characters" in system
+        assert "World Rules" in system
+
     def test_user_registered_anchors_loaded(self, tmp_path: Path) -> None:
         """User-registered anchors from CLI are loaded in all modes."""
         from governor.continuity import Anchor, AnchorType, Severity, AnchorRegistry

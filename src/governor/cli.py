@@ -10472,15 +10472,18 @@ def gate_cmd(ctx):
 @click.option("--task", "-t", default="", help="Task description for context")
 @click.option("--strict/--permissive", default=True, help="Strict mode (fail-closed) or permissive (warn only)")
 @click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--oracle", "oracle_type", type=click.Choice(["pytest"]), help="Run oracle and attach evidence")
+@click.option("--test-path", multiple=True, help="Test path(s) for oracle:pytest (default: tests/)")
 @click.pass_context
-def lite_check(ctx, text, use_stdin, file, task, strict, fmt):
+def lite_check(ctx, text, use_stdin, file, task, strict, fmt, oracle_type, test_path):
     """Check agent output against kernel constraints.
 
     \b
     Examples:
-        governor lite check "This improves performance by 10x"
+        governor gate check "This improves performance by 10x"
         governor gate check --stdin < output.txt
-        governor gate check --file output.txt --format json
+        governor gate check --oracle pytest "All tests pass."
+        governor gate check --oracle pytest --test-path tests/test_foo.py "Tests verified."
     """
     from .evidence_gate import EvidenceGate, EvidenceGateConfig
 
@@ -10500,18 +10503,75 @@ def lite_check(ctx, text, use_stdin, file, task, strict, fmt):
 
     # Wire receipt system if governor is initialized
     receipt_system = None
+    kernel_bridge = None
     gov_dir = get_governor_dir(ctx)
     if gov_dir.exists():
         from .gate_receipt import GateReceiptSystem
         receipt_system = GateReceiptSystem(gov_dir)
 
-    gate = EvidenceGate(config=config, receipt_system=receipt_system)
-    result = gate.check(task=task, context="", output=content)
+        # Wire kernel bridge
+        try:
+            from receipt_kernel.store_sqlite import SqliteReceiptStore
+            from .receipt_bridge import ReceiptKernelBridge
+            db_path = gov_dir / "receipt_kernel.db"
+            store = SqliteReceiptStore(str(db_path), redaction_enabled=False)
+            store.initialize_schema()
+            kernel_bridge = ReceiptKernelBridge(
+                store=store,
+                policy_id="evidence_gate_v1",
+                policy_version="0.3",
+                stage_graph_id="v1_default",
+            )
+        except ImportError:
+            pass
+
+    # Run oracle if requested
+    oracle_evidence = []
+    if oracle_type == "pytest":
+        from .oracle_pytest import PytestRunner
+        paths = list(test_path) if test_path else ["tests/"]
+        click.echo("Running pytest oracle...", err=True)
+        runner = PytestRunner()
+        try:
+            pytest_result = runner.run(paths, cwd=str(Path.cwd()))
+            oracle_evidence.append(pytest_result.log)
+            log = pytest_result.log
+            if log.all_passed:
+                click.echo(f"  {log.tests_passed} passed, {log.tests_skipped} skipped ({log.duration_s:.1f}s)", err=True)
+            else:
+                click.echo(f"  {log.tests_failed} failed, {log.tests_errored} errored, {log.tests_passed} passed ({log.duration_s:.1f}s)", err=True)
+                for f in log.failures[:3]:
+                    click.echo(f"    FAIL: {f.nodeid}", err=True)
+            click.echo(f"  oracle_class: {log.oracle_class} (local)", err=True)
+        except Exception as exc:
+            click.echo(f"  oracle failed: {exc}", err=True)
+
+    gate = EvidenceGate(config=config, receipt_system=receipt_system, kernel_bridge=kernel_bridge)
+    result = gate.check(task=task, context="", output=content, oracle_evidence=oracle_evidence or None)
 
     if fmt == "json":
-        click.echo(result.to_json())
+        # Include oracle metadata in JSON output
+        d = result.to_dict()
+        if oracle_evidence:
+            d["oracle_evidence"] = [
+                {
+                    "kind": o.kind,
+                    "oracle_class": o.oracle_class,
+                    "all_passed": o.all_passed,
+                    "tests_total": o.tests_total,
+                    "tests_failed": o.tests_failed,
+                    "duration_s": o.duration_s,
+                }
+                for o in oracle_evidence
+                if hasattr(o, "kind")
+            ]
+        click.echo(json.dumps(d, indent=2))
     else:
         click.echo(gate.format_status(result))
+        if result.kernel_run_id:
+            click.echo(f"\nKernel run: {result.kernel_run_id}")
+            if result.kernel_ok:
+                click.echo("  Use 'governor kernel verify --run <id>' to inspect invariants")
 
 
 @gate_cmd.command("validate")

@@ -43,7 +43,7 @@ Every enforcement action produces one of these. Tamper with the chain — the ha
 - Not an agent framework. Governs pipelines that generate and verify artifacts — including semi-automated ones — but does not own an agent runtime.
 - Not "alignment." Does not make models good.
 - Not a confidence-score system. Confidence without evidence is theater.
-- Not a policy document. It's an enforcement boundary with teeth.
+- Not a policy document. It's an enforcement boundary that blocks writes.
 
 ---
 

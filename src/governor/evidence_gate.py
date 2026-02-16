@@ -200,6 +200,9 @@ class EvidenceGateOutput:
     kernel_run_id: str | None = None
     kernel_ok: bool | None = None  # None = no bridge, True = success, False = write failed
 
+    # Release taint (computed after kernel run, dict form of RunTaint)
+    release_taint: dict[str, Any] | None = None
+
     def to_dict(self) -> dict[str, Any]:
         d = {
             "patch": self.patch,
@@ -215,6 +218,8 @@ class EvidenceGateOutput:
         if self.kernel_run_id is not None:
             d["kernel_run_id"] = self.kernel_run_id
             d["kernel_ok"] = self.kernel_ok
+        if self.release_taint is not None:
+            d["release_taint"] = self.release_taint
         return d
 
     def to_json(self) -> str:
@@ -859,6 +864,14 @@ class EvidenceGate:
             result.kernel_run_id = run_id
             result.kernel_ok = True
             self.logger.log("kernel_run_complete", run_id=run_id)
+
+            # Compute release taint (informational, non-fatal)
+            try:
+                from governor.release_taint import compute_taint
+                taint = compute_taint(bridge._store, run_id)
+                result.release_taint = taint.to_dict()
+            except Exception as exc:
+                logger.warning("release taint computation failed: %s", exc)
         except Exception as exc:
             # CRITICAL: write failure must NOT produce silent green.
             result.kernel_run_id = run_id

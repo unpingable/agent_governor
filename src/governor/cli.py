@@ -10572,6 +10572,15 @@ def lite_check(ctx, text, use_stdin, file, task, strict, fmt, oracle_type, test_
             click.echo(f"\nKernel run: {result.kernel_run_id}")
             if result.kernel_ok:
                 click.echo("  Use 'governor kernel verify --run <id>' to inspect invariants")
+            if result.release_taint:
+                t = result.release_taint
+                if t["status"] == "tainted":
+                    n = len(t["reasons"])
+                    click.echo(f"  Release: TAINTED — {n} claim(s) below publish threshold (rerun in CI to clear)")
+                elif t["status"] == "unknown":
+                    click.echo(f"  Release: UNKNOWN — missing evidence (rerun with --oracle to make auditable)")
+                else:
+                    click.echo(f"  Release: clean")
 
 
 @gate_cmd.command("validate")
@@ -17133,6 +17142,7 @@ def kernel_verify(ctx: click.Context, run_id: str, as_json: bool) -> None:
             RefsClosedWorldInvariant,
             OutputBoundToClaimsInvariant,
             ConfidenceSanityInvariant,
+            OracleIndependenceInvariant,
         )
     except ImportError:
         click.echo("Error: receipt_kernel not installed.", err=True)
@@ -17170,6 +17180,7 @@ def kernel_verify(ctx: click.Context, run_id: str, as_json: bool) -> None:
         RefsClosedWorldInvariant(),
         OutputBoundToClaimsInvariant(),
         ConfidenceSanityInvariant(),
+        OracleIndependenceInvariant(),
     ]
 
     inv_ctx = {"store": store, "run_id": run_id}
@@ -17222,10 +17233,19 @@ def kernel_verify(ctx: click.Context, run_id: str, as_json: bool) -> None:
                 })
     top_blocking = blocking[:3]
 
+    # Compute release taint
+    taint_dict = None
+    try:
+        from governor.release_taint import compute_taint
+        taint = compute_taint(store, run_id)
+        taint_dict = taint.to_dict()
+    except Exception:
+        pass
+
     store.close()
 
     if as_json:
-        click.echo(json.dumps({
+        out = {
             "run_id": run_id,
             "mode": run_mode,
             "overall_verdict": overall,
@@ -17233,7 +17253,10 @@ def kernel_verify(ctx: click.Context, run_id: str, as_json: bool) -> None:
             "ceiling_reason": ceiling_reason,
             "invariants": results,
             "top_blocking": top_blocking,
-        }, indent=2))
+        }
+        if taint_dict is not None:
+            out["release_taint"] = taint_dict
+        click.echo(json.dumps(out, indent=2))
         return
 
     # Human-readable output
@@ -17252,6 +17275,48 @@ def kernel_verify(ctx: click.Context, run_id: str, as_json: bool) -> None:
         if r.get("meta", {}).get("skipped"):
             suffix = " (skipped)"
         click.echo(f"  {marker}{sym:7s} {r['invariant_id']}{suffix}")
+
+    # Oracle independence details (always show — debuggability is governance)
+    oracle_result = next(
+        (r for r in results if r["invariant_id"] == "oracle.independence_minimum"), None
+    )
+    if oracle_result and not oracle_result.get("meta", {}).get("skipped"):
+        details = oracle_result.get("meta", {}).get("claim_details", [])
+        if details:
+            click.echo()
+            click.echo("Oracle independence:")
+            for d in details:
+                ok = "OK" if d["satisfied"] else "FAIL"
+                click.echo(
+                    f"  {d['claim_id']}: min={d['min_required']} "
+                    f"observed={d['observed_class']} [{ok}]"
+                )
+
+    # Release taint (always show when available)
+    if taint_dict is not None:
+        click.echo()
+        status = taint_dict["status"].upper()
+        pub_min = taint_dict["publish_min_class"]
+        if taint_dict["status"] == "tainted":
+            n = len(taint_dict["reasons"])
+            total = taint_dict["total_high_confidence_claims"]
+            click.echo(f"Release taint:")
+            click.echo(f"  TAINTED: {n}/{total} high-confidence claims below publish threshold (class {pub_min})")
+            for r in taint_dict["reasons"]:
+                click.echo(f"    {r['claim_id']}: oracle class {r['observed_class']} < publish min {r['publish_min_class']}")
+            click.echo(f"  Next: rerun with --oracle pytest in CI (class 1+) to clear taint")
+        elif taint_dict["status"] == "unknown":
+            click.echo(f"Release taint:")
+            for reason in taint_dict["unknown_reasons"]:
+                if "missing class metadata" in reason:
+                    click.echo(f"  UNKNOWN: {reason}")
+                    click.echo(f"  Next: oracle evidence missing class metadata — check oracle adapter")
+                else:
+                    click.echo(f"  UNKNOWN: {reason}")
+                    click.echo(f"  Next: rerun gate check with --oracle to produce auditable evidence")
+        else:
+            click.echo(f"Release taint:")
+            click.echo(f"  CLEAN: all high-confidence oracle-backed claims meet publish threshold (class {pub_min}+)")
 
     # Top blocking reasons
     if top_blocking:

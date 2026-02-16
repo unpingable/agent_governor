@@ -75,6 +75,54 @@ class TestExtractSourceRefs:
         refs = extract_source_refs("This text has no source references.")
         assert len(refs) == 0
 
+    # -- Edge cases (Chatty review) --
+
+    def test_trailing_punctuation_stripped(self) -> None:
+        """DOI at end of sentence: trailing period stripped."""
+        refs = extract_source_refs("See doi:10.1234/abc.")
+        assert len(refs) == 1
+        assert refs[0].identifier == "10.1234/abc"
+
+    def test_trailing_paren_not_captured(self) -> None:
+        """DOI in parentheses: closing paren not captured."""
+        refs = extract_source_refs("(doi:10.1234/abc)")
+        assert len(refs) == 1
+        # The regex stops at ')' because [^\s,;)\]] excludes it
+        assert ")" not in refs[0].identifier
+
+    def test_case_insensitive_cve(self) -> None:
+        """CVE matching is case-insensitive."""
+        refs = extract_source_refs("cve-2024-12345")
+        assert len(refs) == 1
+        assert refs[0].ref_type == "cve"
+
+    def test_doi_in_url_extracted(self) -> None:
+        """DOI URL form is extracted correctly."""
+        refs = extract_source_refs("https://doi.org/10.1038/s41586-023-06747-5")
+        assert len(refs) == 1
+        assert refs[0].identifier.startswith("10.1038/")
+
+    def test_code_block_still_matches(self) -> None:
+        """Source refs inside code blocks are still extracted.
+
+        This is intentional: we want to catch citations wherever they appear.
+        The model might format them as code.
+        """
+        refs = extract_source_refs("```\ndoi:10.1234/foo\n```")
+        assert len(refs) == 1
+
+    def test_not_a_doi_false_positive(self) -> None:
+        """Random '10.' followed by digits is not a DOI without prefix."""
+        refs = extract_source_refs("The score was 10.5432 out of 20.")
+        # No doi: prefix → should not match
+        assert not any(r.ref_type == "doi" for r in refs)
+
+    def test_pip_install_in_prose(self) -> None:
+        """'pip install' in prose extracts the package name."""
+        refs = extract_source_refs("You can pip install flask-cors for CORS support.")
+        assert len(refs) == 1
+        assert refs[0].identifier == "flask-cors"
+
 
 # ============================================================================
 # extract_candidate_sources

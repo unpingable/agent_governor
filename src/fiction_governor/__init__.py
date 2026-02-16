@@ -84,6 +84,13 @@ from .context_drift import (
     estimate_risk_tier,
     create_context_drift_detector,
 )
+from .canon_capture import (
+    CaptureKind,
+    CaptureStatus,
+    CapturedItem,
+    CaptureReceipt,
+    CanonCaptureClassifier,
+)
 from .guardrails import (
     ConsentLevel,
     ConsentScope,
@@ -185,6 +192,12 @@ __all__ = [
     "classify_register",
     "estimate_risk_tier",
     "create_context_drift_detector",
+    # Canon capture
+    "CaptureKind",
+    "CaptureStatus",
+    "CapturedItem",
+    "CaptureReceipt",
+    "CanonCaptureClassifier",
     # Fiction guardrails
     "ConsentLevel",
     "ConsentScope",

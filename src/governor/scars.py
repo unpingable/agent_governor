@@ -79,6 +79,10 @@ class Scar:
     stiffness: float = MAX_STIFFNESS  # [MIN_STIFFNESS, MAX_STIFFNESS]
     description: str = ""
 
+    # Fingerprint dimensions (region is coarse; these add specificity)
+    failure_kind: str = ""  # What went wrong (timeout, validation, auth, etc.)
+    action_type: str = ""   # What was attempted (write, read, execute, etc.)
+
     # Provenance of the failure that created this scar
     provenance: FailureProvenance = FailureProvenance.INTERNAL
 
@@ -157,12 +161,46 @@ class Scar:
         # Reset evidence counter - must re-prove stability
         self.evidence_count = 0
 
+    @property
+    def fingerprint(self) -> str:
+        """Composite fingerprint: region + failure_kind + action_type."""
+        return f"{self.region}::{self.failure_kind}::{self.action_type}"
+
+    def matches_fingerprint(
+        self,
+        region: str,
+        failure_kind: str = "",
+        action_type: str = "",
+    ) -> bool:
+        """Check if this scar matches a fingerprint query.
+
+        A broader scar (empty failure_kind/action_type) matches
+        narrower queries. A narrow scar only matches exact queries.
+        """
+        if self.region != region:
+            return False
+        # Broad scar (no failure_kind) matches everything in this region
+        if not self.failure_kind and not self.action_type:
+            return True
+        # Narrow query (no failure_kind) matches any scar in this region
+        if not failure_kind and not action_type:
+            return True
+        # Check failure_kind match (empty self matches any query)
+        if self.failure_kind and failure_kind and self.failure_kind != failure_kind:
+            return False
+        # Check action_type match (empty self matches any query)
+        if self.action_type and action_type and self.action_type != action_type:
+            return False
+        return True
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "scar_id": self.scar_id,
             "region": self.region,
             "stiffness": self.stiffness,
             "description": self.description,
+            "failure_kind": self.failure_kind,
+            "action_type": self.action_type,
             "provenance": self.provenance.value,
             "created_at": self.created_at.isoformat(),
             "last_evidence_at": self.last_evidence_at.isoformat() if self.last_evidence_at else None,
@@ -183,6 +221,8 @@ class Scar:
             region=data["region"],
             stiffness=data.get("stiffness", MAX_STIFFNESS),
             description=data.get("description", ""),
+            failure_kind=data.get("failure_kind", ""),
+            action_type=data.get("action_type", ""),
             provenance=FailureProvenance(data.get("provenance", "internal")),
             created_at=datetime.fromisoformat(data["created_at"]),
             last_evidence_at=(
@@ -334,6 +374,8 @@ class FailureEvent:
 
     # What failed
     region: str = ""  # Scope/path/action that failed
+    failure_kind: str = ""  # What went wrong (timeout, validation, auth, etc.)
+    action_type: str = ""   # What was attempted (write, read, execute, etc.)
     description: str = ""
     error_magnitude: float = 0.0  # How bad was the failure [0, inf)
 
@@ -355,6 +397,8 @@ class FailureEvent:
             "event_id": self.event_id,
             "timestamp": self.timestamp.isoformat(),
             "region": self.region,
+            "failure_kind": self.failure_kind,
+            "action_type": self.action_type,
             "description": self.description,
             "error_magnitude": self.error_magnitude,
             "observation_shift": self.observation_shift,
@@ -372,6 +416,8 @@ class FailureEvent:
             event_id=data["event_id"],
             timestamp=datetime.fromisoformat(data["timestamp"]),
             region=data.get("region", ""),
+            failure_kind=data.get("failure_kind", ""),
+            action_type=data.get("action_type", ""),
             description=data.get("description", ""),
             error_magnitude=data.get("error_magnitude", 0.0),
             observation_shift=data.get("observation_shift", 0.0),
@@ -530,6 +576,8 @@ class ScarLedger:
         error_magnitude: float = 1.0,
         description: str = "",
         source: str | None = None,
+        failure_kind: str = "",
+        action_type: str = "",
     ) -> FailureEvent:
         """
         Record a failure event, classify provenance, and apply scar or shield.
@@ -543,6 +591,8 @@ class ScarLedger:
             error_magnitude: severity of the failure
             description: human-readable description
             source: input source (for shielding)
+            failure_kind: what went wrong (timeout, validation, auth, etc.)
+            action_type: what was attempted (write, read, execute, etc.)
 
         Returns the classified FailureEvent.
         """
@@ -550,6 +600,8 @@ class ScarLedger:
         event = FailureEvent(
             event_id=f"fe_{uuid.uuid4().hex[:12]}",
             region=region,
+            failure_kind=failure_kind,
+            action_type=action_type,
             description=description,
             error_magnitude=error_magnitude,
             observation_shift=observation_shift,
@@ -591,8 +643,10 @@ class ScarLedger:
 
     def _apply_scar(self, event: FailureEvent) -> Scar:
         """Apply a scar (tighten admissible control set U)."""
-        # Check if scar already exists for this region
-        existing = self._find_scar_by_region(event.region)
+        # Check if scar already exists for this exact fingerprint
+        existing = self._find_exact_scar(
+            event.region, event.failure_kind, event.action_type,
+        )
 
         if existing:
             # Re-tighten existing scar
@@ -601,12 +655,14 @@ class ScarLedger:
             existing.failure_surprise_ratio = event.surprise_ratio
             return existing
 
-        # Create new scar
+        # Create new scar with full fingerprint
         scar = Scar(
             scar_id=f"sc_{uuid.uuid4().hex[:12]}",
             region=event.region,
             stiffness=self.config.default_stiffness,
             description=event.description,
+            failure_kind=event.failure_kind,
+            action_type=event.action_type,
             provenance=FailureProvenance.INTERNAL,
             anneal_floor=self.config.anneal_floor,
             required_evidence=self.config.evidence_required,
@@ -665,8 +721,10 @@ class ScarLedger:
             )
             self.shields[shield.shield_id] = shield
 
-        # Optional: soft stiffness bump on existing scar (no new topology)
-        existing_scar = self._find_scar_by_region(event.region)
+        # Optional: soft stiffness bump on matching scar (no new topology)
+        existing_scar = self._find_exact_scar(
+            event.region, event.failure_kind, event.action_type,
+        )
         if existing_scar:
             existing_scar.stiffness = min(
                 MAX_STIFFNESS,
@@ -679,7 +737,12 @@ class ScarLedger:
     # Admissibility Checks
     # =========================================================================
 
-    def check_admissible(self, region: str) -> tuple[bool, float, Scar | None]:
+    def check_admissible(
+        self,
+        region: str,
+        failure_kind: str = "",
+        action_type: str = "",
+    ) -> tuple[bool, float, Scar | None]:
         """
         Check if an action in the given region is admissible.
 
@@ -687,8 +750,11 @@ class ScarLedger:
 
         An action is admissible if no hard scar (stiffness >= 0.95) covers it.
         Soft scars impose a cost multiplier but don't block.
+
+        When multiple scars match (e.g. a region-level scar AND a
+        failure_kind-specific scar), the MOST RESTRICTIVE scar wins.
         """
-        scar = self._find_scar_by_region(region)
+        scar = self._find_most_restrictive_scar(region, failure_kind, action_type)
 
         if scar is None:
             return True, 1.0, None
@@ -740,20 +806,30 @@ class ScarLedger:
 
         return results
 
-    def record_stability_evidence(self, region: str) -> bool:
+    def record_stability_evidence(
+        self,
+        region: str,
+        failure_kind: str = "",
+        action_type: str = "",
+    ) -> bool:
         """
         Record evidence of stable operation in a scarred region.
 
         This is how scars eventually relax - not by time passing,
         but by proving stability under similar conditions.
 
-        Returns True if evidence was recorded for a scar.
+        When failure_kind/action_type are provided, evidence targets
+        only scars matching that fingerprint. When omitted, evidence
+        applies to ALL scars in the region (backward compat).
+
+        Returns True if evidence was recorded for at least one scar.
         """
-        scar = self._find_scar_by_region(region)
-        if scar is None:
+        matched = self._find_matching_scars(region, failure_kind, action_type)
+        if not matched:
             return False
 
-        scar.record_evidence()
+        for scar in matched:
+            scar.record_evidence()
         return True
 
     # =========================================================================
@@ -816,11 +892,60 @@ class ScarLedger:
     # =========================================================================
 
     def _find_scar_by_region(self, region: str) -> Scar | None:
-        """Find a scar by region."""
+        """Find a scar by region (backward-compat: returns first match)."""
         for scar in self.scars.values():
             if scar.region == region:
                 return scar
         return None
+
+    def _find_exact_scar(
+        self,
+        region: str,
+        failure_kind: str = "",
+        action_type: str = "",
+    ) -> Scar | None:
+        """Find a scar with an exact fingerprint match."""
+        for scar in self.scars.values():
+            if (
+                scar.region == region
+                and scar.failure_kind == failure_kind
+                and scar.action_type == action_type
+            ):
+                return scar
+        return None
+
+    def _find_matching_scars(
+        self,
+        region: str,
+        failure_kind: str = "",
+        action_type: str = "",
+    ) -> list[Scar]:
+        """Find all scars matching a fingerprint query."""
+        return [
+            scar for scar in self.scars.values()
+            if scar.matches_fingerprint(region, failure_kind, action_type)
+        ]
+
+    def _find_most_restrictive_scar(
+        self,
+        region: str,
+        failure_kind: str = "",
+        action_type: str = "",
+    ) -> Scar | None:
+        """Find the most restrictive scar matching a fingerprint query.
+
+        Tie-breaking is deterministic: highest stiffness wins, then
+        narrowest fingerprint (more fields populated), then scar_id.
+        """
+        matched = self._find_matching_scars(region, failure_kind, action_type)
+        if not matched:
+            return None
+        # Deterministic: stiffness desc, then specificity desc, then scar_id asc
+        return max(matched, key=lambda s: (
+            s.stiffness,
+            len(s.failure_kind) + len(s.action_type),  # prefer specific scars
+            s.scar_id,
+        ))
 
     def _find_shield_by_source(self, source: str) -> Shield | None:
         """Find a shield by source."""

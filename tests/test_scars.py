@@ -1054,3 +1054,413 @@ class TestEdgeCases:
         # negative shift / positive error -> negative rho -> below rho_lo -> internal
         prov, rho = ledger.classify_failure(-0.5, 1.0)
         assert prov == FailureProvenance.INTERNAL
+
+
+# =============================================================================
+# Scar Fingerprint (region + failure_kind + action_type)
+# =============================================================================
+
+
+class TestScarFingerprint:
+    """Test composite fingerprint matching on Scar objects."""
+
+    def test_fingerprint_property(self):
+        scar = Scar(scar_id="s1", region="src/auth.py",
+                     failure_kind="timeout", action_type="write")
+        assert scar.fingerprint == "src/auth.py::timeout::write"
+
+    def test_fingerprint_empty_fields(self):
+        scar = Scar(scar_id="s1", region="src/auth.py")
+        assert scar.fingerprint == "src/auth.py::::"
+
+    def test_matches_same_region_broad_scar(self):
+        """Region-only scar matches any query in that region."""
+        scar = Scar(scar_id="s1", region="src/auth.py")
+        assert scar.matches_fingerprint("src/auth.py")
+        assert scar.matches_fingerprint("src/auth.py", "timeout")
+        assert scar.matches_fingerprint("src/auth.py", "timeout", "write")
+        assert scar.matches_fingerprint("src/auth.py", "validation", "read")
+
+    def test_no_match_different_region(self):
+        scar = Scar(scar_id="s1", region="src/auth.py")
+        assert not scar.matches_fingerprint("src/db.py")
+
+    def test_narrow_scar_only_matches_exact(self):
+        """Scar with failure_kind only matches that kind (or broad queries)."""
+        scar = Scar(scar_id="s1", region="src/auth.py",
+                     failure_kind="timeout")
+        # Exact match
+        assert scar.matches_fingerprint("src/auth.py", "timeout")
+        # Broad query (no failure_kind) matches any scar in region
+        assert scar.matches_fingerprint("src/auth.py")
+        # Different failure_kind does NOT match
+        assert not scar.matches_fingerprint("src/auth.py", "validation")
+
+    def test_full_fingerprint_match(self):
+        scar = Scar(scar_id="s1", region="src/auth.py",
+                     failure_kind="timeout", action_type="write")
+        assert scar.matches_fingerprint("src/auth.py", "timeout", "write")
+        assert scar.matches_fingerprint("src/auth.py", "timeout")
+        assert scar.matches_fingerprint("src/auth.py")
+        assert not scar.matches_fingerprint("src/auth.py", "timeout", "read")
+        assert not scar.matches_fingerprint("src/auth.py", "validation", "write")
+
+    def test_serialization_roundtrip(self):
+        scar = Scar(scar_id="s1", region="r",
+                     failure_kind="timeout", action_type="write")
+        data = scar.to_dict()
+        assert data["failure_kind"] == "timeout"
+        assert data["action_type"] == "write"
+        restored = Scar.from_dict(data)
+        assert restored.failure_kind == "timeout"
+        assert restored.action_type == "write"
+        assert restored.fingerprint == scar.fingerprint
+
+    def test_from_dict_backward_compat(self):
+        """Old serialized scars without fingerprint fields get empty strings."""
+        data = {
+            "scar_id": "s1",
+            "region": "r",
+            "stiffness": 0.8,
+            "provenance": "internal",
+            "created_at": "2025-01-01T00:00:00+00:00",
+        }
+        scar = Scar.from_dict(data)
+        assert scar.failure_kind == ""
+        assert scar.action_type == ""
+
+
+class TestFailureEventFingerprint:
+    """Test failure_kind/action_type on FailureEvent."""
+
+    def test_fields_present(self):
+        event = FailureEvent(event_id="e1", region="r",
+                             failure_kind="timeout", action_type="write")
+        assert event.failure_kind == "timeout"
+        assert event.action_type == "write"
+
+    def test_defaults_empty(self):
+        event = FailureEvent(event_id="e1", region="r")
+        assert event.failure_kind == ""
+        assert event.action_type == ""
+
+    def test_serialization_roundtrip(self):
+        event = FailureEvent(event_id="e1", region="r",
+                             failure_kind="auth", action_type="execute")
+        data = event.to_dict()
+        assert data["failure_kind"] == "auth"
+        assert data["action_type"] == "execute"
+        restored = FailureEvent.from_dict(data)
+        assert restored.failure_kind == "auth"
+        assert restored.action_type == "execute"
+
+    def test_from_dict_backward_compat(self):
+        data = {
+            "event_id": "e1",
+            "timestamp": "2025-01-01T00:00:00+00:00",
+            "region": "r",
+        }
+        event = FailureEvent.from_dict(data)
+        assert event.failure_kind == ""
+        assert event.action_type == ""
+
+
+class TestLedgerFingerprintRecording:
+    """Test that record_failure creates separate scars per fingerprint."""
+
+    def test_same_region_different_failure_kind_separate_scars(self):
+        """Same region, different failure_kind → separate scars."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("src/auth.py", 0.1, 1.0,
+                                     failure_kind="timeout")
+        ev2 = ledger.record_failure("src/auth.py", 0.1, 1.0,
+                                     failure_kind="validation")
+        assert ev1.scar_id != ev2.scar_id
+        assert len(ledger.scars) == 2
+
+    def test_same_fingerprint_retightens(self):
+        """Same fingerprint → retighten existing scar, not new scar."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("src/auth.py", 0.1, 1.0,
+                                     failure_kind="timeout")
+        scar = ledger.scars[ev1.scar_id]
+        scar.stiffness = 0.5  # Soften
+
+        ev2 = ledger.record_failure("src/auth.py", 0.1, 1.0,
+                                     failure_kind="timeout")
+        assert ev2.scar_id == ev1.scar_id
+        assert len(ledger.scars) == 1
+        assert scar.stiffness == MAX_STIFFNESS  # Retightened
+
+    def test_region_only_vs_fingerprinted(self):
+        """Region-only scar and fingerprinted scar coexist."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("src/auth.py", 0.1, 1.0)  # region-only
+        ev2 = ledger.record_failure("src/auth.py", 0.1, 1.0,
+                                     failure_kind="timeout")
+        assert ev1.scar_id != ev2.scar_id
+        assert len(ledger.scars) == 2
+
+    def test_failure_event_carries_fingerprint(self):
+        ledger = ScarLedger()
+        event = ledger.record_failure("r", 0.1, 1.0,
+                                       failure_kind="auth", action_type="execute")
+        assert event.failure_kind == "auth"
+        assert event.action_type == "execute"
+
+
+class TestLedgerFingerprintAdmissibility:
+    """Test check_admissible with fingerprint params."""
+
+    def test_region_only_check_returns_most_restrictive(self):
+        """Region-only check returns most restrictive scar in that region."""
+        ledger = ScarLedger()
+        # Create two scars: one hard (timeout), one soft (validation)
+        ev1 = ledger.record_failure("src/auth.py", 0.1, 1.0,
+                                     failure_kind="timeout")
+        ev2 = ledger.record_failure("src/auth.py", 0.1, 1.0,
+                                     failure_kind="validation")
+        # Soften the validation scar
+        ledger.scars[ev2.scar_id].stiffness = 0.3
+
+        admissible, cost, scar = ledger.check_admissible("src/auth.py")
+        assert not admissible  # Hard scar blocks
+        assert scar.failure_kind == "timeout"
+
+    def test_specific_kind_check_avoids_unrelated_scar(self):
+        """Checking specific failure_kind only sees matching scars."""
+        ledger = ScarLedger()
+        ledger.record_failure("src/auth.py", 0.1, 1.0,
+                              failure_kind="timeout")
+        # Validation check: no matching scar (timeout scar doesn't match)
+        admissible, cost, scar = ledger.check_admissible(
+            "src/auth.py", failure_kind="validation")
+        assert admissible
+        assert scar is None
+
+    def test_broad_scar_blocks_specific_query(self):
+        """Region-level scar (no failure_kind) blocks specific queries."""
+        ledger = ScarLedger()
+        ledger.record_failure("src/auth.py", 0.1, 1.0)  # region-only scar
+
+        # Specific query still blocked by broad scar
+        admissible, cost, scar = ledger.check_admissible(
+            "src/auth.py", failure_kind="timeout")
+        assert not admissible
+
+    def test_hard_scar_on_one_kind_allows_other_kind(self):
+        """Hard scar on timeout doesn't block validation (different kind)."""
+        ledger = ScarLedger()
+        ledger.record_failure("src/auth.py", 0.1, 1.0,
+                              failure_kind="timeout")
+
+        # Timeout blocked
+        admissible, _, _ = ledger.check_admissible(
+            "src/auth.py", failure_kind="timeout")
+        assert not admissible
+
+        # Validation not blocked
+        admissible, _, _ = ledger.check_admissible(
+            "src/auth.py", failure_kind="validation")
+        assert admissible
+
+    def test_no_scar_region(self):
+        """Region with no scars is always admissible."""
+        ledger = ScarLedger()
+        ledger.record_failure("src/auth.py", 0.1, 1.0,
+                              failure_kind="timeout")
+        admissible, cost, scar = ledger.check_admissible("src/db.py")
+        assert admissible
+        assert scar is None
+
+    def test_backward_compat_no_fingerprint(self):
+        """Old-style check_admissible(region) still works."""
+        ledger = ScarLedger()
+        ledger.record_failure("r", 0.1, 1.0)
+        admissible, cost, scar = ledger.check_admissible("r")
+        assert not admissible
+        assert scar is not None
+
+
+class TestLedgerFingerprintEvidence:
+    """Test record_stability_evidence with fingerprint params."""
+
+    def test_evidence_targets_matching_scar(self):
+        """Evidence with failure_kind targets only matching scar."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        ev2 = ledger.record_failure("r", 0.1, 1.0, failure_kind="validation")
+        scar1 = ledger.scars[ev1.scar_id]
+        scar2 = ledger.scars[ev2.scar_id]
+
+        ledger.record_stability_evidence("r", failure_kind="timeout")
+        assert scar1.evidence_count == 1
+        assert scar2.evidence_count == 0
+
+    def test_evidence_without_kind_hits_all(self):
+        """Evidence without failure_kind applies to ALL scars in region."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        ev2 = ledger.record_failure("r", 0.1, 1.0, failure_kind="validation")
+        scar1 = ledger.scars[ev1.scar_id]
+        scar2 = ledger.scars[ev2.scar_id]
+
+        ledger.record_stability_evidence("r")
+        assert scar1.evidence_count == 1
+        assert scar2.evidence_count == 1
+
+    def test_evidence_returns_false_no_scar(self):
+        ledger = ScarLedger()
+        assert ledger.record_stability_evidence("unknown") is False
+
+    def test_evidence_anneals_only_matching(self):
+        """After enough evidence, anneal only targets correct fingerprint."""
+        config = ScarConfig(evidence_required=2)
+        ledger = ScarLedger(config)
+        ev1 = ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        ev2 = ledger.record_failure("r", 0.1, 1.0, failure_kind="validation")
+        scar1 = ledger.scars[ev1.scar_id]
+        scar2 = ledger.scars[ev2.scar_id]
+        scar1.required_evidence = 2
+        scar2.required_evidence = 2
+
+        # Only give timeout evidence
+        ledger.record_stability_evidence("r", failure_kind="timeout")
+        ledger.record_stability_evidence("r", failure_kind="timeout")
+        results = ledger.anneal_scars()
+
+        assert scar1.stiffness < MAX_STIFFNESS  # Annealed
+        assert scar2.stiffness == MAX_STIFFNESS  # Still hard
+
+
+class TestLedgerFingerprintSerialization:
+    """Test that fingerprinted scars survive serialization roundtrip."""
+
+    def test_roundtrip_with_fingerprinted_scars(self):
+        ledger = ScarLedger()
+        ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout",
+                              action_type="write")
+        ledger.record_failure("r", 0.1, 1.0, failure_kind="validation",
+                              action_type="read")
+
+        data = ledger.to_dict()
+        restored = ScarLedger.from_dict(data)
+
+        assert len(restored.scars) == 2
+        scars = list(restored.scars.values())
+        fingerprints = {s.fingerprint for s in scars}
+        assert "r::timeout::write" in fingerprints
+        assert "r::validation::read" in fingerprints
+
+    def test_roundtrip_failure_events_with_fingerprint(self):
+        ledger = ScarLedger()
+        ledger.record_failure("r", 0.1, 1.0, failure_kind="auth",
+                              action_type="execute")
+        data = ledger.to_dict()
+        restored = ScarLedger.from_dict(data)
+        event = restored.failure_history[0]
+        assert event.failure_kind == "auth"
+        assert event.action_type == "execute"
+
+
+class TestLedgerFingerprintRetighten:
+    """Test retighten only fires for matching fingerprint."""
+
+    def test_retighten_matching_fingerprint(self):
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        scar = ledger.scars[ev1.scar_id]
+        scar.stiffness = 0.3  # Soften
+
+        # Same fingerprint → retighten (0.3 + 0.5 default = 0.8)
+        ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        assert scar.stiffness > 0.3  # Retightened
+        assert scar.evidence_count == 0  # Evidence reset
+
+    def test_different_fingerprint_no_retighten(self):
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        scar = ledger.scars[ev1.scar_id]
+        scar.stiffness = 0.3
+
+        # Different fingerprint → new scar, not retighten
+        ev2 = ledger.record_failure("r", 0.1, 1.0, failure_kind="validation")
+        assert scar.stiffness == 0.3  # Unchanged
+        assert len(ledger.scars) == 2
+
+
+class TestLedgerFingerprintTieBreaking:
+    """Test deterministic tie-breaking in most-restrictive selection."""
+
+    def test_same_stiffness_prefers_specific(self):
+        """When stiffness is equal, prefer the more specific scar."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0)  # broad
+        ev2 = ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        scar1 = ledger.scars[ev1.scar_id]
+        scar2 = ledger.scars[ev2.scar_id]
+        scar1.stiffness = 0.5
+        scar2.stiffness = 0.5
+
+        _, _, winner = ledger.check_admissible("r", failure_kind="timeout")
+        # Both match; same stiffness; specific scar (longer fingerprint) wins
+        assert winner.failure_kind == "timeout"
+
+    def test_higher_stiffness_always_wins(self):
+        """Higher stiffness beats higher specificity."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0)  # broad
+        ev2 = ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        scar1 = ledger.scars[ev1.scar_id]
+        scar2 = ledger.scars[ev2.scar_id]
+        scar1.stiffness = 0.8
+        scar2.stiffness = 0.3
+
+        _, _, winner = ledger.check_admissible("r", failure_kind="timeout")
+        assert winner.stiffness == 0.8
+        assert winner.failure_kind == ""  # The broad scar won
+
+    def test_tiebreak_is_deterministic(self):
+        """Same inputs always produce same winner."""
+        ledger = ScarLedger()
+        ledger.record_failure("r", 0.1, 1.0, failure_kind="a")
+        ledger.record_failure("r", 0.1, 1.0, failure_kind="b")
+        for s in ledger.scars.values():
+            s.stiffness = 0.5
+
+        results = set()
+        for _ in range(10):
+            _, _, winner = ledger.check_admissible("r")
+            results.add(winner.scar_id)
+        # Always the same winner
+        assert len(results) == 1
+
+
+class TestBroadcastEvidenceExplicit:
+    """Explicit tests for the broadcast behavior of unspecified kind/type."""
+
+    def test_broadcast_evidence_documented(self):
+        """Unspecified kind == broadcast: evidence hits ALL scars in region.
+
+        This is intentional behavior. Callers who want targeted evidence
+        MUST pass failure_kind and/or action_type.
+        """
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0, failure_kind="a")
+        ev2 = ledger.record_failure("r", 0.1, 1.0, failure_kind="b")
+        ev3 = ledger.record_failure("r", 0.1, 1.0, failure_kind="c")
+
+        # Broadcast: hits all 3
+        ledger.record_stability_evidence("r")
+        for sid in [ev1.scar_id, ev2.scar_id, ev3.scar_id]:
+            assert ledger.scars[sid].evidence_count == 1
+
+    def test_targeted_evidence_does_not_broadcast(self):
+        """Specifying failure_kind targets only that scar."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0, failure_kind="a")
+        ev2 = ledger.record_failure("r", 0.1, 1.0, failure_kind="b")
+
+        ledger.record_stability_evidence("r", failure_kind="a")
+        assert ledger.scars[ev1.scar_id].evidence_count == 1
+        assert ledger.scars[ev2.scar_id].evidence_count == 0

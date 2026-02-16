@@ -1,6 +1,6 @@
 # Canon Capture — Promote Chat Facts to Canonical Store
 
-**Status:** gap
+**Status:** phase-1-implemented
 **Priority:** high (fiction UX — reduces friction between chat and structured data)
 **Effort:** medium (2-3 sessions)
 **Depends on:** CANON_AUTHORITY_PROMPT.md (quick fix should ship first)
@@ -32,14 +32,14 @@ EXPLICIT_MARKERS (high confidence):
   - "{Name}'s backstory is ..."
 
 COPULA_DEFINITIONS (medium confidence):
-  - "{ProperNoun} is {descriptor}" — "Bee is from Karsovik"
+  - "{ProperNoun} is {descriptor}" — "Alice is from Northvale"
   - "{ProperNoun} is a {role}" — "Marcus is a blacksmith"
-  - "{ProperNoun} has {trait}" — "Elena has green eyes"
+  - "{ProperNoun} has {trait}" — "Carol has green eyes"
   - "{ProperNoun} was {origin}" — "She was raised in the capital"
 
 RELATIONSHIP_MARKERS (medium confidence):
-  - "{Name} and {Name} are {relationship}" — "Bee and Fen are rivals"
-  - "{Name} is {Name}'s {role}" — "Marcus is Elena's father"
+  - "{Name} and {Name} are {relationship}" — "Alice and Bob are rivals"
+  - "{Name} is {Name}'s {role}" — "Marcus is Carol's father"
 
 WORLD_BUILDING (medium confidence):
   - "In this world, ..." / "In {setting}, ..."
@@ -73,8 +73,8 @@ class CapturedCanon:
 ```
 
 **What NOT to detect:**
-- Questions ("Is Elena tall?")
-- Hypotheticals ("What if Elena had blue eyes?")
+- Questions ("Is Carol tall?")
+- Hypotheticals ("What if Carol had blue eyes?")
 - Scene content / narration (dialogue lines, action descriptions)
 - Meta-discussion ("I'm thinking about making her a doctor")
 
@@ -90,9 +90,9 @@ After the assistant's response, append a small non-intrusive chip:
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│ [Assistant response about Bee's background...]       │
+│ [Assistant response about Alice's background...]       │
 │                                                      │
-│  📌 Add to canon?  [Character: Bee] [World Rule]     │
+│  📌 Add to canon?  [Character: Alice] [World Rule]     │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -108,11 +108,11 @@ Captured definitions appear in a "Pending" section at the top of the Characters/
 Characters
   ┌─────────────────────────────────┐
   │ 📋 Pending (2)                  │
-  │   Bee — "is from Karsovik"  [✓] │
-  │   Bee — "stubborn, loyal"   [✓] │
+  │   Alice — "is from Northvale"  [✓] │
+  │   Alice — "stubborn, loyal"   [✓] │
   └─────────────────────────────────┘
-  Bee (confirmed)
-  Elena (confirmed)
+  Alice (confirmed)
+  Carol (confirmed)
 ```
 
 Clicking ✓ promotes to canon. Items expire after session end if not promoted.
@@ -126,7 +126,7 @@ When canon is captured (whether via chip or draft queue), the assistant's system
 ```
 ## Pending Canon
 The following facts were mentioned in chat but not yet added to canon:
-- Bee: "is from Karsovik" (pending — user has not confirmed)
+- Alice: "is from Northvale" (pending — user has not confirmed)
 
 Treat pending items as provisional. Do not reference them as established facts.
 ```
@@ -161,9 +161,9 @@ CanonCaptureClassifier.scan(text)
 
 ```
 POST /governor/fiction/capture
-  Request:  { "text": "Bee is from Karsovik", "message_id": "msg_123" }
-  Response: { "captures": [{ "type": "character", "name": "Bee",
-              "statement": "is from Karsovik", "confidence": 0.85,
+  Request:  { "text": "Alice is from Northvale", "message_id": "msg_123" }
+  Response: { "captures": [{ "type": "character", "name": "Alice",
+              "statement": "is from Northvale", "confidence": 0.85,
               "suggested_field": "description" }] }
 ```
 
@@ -232,12 +232,12 @@ The capture classifier does NOT write to canon. It only detects and suggests. Th
 
 ## Verification
 
-1. Start fiction session, type "Bee is from Karsovik and she's stubborn"
-2. Classifier returns: `[{type: "character", name: "Bee", statement: "is from Karsovik", field: "description"}, {type: "character", name: "Bee", statement: "stubborn", field: "description"}]`
-3. Inline chip appears: `📌 Add to canon? [Character: Bee]`
-4. Clicking opens Add Character modal with name="Bee", description="is from Karsovik; stubborn"
+1. Start fiction session, type "Alice is from Northvale and she's stubborn"
+2. Classifier returns: `[{type: "character", name: "Alice", statement: "is from Northvale", field: "description"}, {type: "character", name: "Alice", statement: "stubborn", field: "description"}]`
+3. Inline chip appears: `📌 Add to canon? [Character: Alice]`
+4. Clicking opens Add Character modal with name="Alice", description="is from Northvale; stubborn"
 5. User confirms → character appears in sidebar → continuity anchor created
-6. Assistant now treats "Bee is from Karsovik" as canonical fact
+6. Assistant now treats "Alice is from Northvale" as canonical fact
 
 ## Files
 

@@ -1,13 +1,13 @@
 # Canon Authority Prompt — Stop Confirming What Isn't Saved
 
 **Status:** gap
-**Priority:** immediate (fiction UX — Erin is hitting this now)
+**Priority:** immediate (fiction UX — observed in active sessions)
 **Effort:** 30 minutes
 **Risk:** none — prompt-only change, no code
 
 ## Problem
 
-When Erin defines character facts in chat ("Bee is from Karsovik"), the assistant responds as if the fact has been integrated into persistent canon ("this adds depth", "this positions her perfectly"). The user reasonably infers: *I said it, the system acknowledged it, therefore it's saved.*
+When a user defines character facts in chat ("Alice is from Northvale"), the assistant responds as if the fact has been integrated into persistent canon ("this adds depth", "this positions her perfectly"). The user reasonably infers: *I said it, the system acknowledged it, therefore it's saved.*
 
 It isn't. Characters/World Rules only become canonical when added through the sidebar panels. Chat is ephemeral. The assistant is creating a false sense of persistence.
 
@@ -49,7 +49,7 @@ the Characters or World Rules panels.
 
 When the user defines a character trait, world rule, or relationship in chat:
 - Acknowledge it for the current conversation
-- Do NOT confirm it as permanently established ("got it, she's from Karsovik now")
+- Do NOT confirm it as permanently established ("got it, she's from Northvale now")
 - Instead, gently direct: "I'll use that for now — add it under Characters if you
   want it to stick across sessions."
 
@@ -67,7 +67,7 @@ in chat. You will not remember them. Be honest about that.
 ## Verification
 
 1. Start a fiction session
-2. Type "Elena has green eyes and grew up in Prague"
+2. Type "Carol has green eyes and grew up in Prague"
 3. Assistant should NOT say "Got it, I'll remember that" or equivalent
 4. Assistant SHOULD say something like "I'll work with that — if you want it locked in, add it under Characters"
 5. Check that the redirect doesn't break narrative flow (shouldn't feel like an error message)

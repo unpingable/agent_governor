@@ -1561,10 +1561,12 @@ class GovernorHooks:
         """System prompt for research writing mode.
 
         Integrates epistemic debt tracking: claims, assumptions, uncertainties,
-        typed links, and the ED score.
+        typed links, and the ED score. Injects accepted sources and claims
+        so the capture loop pays rent on the next turn.
         """
-        # Load ED summary if store exists
+        # Load ED summary and accepted context if store exists
         ed_context = ""
+        accepted_context = ""
         store = self._load_research_store()
         if store is not None:
             ed = store.compute_ed()
@@ -1578,6 +1580,7 @@ class GovernorHooks:
                 f"Every unsupported claim and unresolved uncertainty adds to ED. "
                 f"Support claims with evidence links to reduce it."
             )
+            accepted_context = self._build_accepted_context(store)
 
         return (
             "You are a research writing assistant with epistemic debt tracking.\n\n"
@@ -1601,7 +1604,85 @@ class GovernorHooks:
             "- Reduce ED by adding support links, filling in scopes, and resolving "
             "uncertainties with evidence."
             + ed_context
+            + accepted_context
         )
+
+    def _build_accepted_context(self, store: Any) -> str:
+        """Build ACCEPTED SOURCES and ACCEPTED CLAIMS blocks for prompt injection.
+
+        Rules (from design review):
+        - Bounded: cap at K=20 claims, S=25 sources
+        - Machine-checkable: structured format with IDs and ref types
+        - Don't brick empty ledger: graceful minimal injection when nothing accepted
+        - Separate sources from claims: distinct sections
+        - CANDIDATE_SOURCES format: model proposes new refs for user to accept/reject
+        """
+        # Collect active claims (not retracted/superseded), newest first
+        active_claims = [
+            c for c in store.claims.values()
+            if c.status.value not in ("retracted", "superseded")
+        ]
+        active_claims.sort(key=lambda c: c.created_at, reverse=True)
+        active_claims = active_claims[:20]
+
+        # Extract unique source_refs preserving insertion order
+        source_refs: list[str] = []
+        seen_refs: set[str] = set()
+        for claim in active_claims:
+            if claim.source_ref and claim.source_ref not in seen_refs:
+                source_refs.append(claim.source_ref)
+                seen_refs.add(claim.source_ref)
+        source_refs = source_refs[:25]
+
+        # Empty ledger — minimal instruction, don't brick the prompt
+        if not active_claims and not source_refs:
+            return (
+                "\n\n## Source Discipline\n"
+                "No sources accepted yet. Do not fabricate citations. "
+                "If you reference a source, present it as:\n"
+                "CANDIDATE_SOURCE: <ref_type>:<identifier>\n"
+                "The user will accept or reject it."
+            )
+
+        parts: list[str] = []
+
+        if source_refs:
+            parts.append("## Accepted Sources")
+            for ref in source_refs:
+                parts.append(f"- {ref}")
+
+        if active_claims:
+            if parts:
+                parts.append("")
+            parts.append("## Accepted Claims")
+            for claim in active_claims:
+                line = f"[{claim.id}] \"{claim.content}\""
+                if claim.source_ref:
+                    line += f" source_ref={claim.source_ref}"
+                if claim.status.value != "floating":
+                    line += f" ({claim.status.value})"
+                parts.append(line)
+
+        # Enforcement instruction
+        parts.append("")
+        if source_refs:
+            parts.append(
+                "## Source Discipline\n"
+                "Cite only accepted source_refs when making supported claims. "
+                "To introduce a new source, present it as:\n"
+                "CANDIDATE_SOURCE: <ref_type>:<identifier>\n"
+                "The user will accept or reject it."
+            )
+        else:
+            parts.append(
+                "## Source Discipline\n"
+                "No source_refs accepted yet. Do not fabricate citations. "
+                "If you reference a source, present it as:\n"
+                "CANDIDATE_SOURCE: <ref_type>:<identifier>\n"
+                "The user will accept or reject it."
+            )
+
+        return "\n\n" + "\n".join(parts)
 
     def _load_research_store(self) -> Any | None:
         """Load the research store if it exists."""

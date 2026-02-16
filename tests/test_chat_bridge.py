@@ -2413,6 +2413,200 @@ class TestResearchMode:
 
 
 # =============================================================================
+# Accepted context injection (prompt integration)
+# =============================================================================
+
+
+class TestAcceptedContext:
+    """Tests for ACCEPTED SOURCES / ACCEPTED CLAIMS prompt injection."""
+
+    def test_empty_ledger_source_discipline(self, tmp_path: Path) -> None:
+        """Empty store injects minimal source discipline — no bricking."""
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert "Source Discipline" in prompt
+        assert "No sources accepted yet" in prompt
+        assert "CANDIDATE_SOURCE" in prompt
+
+    def test_accepted_sources_appear(self, tmp_path: Path) -> None:
+        """Claims with source_ref produce an ACCEPTED SOURCES block."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        store.add_claim("Neural scaling laws", source_ref="doi:10.1234/foo")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert "## Accepted Sources" in prompt
+        assert "- doi:10.1234/foo" in prompt
+
+    def test_accepted_claims_appear(self, tmp_path: Path) -> None:
+        """Active claims appear in ACCEPTED CLAIMS block with IDs."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        claim = store.add_claim("Neural scaling follows power law")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert "## Accepted Claims" in prompt
+        assert f"[{claim.id}]" in prompt
+        assert "Neural scaling follows power law" in prompt
+
+    def test_source_ref_on_claim_line(self, tmp_path: Path) -> None:
+        """Claim lines include source_ref when present."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        claim = store.add_claim("Tested on CIFAR-10", source_ref="doi:10.5678/bar")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert f"source_ref=doi:10.5678/bar" in prompt
+
+    def test_claim_status_shown_when_not_floating(self, tmp_path: Path) -> None:
+        """Non-floating status appears in parentheses."""
+        from governor.research_store import ClaimStatus, ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        c = store.add_claim("Claim A")
+        store.update_claim_status(c.id, ClaimStatus.CONTESTED)
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert "(contested)" in prompt
+
+    def test_retracted_claims_excluded(self, tmp_path: Path) -> None:
+        """Retracted and superseded claims are NOT injected."""
+        from governor.research_store import ClaimStatus, ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        c1 = store.add_claim("Good claim")
+        c2 = store.add_claim("Retracted claim")
+        store.update_claim_status(c2.id, ClaimStatus.RETRACTED)
+        c3 = store.add_claim("Superseded claim")
+        store.update_claim_status(c3.id, ClaimStatus.SUPERSEDED)
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert f"[{c1.id}]" in prompt
+        assert f"[{c2.id}]" not in prompt
+        assert f"[{c3.id}]" not in prompt
+
+    def test_source_dedup(self, tmp_path: Path) -> None:
+        """Same source_ref from multiple claims appears only once."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        store.add_claim("Claim A", source_ref="doi:10.1234/foo")
+        store.add_claim("Claim B", source_ref="doi:10.1234/foo")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert prompt.count("- doi:10.1234/foo") == 1
+
+    def test_claims_capped_at_20(self, tmp_path: Path) -> None:
+        """At most 20 claims injected."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        for i in range(25):
+            store.add_claim(f"Claim number {i}")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        # Count claim lines (lines starting with [C-)
+        claim_lines = [l for l in prompt.split("\n") if l.startswith("[C-")]
+        assert len(claim_lines) == 20
+
+    def test_sources_capped_at_25(self, tmp_path: Path) -> None:
+        """At most 25 sources injected."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        for i in range(30):
+            store.add_claim(f"Claim {i}", source_ref=f"doi:10.{i:04d}/test")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        source_lines = [l for l in prompt.split("\n") if l.startswith("- doi:")]
+        assert len(source_lines) <= 25
+
+    def test_enforcement_with_sources(self, tmp_path: Path) -> None:
+        """When sources exist, enforcement says 'cite only accepted'."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        store.add_claim("Claim", source_ref="doi:10.1234/foo")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert "Cite only accepted source_refs" in prompt
+
+    def test_enforcement_without_sources(self, tmp_path: Path) -> None:
+        """When no sources exist, enforcement says 'do not fabricate'."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        store.add_claim("Claim without source")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert "No source_refs accepted yet" in prompt
+        assert "Do not fabricate" in prompt
+
+    def test_candidate_source_format(self, tmp_path: Path) -> None:
+        """All enforcement blocks include CANDIDATE_SOURCE format."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        store.add_claim("Any claim", source_ref="pypi:numpy")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert "CANDIDATE_SOURCE: <ref_type>:<identifier>" in prompt
+
+    def test_ed_and_accepted_both_present(self, tmp_path: Path) -> None:
+        """ED score and accepted context are both in the prompt."""
+        from governor.research_store import ResearchStore
+
+        cm = GovernorContextManager(base_dir=tmp_path / "contexts")
+        ctx = cm.create("test-ctx", mode="research")
+        store = ResearchStore(ctx.governor_dir)
+        store.add_claim("Test claim", source_ref="doi:10.1234/x")
+
+        hooks = GovernorHooks(ctx)
+        prompt = hooks._build_research_prompt()
+        assert "ED Score:" in prompt
+        assert "## Accepted Sources" in prompt
+        assert "## Source Discipline" in prompt
+
+
+# =============================================================================
 # Auth error detection — ClaudeCodeAuthError + _is_auth_error
 # =============================================================================
 

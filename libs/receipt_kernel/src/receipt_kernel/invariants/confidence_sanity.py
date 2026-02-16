@@ -3,26 +3,28 @@
 If all claims are marked "low" confidence in factual mode, the run
 is effectively "I have no idea but here's some text." That's WARN at best.
 
-Also: high-confidence claims with only weak evidence strength → FAIL.
+High-confidence claims with only weak evidence → FAIL.
+
+IMPORTANT: Evidence strength is derived from evidence provenance
+(evidence_kind on EVIDENCE_PUT events), NOT from claim self-report.
+Claims can *request* confidence; evidence decides whether that's allowed.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from receipt_kernel.invariants._helpers import get_run_mode, load_evidence_json
-from receipt_kernel.types import InvariantResult, Reason, Verdict
-
-
-# Evidence strength hierarchy (orthogonal to retention class).
-# Strong: tool outputs, primary sources, structured measurements
-# Medium: cached summaries, secondhand extracts
-# Weak: model self-report, freeform text with no provenance
-STRENGTH_RANK = {"strong": 3, "medium": 2, "weak": 1}
+from receipt_kernel.invariants._helpers import build_blob_kind_map, get_run_mode, load_evidence_json
+from receipt_kernel.types import EvidenceStrength, InvariantResult, Reason, Verdict, strength_for_kind
 
 
 class ConfidenceSanityInvariant:
-    """Verify confidence levels are sane relative to evidence strength."""
+    """Verify confidence levels are sane relative to evidence strength.
+
+    Strength is determined by the evidence_kind tag on the EVIDENCE_PUT
+    events that produced the referenced blobs — not by what the claim
+    says about its own evidence.
+    """
 
     invariant_id = "confidence.sanity"
 
@@ -73,6 +75,9 @@ class ConfidenceSanityInvariant:
                 meta={"mode": mode, "claim_count": 0},
             )
 
+        # Build blob_ref → evidence_kind mapping from EVIDENCE_PUT events
+        blob_kind_map = build_blob_kind_map(store, str(run_id))
+
         reasons: list[Reason] = []
         counts = {"high": 0, "medium": 0, "low": 0, "unspecified": 0}
 
@@ -86,13 +91,15 @@ class ConfidenceSanityInvariant:
             else:
                 counts["unspecified"] += 1
 
-            # High confidence with only weak evidence strength → flag
+            # For high-confidence claims, check evidence strength from provenance
             if confidence == "high":
-                strength = str(c.get("evidence_strength", "")).lower()
-                if strength and STRENGTH_RANK.get(strength, 0) < STRENGTH_RANK["medium"]:
+                evrefs = c.get("evidence_refs") or []
+                max_strength = self._max_evidence_strength(evrefs, blob_kind_map)
+
+                if max_strength == EvidenceStrength.WEAK:
                     reasons.append(Reason(
                         code="HIGH_CONFIDENCE_WEAK_EVIDENCE",
-                        msg=f"claim {cid}: high confidence but evidence_strength={strength}",
+                        msg=f"claim {cid}: high confidence but best evidence is {max_strength.value} (by provenance)",
                     ))
 
         # All-low in factual mode is suspect
@@ -122,3 +129,26 @@ class ConfidenceSanityInvariant:
             reasons=reasons,
             meta={"mode": mode, "counts": counts},
         )
+
+    @staticmethod
+    def _max_evidence_strength(
+        evidence_refs: list[Any],
+        blob_kind_map: dict[str, str],
+    ) -> EvidenceStrength:
+        """Determine the strongest evidence backing a claim.
+
+        Looks up evidence_kind from the blob_kind_map (built from
+        EVIDENCE_PUT events), NOT from claim self-report.
+        """
+        best = EvidenceStrength.WEAK
+        rank = {"strong": 3, "medium": 2, "weak": 1}
+
+        for ref in evidence_refs:
+            if not isinstance(ref, str):
+                continue
+            kind = blob_kind_map.get(ref)
+            strength = strength_for_kind(kind)
+            if rank.get(strength.value, 0) > rank.get(best.value, 0):
+                best = strength
+
+        return best

@@ -66,6 +66,25 @@ def load_evidence_json(store: Any, run_id: str, key: str) -> dict[str, Any] | No
         return None
 
 
+def build_blob_kind_map(store: Any, run_id: str) -> dict[str, str]:
+    """Build a mapping from blob ref → evidence_kind for a run.
+
+    Scans all EVIDENCE_PUT events and extracts meta.evidence_kind.
+    Returns {blob_ref: evidence_kind} for all blobs with a kind tag.
+    """
+    events = store.get_events(run_id, event_type="EVIDENCE_PUT")
+    result: dict[str, str] = {}
+    for ev in events:
+        payload = ev.get("payload") or {}
+        evidence = payload.get("evidence") or {}
+        ref = evidence.get("ref")
+        meta = payload.get("meta") or {}
+        kind = meta.get("evidence_kind")
+        if isinstance(ref, str) and isinstance(kind, str):
+            result[ref] = kind
+    return result
+
+
 def collect_run_blob_refs(store: Any, run_id: str) -> set[str]:
     """Collect all blob refs produced by EVIDENCE_PUT events in a run.
 

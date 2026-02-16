@@ -44,14 +44,18 @@ def _start_run(store, run_id, mode="factual"):
     store.append_event(run_id, env)
 
 
-def _put_evidence(store, run_id, key, data, content_type="application/json"):
+def _put_evidence(store, run_id, key, data, content_type="application/json",
+                   evidence_kind=None):
     """Store a blob and emit EVIDENCE_PUT, returning the blob ref."""
     blob = store.put_blob(data, content_type=content_type)
+    meta = {}
+    if evidence_kind is not None:
+        meta["evidence_kind"] = evidence_kind
     env = make_envelope(
         event_type="EVIDENCE_PUT", stage="COLLECT",
         policy_id="test", policy_version="0.1",
         stage_graph_id="v1_default", actor_kind="pytest", actor_id="test",
-        payload={"key": key, "evidence": blob.to_dict()},
+        payload={"key": key, "evidence": blob.to_dict(), "meta": meta},
         blob_refs=[blob.ref],
     )
     store.append_event(run_id, env)
@@ -205,18 +209,20 @@ class TestToolTraceConsistency:
         assert any(r.code == "TOOL_TRACE_MISSING" for r in result.reasons)
         store.close()
 
-    def test_tool_ids_present_in_trace_passes(self, tmp_path):
+    def test_tool_ids_present_in_trace_with_outputs_passes(self, tmp_path):
         store = _make_store(tmp_path)
         _start_run(store, "r1", "factual")
         blob = _put_evidence(store, "r1", "source", b'{"result": 42}')
+        out1 = _put_evidence(store, "r1", "t1_output", b'{"web": "result"}')
+        out2 = _put_evidence(store, "r1", "t2_output", b'{"calc": 42}')
         _put_claims_map(store, "r1", [
             {"id": "c1", "text": "Tool returned 42",
              "evidence_refs": [blob.ref], "confidence": "high",
              "tool_call_ids": ["t1", "t2"]},
         ])
         _put_tool_trace(store, "r1", [
-            {"id": "t1", "tool": "web.run", "ok": True},
-            {"id": "t2", "tool": "calc.eval", "ok": True},
+            {"id": "t1", "tool": "web.run", "ok": True, "output_ref": out1.ref},
+            {"id": "t2", "tool": "calc.eval", "ok": True, "output_ref": out2.ref},
         ])
         result = ToolTraceConsistencyInvariant().evaluate(_ctx(store, "r1"))
         assert result.verdict == Verdict.PASS
@@ -237,9 +243,10 @@ class TestToolTraceConsistency:
         ])
         result = ToolTraceConsistencyInvariant().evaluate(_ctx(store, "r1"))
         assert result.verdict == Verdict.FAIL
-        assert any(r.code == "TOOL_CALL_MISSING" for r in result.reasons)
-        assert "t2" in result.meta["missing"]
-        assert "t3" in result.meta["missing"]
+        missing_reason = [r for r in result.reasons if r.code == "TOOL_CALL_MISSING"]
+        assert len(missing_reason) == 1
+        assert "t2" in missing_reason[0].msg
+        assert "t3" in missing_reason[0].msg
         store.close()
 
     def test_no_tool_ids_in_claims_passes(self, tmp_path):
@@ -276,6 +283,97 @@ class TestToolTraceConsistency:
         result = ToolTraceConsistencyInvariant().evaluate(_ctx(store, "r1"))
         assert result.verdict == Verdict.FAIL
         assert any(r.code == "TOOL_TRACE_MALFORMED" for r in result.reasons)
+        store.close()
+
+    # --- Tool output binding tests ---
+
+    def test_output_ref_in_run_passes(self, tmp_path):
+        """Tool output_ref pointing to in-run blob passes."""
+        store = _make_store(tmp_path)
+        _start_run(store, "r1", "factual")
+        output_blob = _put_evidence(store, "r1", "tool_result", b'{"result": 42}')
+        blob = _put_evidence(store, "r1", "source", b'{"x": 1}')
+        _put_claims_map(store, "r1", [
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref],
+             "confidence": "high", "tool_call_ids": ["t1"]},
+        ])
+        _put_tool_trace(store, "r1", [
+            {"id": "t1", "tool": "db.query", "ok": True, "output_ref": output_blob.ref},
+        ])
+        result = ToolTraceConsistencyInvariant().evaluate(_ctx(store, "r1"))
+        assert result.verdict == Verdict.PASS
+        store.close()
+
+    def test_output_ref_not_in_run_fails(self, tmp_path):
+        """Tool output_ref pointing to blob NOT from this run → FAIL."""
+        store = _make_store(tmp_path)
+        _start_run(store, "r1", "factual")
+        # Put blob directly (not via EVIDENCE_PUT for r1)
+        rogue_blob = store.put_blob(b'rogue output', content_type="text/plain")
+        blob = _put_evidence(store, "r1", "source", b'{"x": 1}')
+        _put_claims_map(store, "r1", [
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref],
+             "confidence": "high", "tool_call_ids": ["t1"]},
+        ])
+        _put_tool_trace(store, "r1", [
+            {"id": "t1", "tool": "db.query", "ok": True, "output_ref": rogue_blob.ref},
+        ])
+        result = ToolTraceConsistencyInvariant().evaluate(_ctx(store, "r1"))
+        assert result.verdict == Verdict.FAIL
+        assert any(r.code == "TOOL_OUTPUT_NOT_IN_RUN" for r in result.reasons)
+        store.close()
+
+    def test_output_sha256_in_run_passes(self, tmp_path):
+        """Tool output_sha256 resolves to in-run blob passes."""
+        store = _make_store(tmp_path)
+        _start_run(store, "r1", "factual")
+        output_blob = _put_evidence(store, "r1", "tool_result", b'{"result": 42}')
+        blob = _put_evidence(store, "r1", "source", b'{"x": 1}')
+        _put_claims_map(store, "r1", [
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref],
+             "confidence": "high", "tool_call_ids": ["t1"]},
+        ])
+        _put_tool_trace(store, "r1", [
+            {"id": "t1", "tool": "db.query", "ok": True,
+             "output_sha256": output_blob.sha256},
+        ])
+        result = ToolTraceConsistencyInvariant().evaluate(_ctx(store, "r1"))
+        assert result.verdict == Verdict.PASS
+        store.close()
+
+    def test_no_output_binding_factual_fails(self, tmp_path):
+        """Factual mode: tool call without output binding → FAIL."""
+        store = _make_store(tmp_path)
+        _start_run(store, "r1", "factual")
+        blob = _put_evidence(store, "r1", "source", b'{"x": 1}')
+        _put_claims_map(store, "r1", [
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref],
+             "confidence": "high", "tool_call_ids": ["t1"]},
+        ])
+        # Trace entry has no output_ref or output_sha256
+        _put_tool_trace(store, "r1", [
+            {"id": "t1", "tool": "db.query", "ok": True},
+        ])
+        result = ToolTraceConsistencyInvariant().evaluate(_ctx(store, "r1"))
+        assert result.verdict == Verdict.FAIL
+        assert any(r.code == "TOOL_OUTPUT_UNBOUND" for r in result.reasons)
+        store.close()
+
+    def test_no_output_binding_mixed_warns(self, tmp_path):
+        """Mixed mode: tool call without output binding → WARN (not FAIL)."""
+        store = _make_store(tmp_path)
+        _start_run(store, "r1", "mixed")
+        blob = _put_evidence(store, "r1", "source", b'{"x": 1}')
+        _put_claims_map(store, "r1", [
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref],
+             "confidence": "high", "tool_call_ids": ["t1"]},
+        ])
+        _put_tool_trace(store, "r1", [
+            {"id": "t1", "tool": "db.query", "ok": True},
+        ])
+        result = ToolTraceConsistencyInvariant().evaluate(_ctx(store, "r1"))
+        assert result.verdict == Verdict.WARN
+        assert any(r.code == "TOOL_OUTPUT_UNBOUND_WARN" for r in result.reasons)
         store.close()
 
 
@@ -516,23 +614,29 @@ class TestConfidenceSanity:
         assert any(r.code == "ALL_LOW_CONFIDENCE" for r in result.reasons)
         store.close()
 
-    def test_some_high_confidence_passes(self, tmp_path):
+    def test_some_high_confidence_with_strong_evidence_passes(self, tmp_path):
+        """High confidence backed by oracle evidence → PASS."""
         store = _make_store(tmp_path)
         _start_run(store, "r1", "factual")
+        blob = _put_evidence(store, "r1", "source", b'{"data": 1}',
+                             evidence_kind="oracle:test_log")
         _put_claims_map(store, "r1", [
-            {"id": "c1", "text": "X", "evidence_refs": ["blob://sha256:a"], "confidence": "high"},
-            {"id": "c2", "text": "Y", "evidence_refs": ["blob://sha256:b"], "confidence": "low"},
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref], "confidence": "high"},
+            {"id": "c2", "text": "Y", "evidence_refs": [blob.ref], "confidence": "low"},
         ])
         result = ConfidenceSanityInvariant().evaluate(_ctx(store, "r1"))
         assert result.verdict == Verdict.PASS
         store.close()
 
     def test_high_confidence_weak_evidence_fails(self, tmp_path):
+        """Strength derived from evidence_kind on EVIDENCE_PUT, not claim self-report."""
         store = _make_store(tmp_path)
         _start_run(store, "r1", "factual")
+        # Evidence tagged as model self-report → WEAK
+        blob = _put_evidence(store, "r1", "source", b'{"guess": true}',
+                             evidence_kind="model:self_report")
         _put_claims_map(store, "r1", [
-            {"id": "c1", "text": "X", "evidence_refs": ["blob://sha256:a"],
-             "confidence": "high", "evidence_strength": "weak"},
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref], "confidence": "high"},
         ])
         result = ConfidenceSanityInvariant().evaluate(_ctx(store, "r1"))
         assert result.verdict == Verdict.FAIL
@@ -540,14 +644,58 @@ class TestConfidenceSanity:
         store.close()
 
     def test_high_confidence_strong_evidence_passes(self, tmp_path):
+        """Oracle-backed evidence_kind → STRONG → high confidence allowed."""
         store = _make_store(tmp_path)
         _start_run(store, "r1", "factual")
+        blob = _put_evidence(store, "r1", "source", b'{"result": 42}',
+                             evidence_kind="oracle:test_log")
         _put_claims_map(store, "r1", [
-            {"id": "c1", "text": "X", "evidence_refs": ["blob://sha256:a"],
-             "confidence": "high", "evidence_strength": "strong"},
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref], "confidence": "high"},
         ])
         result = ConfidenceSanityInvariant().evaluate(_ctx(store, "r1"))
         assert result.verdict == Verdict.PASS
+        store.close()
+
+    def test_high_confidence_no_kind_defaults_weak(self, tmp_path):
+        """Evidence without evidence_kind tag defaults to WEAK."""
+        store = _make_store(tmp_path)
+        _start_run(store, "r1", "factual")
+        # No evidence_kind on the EVIDENCE_PUT → defaults to WEAK
+        blob = _put_evidence(store, "r1", "source", b'{"data": 1}')
+        _put_claims_map(store, "r1", [
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref], "confidence": "high"},
+        ])
+        result = ConfidenceSanityInvariant().evaluate(_ctx(store, "r1"))
+        assert result.verdict == Verdict.FAIL
+        assert any(r.code == "HIGH_CONFIDENCE_WEAK_EVIDENCE" for r in result.reasons)
+        store.close()
+
+    def test_high_confidence_medium_evidence_passes(self, tmp_path):
+        """User-provided evidence_kind → MEDIUM → high confidence allowed."""
+        store = _make_store(tmp_path)
+        _start_run(store, "r1", "factual")
+        blob = _put_evidence(store, "r1", "source", b'user document',
+                             evidence_kind="user:provided")
+        _put_claims_map(store, "r1", [
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref], "confidence": "high"},
+        ])
+        result = ConfidenceSanityInvariant().evaluate(_ctx(store, "r1"))
+        assert result.verdict == Verdict.PASS
+        store.close()
+
+    def test_claim_self_report_strength_ignored(self, tmp_path):
+        """evidence_strength on the claim is IGNORED — provenance decides."""
+        store = _make_store(tmp_path)
+        _start_run(store, "r1", "factual")
+        # Claim says "strong" but evidence_kind says model:self_report → WEAK
+        blob = _put_evidence(store, "r1", "source", b'{"guess": true}',
+                             evidence_kind="model:self_report")
+        _put_claims_map(store, "r1", [
+            {"id": "c1", "text": "X", "evidence_refs": [blob.ref],
+             "confidence": "high", "evidence_strength": "strong"},  # self-report, ignored
+        ])
+        result = ConfidenceSanityInvariant().evaluate(_ctx(store, "r1"))
+        assert result.verdict == Verdict.FAIL  # provenance wins
         store.close()
 
     def test_no_claims_passes(self, tmp_path):
@@ -589,16 +737,22 @@ class TestFullFactualRun:
         store = _make_store(tmp_path)
         _start_run(store, "r1", "factual")
 
-        # Evidence: a source document
-        source_blob = _put_evidence(store, "r1", "source_doc", b'{"population": 8000000}')
+        # Evidence: a source document (oracle-backed → STRONG)
+        source_blob = _put_evidence(
+            store, "r1", "source_doc", b'{"population": 8000000}',
+            evidence_kind="oracle:retrieval_bundle",
+        )
 
-        # Evidence: tool trace
+        # Evidence: tool trace with output binding
         _put_tool_trace(store, "r1", [
-            {"id": "t1", "tool": "db.query", "ok": True, "output_sha256": source_blob.sha256},
+            {"id": "t1", "tool": "db.query", "ok": True,
+             "output_ref": source_blob.ref},
         ])
 
         # Evidence: final output
-        output_blob = _put_evidence(store, "r1", "final_output", b"The population is 8 million.")
+        output_blob = _put_evidence(store, "r1", "final_output",
+                                     b"The population is 8 million.",
+                                     evidence_kind="tool:output")
 
         # Evidence: claims_map binding everything together
         _put_claims_map(store, "r1", [
@@ -607,7 +761,6 @@ class TestFullFactualRun:
                 "text": "population is 8 million",
                 "evidence_refs": [source_blob.ref],
                 "confidence": "high",
-                "evidence_strength": "strong",
                 "tool_call_ids": ["t1"],
             },
         ], output_ref=output_blob.ref)

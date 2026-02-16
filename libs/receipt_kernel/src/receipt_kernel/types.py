@@ -51,11 +51,45 @@ class EvidenceStrength(enum.Enum):
     Strong: tool outputs, primary sources, structured measurements
     Medium: cached summaries, secondhand extracts
     Weak: model self-report, freeform text with no provenance
+
+    Strength is determined by evidence_kind (provenance), not by
+    what claims say about their own evidence.
     """
 
     STRONG = "strong"
     MEDIUM = "medium"
     WEAK = "weak"
+
+
+# Evidence kind taxonomy. Tags go on EVIDENCE_PUT.payload.meta.evidence_kind.
+# Strength is derived from kind by policy (this mapping), not self-reported.
+KIND_TO_STRENGTH: dict[str, EvidenceStrength] = {
+    # Oracle-backed artifacts → STRONG
+    "oracle:test_log": EvidenceStrength.STRONG,
+    "oracle:linter_output": EvidenceStrength.STRONG,
+    "oracle:retrieval_bundle": EvidenceStrength.STRONG,
+    "oracle:sandbox_exec": EvidenceStrength.STRONG,
+    "oracle:static_analysis": EvidenceStrength.STRONG,
+    "tool:trace": EvidenceStrength.STRONG,
+    "tool:output": EvidenceStrength.STRONG,
+    # User-provided → MEDIUM
+    "user:provided": EvidenceStrength.MEDIUM,
+    "user:document": EvidenceStrength.MEDIUM,
+    "model:summary": EvidenceStrength.MEDIUM,
+    # Model self-report → WEAK
+    "model:self_report": EvidenceStrength.WEAK,
+    "model:generated": EvidenceStrength.WEAK,
+}
+
+
+def strength_for_kind(evidence_kind: str | None) -> EvidenceStrength:
+    """Derive evidence strength from evidence_kind tag.
+
+    Unknown kinds default to WEAK (conservative).
+    """
+    if evidence_kind is None:
+        return EvidenceStrength.WEAK
+    return KIND_TO_STRENGTH.get(evidence_kind, EvidenceStrength.WEAK)
 
 
 class BlobState(enum.Enum):

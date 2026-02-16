@@ -2,13 +2,22 @@
 
 If claims reference tool_call_ids, the tool_trace evidence must exist
 and contain matching entries. Catches "phantom tooling" structurally.
+
+Also verifies tool output binding: if trace entries have output_ref or
+output_sha256, those outputs must exist as blobs AND be in this run's
+closed-world evidence set.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from receipt_kernel.invariants._helpers import get_run_mode, load_evidence_json
+from receipt_kernel.invariants._helpers import (
+    collect_run_blob_refs,
+    get_run_mode,
+    load_evidence_json,
+    parse_blob_ref,
+)
 from receipt_kernel.types import InvariantResult, Reason, Verdict
 
 
@@ -97,26 +106,94 @@ class ToolTraceConsistencyInvariant:
                 meta={"mode": mode},
             )
 
-        present_ids: set[str] = set()
+        # Build call index
+        call_by_id: dict[str, dict[str, Any]] = {}
         for call in calls:
             if isinstance(call, dict) and isinstance(call.get("id"), str):
-                present_ids.add(call["id"])
+                call_by_id[call["id"]] = call
 
-        missing = sorted(required_ids - present_ids)
-        if missing:
-            return InvariantResult(
-                invariant_id=self.invariant_id,
-                verdict=Verdict.FAIL,
-                reasons=[Reason(
-                    code="TOOL_CALL_MISSING",
-                    msg=f"claims reference tool_call_ids missing from trace: {missing}",
-                )],
-                meta={"mode": mode, "missing": missing},
-            )
+        reasons: list[Reason] = []
+
+        # Phase 1: verify call IDs exist
+        missing_ids = sorted(required_ids - set(call_by_id.keys()))
+        if missing_ids:
+            reasons.append(Reason(
+                code="TOOL_CALL_MISSING",
+                msg=f"claims reference tool_call_ids missing from trace: {missing_ids}",
+            ))
+
+        # Phase 2: verify tool output binding (closed-world)
+        # Only check calls that are actually referenced by claims
+        run_refs = collect_run_blob_refs(store, str(run_id))
+
+        for tid in sorted(required_ids & set(call_by_id.keys())):
+            call = call_by_id[tid]
+            output_ref = call.get("output_ref")
+            output_sha = call.get("output_sha256")
+
+            if output_ref is not None:
+                # Output ref must be in this run's closed-world set
+                if output_ref not in run_refs:
+                    reasons.append(Reason(
+                        code="TOOL_OUTPUT_NOT_IN_RUN",
+                        msg=f"tool {tid}: output_ref not produced by this run",
+                        pointers=(output_ref,),
+                    ))
+                else:
+                    # Also verify blob is retrievable
+                    sha = parse_blob_ref(output_ref)
+                    if sha is not None and not store.has_blob(sha):
+                        reasons.append(Reason(
+                            code="TOOL_OUTPUT_MISSING",
+                            msg=f"tool {tid}: output blob not in store",
+                            pointers=(output_ref,),
+                        ))
+            elif output_sha is not None:
+                # Resolve sha to ref and check
+                resolved_ref = f"blob://sha256:{output_sha}"
+                if resolved_ref not in run_refs:
+                    reasons.append(Reason(
+                        code="TOOL_OUTPUT_NOT_IN_RUN",
+                        msg=f"tool {tid}: output_sha256 blob not produced by this run",
+                        pointers=(resolved_ref,),
+                    ))
+                elif not store.has_blob(output_sha):
+                    reasons.append(Reason(
+                        code="TOOL_OUTPUT_MISSING",
+                        msg=f"tool {tid}: output blob not in store",
+                        pointers=(resolved_ref,),
+                    ))
+            else:
+                # No output binding — severity depends on mode
+                if mode == "factual":
+                    reasons.append(Reason(
+                        code="TOOL_OUTPUT_UNBOUND",
+                        msg=f"tool {tid}: no output_ref or output_sha256 in trace entry",
+                    ))
+                else:
+                    # mixed mode: warn instead of fail
+                    reasons.append(Reason(
+                        code="TOOL_OUTPUT_UNBOUND_WARN",
+                        msg=f"tool {tid}: no output binding (warn in {mode} mode)",
+                    ))
+
+        # Determine verdict
+        fail_codes = {"TOOL_CALL_MISSING", "TOOL_OUTPUT_MISSING", "TOOL_OUTPUT_NOT_IN_RUN", "TOOL_OUTPUT_UNBOUND"}
+        warn_codes = {"TOOL_OUTPUT_UNBOUND_WARN"}
+
+        has_fail = any(r.code in fail_codes for r in reasons)
+        has_warn = any(r.code in warn_codes for r in reasons)
+
+        if has_fail:
+            verdict = Verdict.FAIL
+        elif has_warn:
+            verdict = Verdict.WARN
+        else:
+            verdict = Verdict.PASS
 
         return InvariantResult(
             invariant_id=self.invariant_id,
-            verdict=Verdict.PASS,
-            reasons=[],
+            verdict=verdict,
+            reasons=reasons,
             meta={"mode": mode, "tool_ids_checked": len(required_ids)},
         )

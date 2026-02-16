@@ -102,6 +102,9 @@ src/governor/
 # Intent Compiler:
 ├── intent_compiler.py     # IntentFormPolicy, IntentFormSchema, compile_intent, BUILTIN_TEMPLATES, receipt emission
 │
+# Receipt Kernel Bridge (parallel audit trail):
+├── receipt_bridge.py      # ReceiptKernelBridge: emit hash-chained events to receipt_kernel SQLite store
+│
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class
 ├── ledger.py         # Original CodebaseLedger
@@ -160,6 +163,33 @@ integration/
 ├── test_backend_claude.py        # 2 tests: Claude Code smoke (skipped by default)
 ├── test_backend_codex.py         # 2 tests: Codex smoke (skipped by default)
 └── test_backend_ollama.py        # 2 tests: Ollama smoke (skipped by default)
+
+# Receipt Kernel (in-repo extracted library):
+libs/receipt_kernel/
+├── pyproject.toml                  # Standalone package (stdlib-only deps)
+├── README.md
+├── src/receipt_kernel/
+│   ├── __init__.py                 # Public API: Verdict, BlobRef, RetentionPolicy, etc.
+│   ├── types.py                    # Verdict, BlobState, EvidenceClass, RetentionPolicy, InvariantResult, Reason
+│   ├── envelope.py                 # Event envelope: make_envelope, seal_envelope, canonical_json, compute_hash
+│   ├── stages.py                   # StageGraph (hard-fail on illegal transitions), DEFAULT_STAGE_GRAPH
+│   ├── store_sqlite.py             # SqliteReceiptStore: append-only, hash-chained, WAL mode, redaction hook
+│   ├── redact.py                   # Redaction hook: pattern-based secret detection, RedactionReport
+│   ├── retention.py                # RetentionPolicy enforcement, find_expired_blobs, purge_expired
+│   └── invariants/
+│       ├── __init__.py             # All 6 invariant exports
+│       ├── ledger_chain_valid.py   # Hash chain integrity (seq contiguity, prev_hash, event_hash)
+│       ├── receipt_completeness.py # Required evidence keys present + blobs retrievable
+│       ├── evaluation_completeness.py  # Attested evaluation, no silent downgrade
+│       ├── finalization_completeness.py # Clean endings, decision ref, last event
+│       └── run_shape.py            # single_finalize + stage_required_path
+└── tests/
+    ├── test_canonical_json.py      # 12 tests: determinism, hash stability
+    ├── test_ledger_chain.py        # 7 tests: chain integrity, tamper detection
+    ├── test_invariants_smoke.py    # 17 tests: all 6 invariants pass/fail cases + verdict semantics
+    ├── test_redaction.py           # 17 tests: secret patterns, store integration, custom redactor
+    ├── test_retention.py           # 13 tests: TTL computation, expiry, purge lifecycle
+    └── test_smoke_run.py           # 23 tests: full lifecycle, stage enforcement, blob/event store
 
 # Extracted repos (separate GitHub repositories):
 # vscode-governor → github.com/unpingable/vscode-governor

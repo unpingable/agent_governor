@@ -39,10 +39,23 @@ class Verdict(enum.Enum):
 
 
 class EvidenceClass(enum.Enum):
-    """Classification for evidence blobs."""
+    """Classification for evidence blobs (retention axis)."""
 
     PUBLIC = "public"  # safe-ish, retained longer
     SEALED = "sealed"  # may contain secrets, aggressively expired
+
+
+class EvidenceStrength(enum.Enum):
+    """Epistemic strength of evidence (trust axis, orthogonal to retention).
+
+    Strong: tool outputs, primary sources, structured measurements
+    Medium: cached summaries, secondhand extracts
+    Weak: model self-report, freeform text with no provenance
+    """
+
+    STRONG = "strong"
+    MEDIUM = "medium"
+    WEAK = "weak"
 
 
 class BlobState(enum.Enum):

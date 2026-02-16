@@ -568,6 +568,63 @@ class ScarLedger:
     # Failure Recording (The Governor Loop Step 4b-5)
     # =========================================================================
 
+    def record_failure_strict(
+        self,
+        region: str,
+        failure_kind: str,
+        action_type: str,
+        observation_shift: float = 0.0,
+        prediction_error: float = 0.0,
+        error_magnitude: float = 1.0,
+        description: str = "",
+        source: str | None = None,
+    ) -> FailureEvent:
+        """Record a failure with required fingerprint fields.
+
+        New call sites should use this instead of record_failure() to
+        prevent silent fallback into the region-only bucket.
+        """
+        if not failure_kind:
+            raise ValueError("failure_kind is required (use record_failure() for legacy)")
+        return self.record_failure(
+            region=region,
+            observation_shift=observation_shift,
+            prediction_error=prediction_error,
+            error_magnitude=error_magnitude,
+            description=description,
+            source=source,
+            failure_kind=failure_kind,
+            action_type=action_type,
+        )
+
+    def check_admissible_strict(
+        self,
+        region: str,
+        failure_kind: str,
+        action_type: str = "",
+    ) -> tuple[bool, float, Scar | None]:
+        """Check admissibility with required fingerprint fields.
+
+        New call sites should use this instead of check_admissible().
+        """
+        if not failure_kind:
+            raise ValueError("failure_kind is required (use check_admissible() for legacy)")
+        return self.check_admissible(region, failure_kind, action_type)
+
+    def record_stability_evidence_strict(
+        self,
+        region: str,
+        failure_kind: str,
+        action_type: str = "",
+    ) -> bool:
+        """Record evidence with required fingerprint fields.
+
+        New call sites should use this to avoid broadcast evidence.
+        """
+        if not failure_kind:
+            raise ValueError("failure_kind is required (use record_stability_evidence() for legacy)")
+        return self.record_stability_evidence(region, failure_kind, action_type)
+
     def record_failure(
         self,
         region: str,
@@ -642,20 +699,41 @@ class ScarLedger:
         return event
 
     def _apply_scar(self, event: FailureEvent) -> Scar:
-        """Apply a scar (tighten admissible control set U)."""
-        # Check if scar already exists for this exact fingerprint
+        """Apply a scar (tighten admissible control set U).
+
+        Three-tier novelty gate:
+        1. Exact fingerprint match → retighten existing scar
+        2. Similar class (same region+kind or region+action, but not exact)
+           → retighten the similar scar instead of creating a new one.
+           Prevents novel-but-similar retries from self-bricking with
+           many narrow scars, while still accumulating evidence correctly.
+        3. Different class (no match) → create new scar
+        """
+        # Tier 1: Exact fingerprint match → retighten
         existing = self._find_exact_scar(
             event.region, event.failure_kind, event.action_type,
         )
 
         if existing:
-            # Re-tighten existing scar
             existing.retighten()
             existing.failure_event_id = event.event_id
             existing.failure_surprise_ratio = event.surprise_ratio
             return existing
 
-        # Create new scar with full fingerprint
+        # Tier 2: Similar class → retighten the similar scar
+        # "Similar" = same region AND shares either failure_kind or action_type
+        # (but only when event has fingerprint specificity to compare)
+        if event.failure_kind or event.action_type:
+            similar = self._find_similar_scar(
+                event.region, event.failure_kind, event.action_type,
+            )
+            if similar:
+                similar.retighten()
+                similar.failure_event_id = event.event_id
+                similar.failure_surprise_ratio = event.surprise_ratio
+                return similar
+
+        # Tier 3: Different class → create new scar
         scar = Scar(
             scar_id=f"sc_{uuid.uuid4().hex[:12]}",
             region=event.region,
@@ -782,6 +860,46 @@ class ScarLedger:
             return False, shield.permeability, shield
 
         return True, shield.permeability, shield
+
+    def explain_admissibility(
+        self,
+        region: str,
+        failure_kind: str = "",
+        action_type: str = "",
+    ) -> dict[str, Any]:
+        """Explain why an action is admissible or blocked.
+
+        Returns a structured explanation including which scars matched,
+        which one won, and what fields were used for matching.
+        """
+        matched = self._find_matching_scars(region, failure_kind, action_type)
+        winner = self._find_most_restrictive_scar(region, failure_kind, action_type)
+
+        admissible = True
+        if winner and winner.is_hard:
+            admissible = False
+
+        return {
+            "query": {
+                "region": region,
+                "failure_kind": failure_kind or "(unspecified)",
+                "action_type": action_type or "(unspecified)",
+            },
+            "admissible": admissible,
+            "cost": winner.effective_cost if winner else 1.0,
+            "winner": winner.to_dict() if winner else None,
+            "winner_fingerprint": winner.fingerprint if winner else None,
+            "candidates": len(matched),
+            "all_matches": [
+                {
+                    "scar_id": s.scar_id,
+                    "fingerprint": s.fingerprint,
+                    "stiffness": s.stiffness,
+                    "is_hard": s.is_hard,
+                }
+                for s in sorted(matched, key=lambda s: -s.stiffness)
+            ],
+        }
 
     # =========================================================================
     # Annealing (Stiffness Relaxation)
@@ -925,6 +1043,50 @@ class ScarLedger:
             scar for scar in self.scars.values()
             if scar.matches_fingerprint(region, failure_kind, action_type)
         ]
+
+    def _find_similar_scar(
+        self,
+        region: str,
+        failure_kind: str = "",
+        action_type: str = "",
+    ) -> Scar | None:
+        """Find a scar in the same class (similar but not exact).
+
+        "Similar" means: same region AND shares at least one non-empty
+        fingerprint dimension (failure_kind or action_type) with the query.
+        Region-only scars (both fields empty) are NOT similar — they're broad.
+
+        Returns the most restrictive similar scar, or None.
+        """
+        candidates = []
+        for scar in self.scars.values():
+            if scar.region != region:
+                continue
+            # Skip broad scars (no fingerprint) — they're a different class
+            if not scar.failure_kind and not scar.action_type:
+                continue
+            # Skip exact matches (handled by _find_exact_scar)
+            if scar.failure_kind == failure_kind and scar.action_type == action_type:
+                continue
+            # Similar = shares at least one non-empty dimension
+            kind_match = (
+                failure_kind and scar.failure_kind
+                and scar.failure_kind == failure_kind
+            )
+            action_match = (
+                action_type and scar.action_type
+                and scar.action_type == action_type
+            )
+            if kind_match or action_match:
+                candidates.append(scar)
+
+        if not candidates:
+            return None
+        return max(candidates, key=lambda s: (
+            s.stiffness,
+            len(s.failure_kind) + len(s.action_type),
+            s.scar_id,
+        ))
 
     def _find_most_restrictive_scar(
         self,

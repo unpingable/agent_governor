@@ -6075,9 +6075,11 @@ def scar_history(ctx, limit, region):
 
 @scar.command("anneal")
 @click.option("--region", "-r", default=None, help="Record evidence for specific region")
+@click.option("--failure-kind", "-k", default="", help="Failure kind (target specific scar)")
+@click.option("--action-type", "-a", default="", help="Action type (target specific scar)")
 @click.option("--dry-run", is_flag=True, help="Show what would be annealed without doing it")
 @click.pass_context
-def scar_anneal(ctx, region, dry_run):
+def scar_anneal(ctx, region, failure_kind, action_type, dry_run):
     """Anneal scars (relax stiffness under evidence of stability)."""
     from .scars import ScarLedger
 
@@ -6091,9 +6093,14 @@ def scar_anneal(ctx, region, dry_run):
     ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
 
     if region:
-        # Record evidence for a specific region
-        if ledger.record_stability_evidence(region):
-            click.echo(f"Recorded stability evidence for: {region}")
+        # Record evidence for a specific region (+ optional fingerprint)
+        if ledger.record_stability_evidence(region, failure_kind, action_type):
+            target = region
+            if failure_kind:
+                target += f" [{failure_kind}]"
+            if action_type:
+                target += f" ({action_type})"
+            click.echo(f"Recorded stability evidence for: {target}")
         else:
             click.echo(f"No scar found for region: {region}")
             return
@@ -6168,8 +6175,10 @@ def scar_stats(ctx):
 @click.option("--magnitude", type=float, default=1.0, help="Error magnitude")
 @click.option("--source", type=str, default=None, help="Input source (for shields)")
 @click.option("--description", "-d", type=str, default="", help="Description")
+@click.option("--failure-kind", "-k", type=str, default="", help="Failure kind (timeout, validation, auth, etc.)")
+@click.option("--action-type", "-a", type=str, default="", help="Action type (write, read, execute, etc.)")
 @click.pass_context
-def scar_record(ctx, region, obs_shift, pred_error, magnitude, source, description):
+def scar_record(ctx, region, obs_shift, pred_error, magnitude, source, description, failure_kind, action_type):
     """Record a failure event and classify provenance."""
     from .scars import ScarLedger, ScarConfig
 
@@ -6188,12 +6197,16 @@ def scar_record(ctx, region, obs_shift, pred_error, magnitude, source, descripti
         error_magnitude=magnitude,
         description=description,
         source=source,
+        failure_kind=failure_kind,
+        action_type=action_type,
     )
 
     prov = event.provenance.value if event.provenance else "unknown"
     click.echo(f"Failure recorded: {event.event_id}")
     click.echo(f"  provenance: {prov}  rho: {event.surprise_ratio:.3f}")
     click.echo(f"  response: {event.response_type}")
+    if failure_kind or action_type:
+        click.echo(f"  fingerprint: {region}::{failure_kind}::{action_type}")
 
     if event.scar_id:
         scar = ledger.get_scar(event.scar_id)
@@ -6208,8 +6221,12 @@ def scar_record(ctx, region, obs_shift, pred_error, magnitude, source, descripti
 
 @scar.command("check")
 @click.argument("region")
+@click.option("--failure-kind", "-k", default="", help="Failure kind to check")
+@click.option("--action-type", "-a", default="", help="Action type to check")
+@click.option("--explain", is_flag=True, help="Show detailed match explanation")
+@click.option("--json-output", "use_json", is_flag=True, help="JSON output")
 @click.pass_context
-def scar_check(ctx, region):
+def scar_check(ctx, region, failure_kind, action_type, explain, use_json):
     """Check if an action in a region is admissible."""
     from .scars import ScarLedger
 
@@ -6217,22 +6234,44 @@ def scar_check(ctx, region):
     scar_path = gov_dir / "scars.json"
 
     if not scar_path.exists():
-        click.echo(f"ADMISSIBLE: {region} (no scar ledger)")
+        if use_json:
+            click.echo(json.dumps({"admissible": True, "reason": "no scar ledger"}))
+        else:
+            click.echo(f"ADMISSIBLE: {region} (no scar ledger)")
         return
 
     ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
-    admissible, cost, scar = ledger.check_admissible(region)
+
+    if explain or use_json:
+        info = ledger.explain_admissibility(region, failure_kind, action_type)
+        if use_json:
+            click.echo(json.dumps(info, indent=2, default=str))
+        else:
+            click.echo(f"\n{'ADMISSIBLE' if info['admissible'] else 'BLOCKED'}: {region}")
+            q = info["query"]
+            click.echo(f"  query: region={q['region']} kind={q['failure_kind']} action={q['action_type']}")
+            click.echo(f"  cost:  {info['cost']:.1f}x")
+            click.echo(f"  matching scars: {info['candidates']}")
+            for m in info["all_matches"]:
+                marker = " <-- winner" if info["winner"] and m["scar_id"] == info["winner"]["scar_id"] else ""
+                click.echo(f"    {m['scar_id']}: {m['fingerprint']} stiffness={m['stiffness']:.3f} hard={m['is_hard']}{marker}")
+        return
+
+    admissible, cost, scar = ledger.check_admissible(region, failure_kind, action_type)
 
     if admissible:
         if scar:
             click.echo(f"ADMISSIBLE (with cost): {region}")
             click.echo(f"  cost multiplier: {cost:.1f}x")
             click.echo(f"  scar stiffness: {scar.stiffness:.3f}")
+            if scar.failure_kind:
+                click.echo(f"  scar fingerprint: {scar.fingerprint}")
         else:
             click.echo(f"ADMISSIBLE: {region} (no scar)")
     else:
         click.echo(f"BLOCKED: {region}")
         click.echo(f"  scar: {scar.scar_id} (stiffness: {scar.stiffness:.3f})")
+        click.echo(f"  fingerprint: {scar.fingerprint}")
         click.echo(f"  cost: {cost:.1f}x")
         click.echo("  Action requires annealing or explicit override.")
 

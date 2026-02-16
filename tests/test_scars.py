@@ -1464,3 +1464,209 @@ class TestBroadcastEvidenceExplicit:
         ledger.record_stability_evidence("r", failure_kind="a")
         assert ledger.scars[ev1.scar_id].evidence_count == 1
         assert ledger.scars[ev2.scar_id].evidence_count == 0
+
+
+# =============================================================================
+# Strict Wrappers
+# =============================================================================
+
+
+class TestStrictWrappers:
+    """Test strict API that requires fingerprint fields."""
+
+    def test_record_failure_strict_requires_kind(self):
+        ledger = ScarLedger()
+        with pytest.raises(ValueError, match="failure_kind is required"):
+            ledger.record_failure_strict("r", failure_kind="", action_type="write")
+
+    def test_record_failure_strict_works(self):
+        ledger = ScarLedger()
+        event = ledger.record_failure_strict("r", failure_kind="timeout", action_type="write")
+        assert event.failure_kind == "timeout"
+        assert event.action_type == "write"
+
+    def test_check_admissible_strict_requires_kind(self):
+        ledger = ScarLedger()
+        with pytest.raises(ValueError, match="failure_kind is required"):
+            ledger.check_admissible_strict("r", failure_kind="")
+
+    def test_check_admissible_strict_works(self):
+        ledger = ScarLedger()
+        ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        admissible, cost, scar = ledger.check_admissible_strict(
+            "r", failure_kind="timeout")
+        assert not admissible
+        assert scar.failure_kind == "timeout"
+
+    def test_record_stability_evidence_strict_requires_kind(self):
+        ledger = ScarLedger()
+        with pytest.raises(ValueError, match="failure_kind is required"):
+            ledger.record_stability_evidence_strict("r", failure_kind="")
+
+    def test_record_stability_evidence_strict_works(self):
+        ledger = ScarLedger()
+        ev = ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        result = ledger.record_stability_evidence_strict("r", failure_kind="timeout")
+        assert result is True
+        assert ledger.scars[ev.scar_id].evidence_count == 1
+
+
+# =============================================================================
+# Retry Novelty Gate (3-tier: exact → similar → new)
+# =============================================================================
+
+
+class TestRetryNoveltyGate:
+    """Test the three-tier novelty gate in _apply_scar."""
+
+    def test_tier1_exact_retighten(self):
+        """Exact fingerprint match → retighten existing scar."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="timeout", action_type="write")
+        scar = ledger.scars[ev1.scar_id]
+        scar.stiffness = 0.3
+
+        ev2 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="timeout", action_type="write")
+        assert ev2.scar_id == ev1.scar_id  # Same scar
+        assert scar.stiffness > 0.3  # Retightened
+        assert len(ledger.scars) == 1
+
+    def test_tier2_similar_kind_retightens(self):
+        """Same region + kind, different action → similar → retighten."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="timeout", action_type="write")
+        scar = ledger.scars[ev1.scar_id]
+        scar.stiffness = 0.3
+
+        # Same kind, different action → similar class
+        ev2 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="timeout", action_type="read")
+        assert ev2.scar_id == ev1.scar_id  # Retightened existing
+        assert scar.stiffness > 0.3
+        assert len(ledger.scars) == 1  # No new scar
+
+    def test_tier2_similar_action_retightens(self):
+        """Same region + action, different kind → similar → retighten."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="timeout", action_type="write")
+        scar = ledger.scars[ev1.scar_id]
+        scar.stiffness = 0.3
+
+        # Same action, different kind → similar class
+        ev2 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="validation", action_type="write")
+        assert ev2.scar_id == ev1.scar_id  # Retightened existing
+        assert scar.stiffness > 0.3
+        assert len(ledger.scars) == 1
+
+    def test_tier3_different_class_creates_new(self):
+        """Different kind AND different action → different class → new scar."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="timeout", action_type="write")
+        ev2 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="validation", action_type="read")
+        assert ev1.scar_id != ev2.scar_id  # New scar
+        assert len(ledger.scars) == 2
+
+    def test_tier3_no_fingerprint_creates_new(self):
+        """Region-only failure always creates new (no similarity check)."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="timeout", action_type="write")
+        # Region-only event can't trigger Tier 2 (needs specificity to compare)
+        ev2 = ledger.record_failure("r", 0.1, 1.0)
+        assert ev1.scar_id != ev2.scar_id
+        assert len(ledger.scars) == 2
+
+    def test_similar_does_not_match_broad_scar(self):
+        """Broad scars (no fingerprint) are NOT similar — they're a different class."""
+        ledger = ScarLedger()
+        ev1 = ledger.record_failure("r", 0.1, 1.0)  # broad scar
+        ev2 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="timeout", action_type="write")
+        # Broad scar has no fingerprint dimensions → not "similar"
+        assert ev1.scar_id != ev2.scar_id
+        assert len(ledger.scars) == 2
+
+    def test_similar_picks_most_restrictive(self):
+        """When multiple similar scars exist, retighten the most restrictive."""
+        ledger = ScarLedger()
+        # Create two scars manually (different class: different kind AND action)
+        scar1 = Scar(scar_id="sc_1", region="r",
+                      failure_kind="timeout", action_type="write", stiffness=0.8)
+        scar2 = Scar(scar_id="sc_2", region="r",
+                      failure_kind="timeout", action_type="read", stiffness=0.3)
+        ledger.scars["sc_1"] = scar1
+        ledger.scars["sc_2"] = scar2
+
+        # New failure same kind, different action → similar to both
+        ev3 = ledger.record_failure("r", 0.1, 1.0,
+                                     failure_kind="timeout", action_type="execute")
+        # Should retighten the more restrictive one (scar1)
+        assert ev3.scar_id == "sc_1"
+        assert scar1.stiffness > 0.8
+        assert len(ledger.scars) == 2  # No new scar
+
+    def test_novelty_gate_prevents_self_bricking(self):
+        """Rapidly varying action_type doesn't create a scar per retry."""
+        ledger = ScarLedger()
+        ledger.record_failure("r", 0.1, 1.0,
+                              failure_kind="timeout", action_type="write")
+        # 10 retries with different action_type but same kind
+        for action in ["read", "execute", "delete", "list", "stat",
+                       "create", "update", "move", "copy", "chmod"]:
+            ledger.record_failure("r", 0.1, 1.0,
+                                  failure_kind="timeout", action_type=action)
+        # Should NOT have 11 scars — similar retries retighten
+        assert len(ledger.scars) == 1
+
+
+# =============================================================================
+# Explain Admissibility
+# =============================================================================
+
+
+class TestExplainAdmissibility:
+    """Test the explain_admissibility debug path."""
+
+    def test_no_scars(self):
+        ledger = ScarLedger()
+        info = ledger.explain_admissibility("r")
+        assert info["admissible"] is True
+        assert info["winner"] is None
+        assert info["candidates"] == 0
+
+    def test_blocked_with_explanation(self):
+        ledger = ScarLedger()
+        ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        info = ledger.explain_admissibility("r", failure_kind="timeout")
+        assert info["admissible"] is False
+        assert info["winner"] is not None
+        assert info["winner_fingerprint"] == "r::timeout::"
+        assert info["candidates"] == 1
+
+    def test_multiple_matches_listed(self):
+        ledger = ScarLedger()
+        ledger.record_failure("r", 0.1, 1.0)  # broad
+        ledger.record_failure("r", 0.1, 1.0, failure_kind="timeout")
+        info = ledger.explain_admissibility("r", failure_kind="timeout")
+        assert info["candidates"] == 2
+        assert len(info["all_matches"]) == 2
+
+    def test_query_fields_in_output(self):
+        ledger = ScarLedger()
+        info = ledger.explain_admissibility("r", failure_kind="timeout", action_type="write")
+        assert info["query"]["region"] == "r"
+        assert info["query"]["failure_kind"] == "timeout"
+        assert info["query"]["action_type"] == "write"
+
+    def test_unspecified_shows_placeholder(self):
+        ledger = ScarLedger()
+        info = ledger.explain_admissibility("r")
+        assert info["query"]["failure_kind"] == "(unspecified)"
+        assert info["query"]["action_type"] == "(unspecified)"

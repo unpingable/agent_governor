@@ -34,12 +34,43 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Protocol
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Evidence Gate → Kernel Verdict Mapping (single source of truth)
+# =============================================================================
+
+# Maps application-layer status to kernel Verdict vocabulary.
+# BLOCKED → "fail" (not "unknown"): the gate made a definitive rejection.
+# This mapping is used by kernel run emission and CLI verify output.
+# Do not create parallel truth tables — use this constant everywhere.
+STATUS_TO_KERNEL_VERDICT: dict[str, str] = {
+    "OK": "pass",
+    "WARN": "warn",
+    "BLOCKED": "fail",
+}
+
+
+# =============================================================================
+# Canonical JSON (matches receipt_kernel.envelope.canonical_json)
+# =============================================================================
+
+
+def _canonical_json(obj: Any) -> bytes:
+    """Deterministic JSON for kernel evidence blobs."""
+    return json.dumps(
+        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+    ).encode("utf-8")
 
 
 # =============================================================================
@@ -165,8 +196,12 @@ class EvidenceGateOutput:
     # For contradiction tracking
     claim_ids: list[str] = field(default_factory=list)
 
+    # Receipt kernel integration
+    kernel_run_id: str | None = None
+    kernel_ok: bool | None = None  # None = no bridge, True = success, False = write failed
+
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "patch": self.patch,
             "response": self.response,
             "rationale": self.rationale,
@@ -177,6 +212,10 @@ class EvidenceGateOutput:
             "warnings": self.warnings,
             "claim_ids": self.claim_ids,
         }
+        if self.kernel_run_id is not None:
+            d["kernel_run_id"] = self.kernel_run_id
+            d["kernel_ok"] = self.kernel_ok
+        return d
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
@@ -629,11 +668,13 @@ class EvidenceGate:
         config: EvidenceGateConfig | None = None,
         log_path: Path | None = None,
         receipt_system: Any | None = None,
+        kernel_bridge: Any | None = None,
     ):
         self.config = config or EvidenceGateConfig()
         self.logger = EvidenceGateLogger(log_path)
         self.prior_claims: list[EvidenceGateClaim] = []
         self._receipt_system = receipt_system  # GateReceiptSystem or None
+        self._kernel_bridge = kernel_bridge  # ReceiptKernelBridge or None
 
     def check(
         self,
@@ -745,6 +786,9 @@ class EvidenceGate:
         # Emit gate receipt (if receipt system is configured)
         self._emit_receipt(output, result)
 
+        # Emit receipt kernel run (if bridge is configured)
+        self._emit_kernel_run(task, output, result, custody)
+
         return result
 
     def _emit_receipt(self, output: str, result: EvidenceGateOutput) -> None:
@@ -778,6 +822,216 @@ class EvidenceGate:
             evidence_bundle=evidence_bundle,
             gate_config=self.config.to_dict(),
         )
+
+    def _emit_kernel_run(
+        self,
+        task: str,
+        output: str,
+        result: EvidenceGateOutput,
+        custody: CustodyScore,
+    ) -> None:
+        """Emit a complete receipt kernel run for this check.
+
+        One check() = one kernel run. The kernel is the receipted mirror
+        of the evidence gate, not a replacement.
+
+        If the bridge is not configured or not available, this is a no-op.
+        If a write fails, the failure is logged and result.kernel_ok is set
+        to False — callers MUST check this to prevent silent green.
+        """
+        bridge = self._kernel_bridge
+        if bridge is None:
+            return
+        if not bridge.available:
+            self.logger.log("kernel_skipped", reason=bridge.status.reason)
+            return
+
+        run_id = str(uuid.uuid4())
+        mode = "factual" if self.config.strict else "mixed"
+
+        try:
+            self._do_kernel_run(bridge, run_id, mode, task, output, result, custody)
+            result.kernel_run_id = run_id
+            result.kernel_ok = True
+            self.logger.log("kernel_run_complete", run_id=run_id)
+        except Exception as exc:
+            # CRITICAL: write failure must NOT produce silent green.
+            result.kernel_run_id = run_id
+            result.kernel_ok = False
+            self.logger.log("kernel_write_failed", run_id=run_id, error=str(exc))
+            logger.warning("receipt kernel write failed for run %s: %s", run_id, exc)
+
+            # Belt: don't rely only on callers checking kernel_ok.
+            # In strict/factual mode: kernel failure → BLOCKED (unverifiable = inadmissible).
+            # In mixed mode: → WARN (acceptable uncertainty).
+            msg = f"receipt kernel write failed (run {run_id[:8]}): verdict unverifiable"
+            if self.config.strict:
+                result.blocking_reasons.append(msg)
+                result.status = EvidenceGateStatus.BLOCKED
+            else:
+                result.warnings.append(msg)
+                if result.status == EvidenceGateStatus.OK:
+                    result.status = EvidenceGateStatus.WARN
+
+    def _do_kernel_run(
+        self,
+        bridge: Any,
+        run_id: str,
+        mode: str,
+        task: str,
+        output: str,
+        result: EvidenceGateOutput,
+        custody: CustodyScore,
+    ) -> None:
+        """Execute the full kernel run sequence. Raises on write failure."""
+
+        # --- RUN_START ---
+        bridge.ensure_run(run_id, meta={"mode": mode})
+        bridge.run_start(run_id, "START", meta={
+            "mode": mode,
+            "task": task[:500],
+            "strict": self.config.strict,
+        })
+
+        # --- COLLECT stage ---
+        bridge.stage_advance(run_id, "START", "COLLECT")
+
+        # Evidence: final_output (model-generated text being checked)
+        _, output_blob = bridge.evidence_put(
+            run_id, "COLLECT", "final_output",
+            output.encode("utf-8"),
+            content_type="text/plain",
+            evidence_class="public",
+            meta={"evidence_kind": "model:generated"},
+        )
+
+        # Evidence: claims_map (governor's extraction — oracle)
+        output_ref = output_blob.ref if output_blob else None
+        output_sha = output_blob.sha256 if output_blob else None
+        claims_map = self._build_claims_map(result.claims, output_ref, output_sha)
+        bridge.evidence_put(
+            run_id, "COLLECT", "claims_map",
+            _canonical_json(claims_map),
+            content_type="application/json",
+            evidence_class="public",
+            meta={"evidence_kind": "oracle:static_analysis"},
+        )
+
+        # Evidence: tool_trace (evidence_gate has no tool system)
+        # system="none" distinguishes "no tool system" from "tool system
+        # recorded zero calls". Strength is WEAK because this doesn't prove
+        # tools weren't invoked — only that we have no tool integration.
+        tool_trace = {"schema_version": 1, "system": "none", "calls": []}
+        bridge.evidence_put(
+            run_id, "COLLECT", "tool_trace",
+            _canonical_json(tool_trace),
+            content_type="application/json",
+            evidence_class="public",
+            meta={"evidence_kind": "model:self_report"},
+        )
+
+        # --- EVALUATE stage ---
+        bridge.stage_advance(run_id, "COLLECT", "EVALUATE")
+
+        eval_results = self._build_eval_results(result, custody)
+        overall_verdict = STATUS_TO_KERNEL_VERDICT.get(result.status.value, "unknown")
+        eval_ref = bridge.record_evaluation(
+            run_id, "EVALUATE",
+            results=eval_results,
+            overall_verdict=overall_verdict,
+            evidence_complete=True,
+        )
+
+        # --- DECIDE stage ---
+        bridge.stage_advance(run_id, "EVALUATE", "DECIDE")
+
+        decision_ref = bridge.record_decision(
+            run_id, "DECIDE",
+            decision_id=f"eg_{run_id[:8]}",
+            basis={
+                "status": result.status.value,
+                "blocking_reasons": result.blocking_reasons,
+                "warnings": result.warnings,
+                "custody": custody.to_dict(),
+            },
+            event_refs=[eval_ref] if eval_ref else None,
+        )
+
+        # --- FINALIZE stage ---
+        bridge.stage_advance(run_id, "DECIDE", "FINALIZE")
+
+        bridge.run_finalize(
+            run_id, "FINALIZE",
+            overall_verdict=overall_verdict,
+            summary={
+                "claim_count": len(result.claims),
+                "status": result.status.value,
+                "blocking_reasons": result.blocking_reasons,
+                "custody_total": custody.total,
+            },
+            event_refs=[r for r in [eval_ref, decision_ref] if r],
+        )
+
+    @staticmethod
+    def _build_claims_map(
+        claims: list[EvidenceGateClaim],
+        output_ref: str | None,
+        output_sha: str | None,
+    ) -> dict[str, Any]:
+        """Build claims_map evidence blob from extracted claims."""
+        kernel_claims = []
+        for claim in claims:
+            # All claims come from the output text
+            evidence_refs = [output_ref] if output_ref else []
+            confidence = "high" if claim.level == ClaimLevel.HARD else "low"
+
+            kernel_claims.append({
+                "id": claim.id,
+                "text": claim.text,
+                "evidence_refs": evidence_refs,
+                "confidence": confidence,
+                "tool_call_ids": [],
+            })
+
+        return {
+            "schema_version": 1,
+            "claims": kernel_claims,
+            "output_ref": output_ref,
+            "output_sha256": output_sha,
+        }
+
+    @staticmethod
+    def _build_eval_results(
+        result: EvidenceGateOutput,
+        custody: CustodyScore,
+    ) -> list[dict[str, Any]]:
+        """Build evaluation results payload from evidence gate output."""
+        results = []
+        for reason in result.blocking_reasons:
+            results.append({
+                "check": "evidence_gate",
+                "verdict": "fail",
+                "message": reason,
+            })
+        for warning in result.warnings:
+            results.append({
+                "check": "evidence_gate",
+                "verdict": "warn",
+                "message": warning,
+            })
+        if not result.blocking_reasons and not result.warnings:
+            results.append({
+                "check": "evidence_gate",
+                "verdict": "pass",
+                "message": "all checks passed",
+            })
+        # Always include custody scores
+        results.append({
+            "check": "custody_score",
+            "verdict": "pass" if custody.passed else "fail",
+            "message": f"Ap={custody.ap:.2f} Ip={custody.ip:.2f} Fp={custody.fp:.2f}",
+        })
+        return results
 
     def validate_input(self, input_data: EvidenceGateInput) -> EvidenceGateOutput:
         """

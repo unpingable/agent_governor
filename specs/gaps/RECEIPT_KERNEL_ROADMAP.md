@@ -35,7 +35,7 @@ status: canonical
 - Illegal transitions are hard errors (not warnings)
 - Default graph: `START → COLLECT → EVALUATE → DECIDE → FINALIZE`
 
-### E) 6 Constitutional Invariants
+### E) 6 Constitutional Invariants (Structural)
 - `ledger.chain_valid` — hash chain verification (seq contiguity, prev_hash continuity, event_hash integrity)
 - `receipt.completeness` — required evidence keys present, blobs retrievable
 - `evaluation.completeness` — attested evaluation with no silent downgrade
@@ -43,8 +43,24 @@ status: canonical
 - `run.single_finalize` — exactly one RUN_FINALIZE per run
 - `run.stage_required_path` — required stages appear in order
 
-### F) Bridge Adapter
-- `src/governor/adapters/receipt_kernel_bridge.py`
+### F) 6 Hallucination Invariants (Claims ↔ Evidence Binding)
+- `claims.evidence_binding` — factual claims must have evidence_refs that resolve to real blobs
+- `tools.trace_consistency` — tool_call_ids in claims must match trace entries; tool outputs must exist as in-run blobs (closed-world); factual mode = FAIL on missing output binding, mixed = WARN
+- `epistemic.mode_requirements` — mode-specific minimum evidence (factual/mixed require claims_map; missing mode = FAIL)
+- `refs.closed_world` — evidence_refs must come from this run's EVIDENCE_PUT events (prevents citation laundering)
+- `output.bound_to_claims` — claims_map must bind to the actual final_output blob via output_ref/output_sha256
+- `confidence.sanity` — evidence strength derived from evidence_kind on EVIDENCE_PUT (provenance), not claim self-report; high confidence + weak provenance = FAIL; all-low confidence in factual = WARN
+
+### G) Evidence Provenance Model
+- `EvidenceStrength` enum: STRONG / MEDIUM / WEAK (orthogonal to retention class)
+- `evidence_kind` tag on `EVIDENCE_PUT.payload.meta` (e.g. `oracle:test_log`, `tool:output`, `model:self_report`)
+- `KIND_TO_STRENGTH` policy mapping: oracle/tool → STRONG, user → MEDIUM, model → WEAK
+- `strength_for_kind()` function: unknown/missing kind defaults to WEAK (conservative)
+- Claims can *request* confidence; evidence provenance decides whether that's allowed
+
+### H) Bridge Adapter
+- `src/governor/receipt_bridge.py`
+- `KernelStatus` with `verdict_ceiling`: kernel disabled → ceiling is "unknown" (never silent green)
 - Emit events in parallel with existing JSONL receipts
 - No refactor of existing paths — additive only
 
@@ -152,8 +168,16 @@ status: canonical
 **When**: After 20+ real runs pass without false invariant failures.
 **Gap risk**: Medium. Without this, the kernel is advisory (same thing we built the governor to prevent).
 
+### 17. Problem-Solving Mode (Controlled Divergence)
+**What**: Two-phase DIVERGE→VALIDATE loop. Creativity is a stage, not a vibe. Proposals are UNKNOWN until validated. Mode transitions explicit + receipted.
+**Why deferred**: All dependencies are met (stage graphs, invariants, evidence_kind, bridge wired). But needs careful boundary control — creativity has the same mechanical shape as hallucination.
+**When**: Late v2 (minimal: stage graph variant + invariant + evidence_kind entries). v3 for operational scaling (hot-loaded policy, executor routing, multi-tenancy).
+**Gap risk**: Medium. Without this, blocks cause frustration and users bypass governance. With this done wrong, creative output leaks into authoritative output.
+**Spec**: `specs/gaps/PROBLEM_SOLVING_MODE.md`
+**Depends on**: Event envelope (done), evidence provenance model (done), stage graphs (done), bridge wiring (done)
+
 ### 16. `governor receipt verify` CLI Command
-**What**: `governor receipt verify --run <id>` — runs the 6 invariants, prints single-line verdict + pointers. Makes the kernel touchable without full integration.
+**What**: `governor receipt verify --run <id>` — runs the 12 invariants (6 structural + 6 hallucination), prints single-line verdict + pointers. Makes the kernel touchable without full integration.
 **Why deferred**: Kernel needs to be wired first. Small feature.
 **When**: Shortly after bridge is wired to a real workflow.
 **Gap risk**: Low. Invariants can be run programmatically today.
@@ -177,15 +201,24 @@ These are not deferred — they're permanent guardrails:
 ## Build Order
 
 ```
-DONE: redaction + retention + envelope + store + invariants + bridge + BLOB_EXPIRE events
+DONE: redaction + retention + envelope + store + stage graph + bridge + BLOB_EXPIRE events
       + silent-green prevention (KernelStatus, verdict_ceiling)
       + redaction proof tests (secret not in DB, not in report)
-NEXT: wire bridge to one real workflow (evidence_gate or daemon chat)
-      + governor receipt verify CLI command
-      + external anchoring (minimal anchor file)
-THEN: gating flip (parallel → enforcement), remediation runner, cost evidence
-LATER: regression farming, replay tiers, executor swap prep (build_id in envelopes)
-3.x:  full executor split, multi-tenancy, policy distribution
+      + 6 structural invariants (chain, completeness, evaluation, finalization, single-finalize, stage path)
+      + 6 hallucination invariants (claims binding, tool trace + output binding, mode requirements,
+        closed-world refs, output-to-claims binding, confidence sanity)
+      + evidence provenance model (EvidenceStrength, evidence_kind, KIND_TO_STRENGTH policy,
+        strength_for_kind, provenance-based confidence gating)
+DONE: wire bridge to evidence_gate.check() — one kernel run per check invocation
+      + final_output, claims_map, tool_trace as evidence blobs with evidence_kind tags
+      + custody scores + evaluation + decision + finalize in proper stage sequence
+      + kernel write failures caught + logged (kernel_ok=False prevents silent green)
+      + 41 integration tests (12 invariants run against real evidence_gate output)
+NEXT: governor receipt verify CLI command (#16)
+      + external anchoring — minimal anchor file (#13)
+THEN: gating flip (parallel → enforcement, #15), remediation runner (#2), cost evidence (#5)
+LATER: regression farming (#4), replay tiers (#9), executor swap prep (#14, build_id in envelopes)
+3.x:  full executor split (#14), multi-tenancy (#3), policy distribution (#10)
 ```
 
 ---
@@ -195,3 +228,5 @@ LATER: regression farming, replay tiers, executor swap prep (build_id in envelop
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1 | 2026-02-15 | Initial roadmap. Redaction + retention + envelope as first build. |
+| 0.2 | 2026-02-15 | 12 invariants complete (6 structural + 6 hallucination). Evidence provenance model. Tool output binding. |
+| 0.3 | 2026-02-15 | Bridge wired to evidence_gate.check(). First real workflow emitting kernel runs. 41 integration tests. |

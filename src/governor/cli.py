@@ -17031,6 +17031,231 @@ def serve(ctx: click.Context, stdio: bool, socket_path: str | None,
     run_daemon(gov_dir, mode=mode, stdio=stdio, socket_path=sock)
 
 
+# =============================================================================
+# Receipt Kernel CLI
+# =============================================================================
+
+
+@cli.group("kernel")
+@click.pass_context
+def kernel_cmd(ctx: click.Context) -> None:
+    """Receipt kernel — hash-chained run ledger with invariant evaluation."""
+    pass
+
+
+@kernel_cmd.command("verify")
+@click.option("--run", "run_id", required=True, help="Run ID to verify")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def kernel_verify(ctx: click.Context, run_id: str, as_json: bool) -> None:
+    """Run all invariants against a kernel run and print verdict."""
+    gov_dir = ensure_initialized(ctx)
+    db_path = gov_dir / "receipt_kernel.db"
+
+    if not db_path.exists():
+        click.echo("Error: No receipt kernel database found.", err=True)
+        click.echo(f"Expected: {db_path}", err=True)
+        ctx.exit(1)
+
+    try:
+        from receipt_kernel.store_sqlite import SqliteReceiptStore
+        from receipt_kernel.types import Verdict
+        from receipt_kernel.invariants import (
+            LedgerChainValidInvariant,
+            ReceiptCompletenessInvariant,
+            EvaluationCompletenessInvariant,
+            FinalizationCompletenessInvariant,
+            SingleFinalizeInvariant,
+            StageRequiredPathInvariant,
+            ClaimsEvidenceBindingInvariant,
+            ToolTraceConsistencyInvariant,
+            EpistemicModeRequirementsInvariant,
+            RefsClosedWorldInvariant,
+            OutputBoundToClaimsInvariant,
+            ConfidenceSanityInvariant,
+        )
+    except ImportError:
+        click.echo("Error: receipt_kernel not installed.", err=True)
+        ctx.exit(1)
+
+    store = SqliteReceiptStore(str(db_path), redaction_enabled=False)
+    store.initialize_schema()
+
+    # Check run exists
+    run = store.get_run(run_id)
+    if run is None:
+        click.echo(f"Error: Run {run_id!r} not found.", err=True)
+        store.close()
+        ctx.exit(1)
+
+    # Get run mode for display
+    events = store.get_events(run_id, event_type="RUN_START")
+    run_mode = "unknown"
+    if events:
+        run_mode = (events[0].get("payload") or {}).get("meta", {}).get("mode", "unknown")
+
+    # Required stage path for v1_default graph
+    required_path = ["START", "COLLECT", "EVALUATE", "DECIDE", "FINALIZE"]
+
+    invariants = [
+        LedgerChainValidInvariant(),
+        ReceiptCompletenessInvariant(),
+        EvaluationCompletenessInvariant(),
+        FinalizationCompletenessInvariant(),
+        SingleFinalizeInvariant(),
+        StageRequiredPathInvariant(required_path),
+        ClaimsEvidenceBindingInvariant(),
+        ToolTraceConsistencyInvariant(),
+        EpistemicModeRequirementsInvariant(),
+        RefsClosedWorldInvariant(),
+        OutputBoundToClaimsInvariant(),
+        ConfidenceSanityInvariant(),
+    ]
+
+    inv_ctx = {"store": store, "run_id": run_id}
+    results = []
+    for inv in invariants:
+        r = inv.evaluate(inv_ctx)
+        results.append({
+            "invariant_id": inv.invariant_id,
+            "verdict": r.verdict.value,
+            "reasons": [{"code": reason.code, "msg": reason.msg} for reason in r.reasons],
+            "meta": r.meta or {},
+        })
+
+    # Compute overall verdict
+    verdicts = [r["verdict"] for r in results]
+    if "fail" in verdicts:
+        overall = "fail"
+    elif "unknown" in verdicts:
+        overall = "unknown"
+    elif "warn" in verdicts:
+        overall = "warn"
+    else:
+        overall = "pass"
+
+    # Verdict ceiling: if kernel is enabled, ceiling is "pass".
+    # If any structural invariant fails, ceiling drops.
+    structural_ids = {
+        "ledger.chain_valid", "receipt.completeness",
+        "evaluation.completeness", "finalization.completeness",
+        "run.single_finalize", "run.stage_required_path",
+    }
+    structural_fail = any(
+        r["verdict"] in ("fail", "unknown")
+        for r in results if r["invariant_id"] in structural_ids
+    )
+    ceiling = "unknown" if structural_fail else "pass"
+    ceiling_reason = (
+        "structural invariant failure" if structural_fail else "all structural invariants pass"
+    )
+
+    # Top blocking reasons (from FAIL/UNKNOWN invariants)
+    blocking = []
+    for r in results:
+        if r["verdict"] in ("fail", "unknown"):
+            for reason in r["reasons"]:
+                blocking.append({
+                    "invariant": r["invariant_id"],
+                    "code": reason["code"],
+                    "msg": reason["msg"],
+                })
+    top_blocking = blocking[:3]
+
+    store.close()
+
+    if as_json:
+        click.echo(json.dumps({
+            "run_id": run_id,
+            "mode": run_mode,
+            "overall_verdict": overall,
+            "verdict_ceiling": ceiling,
+            "ceiling_reason": ceiling_reason,
+            "invariants": results,
+            "top_blocking": top_blocking,
+        }, indent=2))
+        return
+
+    # Human-readable output
+    verdict_symbol = {"pass": "PASS", "warn": "WARN", "fail": "FAIL", "unknown": "UNKNOWN"}
+    click.echo(f"Run:     {run_id}")
+    click.echo(f"Mode:    {run_mode}")
+    click.echo(f"Verdict: {verdict_symbol.get(overall, overall)}")
+    click.echo(f"Ceiling: {ceiling} ({ceiling_reason})")
+    click.echo()
+
+    # Invariant results table
+    for r in results:
+        sym = verdict_symbol.get(r["verdict"], r["verdict"])
+        marker = "  " if r["verdict"] == "pass" else "> "
+        suffix = ""
+        if r.get("meta", {}).get("skipped"):
+            suffix = " (skipped)"
+        click.echo(f"  {marker}{sym:7s} {r['invariant_id']}{suffix}")
+
+    # Top blocking reasons
+    if top_blocking:
+        click.echo()
+        click.echo("Blocking reasons:")
+        for b in top_blocking:
+            click.echo(f"  [{b['invariant']}] {b['code']}: {b['msg']}")
+
+
+@kernel_cmd.command("runs")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def kernel_runs(ctx: click.Context, as_json: bool) -> None:
+    """List kernel runs."""
+    gov_dir = ensure_initialized(ctx)
+    db_path = gov_dir / "receipt_kernel.db"
+
+    if not db_path.exists():
+        click.echo("No receipt kernel database found.", err=True)
+        ctx.exit(1)
+
+    try:
+        from receipt_kernel.store_sqlite import SqliteReceiptStore
+    except ImportError:
+        click.echo("Error: receipt_kernel not installed.", err=True)
+        ctx.exit(1)
+
+    store = SqliteReceiptStore(str(db_path), redaction_enabled=False)
+    store.initialize_schema()
+
+    # Query all runs
+    store._ensure_conn()
+    assert store._conn is not None
+    rows = store._conn.execute(
+        "SELECT run_id, policy_id, created_at, meta_json FROM runs ORDER BY created_at DESC"
+    ).fetchall()
+
+    runs = []
+    for row in rows:
+        event_count = store.event_count(row[0])
+        meta = json.loads(row[3]) if row[3] else {}
+        runs.append({
+            "run_id": row[0],
+            "policy_id": row[1],
+            "created_at": row[2],
+            "mode": meta.get("mode", "unknown"),
+            "events": event_count,
+        })
+
+    store.close()
+
+    if as_json:
+        click.echo(json.dumps(runs, indent=2))
+        return
+
+    if not runs:
+        click.echo("No kernel runs found.")
+        return
+
+    click.echo(f"Kernel runs ({len(runs)}):\n")
+    for r in runs:
+        click.echo(f"  {r['run_id'][:12]}..  {r['mode']:8s}  {r['events']:3d} events  {r['created_at']}")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

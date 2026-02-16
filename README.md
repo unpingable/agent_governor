@@ -16,11 +16,31 @@ Agent replans:   continues with reduced capability set
 
 This is the difference between a **validator** (checks if a call is well-formed) and a **governor** (decides whether this call should exist *at this point in the run*, given observed behavior, constraints, and prior evidence).
 
-A governor doesn't just say "no." It **denies, downgrades, forces replan, strips tools, caps retries, expires tasks, and emits a machine-readable receipt explaining why.**
+A governor doesn't just say "no." It **denies, downgrades, forces replan, strips tools, caps retries, expires tasks, and emits a machine-readable receipt explaining why:**
+
+```json
+{
+  "receipt_id": "a7f3c91e...",
+  "gate": "evidence_gate",
+  "verdict": "fail",
+  "subject_hash": "sha256:e4d909c...",
+  "evidence_hash": "sha256:8b1a9c4...",
+  "invariants": {
+    "confidence.sanity": "FAIL — claim c870e5: high confidence, best evidence is weak (by provenance)",
+    "ledger.chain_valid": "PASS (11 events)",
+    "run.stage_required_path": "PASS"
+  },
+  "verdict_ceiling": "unknown (structural invariant failure)",
+  "oracle_evidence": [],
+  "timestamp": "2026-02-16T02:55:11Z"
+}
+```
+
+Every enforcement action produces one of these. Tamper with the chain — the hash breaks.
 
 ## Non-Goals
 
-- Not an agent framework. Does not run your agent.
+- Not an agent framework. Governs pipelines that generate and verify artifacts — including semi-automated ones — but does not own an agent runtime.
 - Not "alignment." Does not make models good.
 - Not a confidence-score system. Confidence without evidence is theater.
 - Not a policy document. It's an enforcement boundary with teeth.

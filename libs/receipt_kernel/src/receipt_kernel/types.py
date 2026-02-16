@@ -66,6 +66,7 @@ class EvidenceStrength(enum.Enum):
 KIND_TO_STRENGTH: dict[str, EvidenceStrength] = {
     # Oracle-backed artifacts → STRONG
     "oracle:test_log": EvidenceStrength.STRONG,
+    "oracle:pytest_log": EvidenceStrength.STRONG,
     "oracle:linter_output": EvidenceStrength.STRONG,
     "oracle:retrieval_bundle": EvidenceStrength.STRONG,
     "oracle:sandbox_exec": EvidenceStrength.STRONG,

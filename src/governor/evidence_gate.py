@@ -683,6 +683,7 @@ class EvidenceGate:
         output: str,
         constraints: list[str] | None = None,
         prior_claims: list[EvidenceGateClaim] | None = None,
+        oracle_evidence: list[Any] | None = None,
     ) -> EvidenceGateOutput:
         """
         Validate agent output against kernel constraints.
@@ -693,6 +694,9 @@ class EvidenceGate:
             output: The agent's output to validate
             constraints: Additional constraints
             prior_claims: Prior claims for contradiction checking
+            oracle_evidence: Oracle artifacts (e.g. OraclePytestLog) to
+                attach as STRONG evidence. These are produced by real
+                tool execution, not model narration.
 
         Returns:
             EvidenceGateOutput with status, claims, and any issues
@@ -787,7 +791,7 @@ class EvidenceGate:
         self._emit_receipt(output, result)
 
         # Emit receipt kernel run (if bridge is configured)
-        self._emit_kernel_run(task, output, result, custody)
+        self._emit_kernel_run(task, output, result, custody, oracle_evidence or [])
 
         return result
 
@@ -829,6 +833,7 @@ class EvidenceGate:
         output: str,
         result: EvidenceGateOutput,
         custody: CustodyScore,
+        oracle_evidence: list[Any] | None = None,
     ) -> None:
         """Emit a complete receipt kernel run for this check.
 
@@ -850,7 +855,7 @@ class EvidenceGate:
         mode = "factual" if self.config.strict else "mixed"
 
         try:
-            self._do_kernel_run(bridge, run_id, mode, task, output, result, custody)
+            self._do_kernel_run(bridge, run_id, mode, task, output, result, custody, oracle_evidence or [])
             result.kernel_run_id = run_id
             result.kernel_ok = True
             self.logger.log("kernel_run_complete", run_id=run_id)
@@ -882,6 +887,7 @@ class EvidenceGate:
         output: str,
         result: EvidenceGateOutput,
         custody: CustodyScore,
+        oracle_evidence: list[Any] | None = None,
     ) -> None:
         """Execute the full kernel run sequence. Raises on write failure."""
 
@@ -905,10 +911,30 @@ class EvidenceGate:
             meta={"evidence_kind": "model:generated"},
         )
 
+        # Evidence: oracle artifacts (real tool execution, STRONG)
+        # Each oracle blob gets its own evidence_kind tag. Claims that
+        # reference these blobs will have STRONG evidence in confidence.sanity.
+        oracle_blob_refs: list[str] = []
+        for oracle in (oracle_evidence or []):
+            # Duck-type: anything with to_bytes() and a .kind attribute
+            if hasattr(oracle, "to_bytes") and hasattr(oracle, "kind"):
+                _, oracle_blob = bridge.evidence_put(
+                    run_id, "COLLECT", oracle.kind.replace(":", "_"),
+                    oracle.to_bytes(),
+                    content_type="application/json",
+                    evidence_class="public",
+                    meta={
+                        "evidence_kind": oracle.kind,
+                        "oracle_class": getattr(oracle, "oracle_class", 0),
+                    },
+                )
+                if oracle_blob:
+                    oracle_blob_refs.append(oracle_blob.ref)
+
         # Evidence: claims_map (governor's extraction — oracle)
         output_ref = output_blob.ref if output_blob else None
         output_sha = output_blob.sha256 if output_blob else None
-        claims_map = self._build_claims_map(result.claims, output_ref, output_sha)
+        claims_map = self._build_claims_map(result.claims, output_ref, output_sha, oracle_blob_refs)
         bridge.evidence_put(
             run_id, "COLLECT", "claims_map",
             _canonical_json(claims_map),
@@ -977,13 +1003,25 @@ class EvidenceGate:
         claims: list[EvidenceGateClaim],
         output_ref: str | None,
         output_sha: str | None,
+        oracle_refs: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Build claims_map evidence blob from extracted claims."""
+        """Build claims_map evidence blob from extracted claims.
+
+        When oracle evidence is present, HARD claims get oracle blob refs
+        in addition to the output ref. This is what makes confidence.sanity
+        PASS: the evidence_kind on those blobs is oracle:* (STRONG), which
+        satisfies the "high confidence needs strong evidence" invariant.
+        """
         kernel_claims = []
+        oracle_refs = oracle_refs or []
         for claim in claims:
             # All claims come from the output text
             evidence_refs = [output_ref] if output_ref else []
             confidence = "high" if claim.level == ClaimLevel.HARD else "low"
+
+            # HARD claims get oracle refs — STRONG evidence backing
+            if claim.level == ClaimLevel.HARD and oracle_refs:
+                evidence_refs.extend(oracle_refs)
 
             kernel_claims.append({
                 "id": claim.id,

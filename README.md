@@ -95,6 +95,8 @@ The agent can *claim* anything. But it can't *write* anything until it provides 
 
 **No hallucination can fake a receipt.**
 
+**Evidence must be produced by trusted collectors** (test runners, linters, filesystem probes, git diffs, CI attestations). Free-text "evidence" provided by the agent is treated as untrusted narrative and cannot satisfy hard gates. The model is not the verifier — it's a consumer of attested evidence.
+
 ---
 
 ## Failure Modes We Detect
@@ -120,6 +122,27 @@ Not abstract risks. Specific signals with specific enforcement actions.
 pip install -e .
 governor init
 
+# Stop an agent from lying
+governor gate check "All tests pass. The auth module is thread-safe."
+# → BLOCKED: claim "is thread-safe" lacks evidence
+#   required: benchmark data, profiler output, or documentation
+#   to proceed: provide evidence or downgrade to SOFT
+```
+
+Zero config. One command. The agent claimed something it can't prove — blocked.
+
+### With Oracle Evidence
+
+```bash
+# Run the tests yourself, feed the result as evidence
+governor gate check "All tests pass" --oracle pytest
+# → PASS: oracle:pytest_log attached (23 passed, 0 failed)
+#   evidence_kind: oracle:pytest_log (STRONG), oracle_class: 0 (local)
+```
+
+### Code: Enforce Decisions
+
+```bash
 # Record a decision
 governor propose --claim "Using React for frontend" --topic framework
 governor verify 1 && governor apply 1
@@ -127,9 +150,18 @@ governor verify 1 && governor apply 1
 # Now try to contradict it
 governor propose --claim "Using Vue for frontend" --topic framework
 # REJECTED — Contradicts existing decision on 'framework'
+
+governor intent set --profile production --scope "src/auth/**"
+governor check src/auth/login.py
 ```
 
-### Fiction: Protect Your Canon
+### Operations: Enforce Runbooks
+
+```bash
+ops-gov verify --runbook deploy-v2.yaml --window maintenance
+```
+
+### Domain Plugin: Fiction
 
 ```bash
 governor continuity anchor add \
@@ -139,35 +171,6 @@ governor continuity anchor add \
   --severity reject
 
 governor check chapter-3.md --mode fiction
-```
-
-### Code: Enforce Decisions
-
-```bash
-governor intent set --profile production --scope "src/auth/**"
-governor check src/auth/login.py
-
-# Compare models on a task
-governor interferometry compare "Add auth middleware" \
-  --backends claude:sonnet,ollama:qwen
-```
-
-### Operations: Enforce Runbooks
-
-```bash
-ops-gov verify --runbook deploy-v2.yaml --window maintenance
-```
-
-### Evidence Gate: Kernel-Only Surface
-
-```bash
-# Check agent output against kernel constraints
-governor gate check "All tests pass. The auth module is thread-safe."
-# → HARD claim "thread-safe" flagged: no oracle evidence
-
-# Verify a kernel run
-governor kernel verify --run <id>
-# → Verdict: FAIL | confidence.sanity: HIGH_CONFIDENCE_WEAK_EVIDENCE
 ```
 
 ---
@@ -201,14 +204,14 @@ flowchart TD
 
 ## Modes
 
+Same kernel, different policy bundles. Code governance uses deterministic evidence (tests, diffs). Creative governance uses probabilistic constraints (tone, canon consistency). If the architecture only works where ground truth is crisp, it's compliance middleware. The creative modes prove it generalizes.
+
 | Mode | Mental Model | What It Governs |
 |------|-------------|-----------------|
 | **Code** | "My architectural decisions" | Decisions, constraints, API surfaces, test requirements |
 | **Fiction** | "My story bible" | Characters, world rules, canon, tone, consent |
 | **Nonfiction** | "My research corpus" | Sources, claims, citations, frame intrusion |
 | **Ops** | "My runbooks" | Blast radius, time windows, preconditions |
-
-Same engine, different constraints. The governor doesn't care what domain you're in — it cares that claims have evidence.
 
 ---
 
@@ -220,32 +223,31 @@ Typed claims, cryptographic receipts, FSM lifecycle, fact/decision ledgers with 
 ### Multi-Agent Coordination (~120 tests)
 SQLite WAL backend, agent leases, epochs, permissions, task dispatcher protocol.
 
-### Epistemic Stack (~980 tests)
-Provenance tracking, confidence modeling, quorum consensus, drift detection, claim diffing, premise dependencies, agent roles, TTL enforcement, dissent ledger, taint similarity.
+### Evidence Pipeline (~980 tests)
+Provenance tracking (epistemic stack), confidence modeling, quorum consensus, drift detection, claim diffing, premise dependencies, agent roles, TTL enforcement, dissent ledger, taint similarity.
 
 ### Autonomous Execution (~230 tests)
 Spine locking, invariant specs, execution budgets, session manager, step-function executor with checkpoint/resume.
 
-### Adaptive Control (~530 tests)
+### Stop Conditions & Adaptive Control (~530 tests)
 Regime detection (ELASTIC/WARM/DUCTILE/UNSTABLE), boil control presets, homeostat with exploration budgets, ultrastability (S1 adaptation), failure provenance with scars/shields, auto-tuning with Pareto analysis.
 
 ### Evidence Gate + Receipt Kernel (~240 tests)
 Evidence-gated coding harness, claim extraction, custody scoring, hash-chained kernel runs with 12 constitutional invariants, verdict ceiling, oracle evidence classes.
 
-### Writing Governance (~920 tests)
-11 modules: tone vectors (6D), affect regimes, governance visibility scoring, intent classification, structural constraints, prose/code ticketing, puppet mode.
-
-### Fiction Governor (~380 tests)
-Plot threads, scene proposals, canon ledger, manuscript scanning, context drift detection, consent tracking, narrative guardrails (DSI, AII).
-
-### Non-Fiction Governor (~280 tests)
-Corpus management, DOI fetching, citation verification, contextual frame intrusion detection (12-frame taxonomy).
-
 ### Ops Governor (~60 tests)
 Runbook verification, time window enforcement, blast radius limits, precondition chains.
 
-### Interferometry (~90 tests)
-Multi-model claim comparison (parallel + serial modes), code-specific risk markers (19 types), anchor compatibility checking, divergence signals.
+### Cross-Check / Model Comparison (~90 tests)
+Multi-model claim comparison (interferometry — parallel + serial modes), code-specific risk markers (19 types), anchor compatibility checking, divergence signals.
+
+### Domain Plugins
+
+**Writing Governance (~920 tests)** — 11 modules: tone vectors (6D), affect regimes, governance visibility scoring, intent classification, structural constraints, prose/code ticketing, puppet mode.
+
+**Fiction Governor (~380 tests)** — Plot threads, scene proposals, canon ledger, manuscript scanning, context drift detection, consent tracking, narrative guardrails (DSI, AII).
+
+**Non-Fiction Governor (~280 tests)** — Corpus management, DOI fetching, citation verification, contextual frame intrusion detection (12-frame taxonomy).
 
 ### Integrations (~560 tests)
 [VS Code extension](https://github.com/unpingable/vscode-governor), [WebUI](https://github.com/unpingable/governor_webui) (FastAPI + chat bridge), SDK middleware, MCP safety controls, session continuity, git/Perforce governance, external constraint attachment (Wikidata/Wikipedia/Scholar).
@@ -266,10 +268,10 @@ Structured telemetry, Prometheus metrics, config profiles, continuity enforcemen
 | **Facts vs decisions** | "Tests pass" decays. "We use React" persists. |
 | **Typed claims** | `ClaimType.TESTS_PASS`, not "I think the tests pass" |
 | **Receipts** | Content-addressed, hash-chained proof of verification |
-| **Custody scoring** | Ap (accountability) x Ip (invariant coupling) x Fp (failure explicitness) |
+| **Accountability score** | Who owns this? (Ap) What are the invariants? (Ip) How does it fail? (Fp) |
 | **Scar tissue** | Failed actions create lasting constraints (hysteresis) |
-| **Regime detection** | ELASTIC/WARM/DUCTILE/UNSTABLE — not vibes, measured signals |
-| **Verdict ceiling** | Structural invariant failure caps the best possible verdict |
+| **Stop conditions** | ELASTIC/WARM/DUCTILE/UNSTABLE — measured signals, not vibes |
+| **Max authority** | Structural invariant failure caps the best possible verdict |
 
 ---
 

@@ -10578,9 +10578,9 @@ def lite_check(ctx, text, use_stdin, file, task, strict, fmt, oracle_type, test_
                     n = len(t["reasons"])
                     click.echo(f"  Release: TAINTED — {n} claim(s) below publish threshold (rerun in CI to clear)")
                 elif t["status"] == "unknown":
-                    click.echo(f"  Release: UNKNOWN — missing evidence (rerun with --oracle to make auditable)")
+                    click.echo("  Release: UNKNOWN — missing evidence (rerun with --oracle to make auditable)")
                 else:
-                    click.echo(f"  Release: clean")
+                    click.echo("  Release: clean")
 
 
 @gate_cmd.command("validate")
@@ -17300,22 +17300,22 @@ def kernel_verify(ctx: click.Context, run_id: str, as_json: bool) -> None:
         if taint_dict["status"] == "tainted":
             n = len(taint_dict["reasons"])
             total = taint_dict["total_high_confidence_claims"]
-            click.echo(f"Release taint:")
+            click.echo("Release taint:")
             click.echo(f"  TAINTED: {n}/{total} high-confidence claims below publish threshold (class {pub_min})")
             for r in taint_dict["reasons"]:
                 click.echo(f"    {r['claim_id']}: oracle class {r['observed_class']} < publish min {r['publish_min_class']}")
-            click.echo(f"  Next: rerun with --oracle pytest in CI (class 1+) to clear taint")
+            click.echo("  Next: rerun with --oracle pytest in CI (class 1+) to clear taint")
         elif taint_dict["status"] == "unknown":
-            click.echo(f"Release taint:")
+            click.echo("Release taint:")
             for reason in taint_dict["unknown_reasons"]:
                 if "missing class metadata" in reason:
                     click.echo(f"  UNKNOWN: {reason}")
-                    click.echo(f"  Next: oracle evidence missing class metadata — check oracle adapter")
+                    click.echo("  Next: oracle evidence missing class metadata — check oracle adapter")
                 else:
                     click.echo(f"  UNKNOWN: {reason}")
-                    click.echo(f"  Next: rerun gate check with --oracle to produce auditable evidence")
+                    click.echo("  Next: rerun gate check with --oracle to produce auditable evidence")
         else:
-            click.echo(f"Release taint:")
+            click.echo("Release taint:")
             click.echo(f"  CLEAN: all high-confidence oracle-backed claims meet publish threshold (class {pub_min}+)")
 
     # Top blocking reasons

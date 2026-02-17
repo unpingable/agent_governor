@@ -97,6 +97,13 @@ def cli(ctx: click.Context, root: str) -> None:
       governor resolve            Handle pending issues
 
     \b
+    Operator:
+      governor status --full      One-page dashboard
+      governor doctor             Walk subsystems, suggest fixes
+      governor explain <CODE>     Look up a diagnostic code
+      governor trace              Unified event timeline
+
+    \b
     Advanced:
       governor advanced           Power user commands (50+)
     """
@@ -576,10 +583,18 @@ def decay(ctx: click.Context, auto_prune: bool) -> None:
 @click.option("--limit", "-n", default=20, help="Number of proposals to show")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.option("--claims", "show_claims", is_flag=True, help="Show claim status weather report")
+@click.option("--full", "full_dashboard", is_flag=True, help="Show operator dashboard")
 @click.pass_context
-def status(ctx: click.Context, limit: int, as_json: bool, show_claims: bool) -> None:
-    """Show proposal status. With --claims, show claim weather report."""
+def status(ctx: click.Context, limit: int, as_json: bool, show_claims: bool, full_dashboard: bool) -> None:
+    """Show proposal status. With --full, show operator dashboard."""
     gov_dir = ensure_initialized(ctx)
+
+    # If --full flag, show operator dashboard
+    if full_dashboard:
+        from .cli_operator import dashboard_command
+        rc = dashboard_command(gov_dir, as_json)
+        ctx.exit(rc)
+        return
 
     # If --claims flag, show claim status summary
     if show_claims:
@@ -627,6 +642,8 @@ def status(ctx: click.Context, limit: int, as_json: bool, show_claims: bool) -> 
         click.echo(f"  {state_icon} [{proposal.state.value}] {pid[:8]}...")
         click.echo(f"     Claims: {len(proposal.claims)}")
         click.echo()
+
+    click.echo("Tip: governor status --full for operator dashboard")
 
 
 @cli.command()
@@ -17459,6 +17476,56 @@ def kernel_runs(ctx: click.Context, as_json: bool) -> None:
     click.echo(f"Kernel runs ({len(runs)}):\n")
     for r in runs:
         click.echo(f"  {r['run_id'][:12]}..  {r['mode']:8s}  {r['events']:3d} events  {r['created_at']}")
+
+
+# =============================================================================
+# Operator commands (front-door surface)
+# =============================================================================
+
+
+@cli.command()
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--strict", is_flag=True, help="Exit 1 on warnings too (CI mode)")
+@click.pass_context
+def doctor(ctx: click.Context, as_json: bool, strict: bool) -> None:
+    """Walk subsystems, report non-nominal, suggest next commands."""
+    gov_dir = ensure_initialized(ctx)
+    from .cli_operator import doctor_command
+    rc = doctor_command(gov_dir, as_json, strict)
+    ctx.exit(rc)
+
+
+@cli.command()
+@click.argument("code", default="")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--list", "list_all", is_flag=True, help="List all diagnostic codes")
+@click.pass_context
+def explain(ctx: click.Context, code: str, as_json: bool, list_all: bool) -> None:
+    """Explain a diagnostic code (e.g. ELASTIC, CAPTURE, BLOCK).
+
+    \b
+    Examples:
+      governor explain ELASTIC
+      governor explain regime:WARM
+      governor explain --list
+    """
+    from .cli_operator import explain_command
+    rc = explain_command(code, as_json, list_all)
+    ctx.exit(rc)
+
+
+@cli.command()
+@click.option("--last", "-n", default=20, help="Number of events to show")
+@click.option("--source", "-s", type=click.Choice(["receipt", "scar", "scope", "violation"]),
+              help="Filter by event source")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def trace(ctx: click.Context, last: int, source: str | None, as_json: bool) -> None:
+    """Unified timeline of receipts, scars, scope, and violations."""
+    gov_dir = ensure_initialized(ctx)
+    from .cli_operator import trace_command
+    rc = trace_command(gov_dir, as_json, last, source)
+    ctx.exit(rc)
 
 
 def main() -> None:

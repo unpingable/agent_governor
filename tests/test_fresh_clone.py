@@ -153,6 +153,47 @@ class TestCLIHappyPath:
         result = run_gov(["envelope"], cwd=tmp_path)
         assert result.returncode == 0, f"envelope failed: {result.stderr}"
 
+    def test_operator_doctor(self, tmp_path):
+        """governor doctor runs clean on fresh init."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        result = run_gov(["doctor"], cwd=tmp_path)
+        assert result.returncode == 0, f"doctor failed: {result.stderr}"
+        assert "[ok]" in result.stdout
+
+    def test_operator_status_full(self, tmp_path):
+        """governor status --full shows dashboard."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        result = run_gov(["status", "--full"], cwd=tmp_path)
+        assert result.returncode == 0, f"status --full failed: {result.stderr}"
+        assert "Governor Dashboard" in result.stdout
+
+    def test_operator_status_full_json(self, tmp_path):
+        """governor status --full --json returns valid JSON."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        result = run_gov(["status", "--full", "--json"], cwd=tmp_path)
+        assert result.returncode == 0, f"status --full --json failed: {result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["schema_version"] == 1
+        assert data["envelope"]["ok"] is True
+
+    def test_operator_explain(self, tmp_path):
+        """governor explain ELASTIC returns explanation."""
+        git_init(tmp_path)
+        result = run_gov(["explain", "ELASTIC"], cwd=tmp_path)
+        assert result.returncode == 0, f"explain failed: {result.stderr}"
+        assert "regime:ELASTIC" in result.stdout
+
+    def test_operator_trace(self, tmp_path):
+        """governor trace runs clean on fresh init."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        result = run_gov(["trace"], cwd=tmp_path)
+        assert result.returncode == 0, f"trace failed: {result.stderr}"
+        assert "No events recorded" in result.stdout
+
 
 # ── Group 2: Daemon smoke ────────────────────────────────────────────────
 

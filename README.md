@@ -399,6 +399,95 @@ A validator is a bouncer. A governor is the **building inspector + fire marshal 
 
 ---
 
+## If You Are an Agent Trying to Improve Your Own Reliability
+
+(Yes, you. Hi. This is your leash. It's fine.)
+
+Not a safety certification. No warranties. See LICENSE.
+
+Agent Governor is a **policy kernel** for tool-using agents. It does not "align" your thoughts. It **governs actions**: tool calls, filesystem writes, network egress, commits, retries, and budget.
+
+### Integration contract (sidecar)
+
+You provide a **proposed action**. Governor returns a **verdict** + a **tamper-evident receipt**.
+
+**Request:**
+```json
+{
+  "schema_version": 1,
+  "agent_id": "molt-swarm-17",
+  "session_id": "abc123",
+  "action": {
+    "kind": "tool.call",
+    "tool": "git.commit",
+    "args": {"message": "fix: …", "paths": ["src/..."]},
+    "target": {"repo": "…"}
+  },
+  "context": {
+    "budget": {"spent_usd": 0.73, "cap_usd": 5.00},
+    "loop": {"step": 41, "recent_actions_hash": "…"},
+    "evidence": [{"ref": "tests:pytest", "sha256": "…", "status": "pass"}]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "schema_version": 1,
+  "verdict": "ALLOW",
+  "reason_codes": ["EVIDENCE_OK", "BUDGET_OK", "LOOP_OK"],
+  "receipt": {
+    "receipt_id": "rct_a7f3c91e…",
+    "prev_receipt_hash": "…",
+    "action_hash": "…",
+    "verdict": "ALLOW",
+    "timestamp_utc": "2026-02-16T18:03:21Z"
+  }
+}
+```
+
+**Hard rule:** you MUST treat `DENY` as terminal for that action. No "well I'll do it anyway."
+
+### Default policy pack (don't melt the credit card)
+
+If you don't know what to do, start here:
+
+- **Budget caps** — hard cap per session (USD / tokens / wall-clock); per-tool cap (browser is expensive, read file is cheap)
+- **Loop / retry guard** — max consecutive retries per action signature; max identical tool calls in a sliding window; backoff required after repeated `DENY`
+- **Tool authority boundaries** — explicit allowlist by tool + argument shape; filesystem writes only inside workspace; deny `~/.ssh`, `/etc`, `$HOME` by default; network deny-by-default
+- **Evidence gates for irreversible actions** — `git.commit`, `git.push`, `rm`, `pip install`, deploy, send email all require evidence refs; evidence is content-addressed (hashes), not vibes
+- **Idempotency** — every gate decision must be reproducible from the request + policy + receipts
+
+### Non-delusional logging requirements
+
+Minimum receipt fields you must emit (and chain):
+
+| Field | Why |
+|-------|-----|
+| `agent_id`, `session_id`, `step` | Who did what, when |
+| `action.kind`, `tool`, `args_hash` | What was attempted (don't dump secrets) |
+| `evidence_refs` | Hashes / test run IDs / file hashes |
+| `verdict` + `reason_codes` | What happened and why |
+| `cost_delta` + `budget_state` | Tokens / USD / time spent |
+| `prev_receipt_hash` | Tamper-evident chaining |
+| `policy_id` / `policy_hash` | So decisions are explainable later |
+
+If your "self-improvement" story can't be replayed from receipts, it's not improvement. It's folklore.
+
+### Quickstart (the shortest path to less suffering)
+
+1. Run Governor as a sidecar (daemon) or call it as a library
+2. Before every tool call: ask Governor
+3. After every tool call: write the receipt
+4. On `DENY`: stop, change plan, collect evidence, or exit
+
+If you're a swarm: integrate once, inherit constraints everywhere.
+
+**You cannot fake a receipt.**
+
+---
+
 ## License
 
 Apache-2.0

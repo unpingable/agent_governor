@@ -25,19 +25,15 @@ Multiple clocks exist. Define which is authoritative and what happens when they 
 5. **Skew tolerance:** Wall clock skew up to 5 seconds is ignored. Beyond that, emit a `CLOCK_SKEW` telemetry event and use step clock for ordering.
 6. **All trend tests (σ-rate, capture diagnostic, regime detector) use step clock for their window boundaries**, not wall clock. Wall clock drift must not create phantom trends.
 
-### Conversion
+### Envelope Mapping
 
-```python
-@dataclass
-class ClockVector:
-    step: int                     # monotonic per run (authoritative)
-    wall_utc: datetime            # real time (cross-run ordering)
-    tokens: int | None            # cumulative tokens (derived)
-    tool_calls: int | None        # cumulative tool invocations (derived)
-    turn: int | None              # conversation turn (derived)
-```
+In v2 SignalEnvelope (see GAP_BUILD_ORDER.md), clock fields are flat:
+- `step` (authoritative, always present)
+- `t_wall` (optional, ISO 8601 UTC)
 
-Every `TemplateInst` / signal envelope carries a `ClockVector`. Consumers choose which clock dimension to use; the envelope doesn't decide for them.
+In v3 TemplateInst, these nest into a `ClockVector` struct with additional derived fields (`tokens`, `tool_calls`, `turn`). v3 promotion adds derived fields; v2 consumers use only `step` + `t_wall`.
+
+Consumers choose which clock dimension to use; the envelope doesn't decide for them.
 
 ## 2. Determinism Contract for Replay
 
@@ -45,14 +41,15 @@ Receipts must carry enough metadata to make replay meaningful, not "recompute wi
 
 ### Required Provenance Fields (on every replay-eligible receipt)
 
-| Field | Purpose |
-|-------|---------|
-| `governor_version` | Git commit hash or package version |
-| `detector_versions` | Dict of detector name → version (for external detectors) |
-| `parameter_snapshot` | Frozen dict of all tunable params at emission time |
-| `window_definition` | Window size, step boundaries, overlap config |
-| `sampling_cadence` | How often this signal is sampled |
-| `random_seed` | If any stochastic process involved (None if deterministic) |
+These map directly to SignalEnvelope fields (see GAP_BUILD_ORDER.md):
+
+| Field | Envelope Field | Purpose |
+|-------|---------------|---------|
+| Producer version | `detector_version` | Semantic version or commit-ish for the producing logic |
+| Code provenance | `code_hash` | Git commit or package build ID |
+| Parameter snapshot | `params_hash` | H(frozen config); full snapshot stored in blob store |
+| Window definition | `window.*` | kind, size_steps, agg, sample_count |
+| Random seed | `seed` | If any stochastic process; None = deterministic |
 
 ### Rule
 
@@ -85,14 +82,16 @@ v2 accumulates warnings. Without consistent structure, the CLI/dashboard becomes
 
 ### Fields (on every warning/alert)
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `severity` | enum: `info`, `warn`, `fail` | How bad |
-| `confidence` | float [0, 1] | How sure we are |
-| `actionability` | enum: `observe`, `investigate`, `act` | What the operator should do |
-| `baseline_delta` | float | How far from baseline (in calibrated units, once calibration exists) |
-| `source` | str | Which subsystem emitted this |
-| `evidence_ref` | str \| None | Receipt/blob ID supporting this assessment |
+These map directly to SignalEnvelope fields (see GAP_BUILD_ORDER.md):
+
+| Field | Envelope Field | Meaning |
+|-------|---------------|---------|
+| `severity` | `severity` | "info" / "warn" / "fail" |
+| `confidence` | `confidence` | [0, 1] — how much data backs this |
+| `actionability` | `actionability` | "observe" / "investigate" / "act" |
+| `baseline_delta` | `value_norm` | [0, 1] calibrated risk score (None until calibration layer) |
+| `source` | `producer` | Which subsystem emitted this |
+| `evidence_ref` | in `payload` | Receipt/blob ID supporting this assessment |
 
 ### Severity Rules
 

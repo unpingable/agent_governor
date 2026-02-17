@@ -91,61 +91,160 @@ In v2, define a minimal "signal envelope" in receipts that is intentionally isom
 
 ### v2 Minimal Signal Envelope
 
-Every v2 signal emission (σ-rate observations, capture diagnostics, heartbeat events, calibrated signals, replay results) uses this envelope:
+Every v2 signal emission (σ-rate observations, capture diagnostics, heartbeat events, calibrated signals, replay results, epoch checkpoints) uses this envelope. One job: carry any signal in a shape that can be appended, replayed, partitioned by `run_id`, and upgraded by `schema_version`.
 
 ```python
 @dataclass
 class SignalEnvelope:
-    # Identity (content-addressed, same scheme as gate_receipt.py)
-    envelope_id: str                  # H(canonical_json(content fields))
-    schema_version: str               # "v2.1" — will promote to TemplateInst version
+    # ── Identity + ordering (sharding depends on this) ──────────────
+    schema_version: int               # envelope schema version (1 for v2; promotes to v3)
+    run_id: str                       # partition key; total-order boundary
+    seq: int                          # monotonic per run; total order within the run stream
+    event_type: str                   # enum: see EventType below
 
-    # Source
-    source: str                       # e.g. "governor.sigma_rate", "governor.capture_diag"
-    run_id: str                       # ties to receipt kernel run
+    # ── Clock vector (trend tests depend on this) ───────────────────
+    step: int                         # monotonic per run (AUTHORITATIVE for ordering)
+    t_wall: str | None                # ISO 8601 UTC (cross-run ordering / UX; never authoritative)
 
-    # Clock vector (see GAP_INVARIANTS.md §1)
-    step: int                         # monotonic per run (authoritative for ordering)
-    wall_utc: str                     # ISO 8601 UTC (authoritative for cross-run)
-    tokens: int | None                # cumulative tokens (derived, optional)
-    tool_calls: int | None            # cumulative tool invocations (derived, optional)
+    # ── Source + signal identity ────────────────────────────────────
+    producer: str                     # subsystem: "detector.scalar", "governor.correlator", "governor.preflight"
+    signal_id: str                    # stable name: "sigma_rate", "exposure_proxy", "contradiction_trend"
 
-    # Observation
-    observation_type: str             # "measurement", "alert", "heartbeat", "replay_result"
-    severity: str                     # "info" | "warn" | "fail" (see GAP_INVARIANTS.md §4)
-    confidence: float                 # [0, 1]
+    # ── Provenance / determinism (replay depends on this) ──────────
+    detector_version: str             # semver or commit-ish for producing logic
+    code_hash: str                    # git commit or package build ID
+    params_hash: str                  # H(frozen config used at emission time)
+    seed: int | None                  # stochastic seed if any; None = deterministic
 
-    # Payload (source-specific, schema registered)
-    payload: dict                     # the actual signal data
+    # ── Value (calibration depends on this) ─────────────────────────
+    value_raw: float | None           # raw signal value (None for non-numeric events like heartbeats)
+    unit: str | None                  # "per_step", "ratio", "count", "seconds", etc.
+    direction: str | None             # "higher_worse" | "lower_worse" | None (for non-directional)
+    value_norm: float | None          # calibrated [0,1] risk score (None until calibration layer exists)
+    confidence: float                 # [0,1] — how much data backs this measurement
+
+    # ── Severity taxonomy (warn-first structure) ────────────────────
+    severity: str                     # "info" | "warn" | "fail"
+    actionability: str                # "observe" | "investigate" | "act"
+
+    # ── Windowing (trend tests + replay sweeps depend on this) ──────
+    window: WindowDescriptor | None   # None for point-in-time events
+
+    # ── Payload (source-specific, schema registered) ────────────────
+    payload: dict                     # the actual signal data (source-specific)
     payload_hash: str                 # H(canonical_json(payload))
 
-    # Provenance (see GAP_INVARIANTS.md §2)
-    governor_version: str             # git commit or package version
-    parameter_snapshot_hash: str      # H(frozen params) — full snapshot stored separately
+    # ── Integrity ───────────────────────────────────────────────────
+    checkpoint: CheckpointRef | None  # epoch root reference (None for non-checkpoint events)
+
+    # ── Traceability ────────────────────────────────────────────────
+    parent_event_id: str | None       # for derived signals (e.g. calibrated from raw)
+    tenant_id: str                    # "local" in v2; real tenant ID in PaaS v3
+
+@dataclass
+class WindowDescriptor:
+    kind: str                         # "rolling" | "tumbling" | "cumulative"
+    size_steps: int                   # window size in step-clock units
+    start_step: int | None            # explicit boundary (optional)
+    end_step: int | None              # explicit boundary (optional)
+    agg: str                          # "mean" | "slope" | "ratio" | "count" | "max"
+    sample_count: int                 # how many points contributed
+
+@dataclass
+class CheckpointRef:
+    epoch_id: str
+    root_hash: str                    # Merkle root of events in range
+    range_start_seq: int
+    range_end_seq: int
+    prev_root_hash: str | None        # chain across epochs
+
+class EventType:
+    """Enum values for event_type field."""
+    SENSOR_SAMPLE = "sensor_sample"           # single observation
+    SENSOR_SUMMARY = "sensor_summary"         # windowed aggregation
+    HEARTBEAT = "heartbeat"                   # liveness proof
+    POLICY_DECISION = "policy_decision"       # warn-only in v2; gating in v3
+    CHECKPOINT = "checkpoint"                 # epoch root
+    PREFLIGHT_PREDICTION = "preflight_prediction"  # advisory regime prediction
 ```
+
+### Canonical JSON example
+
+```json
+{
+  "schema_version": 1,
+  "run_id": "run_abc123",
+  "seq": 847,
+  "event_type": "sensor_summary",
+  "step": 980,
+  "t_wall": "2026-02-16T18:32:10.123Z",
+  "producer": "governor.sigma_rate",
+  "signal_id": "sigma_rate",
+  "detector_version": "2.1.0",
+  "code_hash": "git:deadbeef",
+  "params_hash": "sha256:a1b2c3...",
+  "seed": null,
+  "value_raw": 0.031,
+  "unit": "per_step",
+  "direction": "higher_worse",
+  "value_norm": null,
+  "confidence": 0.8,
+  "severity": "warn",
+  "actionability": "observe",
+  "window": {
+    "kind": "rolling",
+    "size_steps": 200,
+    "agg": "slope",
+    "sample_count": 180
+  },
+  "payload": {"endorsed_count": 180, "contradiction_count": 6, "contributing_ids": ["..."]},
+  "payload_hash": "sha256:f4e5d6...",
+  "checkpoint": null,
+  "parent_event_id": null,
+  "tenant_id": "local"
+}
+```
+
+### "Does it pass?" rubric
+
+1. **Replay**: Can I reproduce this signal on a different machine? Yes — `detector_version` + `code_hash` + `params_hash` + `seed` pin the logic.
+2. **Sweep**: Can I sweep thresholds without guessing the window? Yes — `window.kind` + `size_steps` + `agg` + `sample_count` are explicit.
+3. **Shard**: Can I partition by `run_id` and compute trends without cross-shard joins? Yes — `seq` is total order within run; `step` is authoritative clock.
+4. **Compact**: Can I compact with epoch roots and keep tamper-evidence? Yes — `checkpoint.*` anchored to `seq` (same ordering key as shard).
+5. **κ later**: Can I add κ as quota/policy without rewriting? Yes — `actionability` + `severity` + `tenant_id` are already present.
 
 ### Field Mapping to v3 TemplateInst
 
-| v2 SignalEnvelope | v3 TemplateInst | Notes |
-|-------------------|-----------------|-------|
-| `envelope_id` | `content_hash` | Same computation |
-| `schema_version` | `schema_version` | Promote "v2.1" → "v3.0" |
-| `source` | `source` | Identical |
+| v2 SignalEnvelope | v3 TemplateInst | Promotion |
+|-------------------|-----------------|-----------|
+| `schema_version: 1` | `schema_version: 2` | Bump |
 | `run_id` | `run_id` | Identical |
-| `step` + `wall_utc` + ... | `ClockVector` | Promote flat fields to nested struct |
-| `observation_type` | `observation_type` | Identical |
-| `payload` | `payload` | Identical |
-| `payload_hash` | `content_hash` | Identical |
-| — | `turn_id` | Added in v3 (nullable in v2) |
+| `seq` | `seq` | Identical |
+| `event_type` | `event_type` | Identical |
+| `step` + `t_wall` | `clock: ClockVector` | Nest into struct, add `tokens` + `tool_calls` |
+| `producer` | `producer` | Identical |
+| `signal_id` | `signal_id` | Identical |
+| `detector_version` + `code_hash` + ... | `provenance: Provenance` | Nest into struct |
+| `value_raw` + `unit` + `direction` + `value_norm` | `value: SignalValue` | Nest into struct |
+| `severity` + `actionability` | `assessment: Assessment` | Nest into struct |
+| `window` | `window` | Identical |
+| `payload` + `payload_hash` | `payload` + `content_hash` | Rename hash field |
+| `checkpoint` | `checkpoint` | Identical |
+| `parent_event_id` | `parent_event_id` | Identical |
+| `tenant_id` | `tenant_id` | Identical |
+| — | `turn_id` | Added in v3 (nullable) |
+| — | `integrity.sig` | Added in v3 (cryptographic signature) |
 
-v3 promotion = add `turn_id` field + nest clock fields into `ClockVector` + bump `schema_version`. No payload changes. No adapters.
+v3 promotion = nest flat fields into typed structs + add `turn_id` + add `integrity.sig` + bump `schema_version`. No payload changes. No field deletions. No adapters.
 
 ### Rules
 
 1. **All v2 gap spec implementations MUST emit via SignalEnvelope.** No raw dicts, no bespoke event shapes.
-2. **Payload schemas registered in a central dict** (not a runtime registry yet — just a Python dict mapping source → expected keys). v3 promotes this to the SchemaRegistry.
+2. **Payload schemas registered in a central dict** (not a runtime registry yet — just a Python dict mapping `signal_id` → expected keys). v3 promotes this to the SchemaRegistry.
 3. **`local_only: true` signals** (if any) are exempt from envelope requirement but MUST be documented and WILL be deleted in v3. (See GAP_INVARIANTS.md §5.)
-4. **PREDICT_REGIME_PREFLIGHT** emits into the same envelope as runtime detectors, even though it's advisory. This avoids wrapping it later.
+4. **PREDICT_REGIME_PREFLIGHT** emits into the same envelope as runtime detectors (event_type=`preflight_prediction`). This avoids wrapping it later.
+5. **Ordering is by `seq`, never by `t_wall`.** Timestamp jitter must not affect event ordering.
+6. **`tenant_id` defaults to `"local"` in v2.** Never omit it — PaaS promotion must not require backfilling.
 
 ## Cross-Cutting Contracts
 

@@ -1,28 +1,47 @@
 # Agent Governor
 
-**Enforcement kernel for tool-using LLM workflows.** Constrains capabilities over time, detects failure modes (loops, drift, hallucinated completion), and produces tamper-evident receipts for audit and replay.
+**A WAF at the tool boundary for LLM/agent workflows** — an enforcement kernel and receipt chain for tool-using agents.
+
+Like a WAF, but for tool calls instead of HTTP. Agents are untrusted request generators. The Governor sits between the model and its tools, enforcing invariants (scope, evidence, budgets, scars) and producing tamper-evident receipts you can audit and replay.
+
+```text
+Agent:     edit_file("src/auth/login.py", ...)
+Governor:  scope? ✓  evidence? ✗  budget? ✓  scars? ✓
+Verdict:   DENY — claim "auth module is thread-safe" has no evidence
+Receipt:   rct_a7f3c91e (hash-chained, tamper-evident)
+Next:      provide test results, downgrade to hypothesis, or request override
+```
 
 11,000+ tests. Zero trust. Agents propose — only the governor commits.
 
 > **Status:** Alpha. Under active solo development. The core kernel (evidence gate, receipt chain, claim extraction) is stable and tested. Client integrations (VS Code, TUI, desktop, WebUI) are functional but evolving. Not packaged for distribution — install from source.
 >
 > **Support:** No SLA. No DMs. File structured issues (templates provided) or post in Discussions. Paper-cut reports are gold; vague feature requests may be closed.
->
-> **This is not** alignment research, an agent framework, a prompt wrapper, or vibes-based linting. It's an enforcement boundary that blocks writes until evidence exists. If you're looking for those other things, this isn't it.
 
-## What Actually Happens
+> *Language is a proposal, not an authority.*
 
+## How It Works
+
+**The short version:** every tool call hits a policy gate. The gate checks rules, requires evidence for hard claims, and emits a receipt. Allow, deny, or downgrade — no silent pass-throughs.
+
+```text
+propose → observe → evaluate → enforce → receipt
+            ↑                               ↓
+            └───────── agent replans ────────┘
 ```
-Agent proposes:  web.search("auth bypass techniques")  (attempt 4, same query class)
-Governor sees:   tool churn + low novelty + budget burn
-Governor acts:   DENY + DOWNGRADE (strip web tool, force local reasoning)
-Agent receives:  {reason: "tool_churn_detected", allowed_next: ["read_file", "propose_plan"], expiry: "3 turns"}
-Agent replans:   continues with reduced capability set
-```
 
-This is the difference between a **validator** (checks if a call is well-formed) and a **governor** (decides whether this call should exist *at this point in the run*, given observed behavior, constraints, and prior evidence).
+Validators check whether a call is well-formed. Governors decide whether it's admissible *now*, given state, regime, and evidence.
 
-A governor doesn't just say "no." It **denies, downgrades, forces replan, strips tools, caps retries, expires tasks, and emits a machine-readable receipt explaining why:**
+**The 30-second walkthrough:**
+
+1. **Agent proposes** an action (file write, tool call, commit).
+2. **Governor checks** scope (is this tool allowed here?), evidence (can you prove that claim?), budget (how much have you spent?), and scars (did this fail before?).
+3. **Governor decides**: allow, deny, downgrade (strip tools, cap retries, force replan).
+4. **Receipt emitted**: content-addressed, hash-chained. Inputs, decision, rationale — all auditable.
+
+When things go wrong, the question shifts from "why did it do that?" (storytime) to **"was this action admissible under the declared rules?"** (audit).
+
+**What a receipt looks like:**
 
 ```json
 {
@@ -32,12 +51,11 @@ A governor doesn't just say "no." It **denies, downgrades, forces replan, strips
   "subject_hash": "sha256:e4d909c...",
   "evidence_hash": "sha256:8b1a9c4...",
   "invariants": {
-    "confidence.sanity": "FAIL — claim c870e5: high confidence, best evidence is weak (by provenance)",
+    "confidence.sanity": "FAIL — claim c870e5: high confidence, best evidence is weak",
     "ledger.chain_valid": "PASS (11 events)",
     "run.stage_required_path": "PASS"
   },
   "verdict_ceiling": "unknown (structural invariant failure)",
-  "oracle_evidence": [],
   "timestamp": "2026-02-16T02:55:11Z"
 }
 ```
@@ -46,62 +64,25 @@ Every enforcement action produces one of these. Tamper with the chain — the ha
 
 ## Non-Goals
 
-- Not an agent framework. Governs pipelines that generate and verify artifacts — including semi-automated ones — but does not own an agent runtime.
-- Not "alignment." Does not make models good.
-- Not a confidence-score system. Confidence without evidence is theater.
-- Not a policy document. It's an enforcement boundary that blocks writes.
+- **Not an agent framework.** Does not own a runtime. Governs whatever runtime you use.
+- **Not alignment research.** Does not make models good. Constrains what they can *do*.
+- **Not content moderation.** Operates at the tool boundary, not the text boundary.
+- **Not a confidence score.** Confidence without evidence is theater. Receipts or it didn't happen.
 
 ---
 
-## The Enforcement Loop
+## Why
 
-```
-propose → observe → evaluate → enforce → feedback → replan → continue
-          ↑                                                    ↓
-          └────────────────── receipts ─────────────────────────┘
-```
+You're using Claude Code, Cursor, or Codex. The agent says "tests pass" — did it run them? It says "file exists" — did it check? It contradicts yesterday's decision — does anyone notice? It burns $4 on a retry loop — does anything stop it?
 
-Five verbs make a governor:
+Without enforcement, every agent claim is folklore. With enforcement:
 
-| Verb | What It Does |
-|------|-------------|
-| **Observe** | Track signals across time: looping, divergence, novelty decay, cost slope, tool churn |
-| **Decide** | Apply policy over state, regime, stage, and accumulated evidence |
-| **Enforce** | Allow / deny / strip / expire / throttle / downgrade |
-| **Redirect** | Require replan with fewer degrees of freedom (tool stripping, stage shift) |
-| **Prove** | Emit receipts that bind claims, actions, and evidence into a tamper-evident chain |
+- Agent says "tests pass" → Governor runs the tests, produces a receipt.
+- Agent says "file exists" → Governor hashes the file, records a snapshot.
+- Agent contradicts a prior decision → Governor blocks the write.
+- Agent loops on the same tool call → Governor strips the tool, forces replan.
 
-"Tool gateway" is a leaf of this system, not its center.
-
----
-
-## The Problem
-
-You're using Claude Code, Cursor, or Codex. The agent:
-- Hallucinates APIs that don't exist
-- Contradicts itself between sessions
-- Drifts from architectural decisions you made yesterday
-- Gives you no audit trail for why things changed
-- Burns money on retry loops nobody notices
-- Requires a human babysitter for every action
-
-**That's not agentic development. That's expensive remote control.**
-
-## The Solution
-
-Agent Governor enforces the **Non-Linguistic Authority Invariant (NLAI)**:
-
-> Language is a proposal, not an authority.
-
-The agent can *claim* anything. But it can't *write* anything until it provides verifiable evidence.
-
-- Agent says "tests pass"? Governor runs the tests and produces a receipt.
-- Agent says "file exists"? Governor checks and hashes the file.
-- Agent says "we decided on React"? Governor checks the ledger for contradictions.
-
-**No hallucination can fake a receipt.**
-
-**Evidence must be produced by trusted collectors** (test runners, linters, filesystem probes, git diffs, CI attestations). Free-text "evidence" provided by the agent is treated as untrusted narrative and cannot satisfy hard gates. The model is not the verifier — it's a consumer of attested evidence.
+**The core invariant:** language is a proposal, not an authority. The agent can *claim* anything. It can't *write* anything until evidence exists. Evidence must come from trusted collectors (test runners, linters, filesystem probes, git diffs) — not from the agent itself.
 
 ---
 
@@ -178,6 +159,22 @@ governor continuity anchor add \
 
 governor check chapter-3.md --mode fiction
 ```
+
+### Operator Commands
+
+Once initialized, four front-door commands collapse subsystem state into obvious workflows:
+
+```bash
+governor status --full        # One-page dashboard (envelope, regime, scars, etc.)
+governor doctor               # Walk 9 subsystems, flag non-nominal, suggest next commands
+governor doctor --strict      # CI mode: exit 1 on warnings too
+governor explain ELASTIC      # What does this code mean?
+governor explain --list       # All diagnostic codes, grouped
+governor trace                # Unified timeline (receipts, scars, scope, violations)
+governor trace --source scar  # Filter by event source
+```
+
+All four are read-only, `--json` capable, and width-capped at 80 columns.
 
 ---
 

@@ -13,7 +13,10 @@ Tests cover:
 - Edge cases
 """
 
+import json
 import math
+from pathlib import Path
+
 import pytest
 from datetime import datetime, timezone
 
@@ -1671,3 +1674,92 @@ class TestExplainAdmissibility:
         info = ledger.explain_admissibility("r")
         assert info["query"]["failure_kind"] == "(unspecified)"
         assert info["query"]["action_type"] == "(unspecified)"
+
+
+# =============================================================================
+# CLI --json output
+# =============================================================================
+
+
+class TestScarCliJson:
+    """Tests for --json flags on scar list, scar history, scar stats."""
+
+    @pytest.fixture
+    def runner(self):
+        from click.testing import CliRunner
+        return CliRunner()
+
+    @pytest.fixture
+    def initialized(self, tmp_path, runner):
+        from governor.cli import cli
+        with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+            runner.invoke(cli, ["--root", td, "init"])
+            yield Path(td)
+
+    @pytest.fixture
+    def with_scars(self, initialized, runner):
+        """Initialize a scar ledger with a failure event."""
+        from governor.cli import cli
+        root = str(initialized)
+        runner.invoke(cli, ["--root", root, "scar", "record", "src/api",
+                            "--obs-shift", "0.1", "--pred-error", "1.0",
+                            "--description", "test failure",
+                            "--failure-kind", "timeout", "--action-type", "write"])
+        return initialized
+
+    def test_scar_list_json_empty(self, runner, initialized):
+        from governor.cli import cli
+        result = runner.invoke(cli, ["--root", str(initialized), "scar", "list", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["scars"] == []
+        assert data["shields"] == []
+        assert data["stats"]["health"] == "NOMINAL"
+        assert data["stats"]["total_scars"] == 0
+
+    def test_scar_list_json_with_data(self, runner, with_scars):
+        from governor.cli import cli
+        result = runner.invoke(cli, ["--root", str(with_scars), "scar", "list", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert len(data["scars"]) >= 1
+        assert "scar_id" in data["scars"][0]
+        assert "region" in data["scars"][0]
+        assert "stiffness" in data["scars"][0]
+        assert isinstance(data["stats"]["total_scars"], int)
+        assert isinstance(data["stats"]["hard_scars"], int)
+        assert data["stats"]["health"] in ("NOMINAL", "CAUTIOUS", "CONSTRAINED")
+
+    def test_scar_history_json_empty(self, runner, initialized):
+        from governor.cli import cli
+        result = runner.invoke(cli, ["--root", str(initialized), "scar", "history", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data == []
+
+    def test_scar_history_json_with_data(self, runner, with_scars):
+        from governor.cli import cli
+        result = runner.invoke(cli, ["--root", str(with_scars), "scar", "history", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert len(data) >= 1
+        assert "event_id" in data[0]
+        assert "region" in data[0]
+        assert "provenance" in data[0]
+        assert "surprise_ratio" in data[0]
+
+    def test_scar_stats_json_empty(self, runner, initialized):
+        from governor.cli import cli
+        result = runner.invoke(cli, ["--root", str(initialized), "scar", "stats", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["health"] == "NOMINAL"
+
+    def test_scar_stats_json_with_data(self, runner, with_scars):
+        from governor.cli import cli
+        result = runner.invoke(cli, ["--root", str(with_scars), "scar", "stats", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "health" in data
+        assert "total_failures" in data
+        assert isinstance(data["total_failures"], int)

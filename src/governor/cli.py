@@ -5967,8 +5967,9 @@ def scar():
 @scar.command("list")
 @click.option("--hard", is_flag=True, help="Show only hard scars (full veto)")
 @click.option("--soft", is_flag=True, help="Show only soft scars (relaxed)")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
 @click.pass_context
-def scar_list(ctx, hard, soft):
+def scar_list(ctx, hard, soft, as_json):
     """List all scars (action restrictions from internal failures)."""
     from .scars import ScarLedger
 
@@ -5976,10 +5977,32 @@ def scar_list(ctx, hard, soft):
     scar_path = gov_dir / "scars.json"
 
     if not scar_path.exists():
-        click.echo("No scar ledger found. No failures recorded yet.")
+        if as_json:
+            click.echo(json.dumps({"scars": [], "shields": [], "stats": {"total_scars": 0, "hard_scars": 0, "total_shields": 0, "health": "NOMINAL"}}))
+        else:
+            click.echo("No scar ledger found. No failures recorded yet.")
         return
 
     ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
+
+    if as_json:
+        summary = ledger.get_summary()
+        health = summary.get("health", "NOMINAL")
+        scars_list = ledger.get_active_scars()
+        shields_list = ledger.get_active_shields()
+        hard_count = len([s for s in scars_list if s.is_hard])
+        result = {
+            "scars": [s.to_dict() for s in scars_list],
+            "shields": [s.to_dict() for s in shields_list],
+            "stats": {
+                "total_scars": len(scars_list),
+                "hard_scars": hard_count,
+                "total_shields": len(shields_list),
+                "health": health,
+            },
+        }
+        click.echo(json.dumps(result, indent=2, default=str))
+        return
 
     if hard:
         scars = ledger.get_hard_scars()
@@ -6040,8 +6063,9 @@ def scar_shields(ctx):
 @scar.command("history")
 @click.option("--limit", "-n", default=20, help="Number of events to show")
 @click.option("--region", "-r", default=None, help="Filter by region")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
 @click.pass_context
-def scar_history(ctx, limit, region):
+def scar_history(ctx, limit, region, as_json):
     """Show failure history with provenance classification."""
     from .scars import ScarLedger
 
@@ -6049,7 +6073,10 @@ def scar_history(ctx, limit, region):
     scar_path = gov_dir / "scars.json"
 
     if not scar_path.exists():
-        click.echo("No scar ledger found.")
+        if as_json:
+            click.echo(json.dumps([]))
+        else:
+            click.echo("No scar ledger found.")
         return
 
     ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
@@ -6058,6 +6085,10 @@ def scar_history(ctx, limit, region):
         events = ledger.get_failures_by_region(region)
     else:
         events = ledger.get_failure_history(limit=limit)
+
+    if as_json:
+        click.echo(json.dumps([e.to_dict() for e in events], indent=2, default=str))
+        return
 
     if not events:
         click.echo("No failure events recorded.")
@@ -6136,8 +6167,9 @@ def scar_anneal(ctx, region, failure_kind, action_type, dry_run):
 
 
 @scar.command("stats")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
 @click.pass_context
-def scar_stats(ctx):
+def scar_stats(ctx, as_json):
     """Show scar/shield statistics and system health."""
     from .scars import ScarLedger
 
@@ -6145,12 +6177,20 @@ def scar_stats(ctx):
     scar_path = gov_dir / "scars.json"
 
     if not scar_path.exists():
-        click.echo("No scar ledger found. System is unscarred.")
+        if as_json:
+            click.echo(json.dumps({"health": "NOMINAL", "failures": "0 total", "scars": "0 total", "shields": "0 active"}))
+        else:
+            click.echo("No scar ledger found. System is unscarred.")
         return
 
     ledger = ScarLedger.from_dict(json.loads(scar_path.read_text()))
     metrics = ledger.get_metrics()
     summary = ledger.get_summary()
+
+    if as_json:
+        result = {**summary, **metrics}
+        click.echo(json.dumps(result, indent=2, default=str))
+        return
 
     click.echo(f"\nSCAR SYSTEM STATUS: {summary['health']}")
     click.echo("=" * 50)

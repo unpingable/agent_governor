@@ -1,0 +1,70 @@
+[
+  {
+    "name": "sorted_keys",
+    "input": {
+      "b": 2,
+      "a": 1
+    },
+    "expected_utf8": "{\"a\":1,\"b\":2}"
+  },
+  {
+    "name": "unicode_nfc",
+    "input": {
+      "s": "é"
+    },
+    "expected_utf8": "{\"s\":\"e\\u0301\"}"
+  },
+  {
+    "name": "nested",
+    "input": {
+      "x": [
+        {
+          "z": 3,
+          "y": 2
+        }
+      ]
+    },
+    "expected_utf8": "{\"x\":[{\"y\":2,\"z\":3}]}"
+  },
+  {
+    "name": "bool_int_edge",
+    "input": {
+      "t": true,
+      "i": 1
+    },
+    "expected_utf8": "{\"i\":1,\"t\":true}"
+  },
+  {
+    "name": "empty",
+    "input": {},
+    "expected_utf8": "{}"
+  },
+  {
+    "name": "string_escaping",
+    "input": {
+      "q": "he said \"hello\""
+    },
+    "expected_utf8": "{\"q\":\"he said \\\"hello\\\"\"}"
+  },
+  {
+    "name": "null_value",
+    "input": {
+      "a": null,
+      "b": 1
+    },
+    "expected_utf8": "{\"a\":null,\"b\":1}"
+  },
+  {
+    "name": "deep_nesting",
+    "input": {
+      "a": {
+        "b": {
+          "c": {
+            "d": 1
+          }
+        }
+      }
+    },
+    "expected_utf8": "{\"a\":{\"b\":{\"c\":{\"d\":1}}}}"
+  }
+]

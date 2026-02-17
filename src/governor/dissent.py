@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Contradiction persistence ledger: Track dissent as first-class state.
 

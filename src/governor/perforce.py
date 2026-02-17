@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Perforce Support — integrity invariants on explicit authority substrate.
 
 Applies the same integrity invariants as Git governance, but on a substrate

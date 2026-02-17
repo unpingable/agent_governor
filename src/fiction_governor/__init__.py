@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Fiction Governor: Constraint system for LLM-assisted fiction writing.
 

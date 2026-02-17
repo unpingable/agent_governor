@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Cooperative redundancy: independence scoring for quorum votes.
 

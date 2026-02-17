@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """StageGraph: explicit stage machine with hard-fail on illegal transitions.
 
 Stages are not advisory. An illegal transition is a bug, not a warning.

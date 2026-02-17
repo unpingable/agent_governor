@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Multi-agent quorum extensions — severity-based gating (AG2 Layer 2.1-D).
 
 Extends existing quorum.py with:

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Instrumented Execution — AG2 Layer 0, Item #1.
 

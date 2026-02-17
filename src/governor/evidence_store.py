@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Evidence persistence: SQLite-backed storage for evidence and agent run provenance.
 

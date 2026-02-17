@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Structured telemetry: JSON-line logging, pluggable backends, cost/performance analysis.
 

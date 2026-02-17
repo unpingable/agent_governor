@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Canon: The facts ledger for fiction.
 

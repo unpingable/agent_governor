@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """QA Harness: Self-Governance Tests.
 
 The governor validates its own outputs.

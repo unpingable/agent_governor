@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Domain/Mode Detection — Bayesian Mode Posterior.
 

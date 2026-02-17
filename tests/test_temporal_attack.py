@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for temporal_attack — Δt-aware security analysis (AG2 Parallel Track)."""
 
 import json

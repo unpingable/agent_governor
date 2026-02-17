@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the Constraint Compiler (AG2 Layer 1, Item #3)."""
 
 import json

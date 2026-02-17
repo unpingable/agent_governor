@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 DOI metadata fetching via CrossRef and DataCite APIs.
 

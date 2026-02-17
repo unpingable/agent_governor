@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for multi-agent routing and task sizing."""
 
 import pytest

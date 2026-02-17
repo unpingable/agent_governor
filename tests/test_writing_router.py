@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for writing_router.py — Language Domain Toggle + Fiction Type Selection."""
 
 import pytest

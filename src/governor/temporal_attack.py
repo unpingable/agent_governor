@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Temporal attack surface scanner — Δt-aware security analysis (AG2 Parallel Track).
 
 Detects temporal vulnerability patterns: race windows, fail-open defaults,

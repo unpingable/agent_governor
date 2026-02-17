@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Governed Compact — loss-aware context compaction with receipts.
 
 Context compaction is dangerous. Done carelessly, it creates representational

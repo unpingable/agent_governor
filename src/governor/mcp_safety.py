@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """MCP Safety Controls — self-protective infrastructure for the MCP server.
 
 The MCP server must protect itself from misbehaving clients without

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for session_continuity.py — capsule-based session management.
 
 Three acceptance tests per user request:

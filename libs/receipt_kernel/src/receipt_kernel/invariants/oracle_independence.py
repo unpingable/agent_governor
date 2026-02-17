@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Invariant: oracle.independence_minimum
 
 Verifies that oracle evidence cited by claims meets a minimum independence

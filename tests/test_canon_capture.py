@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for fiction_governor.canon_capture — Canon Capture Phase 1.
 
 Tests the CanonCaptureClassifier: pattern detection, false positive

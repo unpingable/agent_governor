@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Grounding Audit Pipeline: Closed-loop hallucination detection and prevention.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Spine: Locked project structure for autonomous execution.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 AgentGovernor: Main interface for the agent governor.
 

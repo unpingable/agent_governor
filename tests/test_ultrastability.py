@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for governor.ultrastability — Ashby-style S₁ adaptation."""
 
 import json

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Contract test for RPC streaming via chat.stream.
 
 Skipped by default — requires a live chat backend.

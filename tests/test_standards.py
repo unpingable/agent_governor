@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Engineering standards regression guards.
 
 These tests enforce invariants from docs/ENGINEERING_STANDARDS.md mechanically.

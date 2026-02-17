@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for risk_function — scalar risk V from signals (AG2 Layer 2.1-B)."""
 
 import json

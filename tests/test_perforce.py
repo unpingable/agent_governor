@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Perforce governance module.
 
 Integrity invariants on explicit authority substrate. Tests work whether

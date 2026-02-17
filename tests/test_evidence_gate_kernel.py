@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for evidence_gate ↔ receipt_kernel integration.
 
 Verifies that EvidenceGate.check() emits a complete kernel run

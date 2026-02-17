@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Detector Handoff Gate — Controller Decision → Gate Receipt.
 

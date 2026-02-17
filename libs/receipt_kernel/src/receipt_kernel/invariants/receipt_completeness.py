@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Invariant: receipt.completeness
 
 Verifies that all required evidence keys are present in EVIDENCE_PUT events

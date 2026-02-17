@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Slim Mode — Single-developer governance for high-iteration workflows.
 

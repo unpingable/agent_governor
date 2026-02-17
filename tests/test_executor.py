@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Tests for Phase A2: Autonomous executor loop.
 """

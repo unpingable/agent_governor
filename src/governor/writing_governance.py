@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Writing Governance — Governance visibility scoring and leak detection.
 

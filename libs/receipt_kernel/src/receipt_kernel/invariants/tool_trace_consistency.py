@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Invariant: tools.trace_consistency
 
 If claims reference tool_call_ids, the tool_trace evidence must exist

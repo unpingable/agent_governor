@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Correlator telemetry: Capture detection for the governor.
 

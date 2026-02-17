@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Epistemic Evasion Detection — Discourse Pattern Analysis.
 

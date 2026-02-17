@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for writing_intent.py — intent classifier and ancillary regime scorers."""
 
 import pytest

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Tests for InvariantSpec, InvariantStore, and materialization.
 Deferred 1: Invariant management.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Receipt Kernel: append-only, hash-chained run ledger with invariant evaluation."""
 
 __version__ = "0.1.0"

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Spectral Stability (AG2 Layer 2, Item #6)."""
 
 import json

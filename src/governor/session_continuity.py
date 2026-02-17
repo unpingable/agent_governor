@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Session Continuity — capsule-based session management.
 
 This is NOT chat replay. It is restoration of intent, constraints, and authority state.

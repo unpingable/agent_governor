@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Config profiles: Named governance presets that bundle envelope, boil, jurisdiction, and strict settings.
 

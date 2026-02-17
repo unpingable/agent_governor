@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for governor.capture — Generic capture protocol + code/research classifiers.
 
 Tests the base CaptureClassifier ABC, CodeCaptureClassifier, ResearchCaptureClassifier,

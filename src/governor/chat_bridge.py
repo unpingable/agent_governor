@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Chat Bridge: backend abstraction over Anthropic API, Ollama, Claude Code, and Codex.
 

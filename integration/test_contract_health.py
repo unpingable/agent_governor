@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Contract tests for governor.hello (health).
 
 Verifies that Maude's HealthResponse model can deserialize

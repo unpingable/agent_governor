@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Writing Intent — Intent classifier and ancillary regime scorers.
 

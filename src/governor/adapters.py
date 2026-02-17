@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Governor adapters: thin wrappers connecting domain governors to the executor.
 

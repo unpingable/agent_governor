@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Dashboard UX — Run-centric governance dashboard backend.
 

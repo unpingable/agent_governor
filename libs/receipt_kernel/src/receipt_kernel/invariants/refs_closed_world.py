@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Invariant: refs.closed_world
 
 Every evidence_ref in claims_map must be present in some EVIDENCE_PUT

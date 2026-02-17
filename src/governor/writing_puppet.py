@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Writing Puppet — Character constraints for authorial control.
 

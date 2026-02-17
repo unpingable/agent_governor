@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Direction tracking for narrative and argumentative coherence.
 

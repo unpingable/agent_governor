@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Governor Context Manager: isolated governor contexts per user/project.
 

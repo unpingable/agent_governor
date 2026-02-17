@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Invariant: output.bound_to_claims
 
 The claims_map must bind to the actual output blob via output_ref.

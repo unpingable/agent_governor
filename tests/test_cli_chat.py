@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for cli_chat.py — Governed Conversational CLI with Backend Switching."""
 
 from __future__ import annotations

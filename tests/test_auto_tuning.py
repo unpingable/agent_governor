@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for auto_tuning module — Phase E8: Automated Tuning."""
 
 import math

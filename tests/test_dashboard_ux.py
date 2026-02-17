@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for dashboard_ux.py — Run-centric governance dashboard backend."""
 
 from __future__ import annotations

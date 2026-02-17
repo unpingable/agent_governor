@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """SQLite receipt store: append-only, hash-chained event ledger.
 
 Design:

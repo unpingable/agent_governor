@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the Governor Coupling module (Homeostat → Ultrastability)."""
 
 import pytest

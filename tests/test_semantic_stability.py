@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for semantic_stability — perturbation-based conditioning audit.
 
 Property-based: assert structural properties (monotonicity, bounds,

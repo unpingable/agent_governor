@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for ledger chain integrity and the chain validation invariant."""
 
 from __future__ import annotations

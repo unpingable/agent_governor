@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Fiction guardrails: consent tracking, DSI, AII, hard constraints, soft penalties.
 

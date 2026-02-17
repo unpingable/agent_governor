@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Tests for claim_diff module — epistemic state change detection.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 No-laundering regression tests: the moral center disguised as tests.
 

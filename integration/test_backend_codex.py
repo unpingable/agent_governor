@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Backend smoke tests: Codex.
 
 These tests require a working codex binary and OPENAI_API_KEY.

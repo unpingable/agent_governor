@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for epistemic_evasion — evasion operator detection (AG2 Layer 2.1-C)."""
 
 import json

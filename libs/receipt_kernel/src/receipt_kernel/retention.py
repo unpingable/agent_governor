@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Retention policy enforcement for evidence blobs.
 
 Manages blob lifecycle: LIVE -> EXPIRED_HASH_ONLY -> PURGED.

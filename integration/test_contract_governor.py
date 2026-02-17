@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Contract tests for governor.now and governor.status RPC methods.
 
 Verifies that Maude's GovernorNow model can deserialize Governor

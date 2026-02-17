@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Golden-file tests for JSON artifact shapes.
 

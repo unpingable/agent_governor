@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """QA Harness: Cross-Module Lifecycle Tests.
 
 Prove the seams hold — claims flow correctly through the full stack.

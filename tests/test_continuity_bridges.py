@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for continuity_bridges: mode-specific anchor factories."""
 
 import pytest

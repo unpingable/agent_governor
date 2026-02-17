@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Claim signal extraction: detect implicit claims from text.
 

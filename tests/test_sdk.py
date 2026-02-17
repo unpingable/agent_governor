@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for SDK middleware module."""
 
 from dataclasses import dataclass

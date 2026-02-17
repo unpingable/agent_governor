@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for writing_constraints.py — structural constraint checks."""
 
 import pytest

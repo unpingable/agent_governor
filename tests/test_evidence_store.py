@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Tests for evidence persistence: EvidenceStore, RunProvenance, and schema v2 migration.
 """

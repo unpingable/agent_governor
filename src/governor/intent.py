@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Intent resource for Code Autopilot.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the interferometry module (multi-model claim comparison)."""
 
 import asyncio

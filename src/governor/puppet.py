@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Puppet Mode — Runtime persona pinning with semantic safety.
 

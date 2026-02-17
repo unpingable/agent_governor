@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Canonical test fixtures for fiction capture tests.
 
 These names are deliberately boring and generic. They MUST NOT

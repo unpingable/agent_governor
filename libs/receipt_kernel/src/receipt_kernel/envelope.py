@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Event envelope: hash-chained, append-only event records.
 
 Every event in a run shares this stable schema. The envelope is the unit

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for governor state --json and --json flags on 7 existing commands."""
 
 import json

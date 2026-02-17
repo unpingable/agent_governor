@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Writing Router — Language Domain Toggle + Explicit Fiction Type Selection.
 
 Sits after intent classification, before regime detection. Routes to

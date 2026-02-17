@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Tainted Claim Similarity — Recurrence detection for contradicted/retracted claims.
 

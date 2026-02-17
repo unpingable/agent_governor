@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for research_why — per-turn Why overlay analysis."""
 
 from __future__ import annotations

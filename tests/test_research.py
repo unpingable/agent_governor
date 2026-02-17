@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for research mode: non-convergent epistemic control."""
 
 import math

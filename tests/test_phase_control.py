@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Phase Control System — Run Phases with Budget Locks.
 
 Layer 2.1-A. Invariant G: B_verify inaccessible until phase ≥ VERIFY.

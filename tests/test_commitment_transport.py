@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Commitment Transport (AG2 Layer 2, Item #5)."""
 
 import json

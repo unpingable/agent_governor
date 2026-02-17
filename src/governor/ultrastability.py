@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Ultrastability Layer: Ashby-style second-order adaptation for S₁ parameters.
 

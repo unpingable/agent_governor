@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Shared helpers for hallucination invariants.
 
 These extract structured data from the event ledger using the store's

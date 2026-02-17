@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Epistemic governance: Provenance, confidence, and evidence tracking.
 

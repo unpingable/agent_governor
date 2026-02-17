@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Coherence Budget Index (CBI) — Governor Health Metric.
 

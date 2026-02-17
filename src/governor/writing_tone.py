@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Writing Tone — 6-axis tone modulation layer.
 

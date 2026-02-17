@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Golden vector compatibility tests for detector handoff.
 
 These tests load decision fixtures from the detector repo and verify

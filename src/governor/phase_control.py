@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Phase Control System — Run Phases with Budget Locks and Novelty Debt.
 

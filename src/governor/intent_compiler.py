@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Intent Compiler — structured hypothesis-collapse for governance sessions.
 

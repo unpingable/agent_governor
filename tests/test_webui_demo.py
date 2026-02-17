@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for WebUI Demo — Scripted, Reproducible WebUI Screenshots.
 
 AG2 Layer 4, Item #12 of the AG2 build order.

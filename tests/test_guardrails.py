@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for fiction_governor.guardrails — consent, DSI, AII, constraints, penalties."""
 
 import pytest

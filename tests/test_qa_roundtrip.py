@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """QA Harness: Serialization Roundtrip Tests.
 
 Every serializable type must survive to_dict() → from_dict() → to_dict().

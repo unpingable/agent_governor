@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Tests for CFI v0: Contextual Frame Intrusion detector for nonfiction.
 """

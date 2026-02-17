@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """SDK Middleware — drop-in governor enforcement for Anthropic SDK.
 
 Usage:

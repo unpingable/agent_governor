@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Regime Detection: Health monitoring for the governor system.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the governor daemon — protocol, dispatcher, all 26 handlers."""
 
 import asyncio

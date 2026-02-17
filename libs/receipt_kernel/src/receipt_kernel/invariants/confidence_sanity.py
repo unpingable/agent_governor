@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Invariant: confidence.sanity
 
 If all claims are marked "low" confidence in factual mode, the run

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Invariants: run.single_finalize + run.stage_required_path
 
 run.single_finalize:

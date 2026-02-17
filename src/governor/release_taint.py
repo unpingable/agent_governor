@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Release Taint — publish-boundary assessment for kernel runs.
 
 Computes whether a kernel run's oracle evidence meets the minimum

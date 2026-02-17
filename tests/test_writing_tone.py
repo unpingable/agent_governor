@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for writing_tone.py — 6-axis tone modulation layer."""
 
 import math

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for doc_governance.py — Document Governance."""
 
 from __future__ import annotations

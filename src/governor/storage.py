@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 SQLite storage backend with WAL mode for concurrent access.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Telemetry Dashboard - Real-time regime visualization.
 

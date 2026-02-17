@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for fiction_governor.context_drift — context drift detection."""
 
 import pytest

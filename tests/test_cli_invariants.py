@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Tests for CLI invariant management commands and autonomous run.
 Deferred 1: Invariant management CLI + execution shell.

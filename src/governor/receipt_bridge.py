@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Bridge adapter: emit receipt_kernel events from agent_gov workflows.
 
 This adapter lets agent_gov emit hash-chained events in parallel with

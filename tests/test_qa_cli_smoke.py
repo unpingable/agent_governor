@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """QA Harness: CLI Smoke Tests.
 
 Verify all CLI commands execute without crashing.

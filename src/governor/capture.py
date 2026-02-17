@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Generic capture protocol: detect structured intent in chat and stage for promotion.
 

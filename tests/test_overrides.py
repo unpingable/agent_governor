@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Code Autopilot override mechanism."""
 
 import json

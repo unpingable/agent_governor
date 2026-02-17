@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Redaction hook for evidence blobs.
 
 Pre-write filter that detects and removes secrets before persistence.

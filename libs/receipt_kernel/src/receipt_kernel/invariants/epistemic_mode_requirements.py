@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Invariant: epistemic.mode_requirements
 
 Certain run modes impose minimum evidence requirements.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Drift Detection: Defense against temporal asymmetry attacks.
 

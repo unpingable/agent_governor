@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Smoke tests for all 6 constitutional invariants."""
 
 from __future__ import annotations

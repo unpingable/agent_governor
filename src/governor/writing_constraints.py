@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Writing Constraints — 11 structural constraint categories from writingconstraints.md.
 

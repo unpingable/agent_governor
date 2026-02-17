@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Deployment Profiles — Authority Classes.
 
 Layer 2.1-B. Invariant B: Action needs capability token.

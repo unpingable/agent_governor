@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Violation Resolver: Interactive violation resolution for author-friendly chat.
 

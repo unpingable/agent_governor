@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Control Theory Formalization — R_t = (P_t * D_t) / E_t
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """External Constraint Attachment — bind claims to external substrate snapshots.
 
 This is NOT fact verification. It is structural logging of what the system

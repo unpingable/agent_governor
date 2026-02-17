@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Backend smoke tests: Ollama.
 
 These tests require a running Ollama instance with a model pulled.

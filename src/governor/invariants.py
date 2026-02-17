@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Invariants: Mechanically verifiable rules for autonomous execution.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Risk Potential Function — Scalar Risk V.
 

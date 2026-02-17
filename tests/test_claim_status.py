@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Tests for ClaimStatus enum, QuorumStatus mapping, EpistemicLedger from_dict/from_json,
 and epistemic_status methods on GroundedClaim and EpistemicLedger.

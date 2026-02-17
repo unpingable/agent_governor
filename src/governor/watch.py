@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Watch mode for continuous file monitoring and verification.
 

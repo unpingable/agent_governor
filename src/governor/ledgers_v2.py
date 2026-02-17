@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 SQLite-backed ledgers with epochs and transactional semantics.
 

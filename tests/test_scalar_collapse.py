@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Scalar Collapse Detection (AG2 Layer 2, Item #7)."""
 
 import json

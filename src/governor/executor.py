@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Autonomous executor: governor-constrained autonomous operation.
 

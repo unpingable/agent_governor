@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for control_theory.py — R_t = (P_t * D_t) / E_t.
 
 ~120 tests across 17 test classes.

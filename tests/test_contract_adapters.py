@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Contract tests for governor adapters (Phase A4).
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Writing Code — Code/SRE Controller (Custody Regime).
 

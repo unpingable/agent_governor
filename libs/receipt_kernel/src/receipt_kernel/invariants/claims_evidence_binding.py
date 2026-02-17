@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Invariant: claims.evidence_binding
 
 Every factual claim must point to evidence refs (blobs) that exist in the store.

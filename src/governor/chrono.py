@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Chrono check: temporal grounding for AI-generated content.
 

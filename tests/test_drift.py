@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for drift detection module (temporal asymmetry defense)."""
 
 import json

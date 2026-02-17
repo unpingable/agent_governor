@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Contract tests for v2 dashboard endpoints.
 
 These endpoints are HTTP-era features that haven't been mapped to

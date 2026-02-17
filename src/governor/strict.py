@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Strict Programmer Mode — Fail-closed governance for production contexts.
 

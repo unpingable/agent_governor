@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Detector Integration (AG2 Layer 1, Item #4)."""
 
 import json

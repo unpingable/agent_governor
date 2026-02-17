@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Research Why Overlay: per-turn analysis of what was injected vs what was referenced.
 

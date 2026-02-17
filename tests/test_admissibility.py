@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Admissibility Gate — Push-Back System.
 
 Layer 2.1-A. Invariant F: No hidden assumptions for S2/S3 actions.

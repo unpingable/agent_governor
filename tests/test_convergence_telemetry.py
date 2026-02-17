@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for convergence telemetry: field helpers, collector methods, instrumentation, analysis."""
 
 from __future__ import annotations

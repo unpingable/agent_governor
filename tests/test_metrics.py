@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Coverage and Efficiency Metrics.
 
 Layer 2.1-A. Severity-weighted verification coverage and efficiency.

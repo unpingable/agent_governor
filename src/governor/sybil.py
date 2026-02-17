@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Sybil resistance: bloc detection, effective voter count (Neff), per-origin budget coupling.
 

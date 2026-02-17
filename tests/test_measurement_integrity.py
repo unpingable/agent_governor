@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Measurement Integrity — Tidepool Defense.
 
 Layer 2.1-B. Invariant C: Only signed+schema tool outputs update state estimates.

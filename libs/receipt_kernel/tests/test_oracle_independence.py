@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for oracle.independence_minimum invariant.
 
 Tests:

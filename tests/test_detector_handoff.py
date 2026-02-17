@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for detector_handoff.py — controller decision → gate receipt."""
 
 from __future__ import annotations

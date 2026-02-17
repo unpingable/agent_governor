@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Evidence Gate: Evidence-gated coding harness — kernel-only surface.
 (Formerly maude_lite.py — renamed per MAUDE_RENAME_SPEC.md)

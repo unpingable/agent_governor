@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for mode_detection — Bayesian mode posterior (AG2 Layer 2.1-C)."""
 
 import json

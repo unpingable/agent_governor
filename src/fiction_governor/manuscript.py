@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Manuscript scanner for auto-populating canon from existing text.
 

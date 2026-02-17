@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Docket UX: Adjudicator framing for violation resolution.
 

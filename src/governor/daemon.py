@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Governor Daemon — JSON-RPC 2.0 control plane over stdio or Unix socket.
 

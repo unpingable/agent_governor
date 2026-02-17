@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for retention policy enforcement."""
 
 from __future__ import annotations

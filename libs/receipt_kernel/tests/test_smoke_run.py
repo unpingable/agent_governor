@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """End-to-end smoke test: build a complete run and verify all invariants PASS.
 
 This is the proof-of-concept test: if this passes, the kernel works.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Failure-injection tests for the autonomous executor.
 

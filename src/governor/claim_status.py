@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Claim Status Dashboard: Weather report for claim health.
 

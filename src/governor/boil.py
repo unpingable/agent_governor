@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Boil Control - Named Regime Presets with Dwell Time Enforcement
 

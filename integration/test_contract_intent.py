@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Contract tests for v2 intent compiler endpoints.
 
 Verifies that Maude's Intent* models can deserialize Governor's actual

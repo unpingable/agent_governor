@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Security verifier for detecting common vulnerabilities.
 

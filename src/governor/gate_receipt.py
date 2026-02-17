@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Gate Receipt: content-addressed decision receipts for governor gates.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Writing Regime — Affect regime system with comedy/tragedy/sincerity/drama.
 

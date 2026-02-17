@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Backend smoke tests: Claude Code.
 
 These tests require a working claude CLI and ANTHROPIC_API_KEY.

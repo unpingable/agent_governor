@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for research_store.py — epistemic debt tracking for research writing."""
 
 import json

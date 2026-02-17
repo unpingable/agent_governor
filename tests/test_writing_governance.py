@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for writing_governance.py — governance visibility scoring and leak detection."""
 
 import pytest

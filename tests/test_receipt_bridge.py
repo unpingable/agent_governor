@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the receipt kernel bridge adapter.
 
 Key invariant: kernel disabled must NEVER produce silent green.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Governor Coupling: Homeostat → Ultrastability one-way protocol.
 

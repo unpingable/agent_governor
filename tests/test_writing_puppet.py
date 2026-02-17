@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for writing_puppet.py — Character constraints for authorial control."""
 
 import pytest

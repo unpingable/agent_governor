@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Epistemic Homeostat — Adaptive gain scheduling for the agent governor.
 

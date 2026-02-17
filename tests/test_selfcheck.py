@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the selfcheck module — automated deployment health verification."""
 
 import json

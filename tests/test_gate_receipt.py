@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for gate_receipt module — content-addressed decision receipts."""
 
 from __future__ import annotations

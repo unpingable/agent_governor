@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for oracle:pytest_log — the first real oracle evidence artifact.
 
 Key regressions:

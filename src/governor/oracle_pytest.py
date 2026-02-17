@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Oracle: pytest_log — non-linguistic evidence from real test execution.
 
 Runs pytest as a subprocess, captures stdout/stderr + junit.xml, produces

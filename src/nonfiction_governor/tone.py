@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Tone profiling and style enforcement for nonfiction writing.
 

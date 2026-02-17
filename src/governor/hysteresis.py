@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Hysteresis and anti-churn — prevent controller chatter (AG2 Layer 2.1-C).
 
 Asymmetric mode transition thresholds, replan limiting, and regression detection.

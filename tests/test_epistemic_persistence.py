@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Tests for EpistemicLedger persistence: Schema V4, storage wiring, write-through,
 evidence store integration, CLI helpers, and backward compatibility.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for context compaction module.
 
 Loss-aware context compaction that emits receipts, respects anchors,

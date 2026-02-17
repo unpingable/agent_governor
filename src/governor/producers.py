@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Receipt producers: Functions that create receipts from real inputs.
 

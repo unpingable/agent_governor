@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for boil control - named presets with dwell time enforcement."""
 
 import json

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for quorum_ext — severity-based quorum gating (AG2 Layer 2.1-D)."""
 
 import json

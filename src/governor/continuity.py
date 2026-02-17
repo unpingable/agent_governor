@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Continuity Enforcement — Closed-loop generation control.
 

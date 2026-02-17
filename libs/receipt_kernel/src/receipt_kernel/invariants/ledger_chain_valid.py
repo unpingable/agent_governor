@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Invariant: ledger.chain_valid
 
 Verifies the hash chain integrity of a run's event ledger:

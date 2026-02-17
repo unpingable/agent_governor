@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Agent wrapper: Intercepts file writes and routes through governor.
 

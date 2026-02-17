@@ -1,189 +1,85 @@
 # Agent Governor Roadmap
 
-## Planned Integrations
+Last updated: 2026-02-16
 
-### VS Code Extension
+## Shipped
 
-**Status:** Not started
+### Core Kernel
+- Evidence gate, receipt chain, claim extraction, custody scoring
+- Receipt kernel (hash-chained SQLite, 6 constitutional invariants, redaction, retention)
+- Typed claims, FSM lifecycle, fact/decision ledgers with decay
+- Operating envelopes (strict/exploratory), pre-commit hooks, MCP server
 
-A VS Code extension that brings governor into the editor:
+### Multi-Agent Coordination
+- SQLite WAL backend, agent leases, epochs, permissions
+- Task dispatcher protocol, quorum consensus, independence scoring
+- Sybil resistance (bloc detection, effective voter count)
 
-- **Sidebar panel** showing:
-  - Active tasks with tree view
-  - Current session status and timer
-  - Recent decisions/facts
-  - Blocking relationships
+### Evidence Pipeline
+- Provenance tracking, confidence modeling, premise dependencies
+- Drift detection, claim diffing, taint similarity, dissent ledger
+- TTL enforcement, agent roles, revalidation orchestrator
+- Oracle evidence classes (pytest_log)
 
-- **Status bar** with:
-  - Active timer (click to stop)
-  - Current task
-  - Session duration
+### Adaptive Control
+- Regime detection (ELASTIC/WARM/DUCTILE/UNSTABLE)
+- Boil control presets, homeostat with exploration budgets
+- Ultrastability (S1 adaptation), failure provenance with scars/shields
+- Auto-tuning with Pareto analysis, convergence auto-tuning
 
-- **Commands** (Ctrl+Shift+P):
-  - `Governor: Start Task`
-  - `Governor: Complete Task`
-  - `Governor: Start Timer`
-  - `Governor: End Session with Handoff`
-  - `Governor: Show Recommendations`
+### Autonomous Execution
+- Spine locking, invariant specs, execution budgets
+- Session manager, step-function executor with checkpoint/resume
 
-- **SCM integration**:
-  - Pre-commit hook status
-  - Proposal approval workflow
+### Domain Governors
+- **Fiction** — Plot threads, canon ledger, manuscript scanning, context drift, consent tracking, narrative guardrails (DSI, AII)
+- **Nonfiction** — Corpus management, DOI fetching, citation verification, contextual frame intrusion (12-frame taxonomy)
+- **Ops** — Runbook verification, time window enforcement, blast radius limits, precondition chains
+- **Writing** — 11 modules: tone vectors, affect regimes, governance visibility, intent classification, structural constraints, ticketing, puppet mode
 
-- **Decorations**:
-  - Gutter icons for files with associated facts
-  - Highlight files in scope of active task
+### Integrations
+- [VS Code extension](https://github.com/unpingable/vscode-governor) (V7.0 — preflight, correlator K-vector, capture hysteresis, workspace trust)
+- [WebUI + dashboard](https://github.com/unpingable/governor_webui) (FastAPI, chat bridge, interferometry compare, intent compiler modal)
+- [Guvnah desktop cockpit](https://github.com/unpingable/guvnah) (Electron, daemon RPC)
+- [Maude TUI client](https://github.com/unpingable/maude) (Textual, daemon RPC via Unix socket)
+- Governor daemon (JSON-RPC 2.0 over stdio/Unix socket, 36 RPC methods)
+- Claude Code hooks, Codex hooks (post-hoc enforcement)
+- SDK middleware (drop-in Anthropic SDK wrapper)
+- MCP safety controls (rate limiting, backpressure, circuit breaker)
+- External constraint attachment (Wikidata/Wikipedia/Scholar)
+- Git governance, Perforce governance
+- Session continuity (capsule-based, fork/promote)
+- Interferometry (multi-model claim comparison, code risk markers)
 
-**Implementation notes:**
-- Use VS Code Extension API
-- Communicate with governor CLI or expose a simple HTTP/JSON-RPC API
-- Could share MCP server infrastructure
+### Infrastructure
+- Structured telemetry (JSONL, cost/performance/convergence analysis)
+- Prometheus metrics, telemetry dashboard (Rich TUI)
+- Config profiles, context compaction with receipts
+- Intent compiler (structured hypothesis-collapse)
+- Correlator telemetry (capture detection, K-vector)
+- Scope governor (locality-first policy, escalation receipts)
+- Semantic stability (perturbation-based conditioning audit)
 
-**Principle:** These are **views over state**, not additional sources of truth. UI is projection.
+## Active / Next
 
----
+### 3.x Self-Governance Architecture
+Spec written (`specs/core/SELF_GOVERNANCE_SPEC.md`). Eight hardening items pending human review before building. Core: executor/proposer separation, admissible measurement gating, rollback + hysteresis + dwell. See spec for math tiers and capability discipline model.
 
-### Obsidian Plugin
+### Client Wiring Gaps
+Correlator views, scope views, and stability views not yet wired into Guvnah, Maude, or VS Code V7.1+. The daemon exposes the RPC methods; clients need UI.
 
-**Status:** Not started
+### Receipt Kernel v2
+12 deferred items documented in `specs/gaps/RECEIPT_KERNEL_ROADMAP.md`. Includes cross-store federation, remote attestation, and retention policy UI.
 
-Sync governor state to an Obsidian vault for knowledge management:
+### Problem-Solving Mode
+10 items deferred to late v2. See `specs/gaps/PROBLEM_SOLVING_MODE.md`.
 
-- **Daily notes integration**:
-  - Auto-append session handoffs to daily note
-  - Task completions logged with timestamps
+### Ethical Hardening
+5 enforceable invariants deferred to v3. See `specs/gaps/ETHICAL_HARDENING.md`.
 
-- **Decisions as notes**:
-  - Each decision becomes a linked note
-  - Superseded decisions show revision history
-  - Tags from topics become Obsidian tags
+## Not Planned
 
-- **Tasks as notes** (optional):
-  - Kanban-compatible frontmatter
-  - Links between parent/subtasks
-  - Dataview-compatible metadata
-
-- **Facts with backlinks**:
-  - Facts link to the files they reference
-  - Staleness visible in note
-
-- **Graph view**:
-  - Decisions → files they govern
-  - Tasks → proposals that resolved them
-  - Sessions → work accomplished
-
-**Implementation notes:**
-- Could be one-way sync (governor → Obsidian) via CLI export
-- Or bidirectional with Obsidian plugin that watches vault
-- Export format: YAML frontmatter + markdown body
-
----
-
-## Priority: SRE/Ops Governor
-
-**Status:** Not started
-**Priority:** HIGH - This is where "real tool" vs "toy" becomes unambiguous
-
-The highest-leverage gap. Where verification can be *mechanical* and the scars from decades of sysadmin/devops/SRE work become encoded.
-
-### Policy Packs (the key abstraction)
-
-Think in terms of **installable policy packs** per environment:
-
-```
-policy:change_mgmt/basic
-policy:incident/strict
-policy:deploy/safe_rollout
-policy:runbook/<service>
-```
-
-This turns "governor is a philosophy" into "governor is installable."
-
-### Keystone Verifier: Claim Gating with Proof Types
-
-**Build this first.** Example:
-
-```
-claim: service_restored
-requires:
-  - successful healthcheck evidence (URL/command + output hash)
-  - error rate below threshold (query + snapshot)
-  - rollback plan present OR explicitly waived with approver identity
-```
-
-This is where the system becomes non-toy instantly.
-
-### Core Verifiers
-
-- **Runbook compliance** - Actions must follow documented procedures
-- **Change windows / approvals** - Enforce when changes can happen, who approved
-- **Precondition enforcement** - "This action required these preconditions"
-- **Evidence capture** - Diffs, rollouts, smoke checks as receipts
-
-### Incident Response
-
-- **Timeline integrity** - Events must be temporally consistent
-- **Claim verification** - "Service restored" requires proof
-- **Escalation tracking** - Who was notified, when, what was the response
-
-### Change Management
-
-- **Rollback requirements** - Can't deploy without verified rollback plan
-- **Blast radius limits** - Scope constraints on what can change
-- **Dependency verification** - Upstream/downstream impact checks
-
-### Why This Matters
-
-Choose between making it **pleasant** (extensions/UIs) or making it **inevitable** (ops verifiers). We chose inevitable.
-
-### Anti-pattern to Avoid
-
-"Code review layer" as "agent judges architecture" = vibes-based linting.
-Instead: **policy-as-tests** (interfaces, invariants, dependency rules, forbidden patterns).
-
----
-
-## Other Future Features
-
-### Claude Code Hooks
-- Behavioral guardrails injected into AI sessions
-- Auto-load context from last session
-- Enforce governor approval before file writes
-
-### Web Dashboard
-- Browser-based UI for governor state
-- Task board (kanban view)
-- Timeline of decisions
-- Audit log visualization
-
-### GitHub Integration
-- Sync issues bidirectionally
-- Link proposals to PRs
-- Auto-close tasks when PR merges
-
-### Slack/Discord Bot
-
-**Warning:** Slack/Discord is where tools go to die as "notifications."
-
-If implemented, **high-signal only**:
-- Session handoffs
-- Incidents
-- Approvals
-
-No daily digests unless genuinely compressive. Noise kills adoption.
-
----
-
-## Completed
-
-- [x] Core governor (receipts, claims, FSM)
-- [x] Multi-agent coordination
-- [x] Fiction governor (bible, canon, narrative state)
-- [x] Non-fiction governor (academic writing)
-- [x] Task management system
-- [x] Session handoffs
-- [x] Time tracking
-- [x] MCP server
-- [x] Git hooks
-- [x] Audit graph with Maltego-style transforms
-- [x] Collapse transform (stable summary objects)
+- **PyPI packaging** — Install from source for now. No distribution pipeline.
+- **Obsidian plugin** — Original roadmap item, not pursued.
+- **Slack/Discord bot** — Noise kills adoption.
+- **GitHub bidirectional sync** — Complexity without clear value.

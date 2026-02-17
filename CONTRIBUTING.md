@@ -45,6 +45,24 @@ python3 -m pytest tests/ -v    # Must pass before merging to main
 ruff check src/ tests/         # Must pass before merging to main
 ```
 
+## Issue Standards
+
+**Bug reports:** exact command, environment (OS + Python version + commit hash), expected vs actual, receipt ID or log snippet if applicable. Issues without reproduction steps may be closed.
+
+**Feature requests:** concrete use case, not "wouldn't it be cool if." Check ROADMAP.md first — it may already be listed or explicitly not planned.
+
+## What We Value
+
+- Paper cuts (friction in actual use)
+- Receipt/evidence chain failures (the invariants this project exists to enforce)
+- Documentation gaps (things that confused you on first read)
+
+## What We Don't Want
+
+- Architecture astronautics ("you should rewrite this in Rust")
+- Philosophical debates about alignment
+- PRs that don't pass existing tests
+
 ## The meta-constraint
 
 This project builds governance tooling. The repo is part of the argument. If the repo doesn't demonstrate governed development, that's a credibility gap.

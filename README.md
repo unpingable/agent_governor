@@ -4,6 +4,12 @@
 
 11,000+ tests. Zero trust. Agents propose — only the governor commits.
 
+> **Status:** Alpha. Under active solo development. The core kernel (evidence gate, receipt chain, claim extraction) is stable and tested. Client integrations (VS Code, TUI, desktop, WebUI) are functional but evolving. Not packaged for distribution — install from source.
+>
+> **Support:** No SLA. No DMs. File structured issues (templates provided) or post in Discussions. Paper-cut reports are gold; vague feature requests may be closed.
+>
+> **This is not** alignment research, an agent framework, a prompt wrapper, or vibes-based linting. It's an enforcement boundary that blocks writes until evidence exists. If you're looking for those other things, this isn't it.
+
 ## What Actually Happens
 
 ```

@@ -21,7 +21,7 @@ from governor.capture import (
     PatternDef,
     # Re-export for backward compat
     classify_skippable as _classify_skippable,
-    extract_proper_noun as _extract_proper_noun,
+    extract_proper_noun as _base_extract_proper_noun,
 )
 
 # Re-export base types so existing imports keep working
@@ -337,4 +337,4 @@ def _is_skippable(text: str) -> bool:
 
 def _extract_proper_noun(text: str) -> str | None:
     """Backward-compat wrapper. Use extract_proper_noun() from governor.capture."""
-    return _extract_proper_noun(text)
+    return _base_extract_proper_noun(text)

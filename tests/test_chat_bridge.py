@@ -2471,7 +2471,7 @@ class TestAcceptedContext:
 
         hooks = GovernorHooks(ctx)
         prompt = hooks._build_research_prompt()
-        assert f"source_ref=doi:10.5678/bar" in prompt
+        assert "source_ref=doi:10.5678/bar" in prompt
 
     def test_claim_status_shown_when_not_floating(self, tmp_path: Path) -> None:
         """Non-floating status appears in parentheses."""

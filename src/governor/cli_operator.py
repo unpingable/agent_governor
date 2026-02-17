@@ -599,7 +599,7 @@ def dashboard_command(gov_dir: Path, as_json: bool) -> int:
             d = scp["escalations_denied"]
             print(f"  Scope:       level {lvl} ({scp['grants']} grants, {a}/{d} allow/deny)")
         else:
-            print(f"  Scope:       not configured")
+            print("  Scope:       not configured")
     else:
         print(f"  {GLYPH_ERR} Scope:       {_truncate(scp['error'])}")
 

@@ -99,7 +99,8 @@ class SignalEnvelope:
     # ── Identity + ordering (sharding depends on this) ──────────────
     schema_version: int               # envelope schema version (1 for v2; promotes to v3)
     run_id: str                       # partition key; total-order boundary
-    seq: int                          # monotonic per run; total order within the run stream
+    event_id: str                     # stable identity (UUID/ULID); producer-assigned, survives resequencing
+    seq: int                          # monotonic per run; stream-assigned total order (may change on repack)
     event_type: str                   # enum: see EventType below
 
     # ── Clock vector (trend tests depend on this) ───────────────────
@@ -121,14 +122,19 @@ class SignalEnvelope:
     unit: str | None                  # "per_step", "ratio", "count", "seconds", etc.
     direction: str | None             # "higher_worse" | "lower_worse" | None (for non-directional)
     value_norm: float | None          # calibrated [0,1] risk score (None until calibration layer exists)
+    calibration_id: str | None        # which calibration produced value_norm (None until calibration layer)
     confidence: float                 # [0,1] — how much data backs this measurement
 
     # ── Severity taxonomy (warn-first structure) ────────────────────
     severity: str                     # "info" | "warn" | "fail"
     actionability: str                # "observe" | "investigate" | "act"
+    reason_codes: list[str]           # stable machine-readable codes (see ReasonCode enum)
 
     # ── Windowing (trend tests + replay sweeps depend on this) ──────
     window: WindowDescriptor | None   # None for point-in-time events
+
+    # ── Policy (for POLICY_DECISION events) ─────────────────────────
+    policy: PolicyRef | None          # None for non-decision events
 
     # ── Payload (source-specific, schema registered) ────────────────
     payload: dict                     # the actual signal data (source-specific)
@@ -138,25 +144,35 @@ class SignalEnvelope:
     checkpoint: CheckpointRef | None  # epoch root reference (None for non-checkpoint events)
 
     # ── Traceability ────────────────────────────────────────────────
-    parent_event_id: str | None       # for derived signals (e.g. calibrated from raw)
+    parent_event_id: str | None       # references event_id (NEVER seq); for derived signals
     tenant_id: str                    # "local" in v2; real tenant ID in PaaS v3
 
 @dataclass
 class WindowDescriptor:
+    clock_kind: str                   # "step" (v2 only); future: "token", "wall"
     kind: str                         # "rolling" | "tumbling" | "cumulative"
-    size_steps: int                   # window size in step-clock units
-    start_step: int | None            # explicit boundary (optional)
-    end_step: int | None              # explicit boundary (optional)
+    size: int                         # window size in clock_kind units
+    start: int | None                 # explicit boundary (optional)
+    end: int | None                   # explicit boundary (optional)
     agg: str                          # "mean" | "slope" | "ratio" | "count" | "max"
     sample_count: int                 # how many points contributed
 
 @dataclass
 class CheckpointRef:
     epoch_id: str
-    root_hash: str                    # Merkle root of events in range
-    range_start_seq: int
-    range_end_seq: int
+    root_hash: str                    # Merkle root of event hashes in range
+    seq_start: int                    # range boundary on seq axis
+    seq_end: int                      # range boundary on seq axis
+    step_start: int                   # range boundary on step axis (for cross-reference)
+    step_end: int                     # range boundary on step axis (for cross-reference)
     prev_root_hash: str | None        # chain across epochs
+
+@dataclass
+class PolicyRef:
+    policy_id: str                    # which policy was evaluated
+    policy_version: str               # version of that policy
+    verdict: str                      # "allow" | "warn" | "deny" | "escalate"
+    reason_codes: list[str]           # stable machine-readable codes
 
 class EventType:
     """Enum values for event_type field."""
@@ -168,12 +184,92 @@ class EventType:
     PREFLIGHT_PREDICTION = "preflight_prediction"  # advisory regime prediction
 ```
 
+### Identity semantics: `event_id` vs `seq`
+
+- **`event_id`**: stable identity (UUID/ULID), producer-assigned. Survives resequencing, stream merge, log repack. This is what `parent_event_id` references.
+- **`seq`**: total order within a run, stream/ingest-assigned. May change on repack/merge. This is what sharding and checkpoint ranges use.
+- **`parent_event_id` always references `event_id`, never `seq`.** Lineage must survive resequencing.
+
+### Canonicalization + hash rules
+
+Content hash (`payload_hash`) is computed via:
+- `json.dumps(payload, sort_keys=True, separators=(',',':'), ensure_ascii=True).encode('utf-8')` (same as gate_receipt.py)
+- SHA-256, hex-encoded with `sha256:` prefix
+- Numbers: Python `json.dumps` default (no trailing zeros, no scientific for small integers)
+- Null: JSON `null` (not absent key)
+
+**Hash inclusion rules:**
+- `payload_hash` covers: `payload` dict only
+- `seq` is **excluded** from hashed material (it's stream-assigned, may change on repack)
+- `event_id` is **included** in the checkpoint Merkle tree (binds identity to epoch root)
+- Checkpoint `root_hash` = Merkle root of `H(event_id || payload_hash)` for all events in the seq range
+- This means: order is bound by `(seq → event_id)` mapping inside the checkpoint, not by signing individual events
+
+**Consequence:** Valid checkpoint + valid event_id chain = tamper-evident ordering, even though `seq` itself is mutable.
+
+### Reason codes (stable, machine-readable)
+
+Every `severity: warn` or `severity: fail` event MUST include at least one `reason_code`. Human text lives in `payload`; dashboards and replay key on reason codes.
+
+```python
+class ReasonCode:
+    """Stable reason codes. Add new codes; never rename or remove existing ones."""
+    # ── Capture / suppression ───────────────────────────────────────
+    CAPTURE_LOW_CONTRADICTION_UNDER_EXPOSURE = "capture_low_contradiction_under_exposure"
+    CAPTURE_ENTROPY_NON_INCREASING = "capture_entropy_non_increasing"
+    CAPTURE_COMMITMENT_LOSS = "capture_commitment_loss"
+
+    # ── Silent suppression ──────────────────────────────────────────
+    GATE_STARVATION = "gate_starvation"           # no gate calls at all
+    SENSOR_SILENT = "sensor_silent"               # gate called, sensor emitted zero
+    HEARTBEAT_MISSED = "heartbeat_missed"         # expected heartbeat not received
+
+    # ── Sigma rate ──────────────────────────────────────────────────
+    SIGMA_ABOVE_BASELINE = "sigma_above_baseline"
+    SIGMA_TREND_RISING = "sigma_trend_rising"
+
+    # ── Exposure ────────────────────────────────────────────────────
+    EXPOSURE_CLOCK_SKEW = "exposure_clock_skew"
+
+    # ── Calibration ─────────────────────────────────────────────────
+    CALIBRATION_INSUFFICIENT_DATA = "calibration_insufficient_data"
+    CALIBRATION_BASELINE_SHIFT = "calibration_baseline_shift"
+
+    # ── Regime / preflight ──────────────────────────────────────────
+    REGIME_PREDICTED_UNSTABLE = "regime_predicted_unstable"
+    REGIME_PREDICTED_METASTABLE = "regime_predicted_metastable"
+
+    # ── Policy ──────────────────────────────────────────────────────
+    EVIDENCE_INSUFFICIENT = "evidence_insufficient"
+    BUDGET_EXCEEDED = "budget_exceeded"
+    LOOP_DETECTED = "loop_detected"
+    TOOL_CHURN = "tool_churn"
+```
+
+### Preflight prediction: vector output
+
+PREFLIGHT_PREDICTION events use `value_raw` for the primary risk score (boundary proximity, [0,1]). The full prediction vector lives in `payload`:
+
+```json
+{
+  "predicted_regime": "metastable",
+  "boundary_proximity": 0.73,
+  "confidence": 0.85,
+  "failure_mode": "drift_cycle",
+  "metric_count": 7,
+  "window_size": 15
+}
+```
+
+This avoids smuggling meaning into `unit` while keeping the flat `value_raw` field useful for dashboards and calibration.
+
 ### Canonical JSON example
 
 ```json
 {
   "schema_version": 1,
   "run_id": "run_abc123",
+  "event_id": "evt_01JMKX7V3QWERTY",
   "seq": 847,
   "event_type": "sensor_summary",
   "step": 980,
@@ -188,15 +284,19 @@ class EventType:
   "unit": "per_step",
   "direction": "higher_worse",
   "value_norm": null,
+  "calibration_id": null,
   "confidence": 0.8,
   "severity": "warn",
   "actionability": "observe",
+  "reason_codes": ["sigma_above_baseline"],
   "window": {
+    "clock_kind": "step",
     "kind": "rolling",
-    "size_steps": 200,
+    "size": 200,
     "agg": "slope",
     "sample_count": 180
   },
+  "policy": null,
   "payload": {"endorsed_count": 180, "contradiction_count": 6, "contributing_ids": ["..."]},
   "payload_hash": "sha256:f4e5d6...",
   "checkpoint": null,
@@ -219,18 +319,20 @@ class EventType:
 |-------------------|-----------------|-----------|
 | `schema_version: 1` | `schema_version: 2` | Bump |
 | `run_id` | `run_id` | Identical |
+| `event_id` | `event_id` | Identical |
 | `seq` | `seq` | Identical |
 | `event_type` | `event_type` | Identical |
 | `step` + `t_wall` | `clock: ClockVector` | Nest into struct, add `tokens` + `tool_calls` |
 | `producer` | `producer` | Identical |
 | `signal_id` | `signal_id` | Identical |
 | `detector_version` + `code_hash` + ... | `provenance: Provenance` | Nest into struct |
-| `value_raw` + `unit` + `direction` + `value_norm` | `value: SignalValue` | Nest into struct |
-| `severity` + `actionability` | `assessment: Assessment` | Nest into struct |
-| `window` | `window` | Identical |
+| `value_raw` + `unit` + `direction` + `value_norm` + `calibration_id` | `value: SignalValue` | Nest into struct |
+| `severity` + `actionability` + `reason_codes` | `assessment: Assessment` | Nest into struct |
+| `window` | `window` | Identical (clock_kind already present) |
+| `policy` | `policy` | Identical |
 | `payload` + `payload_hash` | `payload` + `content_hash` | Rename hash field |
-| `checkpoint` | `checkpoint` | Identical |
-| `parent_event_id` | `parent_event_id` | Identical |
+| `checkpoint` | `checkpoint` | Identical (both seq + step ranges) |
+| `parent_event_id` | `parent_event_id` | Identical (always refs event_id) |
 | `tenant_id` | `tenant_id` | Identical |
 | — | `turn_id` | Added in v3 (nullable) |
 | — | `integrity.sig` | Added in v3 (cryptographic signature) |
@@ -242,9 +344,21 @@ v3 promotion = nest flat fields into typed structs + add `turn_id` + add `integr
 1. **All v2 gap spec implementations MUST emit via SignalEnvelope.** No raw dicts, no bespoke event shapes.
 2. **Payload schemas registered in a central dict** (not a runtime registry yet — just a Python dict mapping `signal_id` → expected keys). v3 promotes this to the SchemaRegistry.
 3. **`local_only: true` signals** (if any) are exempt from envelope requirement but MUST be documented and WILL be deleted in v3. (See GAP_INVARIANTS.md §5.)
-4. **PREDICT_REGIME_PREFLIGHT** emits into the same envelope as runtime detectors (event_type=`preflight_prediction`). This avoids wrapping it later.
+4. **PREDICT_REGIME_PREFLIGHT** emits into the same envelope as runtime detectors (event_type=`preflight_prediction`). Vector output in payload; `value_raw` = boundary proximity.
 5. **Ordering is by `seq`, never by `t_wall`.** Timestamp jitter must not affect event ordering.
 6. **`tenant_id` defaults to `"local"` in v2.** Never omit it — PaaS promotion must not require backfilling.
+7. **`parent_event_id` always references `event_id`, never `seq`.** Lineage must survive resequencing.
+8. **Every `warn` or `fail` event MUST include at least one `reason_code`.** Human text in payload; machine codes in `reason_codes`.
+9. **`reason_codes` are append-only.** New codes can be added; existing codes are never renamed or removed.
+
+### PR requirements (per-gap implementation)
+
+Every gap spec PR must include:
+
+1. **SignalEnvelope emission** — all new signals emitted via the envelope
+2. **Invariant tests** — at least one test asserting the cross-cutting contracts (clock law, emission contract, severity fields)
+3. **At least one replay/backtest assertion** — even crude; e.g. "emit 10 envelopes, replay, verify same reason_codes"
+4. **Golden fixtures** — freeze 2-3 representative envelope sequences as JSON test fixtures. These catch "harmless refactor changed semantics" immediately. Store in `tests/fixtures/envelopes/`.
 
 ## Cross-Cutting Contracts
 

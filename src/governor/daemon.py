@@ -326,6 +326,38 @@ class DaemonState:
         self._scope_governor = None
         self._stability_store = None
         self._stability_auditor = None
+        self._lane_router = None
+        self._cascade_executor = None
+        self._artifact_store = None
+
+    @property
+    def lane_router(self):
+        if self._lane_router is None:
+            from .lanes import LaneRouter, ArtifactReuseStore
+            self._lane_router = LaneRouter(
+                artifact_store=self.artifact_store,
+                receipt_system=self.receipt_system,
+            )
+        return self._lane_router
+
+    @property
+    def artifact_store(self):
+        if self._artifact_store is None:
+            from .lanes import ArtifactReuseStore
+            artifacts_dir = self.governor_dir / "artifacts"
+            self._artifact_store = ArtifactReuseStore(artifacts_dir)
+        return self._artifact_store
+
+    @property
+    def cascade_executor(self):
+        if self._cascade_executor is None:
+            from .lanes import CascadeExecutor
+            self._cascade_executor = CascadeExecutor(
+                lane_router=self.lane_router,
+                artifact_store=self.artifact_store,
+                receipt_system=self.receipt_system,
+            )
+        return self._cascade_executor
 
     @property
     def session_store(self):
@@ -950,6 +982,60 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "pending": pending.to_dict(),
                 }
 
+        # --- Optional lane routing (opt-in) ---
+        use_lanes = params.get("use_lanes", False)
+        if use_lanes:
+            try:
+                from .lanes import CascadeResult
+                lr = state.lane_router
+                last_content = messages_raw[-1].get("content", "")
+                plan = lr.route(
+                    task_hint=params.get("task_hint"),
+                    risk_class=params.get("risk_class", "standard"),
+                    has_side_effects=params.get("has_side_effects", False),
+                    format_strict=params.get("format_strict", False),
+                    context_heavy=params.get("context_heavy", False),
+                )
+                routed_model = plan.model
+
+                def sync_generate(prompt: str, mdl: str) -> str:
+                    import asyncio as _aio
+                    import concurrent.futures
+                    from .chat_bridge import ChatMessage as CM
+                    async def _gen():
+                        msgs = [CM(role="user", content=prompt)]
+                        resp = await bridge.backend.chat(msgs, mdl)
+                        return resp.content
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        fut = pool.submit(_aio.run, _gen())
+                        return fut.result(timeout=120)
+
+                executor = state.cascade_executor
+                cascade_result = executor.execute(
+                    plan=plan,
+                    prompt=last_content,
+                    generate_fn=sync_generate,
+                )
+                run_id = uuid.uuid4().hex[:12]
+                _emit_chat_receipt(
+                    state, "pass", cascade_result.output, run_id,
+                    model=cascade_result.model_used, principal_id=principal_id,
+                )
+                return {
+                    "content": cascade_result.output,
+                    "model": cascade_result.model_used,
+                    "usage": {},
+                    "violations": [],
+                    "footer": None,
+                    "pending": None,
+                    "lane": cascade_result.lane_used,
+                    "escalated": cascade_result.escalated,
+                    "artifact_hit": cascade_result.artifact_hit,
+                }
+            except Exception as e:
+                logger.warning("Lane routing failed, falling back: %s", e)
+                # Fall through to normal path
+
         from .chat_bridge import ChatMessage, ChatResponse, ViolationPendingResponse
 
         messages = [
@@ -1353,6 +1439,49 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("stability.audit", stability_audit)
     dispatcher.register("stability.history", stability_history)
     dispatcher.register("stability.probe", stability_probe)
+
+    # --- Lanes (capability-based routing) ---
+
+    async def lanes_route(params: dict) -> dict:
+        """Route a request to a lane + model. Returns RoutePlan."""
+        lr = state.lane_router
+        claims = None
+        task_hint = params.get("task_hint")
+        raw_claims = params.get("claims")
+        if raw_claims:
+            from .claims import Claim
+            claims = [Claim.from_dict(c) if isinstance(c, dict) else c for c in raw_claims]
+        plan = lr.route(
+            claims=claims,
+            task_hint=task_hint,
+            risk_class=params.get("risk_class", "standard"),
+            has_side_effects=params.get("has_side_effects", False),
+            format_strict=params.get("format_strict", False),
+            context_heavy=params.get("context_heavy", False),
+            prompt_words=params.get("prompt_words", 0),
+            must_have_strengths=params.get("must_have_strengths"),
+            nice_to_have_strengths=params.get("nice_to_have_strengths"),
+            force_lane=params.get("force_lane"),
+        )
+        return plan.to_dict()
+
+    async def lanes_explain(params: dict) -> dict:
+        """Explain a routing plan."""
+        from .lanes import RoutePlan
+        lr = state.lane_router
+        plan_dict = params.get("plan")
+        if not plan_dict:
+            raise ValueError("Missing required param: plan")
+        plan = RoutePlan.from_dict(plan_dict)
+        return lr.explain(plan)
+
+    async def lanes_status(params: dict) -> dict:
+        """Return lane routing configuration status."""
+        return state.lane_router.get_status()
+
+    dispatcher.register("lanes.route", lanes_route)
+    dispatcher.register("lanes.explain", lanes_explain)
+    dispatcher.register("lanes.status", lanes_status)
 
     dispatcher.register("chat.send", chat_send)
     dispatcher.register_streaming("chat.stream", chat_stream)

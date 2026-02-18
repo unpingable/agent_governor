@@ -912,6 +912,9 @@ class TestAllMethodsRegistered:
         "stability.audit",
         "stability.history",
         "stability.probe",
+        "lanes.route",
+        "lanes.explain",
+        "lanes.status",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -928,7 +931,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 37
+        assert total == 40
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):

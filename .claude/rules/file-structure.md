@@ -99,6 +99,9 @@ src/governor/
 ├── writing_code.py        # Code-specific constraints from code.md spec
 ├── writing_router.py      # Writing-aware routing from specs
 │
+# Lane Routing:
+├── lanes.py               # Lane enum, LaneContract, RoutePlan, ArtifactReuseStore, CascadeExecutor, LaneRouter
+│
 # Intent Compiler:
 ├── intent_compiler.py     # IntentFormPolicy, IntentFormSchema, compile_intent, BUILTIN_TEMPLATES, receipt emission
 │

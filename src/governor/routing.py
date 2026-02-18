@@ -1267,6 +1267,9 @@ class Router:
         complexity: ComplexityEstimate,
         estimated_tokens: int,
         alternatives: list[dict[str, Any]],
+        must_have_strengths: list[str] | None = None,
+        nice_to_have_strengths: list[str] | None = None,
+        min_context_window: int = 0,
     ) -> str | None:
         """Select model based on configured strategy.
 
@@ -1275,6 +1278,11 @@ class Router:
         - SPEED_OPTIMAL: Fastest model that can handle complexity
         - QUALITY_OPTIMAL: Best model regardless of cost
         - BALANCED: Weighted combination
+
+        Capability filters (from lane contracts):
+        - must_have_strengths: hard filter — model.strengths must contain ALL
+        - nice_to_have_strengths: soft preference — rank by overlap count
+        - min_context_window: hard filter — model.context_window >= threshold
         """
         # Get all capable models (tier and above)
         capable_models: list[tuple[str, ModelCapabilities]] = []
@@ -1287,6 +1295,25 @@ class Router:
 
         if not capable_models:
             return None
+
+        # --- Capability filters ---
+        if must_have_strengths:
+            required = set(must_have_strengths)
+            filtered = [
+                (n, c) for n, c in capable_models
+                if required <= set(c.strengths)
+            ]
+            if filtered:
+                capable_models = filtered
+            # If no match, keep all candidates (degrade gracefully)
+
+        if min_context_window > 0:
+            filtered = [
+                (n, c) for n, c in capable_models
+                if c.context_window >= min_context_window
+            ]
+            if filtered:
+                capable_models = filtered
 
         # Calculate scores for each model
         scored: list[tuple[float, str, dict[str, Any]]] = []
@@ -1330,8 +1357,21 @@ class Router:
             alternatives.append(alt_entry)
             scored.append((final_score, name, alt_entry))
 
-        # Sort by score (highest first)
-        scored.sort(key=lambda x: x[0], reverse=True)
+        # Sort by score (highest first), with nice_to_have as tiebreaker
+        if nice_to_have_strengths:
+            preferred = set(nice_to_have_strengths)
+            scored.sort(
+                key=lambda x: (
+                    x[0],
+                    len(preferred & set(
+                        self.registry.get_capabilities(x[1]).strengths
+                        if self.registry.get_capabilities(x[1]) else []
+                    )),
+                ),
+                reverse=True,
+            )
+        else:
+            scored.sort(key=lambda x: x[0], reverse=True)
         return scored[0][1] if scored else None
 
     def _select_tier(

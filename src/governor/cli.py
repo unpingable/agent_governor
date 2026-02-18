@@ -5971,6 +5971,186 @@ def routing_available(name: str, available: bool) -> None:
 
 
 # =============================================================================
+# Lanes Commands (Capability-Based Lane Routing)
+# =============================================================================
+
+
+@cli.group()
+def lanes():
+    """Capability-based lane routing with artifact reuse."""
+    pass
+
+
+@lanes.command("status")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def lanes_status(ctx: click.Context, as_json: bool) -> None:
+    """Show lane contracts, autopilot level, budgets, artifact stats."""
+    gov_dir = ensure_initialized(ctx)
+    from .lanes import LaneRouter, ArtifactReuseStore
+
+    artifact_store = ArtifactReuseStore(gov_dir / "artifacts")
+    try:
+        from .gate_receipt import GateReceiptSystem
+        receipt_system = GateReceiptSystem(gov_dir)
+    except Exception:
+        receipt_system = None
+
+    lr = LaneRouter(artifact_store=artifact_store, receipt_system=receipt_system)
+    status = lr.get_status()
+
+    if as_json:
+        click.echo(json.dumps(status, indent=2))
+        return
+
+    click.echo("Lane Routing Status:")
+    click.echo(f"  Autopilot level: {status['autopilot_level']}")
+    click.echo(f"  Budget total (USD): ${status['budget_total_usd']:.2f}")
+    click.echo()
+
+    click.echo("Contracts:")
+    for name, contract in status.get("contracts", {}).items():
+        lane_num = contract.get("lane", "?")
+        tiers = ", ".join(contract.get("model_tiers", []))
+        probe = contract.get("probe_policy", "none")
+        budget = contract.get("budget_per_call_usd", 0.0)
+        click.echo(f"  {name}: tiers=[{tiers}] probe={probe} budget=${budget:.2f}")
+
+    click.echo()
+    artifact_stats = status.get("artifact_stats", {})
+    click.echo(f"Artifact Store: {artifact_stats.get('total_artifacts', 0)} artifacts, {artifact_stats.get('total_hits', 0)} hits")
+
+    registry = status.get("model_registry", {})
+    if registry:
+        click.echo()
+        click.echo("Available Models:")
+        for tier_name, models in registry.items():
+            if models:
+                click.echo(f"  {tier_name}: {', '.join(models)}")
+
+
+@lanes.command("route")
+@click.argument("description")
+@click.option("--risk", type=click.Choice(["standard", "elevated", "critical"]), default="standard")
+@click.option("--side-effects", is_flag=True, help="Task has side effects")
+@click.option("--format-strict", is_flag=True, help="Strict format required")
+@click.option("--context-heavy", is_flag=True, help="Context-heavy task")
+@click.option("--force-lane", type=int, help="Force specific lane (0=disabled, 1-3)")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def lanes_route(
+    ctx: click.Context,
+    description: str,
+    risk: str,
+    side_effects: bool,
+    format_strict: bool,
+    context_heavy: bool,
+    force_lane: int | None,
+    as_json: bool,
+) -> None:
+    """Route a task description to a lane + model."""
+    gov_dir = ensure_initialized(ctx)
+    from .lanes import LaneRouter, ArtifactReuseStore
+
+    artifact_store = ArtifactReuseStore(gov_dir / "artifacts")
+    try:
+        from .gate_receipt import GateReceiptSystem
+        receipt_system = GateReceiptSystem(gov_dir)
+    except Exception:
+        receipt_system = None
+
+    lr = LaneRouter(artifact_store=artifact_store, receipt_system=receipt_system)
+
+    plan = lr.route(
+        task_hint=description if description in ("extract", "summarize", "codegen", "decision", "verify") else None,
+        claims=None,
+        risk_class=risk,
+        has_side_effects=side_effects,
+        format_strict=format_strict,
+        context_heavy=context_heavy,
+        force_lane=force_lane,
+    )
+
+    if as_json:
+        click.echo(json.dumps(plan.to_dict(), indent=2))
+        return
+
+    click.echo(f"Lane: {plan.lane} ({['ROUTER', 'FAST', 'GENERAL', 'DEEP'][plan.lane]})")
+    click.echo(f"Model: {plan.model} ({plan.provider})")
+    click.echo(f"Probe policy: {plan.probe_policy}")
+    click.echo(f"Budget: ${plan.budget_per_call_usd:.2f}/call, ${plan.budget_total_usd:.2f}/total")
+    click.echo(f"Tools allowed: {plan.tools_allowed}")
+    click.echo(f"Escalation: {plan.escalation_policy}")
+    if plan.fallback_chain:
+        click.echo(f"Fallback chain: {' → '.join(plan.fallback_chain[:5])}")
+    click.echo()
+    click.echo("Reasons:")
+    for r in plan.reasons:
+        click.echo(f"  - {r}")
+
+
+@lanes.command("explain")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def lanes_explain(ctx: click.Context, as_json: bool) -> None:
+    """Explain the last route decision (reads from .governor/last_route.json)."""
+    gov_dir = ensure_initialized(ctx)
+    from .lanes import LaneRouter, RoutePlan
+
+    last_route = gov_dir / "last_route.json"
+    if not last_route.exists():
+        click.echo("No route decision found. Run 'governor lanes route' first.", err=True)
+        ctx.exit(1)
+        return
+
+    plan = RoutePlan.from_dict(json.loads(last_route.read_text()))
+    lr = LaneRouter()
+    explanation = lr.explain(plan)
+
+    if as_json:
+        click.echo(json.dumps(explanation, indent=2))
+        return
+
+    click.echo(f"Lane: {explanation['lane']} ({explanation['lane_name']})")
+    click.echo(f"Model: {explanation['model']}")
+    click.echo(f"Probe: {explanation['probe_policy']}")
+    click.echo(f"Autopilot: level {explanation['autopilot_level']}")
+    click.echo()
+    click.echo("Reasons:")
+    for r in explanation.get("reasons", []):
+        click.echo(f"  - {r}")
+
+
+@lanes.command("artifacts")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.option("--evict-expired", is_flag=True, help="Evict expired artifacts")
+@click.pass_context
+def lanes_artifacts(ctx: click.Context, as_json: bool, evict_expired: bool) -> None:
+    """Show artifact reuse store stats."""
+    gov_dir = ensure_initialized(ctx)
+    from .lanes import ArtifactReuseStore
+
+    store = ArtifactReuseStore(gov_dir / "artifacts")
+
+    if evict_expired:
+        count = store.evict_expired()
+        click.echo(f"Evicted {count} expired artifact(s)")
+
+    stats = store.stats()
+
+    if as_json:
+        click.echo(json.dumps(stats, indent=2))
+        return
+
+    click.echo(f"Total artifacts: {stats['total_artifacts']}")
+    click.echo(f"Total hits: {stats['total_hits']}")
+    if stats.get("by_kind"):
+        click.echo("By kind:")
+        for kind, count in stats["by_kind"].items():
+            click.echo(f"  {kind}: {count}")
+
+
+# =============================================================================
 # Scar Commands (Failure Provenance & Constraint Hysteresis)
 # =============================================================================
 

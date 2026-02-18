@@ -51,6 +51,15 @@ governor mcp serve               # Run MCP server for Claude integration
 governor mcp tools               # List available MCP tools
 governor mcp call <tool>         # Test MCP tools directly
 
+# Lane Routing (capability-based cascade)
+governor lanes status                    # Show contracts, autopilot, budgets, artifact stats (--json)
+governor lanes route "task description"  # Route a task, show RoutePlan
+    [--risk standard|elevated|critical]
+    [--side-effects] [--format-strict] [--context-heavy]
+    [--force-lane 1|2|3] [--json]
+governor lanes explain                   # Explain last route decision (--json)
+governor lanes artifacts                 # Show artifact reuse store stats (--json, --evict-expired)
+
 # Multi-Agent Dispatcher Protocol (v2)
 governor init --v2               # Initialize with SQLite backend
 governor agent register --id X   # Register agent with governor

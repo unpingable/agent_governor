@@ -105,6 +105,29 @@ Four gap specs are explicitly 3.x:
 
 ---
 
+## Known-Good Bundle (2.3.0)
+
+| Repo | Version | Coupling |
+|------|---------|----------|
+| [agent_gov](https://github.com/unpingable/agent_governor) | 2.3.0 | — |
+| [maude](https://github.com/unpingable/maude) | 2.3.0 | hard (mirrors major.minor) |
+| [vscode-governor](https://github.com/unpingable/vscode-governor) | 2.3.0 | hard (mirrors major.minor) |
+| [guvnah](https://github.com/unpingable/guvnah) | 2.3.0 | hard (mirrors major.minor) |
+| [gov-webui](https://github.com/unpingable/governor_webui) | 0.3.0 | loose (targets contract v1) |
+
+**Sanity check** (run these to verify you're not in version hell):
+
+```bash
+governor --version                      # should say 2.3.0
+governor status --json | python3 -c "import sys,json; print(json.load(sys.stdin)['schema_version'])"  # should say 1
+governor doctor                         # walk 9 subsystems, flag non-nominal
+make test                               # in each repo
+```
+
+See `docs/VERSIONING.md` for the coupling rules and contract version table.
+
+---
+
 ## What To Do Next
 
 If you're returning to this codebase:

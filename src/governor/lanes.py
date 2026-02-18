@@ -1583,12 +1583,13 @@ class CooldownStore:
         """True if entry belongs to the current policy version.
 
         When no policy_version is set on the store, all entries match
-        (backwards-compatible).  When set, only entries with the same
-        version (or entries with no version — legacy) are included.
+        (backwards-compatible).  When set, only entries with the exact
+        same version are included — legacy entries (pv="") are excluded
+        to prevent old poison from bleeding forward on upgrade.
         """
         if not self._policy_version:
             return True
-        return entry.policy_version in ("", self._policy_version)
+        return entry.policy_version == self._policy_version
 
     def is_cooled_down(
         self,

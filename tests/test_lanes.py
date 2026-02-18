@@ -2109,8 +2109,8 @@ class TestPolicyVersionIsolation:
         score, bd = store_v2.model_score("m1", 2)
         assert score == 0.5  # insufficient data
 
-    def test_legacy_entries_included(self, tmp_path):
-        """Entries with no policy_version (legacy) are included by any version."""
+    def test_legacy_entries_excluded_by_versioned_store(self, tmp_path):
+        """Legacy entries (no pv) are excluded when store has a policy_version."""
         # Write a legacy entry directly (no pv field)
         entry_line = json.dumps({
             "ck": "x", "model": "m1", "lane": 2,
@@ -2121,9 +2121,13 @@ class TestPolicyVersionIsolation:
         p = tmp_path / "cool.jsonl"
         p.write_text(entry_line * 5)
 
-        store = CooldownStore(path=p, policy_version="v1")
-        # Legacy entries (pv="") should be visible to any version
-        assert store.recent_failures("m1", 2) == 5
+        # Versioned store excludes legacy entries (prevents upgrade-day poison)
+        store_v = CooldownStore(path=p, policy_version="v1")
+        assert store_v.recent_failures("m1", 2) == 0
+
+        # Unversioned store still sees them (backwards compat)
+        store_unv = CooldownStore(path=p)
+        assert store_unv.recent_failures("m1", 2) == 5
 
     def test_same_version_entries_counted(self, tmp_path):
         """Entries with matching policy_version are counted normally."""

@@ -1450,8 +1450,11 @@ class TestCooldownEntry:
 
     def test_roundtrip(self):
         e = CooldownEntry(
-            model="m1", lane=2, validators_failed=["schema"],
+            cooldown_key="abc123", model="m1", lane=2,
+            risk_class="standard", task_hint="codegen",
+            validators_failed=["schema"],
             probe_decision="mitigate", escalated=True,
+            is_failure=True,
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
         d = e.to_dict()
@@ -1460,6 +1463,10 @@ class TestCooldownEntry:
         assert e2.lane == 2
         assert e2.validators_failed == ["schema"]
         assert e2.escalated is True
+        assert e2.is_failure is True
+        assert e2.cooldown_key == "abc123"
+        assert e2.risk_class == "standard"
+        assert e2.task_hint == "codegen"
 
     def test_from_dict_defaults(self):
         d = {"model": "m", "lane": 1, "timestamp": "2026-01-01T00:00:00+00:00"}
@@ -1467,6 +1474,10 @@ class TestCooldownEntry:
         assert e.validators_failed == []
         assert e.escalated is False
         assert e.probe_decision is None
+        assert e.cooldown_key == ""
+        assert e.risk_class == ""
+        assert e.task_hint == ""
+        assert e.is_failure is False
 
 
 class TestCooldownStore:
@@ -1550,8 +1561,11 @@ class TestCooldownStore:
         # Write an entry with an old timestamp
         old_ts = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         entry = CooldownEntry(
-            model="m1", lane=2, validators_failed=["schema"],
-            probe_decision=None, escalated=True, timestamp=old_ts,
+            cooldown_key="old", model="m1", lane=2,
+            risk_class="", task_hint="",
+            validators_failed=["schema"],
+            probe_decision=None, escalated=True,
+            is_failure=True, timestamp=old_ts,
         )
         with open(path, "w") as f:
             f.write(json.dumps(entry.to_dict()) + "\n")

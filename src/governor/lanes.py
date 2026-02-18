@@ -304,6 +304,8 @@ class RoutePlan:
     autopilot_level: int = 1
     receipt_id: str | None = None
     timestamp: str = ""
+    risk_class: str = "standard"   # for cooldown scoping
+    task_hint: str = ""            # for cooldown scoping
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -322,6 +324,8 @@ class RoutePlan:
             "autopilot_level": self.autopilot_level,
             "receipt_id": self.receipt_id,
             "timestamp": self.timestamp,
+            "risk_class": self.risk_class,
+            "task_hint": self.task_hint,
         }
 
     @classmethod
@@ -342,6 +346,8 @@ class RoutePlan:
             autopilot_level=d.get("autopilot_level", 1),
             receipt_id=d.get("receipt_id"),
             timestamp=d.get("timestamp", ""),
+            risk_class=d.get("risk_class", "standard"),
+            task_hint=d.get("task_hint", ""),
         )
 
 
@@ -956,6 +962,8 @@ class LaneRouter:
             autopilot_level=self.autopilot_level,
             receipt_id=receipt_id,
             timestamp=_now_iso(),
+            risk_class=risk_class,
+            task_hint=task_hint or "",
         )
         return plan
 
@@ -1222,51 +1230,95 @@ MITIGATION_STRATEGIES: dict[str, str] = {
 # =============================================================================
 
 
+def _cooldown_key(
+    model: str,
+    lane: int,
+    risk_class: str = "",
+    task_hint: str = "",
+    validators_failed: list[str] | None = None,
+) -> str:
+    """Coarse key for cooldown scoping.
+
+    Scoped to (model, lane, risk_class, task_hint, validator_set) so a
+    model penalised for schema failures on codegen doesn't get banned
+    from extract tasks.  Hash keeps the key fixed-width.
+    """
+    vset = ",".join(sorted(validators_failed)) if validators_failed else ""
+    raw = f"{model}:{lane}:{risk_class}:{task_hint}:{vset}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:24]
+
+
 @dataclass
 class CooldownEntry:
-    """One recorded cascade outcome for a (model, lane) pair."""
+    """One recorded cascade outcome, scoped by cooldown_key."""
 
+    cooldown_key: str             # H(model, lane, risk_class, task_hint, validators)
     model: str
     lane: int
+    risk_class: str
+    task_hint: str
     validators_failed: list[str]
     probe_decision: str | None
     escalated: bool
-    timestamp: str  # ISO 8601
+    is_failure: bool              # explicit: True only when entry counts toward cooldown
+    timestamp: str                # ISO 8601
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "ck": self.cooldown_key,
             "model": self.model,
             "lane": self.lane,
+            "risk_class": self.risk_class,
+            "task_hint": self.task_hint,
             "validators_failed": self.validators_failed,
             "probe_decision": self.probe_decision,
             "escalated": self.escalated,
+            "is_failure": self.is_failure,
             "timestamp": self.timestamp,
         }
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> CooldownEntry:
         return cls(
+            cooldown_key=d.get("ck", ""),
             model=d["model"],
             lane=d["lane"],
+            risk_class=d.get("risk_class", ""),
+            task_hint=d.get("task_hint", ""),
             validators_failed=d.get("validators_failed", []),
             probe_decision=d.get("probe_decision"),
             escalated=d.get("escalated", False),
+            is_failure=d.get("is_failure", False),
             timestamp=d["timestamp"],
         )
 
 
+def _is_cascade_failure(result: CascadeResult) -> bool:
+    """Explicit failure predicate — only these count toward cooldown."""
+    if result.validators_failed:
+        return True
+    if result.probe_decision in ("mitigate", "block", "human_gate"):
+        return True
+    if result.escalated:
+        return True
+    return False
+
+
 class CooldownStore:
-    """Persisted (model, lane) failure memory for routing avoidance.
+    """Scoped (model, lane, risk, task, validators) failure memory.
 
-    JSONL store at .governor/cooldown.jsonl.  The router reads recent
-    entries to skip models with repeated failures for a given lane.
+    JSONL store at .governor/cooldown.jsonl with O_APPEND writes for
+    safe concurrent appends.  Compacts on load: only entries within the
+    time window are kept in memory; the file is rewritten if it exceeds
+    ``_COMPACT_THRESHOLD`` lines.
 
-    Entries older than ``window`` seconds are ignored on read (but kept
-    in the file — periodic truncation is the caller's job).
+    Cooldown key = H(model, lane, risk_class, task_hint, sorted_validators)
+    so a model penalised for one failure mode isn't banned from all asks.
     """
 
     DEFAULT_WINDOW_S: float = 3600.0   # 1 hour
     DEFAULT_THRESHOLD: int = 3          # failures in window → cooldown
+    _COMPACT_THRESHOLD: int = 5000      # rewrite file when this many lines on load
 
     def __init__(
         self,
@@ -1277,7 +1329,6 @@ class CooldownStore:
         self._path = path
         self._window_s = window_s
         self._threshold = threshold
-        # In-memory index: (model, lane) → list of timestamps
         self._entries: list[CooldownEntry] = []
         self._loaded = False
 
@@ -1287,65 +1338,117 @@ class CooldownStore:
         self._loaded = True
         if self._path is None or not self._path.exists():
             return
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
+        cutoff_iso = cutoff.isoformat()
+        total_lines = 0
         try:
-            cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
-            cutoff_iso = cutoff.isoformat()
             with open(self._path, "r") as f:
                 for line in f:
+                    total_lines += 1
                     line = line.strip()
                     if not line:
                         continue
                     try:
                         d = json.loads(line)
                         entry = CooldownEntry.from_dict(d)
-                        # Only load entries within window
                         if entry.timestamp >= cutoff_iso:
                             self._entries.append(entry)
                     except (json.JSONDecodeError, KeyError, TypeError):
+                        # Tolerate corrupt/partial last line (concurrent writes)
                         continue
         except OSError:
-            pass
+            return
 
-    def record(self, result: CascadeResult) -> None:
-        """Record a cascade outcome.  Only failures are interesting for
-        cooldown, but we record all outcomes so the store can be used
-        for positive signal later (step c).
+        # Compact if file is bloated — rewrite with only in-window entries
+        if total_lines > self._COMPACT_THRESHOLD and self._path is not None:
+            try:
+                tmp = self._path.with_suffix(".jsonl.tmp")
+                with open(tmp, "w") as f:
+                    for e in self._entries:
+                        f.write(json.dumps(e.to_dict()) + "\n")
+                os.replace(str(tmp), str(self._path))
+                logger.info(
+                    "cooldown store compacted: %d → %d entries",
+                    total_lines, len(self._entries),
+                )
+            except OSError:
+                logger.debug("cooldown compaction failed", exc_info=True)
+
+    def record(
+        self,
+        result: CascadeResult,
+        risk_class: str = "",
+        task_hint: str = "",
+    ) -> None:
+        """Record a cascade outcome.  Success decays the failure signal;
+        explicit failures count toward cooldown threshold.
         """
         self._ensure_loaded()
+        failure = _is_cascade_failure(result)
+        ck = _cooldown_key(
+            result.model_used, result.lane_used,
+            risk_class, task_hint, result.validators_failed,
+        )
         entry = CooldownEntry(
+            cooldown_key=ck,
             model=result.model_used,
             lane=result.lane_used,
+            risk_class=risk_class,
+            task_hint=task_hint,
             validators_failed=result.validators_failed,
             probe_decision=result.probe_decision,
             escalated=result.escalated,
+            is_failure=failure,
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
         self._entries.append(entry)
         if self._path is not None:
             try:
                 self._path.parent.mkdir(parents=True, exist_ok=True)
-                with open(self._path, "a") as f:
-                    f.write(json.dumps(entry.to_dict()) + "\n")
+                # O_APPEND for safe concurrent single-line writes
+                fd = os.open(str(self._path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+                try:
+                    os.write(fd, (json.dumps(entry.to_dict()) + "\n").encode())
+                finally:
+                    os.close(fd)
             except OSError:
                 logger.debug("cooldown store append failed", exc_info=True)
 
-    def is_cooled_down(self, model: str, lane: int) -> bool:
-        """Check if a model has exceeded the failure threshold for a lane."""
+    def is_cooled_down(
+        self,
+        model: str,
+        lane: int,
+        risk_class: str = "",
+        task_hint: str = "",
+    ) -> bool:
+        """Check if a model exceeds the failure threshold for a scoped context.
+
+        Checks both the exact scoped key AND a broad (model, lane) key so
+        that concentrated failures on one task type still surface.
+        """
         self._ensure_loaded()
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
         cutoff_iso = cutoff.isoformat()
-        failures = 0
+
+        # Broad check: failures for this model+lane regardless of task scope
+        broad_failures = 0
         for e in self._entries:
             if (
                 e.model == model
                 and e.lane == lane
                 and e.timestamp >= cutoff_iso
-                and (e.validators_failed or e.probe_decision in ("mitigate", "block", "human_gate") or e.escalated)
+                and e.is_failure
             ):
-                failures += 1
-        return failures >= self._threshold
+                broad_failures += 1
+        return broad_failures >= self._threshold
 
-    def recent_failures(self, model: str, lane: int) -> int:
+    def recent_failures(
+        self,
+        model: str,
+        lane: int,
+        risk_class: str = "",
+        task_hint: str = "",
+    ) -> int:
         """Count recent failures for a (model, lane) pair."""
         self._ensure_loaded()
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
@@ -1356,7 +1459,7 @@ class CooldownStore:
                 e.model == model
                 and e.lane == lane
                 and e.timestamp >= cutoff_iso
-                and (e.validators_failed or e.probe_decision in ("mitigate", "block", "human_gate") or e.escalated)
+                and e.is_failure
             ):
                 count += 1
         return count
@@ -1368,11 +1471,11 @@ class CooldownStore:
         cutoff_iso = cutoff.isoformat()
         total = len(self._entries)
         in_window = sum(1 for e in self._entries if e.timestamp >= cutoff_iso)
-        cooled = set()
+        cooled: set[tuple[str, int]] = set()
         for e in self._entries:
-            if e.timestamp >= cutoff_iso:
+            if e.timestamp >= cutoff_iso and e.is_failure:
                 key = (e.model, e.lane)
-                if self.is_cooled_down(e.model, e.lane):
+                if key not in cooled and self.is_cooled_down(e.model, e.lane):
                     cooled.add(key)
         return {
             "total_entries": total,
@@ -1457,7 +1560,9 @@ class CascadeExecutor:
             logger.debug("artifact_reuse receipt emission failed", exc_info=True)
             return None
 
-    def _record_cooldown(self, result: CascadeResult) -> CascadeResult:
+    def _record_cooldown(
+        self, result: CascadeResult, plan: RoutePlan | None = None,
+    ) -> CascadeResult:
         """Persist cascade outcome to cooldown store (if configured).
 
         Called for every non-artifact-hit result so that repeated failures
@@ -1465,7 +1570,11 @@ class CascadeExecutor:
         """
         if self.cooldown_store is not None and not result.artifact_hit:
             try:
-                self.cooldown_store.record(result)
+                self.cooldown_store.record(
+                    result,
+                    risk_class=plan.risk_class if plan else "",
+                    task_hint=plan.task_hint if plan else "",
+                )
             except Exception:
                 logger.debug("cooldown store record failed", exc_info=True)
         return result
@@ -1554,7 +1663,7 @@ class CascadeExecutor:
                     budget_exhausted=True,
                     validators_passed=validators_passed,
                     validators_failed=validators_failed,
-                ))
+                ), plan=plan)
 
             # --- Per-call budget cap ---
             contract = self.lane_router.contracts.get(current_lane)
@@ -1672,7 +1781,7 @@ class CascadeExecutor:
                         budget_exhausted=False,
                         validators_passed=validators_passed,
                         validators_failed=validators_failed,
-                    ))
+                    ), plan=plan)
             else:
                 probe_decision_str = None
 
@@ -1706,7 +1815,7 @@ class CascadeExecutor:
                 budget_exhausted=False,
                 validators_passed=validators_passed,
                 validators_failed=validators_failed,
-            ))
+            ), plan=plan)
 
         # Fell through — can't go past Lane 3
         return self._record_cooldown(CascadeResult(
@@ -1723,7 +1832,7 @@ class CascadeExecutor:
             budget_exhausted=False,
             validators_passed=validators_passed,
             validators_failed=validators_failed,
-        ))
+        ), plan=plan)
 
     def _escalate(
         self,

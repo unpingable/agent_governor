@@ -25,12 +25,14 @@ from governor.lanes import (
     CooldownStore,
     CooldownEntry,
     compute_vary_key,
+    compute_policy_version,
     is_final_answer_reusable,
     resolve_task_hint,
     DEFAULT_TTLS,
     LANE_TO_TIERS,
     MITIGATION_STRATEGIES,
     _canonical_json,
+    _COOLDOWN_SCHEMA_VERSION,
 )
 from governor.claims import Claim, ClaimType
 from governor.routing import ModelTier, Router, ModelRegistry, ModelCapabilities
@@ -1978,3 +1980,314 @@ class TestAutopilotLevel2Selection:
         plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
         score_reasons = [r for r in plan.reasons if r.startswith("score(")]
         assert len(score_reasons) >= 1  # at least one model scored
+
+
+# =============================================================================
+# TestPolicyVersion
+# =============================================================================
+
+
+class TestPolicyVersion:
+    """Policy version salt for cooldown key isolation."""
+
+    def test_deterministic(self):
+        """Same inputs → same hash."""
+        v1 = compute_policy_version()
+        v2 = compute_policy_version()
+        assert v1 == v2
+        assert len(v1) == 16  # 16 hex chars
+
+    def test_contract_change_changes_version(self):
+        """Different contracts → different version."""
+        v_default = compute_policy_version()
+        custom = dict(LANE_CONTRACTS)
+        custom[Lane.FAST] = LaneContract(
+            lane=Lane.FAST,
+            model_tiers=("local",),  # changed from ("local", "fast")
+            budget_per_call_usd=0.02,  # changed
+        )
+        v_custom = compute_policy_version(contracts=custom)
+        assert v_default != v_custom
+
+    def test_weight_change_changes_version(self):
+        """Different scoring weights → different version."""
+        v1 = compute_policy_version(score_weights=(0.50, 0.30, 0.20))
+        v2 = compute_policy_version(score_weights=(0.40, 0.40, 0.20))
+        assert v1 != v2
+
+    def test_window_change_changes_version(self):
+        """Different cooldown window → different version."""
+        v1 = compute_policy_version(cooldown_window_s=3600.0)
+        v2 = compute_policy_version(cooldown_window_s=7200.0)
+        assert v1 != v2
+
+    def test_threshold_change_changes_version(self):
+        """Different cooldown threshold → different version."""
+        v1 = compute_policy_version(cooldown_threshold=3)
+        v2 = compute_policy_version(cooldown_threshold=5)
+        assert v1 != v2
+
+    def test_route_plan_carries_policy_version(self):
+        """RoutePlan produced by LaneRouter has policy_version set."""
+        lr = LaneRouter()
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        assert plan.policy_version
+        assert len(plan.policy_version) == 16
+
+    def test_plan_roundtrip_preserves_policy_version(self):
+        """policy_version survives to_dict/from_dict."""
+        plan = RoutePlan(
+            lane=1, model="m", provider="p",
+            budget_per_call_usd=0.01, budget_total_usd=10.0,
+            tools_allowed=False, validators=["format"],
+            probe_policy="none", vary_key="k",
+            escalation_policy="auto", fallback_chain=[],
+            reasons=[], policy_version="abc123",
+        )
+        d = plan.to_dict()
+        assert d["policy_version"] == "abc123"
+        plan2 = RoutePlan.from_dict(d)
+        assert plan2.policy_version == "abc123"
+
+    def test_entry_roundtrip_preserves_policy_version(self):
+        """CooldownEntry policy_version survives to_dict/from_dict."""
+        entry = CooldownEntry(
+            cooldown_key="ck1", model="m1", lane=2,
+            risk_class="standard", task_hint="codegen",
+            validators_failed=[], probe_decision="proceed",
+            escalated=False, is_failure=False,
+            timestamp="2026-01-01T00:00:00+00:00",
+            policy_version="deadbeef",
+        )
+        d = entry.to_dict()
+        assert d["pv"] == "deadbeef"
+        entry2 = CooldownEntry.from_dict(d)
+        assert entry2.policy_version == "deadbeef"
+
+    def test_legacy_entry_has_empty_policy_version(self):
+        """Legacy entries (no 'pv' key) default to empty string."""
+        d = {"model": "m1", "lane": 2, "timestamp": "2026-01-01T00:00:00+00:00"}
+        entry = CooldownEntry.from_dict(d)
+        assert entry.policy_version == ""
+
+
+class TestPolicyVersionIsolation:
+    """Queries only consider entries matching current policy_version."""
+
+    def _make_result(self, model, lane, probe_decision=None, escalated=False,
+                     validators_failed=None):
+        return CascadeResult(
+            output="x", lane_used=lane, model_used=model,
+            escalated=escalated, escalation_chain=[], mitigations_attempted=[],
+            probe_decision=probe_decision, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=["format"],
+            validators_failed=validators_failed or [],
+        )
+
+    def test_different_version_entries_ignored(self, tmp_path):
+        """Entries from a different policy_version don't count."""
+        # Store with version "v1"
+        store_v1 = CooldownStore(
+            path=tmp_path / "cool.jsonl", policy_version="v1",
+        )
+        # Record 5 failures under v1
+        for _ in range(5):
+            store_v1.record(self._make_result(
+                "m1", 2, "mitigate", validators_failed=["format"],
+            ))
+
+        # New store with version "v2" reading same file
+        store_v2 = CooldownStore(
+            path=tmp_path / "cool.jsonl", policy_version="v2",
+        )
+        # v2 should NOT see v1's failures
+        assert not store_v2.is_cooled_down("m1", 2)
+        assert store_v2.recent_failures("m1", 2) == 0
+        rate, attempts = store_v2.probe_fail_rate("m1", 2)
+        assert attempts == 0
+        score, bd = store_v2.model_score("m1", 2)
+        assert score == 0.5  # insufficient data
+
+    def test_legacy_entries_included(self, tmp_path):
+        """Entries with no policy_version (legacy) are included by any version."""
+        # Write a legacy entry directly (no pv field)
+        entry_line = json.dumps({
+            "ck": "x", "model": "m1", "lane": 2,
+            "validators_failed": ["format"], "probe_decision": "mitigate",
+            "escalated": False, "is_failure": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }) + "\n"
+        p = tmp_path / "cool.jsonl"
+        p.write_text(entry_line * 5)
+
+        store = CooldownStore(path=p, policy_version="v1")
+        # Legacy entries (pv="") should be visible to any version
+        assert store.recent_failures("m1", 2) == 5
+
+    def test_same_version_entries_counted(self, tmp_path):
+        """Entries with matching policy_version are counted normally."""
+        store = CooldownStore(
+            path=tmp_path / "cool.jsonl", policy_version="v1",
+        )
+        for _ in range(5):
+            store.record(self._make_result(
+                "m1", 2, "mitigate", validators_failed=["format"],
+            ))
+        assert store.is_cooled_down("m1", 2)
+        assert store.recent_failures("m1", 2) == 5
+
+    def test_no_policy_version_on_store_matches_all(self, tmp_path):
+        """Store with no policy_version sees all entries (backwards compat)."""
+        # Write entries with a specific version
+        store_v1 = CooldownStore(
+            path=tmp_path / "cool.jsonl", policy_version="v1",
+        )
+        for _ in range(5):
+            store_v1.record(self._make_result(
+                "m1", 2, "mitigate", validators_failed=["format"],
+            ))
+
+        # Store without policy_version → sees everything
+        store_any = CooldownStore(path=tmp_path / "cool.jsonl")
+        assert store_any.recent_failures("m1", 2) == 5
+
+    def test_stats_shows_version_breakdown(self, tmp_path):
+        """stats() includes per-version counts and current version."""
+        store = CooldownStore(
+            path=tmp_path / "cool.jsonl", policy_version="v1",
+        )
+        for _ in range(3):
+            store.record(self._make_result("m1", 2, "proceed"))
+        stats = store.stats()
+        assert stats["policy_version"] == "v1"
+        assert stats["current_version_in_window"] == 3
+        assert "v1" in stats["entries_by_version"]
+
+    def test_stale_version_dropped_on_load(self, tmp_path):
+        """Entries from old policy_version + >24h old are dropped on load."""
+        p = tmp_path / "cool.jsonl"
+        # Write an entry with old version + old timestamp (26h ago)
+        old_ts = (
+            datetime.now(timezone.utc) - timedelta(hours=26)
+        ).isoformat()
+        old_entry = json.dumps({
+            "ck": "x", "model": "m1", "lane": 2,
+            "validators_failed": [], "probe_decision": "mitigate",
+            "escalated": False, "is_failure": True,
+            "timestamp": old_ts, "pv": "old_version",
+        }) + "\n"
+        # Write an entry with old version but recent timestamp (5min ago)
+        recent_ts = (
+            datetime.now(timezone.utc) - timedelta(minutes=5)
+        ).isoformat()
+        recent_entry = json.dumps({
+            "ck": "x", "model": "m1", "lane": 2,
+            "validators_failed": [], "probe_decision": "mitigate",
+            "escalated": False, "is_failure": True,
+            "timestamp": recent_ts, "pv": "old_version",
+        }) + "\n"
+        p.write_text(old_entry + recent_entry)
+
+        # Load with a different current version
+        store = CooldownStore(path=p, policy_version="new_version")
+        store._ensure_loaded()
+        # Old entry (>24h + wrong version) should be dropped
+        # Recent entry (wrong version but <24h) should be kept
+        assert len(store._entries) == 1
+        assert store._entries[0].policy_version == "old_version"
+
+
+# =============================================================================
+# TestExplainTransparency
+# =============================================================================
+
+
+class TestExplainTransparency:
+    """lanes.explain() shows score breakdown and policy_version."""
+
+    def _make_result(self, model, lane, probe_decision=None):
+        return CascadeResult(
+            output="x", lane_used=lane, model_used=model,
+            escalated=False, escalation_chain=[], mitigations_attempted=[],
+            probe_decision=probe_decision, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=["format"], validators_failed=[],
+        )
+
+    def test_explain_includes_policy_version(self):
+        """explain() output includes policy_version."""
+        lr = LaneRouter()
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        explanation = lr.explain(plan)
+        assert "policy_version" in explanation
+        assert explanation["policy_version"] == plan.policy_version
+
+    def test_explain_includes_window_s(self, tmp_path):
+        """explain() output includes window_s from cooldown store."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl", window_s=7200.0)
+        lr = LaneRouter(cooldown_store=store)
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        explanation = lr.explain(plan)
+        assert explanation["window_s"] == 7200.0
+
+    def test_explain_no_cooldown_store_no_candidates(self):
+        """explain() without cooldown store omits candidates list."""
+        lr = LaneRouter()
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        explanation = lr.explain(plan)
+        assert "candidates" not in explanation
+
+    def test_explain_with_data_shows_candidates(self, tmp_path):
+        """explain() with cooldown data includes candidate scorecards."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        for _ in range(5):
+            store.record(self._make_result("qwen2.5-coder:7b", 1, "proceed"))
+        lr = LaneRouter(cooldown_store=store)
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        explanation = lr.explain(plan)
+        assert "candidates" in explanation
+        candidates = explanation["candidates"]
+        assert len(candidates) >= 1
+        # Check structure of candidate entries
+        for c in candidates:
+            assert "model" in c
+            assert "score" in c
+            assert "n" in c
+            assert "is_cooled" in c
+            assert "selected" in c
+
+    def test_explain_cold_start_labeled(self, tmp_path):
+        """Candidates with insufficient data are labeled 'cold_start'."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        # Only 1 entry — below min_samples
+        store.record(self._make_result("qwen2.5-coder:7b", 1, "proceed"))
+        lr = LaneRouter(cooldown_store=store)
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        explanation = lr.explain(plan)
+        if "candidates" in explanation:
+            for c in explanation["candidates"]:
+                if c["n"] < CooldownStore._PROBE_MIN_SAMPLES:
+                    assert c.get("note") == "cold_start"
+
+    def test_explain_sufficient_data_shows_breakdown(self, tmp_path):
+        """Candidates with enough data show full score breakdown."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        for _ in range(5):
+            store.record(self._make_result("qwen2.5-coder:7b", 1, "proceed"))
+        lr = LaneRouter(cooldown_store=store)
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        explanation = lr.explain(plan)
+        if "candidates" in explanation:
+            scored = [c for c in explanation["candidates"] if c["n"] >= 3]
+            for c in scored:
+                assert "success_rate" in c
+                assert "probe_reliability" in c
+                assert "escalation_rate" in c
+
+    def test_status_includes_policy_version(self):
+        """get_status() includes policy_version."""
+        lr = LaneRouter()
+        status = lr.get_status()
+        assert "policy_version" in status
+        assert status["policy_version"] == lr.policy_version

@@ -234,6 +234,46 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# Schema constant — bump when cooldown entry semantics change structurally
+_COOLDOWN_SCHEMA_VERSION = "cooldown_key_v2"
+
+# Scoring weights (constants for hashing; change these → new policy_version)
+_SCORE_WEIGHT_SUCCESS = 0.50
+_SCORE_WEIGHT_PROBE = 0.30
+_SCORE_WEIGHT_ESCALATION = 0.20
+
+
+def compute_policy_version(
+    contracts: dict[int, LaneContract] | None = None,
+    score_weights: tuple[float, ...] | None = None,
+    cooldown_window_s: float = 3600.0,
+    cooldown_threshold: int = 3,
+    probe_min_samples: int = 3,
+) -> str:
+    """Stable digest over all policy knobs that affect routing decisions.
+
+    Any change in contracts, scoring weights, cooldown parameters, or the
+    schema version constant produces a different hash.  Old cooldown entries
+    keyed under a different policy_version naturally stop influencing routing.
+    """
+    c = contracts or LANE_CONTRACTS
+    blob = {
+        "schema": _COOLDOWN_SCHEMA_VERSION,
+        "contracts": {
+            str(k): v.to_dict() for k, v in sorted(c.items())
+        },
+        "score_weights": list(score_weights or (
+            _SCORE_WEIGHT_SUCCESS,
+            _SCORE_WEIGHT_PROBE,
+            _SCORE_WEIGHT_ESCALATION,
+        )),
+        "cooldown_window_s": cooldown_window_s,
+        "cooldown_threshold": cooldown_threshold,
+        "probe_min_samples": probe_min_samples,
+    }
+    return _sha256(_canonical_json(blob))[:16]
+
+
 # =============================================================================
 # Vary Key
 # =============================================================================
@@ -306,6 +346,7 @@ class RoutePlan:
     timestamp: str = ""
     risk_class: str = "standard"   # for cooldown scoping
     task_hint: str = ""            # for cooldown scoping
+    policy_version: str = ""       # stable hash over routing policy config
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -326,6 +367,7 @@ class RoutePlan:
             "timestamp": self.timestamp,
             "risk_class": self.risk_class,
             "task_hint": self.task_hint,
+            "policy_version": self.policy_version,
         }
 
     @classmethod
@@ -348,6 +390,7 @@ class RoutePlan:
             timestamp=d.get("timestamp", ""),
             risk_class=d.get("risk_class", "standard"),
             task_hint=d.get("task_hint", ""),
+            policy_version=d.get("policy_version", ""),
         )
 
 
@@ -774,6 +817,17 @@ class LaneRouter:
         self.receipt_system = receipt_system
         self.cooldown_store = cooldown_store
 
+        # Compute once — changes when contracts/scoring/cooldown knobs change
+        self.policy_version = compute_policy_version(
+            contracts=self.contracts,
+            cooldown_window_s=(
+                cooldown_store._window_s if cooldown_store else CooldownStore.DEFAULT_WINDOW_S
+            ),
+            cooldown_threshold=(
+                cooldown_store._threshold if cooldown_store else CooldownStore.DEFAULT_THRESHOLD
+            ),
+        )
+
         # Lazily import and build Router if not provided
         if router is not None:
             self._router = router
@@ -964,17 +1018,59 @@ class LaneRouter:
             timestamp=_now_iso(),
             risk_class=risk_class,
             task_hint=task_hint or "",
+            policy_version=self.policy_version,
         )
         return plan
 
     def explain(self, plan: RoutePlan) -> dict[str, Any]:
-        """Generate a detailed explanation of a routing plan."""
+        """Generate a detailed explanation of a routing plan.
+
+        Includes per-candidate score breakdown when cooldown data exists
+        so operators can see *why* a model was chosen.
+        """
         contract = self.contracts.get(plan.lane)
-        return {
+
+        # Build per-candidate scorecard for the chosen lane
+        candidates_info: list[dict[str, Any]] = []
+        if self.cooldown_store is not None and contract is not None:
+            from .routing import ModelTier
+            registry = self.router.registry
+            for tier_name in contract.model_tiers:
+                try:
+                    tier = ModelTier(tier_name)
+                except ValueError:
+                    continue
+                for name in registry.get_available_models(tier):
+                    score, breakdown = self.cooldown_store.model_score(
+                        name, plan.lane,
+                    )
+                    is_cooled = self.cooldown_store.is_cooled_down(
+                        name, plan.lane,
+                    )
+                    n = breakdown.get("total", 0)
+                    entry: dict[str, Any] = {
+                        "model": name,
+                        "score": round(score, 3),
+                        "n": n,
+                        "is_cooled": is_cooled,
+                        "selected": name == plan.model,
+                    }
+                    if n >= CooldownStore._PROBE_MIN_SAMPLES:
+                        entry.update({
+                            "success_rate": breakdown.get("success_rate"),
+                            "probe_reliability": breakdown.get("probe_reliability"),
+                            "escalation_rate": breakdown.get("escalation_rate"),
+                        })
+                    else:
+                        entry["note"] = "cold_start"
+                    candidates_info.append(entry)
+
+        result = {
             "lane": plan.lane,
             "lane_name": Lane(plan.lane).name if plan.lane in Lane.__members__.values() else f"Lane {plan.lane}",
             "model": plan.model,
             "provider": plan.provider,
+            "policy_version": plan.policy_version,
             "reasons": plan.reasons,
             "contract": contract.to_dict() if contract else None,
             "budget": {
@@ -986,7 +1082,13 @@ class LaneRouter:
             "fallback_chain": plan.fallback_chain,
             "autopilot_level": plan.autopilot_level,
             "vary_key": plan.vary_key,
+            "window_s": (
+                self.cooldown_store._window_s if self.cooldown_store else None
+            ),
         }
+        if candidates_info:
+            result["candidates"] = candidates_info
+        return result
 
     def get_status(self) -> dict[str, Any]:
         """Return current lane routing configuration status."""
@@ -1016,6 +1118,7 @@ class LaneRouter:
         return {
             "autopilot_level": self.autopilot_level,
             "budget_total_usd": self.budget_total_usd,
+            "policy_version": self.policy_version,
             "contracts": contracts_info,
             "artifact_stats": artifact_stats,
             "cooldown_stats": cooldown_stats,
@@ -1275,15 +1378,17 @@ def _cooldown_key(
     risk_class: str = "",
     task_hint: str = "",
     validators_failed: list[str] | None = None,
+    policy_version: str = "",
 ) -> str:
     """Coarse key for cooldown scoping.
 
-    Scoped to (model, lane, risk_class, task_hint, validator_set) so a
-    model penalised for schema failures on codegen doesn't get banned
-    from extract tasks.  Hash keeps the key fixed-width.
+    Scoped to (model, lane, risk_class, task_hint, validator_set,
+    policy_version) so a model penalised for schema failures on codegen
+    doesn't get banned from extract tasks, and entries from a previous
+    routing policy don't poison the current one.
     """
     vset = ",".join(sorted(validators_failed)) if validators_failed else ""
-    raw = f"{model}:{lane}:{risk_class}:{task_hint}:{vset}"
+    raw = f"{model}:{lane}:{risk_class}:{task_hint}:{vset}:{policy_version}"
     return hashlib.sha256(raw.encode()).hexdigest()[:24]
 
 
@@ -1301,6 +1406,7 @@ class CooldownEntry:
     escalated: bool
     is_failure: bool              # explicit: True only when entry counts toward cooldown
     timestamp: str                # ISO 8601
+    policy_version: str = ""      # routing policy hash — entries from different versions are isolated
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -1314,6 +1420,7 @@ class CooldownEntry:
             "escalated": self.escalated,
             "is_failure": self.is_failure,
             "timestamp": self.timestamp,
+            "pv": self.policy_version,
         }
 
     @classmethod
@@ -1329,6 +1436,7 @@ class CooldownEntry:
             escalated=d.get("escalated", False),
             is_failure=d.get("is_failure", False),
             timestamp=d["timestamp"],
+            policy_version=d.get("pv", ""),
         )
 
 
@@ -1358,16 +1466,19 @@ class CooldownStore:
     DEFAULT_WINDOW_S: float = 3600.0   # 1 hour
     DEFAULT_THRESHOLD: int = 3          # failures in window → cooldown
     _COMPACT_THRESHOLD: int = 5000      # rewrite file when this many lines on load
+    _STALE_VERSION_DROP_S: float = 86400.0  # 24h — drop non-current-version entries older than this
 
     def __init__(
         self,
         path: Path | None = None,
         window_s: float = DEFAULT_WINDOW_S,
         threshold: int = DEFAULT_THRESHOLD,
+        policy_version: str = "",
     ) -> None:
         self._path = path
         self._window_s = window_s
         self._threshold = threshold
+        self._policy_version = policy_version
         self._entries: list[CooldownEntry] = []
         self._loaded = False
 
@@ -1379,6 +1490,11 @@ class CooldownStore:
             return
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
         cutoff_iso = cutoff.isoformat()
+        # Stale-version drop: entries from a different policy_version older
+        # than 24h are archaeology — drop them on compaction.
+        stale_cutoff = (
+            datetime.now(timezone.utc) - timedelta(seconds=self._STALE_VERSION_DROP_S)
+        ).isoformat()
         total_lines = 0
         try:
             with open(self._path, "r") as f:
@@ -1390,8 +1506,16 @@ class CooldownStore:
                     try:
                         d = json.loads(line)
                         entry = CooldownEntry.from_dict(d)
-                        if entry.timestamp >= cutoff_iso:
-                            self._entries.append(entry)
+                        if entry.timestamp < cutoff_iso:
+                            continue  # outside time window
+                        # Drop stale-version entries older than 24h
+                        if (
+                            self._policy_version
+                            and entry.policy_version != self._policy_version
+                            and entry.timestamp < stale_cutoff
+                        ):
+                            continue
+                        self._entries.append(entry)
                     except (json.JSONDecodeError, KeyError, TypeError):
                         # Tolerate corrupt/partial last line (concurrent writes)
                         continue
@@ -1427,6 +1551,7 @@ class CooldownStore:
         ck = _cooldown_key(
             result.model_used, result.lane_used,
             risk_class, task_hint, result.validators_failed,
+            policy_version=self._policy_version,
         )
         entry = CooldownEntry(
             cooldown_key=ck,
@@ -1439,6 +1564,7 @@ class CooldownStore:
             escalated=result.escalated,
             is_failure=failure,
             timestamp=datetime.now(timezone.utc).isoformat(),
+            policy_version=self._policy_version,
         )
         self._entries.append(entry)
         if self._path is not None:
@@ -1452,6 +1578,17 @@ class CooldownStore:
                     os.close(fd)
             except OSError:
                 logger.debug("cooldown store append failed", exc_info=True)
+
+    def _matches_policy(self, entry: CooldownEntry) -> bool:
+        """True if entry belongs to the current policy version.
+
+        When no policy_version is set on the store, all entries match
+        (backwards-compatible).  When set, only entries with the same
+        version (or entries with no version — legacy) are included.
+        """
+        if not self._policy_version:
+            return True
+        return entry.policy_version in ("", self._policy_version)
 
     def is_cooled_down(
         self,
@@ -1477,6 +1614,7 @@ class CooldownStore:
                 and e.lane == lane
                 and e.timestamp >= cutoff_iso
                 and e.is_failure
+                and self._matches_policy(e)
             ):
                 broad_failures += 1
         return broad_failures >= self._threshold
@@ -1499,6 +1637,7 @@ class CooldownStore:
                 and e.lane == lane
                 and e.timestamp >= cutoff_iso
                 and e.is_failure
+                and self._matches_policy(e)
             ):
                 count += 1
         return count
@@ -1533,6 +1672,7 @@ class CooldownStore:
                 and e.lane == lane
                 and e.timestamp >= cutoff_iso
                 and e.probe_decision is not None
+                and self._matches_policy(e)
             ):
                 attempts += 1
                 if e.probe_decision in self._PROBE_DECISIONS_BAD:
@@ -1567,6 +1707,8 @@ class CooldownStore:
         for e in self._entries:
             if e.model != model or e.lane != lane or e.timestamp < cutoff_iso:
                 continue
+            if not self._matches_policy(e):
+                continue
             total += 1
             if e.is_failure:
                 failures += 1
@@ -1586,9 +1728,9 @@ class CooldownStore:
 
         # Weighted composite: success matters most, then probe, then escalation
         score = (
-            0.50 * success_rate
-            + 0.30 * probe_reliability
-            + 0.20 * (1.0 - escalation_rate)
+            _SCORE_WEIGHT_SUCCESS * success_rate
+            + _SCORE_WEIGHT_PROBE * probe_reliability
+            + _SCORE_WEIGHT_ESCALATION * (1.0 - escalation_rate)
         )
         # Clamp to [0, 1]
         score = max(0.0, min(1.0, score))
@@ -1610,16 +1752,28 @@ class CooldownStore:
         total = len(self._entries)
         in_window = sum(1 for e in self._entries if e.timestamp >= cutoff_iso)
         cooled: set[tuple[str, int]] = set()
+        # Per-policy-version counts
+        version_counts: dict[str, int] = {}
         for e in self._entries:
+            pv = e.policy_version or "(legacy)"
+            version_counts[pv] = version_counts.get(pv, 0) + 1
             if e.timestamp >= cutoff_iso and e.is_failure:
                 key = (e.model, e.lane)
                 if key not in cooled and self.is_cooled_down(e.model, e.lane):
                     cooled.add(key)
+        current_pv = self._policy_version or "(unset)"
+        current_count = sum(
+            1 for e in self._entries
+            if e.timestamp >= cutoff_iso and self._matches_policy(e)
+        )
         return {
             "total_entries": total,
             "in_window": in_window,
             "window_s": self._window_s,
             "threshold": self._threshold,
+            "policy_version": current_pv,
+            "current_version_in_window": current_count,
+            "entries_by_version": version_counts,
             "models_cooled_down": [
                 {"model": m, "lane": l} for m, l in sorted(cooled)
             ],

@@ -362,6 +362,114 @@ class TestCoreFunctions:
         assert s["dr_dd"] == pytest.approx(0.5 / 0.8)
         assert s["dr_de"] == pytest.approx(-(0.5 * 1.0) / (0.8 * 0.8))
 
+    def test_sensitivity_backward_compat(self):
+        """Calling without new kwargs returns same partials + extra keys."""
+        s = compute_sensitivity(power=0.5, delay=1.0, evidence=0.8)
+        # Old keys still present and correct
+        assert s["dr_dd"] == pytest.approx(0.5 / 0.8)
+        assert s["dr_de"] == pytest.approx(-(0.5 * 1.0) / (0.8 * 0.8))
+        # New keys present with benign defaults
+        assert s["should_demote"] is False
+        assert s["delta_r_worst"] == 0.0
+        assert s["margin"] == float("inf")
+
+    def test_sensitivity_worst_case(self):
+        """With tau and perturbation bounds, r_worst is computed."""
+        s = compute_sensitivity(
+            power=0.5, delay=1.0, evidence=0.8,
+            tau=0.8, delta_d=0.1, delta_e=0.1,
+        )
+        # r_worst > risk (perturbation pushes it up)
+        assert s["r_worst"] > s["risk"]
+        # delta_r_worst is positive
+        assert s["delta_r_worst"] > 0
+        # margin is tau - risk
+        assert s["margin"] == pytest.approx(0.8 - s["risk"])
+
+    def test_sensitivity_glass_cannon_demotion(self):
+        """System below cap but one perturbation away → should_demote."""
+        # R = (0.4 * 1.0) / 0.5 = 0.8, tau = 0.9, margin = 0.1
+        # With delta_e=0.1: dR/dE = -(0.4*1.0)/(0.5^2) = -1.6
+        # s_e = 1.6 * 0.1 = 0.16, r_worst = 0.8 + 0.16 = 0.96 > 0.9
+        s = compute_sensitivity(
+            power=0.4, delay=1.0, evidence=0.5,
+            tau=0.9, delta_d=0.0, delta_e=0.1,
+        )
+        assert s["risk"] < 0.9  # below cap
+        assert s["r_worst"] > 0.9  # but worst case breaches
+        assert s["should_demote"] is True
+
+    def test_sensitivity_safe_margin(self):
+        """When margin is large, no demotion even with perturbation."""
+        # R = (0.1 * 0.5) / 0.9 ≈ 0.056, tau = 0.5
+        s = compute_sensitivity(
+            power=0.1, delay=0.5, evidence=0.9,
+            tau=0.5, delta_d=0.01, delta_e=0.01,
+        )
+        assert s["should_demote"] is False
+        assert s["margin"] > 0.4
+
+    def test_sensitivity_no_tau_no_demotion(self):
+        """Without tau, should_demote is always False."""
+        s = compute_sensitivity(power=0.9, delay=1.0, evidence=0.1)
+        assert s["should_demote"] is False
+
+    def test_sensitivity_margin_to_cap_units(self):
+        """margin_to_cap = margin / delta_r_worst: perturbation units to breach."""
+        s = compute_sensitivity(
+            power=0.4, delay=1.0, evidence=0.5,
+            tau=0.9, delta_d=0.0, delta_e=0.1,
+        )
+        # margin_to_cap < 1.0 means less than one perturbation unit to breach
+        assert s["margin_to_cap"] < 1.0
+
+
+# ---------------------------------------------------------------------------
+# TestGlassCannonEvent
+# ---------------------------------------------------------------------------
+
+
+class TestGlassCannonEvent:
+    def test_event_has_new_fields(self):
+        evt = GlassCannonDetectedEvent(
+            dr_dd=1.0, dr_de=-2.0, risk=0.8,
+            r_worst=0.95, margin=0.1, margin_to_cap=0.6,
+            evidence=0.5,
+        )
+        d = evt.to_dict()
+        assert d["type"] == "glass_cannon_detected"
+        assert d["r_worst"] == 0.95
+        assert d["margin"] == 0.1
+        assert d["margin_to_cap"] == 0.6
+
+    def test_controller_emits_on_should_demote(self):
+        """RiskController emits glass cannon event when perturbation breaches cap."""
+        ctrl = RiskController(default_tau=0.9)
+        # Set up state: high power, moderate evidence → R near cap
+        ctrl.current_power = 0.4
+        ctrl.current_delay = 1.0
+        ctrl.current_evidence = 0.5
+        ctrl.events.clear()
+
+        ctrl.get_sensitivity(delta_d=0.0, delta_e=0.1)
+
+        glass_events = [e for e in ctrl.events if e["type"] == "glass_cannon_detected"]
+        assert len(glass_events) == 1
+        assert glass_events[0]["r_worst"] > 0.9
+
+    def test_controller_emits_on_high_partials(self):
+        """Legacy behavior: emits on high partials even without perturbation bounds."""
+        ctrl = RiskController()
+        ctrl.current_power = 0.9
+        ctrl.current_delay = 1.0
+        ctrl.current_evidence = 0.1
+        ctrl.events.clear()
+
+        ctrl.get_sensitivity()  # no delta_d/delta_e
+
+        glass_events = [e for e in ctrl.events if e["type"] == "glass_cannon_detected"]
+        assert len(glass_events) == 1
+
 
 # ---------------------------------------------------------------------------
 # TestAggregateEpisodeRisk
@@ -797,9 +905,15 @@ class TestEvents:
         assert d["type"] == "open_loop_detected"
 
     def test_glass_cannon_detected_event(self):
-        e = GlassCannonDetectedEvent(dr_dd=1.5, dr_de=-2.0, risk=0.3, evidence=0.2)
+        e = GlassCannonDetectedEvent(
+            dr_dd=1.5, dr_de=-2.0, risk=0.3,
+            r_worst=0.46, margin=0.2, margin_to_cap=1.25,
+            evidence=0.2,
+        )
         d = e.to_dict()
         assert d["type"] == "glass_cannon_detected"
+        assert d["r_worst"] == 0.46
+        assert d["margin"] == 0.2
 
 
 # ---------------------------------------------------------------------------

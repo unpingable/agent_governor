@@ -13548,6 +13548,9 @@ def risk_history(ctx: click.Context, limit: int, as_json: bool) -> None:
 @click.option("-p", "--power", type=float, required=True, help="Power value")
 @click.option("-d", "--delay", type=float, required=True, help="Delay value")
 @click.option("-e", "--evidence", type=float, required=True, help="Evidence value")
+@click.option("--tau", type=float, default=0.5, help="Risk cap (regime threshold)")
+@click.option("--delta-d", type=float, default=0.0, help="Plausible D perturbation magnitude")
+@click.option("--delta-e", type=float, default=0.0, help="Plausible E perturbation magnitude")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
 def risk_sensitivity(
@@ -13555,23 +13558,34 @@ def risk_sensitivity(
     power: float,
     delay: float,
     evidence: float,
+    tau: float,
+    delta_d: float,
+    delta_e: float,
     as_json: bool,
 ) -> None:
     """Compute sensitivity analysis (glass cannon detection)."""
     from .control_theory import compute_sensitivity
 
-    s = compute_sensitivity(power, delay, evidence)
+    s = compute_sensitivity(power, delay, evidence, tau=tau, delta_d=delta_d, delta_e=delta_e)
 
     if as_json:
         click.echo(json.dumps(s, indent=2))
         return
 
-    click.echo(f"R_t:    {s['risk']:.4f}")
-    click.echo(f"∂R/∂D:  {s['dr_dd']:.4f}  (delay sensitivity)")
-    click.echo(f"∂R/∂E:  {s['dr_de']:.4f}  (evidence sensitivity)")
+    click.echo(f"R_t:      {s['risk']:.4f}")
+    click.echo(f"∂R/∂D:    {s['dr_dd']:.4f}  (delay sensitivity)")
+    click.echo(f"∂R/∂E:    {s['dr_de']:.4f}  (evidence sensitivity)")
 
-    if abs(s["dr_dd"]) > 0.5 or abs(s["dr_de"]) > 0.5:
-        click.echo(click.style("\n⚠ Glass cannon region: small changes in D or E produce large R changes", fg="yellow"))
+    if tau > 0 and (delta_d > 0 or delta_e > 0):
+        click.echo(f"R_worst:  {s['r_worst']:.4f}  (first-order worst-case)")
+        click.echo(f"margin:   {s['margin']:.4f}  (τ - R)")
+        if s["margin_to_cap"] < float("inf"):
+            click.echo(f"margin/Δ: {s['margin_to_cap']:.2f}  (worst-case perturbations you can tolerate before hitting cap)")
+
+    if s.get("should_demote"):
+        click.echo(click.style("\n⚠ Glass cannon: R < τ but one bounded perturbation breaches cap", fg="yellow"))
+    elif abs(s["dr_dd"]) > 0.5 or abs(s["dr_de"]) > 0.5:
+        click.echo(click.style("\n⚠ High sensitivity: small changes in D or E produce large R changes", fg="yellow"))
 
 
 @risk.command("trajectory")

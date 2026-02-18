@@ -652,11 +652,15 @@ class OpenLoopDetectedEvent:
 
 @dataclass
 class GlassCannonDetectedEvent:
-    """Emitted when glass cannon sensitivity detected (high dR/dD or dR/dE)."""
+    """Emitted when glass cannon sensitivity detected: R is below cap but
+    a single bounded perturbation in D or E could breach it."""
 
     dr_dd: float
     dr_de: float
     risk: float
+    r_worst: float
+    margin: float
+    margin_to_cap: float
     evidence: float
     timestamp: float = field(default_factory=time.time)
 
@@ -666,6 +670,9 @@ class GlassCannonDetectedEvent:
             "dr_dd": self.dr_dd,
             "dr_de": self.dr_de,
             "risk": self.risk,
+            "r_worst": self.r_worst,
+            "margin": self.margin,
+            "margin_to_cap": self.margin_to_cap,
             "evidence": self.evidence,
             "timestamp": self.timestamp,
         }
@@ -834,16 +841,59 @@ def compute_sensitivity(
     power: float,
     delay: float,
     evidence: float,
+    *,
+    tau: float = 0.0,
+    delta_d: float = 0.0,
+    delta_e: float = 0.0,
 ) -> dict[str, float]:
-    """Sensitivity analysis: ∂R/∂D = P/E, ∂R/∂E = -PD/E²."""
+    """Sensitivity analysis with worst-case perturbation bound.
+
+    Core partials: ∂R/∂D = P/E, ∂R/∂E = -PD/E².
+
+    When ``tau`` > 0, computes margin-to-cap and ``should_demote`` (glass
+    cannon detection).  ``delta_d`` / ``delta_e`` are plausible perturbation
+    magnitudes for D and E respectively; when non-zero they drive
+    ``r_worst`` via first-order bound: ΔR_worst = |∂R/∂D|·δD + |∂R/∂E|·δE.
+
+    Returns dict with keys:
+        dr_dd, dr_de    — partial derivatives (always computed)
+        risk            — current R_t
+        r_worst         — R + ΔR_worst (0 when no deltas provided)
+        delta_r_worst   — total first-order perturbation magnitude
+        margin          — tau - R (inf when tau not provided)
+        margin_to_cap   — margin / delta_r_worst: how many worst-case
+                          perturbations until cap breach (inf when
+                          delta_r_worst is 0, i.e. no perturbation bounds)
+        should_demote   — True iff R < tau but R_worst >= tau (glass cannon);
+                          always False when tau/deltas are not provided
+    """
     e = max(evidence, EPSILON)
     dr_dd = power / e
     dr_de = -(power * delay) / (e * e)
     r = compute_risk(power, delay, evidence)
+
+    # Normalised sensitivity magnitudes
+    s_d = abs(dr_dd) * max(0.0, delta_d)
+    s_e = abs(dr_de) * max(0.0, delta_e)
+    delta_r_worst = s_d + s_e
+    r_worst = min(r + delta_r_worst, 1e6)  # soft clamp (R is unbounded above)
+
+    # Margin-to-cap (meaningful only when tau > 0)
+    margin = tau - r if tau > 0 else float("inf")
+    margin_to_cap = margin / max(EPSILON, delta_r_worst) if delta_r_worst > 0 else float("inf")
+
+    # Glass cannon: below cap now, but one bounded perturbation away from breach
+    should_demote = (tau > 0) and (r < tau) and (r_worst >= tau)
+
     return {
         "dr_dd": dr_dd,
         "dr_de": dr_de,
         "risk": r,
+        "r_worst": r_worst,
+        "delta_r_worst": delta_r_worst,
+        "margin": margin,
+        "margin_to_cap": margin_to_cap,
+        "should_demote": should_demote,
     }
 
 
@@ -1132,18 +1182,41 @@ class RiskController:
         power: float | None = None,
         delay: float | None = None,
         evidence: float | None = None,
+        *,
+        delta_d: float = 0.0,
+        delta_e: float = 0.0,
     ) -> dict[str, float]:
-        """Get sensitivity analysis at current or specified state."""
+        """Get sensitivity analysis at current or specified state.
+
+        When ``delta_d`` / ``delta_e`` are non-zero the result includes
+        worst-case perturbation bounds and glass-cannon demotion signal.
+        """
         p = power if power is not None else self.current_power
         d = delay if delay is not None else self.current_delay
         e = evidence if evidence is not None else self.current_evidence
-        result = compute_sensitivity(p, d, e)
+        result = compute_sensitivity(
+            p, d, e,
+            tau=self.default_tau,
+            delta_d=delta_d,
+            delta_e=delta_e,
+        )
 
-        # Check glass cannon
-        if abs(result["dr_dd"]) > GLASS_CANNON_DR_DD_THRESHOLD or abs(result["dr_de"]) > GLASS_CANNON_DR_DE_THRESHOLD:
+        # Emit glass cannon event when partials are extreme OR worst-case
+        # perturbation would breach cap (should_demote).
+        is_glass = (
+            result.get("should_demote", False)
+            or abs(result["dr_dd"]) > GLASS_CANNON_DR_DD_THRESHOLD
+            or abs(result["dr_de"]) > GLASS_CANNON_DR_DE_THRESHOLD
+        )
+        if is_glass:
             self._emit(GlassCannonDetectedEvent(
-                dr_dd=result["dr_dd"], dr_de=result["dr_de"],
-                risk=result["risk"], evidence=e,
+                dr_dd=result["dr_dd"],
+                dr_de=result["dr_de"],
+                risk=result["risk"],
+                r_worst=result["r_worst"],
+                margin=result["margin"],
+                margin_to_cap=result["margin_to_cap"],
+                evidence=e,
             ))
 
         return result

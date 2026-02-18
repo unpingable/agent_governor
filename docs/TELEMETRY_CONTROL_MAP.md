@@ -1,6 +1,6 @@
 # Telemetry → Control Surface Map
 
-Audit date: 2026-02-18. Methodology: static analysis (emitter + consumer + window semantics).
+Audit date: 2026-02-18 (updated). Methodology: static analysis (emitter + consumer + window semantics).
 
 ## Executive Summary
 
@@ -8,9 +8,11 @@ Audit date: 2026-02-18. Methodology: static analysis (emitter + consumer + windo
 
 **Consumers**: 5 active control loops, 6 CLI/dashboard display endpoints, 17+ subsystem `status()/stats()` methods.
 
-**Gap**: Most telemetry is emitted but consumed only for display. The routing loop reads `success_rate` but ignores probe outcomes, validator fail rates, and escalation frequency. The lane routing system (`lanes.py`) emits cascade results but nobody reads them back into routing policy.
+**Wired (2.x)**: Regime → risk_class coupling, LLM telemetry → within-lane model selection (autopilot level 2), probe outcome rate → model penalty, cooldown store (keyed failures + compaction), StatusRollup single truth object.
 
-**Window inconsistency**: 3 critical mismatches (regime.py mixes turn-count with 60s hardcoded; research.py decays per undefined period; correlator turn-step has unknown frequency).
+**Remaining gap**: Escalation frequency not aggregated, scar burst rate not fed into routing, BudgetManager spend not coordinated with lane budgets.
+
+**Window semantics**: 3 critical mismatches — ALL FIXED. dt-aware EMA in homeostat.py and routing.py. See "Window Semantics Issues" section.
 
 ---
 
@@ -18,7 +20,7 @@ Audit date: 2026-02-18. Methodology: static analysis (emitter + consumer + windo
 
 ### Category A: Immediate Routing Constraints (Hard Gates)
 
-These signals already feed into control decisions.
+These signals feed into control decisions.
 
 | Signal | Emitted At | Labels | Consumer | Autopilot Use |
 |--------|-----------|--------|----------|---------------|
@@ -28,18 +30,19 @@ These signals already feed into control decisions.
 | Side effects flag | Caller-provided | bool | LaneRouter.route() | **WIRED** — forces Lane 3 |
 | ClaimType complexity | routing.py:160 CLAIM_COMPLEXITY | claim_type → score | ComplexityEstimator, LaneRouter | **WIRED** — drives initial lane |
 | Budget exhaustion | lanes.py:1233 | budget_spent, budget_total | CascadeExecutor | **WIRED** — stops cascade |
+| **Regime → risk_class** | regime.py:436-456, daemon.py | ELASTIC/WARM/DUCTILE/UNSTABLE → standard/elevated/critical | daemon.py `_handle_chat_send()` → LaneRouter.route() | **WIRED** — DUCTILE→elevated, UNSTABLE→critical (commit 00e5243) |
+| **LLM call success/fail** | telemetry.py:948 record_llm_call | model, provider, success, duration_ms, cost_usd | lanes.py `_select_model()` via telemetry query | **WIRED** — per-model success_rate fed into within-lane selection (commit 6d76882) |
+| **Probe instability rate** | semantic_stability.py:2185 record_stability_probe | stiffness, anisotropy, model, mode | lanes.py `_select_model()` penalty | **WIRED** — per-model probe fail rate → selection penalty (commit 049ccf7) |
+| **Cooldown store** | lanes.py CooldownStore | model, lane, validator_failures, timestamp | LaneRouter `_select_model()` | **WIRED** — keyed failures persisted, models with recent failures skipped (commit 00e5243) |
 
 ### Category B: Provider/Model Health (Soft Gates + Scorecard)
 
-These signals exist but are NOT consumed for routing. **Free autopilot fuel.**
+Signals that exist but are NOT yet consumed for routing.
 
 | Signal | Emitted At | Labels | Current Consumer | Autopilot Potential |
 |--------|-----------|--------|-----------------|-------------------|
-| **LLM call success/fail** | telemetry.py:948 record_llm_call | model, provider, success, duration_ms, cost_usd | CLI `telemetry analyze` (display only) | **HIGH** — feed into per-model success_rate for lane selection |
-| **success_rate by model** | routing.py:550 (EMA α=0.1) | model_name, tier | Router.route() tier escalation | **PARTIAL** — used for tier escalation but NOT for within-lane selection in lanes.py |
-| **Probe instability rate** | semantic_stability.py:2185 record_stability_probe | stiffness, anisotropy, model, mode | CLI `conditioning history` (display only) | **HIGH** — per-model probe fail rate → "ban model from Lane 2 for strict-format" |
-| **Fallback chain usage** | lanes.py CascadeResult.escalation_chain | lane_from, lane_to, model, reason | Nowhere (returned to caller, not persisted) | **HIGH** — becomes provider reliability score + negative result store |
-| **Validator fail reasons** | lanes.py CascadeResult.validators_failed | validator_name, lane, model | Nowhere (returned to caller) | **HIGH** — "model X fails schema validator 40% → banned from Lane 2 strict" |
+| **success_rate by model** | routing.py:550 (dt-aware EMA) | model_name, tier | Router.route() tier escalation | **PARTIAL** — used for tier escalation; lane selection reads telemetry directly |
+| **Validator fail reasons** | lanes.py CascadeResult.validators_failed | validator_name, lane, model | CooldownStore (keyed by model+lane) | **PARTIAL** — stored for cooldown, not yet used for per-validator banning |
 | **MCP rate limit / circuit breaker** | mcp_safety.py:127 | client_id, tool, p95_ms | mcp_safety.py get_stats() (monitoring only) | MEDIUM — feed latency into model selection |
 | **Error rate by operation** | telemetry.py:1018 record_error | error_code, context | CLI display | MEDIUM — per-model error rate for cooldown |
 
@@ -47,38 +50,43 @@ These signals exist but are NOT consumed for routing. **Free autopilot fuel.**
 
 | Signal | Emitted At | Labels | Current Consumer | Autopilot Potential |
 |--------|-----------|--------|-----------------|-------------------|
-| **LLM call cost** | telemetry.py:948 | model, cost_usd, input_tokens, output_tokens | telemetry analyze costs (display) | **HIGH** — actual cost vs budget_per_call_usd for level-2 cheapest-within-lane |
+| **LLM call cost** | telemetry.py:948 | model, cost_usd, input_tokens, output_tokens | telemetry analyze costs (display) + lanes.py level-2 within-lane preference | **WIRED** — cheapest-within-lane at autopilot level 2 |
 | **Budget record_usage** | routing.py:855 | cost_usd, input_tokens, output_tokens | BudgetManager internal | PARTIAL — BudgetManager tracks spend but lanes.py doesn't read it |
-| **Cascade budget_spent** | lanes.py CascadeResult | budget_spent_usd, budget_exhausted | Nowhere (returned to caller) | **HIGH** — feed back into per-request budget enforcement |
+| **Cascade budget_spent** | lanes.py CascadeResult | budget_spent_usd, budget_exhausted | CascadeExecutor (stops cascade) | **WIRED** — per-request budget enforcement |
 | **Per-scope budget** | scope.py grants | grant_id, usage_count | scope.py internal | MEDIUM — scope budget → lane budget coordination |
 
 ### Category D: Drift / Regression Detection (Canaries + Rollback)
 
 | Signal | Emitted At | Labels | Current Consumer | Autopilot Potential |
 |--------|-----------|--------|-----------------|-------------------|
-| **Regime transitions** | regime.py:436-456 | ELASTIC/WARM/DUCTILE/UNSTABLE, rejection_rate | regime.py internal (recommendations) | **HIGH** — regime → lane policy (DUCTILE → min Lane 2, UNSTABLE → min Lane 3) |
 | **Correlator K-vector** | correlator_telemetry.py:963 | T, F, A, C, capture regime | Dashboard display, VS Code status bar | MEDIUM — capture detection → freeze lane policy changes |
-| **Escalation frequency** | lanes.py escalation_chain | lane, model, reason | Nowhere | **HIGH** — sudden spike in escalations = model regression canary |
-| **Probe outcome rate shift** | semantic_stability.py (per audit) | stiffness_by_kind, model | CLI history display | **HIGH** — if MITIGATE rate jumps 30% for a model → cooldown |
+| **Escalation frequency** | lanes.py escalation_chain | lane, model, reason | Nowhere (returned to caller) | **HIGH** — sudden spike in escalations = model regression canary |
 | **Scar creation rate** | scars.py:1201 | region, failure_mode | CLI scar list (display) | MEDIUM — scar burst → routing avoidance |
 | **Convergence metrics** | convergence_tuning.py:1252 | success_rate, violation_rate_delta | Admissibility check (convergence proposals only) | MEDIUM — convergence failure rate → probe policy tightening |
 
 ---
 
-## "Emitted but Not Consumed" — The Shelfware List
+## "Emitted but Not Consumed" — Remaining Shelfware
 
-These are signals we already emit that nobody reads for control decisions:
+Signals we emit that nobody reads for control decisions:
 
 | Signal | Emit Site | What It Could Do |
 |--------|----------|-----------------|
-| **CascadeResult.escalation_chain** | lanes.py | Persist → compute provider reliability score → negative result store (v3 deferred) |
-| **CascadeResult.validators_failed** | lanes.py | Persist → per-model+validator fail rate → "model X banned from strict-format 6h" |
-| **record_llm_call() success/duration** | telemetry.py:948 | Already logged to JSONL → aggregate per-model latency_p95 → within-lane preference |
-| **record_stability_probe() stiffness** | telemetry.py:1194 | Already logged → per-model stiffness_p90 → probe policy escalation per model |
-| **Regime transition events** | regime.py get_history() | Already persisted → feed regime into lane contracts (DUCTILE → tighten) |
+| **Escalation frequency** | lanes.py escalation_chain | Aggregate → spike detection → model regression canary |
 | **Scar ledger get_summary()** | scars.py:1201 | Already has active_scars count → feed into risk_class estimation |
 | **BudgetManager scope tracking** | routing.py:855 | Already records cost → feed actual spend into per-request total enforcement |
 | **DashboardStore pass_rate** | dashboard_ux.py:667 | Already aggregated → trend detection for regression canary |
+
+Items previously on this list that have been **SHIPPED**:
+
+| Signal | Shipped In | Where |
+|--------|-----------|-------|
+| ~~CascadeResult.escalation_chain~~ | CooldownStore (commit 00e5243) | `lanes.py` CooldownStore persists keyed failures |
+| ~~CascadeResult.validators_failed~~ | CooldownStore (commit 00e5243) | `lanes.py` CooldownStore records validator failures per model+lane |
+| ~~record_llm_call() success/duration~~ | Autopilot level 2 (commit 6d76882) | `lanes.py _select_model()` queries telemetry for candidate models |
+| ~~record_stability_probe() stiffness~~ | Probe penalty (commit 049ccf7) | `lanes.py _select_model()` applies selection penalty |
+| ~~Regime transition events~~ | Regime → risk_class (commit 00e5243) | `daemon.py` maps regime → risk_class for lane routing |
+| ~~StatusRollup (suggestion)~~ | StatusRollup module (commit 5f4f3a4) | `src/governor/status_rollup.py` — frozen dataclass, schema v1 |
 
 ---
 
@@ -92,13 +100,13 @@ These are signals we already emit that nobody reads for control decisions:
 | **research.py** | 192 | ~~`lambda_decay = 0.05` per undefined period~~ | **FIXED**: Added `decay_half_life_s` config (wall-clock half-life). `tick()` computes `dt = monotonic() - last_tick_time` and decays `C(t) = C(t-1) * 2^(-dt/half_life)`. Legacy per-tick mode preserved when `decay_half_life_s=0`. 5 tests. |
 | **correlator_telemetry.py** | 885 | ~~`_window_step` frequency unknown~~ | **FIXED**: Added `window_elapsed_s` to KVector (monotonic dt between observations). Enables time-normalised rate comparison across deployments. 4 tests in TestWindowElapsedTime. |
 
-### High Risk (Likely Apples-to-Oranges)
+### High Risk — FIXED (dt-aware EMA)
 
-| Module | Line | Issue |
-|--------|------|-------|
-| **homeostat.py** | 617 | EMA α=0.3 constant regardless of observation interval. If turns vary 100x, EMA decay is wrong |
-| **routing.py** | 552 | EMA α=0.1 hardcoded. No time-awareness |
-| **dashboard.py** | 54 | Window sizes (30, 60, 12) hardcoded. Duration = frequency × count, but frequency unknown |
+| Module | Line | Issue | Fix |
+|--------|------|-------|-----|
+| **homeostat.py** | 617 | ~~EMA α=0.3 constant regardless of observation interval~~ | **FIXED**: `dt_ema_alpha()` from `control_theory.py` computes time-aware α from `dt` and `half_life_s`. Urgency smoothing now dt-aware. (commit 83ae082) |
+| **routing.py** | 552 | ~~EMA α=0.1 hardcoded. No time-awareness~~ | **FIXED**: Model success rate EMA now uses `dt_ema_alpha()` with configurable half-life. (commit 83ae082) |
+| **dashboard.py** | 54 | Window sizes (30, 60, 12) hardcoded | Low risk — display-only, not used for control decisions. Documenting as accepted. |
 
 ### Well-Defined (No Action Needed)
 
@@ -111,51 +119,27 @@ These are signals we already emit that nobody reads for control decisions:
 
 ---
 
-## Minimal Autopilot Unlocks (No New Sensors Required)
+## Autopilot Unlocks — Status
 
-### 1. Within-Lane Provider Selection (Level 2) — Highest Leverage
+### 1. Within-Lane Provider Selection (Level 2) — SHIPPED
 
-**What exists**: `record_llm_call()` logs model, success, duration_ms, cost_usd to JSONL.
-**What's missing**: Nobody reads it back for lane selection.
-**Wire**: In `LaneRouter._select_model()`, query last N `LLM_CALL` events for candidate models. Exclude models below quality floor (success_rate < 0.7). Among remaining, prefer cheaper/faster.
+`lanes.py _select_model()` queries last N `LLM_CALL` events for candidate models. Models below quality floor excluded; among remaining, prefers cheaper/faster. Commit 6d76882.
 
-```
-Effort: ~50 lines in lanes.py + telemetry query helper
-Impact: Autopilot Level 2 becomes meaningful (currently just sorts by cost_input)
-```
+### 2. Cooldown / Negative Result Store — SHIPPED
 
-### 2. Cooldown / Negative Result Store — Second Highest
+`lanes.py CooldownStore` persists `(model, lane, validator_failures, timestamp)` tuples with thread-safe locking and configurable compaction. On next route, models with recent failures for that lane are skipped. Commit 00e5243.
 
-**What exists**: `CascadeResult.validators_failed` and `escalation_chain` are returned but never persisted.
-**What's missing**: No persistence → no memory of "model X fails at Lane 2".
-**Wire**: After each cascade, persist `(model, lane, validator_failures, timestamp)` tuples. On next route, skip models with recent failures for that lane.
+### 3. Regime → Lane Policy Coupling — SHIPPED
 
-```
-Effort: ~80 lines (small JSONL store + lookup in _select_model)
-Impact: "provider X + contract Y fails validators → don't pick for N minutes"
-```
+`daemon.py _handle_chat_send()` reads regime status when `use_lanes=True` and maps DUCTILE→elevated, UNSTABLE→critical. Passed as `risk_class` to `LaneRouter.route()`. Commit 00e5243.
 
-### 3. Regime → Lane Policy Coupling — Third
+### 4. Probe Outcome Rate → Model Cooldown — SHIPPED
 
-**What exists**: `RegimeDetector.classify()` produces ELASTIC/WARM/DUCTILE/UNSTABLE. `LaneRouter.route()` accepts `risk_class`.
-**What's missing**: No bridge. Regime classification is never fed into lane routing.
-**Wire**: In daemon.py `_handle_chat_send()`, when `use_lanes=True`, read `regime.status()` and map: DUCTILE→elevated, UNSTABLE→critical. Pass as `risk_class` to `LaneRouter.route()`.
+After probe MITIGATE/BLOCK, per-model penalty is applied in `_select_model()`. Models with high MITIGATE rate are deprioritized in lane selection. Commit 049ccf7.
 
-```
-Effort: ~15 lines in daemon.py
-Impact: System auto-tightens routing when operational health degrades
-```
+### 5. StatusRollup — SHIPPED
 
-### 4. Probe Outcome Rate → Model Cooldown — Fourth
-
-**What exists**: `record_stability_probe()` logs stiffness, recommendation per model. `CascadeResult` includes `probe_decision`.
-**What's missing**: No aggregation of probe failure rate per model.
-**Wire**: After probe MITIGATE/BLOCK, increment per-model counter. If model's MITIGATE rate exceeds threshold (e.g. 30% over last 20 calls), mark as "probed-unreliable" and prefer alternatives in `_select_model()`.
-
-```
-Effort: ~60 lines (counter + threshold check)
-Impact: Automatically routes away from models that are unstable under perturbation
-```
+`src/governor/status_rollup.py`: frozen `StatusRollup` dataclass (schema v1), `build_status_rollup()` builder, dumb `render_text()` / `render_json()` formatters. Single truth object for CLI, WebUI, and VS Code. `governor status` defaults to one-pager dashboard. Commit 5f4f3a4.
 
 ---
 
@@ -163,16 +147,14 @@ Impact: Automatically routes away from models that are unstable under perturbati
 
 | Current Name | Location | Issue | Fix |
 |-------------|----------|-------|-----|
-| ~~`contradiction_density`~~ | viewmodel.py | ~~Sources from `contradiction_open_rate` — that's a rate, not density~~ | FIXED — renamed to `contradiction_open_rate` |
+| ~~`contradiction_density`~~ | viewmodel.py | ~~Sources from `contradiction_open_rate` — that's a rate, not density~~ | **FIXED** — renamed to `contradiction_open_rate` (commit 83ae082) |
 | `status()` vs `stats()` vs `get_summary()` | 17+ modules | Inconsistent vocabulary | Document: `status()` = state snapshot, `stats()` = counters/rates, `get_summary()` = human rollup |
 
 ---
 
-## Next Steps (Priority Order)
+## Remaining Work (Priority Order)
 
-1. **Wire regime → risk_class** (15 lines, highest ROI)
-2. **Persist cascade outcomes** for cooldown store (80 lines)
-3. **Read LLM_CALL telemetry** back into model selection (50 lines)
-4. **Fix regime.py window_time** hardcoded 60s (rename/document)
-5. **Add WindowDescriptor** to all window definitions (documentation pass)
-6. Consider `StatusRollup` module (chatty's suggestion) as single truth object for CLI/MCP/WebUI
+1. **Aggregate escalation frequency** for model regression canary (HIGH, ~40 lines)
+2. **Feed scar burst rate** into risk_class estimation (MEDIUM, ~30 lines)
+3. **Coordinate BudgetManager** spend with lane budgets (MEDIUM, ~50 lines)
+4. **Add WindowDescriptor** to all window definitions (documentation pass)

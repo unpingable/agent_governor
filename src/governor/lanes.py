@@ -89,6 +89,28 @@ LANE_TO_TIERS: dict[int, list[str]] = {
     Lane.DEEP: ["heavy"],
 }
 
+# Mapping from OperationalRegime name to risk_class for lane routing.
+# ELASTIC/WARM → standard (nominal), DUCTILE → elevated, UNSTABLE → critical.
+REGIME_TO_RISK_CLASS: dict[str, str] = {
+    "elastic": "standard",
+    "warm": "standard",
+    "ductile": "elevated",
+    "unstable": "critical",
+}
+
+
+def regime_to_risk_class(regime_value: str) -> tuple[str, bool]:
+    """Map an OperationalRegime value to a lane routing risk_class.
+
+    Returns (risk_class, is_known_regime).  Unknown regimes default to
+    "standard" (fail-open availability posture) but the caller MUST log
+    a loud reason so a broken detector doesn't silently masquerade as
+    nominal.
+    """
+    if regime_value in REGIME_TO_RISK_CLASS:
+        return REGIME_TO_RISK_CLASS[regime_value], True
+    return "standard", False
+
 
 # =============================================================================
 # LaneContract
@@ -737,12 +759,14 @@ class LaneRouter:
         artifact_store: ArtifactReuseStore | None = None,
         budget_total_usd: float = 10.0,
         receipt_system: Any | None = None,
+        cooldown_store: CooldownStore | None = None,
     ) -> None:
         self.contracts = contracts or dict(LANE_CONTRACTS)
         self.autopilot_level = autopilot_level
         self.artifact_store = artifact_store
         self.budget_total_usd = budget_total_usd
         self.receipt_system = receipt_system
+        self.cooldown_store = cooldown_store
 
         # Lazily import and build Router if not provided
         if router is not None:
@@ -977,11 +1001,16 @@ class LaneRouter:
         except Exception:
             pass
 
+        cooldown_stats = {}
+        if self.cooldown_store:
+            cooldown_stats = self.cooldown_store.stats()
+
         return {
             "autopilot_level": self.autopilot_level,
             "budget_total_usd": self.budget_total_usd,
             "contracts": contracts_info,
             "artifact_stats": artifact_stats,
+            "cooldown_stats": cooldown_stats,
             "model_registry": registry_summary,
         }
 
@@ -1096,6 +1125,26 @@ class LaneRouter:
             if filtered:
                 candidates = filtered
 
+        # --- cooldown filter (soft: prefer non-cooled, don't block) ---
+        if self.cooldown_store is not None:
+            not_cooled = [
+                (n, c) for n, c in candidates
+                if not self.cooldown_store.is_cooled_down(n, lane)
+            ]
+            if not_cooled:
+                not_cooled_names = {n for n, _ in not_cooled}
+                cooled_names = [n for n, _ in candidates if n not in not_cooled_names]
+                if cooled_names:
+                    reasons.append(
+                        f"cooldown: skipping {cooled_names} at Lane {lane}"
+                    )
+                candidates = not_cooled
+            elif candidates:
+                # All candidates cooled — warn but proceed (availability > safety here)
+                reasons.append(
+                    f"cooldown: ALL candidates cooled at Lane {lane}, proceeding anyway"
+                )
+
         # --- nice_to_have ranking ---
         nice_to_have = set(contract.nice_to_have_strengths)
         if extra_nice_to_have:
@@ -1168,6 +1217,174 @@ MITIGATION_STRATEGIES: dict[str, str] = {
 }
 
 
+# =============================================================================
+# CooldownStore — persisted cascade outcome memory
+# =============================================================================
+
+
+@dataclass
+class CooldownEntry:
+    """One recorded cascade outcome for a (model, lane) pair."""
+
+    model: str
+    lane: int
+    validators_failed: list[str]
+    probe_decision: str | None
+    escalated: bool
+    timestamp: str  # ISO 8601
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "lane": self.lane,
+            "validators_failed": self.validators_failed,
+            "probe_decision": self.probe_decision,
+            "escalated": self.escalated,
+            "timestamp": self.timestamp,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> CooldownEntry:
+        return cls(
+            model=d["model"],
+            lane=d["lane"],
+            validators_failed=d.get("validators_failed", []),
+            probe_decision=d.get("probe_decision"),
+            escalated=d.get("escalated", False),
+            timestamp=d["timestamp"],
+        )
+
+
+class CooldownStore:
+    """Persisted (model, lane) failure memory for routing avoidance.
+
+    JSONL store at .governor/cooldown.jsonl.  The router reads recent
+    entries to skip models with repeated failures for a given lane.
+
+    Entries older than ``window`` seconds are ignored on read (but kept
+    in the file — periodic truncation is the caller's job).
+    """
+
+    DEFAULT_WINDOW_S: float = 3600.0   # 1 hour
+    DEFAULT_THRESHOLD: int = 3          # failures in window → cooldown
+
+    def __init__(
+        self,
+        path: Path | None = None,
+        window_s: float = DEFAULT_WINDOW_S,
+        threshold: int = DEFAULT_THRESHOLD,
+    ) -> None:
+        self._path = path
+        self._window_s = window_s
+        self._threshold = threshold
+        # In-memory index: (model, lane) → list of timestamps
+        self._entries: list[CooldownEntry] = []
+        self._loaded = False
+
+    def _ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        self._loaded = True
+        if self._path is None or not self._path.exists():
+            return
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
+            cutoff_iso = cutoff.isoformat()
+            with open(self._path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        d = json.loads(line)
+                        entry = CooldownEntry.from_dict(d)
+                        # Only load entries within window
+                        if entry.timestamp >= cutoff_iso:
+                            self._entries.append(entry)
+                    except (json.JSONDecodeError, KeyError, TypeError):
+                        continue
+        except OSError:
+            pass
+
+    def record(self, result: CascadeResult) -> None:
+        """Record a cascade outcome.  Only failures are interesting for
+        cooldown, but we record all outcomes so the store can be used
+        for positive signal later (step c).
+        """
+        self._ensure_loaded()
+        entry = CooldownEntry(
+            model=result.model_used,
+            lane=result.lane_used,
+            validators_failed=result.validators_failed,
+            probe_decision=result.probe_decision,
+            escalated=result.escalated,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        self._entries.append(entry)
+        if self._path is not None:
+            try:
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+                with open(self._path, "a") as f:
+                    f.write(json.dumps(entry.to_dict()) + "\n")
+            except OSError:
+                logger.debug("cooldown store append failed", exc_info=True)
+
+    def is_cooled_down(self, model: str, lane: int) -> bool:
+        """Check if a model has exceeded the failure threshold for a lane."""
+        self._ensure_loaded()
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
+        cutoff_iso = cutoff.isoformat()
+        failures = 0
+        for e in self._entries:
+            if (
+                e.model == model
+                and e.lane == lane
+                and e.timestamp >= cutoff_iso
+                and (e.validators_failed or e.probe_decision in ("mitigate", "block", "human_gate") or e.escalated)
+            ):
+                failures += 1
+        return failures >= self._threshold
+
+    def recent_failures(self, model: str, lane: int) -> int:
+        """Count recent failures for a (model, lane) pair."""
+        self._ensure_loaded()
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
+        cutoff_iso = cutoff.isoformat()
+        count = 0
+        for e in self._entries:
+            if (
+                e.model == model
+                and e.lane == lane
+                and e.timestamp >= cutoff_iso
+                and (e.validators_failed or e.probe_decision in ("mitigate", "block", "human_gate") or e.escalated)
+            ):
+                count += 1
+        return count
+
+    def stats(self) -> dict[str, Any]:
+        """Summary statistics."""
+        self._ensure_loaded()
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
+        cutoff_iso = cutoff.isoformat()
+        total = len(self._entries)
+        in_window = sum(1 for e in self._entries if e.timestamp >= cutoff_iso)
+        cooled = set()
+        for e in self._entries:
+            if e.timestamp >= cutoff_iso:
+                key = (e.model, e.lane)
+                if self.is_cooled_down(e.model, e.lane):
+                    cooled.add(key)
+        return {
+            "total_entries": total,
+            "in_window": in_window,
+            "window_s": self._window_s,
+            "threshold": self._threshold,
+            "models_cooled_down": [
+                {"model": m, "lane": l} for m, l in sorted(cooled)
+            ],
+        }
+
+
 class CascadeExecutor:
     """Executes a RoutePlan with cascade escalation.
 
@@ -1194,11 +1411,13 @@ class CascadeExecutor:
         artifact_store: ArtifactReuseStore | None = None,
         receipt_system: Any | None = None,
         probe_fn: Callable[[str, str], Any] | None = None,
+        cooldown_store: CooldownStore | None = None,
     ) -> None:
         self.lane_router = lane_router
         self.artifact_store = artifact_store or lane_router.artifact_store
         self.receipt_system = receipt_system
         self.probe_fn = probe_fn
+        self.cooldown_store = cooldown_store
 
     def _emit_reuse_receipt(
         self,
@@ -1237,6 +1456,19 @@ class CascadeExecutor:
         except Exception:
             logger.debug("artifact_reuse receipt emission failed", exc_info=True)
             return None
+
+    def _record_cooldown(self, result: CascadeResult) -> CascadeResult:
+        """Persist cascade outcome to cooldown store (if configured).
+
+        Called for every non-artifact-hit result so that repeated failures
+        steer future routing.  Returns the result unchanged (pass-through).
+        """
+        if self.cooldown_store is not None and not result.artifact_hit:
+            try:
+                self.cooldown_store.record(result)
+            except Exception:
+                logger.debug("cooldown store record failed", exc_info=True)
+        return result
 
     def execute(
         self,
@@ -1308,7 +1540,7 @@ class CascadeExecutor:
 
             # --- Budget check before each step ---
             if budget_spent >= plan.budget_total_usd:
-                return CascadeResult(
+                return self._record_cooldown(CascadeResult(
                     output=current_output or "",
                     lane_used=current_lane,
                     model_used=current_model,
@@ -1322,7 +1554,7 @@ class CascadeExecutor:
                     budget_exhausted=True,
                     validators_passed=validators_passed,
                     validators_failed=validators_failed,
-                )
+                ))
 
             # --- Per-call budget cap ---
             contract = self.lane_router.contracts.get(current_lane)
@@ -1426,7 +1658,7 @@ class CascadeExecutor:
 
                 # --- 8. BLOCK/HUMAN_GATE → return blocked (no escalation) ---
                 elif probe_decision_str in ("block", "human_gate"):
-                    return CascadeResult(
+                    return self._record_cooldown(CascadeResult(
                         output=current_output or "",
                         lane_used=current_lane,
                         model_used=current_model,
@@ -1440,7 +1672,7 @@ class CascadeExecutor:
                         budget_exhausted=False,
                         validators_passed=validators_passed,
                         validators_failed=validators_failed,
-                    )
+                    ))
             else:
                 probe_decision_str = None
 
@@ -1460,7 +1692,7 @@ class CascadeExecutor:
                         probe_decision=probe_decision_str,
                     )
 
-            return CascadeResult(
+            return self._record_cooldown(CascadeResult(
                 output=current_output or "",
                 lane_used=current_lane,
                 model_used=current_model,
@@ -1474,10 +1706,10 @@ class CascadeExecutor:
                 budget_exhausted=False,
                 validators_passed=validators_passed,
                 validators_failed=validators_failed,
-            )
+            ))
 
         # Fell through — can't go past Lane 3
-        return CascadeResult(
+        return self._record_cooldown(CascadeResult(
             output=current_output or "",
             lane_used=min(current_lane, Lane.DEEP),
             model_used=current_model,
@@ -1491,7 +1723,7 @@ class CascadeExecutor:
             budget_exhausted=False,
             validators_passed=validators_passed,
             validators_failed=validators_failed,
-        )
+        ))
 
     def _escalate(
         self,

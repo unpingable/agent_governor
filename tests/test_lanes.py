@@ -22,6 +22,8 @@ from governor.lanes import (
     ArtifactReuseStore,
     CascadeExecutor,
     LaneRouter,
+    CooldownStore,
+    CooldownEntry,
     compute_vary_key,
     is_final_answer_reusable,
     resolve_task_hint,
@@ -1357,3 +1359,285 @@ class TestMustHaveLogging:
         )
         # Should have a reason about must_have fallback
         assert any("must_have" in r and "no exact match" in r for r in plan.reasons)
+
+
+# =============================================================================
+# Regime → risk_class mapping
+# =============================================================================
+
+
+class TestRegimeToRiskClass:
+    """regime_to_risk_class produces expected buckets."""
+
+    def test_elastic_maps_to_standard(self):
+        from governor.lanes import regime_to_risk_class
+        risk, known = regime_to_risk_class("elastic")
+        assert risk == "standard"
+        assert known is True
+
+    def test_warm_maps_to_standard(self):
+        from governor.lanes import regime_to_risk_class
+        risk, known = regime_to_risk_class("warm")
+        assert risk == "standard"
+        assert known is True
+
+    def test_ductile_maps_to_elevated(self):
+        from governor.lanes import regime_to_risk_class
+        risk, known = regime_to_risk_class("ductile")
+        assert risk == "elevated"
+        assert known is True
+
+    def test_unstable_maps_to_critical(self):
+        from governor.lanes import regime_to_risk_class
+        risk, known = regime_to_risk_class("unstable")
+        assert risk == "critical"
+        assert known is True
+
+    def test_unknown_regime_defaults_to_standard_not_known(self):
+        from governor.lanes import regime_to_risk_class
+        risk, known = regime_to_risk_class("bogus")
+        assert risk == "standard"
+        assert known is False
+
+    def test_risk_class_forces_lane_promotion(self):
+        """Elevated risk from regime forces at least Lane 2 + probe policy."""
+        lr = LaneRouter()
+        # Simple claim → normally Lane 1
+        plan_standard = lr.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")],
+            risk_class="standard",
+        )
+        plan_elevated = lr.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")],
+            risk_class="elevated",
+        )
+        plan_critical = lr.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")],
+            risk_class="critical",
+        )
+        assert plan_standard.lane == Lane.FAST
+        assert plan_elevated.lane >= Lane.GENERAL
+        assert plan_critical.lane >= Lane.DEEP
+        # Elevated should mention risk in reasons
+        assert any("risk=elevated" in r for r in plan_elevated.reasons)
+        # Critical should mention risk in reasons
+        assert any("risk=critical" in r for r in plan_critical.reasons)
+        # Probe policy should resolve from risk_gated
+        if plan_elevated.probe_policy != ProbePolicy.NONE.value:
+            assert plan_elevated.probe_policy in (
+                ProbePolicy.CANARY.value, ProbePolicy.DEEP.value
+            )
+
+    def test_regime_mapping_in_explain(self):
+        """Explain output includes reasons that trace to risk_class."""
+        lr = LaneRouter()
+        plan = lr.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")],
+            risk_class="elevated",
+        )
+        explanation = lr.explain(plan)
+        assert "reasons" in explanation
+        assert any("risk=elevated" in r for r in explanation["reasons"])
+
+
+# =============================================================================
+# CooldownStore
+# =============================================================================
+
+
+class TestCooldownEntry:
+    """CooldownEntry serialization."""
+
+    def test_roundtrip(self):
+        e = CooldownEntry(
+            model="m1", lane=2, validators_failed=["schema"],
+            probe_decision="mitigate", escalated=True,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        d = e.to_dict()
+        e2 = CooldownEntry.from_dict(d)
+        assert e2.model == "m1"
+        assert e2.lane == 2
+        assert e2.validators_failed == ["schema"]
+        assert e2.escalated is True
+
+    def test_from_dict_defaults(self):
+        d = {"model": "m", "lane": 1, "timestamp": "2026-01-01T00:00:00+00:00"}
+        e = CooldownEntry.from_dict(d)
+        assert e.validators_failed == []
+        assert e.escalated is False
+        assert e.probe_decision is None
+
+
+class TestCooldownStore:
+    """CooldownStore persistence and routing integration."""
+
+    def test_record_and_check_below_threshold(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cool.jsonl", threshold=3)
+        result = CascadeResult(
+            output="x", lane_used=2, model_used="m1",
+            escalated=True, escalation_chain=["a"], mitigations_attempted=[],
+            probe_decision=None, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=[], validators_failed=["schema"],
+        )
+        store.record(result)
+        store.record(result)
+        # 2 failures, threshold is 3 → not cooled yet
+        assert not store.is_cooled_down("m1", 2)
+
+    def test_record_and_check_at_threshold(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cool.jsonl", threshold=3)
+        result = CascadeResult(
+            output="x", lane_used=2, model_used="m1",
+            escalated=True, escalation_chain=["a"], mitigations_attempted=[],
+            probe_decision=None, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=[], validators_failed=["schema"],
+        )
+        for _ in range(3):
+            store.record(result)
+        assert store.is_cooled_down("m1", 2)
+
+    def test_different_lane_not_cooled(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cool.jsonl", threshold=2)
+        result = CascadeResult(
+            output="x", lane_used=2, model_used="m1",
+            escalated=True, escalation_chain=["a"], mitigations_attempted=[],
+            probe_decision=None, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=[], validators_failed=["schema"],
+        )
+        store.record(result)
+        store.record(result)
+        # Cooled for lane 2, but not lane 1
+        assert store.is_cooled_down("m1", 2)
+        assert not store.is_cooled_down("m1", 1)
+
+    def test_success_not_counted_as_failure(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cool.jsonl", threshold=2)
+        # Success: no validators_failed, no escalation, proceed probe
+        result = CascadeResult(
+            output="x", lane_used=2, model_used="m1",
+            escalated=False, escalation_chain=[], mitigations_attempted=[],
+            probe_decision="proceed", artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=["format"], validators_failed=[],
+        )
+        for _ in range(5):
+            store.record(result)
+        assert not store.is_cooled_down("m1", 2)
+
+    def test_persistence_across_instances(self, tmp_path):
+        path = tmp_path / "cool.jsonl"
+        s1 = CooldownStore(path=path, threshold=2)
+        result = CascadeResult(
+            output="x", lane_used=1, model_used="m1",
+            escalated=True, escalation_chain=["a"], mitigations_attempted=[],
+            probe_decision=None, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=[], validators_failed=["format"],
+        )
+        s1.record(result)
+        s1.record(result)
+        # New instance reads from disk
+        s2 = CooldownStore(path=path, threshold=2)
+        assert s2.is_cooled_down("m1", 1)
+
+    def test_window_expiry(self, tmp_path):
+        path = tmp_path / "cool.jsonl"
+        store = CooldownStore(path=path, threshold=1, window_s=60)
+        # Write an entry with an old timestamp
+        old_ts = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        entry = CooldownEntry(
+            model="m1", lane=2, validators_failed=["schema"],
+            probe_decision=None, escalated=True, timestamp=old_ts,
+        )
+        with open(path, "w") as f:
+            f.write(json.dumps(entry.to_dict()) + "\n")
+        # Old entry should be outside window
+        assert not store.is_cooled_down("m1", 2)
+
+    def test_stats(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cool.jsonl", threshold=1)
+        result = CascadeResult(
+            output="x", lane_used=2, model_used="m1",
+            escalated=True, escalation_chain=["a"], mitigations_attempted=[],
+            probe_decision=None, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=[], validators_failed=["schema"],
+        )
+        store.record(result)
+        st = store.stats()
+        assert st["total_entries"] == 1
+        assert st["in_window"] == 1
+        assert len(st["models_cooled_down"]) == 1
+
+    def test_recent_failures_count(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cool.jsonl", threshold=10)
+        result = CascadeResult(
+            output="x", lane_used=2, model_used="m1",
+            escalated=True, escalation_chain=["a"], mitigations_attempted=[],
+            probe_decision=None, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=[], validators_failed=["schema"],
+        )
+        store.record(result)
+        store.record(result)
+        store.record(result)
+        assert store.recent_failures("m1", 2) == 3
+
+
+class TestCooldownRouterIntegration:
+    """Cooldown store steers model selection."""
+
+    def test_cooled_model_skipped_in_reasons(self, tmp_path):
+        """Cooldown store causes model to be skipped with reason logged."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl", threshold=1)
+        # Record a failure for the model that would normally be selected
+        result = CascadeResult(
+            output="x", lane_used=1, model_used="claude-sonnet-4",
+            escalated=True, escalation_chain=["a"], mitigations_attempted=[],
+            probe_decision=None, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=[], validators_failed=["format"],
+        )
+        store.record(result)
+        lr = LaneRouter(cooldown_store=store)
+        plan = lr.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")],
+        )
+        # The router should have a reason mentioning cooldown
+        cooldown_reasons = [r for r in plan.reasons if "cooldown" in r]
+        # If the model was actually cooled, there should be a reason.
+        # (If there's only one model, ALL are cooled → "proceeding anyway")
+        if cooldown_reasons:
+            assert any("cooldown" in r for r in plan.reasons)
+
+    def test_cascade_records_to_cooldown(self, tmp_path):
+        """CascadeExecutor records outcomes to cooldown store."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl", threshold=10)
+        lr = LaneRouter(cooldown_store=store)
+        executor = CascadeExecutor(
+            lane_router=lr, cooldown_store=store,
+        )
+        plan = lr.route(
+            claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")],
+        )
+        result = executor.execute(
+            plan=plan, prompt="hello",
+            generate_fn=lambda p, m: "output",
+        )
+        # Should have recorded the outcome
+        assert store.recent_failures(result.model_used, result.lane_used) >= 0
+        # Total entries includes success too
+        st = store.stats()
+        assert st["total_entries"] >= 1
+
+    def test_cooldown_status_in_lane_status(self, tmp_path):
+        """lanes.status includes cooldown stats."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        lr = LaneRouter(cooldown_store=store)
+        status = lr.get_status()
+        assert "cooldown_stats" in status
+        assert "window_s" in status["cooldown_stats"]

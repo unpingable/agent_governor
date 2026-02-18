@@ -175,7 +175,7 @@
 | Hook Bypass (test_hook_bypass.py) | 19 |
 | Upgrade Path (test_upgrade_path.py) | 18 |
 | Scale / Performance (test_scale.py) | 12 |
-| Lane Routing | 129 |
+| Lane Routing | 149 |
 | Receipt Kernel (libs/receipt_kernel) | 89 |
 
-**Total: ~11,186 tests** (11,162 unit + 24 integration)
+**Total: ~11,206 tests** (11,182 unit + 24 integration)

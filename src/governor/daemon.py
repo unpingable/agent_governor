@@ -20,6 +20,7 @@ import os
 import shutil
 import signal
 import sys
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -329,6 +330,17 @@ class DaemonState:
         self._lane_router = None
         self._cascade_executor = None
         self._artifact_store = None
+        self._regime_detector = None
+        self._cooldown_store = None
+
+    @property
+    def cooldown_store(self):
+        if self._cooldown_store is None:
+            from .lanes import CooldownStore
+            self._cooldown_store = CooldownStore(
+                path=self.governor_dir / "cooldown.jsonl",
+            )
+        return self._cooldown_store
 
     @property
     def lane_router(self):
@@ -337,6 +349,7 @@ class DaemonState:
             self._lane_router = LaneRouter(
                 artifact_store=self.artifact_store,
                 receipt_system=self.receipt_system,
+                cooldown_store=self.cooldown_store,
             )
         return self._lane_router
 
@@ -356,8 +369,39 @@ class DaemonState:
                 lane_router=self.lane_router,
                 artifact_store=self.artifact_store,
                 receipt_system=self.receipt_system,
+                cooldown_store=self.cooldown_store,
             )
         return self._cascade_executor
+
+    # Max age (seconds) for persisted regime state.  If regime.json is
+    # older than this the detector starts fresh so we don't silently
+    # de-risk lane routing from a stale "elastic."
+    _REGIME_MAX_AGE_S: float = 600.0  # 10 minutes
+
+    @property
+    def regime_detector(self):
+        if self._regime_detector is None:
+            from .regime import RegimeDetector
+            regime_file = self.governor_dir / "regime.json"
+            if regime_file.exists():
+                import json as _json
+                try:
+                    mtime = regime_file.stat().st_mtime
+                    age = time.time() - mtime
+                    if age > self._REGIME_MAX_AGE_S:
+                        logger.info(
+                            "regime.json is %.0fs old (max %ds), starting fresh",
+                            age, self._REGIME_MAX_AGE_S,
+                        )
+                        self._regime_detector = RegimeDetector()
+                    else:
+                        data = _json.loads(regime_file.read_text())
+                        self._regime_detector = RegimeDetector.from_dict(data)
+                except Exception:
+                    self._regime_detector = RegimeDetector()
+            else:
+                self._regime_detector = RegimeDetector()
+        return self._regime_detector
 
     @property
     def session_store(self):
@@ -986,12 +1030,27 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         use_lanes = params.get("use_lanes", False)
         if use_lanes:
             try:
-                from .lanes import CascadeResult
+                from .lanes import CascadeResult, regime_to_risk_class
                 lr = state.lane_router
                 last_content = messages_raw[-1].get("content", "")
+
+                # Derive risk_class from regime if not explicitly provided.
+                explicit_risk = params.get("risk_class")
+                if explicit_risk:
+                    risk_class = explicit_risk
+                else:
+                    regime_val = state.regime_detector.current_regime.value
+                    risk_class, known = regime_to_risk_class(regime_val)
+                    if not known:
+                        logger.warning(
+                            "Unknown regime %r → fail-open standard; "
+                            "regime detector may be broken",
+                            regime_val,
+                        )
+
                 plan = lr.route(
                     task_hint=params.get("task_hint"),
-                    risk_class=params.get("risk_class", "standard"),
+                    risk_class=risk_class,
                     has_side_effects=params.get("has_side_effects", False),
                     format_strict=params.get("format_strict", False),
                     context_heavy=params.get("context_heavy", False),
@@ -1031,6 +1090,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "lane": cascade_result.lane_used,
                     "escalated": cascade_result.escalated,
                     "artifact_hit": cascade_result.artifact_hit,
+                    "risk_class": risk_class,
                 }
             except Exception as e:
                 logger.warning("Lane routing failed, falling back: %s", e)

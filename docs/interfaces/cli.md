@@ -94,13 +94,18 @@ governor apply <proposal-id>
 ### Query State
 
 ```bash
-# Show proposal statuses
+# Operator dashboard (one-pager: regime, scars, scope, lanes, violations, receipts)
 governor status
+governor status --json             # Machine-readable dashboard
 
-# List recorded facts
+# Proposal list (old default, now opt-in)
+governor status --proposals
+
+# Claim health weather report
+governor status --claims
+
+# List recorded facts / decisions
 governor facts
-
-# List recorded decisions
 governor decisions
 
 # Aggregated state (JSON)
@@ -119,7 +124,10 @@ governor state --json --schema v2  # Canonical ViewModel
 | `governor propose --claim <claim>` | Create proposal with typed claim |
 | `governor verify <id>` | Verify proposal, produce receipts |
 | `governor apply <id>` | Apply verified proposal |
-| `governor status` | Show proposal statuses |
+| `governor status` | Operator dashboard (one-pager) |
+| `governor status --proposals` | Show proposal list |
+| `governor status --claims` | Claim health weather report |
+| `governor status --json` | Machine-readable dashboard |
 | `governor rejections` | Show rejection history |
 
 ### Ledgers
@@ -339,7 +347,28 @@ governor continuity anchor upgrade <id> --class invariant
 | `governor telemetry analyze convergence` | Convergence stats |
 | `governor telemetry export` | Export events |
 
-### Dashboard
+### Operator Surface
+
+These read-only commands collapse subsystem state into obvious workflows.
+
+| Command | Description |
+|---------|-------------|
+| `governor status` | One-pager: regime, scars, scope, lanes, violations, receipts |
+| `governor status --json` | Machine-readable dashboard (StatusRollup schema v1) |
+| `governor doctor` | Walk subsystems, report non-nominal, suggest next commands |
+| `governor doctor --json` | Machine-readable checks + counts |
+| `governor doctor --strict` | Exit 1 on warnings (not just errors) |
+| `governor explain <CODE>` | Diagnostic code → plain English (e.g. `DUCTILE`, `CAPTURE`) |
+| `governor explain --list` | List all diagnostic codes |
+| `governor trace` | Unified timeline of receipts, scars, scope, violations |
+| `governor trace --last 20` | Limit to N events |
+| `governor trace --source receipt` | Filter by source |
+| `governor lanes status` | Lane contracts, autopilot level, budgets, artifacts |
+| `governor lanes route "task"` | Route a task, show RoutePlan |
+| `governor lanes explain` | Explain last route decision |
+| `governor lanes artifacts` | Artifact reuse store stats |
+
+### Dashboard (Rich TUI)
 
 | Command | Description |
 |---------|-------------|
@@ -535,16 +564,18 @@ governor hook pre-commit --interactive --mode code
 
 ### JSON Output for Scripting
 
-Most commands support `--json`:
+Most commands support `--json` for machine consumers:
 
 ```bash
-governor status --json
+governor status --json              # StatusRollup (dashboard)
+governor status --proposals --json  # Proposal list
+governor doctor --json              # Subsystem health checks
+governor trace --json               # Unified event timeline
 governor facts --json
 governor decisions --json
-governor state --json
-governor continuity anchor list --json
+governor state --json               # Canonical ViewModel
 governor regime status --json
-governor boil status --json
+governor lanes status --json
 ```
 
 ### Piping and Stdin

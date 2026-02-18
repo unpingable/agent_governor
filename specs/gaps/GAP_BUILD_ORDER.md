@@ -2,9 +2,12 @@
 
 Sequencing based on dependency analysis. Each phase has exit criteria.
 
-## v2.x — Observe, Measure, Warn
+## v2.4 — Instrumentation Spine (Observe, Measure, Warn)
 
-### v2.1 — Instrumentation Spine
+None of this shipped in 2.0–2.3. The entire instrumentation spine is parked for v2.4.
+See `docs/V2_STATUS.md` for the 2.x boundary.
+
+### Phase A — Instrumentation Spine
 
 | Order | Spec | Why First |
 |-------|------|-----------|
@@ -14,7 +17,7 @@ Sequencing based on dependency analysis. Each phase has exit criteria.
 
 **Exit criteria:** You can tell (a) governor ran, (b) what it touched, (c) how often it endorsed then invalidated.
 
-### v2.2 — Reflexive Health (Warn-Only)
+### Phase B — Reflexive Health (Warn-Only)
 
 | Order | Spec | Depends On |
 |-------|------|------------|
@@ -24,7 +27,7 @@ Sequencing based on dependency analysis. Each phase has exit criteria.
 
 **Exit criteria:** Advisory warning fires on synthetic declining-rate scenarios. No gating.
 
-### v2.3 — Make It Measurable
+### Phase C — Make It Measurable
 
 | Order | Spec | Depends On |
 |-------|------|------------|
@@ -35,7 +38,7 @@ Calibration v0 = each signal → bounded [0,1], explicit saturation, versioned p
 
 **Exit criteria:** You can sweep thresholds and see the effect on "would have warned" over stored runs.
 
-### v2.4 — Preflight as Lint
+### Phase D — Preflight as Lint
 
 | Order | Spec | Depends On |
 |-------|------|------------|
@@ -373,13 +376,13 @@ All specs honor the invariants in `GAP_INVARIANTS.md`:
 ## Files
 
 ```
-specs/gaps/SILENT_SUPPRESSION_GAP.md        # v2.1
-specs/gaps/EXPOSURE_PROXY_GAP.md            # v2.1
-specs/gaps/SIGMA_RATE_GAP.md                # v2.1
-specs/gaps/CAPTURE_SELF_DIAGNOSTIC_GAP.md   # v2.2
-specs/gaps/REPLAY_HARNESS_GAP.md            # v2.3
-specs/gaps/CALIBRATION_LAYER_GAP.md         # v2.3
-specs/gaps/PREDICT_REGIME_PREFLIGHT_GAP.md  # v2.4
+specs/gaps/SILENT_SUPPRESSION_GAP.md        # v2.4 Phase A
+specs/gaps/EXPOSURE_PROXY_GAP.md            # v2.4 Phase A
+specs/gaps/SIGMA_RATE_GAP.md                # v2.4 Phase A
+specs/gaps/CAPTURE_SELF_DIAGNOSTIC_GAP.md   # v2.4 Phase B
+specs/gaps/REPLAY_HARNESS_GAP.md            # v2.4 Phase C
+specs/gaps/CALIBRATION_LAYER_GAP.md         # v2.4 Phase C
+specs/gaps/PREDICT_REGIME_PREFLIGHT_GAP.md  # v2.4 Phase D
 specs/gaps/CROSS_DOMAIN_SCHEMA_GAP.md       # v3.0
 specs/gaps/PAAS_SHARDING_GAP.md             # v3.0
 specs/gaps/KAPPA_DIAL_GAP.md                # v3.1

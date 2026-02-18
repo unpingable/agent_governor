@@ -1744,3 +1744,237 @@ class TestProbeFailRate:
         store.record(self._make_result("m1", 2, "proceed"))
         rate, _ = store.probe_fail_rate("m1", 2)
         assert abs(rate - 1/3) < 0.01
+
+
+# =============================================================================
+# TestModelScore
+# =============================================================================
+
+
+class TestModelScore:
+    """Composite quality score for within-lane model selection."""
+
+    def _make_result(self, model, lane, probe_decision=None, escalated=False,
+                     validators_failed=None):
+        return CascadeResult(
+            output="x", lane_used=lane, model_used=model,
+            escalated=escalated, escalation_chain=[], mitigations_attempted=[],
+            probe_decision=probe_decision, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=["format"],
+            validators_failed=validators_failed or [],
+        )
+
+    def test_insufficient_data_returns_neutral(self, tmp_path):
+        """Below min samples → score=0.5 (neutral)."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        score, breakdown = store.model_score("m1", 2)
+        assert score == 0.5
+        assert breakdown["note"] == "insufficient_data"
+
+    def test_insufficient_data_with_some_entries(self, tmp_path):
+        """Even with 1-2 entries, still insufficient → 0.5."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        store.record(self._make_result("m1", 2, "proceed"))
+        store.record(self._make_result("m1", 2, "proceed"))
+        score, breakdown = store.model_score("m1", 2)
+        assert score == 0.5
+        assert breakdown["total"] == 2
+
+    def test_perfect_model(self, tmp_path):
+        """All successes, no probe failures, no escalations → score=1.0."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        for _ in range(5):
+            store.record(self._make_result("m1", 2, "proceed"))
+        score, breakdown = store.model_score("m1", 2)
+        assert score == 1.0
+        assert breakdown["success_rate"] == 1.0
+        assert breakdown["probe_reliability"] == 1.0
+        assert breakdown["escalation_rate"] == 0.0
+
+    def test_all_failures(self, tmp_path):
+        """All failures, all probe failures, all escalations → low score."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        for _ in range(5):
+            store.record(self._make_result(
+                "m1", 2, "mitigate", escalated=True,
+                validators_failed=["format"],
+            ))
+        score, breakdown = store.model_score("m1", 2)
+        assert score < 0.1  # near zero
+        assert breakdown["success_rate"] == 0.0
+        assert breakdown["probe_reliability"] == 0.0
+        assert breakdown["escalation_rate"] == 1.0
+
+    def test_mixed_results(self, tmp_path):
+        """Mixed outcomes produce intermediate score."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        # 3 successes with proceed, 2 failures with mitigate (1 escalated)
+        for _ in range(3):
+            store.record(self._make_result("m1", 2, "proceed"))
+        store.record(self._make_result("m1", 2, "mitigate", escalated=True,
+                                       validators_failed=["format"]))
+        store.record(self._make_result("m1", 2, "mitigate",
+                                       validators_failed=["schema"]))
+        score, breakdown = store.model_score("m1", 2)
+        # success_rate = 3/5 = 0.6
+        # probe_reliability = 1 - 2/5 = 0.6
+        # escalation_rate = 1/5 = 0.2
+        assert breakdown["success_rate"] == 0.6
+        assert breakdown["probe_reliability"] == 0.6
+        assert breakdown["escalation_rate"] == 0.2
+        expected = 0.50 * 0.6 + 0.30 * 0.6 + 0.20 * 0.8
+        assert abs(score - expected) < 0.01
+
+    def test_no_probe_entries_full_reliability(self, tmp_path):
+        """When probe_decision is always None, probe_reliability defaults to 1.0."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        for _ in range(5):
+            store.record(self._make_result("m1", 1, None))  # no probe
+        score, breakdown = store.model_score("m1", 1)
+        assert breakdown["probe_reliability"] == 1.0
+
+    def test_different_lane_isolated(self, tmp_path):
+        """model_score is per (model, lane)."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        # Lane 2: all failures
+        for _ in range(5):
+            store.record(self._make_result("m1", 2, "mitigate",
+                                           validators_failed=["format"]))
+        # Lane 1: no data
+        score_l1, bd_l1 = store.model_score("m1", 1)
+        score_l2, bd_l2 = store.model_score("m1", 2)
+        assert score_l1 == 0.5  # insufficient
+        assert score_l2 < 0.3  # terrible
+
+    def test_score_clamped_to_0_1(self, tmp_path):
+        """Score is always in [0, 1] regardless of inputs."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        for _ in range(10):
+            store.record(self._make_result("m1", 2, "proceed"))
+        score, _ = store.model_score("m1", 2)
+        assert 0.0 <= score <= 1.0
+
+
+# =============================================================================
+# TestAutopilotLevel2Selection
+# =============================================================================
+
+
+class TestAutopilotLevel2Selection:
+    """Autopilot level 2 uses model_score for within-lane selection."""
+
+    def _make_result(self, model, lane, probe_decision=None, escalated=False,
+                     validators_failed=None):
+        return CascadeResult(
+            output="x", lane_used=lane, model_used=model,
+            escalated=escalated, escalation_chain=[], mitigations_attempted=[],
+            probe_decision=probe_decision, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=["format"],
+            validators_failed=validators_failed or [],
+        )
+
+    def _setup_registry(self):
+        """Create a registry with only 2 test models available."""
+        registry = ModelRegistry()
+        # Mark all default models unavailable
+        for name in list(registry._status.keys()):
+            registry.mark_available(name, False)
+        # Register and enable test models
+        registry.register(ModelCapabilities(
+            name="cheap-model", tier=ModelTier.FAST, provider="p",
+            strengths=["speed"], context_window=4096,
+            cost_input=0.001, cost_output=0.002,
+        ))
+        registry.register(ModelCapabilities(
+            name="pricey-model", tier=ModelTier.FAST, provider="p",
+            strengths=["speed"], context_window=4096,
+            cost_input=0.01, cost_output=0.02,
+        ))
+        return registry
+
+    def test_level_2_no_cooldown_store_uses_cost(self):
+        """Level 2 without cooldown store → cheapest model (original behavior)."""
+        registry = self._setup_registry()
+        router = Router(registry=registry)
+        lr = LaneRouter(router=router, autopilot_level=2, cooldown_store=None)
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        # cheap-model should be picked (lower cost)
+        assert plan.model == "cheap-model"
+
+    def test_level_2_prefers_higher_score(self, tmp_path):
+        """Level 2 with cooldown data → prefers model with higher score."""
+        registry = self._setup_registry()
+        router = Router(registry=registry)
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+
+        # cheap-model: all failures (bad score)
+        for _ in range(5):
+            store.record(self._make_result(
+                "cheap-model", 1, "mitigate",
+                validators_failed=["format"],
+            ))
+        # pricey-model: all successes (great score)
+        for _ in range(5):
+            store.record(self._make_result("pricey-model", 1, "proceed"))
+
+        lr = LaneRouter(router=router, autopilot_level=2, cooldown_store=store)
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        # pricey-model should win despite higher cost — quality > cost
+        assert plan.model == "pricey-model"
+
+    def test_level_2_cost_tiebreaker(self, tmp_path):
+        """Equal scores → cheaper model wins (cost as tiebreaker)."""
+        registry = self._setup_registry()
+        router = Router(registry=registry)
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+
+        # Both models: all successes (equal score)
+        for _ in range(5):
+            store.record(self._make_result("cheap-model", 1, "proceed"))
+        for _ in range(5):
+            store.record(self._make_result("pricey-model", 1, "proceed"))
+
+        lr = LaneRouter(router=router, autopilot_level=2, cooldown_store=store)
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        assert plan.model == "cheap-model"
+
+    def test_level_1_does_not_use_score(self, tmp_path):
+        """Level 1 doesn't trigger score-based selection."""
+        registry = self._setup_registry()
+        router = Router(registry=registry)
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+
+        # cheap-model: all failures
+        for _ in range(5):
+            store.record(self._make_result(
+                "cheap-model", 1, "mitigate",
+                validators_failed=["format"],
+            ))
+        # pricey-model: all successes
+        for _ in range(5):
+            store.record(self._make_result("pricey-model", 1, "proceed"))
+
+        lr = LaneRouter(router=router, autopilot_level=1, cooldown_store=store)
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        # Level 1 doesn't do score-based selection — relies on earlier filters
+        # (cooldown + probe_fail_rate may still reorder, but score sort not applied)
+        # The main assertion: level 1 doesn't crash and produces a valid plan
+        assert plan.model in ("cheap-model", "pricey-model")
+
+    def test_score_breakdown_in_reasons(self, tmp_path):
+        """Score breakdown appears in plan.reasons when data is sufficient."""
+        registry = self._setup_registry()
+        router = Router(registry=registry)
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+
+        for _ in range(5):
+            store.record(self._make_result("cheap-model", 1, "proceed"))
+        for _ in range(5):
+            store.record(self._make_result("pricey-model", 1, "proceed"))
+
+        lr = LaneRouter(router=router, autopilot_level=2, cooldown_store=store)
+        plan = lr.route(claims=[Claim(type=ClaimType.FILE_EXISTS, path="a.py")])
+        score_reasons = [r for r in plan.reasons if r.startswith("score(")]
+        assert len(score_reasons) >= 1  # at least one model scored

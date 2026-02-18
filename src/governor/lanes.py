@@ -1184,9 +1184,28 @@ class LaneRouter:
                 reverse=True,
             )
 
-        # Autopilot level 2: pick cheapest within lane
+        # Autopilot level 2: pick best within lane by composite score
         if self.autopilot_level >= 2 and len(candidates) > 1:
-            candidates.sort(key=lambda nc: nc[1].cost_input)
+            if self.cooldown_store is not None:
+                # Score-based: quality > cost. Higher score = better.
+                scores: dict[str, float] = {}
+                for n, _c in candidates:
+                    s, breakdown = self.cooldown_store.model_score(n, lane)
+                    scores[n] = s
+                    if breakdown.get("total", 0) >= CooldownStore._PROBE_MIN_SAMPLES:
+                        reasons.append(
+                            f"score({n})={breakdown['score']} "
+                            f"(success={breakdown['success_rate']}, "
+                            f"probe={breakdown['probe_reliability']}, "
+                            f"esc={breakdown['escalation_rate']})"
+                        )
+                # Sort by (score descending, cost ascending) — quality first, cost as tiebreaker
+                candidates.sort(
+                    key=lambda nc: (-scores.get(nc[0], 0.5), nc[1].cost_input),
+                )
+            else:
+                # No telemetry → cheapest (original behavior)
+                candidates.sort(key=lambda nc: nc[1].cost_input)
 
         best_name, best_caps = candidates[0]
         return best_name, best_caps.provider
@@ -1522,6 +1541,66 @@ class CooldownStore:
         if attempts < self._PROBE_MIN_SAMPLES:
             return 0.0, attempts
         return failures / attempts, attempts
+
+    def model_score(
+        self,
+        model: str,
+        lane: int,
+    ) -> tuple[float, dict[str, Any]]:
+        """Composite quality score for within-lane model selection.
+
+        Score in [0, 1] where 1 is best.  Based on success rate and probe
+        reliability derived from cooldown entries.  Returns (score, breakdown).
+
+        When there's no data (fewer than _PROBE_MIN_SAMPLES attempts), returns
+        (0.5, ...) — neutral, doesn't change ordering.
+        """
+        self._ensure_loaded()
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
+        cutoff_iso = cutoff.isoformat()
+
+        total = 0
+        failures = 0
+        probe_attempts = 0
+        probe_failures = 0
+        escalations = 0
+        for e in self._entries:
+            if e.model != model or e.lane != lane or e.timestamp < cutoff_iso:
+                continue
+            total += 1
+            if e.is_failure:
+                failures += 1
+            if e.escalated:
+                escalations += 1
+            if e.probe_decision is not None:
+                probe_attempts += 1
+                if e.probe_decision in self._PROBE_DECISIONS_BAD:
+                    probe_failures += 1
+
+        if total < self._PROBE_MIN_SAMPLES:
+            return 0.5, {"total": total, "note": "insufficient_data"}
+
+        success_rate = 1.0 - (failures / total)
+        probe_reliability = 1.0 - (probe_failures / probe_attempts) if probe_attempts >= self._PROBE_MIN_SAMPLES else 1.0
+        escalation_rate = escalations / total
+
+        # Weighted composite: success matters most, then probe, then escalation
+        score = (
+            0.50 * success_rate
+            + 0.30 * probe_reliability
+            + 0.20 * (1.0 - escalation_rate)
+        )
+        # Clamp to [0, 1]
+        score = max(0.0, min(1.0, score))
+
+        breakdown = {
+            "total": total,
+            "success_rate": round(success_rate, 3),
+            "probe_reliability": round(probe_reliability, 3),
+            "escalation_rate": round(escalation_rate, 3),
+            "score": round(score, 3),
+        }
+        return score, breakdown
 
     def stats(self) -> dict[str, Any]:
         """Summary statistics."""

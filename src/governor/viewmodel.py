@@ -51,7 +51,7 @@ class RegimeView:
 
     name: str  # ELASTIC, WARM, DUCTILE, UNSTABLE
     setpoints: dict[str, float]
-    telemetry: dict[str, float]  # rejection_rate, contradiction_density, claim_churn
+    telemetry: dict[str, float]  # rejection_rate, contradiction_open_rate, claim_churn
     boil_mode: str | None
     transitions: list[dict[str, Any]]
 
@@ -215,7 +215,7 @@ class StabilityView:
 
     rejection_rate: float
     claim_churn: float
-    contradiction_density: float
+    contradiction_open_rate: float
     drift_alert: str  # NONE, WATCH, WARN, QUARANTINE
     drift_signals: dict[str, float]
 
@@ -223,7 +223,7 @@ class StabilityView:
         return {
             "rejection_rate": self.rejection_rate,
             "claim_churn": self.claim_churn,
-            "contradiction_density": self.contradiction_density,
+            "contradiction_open_rate": self.contradiction_open_rate,
             "drift_alert": self.drift_alert,
             "drift_signals": self.drift_signals,
         }
@@ -380,7 +380,7 @@ def build_regime(gov_dir: Path) -> RegimeView | None:
         sig = detector.last_signals
         telemetry = {
             "rejection_rate": getattr(sig, "rejection_rate", 0.0),
-            "contradiction_density": getattr(sig, "contradiction_open_rate", 0.0),
+            "contradiction_open_rate": getattr(sig, "contradiction_open_rate", 0.0),
             "claim_churn": getattr(sig, "dangerous_claim_rate", 0.0),
         }
 
@@ -742,7 +742,7 @@ def build_stability(gov_dir: Path) -> StabilityView | None:
     """Build stability view from regime and drift signals."""
     rejection_rate = 0.0
     claim_churn = 0.0
-    contradiction_density = 0.0
+    contradiction_open_rate = 0.0
     drift_alert = "NONE"
     drift_signals: dict[str, float] = {}
 
@@ -756,7 +756,7 @@ def build_stability(gov_dir: Path) -> StabilityView | None:
             if detector.last_signals:
                 sig = detector.last_signals
                 rejection_rate = getattr(sig, "rejection_rate", 0.0)
-                contradiction_density = getattr(sig, "contradiction_open_rate", 0.0)
+                contradiction_open_rate = getattr(sig, "contradiction_open_rate", 0.0)
                 claim_churn = getattr(sig, "dangerous_claim_rate", 0.0)
     except Exception:
         pass
@@ -783,7 +783,7 @@ def build_stability(gov_dir: Path) -> StabilityView | None:
     return StabilityView(
         rejection_rate=rejection_rate,
         claim_churn=claim_churn,
-        contradiction_density=contradiction_density,
+        contradiction_open_rate=contradiction_open_rate,
         drift_alert=drift_alert,
         drift_signals=drift_signals,
     )

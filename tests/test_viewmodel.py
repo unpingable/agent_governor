@@ -203,12 +203,12 @@ class TestStabilityViewShape:
         v = StabilityView(
             rejection_rate=0.1,
             claim_churn=0.2,
-            contradiction_density=0.05,
+            contradiction_open_rate=0.05,
             drift_alert="NONE",
             drift_signals={},
         )
         d = v.to_dict()
-        expected = {"rejection_rate", "claim_churn", "contradiction_density", "drift_alert", "drift_signals"}
+        expected = {"rejection_rate", "claim_churn", "contradiction_open_rate", "drift_alert", "drift_signals"}
         assert set(d.keys()) == expected
 
 

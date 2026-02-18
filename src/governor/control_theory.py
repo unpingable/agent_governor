@@ -265,12 +265,28 @@ class RiskWindow:
     max_size: int = 100
     ema_alpha: float = 0.3
     _ema: float = 0.0
+    # dt-aware EMA: time constant in seconds.  0 = use legacy fixed ema_alpha.
+    # Set to e.g. 2.8 (≈ α=0.30 at 1Hz) to enable dt-aware smoothing.
+    ema_tau_s: float = 0.0
+    # NOT persisted — monotonic timestamps are process-relative.
+    _last_add_time_s: float | None = field(default=None, repr=False)
 
     def add(self, r_t: float) -> None:
         self.values.append(r_t)
         if len(self.values) > self.max_size:
             self.values = self.values[-self.max_size:]
-        self._ema = update_ema(r_t, self._ema, self.ema_alpha)
+        if self.ema_tau_s > 0:
+            import time as _time
+            now_s = _time.monotonic()
+            if self._last_add_time_s is None:
+                alpha = self.ema_alpha  # first call: legacy fixed alpha
+            else:
+                dt = now_s - self._last_add_time_s
+                alpha = dt_ema_alpha(dt, self.ema_tau_s)
+            self._last_add_time_s = now_s
+        else:
+            alpha = self.ema_alpha  # legacy fixed alpha
+        self._ema = update_ema(r_t, self._ema, alpha)
 
     @property
     def ema(self) -> float:
@@ -297,6 +313,7 @@ class RiskWindow:
             "values": list(self.values),
             "max_size": self.max_size,
             "ema_alpha": self.ema_alpha,
+            "ema_tau_s": self.ema_tau_s,
             "ema": self._ema,
         }
 
@@ -306,8 +323,10 @@ class RiskWindow:
             values=data.get("values", []),
             max_size=data.get("max_size", 100),
             ema_alpha=data.get("ema_alpha", 0.3),
+            ema_tau_s=data.get("ema_tau_s", 2.8),
         )
         w._ema = data.get("ema", 0.0)
+        w._last_add_time_s = None  # monotonic timestamps are process-relative
         return w
 
 
@@ -791,6 +810,21 @@ def classify_regime(
 def update_ema(r_t: float, r_bar_prev: float, alpha: float = 0.3) -> float:
     """R̄_t = α*R_t + (1-α)*R̄_{t-1}."""
     return alpha * r_t + (1 - alpha) * r_bar_prev
+
+
+def dt_ema_alpha(dt_s: float, tau_s: float) -> float:
+    """Time-aware EMA smoothing factor: α = 1 - exp(-dt / τ).
+
+    Returns 0.0 when dt <= 0 (no time passed → keep old value).
+    Returns 1.0 when tau <= 0 (infinite responsiveness → take new value).
+    At dt = tau: α ≈ 0.632.  For 1 Hz calls with tau ≈ 2.8s: α ≈ 0.30.
+    """
+    import math
+    if tau_s <= 0:
+        return 1.0
+    if dt_s <= 0:
+        return 0.0
+    return 1.0 - math.exp(-dt_s / tau_s)
 
 
 def compute_sma(values: list[float]) -> float:

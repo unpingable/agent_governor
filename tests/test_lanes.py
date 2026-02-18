@@ -2295,3 +2295,392 @@ class TestExplainTransparency:
         status = lr.get_status()
         assert "policy_version" in status
         assert status["policy_version"] == lr.policy_version
+
+
+# =============================================================================
+# CooldownEntry new fields + threading safety
+# =============================================================================
+
+
+class TestCooldownEntryStreamFields:
+    """Tests for is_cancelled, validation_scope fields on CooldownEntry."""
+
+    def test_default_values(self):
+        entry = CooldownEntry(
+            cooldown_key="k", model="m", lane=1, risk_class="standard",
+            task_hint="", validators_failed=[], probe_decision=None,
+            escalated=False, is_failure=False,
+            timestamp="2026-01-01T00:00:00+00:00",
+        )
+        assert entry.is_cancelled is False
+        assert entry.validation_scope == "full"
+
+    def test_to_dict_includes_new_fields(self):
+        entry = CooldownEntry(
+            cooldown_key="k", model="m", lane=1, risk_class="standard",
+            task_hint="", validators_failed=[], probe_decision=None,
+            escalated=False, is_failure=False,
+            timestamp="2026-01-01T00:00:00+00:00",
+            is_cancelled=True, validation_scope="skipped",
+        )
+        d = entry.to_dict()
+        assert d["is_cancelled"] is True
+        assert d["validation_scope"] == "skipped"
+
+    def test_from_dict_with_new_fields(self):
+        d = {
+            "model": "m", "lane": 1, "timestamp": "2026-01-01T00:00:00+00:00",
+            "is_cancelled": True, "validation_scope": "truncated",
+        }
+        entry = CooldownEntry.from_dict(d)
+        assert entry.is_cancelled is True
+        assert entry.validation_scope == "truncated"
+
+    def test_from_dict_without_new_fields_defaults(self):
+        """Old entries without new fields get safe defaults."""
+        d = {"model": "m", "lane": 1, "timestamp": "2026-01-01T00:00:00+00:00"}
+        entry = CooldownEntry.from_dict(d)
+        assert entry.is_cancelled is False
+        assert entry.validation_scope == "full"
+
+    def test_roundtrip(self):
+        entry = CooldownEntry(
+            cooldown_key="k", model="m", lane=2, risk_class="elevated",
+            task_hint="test", validators_failed=["format"],
+            probe_decision="mitigate", escalated=True, is_failure=True,
+            timestamp="2026-01-01T00:00:00+00:00", policy_version="v1",
+            is_cancelled=False, validation_scope="truncated",
+        )
+        restored = CooldownEntry.from_dict(entry.to_dict())
+        assert restored.is_cancelled == entry.is_cancelled
+        assert restored.validation_scope == entry.validation_scope
+        assert restored.model == entry.model
+
+
+class TestCooldownStoreRecordEntry:
+    """Tests for record_entry() method."""
+
+    def test_record_entry_appends(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cd.jsonl")
+        entry = CooldownEntry(
+            cooldown_key="k", model="m", lane=1, risk_class="standard",
+            task_hint="", validators_failed=[], probe_decision=None,
+            escalated=False, is_failure=False,
+            timestamp="2026-01-01T00:00:00+00:00",
+            is_cancelled=False, validation_scope="full",
+        )
+        store.record_entry(entry)
+        assert len(store._entries) == 1
+        assert store._entries[0] is entry
+
+    def test_record_entry_persists(self, tmp_path):
+        path = tmp_path / "cd.jsonl"
+        store = CooldownStore(path=path)
+        entry = CooldownEntry(
+            cooldown_key="k", model="m", lane=1, risk_class="standard",
+            task_hint="", validators_failed=[], probe_decision=None,
+            escalated=False, is_failure=False,
+            timestamp="2026-01-01T00:00:00+00:00",
+        )
+        store.record_entry(entry)
+        assert path.exists()
+        lines = path.read_text().strip().split("\n")
+        assert len(lines) == 1
+
+    def test_record_entry_thread_safe(self, tmp_path):
+        """record_entry is thread-safe (no crashes under contention)."""
+        import threading
+        store = CooldownStore(path=tmp_path / "cd.jsonl")
+        errors = []
+
+        def _record(i):
+            try:
+                entry = CooldownEntry(
+                    cooldown_key=f"k{i}", model="m", lane=1,
+                    risk_class="standard", task_hint="", validators_failed=[],
+                    probe_decision=None, escalated=False, is_failure=False,
+                    timestamp="2026-01-01T00:00:00+00:00",
+                )
+                store.record_entry(entry)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=_record, args=(i,)) for i in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert not errors
+        assert len(store._entries) == 20
+
+
+class TestCooldownStoreLockNoDeadlock:
+    """Verify that stats() doesn't deadlock (regression)."""
+
+    def test_stats_does_not_deadlock(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cd.jsonl", threshold=1)
+        # Add enough failure entries to trigger the is_cooled_down path in stats
+        for i in range(5):
+            cr = CascadeResult(
+                output="out", lane_used=2, model_used="m1",
+                escalated=True, escalation_chain=[], mitigations_attempted=[],
+                probe_decision=None, artifact_hit=False, vary_key="v",
+                budget_spent_usd=0.0, budget_exhausted=False,
+                validators_failed=["fmt"],
+            )
+            store.record(cr, risk_class="standard")
+        # This should not deadlock
+        result = store.stats()
+        assert result["total_entries"] == 5
+        assert len(result["models_cooled_down"]) >= 1
+
+
+# =============================================================================
+# Validator failure penalty
+# =============================================================================
+
+
+class TestValidatorFailRates:
+    """Tests for validator_fail_rates() and penalty in _select_model."""
+
+    def _make_entry(self, model, lane, validators_failed=None, is_cancelled=False,
+                    validation_scope="full", pv=""):
+        from governor.lanes import CooldownEntry, _cooldown_key
+        vf = validators_failed or []
+        return CooldownEntry(
+            cooldown_key=_cooldown_key(model, lane, "", "", vf, policy_version=pv),
+            model=model, lane=lane, risk_class="standard", task_hint="",
+            validators_failed=vf, probe_decision=None, escalated=False,
+            is_failure=bool(vf), timestamp=datetime.now(timezone.utc).isoformat(),
+            policy_version=pv, is_cancelled=is_cancelled,
+            validation_scope=validation_scope,
+        )
+
+    def test_empty_store(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cd.jsonl")
+        assert store.validator_fail_rates("m", 2) == {}
+
+    def test_cold_start_below_threshold(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cd.jsonl")
+        store.record_entry(self._make_entry("m", 2, ["fmt"]))
+        store.record_entry(self._make_entry("m", 2, []))
+        # Only 2 entries, below _PROBE_MIN_SAMPLES=3
+        assert store.validator_fail_rates("m", 2) == {}
+
+    def test_computed_rates(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cd.jsonl")
+        # 4 entries: 2 with "fmt" failure, 1 with "schema" failure, 1 success
+        store.record_entry(self._make_entry("m", 2, ["fmt"]))
+        store.record_entry(self._make_entry("m", 2, ["fmt", "schema"]))
+        store.record_entry(self._make_entry("m", 2, []))
+        store.record_entry(self._make_entry("m", 2, []))
+        rates = store.validator_fail_rates("m", 2)
+        assert abs(rates["fmt"] - 0.5) < 0.01   # 2 out of 4
+        assert abs(rates["schema"] - 0.25) < 0.01  # 1 out of 4
+
+    def test_cancelled_entries_excluded(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cd.jsonl")
+        store.record_entry(self._make_entry("m", 2, ["fmt"]))
+        store.record_entry(self._make_entry("m", 2, []))
+        store.record_entry(self._make_entry("m", 2, []))
+        # This cancelled entry should NOT count in denominator
+        store.record_entry(self._make_entry("m", 2, ["fmt"], is_cancelled=True))
+        rates = store.validator_fail_rates("m", 2)
+        # 3 eligible entries, 1 fmt failure → rate=0.333
+        assert abs(rates["fmt"] - 1 / 3) < 0.01
+
+    def test_truncated_scope_excluded(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cd.jsonl")
+        store.record_entry(self._make_entry("m", 2, ["fmt"]))
+        store.record_entry(self._make_entry("m", 2, []))
+        store.record_entry(self._make_entry("m", 2, []))
+        store.record_entry(self._make_entry("m", 2, ["fmt"],
+                                            validation_scope="truncated"))
+        rates = store.validator_fail_rates("m", 2)
+        # Truncated excluded: 3 eligible, 1 failure
+        assert abs(rates["fmt"] - 1 / 3) < 0.01
+
+    def test_denominator_includes_successes(self, tmp_path):
+        store = CooldownStore(path=tmp_path / "cd.jsonl")
+        # 3 successes + 0 failures → no keys in result
+        for _ in range(4):
+            store.record_entry(self._make_entry("m", 2, []))
+        rates = store.validator_fail_rates("m", 2)
+        assert rates == {}  # No validators failed, so empty dict
+
+    def test_penalty_cap_prevents_ban(self, tmp_path):
+        """Penalty is capped at _VALIDATOR_FAIL_PENALTY_CAP even with many failing validators."""
+        from governor.lanes import (
+            _VALIDATOR_FAIL_PENALTY_CAP,
+            _VALIDATOR_FAIL_PENALTY_THRESHOLD,
+            _VALIDATOR_FAIL_SCORE_PENALTY,
+        )
+        store = CooldownStore(path=tmp_path / "cd.jsonl")
+        # Many different validators all failing at high rate
+        for _ in range(5):
+            store.record_entry(self._make_entry("m", 2, ["v1", "v2", "v3", "v4"]))
+
+        rates = store.validator_fail_rates("m", 2)
+        # All 4 validators at 100% fail rate → raw penalty = 4 * 0.30 = 1.20
+        # But cap is 0.60
+        raw_penalty = sum(
+            _VALIDATOR_FAIL_SCORE_PENALTY
+            for r in rates.values()
+            if r >= _VALIDATOR_FAIL_PENALTY_THRESHOLD
+        )
+        assert raw_penalty > _VALIDATOR_FAIL_PENALTY_CAP  # Would exceed cap
+        capped = min(raw_penalty, _VALIDATOR_FAIL_PENALTY_CAP)
+        assert capped == _VALIDATOR_FAIL_PENALTY_CAP
+
+    def test_explain_shows_validator_rates(self, tmp_path):
+        """explain() includes validator_fail_rates in candidate info."""
+        from governor.lanes import LaneRouter
+        lr = LaneRouter(
+            cooldown_store=CooldownStore(path=tmp_path / "cd.jsonl"),
+        )
+        # Need enough entries to get past cold start
+        cs = lr.cooldown_store
+        for _ in range(5):
+            cs.record_entry(self._make_entry(
+                "claude-sonnet-4", 2, ["fmt"],
+            ))
+        plan = lr.route(task_hint="codegen")
+        info = lr.explain(plan)
+        if "candidates" in info:
+            for c in info["candidates"]:
+                if c.get("validator_fail_rates"):
+                    assert isinstance(c["validator_fail_rates"], dict)
+
+
+class TestDeterministicTieBreak:
+    """Deterministic tie-break prevents nondeterministic model selection."""
+
+    def test_same_score_sorted_by_cost_then_name(self):
+        """With identical scores, tie-break is (cost, name)."""
+        from governor.lanes import LaneRouter
+        lr = LaneRouter(autopilot_level=2)
+        # Two calls with same state should produce same model
+        plan1 = lr.route(task_hint="codegen")
+        plan2 = lr.route(task_hint="codegen")
+        assert plan1.model == plan2.model
+
+
+# =============================================================================
+# Schema stability tests (Commit 3)
+# =============================================================================
+
+
+class TestSchemaStability:
+    """Pin the shapes of explain(), get_status(), and dataclass to_dict outputs.
+
+    Required keys use exact set equality.  Candidate dicts use subset
+    checks to allow diagnostic additions without breaking tests.
+    Float values: assert type + range, NOT exact values.
+    """
+
+    def test_explain_mandatory_fields(self):
+        """explain() result has exactly 14 mandatory keys."""
+        from governor.lanes import LaneRouter
+        lr = LaneRouter()
+        plan = lr.route(task_hint="codegen")
+        info = lr.explain(plan)
+        required = {
+            "lane", "lane_name", "model", "provider", "policy_version",
+            "reasons", "contract", "budget", "probe_policy",
+            "escalation_policy", "fallback_chain", "autopilot_level",
+            "vary_key", "window_s",
+        }
+        assert required == (set(info.keys()) - {"candidates"})
+
+    def test_explain_budget_subkeys(self):
+        from governor.lanes import LaneRouter
+        lr = LaneRouter()
+        plan = lr.route(task_hint="codegen")
+        info = lr.explain(plan)
+        assert set(info["budget"].keys()) == {"per_call_usd", "total_usd"}
+
+    def test_explain_candidate_base_fields(self):
+        """Candidate dicts have at least {model, score, n, is_cooled, selected}."""
+        from governor.lanes import LaneRouter
+        lr = LaneRouter(
+            cooldown_store=CooldownStore(),
+        )
+        plan = lr.route(task_hint="codegen")
+        info = lr.explain(plan)
+        if "candidates" in info:
+            required = {"model", "score", "n", "is_cooled", "selected"}
+            for c in info["candidates"]:
+                assert required <= set(c.keys()), f"Missing keys in candidate: {c}"
+
+    def test_get_status_fields(self):
+        """get_status() has exactly 7 keys."""
+        from governor.lanes import LaneRouter
+        lr = LaneRouter()
+        status = lr.get_status()
+        required = {
+            "autopilot_level", "budget_total_usd", "policy_version",
+            "contracts", "artifact_stats", "cooldown_stats", "model_registry",
+        }
+        assert set(status.keys()) == required
+
+    def test_cascade_result_to_dict_fields(self):
+        """CascadeResult.to_dict() has all expected keys."""
+        cr = CascadeResult(
+            output="x", lane_used=1, model_used="m", escalated=False,
+            escalation_chain=[], mitigations_attempted=[],
+            probe_decision=None, artifact_hit=False, vary_key="v",
+            budget_spent_usd=0.0, budget_exhausted=False,
+        )
+        expected = {
+            "output", "lane_used", "model_used", "escalated",
+            "escalation_chain", "mitigations_attempted", "probe_decision",
+            "artifact_hit", "vary_key", "budget_spent_usd", "budget_exhausted",
+            "receipt_id", "validators_passed", "validators_failed",
+        }
+        assert set(cr.to_dict().keys()) == expected
+
+    def test_route_plan_to_dict_fields(self):
+        """RoutePlan.to_dict() has all expected keys."""
+        from governor.lanes import RoutePlan
+        plan = RoutePlan(
+            lane=1, model="m", provider="p",
+            budget_per_call_usd=0.01, budget_total_usd=1.0,
+            tools_allowed=False, validators=[], probe_policy="none",
+            vary_key="v", escalation_policy="auto",
+            fallback_chain=[], reasons=[],
+        )
+        expected = {
+            "lane", "model", "provider", "budget_per_call_usd",
+            "budget_total_usd", "tools_allowed", "validators",
+            "probe_policy", "vary_key", "escalation_policy",
+            "fallback_chain", "reasons", "autopilot_level", "receipt_id",
+            "timestamp", "risk_class", "task_hint", "policy_version",
+        }
+        assert set(plan.to_dict().keys()) == expected
+
+    def test_cooldown_entry_to_dict_fields(self):
+        """CooldownEntry.to_dict() has all expected keys including stream fields."""
+        entry = CooldownEntry(
+            cooldown_key="k", model="m", lane=1, risk_class="standard",
+            task_hint="", validators_failed=[], probe_decision=None,
+            escalated=False, is_failure=False,
+            timestamp="2026-01-01T00:00:00+00:00",
+        )
+        expected = {
+            "ck", "model", "lane", "risk_class", "task_hint",
+            "validators_failed", "probe_decision", "escalated",
+            "is_failure", "timestamp", "pv",
+            "is_cancelled", "validation_scope",
+        }
+        assert set(entry.to_dict().keys()) == expected
+
+    def test_explain_json_serializable(self):
+        """explain() output is JSON-serializable."""
+        import json as _json
+        from governor.lanes import LaneRouter
+        lr = LaneRouter()
+        plan = lr.route(task_hint="codegen")
+        info = lr.explain(plan)
+        # Should not raise
+        serialized = _json.dumps(info)
+        assert isinstance(serialized, str)

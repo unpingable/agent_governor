@@ -24,8 +24,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
@@ -242,6 +244,14 @@ _SCORE_WEIGHT_SUCCESS = 0.50
 _SCORE_WEIGHT_PROBE = 0.30
 _SCORE_WEIGHT_ESCALATION = 0.20
 
+# Maximum chars buffered for post-hoc validation (stream path)
+_MAX_VALIDATION_BUFFER = 200_000
+
+# Validator failure penalty constants (change these → new policy_version)
+_VALIDATOR_FAIL_PENALTY_THRESHOLD = 0.30  # rate at which penalty kicks in
+_VALIDATOR_FAIL_SCORE_PENALTY = 0.30      # per-validator penalty
+_VALIDATOR_FAIL_PENALTY_CAP = 0.60        # max total penalty
+
 
 def compute_policy_version(
     contracts: dict[int, LaneContract] | None = None,
@@ -270,6 +280,9 @@ def compute_policy_version(
         "cooldown_window_s": cooldown_window_s,
         "cooldown_threshold": cooldown_threshold,
         "probe_min_samples": probe_min_samples,
+        "validator_fail_penalty_threshold": _VALIDATOR_FAIL_PENALTY_THRESHOLD,
+        "validator_fail_score_penalty": _VALIDATOR_FAIL_SCORE_PENALTY,
+        "validator_fail_penalty_cap": _VALIDATOR_FAIL_PENALTY_CAP,
     }
     return _sha256(_canonical_json(blob))[:16]
 
@@ -1061,6 +1074,13 @@ class LaneRouter:
                             "probe_reliability": breakdown.get("probe_reliability"),
                             "escalation_rate": breakdown.get("escalation_rate"),
                         })
+                        vfr = self.cooldown_store.validator_fail_rates(
+                            name, plan.lane,
+                        )
+                        if vfr:
+                            entry["validator_fail_rates"] = {
+                                k: round(v, 3) for k, v in vfr.items()
+                            }
                     else:
                         entry["note"] = "cold_start"
                     candidates_info.append(entry)
@@ -1287,6 +1307,26 @@ class LaneRouter:
                 reverse=True,
             )
 
+        # --- validator failure penalty (soft score adjustment) ---
+        validator_penalties: dict[str, float] = {}
+        if self.cooldown_store is not None and len(candidates) > 1:
+            for n, _c in candidates:
+                vfr = self.cooldown_store.validator_fail_rates(n, lane)
+                if not vfr:
+                    continue
+                penalty = 0.0
+                for v_name, rate in vfr.items():
+                    if rate >= _VALIDATOR_FAIL_PENALTY_THRESHOLD:
+                        penalty += _VALIDATOR_FAIL_SCORE_PENALTY
+                capped = min(penalty, _VALIDATOR_FAIL_PENALTY_CAP)
+                if capped > 0:
+                    validator_penalties[n] = capped
+                    tag = "(capped)" if penalty > _VALIDATOR_FAIL_PENALTY_CAP else ""
+                    reasons.append(
+                        f"validator_penalty({n})={capped:.2f}{tag} "
+                        f"rates={{{','.join(f'{k}:{v:.0%}' for k, v in vfr.items())}}}"
+                    )
+
         # Autopilot level 2: pick best within lane by composite score
         if self.autopilot_level >= 2 and len(candidates) > 1:
             if self.cooldown_store is not None:
@@ -1302,10 +1342,23 @@ class LaneRouter:
                             f"probe={breakdown['probe_reliability']}, "
                             f"esc={breakdown['escalation_rate']})"
                         )
-                # Sort by (score descending, cost ascending) — quality first, cost as tiebreaker
-                candidates.sort(
-                    key=lambda nc: (-scores.get(nc[0], 0.5), nc[1].cost_input),
-                )
+
+                # Apply validator failure penalty to adjusted scores
+                adjusted: dict[str, float] = {}
+                for n, _c in candidates:
+                    base = scores.get(n, 0.5)
+                    adj = max(0.0, base - validator_penalties.get(n, 0.0))
+                    adjusted[n] = adj
+
+                # Deterministic tie-break:
+                #   (-adjusted_score, -base_score, cost_or_inf, model_id)
+                def _sort_key(nc: tuple[str, Any]) -> tuple[float, float, float, str]:
+                    n, c = nc
+                    cost = c.cost_input
+                    safe_cost = float('inf') if math.isnan(cost) else cost
+                    return (-adjusted.get(n, 0.5), -scores.get(n, 0.5), safe_cost, n)
+
+                candidates.sort(key=_sort_key)
             else:
                 # No telemetry → cheapest (original behavior)
                 candidates.sort(key=lambda nc: nc[1].cost_input)
@@ -1407,6 +1460,8 @@ class CooldownEntry:
     is_failure: bool              # explicit: True only when entry counts toward cooldown
     timestamp: str                # ISO 8601
     policy_version: str = ""      # routing policy hash — entries from different versions are isolated
+    is_cancelled: bool = False    # set in finally on error/cancel (stream path)
+    validation_scope: str = "full"  # "full" | "truncated" | "skipped"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -1421,6 +1476,8 @@ class CooldownEntry:
             "is_failure": self.is_failure,
             "timestamp": self.timestamp,
             "pv": self.policy_version,
+            "is_cancelled": self.is_cancelled,
+            "validation_scope": self.validation_scope,
         }
 
     @classmethod
@@ -1437,6 +1494,8 @@ class CooldownEntry:
             is_failure=d.get("is_failure", False),
             timestamp=d["timestamp"],
             policy_version=d.get("pv", ""),
+            is_cancelled=d.get("is_cancelled", False),
+            validation_scope=d.get("validation_scope", "full"),
         )
 
 
@@ -1481,6 +1540,7 @@ class CooldownStore:
         self._policy_version = policy_version
         self._entries: list[CooldownEntry] = []
         self._loaded = False
+        self._lock = threading.Lock()
 
     def _ensure_loaded(self) -> None:
         if self._loaded:
@@ -1546,6 +1606,15 @@ class CooldownStore:
         """Record a cascade outcome.  Success decays the failure signal;
         explicit failures count toward cooldown threshold.
         """
+        with self._lock:
+            self._record_unlocked(result, risk_class, task_hint)
+
+    def _record_unlocked(
+        self,
+        result: CascadeResult,
+        risk_class: str = "",
+        task_hint: str = "",
+    ) -> None:
         self._ensure_loaded()
         failure = _is_cascade_failure(result)
         ck = _cooldown_key(
@@ -1579,6 +1648,29 @@ class CooldownStore:
             except OSError:
                 logger.debug("cooldown store append failed", exc_info=True)
 
+    def record_entry(self, entry: CooldownEntry) -> None:
+        """Record a pre-built CooldownEntry (e.g. from stream path).
+
+        Thread-safe.  Appends to memory + disk.
+        """
+        with self._lock:
+            self._ensure_loaded()
+            self._entries.append(entry)
+            if self._path is not None:
+                try:
+                    self._path.parent.mkdir(parents=True, exist_ok=True)
+                    fd = os.open(
+                        str(self._path),
+                        os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+                        0o644,
+                    )
+                    try:
+                        os.write(fd, (json.dumps(entry.to_dict()) + "\n").encode())
+                    finally:
+                        os.close(fd)
+                except OSError:
+                    logger.debug("cooldown store append failed", exc_info=True)
+
     def _matches_policy(self, entry: CooldownEntry) -> bool:
         """True if entry belongs to the current policy version.
 
@@ -1603,11 +1695,14 @@ class CooldownStore:
         Checks both the exact scoped key AND a broad (model, lane) key so
         that concentrated failures on one task type still surface.
         """
+        with self._lock:
+            return self._is_cooled_down_unlocked(model, lane)
+
+    def _is_cooled_down_unlocked(self, model: str, lane: int) -> bool:
         self._ensure_loaded()
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
         cutoff_iso = cutoff.isoformat()
 
-        # Broad check: failures for this model+lane regardless of task scope
         broad_failures = 0
         for e in self._entries:
             if (
@@ -1628,20 +1723,21 @@ class CooldownStore:
         task_hint: str = "",
     ) -> int:
         """Count recent failures for a (model, lane) pair."""
-        self._ensure_loaded()
-        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
-        cutoff_iso = cutoff.isoformat()
-        count = 0
-        for e in self._entries:
-            if (
-                e.model == model
-                and e.lane == lane
-                and e.timestamp >= cutoff_iso
-                and e.is_failure
-                and self._matches_policy(e)
-            ):
-                count += 1
-        return count
+        with self._lock:
+            self._ensure_loaded()
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
+            cutoff_iso = cutoff.isoformat()
+            count = 0
+            for e in self._entries:
+                if (
+                    e.model == model
+                    and e.lane == lane
+                    and e.timestamp >= cutoff_iso
+                    and e.is_failure
+                    and self._matches_policy(e)
+                ):
+                    count += 1
+            return count
 
     # --- Probe-specific failure view ---
 
@@ -1661,6 +1757,14 @@ class CooldownStore:
         Returns (rate, attempts).  Rate is 0.0 when attempts < _PROBE_MIN_SAMPLES
         (not enough data to form an opinion).
         """
+        with self._lock:
+            return self._probe_fail_rate_unlocked(model, lane)
+
+    def _probe_fail_rate_unlocked(
+        self,
+        model: str,
+        lane: int,
+    ) -> tuple[float, int]:
         self._ensure_loaded()
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
         cutoff_iso = cutoff.isoformat()
@@ -1696,6 +1800,14 @@ class CooldownStore:
         When there's no data (fewer than _PROBE_MIN_SAMPLES attempts), returns
         (0.5, ...) — neutral, doesn't change ordering.
         """
+        with self._lock:
+            return self._model_score_unlocked(model, lane)
+
+    def _model_score_unlocked(
+        self,
+        model: str,
+        lane: int,
+    ) -> tuple[float, dict[str, Any]]:
         self._ensure_loaded()
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
         cutoff_iso = cutoff.isoformat()
@@ -1745,8 +1857,49 @@ class CooldownStore:
         }
         return score, breakdown
 
+    def validator_fail_rates(
+        self, model: str, lane: int,
+    ) -> dict[str, float]:
+        """Per-validator failure rates for (model, lane) in the current window.
+
+        Returns {validator_name: rate} where rate = failures / eligible_total.
+        Entries with is_cancelled=True or validation_scope != "full" are
+        excluded from the denominator.  Returns {} when total < _PROBE_MIN_SAMPLES.
+        """
+        with self._lock:
+            self._ensure_loaded()
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
+            cutoff_iso = cutoff.isoformat()
+
+            # eligible = not cancelled, fully validated, matching policy
+            eligible_total = 0
+            per_validator: dict[str, int] = {}
+
+            for e in self._entries:
+                if e.model != model or e.lane != lane or e.timestamp < cutoff_iso:
+                    continue
+                if not self._matches_policy(e):
+                    continue
+                if e.is_cancelled or e.validation_scope != "full":
+                    continue
+                eligible_total += 1
+                for v in e.validators_failed:
+                    per_validator[v] = per_validator.get(v, 0) + 1
+
+            if eligible_total < self._PROBE_MIN_SAMPLES:
+                return {}
+
+            return {
+                v: count / eligible_total
+                for v, count in per_validator.items()
+            }
+
     def stats(self) -> dict[str, Any]:
         """Summary statistics."""
+        with self._lock:
+            return self._stats_unlocked()
+
+    def _stats_unlocked(self) -> dict[str, Any]:
         self._ensure_loaded()
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
         cutoff_iso = cutoff.isoformat()
@@ -1760,7 +1913,7 @@ class CooldownStore:
             version_counts[pv] = version_counts.get(pv, 0) + 1
             if e.timestamp >= cutoff_iso and e.is_failure:
                 key = (e.model, e.lane)
-                if key not in cooled and self.is_cooled_down(e.model, e.lane):
+                if key not in cooled and self._is_cooled_down_unlocked(e.model, e.lane):
                     cooled.add(key)
         current_pv = self._policy_version or "(unset)"
         current_count = sum(

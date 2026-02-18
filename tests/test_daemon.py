@@ -2403,3 +2403,301 @@ class TestWireRoundtrip:
         resp_reader.feed_eof()
         roundtripped = await read_message(resp_reader)
         assert roundtripped["result"]["metrics"]["regime"] == "unknown"
+
+
+# =============================================================================
+# Lane routing in chat.stream
+# =============================================================================
+
+
+class TestChatStreamLaneRouting:
+    """Test use_lanes support in chat.stream handler."""
+
+    @pytest.mark.asyncio
+    async def test_stream_with_use_lanes_returns_routing(self, dispatcher_with_chat):
+        """chat.stream with use_lanes=True returns routing metadata."""
+        d, state = dispatcher_with_chat
+        notifications: list[dict] = []
+
+        async def mock_notify(method: str, params: dict) -> None:
+            notifications.append({"method": method, "params": params})
+
+        handler = d._streaming_handlers["chat.stream"]
+        result = await handler({
+            "messages": [{"role": "user", "content": "Hello"}],
+            "use_lanes": True,
+        }, mock_notify)
+
+        assert "routing" in result
+        routing = result["routing"]
+        assert routing["enabled"] is True
+        assert "lane" in routing
+        assert "risk_class" in routing
+        assert "risk_class_source" in routing
+        assert isinstance(routing["lane"], int)
+
+    @pytest.mark.asyncio
+    async def test_stream_without_use_lanes_no_routing(self, dispatcher_with_chat):
+        """chat.stream without use_lanes has no routing key."""
+        d, _ = dispatcher_with_chat
+        notifications: list[dict] = []
+
+        async def mock_notify(method: str, params: dict) -> None:
+            notifications.append({"method": method, "params": params})
+
+        handler = d._streaming_handlers["chat.stream"]
+        result = await handler({
+            "messages": [{"role": "user", "content": "Hello"}],
+        }, mock_notify)
+
+        assert "routing" not in result
+
+    @pytest.mark.asyncio
+    async def test_stream_lanes_fallback_returns_routing_disabled(self, tmp_gov_dir):
+        """When lane routing fails, routing.enabled=false with reason."""
+        state = DaemonState(tmp_gov_dir, mode="general")
+        mock_backend = MockChatBackend("fallback response")
+        from governor.chat_bridge import ChatBridge
+        from governor.context_manager import GovernorContextManager
+        ctx_mgr = GovernorContextManager(tmp_gov_dir)
+        state._chat_bridge = ChatBridge(
+            backend=mock_backend,
+            context_manager=ctx_mgr,
+            show_ok_footer=True,
+        )
+        state._backend_type = "mock"
+        state._context_manager = ctx_mgr
+
+        # Force lane routing to fail by breaking the lane_router
+        state._lane_router = MagicMock()
+        state._lane_router.route.side_effect = RuntimeError("no model registry")
+
+        d = Dispatcher()
+        register_handlers(d, state)
+
+        notifications: list[dict] = []
+
+        async def mock_notify(method: str, params: dict) -> None:
+            notifications.append({"method": method, "params": params})
+
+        handler = d._streaming_handlers["chat.stream"]
+        result = await handler({
+            "messages": [{"role": "user", "content": "Hello"}],
+            "use_lanes": True,
+        }, mock_notify)
+
+        # Should fall through to normal path and include routing disabled
+        assert "routing" in result
+        assert result["routing"]["enabled"] is False
+        assert "reason" in result["routing"]
+        # Content should still come through
+        assert result["content"]
+
+    @pytest.mark.asyncio
+    async def test_send_with_use_lanes_returns_routing(self, dispatcher_with_chat):
+        """chat.send with use_lanes=True returns routing metadata."""
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hi"}],
+            "use_lanes": True,
+        })
+        result = resp["result"]
+        assert "routing" in result
+        assert result["routing"]["enabled"] is True
+        assert "lane" in result["routing"]
+        assert "risk_class" in result["routing"]
+
+    @pytest.mark.asyncio
+    async def test_send_without_use_lanes_no_routing(self, dispatcher_with_chat):
+        """chat.send without use_lanes has no routing key."""
+        d, _ = dispatcher_with_chat
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hi"}],
+        })
+        result = resp["result"]
+        assert "routing" not in result
+
+    @pytest.mark.asyncio
+    async def test_stream_lanes_still_sends_deltas(self, dispatcher_with_chat):
+        """chat.stream with use_lanes still sends chat.delta notifications."""
+        d, _ = dispatcher_with_chat
+        notifications: list[dict] = []
+
+        async def mock_notify(method: str, params: dict) -> None:
+            notifications.append({"method": method, "params": params})
+
+        handler = d._streaming_handlers["chat.stream"]
+        result = await handler({
+            "messages": [{"role": "user", "content": "Hello"}],
+            "use_lanes": True,
+        }, mock_notify)
+
+        # Should have received delta notifications
+        assert len(notifications) > 0
+        for n in notifications:
+            assert n["method"] == "chat.delta"
+
+    @pytest.mark.asyncio
+    async def test_stream_lanes_records_cooldown(self, dispatcher_with_chat):
+        """chat.stream with use_lanes records to cooldown store."""
+        d, state = dispatcher_with_chat
+
+        async def noop_notify(method: str, params: dict) -> None:
+            pass
+
+        handler = d._streaming_handlers["chat.stream"]
+        await handler({
+            "messages": [{"role": "user", "content": "Hello"}],
+            "use_lanes": True,
+        }, noop_notify)
+
+        # Cooldown store should have at least one entry
+        cs = state.cooldown_store
+        cs._ensure_loaded()
+        assert len(cs._entries) >= 1
+        last = cs._entries[-1]
+        assert last.validation_scope in ("full", "truncated", "skipped")
+        assert last.is_cancelled is False
+
+
+class TestLaneRoutingE2E:
+    """End-to-end: regime → risk_class → lane policy through daemon."""
+
+    @pytest.fixture
+    def e2e_state(self, tmp_gov_dir):
+        """DaemonState with mock backend and initialized lane_router."""
+        state = DaemonState(tmp_gov_dir, mode="general")
+        mock_backend = MockChatBackend("E2E governed response")
+        from governor.chat_bridge import ChatBridge
+        from governor.context_manager import GovernorContextManager
+        ctx_mgr = GovernorContextManager(tmp_gov_dir)
+        state._chat_bridge = ChatBridge(
+            backend=mock_backend,
+            context_manager=ctx_mgr,
+            show_ok_footer=True,
+        )
+        state._backend_type = "mock"
+        state._backend_kwargs = {}
+        state._context_manager = ctx_mgr
+        # Force lane_router init so we can rely on defaults
+        _ = state.lane_router
+        return state
+
+    @pytest.fixture
+    def e2e_dispatcher(self, e2e_state):
+        d = Dispatcher()
+        register_handlers(d, e2e_state)
+        return d, e2e_state
+
+    @pytest.mark.asyncio
+    async def test_ductile_maps_to_elevated_lane_ge_2(self, e2e_dispatcher):
+        """DUCTILE regime → elevated risk_class → Lane >= 2 (GENERAL)."""
+        d, state = e2e_dispatcher
+        from governor.regime import OperationalRegime
+        state.regime_detector.current_regime = OperationalRegime.DUCTILE
+
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "refactor auth"}],
+            "use_lanes": True,
+        })
+        result = resp["result"]
+        routing = result["routing"]
+        assert routing["enabled"] is True
+        assert routing["risk_class"] == "elevated"
+        assert routing["risk_class_source"] == "regime:ductile"
+        assert routing["lane"] >= 2
+
+    @pytest.mark.asyncio
+    async def test_unstable_maps_to_critical_lane_ge_3(self, e2e_dispatcher):
+        """UNSTABLE regime → critical risk_class → Lane >= 3 (DEEP)."""
+        d, state = e2e_dispatcher
+        from governor.regime import OperationalRegime
+        state.regime_detector.current_regime = OperationalRegime.UNSTABLE
+
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "deploy to prod"}],
+            "use_lanes": True,
+        })
+        result = resp["result"]
+        routing = result["routing"]
+        assert routing["enabled"] is True
+        assert routing["risk_class"] == "critical"
+        assert routing["risk_class_source"] == "regime:unstable"
+        assert routing["lane"] >= 3
+
+    @pytest.mark.asyncio
+    async def test_elastic_maps_to_standard(self, e2e_dispatcher):
+        """ELASTIC regime → standard risk_class."""
+        d, state = e2e_dispatcher
+        from governor.regime import OperationalRegime
+        state.regime_detector.current_regime = OperationalRegime.ELASTIC
+
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "hello"}],
+            "use_lanes": True,
+        })
+        result = resp["result"]
+        routing = result["routing"]
+        assert routing["enabled"] is True
+        assert routing["risk_class"] == "standard"
+        assert routing["risk_class_source"] == "regime:elastic"
+
+    @pytest.mark.asyncio
+    async def test_explicit_risk_overrides_regime(self, e2e_dispatcher):
+        """Explicit risk_class parameter overrides regime-derived value."""
+        d, state = e2e_dispatcher
+        from governor.regime import OperationalRegime
+        state.regime_detector.current_regime = OperationalRegime.ELASTIC
+
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "critical task"}],
+            "use_lanes": True,
+            "risk_class": "critical",
+        })
+        result = resp["result"]
+        routing = result["routing"]
+        assert routing["enabled"] is True
+        assert routing["risk_class"] == "critical"
+        assert routing["risk_class_source"] == "explicit"
+        assert routing["lane"] >= 3
+
+    @pytest.mark.asyncio
+    async def test_stream_with_lanes_returns_regime_metadata(self, e2e_dispatcher):
+        """chat.stream with use_lanes returns regime-derived routing metadata."""
+        d, state = e2e_dispatcher
+        from governor.regime import OperationalRegime
+        state.regime_detector.current_regime = OperationalRegime.DUCTILE
+
+        notifications: list[dict] = []
+
+        async def mock_notify(method: str, params: dict) -> None:
+            notifications.append({"method": method, "params": params})
+
+        handler = d._streaming_handlers["chat.stream"]
+        result = await handler({
+            "messages": [{"role": "user", "content": "stream test"}],
+            "use_lanes": True,
+        }, mock_notify)
+
+        routing = result["routing"]
+        assert routing["enabled"] is True
+        assert routing["risk_class"] == "elevated"
+        assert routing["lane"] >= 2
+        # Should also have sent delta notifications
+        deltas = [n for n in notifications if n["method"] == "chat.delta"]
+        assert len(deltas) >= 1
+
+    @pytest.mark.asyncio
+    async def test_invalid_risk_class_still_routes(self, e2e_dispatcher):
+        """An unrecognized risk_class doesn't crash — treated as explicit."""
+        d, _ = e2e_dispatcher
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "test"}],
+            "use_lanes": True,
+            "risk_class": "nonsense",
+        })
+        result = resp["result"]
+        routing = result["routing"]
+        assert routing["enabled"] is True
+        assert routing["risk_class"] == "nonsense"
+        assert routing["risk_class_source"] == "explicit"

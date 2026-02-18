@@ -163,7 +163,7 @@ Impact: Automatically routes away from models that are unstable under perturbati
 
 | Current Name | Location | Issue | Fix |
 |-------------|----------|-------|-----|
-| `contradiction_density` | viewmodel.py | Sources from `contradiction_open_rate` — that's a rate, not density | Rename to `contradiction_open_rate` |
+| ~~`contradiction_density`~~ | viewmodel.py | ~~Sources from `contradiction_open_rate` — that's a rate, not density~~ | FIXED — renamed to `contradiction_open_rate` |
 | `status()` vs `stats()` vs `get_summary()` | 17+ modules | Inconsistent vocabulary | Document: `status()` = state snapshot, `stats()` = counters/rates, `get_summary()` = human rollup |
 
 ---

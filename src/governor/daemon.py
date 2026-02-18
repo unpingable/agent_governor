@@ -1090,15 +1090,22 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "violations": [],
                     "footer": None,
                     "pending": None,
-                    "lane": cascade_result.lane_used,
-                    "escalated": cascade_result.escalated,
-                    "artifact_hit": cascade_result.artifact_hit,
-                    "risk_class": risk_class,
-                    "risk_class_source": risk_class_source,
+                    "routing": {
+                        "enabled": True,
+                        "lane": cascade_result.lane_used,
+                        "escalated": cascade_result.escalated,
+                        "artifact_hit": cascade_result.artifact_hit,
+                        "risk_class": risk_class,
+                        "risk_class_source": risk_class_source,
+                    },
                 }
             except Exception as e:
                 logger.warning("Lane routing failed, falling back: %s", e)
-                # Fall through to normal path
+                _send_lanes_fallback_reason = str(e)
+                _send_lanes_fell_through = True
+        else:
+            _send_lanes_fell_through = False
+            _send_lanes_fallback_reason = ""
 
         from .chat_bridge import ChatMessage, ChatResponse, ViolationPendingResponse
 
@@ -1150,7 +1157,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             model=model, principal_id=principal_id,
         )
 
-        return {
+        result = {
             "content": response.content,
             "model": response.model,
             "usage": response.usage,
@@ -1158,6 +1165,12 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "footer": footer,
             "pending": None,
         }
+        if use_lanes and _send_lanes_fell_through:
+            result["routing"] = {
+                "enabled": False,
+                "reason": _send_lanes_fallback_reason,
+            }
+        return result
 
     async def chat_stream(params: dict, notify: NotifyFn) -> dict:
         """Streaming governed chat. Sends chat.delta notifications, then final result."""
@@ -1193,6 +1206,143 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "footer": None,
                     "pending": pending.to_dict(),
                 }
+
+        # --- Optional lane routing (opt-in) ---
+        use_lanes = params.get("use_lanes", False)
+        if use_lanes:
+            try:
+                from .lanes import (
+                    CascadeResult, regime_to_risk_class, _MAX_VALIDATION_BUFFER,
+                )
+                lr = state.lane_router
+                last_content = messages_raw[-1].get("content", "")
+
+                # Derive risk_class from regime if not explicitly provided.
+                explicit_risk = params.get("risk_class")
+                if explicit_risk:
+                    risk_class = explicit_risk
+                    risk_class_source = "explicit"
+                else:
+                    regime_val = state.regime_detector.current_regime.value
+                    risk_class, known = regime_to_risk_class(regime_val)
+                    risk_class_source = f"regime:{regime_val}"
+                    if not known:
+                        logger.warning(
+                            "Unknown regime %r → fail-open standard; "
+                            "regime detector may be broken",
+                            regime_val,
+                        )
+                        risk_class_source = f"regime:{regime_val}(unknown)"
+
+                plan = lr.route(
+                    task_hint=params.get("task_hint"),
+                    risk_class=risk_class,
+                    has_side_effects=params.get("has_side_effects", False),
+                    format_strict=params.get("format_strict", False),
+                    context_heavy=params.get("context_heavy", False),
+                )
+                routed_model = plan.model
+
+                from .chat_bridge import ChatMessage as CM
+                stream_msgs = [
+                    CM(role=m.get("role", "user"), content=m.get("content", ""))
+                    for m in messages_raw
+                ]
+
+                # Stream through routed model, buffer for post-hoc validation
+                accumulated: list[str] = []
+                is_cancelled = False
+                validation_scope = "full"
+                validators_failed: list[str] = []
+                try:
+                    async for chunk in bridge.backend.stream(stream_msgs, routed_model):
+                        if chunk.content:
+                            accumulated.append(chunk.content)
+                            await notify("chat.delta", {"content": chunk.content})
+                        if chunk.finish_reason is not None:
+                            break
+                except Exception:
+                    is_cancelled = True
+                    validation_scope = "skipped"
+
+                full_content = "".join(accumulated)
+                run_id = uuid.uuid4().hex[:12]
+
+                # Post-hoc validator check on buffered content
+                if not is_cancelled:
+                    if len(full_content) > _MAX_VALIDATION_BUFFER:
+                        validation_scope = "truncated"
+                    executor = state.cascade_executor
+                    v_passed, v_failed = executor._run_validators(
+                        plan.validators,
+                        full_content[:_MAX_VALIDATION_BUFFER],
+                    )
+                    validators_failed = v_failed
+
+                # Record to cooldown store (always, including cancel)
+                cooldown_store = state.cooldown_store
+                if cooldown_store is not None:
+                    try:
+                        from .lanes import CooldownEntry, _cooldown_key
+                        ck = _cooldown_key(
+                            routed_model, plan.lane,
+                            risk_class, plan.task_hint, validators_failed,
+                            policy_version=lr.policy_version,
+                        )
+                        is_failure = bool(validators_failed) or is_cancelled
+                        entry = CooldownEntry(
+                            cooldown_key=ck,
+                            model=routed_model,
+                            lane=plan.lane,
+                            risk_class=risk_class,
+                            task_hint=plan.task_hint,
+                            validators_failed=validators_failed,
+                            probe_decision=None,
+                            escalated=False,
+                            is_failure=is_failure,
+                            timestamp=time.strftime(
+                                "%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(),
+                            ),
+                            policy_version=lr.policy_version,
+                            is_cancelled=is_cancelled,
+                            validation_scope=validation_scope,
+                        )
+                        cooldown_store.record_entry(entry)
+                    except Exception:
+                        logger.debug(
+                            "cooldown store stream record failed", exc_info=True,
+                        )
+
+                _emit_chat_receipt(
+                    state, "pass", full_content, run_id,
+                    model=routed_model, principal_id=principal_id,
+                )
+
+                return {
+                    "content": full_content,
+                    "model": routed_model,
+                    "usage": {},
+                    "violations": [],
+                    "footer": None,
+                    "pending": None,
+                    "routing": {
+                        "enabled": True,
+                        "lane": plan.lane,
+                        "risk_class": risk_class,
+                        "risk_class_source": risk_class_source,
+                        "validators_failed": validators_failed,
+                        "validation_scope": validation_scope,
+                        "is_cancelled": is_cancelled,
+                    },
+                }
+            except Exception as e:
+                logger.warning("Lane routing failed in stream, falling back: %s", e)
+                # Fall through to normal path with explicit routing disabled
+                _lanes_fallback_reason = str(e)
+                _lanes_fell_through = True
+        else:
+            _lanes_fell_through = False
+            _lanes_fallback_reason = ""
 
         from .chat_bridge import ChatMessage, ViolationPendingResponse
 
@@ -1249,7 +1399,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             model=model, principal_id=principal_id,
         )
 
-        return {
+        result = {
             "content": full_content,
             "model": model,
             "usage": {},
@@ -1257,6 +1407,13 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "footer": footer,
             "pending": None,
         }
+        # When use_lanes was requested but failed, include routing disabled info
+        if use_lanes and _lanes_fell_through:
+            result["routing"] = {
+                "enabled": False,
+                "reason": _lanes_fallback_reason,
+            }
+        return result
 
     async def chat_models(params: dict) -> dict:
         """List available models from the current backend."""

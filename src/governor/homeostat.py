@@ -631,6 +631,8 @@ class Homeostat:
 
         # EMA smoothing
         self._ema_urgency: float = 0.0
+        self._ema_tau_s: float = 0.0  # 0=legacy fixed alpha; set >0 for dt-aware
+        self._last_observe_time_s: float | None = None  # NOT persisted
 
         # History
         self._history: list[ObservationRecord] = []
@@ -694,11 +696,20 @@ class Homeostat:
         # Compute urgency from setpoints
         urgency = self.setpoints.compute_urgency(vitals)
 
-        # EMA smoothing
-        self._ema_urgency = (
-            self.ema_alpha * urgency
-            + (1.0 - self.ema_alpha) * self._ema_urgency
-        )
+        # EMA smoothing (dt-aware when _ema_tau_s > 0)
+        if self._ema_tau_s > 0:
+            import time as _time
+            from .control_theory import dt_ema_alpha
+            now_s = _time.monotonic()
+            if self._last_observe_time_s is None:
+                alpha = self.ema_alpha
+            else:
+                dt = now_s - self._last_observe_time_s
+                alpha = dt_ema_alpha(dt, self._ema_tau_s)
+            self._last_observe_time_s = now_s
+        else:
+            alpha = self.ema_alpha
+        self._ema_urgency = alpha * urgency + (1.0 - alpha) * self._ema_urgency
 
         # Budget management
         profile = self.get_profile()

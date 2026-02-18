@@ -314,6 +314,7 @@ class ModelStatus:
     last_failure: datetime | None = None
     success_rate: float = 1.0  # Recent success rate
     avg_latency_ms: float = 0.0
+    _last_complete_time_s: float | None = None  # NOT persisted — monotonic
 
 
 class ModelRegistry:
@@ -548,11 +549,21 @@ class ModelRegistry:
         else:
             status.last_failure = now
 
-        # Update rolling success rate (exponential moving average)
-        alpha = 0.1  # Weight for new observation
+        # Update rolling success rate (dt-aware when enough time has passed)
+        import time as _time
+        from .control_theory import dt_ema_alpha
+        _EMA_TAU_S = 10.0  # time constant for routing EMA
+        _LEGACY_ALPHA = 0.1
+        now_s = _time.monotonic()
+        if status._last_complete_time_s is not None:
+            dt = now_s - status._last_complete_time_s
+            alpha = dt_ema_alpha(dt, _EMA_TAU_S) if dt >= 0.01 else _LEGACY_ALPHA
+        else:
+            alpha = _LEGACY_ALPHA
+        status._last_complete_time_s = now_s
         status.success_rate = alpha * (1.0 if success else 0.0) + (1 - alpha) * status.success_rate
 
-        # Update latency (EMA)
+        # Update latency (same alpha for consistency)
         if latency_ms > 0:
             status.avg_latency_ms = alpha * latency_ms + (1 - alpha) * status.avg_latency_ms
 

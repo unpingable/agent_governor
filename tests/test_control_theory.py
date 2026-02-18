@@ -1081,3 +1081,79 @@ class TestEpisodeRiskMetrics:
         m2 = EpisodeRiskMetrics.from_dict(d)
         assert m2.j_additive == m.j_additive
         assert m2.step_count == m.step_count
+
+
+# =============================================================================
+# dt_ema_alpha
+# =============================================================================
+
+
+class TestDtEmaAlpha:
+    """Tests for time-aware EMA smoothing factor."""
+
+    def test_zero_dt(self):
+        from governor.control_theory import dt_ema_alpha
+        assert dt_ema_alpha(0.0, 2.8) == 0.0
+
+    def test_negative_dt(self):
+        from governor.control_theory import dt_ema_alpha
+        assert dt_ema_alpha(-1.0, 2.8) == 0.0
+
+    def test_zero_tau(self):
+        from governor.control_theory import dt_ema_alpha
+        assert dt_ema_alpha(1.0, 0.0) == 1.0
+
+    def test_negative_tau(self):
+        from governor.control_theory import dt_ema_alpha
+        assert dt_ema_alpha(1.0, -1.0) == 1.0
+
+    def test_one_hz_equivalence(self):
+        """At 1Hz with tau=2.8s, alpha ≈ 0.30 (matches legacy default)."""
+        import math
+        from governor.control_theory import dt_ema_alpha
+        alpha = dt_ema_alpha(1.0, 2.8)
+        expected = 1.0 - math.exp(-1.0 / 2.8)
+        assert abs(alpha - expected) < 1e-10
+        assert abs(alpha - 0.30) < 0.02
+
+    def test_dt_equals_tau(self):
+        """At dt=tau, alpha ≈ 0.632."""
+        from governor.control_theory import dt_ema_alpha
+        alpha = dt_ema_alpha(2.8, 2.8)
+        assert abs(alpha - 0.632) < 0.01
+
+
+class TestRiskWindowDtAware:
+    """Tests for dt-aware RiskWindow."""
+
+    def test_legacy_behavior_when_tau_zero(self):
+        """With ema_tau_s=0 (default), uses legacy fixed alpha."""
+        from governor.control_theory import RiskWindow
+        w = RiskWindow(ema_alpha=0.5, ema_tau_s=0.0)
+        w.add(1.0)
+        assert w.ema == 0.5  # 0.5 * 1.0 + 0.5 * 0.0
+        w.add(1.0)
+        assert w.ema == 0.75  # 0.5 * 1.0 + 0.5 * 0.5
+
+    def test_dt_aware_first_call_uses_legacy(self):
+        """First call with ema_tau_s > 0 still uses legacy alpha."""
+        from governor.control_theory import RiskWindow
+        w = RiskWindow(ema_alpha=0.5, ema_tau_s=2.8)
+        w.add(1.0)
+        assert w.ema == 0.5  # first call: legacy alpha
+
+    def test_from_dict_resets_time(self):
+        """from_dict sets _last_add_time_s = None."""
+        from governor.control_theory import RiskWindow
+        w = RiskWindow(ema_tau_s=2.8)
+        w.add(1.0)
+        assert w._last_add_time_s is not None
+        d = w.to_dict()
+        w2 = RiskWindow.from_dict(d)
+        assert w2._last_add_time_s is None
+
+    def test_to_dict_includes_tau(self):
+        from governor.control_theory import RiskWindow
+        w = RiskWindow(ema_tau_s=5.0)
+        d = w.to_dict()
+        assert d["ema_tau_s"] == 5.0

@@ -46,6 +46,10 @@ from governor.semantic_stability import (
     perturb_hedge_insert,
     perturb_negation_probe,
     perturb_role_rewrap,
+    perturb_instruction_relocate,
+    perturb_repeat_trusted,
+    perturb_structured_rewrap,
+    perturb_distractor_insert,
     strip_boilerplate,
     tokenize_normalize,
     _jaccard_divergence,
@@ -99,12 +103,16 @@ def _varying_fn(responses: list[str]):
 
 class TestEnums:
     def test_perturbation_kind_values(self):
-        assert len(PerturbationKind) == 5
+        assert len(PerturbationKind) == 9
 
     def test_perturbation_kind_names(self):
         names = {k.value for k in PerturbationKind}
         assert "format_jitter" in names
         assert "negation_probe" in names
+        assert "instruction_relocate" in names
+        assert "repeat_trusted" in names
+        assert "structured_rewrap" in names
+        assert "distractor_insert" in names
 
     def test_divergence_method_values(self):
         assert len(DivergenceMethod) == 3
@@ -360,6 +368,229 @@ class TestPerturbNegationProbe:
         result, mag = perturb_negation_probe("", seed=42)
         assert result == ""
         assert mag == 0.0
+
+
+# =============================================================================
+# TestPerturbInstructionRelocate
+# =============================================================================
+
+
+class TestPerturbInstructionRelocate:
+    MULTI_BLOCK = "Do the following task.\n\nHere is some context about the problem."
+
+    def test_deterministic_with_seed(self):
+        r1, m1 = perturb_instruction_relocate(self.MULTI_BLOCK, seed=42)
+        r2, m2 = perturb_instruction_relocate(self.MULTI_BLOCK, seed=42)
+        assert r1 == r2
+        assert m1 == m2
+
+    def test_different_seed_can_differ(self):
+        r1, _ = perturb_instruction_relocate(self.MULTI_BLOCK, seed=42)
+        r2, _ = perturb_instruction_relocate(self.MULTI_BLOCK, seed=43)
+        # At least both are strings; they may or may not differ depending on RNG
+        assert isinstance(r1, str) and isinstance(r2, str)
+
+    def test_magnitude_nonnegative(self):
+        _, mag = perturb_instruction_relocate(self.MULTI_BLOCK, seed=42)
+        assert mag >= 0.0
+
+    def test_magnitude_bounded(self):
+        _, mag = perturb_instruction_relocate(self.MULTI_BLOCK, seed=42)
+        assert mag <= 1.0
+
+    def test_single_block_unchanged(self):
+        text = "Just one paragraph with no blank lines."
+        result, mag = perturb_instruction_relocate(text, seed=42)
+        assert result == text
+        assert mag == 0.0
+
+    def test_empty_string(self):
+        result, mag = perturb_instruction_relocate("", seed=42)
+        assert result == ""
+        assert mag == 0.0
+
+    def test_content_preserved(self):
+        """All words from the original appear in the result."""
+        result, _ = perturb_instruction_relocate(self.MULTI_BLOCK, seed=42)
+        orig_words = set(self.MULTI_BLOCK.split())
+        result_words = set(result.split())
+        assert orig_words == result_words
+
+    def test_blocks_actually_swap(self):
+        """For at least one seed, the first line should change."""
+        text = "INSTRUCTION: do X.\n\nCONTEXT: here is Y."
+        swapped = False
+        for seed in range(10):
+            result, _ = perturb_instruction_relocate(text, seed=seed)
+            if not result.startswith("INSTRUCTION"):
+                swapped = True
+                break
+        assert swapped
+
+
+# =============================================================================
+# TestPerturbRepeatTrusted
+# =============================================================================
+
+
+class TestPerturbRepeatTrusted:
+    PROMPT = "Write a function that sorts a list.\n\nHere is some context."
+
+    def test_deterministic_with_seed(self):
+        r1, m1 = perturb_repeat_trusted(self.PROMPT, seed=42)
+        r2, m2 = perturb_repeat_trusted(self.PROMPT, seed=42)
+        assert r1 == r2
+        assert m1 == m2
+
+    def test_instruction_block_appears_twice(self):
+        result, _ = perturb_repeat_trusted(self.PROMPT, seed=42)
+        instruction = "Write a function that sorts a list."
+        assert result.count(instruction) == 2
+
+    def test_context_block_not_repeated(self):
+        result, _ = perturb_repeat_trusted(self.PROMPT, seed=42)
+        assert result.count("Here is some context.") == 1
+
+    def test_magnitude_nonnegative(self):
+        _, mag = perturb_repeat_trusted(self.PROMPT, seed=42)
+        assert mag >= 0.0
+
+    def test_magnitude_bounded(self):
+        _, mag = perturb_repeat_trusted(self.PROMPT, seed=42)
+        assert mag <= 1.0
+
+    def test_single_block_still_repeats(self):
+        text = "Sort the list."
+        result, _ = perturb_repeat_trusted(text, seed=42)
+        assert result.count("Sort the list.") == 2
+
+    def test_empty_string(self):
+        result, mag = perturb_repeat_trusted("", seed=42)
+        assert result == ""
+        assert mag == 0.0
+
+    def test_separator_varies_by_seed(self):
+        """Different seeds may produce different separators."""
+        results = set()
+        for seed in range(20):
+            result, _ = perturb_repeat_trusted(self.PROMPT, seed=seed)
+            results.add(result)
+        # With 3 separator variants, we should see at least 2 distinct outputs
+        assert len(results) >= 2
+
+    def test_original_text_is_prefix(self):
+        """The perturbed text starts with the original text (minus trailing whitespace)."""
+        result, _ = perturb_repeat_trusted(self.PROMPT, seed=42)
+        assert result.startswith(self.PROMPT.rstrip())
+
+
+# =============================================================================
+# TestPerturbStructuredRewrap
+# =============================================================================
+
+
+class TestPerturbStructuredRewrap:
+    PROSE = "Always validate input. Never trust user data. Log all errors."
+
+    def test_deterministic_with_seed(self):
+        r1, m1 = perturb_structured_rewrap(self.PROSE, seed=42)
+        r2, m2 = perturb_structured_rewrap(self.PROSE, seed=42)
+        assert r1 == r2
+        assert m1 == m2
+
+    def test_magnitude_nonnegative(self):
+        _, mag = perturb_structured_rewrap(self.PROSE, seed=42)
+        assert mag >= 0.0
+
+    def test_magnitude_bounded(self):
+        _, mag = perturb_structured_rewrap(self.PROSE, seed=42)
+        assert mag <= 1.0
+
+    def test_produces_structure(self):
+        """At least one seed should produce bullets, numbers, or 'Constraint N:'."""
+        found_structure = False
+        for seed in range(20):
+            result, _ = perturb_structured_rewrap(self.PROSE, seed=seed)
+            if "- " in result or "1. " in result or "Constraint " in result:
+                found_structure = True
+                break
+        assert found_structure
+
+    def test_content_words_preserved(self):
+        """Key content words should survive the rewrap."""
+        result, _ = perturb_structured_rewrap(self.PROSE, seed=42)
+        for word in ["validate", "input", "trust", "errors"]:
+            assert word in result.lower()
+
+    def test_single_sentence_unchanged(self):
+        text = "Just one sentence here."
+        result, _ = perturb_structured_rewrap(text, seed=42)
+        # Single sentence has nothing to restructure
+        assert "sentence" in result
+
+    def test_empty_string(self):
+        result, mag = perturb_structured_rewrap("", seed=42)
+        assert result == ""
+        assert mag == 0.0
+
+    def test_code_blocks_preserved(self):
+        text = "Check input. Log errors.\n```python\nx = 1\n```\nDone."
+        result, _ = perturb_structured_rewrap(text, seed=42)
+        assert "```python\nx = 1\n```" in result
+
+
+# =============================================================================
+# TestPerturbDistractorInsert
+# =============================================================================
+
+
+class TestPerturbDistractorInsert:
+    TASK = "Write a function that validates email addresses."
+
+    def test_deterministic_with_seed(self):
+        r1, m1 = perturb_distractor_insert(self.TASK, seed=42)
+        r2, m2 = perturb_distractor_insert(self.TASK, seed=42)
+        assert r1 == r2
+        assert m1 == m2
+
+    def test_original_task_preserved(self):
+        result, _ = perturb_distractor_insert(self.TASK, seed=42)
+        assert self.TASK in result
+
+    def test_distractor_prepended(self):
+        result, _ = perturb_distractor_insert(self.TASK, seed=42)
+        # Task should not be at the start (distractor is prepended)
+        assert not result.startswith(self.TASK)
+
+    def test_magnitude_nonnegative(self):
+        _, mag = perturb_distractor_insert(self.TASK, seed=42)
+        assert mag >= 0.0
+
+    def test_magnitude_bounded(self):
+        _, mag = perturb_distractor_insert(self.TASK, seed=42)
+        assert mag <= 1.0
+
+    def test_empty_string(self):
+        result, mag = perturb_distractor_insert("", seed=42)
+        assert result == ""
+        assert mag == 0.0
+
+    def test_distractor_varies_by_seed(self):
+        """Different seeds select different distractors."""
+        results = set()
+        for seed in range(20):
+            result, _ = perturb_distractor_insert(self.TASK, seed=seed)
+            results.add(result)
+        # With 6 distractor templates, should see multiple variants
+        assert len(results) >= 3
+
+    def test_distractor_appears_exactly_once(self):
+        """The distractor paragraph should not be duplicated."""
+        result, _ = perturb_distractor_insert(self.TASK, seed=42)
+        # Remove the task to isolate the distractor
+        distractor_part = result.replace(self.TASK, "").strip()
+        # Should be a single coherent paragraph (no double insertion)
+        assert "\n\n" not in distractor_part
 
 
 # =============================================================================
@@ -891,7 +1122,7 @@ class TestStabilityConfig:
     def test_defaults(self):
         config = StabilityConfig()
         assert config.n_perturbations == 8
-        assert len(config.kinds) == 5
+        assert len(config.kinds) == 9
         assert config.divergence_method == "jaccard"
         assert config.max_generate_calls == 20
 
@@ -1713,17 +1944,17 @@ class TestScenarios:
 
     def test_all_perturbation_kinds_exercised(self):
         config = StabilityConfig(
-            n_perturbations=5, noise_floor_samples=2,
+            n_perturbations=9, noise_floor_samples=2,
             max_generate_calls=50, sample_rate=1.0,
         )
         auditor = StabilityAuditor(config)
         result = auditor.audit(
-            "You are a coder. Write Python.",
+            "You are a coder. Write Python.\n\nHere is some context about the task.",
             "Output text.",
             _echo_fn,
         )
         kinds_used = set(result.perturbation_kinds)
-        assert len(kinds_used) == 5
+        assert len(kinds_used) == 9
 
     def test_noise_floor_in_fingerprint(self):
         config = StabilityConfig(

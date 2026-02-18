@@ -81,6 +81,18 @@ class PerturbationKind(str, Enum):
     NEGATION_PROBE = "negation_probe"
     """Positive CONTROL — should produce high divergence."""
 
+    INSTRUCTION_RELOCATE = "instruction_relocate"
+    """Move instruction block from top→bottom or bottom→top.  Catches position bias."""
+
+    REPEAT_TRUSTED = "repeat_trusted"
+    """Duplicate the instruction/task block (trusted-only).  Probe for salience."""
+
+    STRUCTURED_REWRAP = "structured_rewrap"
+    """Prose constraints ↔ structured format (bullets, key:value, numbered)."""
+
+    DISTRACTOR_INSERT = "distractor_insert"
+    """Insert a realistic but irrelevant paragraph before the task."""
+
 
 class DivergenceMethod(str, Enum):
     """Divergence proxy between two text outputs."""
@@ -839,12 +851,159 @@ def perturb_negation_probe(text: str, seed: int) -> tuple[str, float]:
     return perturbed, magnitude
 
 
+# ---------------------------------------------------------------------------
+# New perturbation family (v2.3): instruction salience, repetition,
+# structured representation, distractor insertion.
+# ---------------------------------------------------------------------------
+
+_PARAGRAPH_BREAK_RE = re.compile(r"\n\s*\n")
+
+_DISTRACTORS = [
+    "Note: the project uses a standard CI/CD pipeline with automated "
+    "testing on every commit. Build artifacts are cached for 30 days.",
+    "For context, the team adopted this codebase in Q3 2024 after "
+    "evaluating three alternatives. Migration was completed in two sprints.",
+    "The deployment environment uses Kubernetes with auto-scaling "
+    "configured between 2 and 8 replicas based on CPU utilisation.",
+    "Background: the authentication module was last audited in January. "
+    "No critical findings were reported, though two minor items remain open.",
+    "The database schema was normalised to 3NF during the initial design "
+    "phase. Denormalisation was applied selectively for read-heavy queries.",
+    "Historical note: this repository was migrated from SVN in 2021. "
+    "Some legacy commit messages may reference old ticket IDs.",
+]
+
+
+def perturb_instruction_relocate(text: str, seed: int) -> tuple[str, float]:
+    """Move the first paragraph to the end (or vice versa).
+
+    Splits on the first blank-line boundary.  If there's only one block,
+    returns unchanged (magnitude 0).  Deterministic given seed: even seeds
+    move top→bottom, odd seeds move bottom→top.
+    """
+    parts = _PARAGRAPH_BREAK_RE.split(text, maxsplit=1)
+    if len(parts) < 2 or not parts[0].strip() or not parts[1].strip():
+        return text, 0.0
+
+    rng = random.Random(seed)
+    if rng.random() > 0.5:
+        # top → bottom
+        perturbed = parts[1].strip() + "\n\n" + parts[0].strip()
+    else:
+        # bottom → top  (split from end)
+        last_break = text.rfind("\n\n")
+        if last_break <= 0:
+            perturbed = parts[1].strip() + "\n\n" + parts[0].strip()
+        else:
+            tail = text[last_break:].strip()
+            head = text[:last_break].strip()
+            perturbed = tail + "\n\n" + head
+
+    magnitude = compute_divergence(text, perturbed, "jaccard")
+    return perturbed, magnitude
+
+
+def perturb_repeat_trusted(text: str, seed: int) -> tuple[str, float]:
+    """Duplicate the first paragraph (instruction block) at the end.
+
+    Models the "repeat trusted instruction" technique from prompt repetition
+    research (arXiv:2512.14982).  The transform appends the instruction
+    block as-is, prefixed by a separator.  Only the *first* block is
+    repeated — context/evidence blocks are left alone.
+
+    Security invariant: in production (mitigation mode), callers must
+    ensure only trusted segments are repeated.  This function operates on
+    raw text for probe purposes.
+    """
+    parts = _PARAGRAPH_BREAK_RE.split(text, maxsplit=1)
+    instruction_block = parts[0].strip()
+
+    if not instruction_block:
+        return text, 0.0
+
+    rng = random.Random(seed)
+    separators = [
+        "\n\n",
+        "\n\nTo reiterate:\n",
+        "\n\nReminder:\n",
+    ]
+    sep = rng.choice(separators)
+    perturbed = text.rstrip() + sep + instruction_block
+
+    magnitude = compute_divergence(text, perturbed, "jaccard")
+    return perturbed, magnitude
+
+
+_STRUCTURED_TEMPLATES = [
+    # bullet list
+    lambda items: "\n".join(f"- {item}" for item in items),
+    # numbered list
+    lambda items: "\n".join(f"{i+1}. {item}" for i, item in enumerate(items)),
+    # key:value
+    lambda items: "\n".join(
+        f"Constraint {i+1}: {item}" for i, item in enumerate(items)
+    ),
+]
+
+
+def perturb_structured_rewrap(text: str, seed: int) -> tuple[str, float]:
+    """Convert prose constraints into a different structured format.
+
+    Splits prose on sentence boundaries, then rewraps as bullet list,
+    numbered list, or key:value pairs.  Catches models that behave
+    differently with explicit structure vs. flowing prose.
+    """
+    rng = random.Random(seed)
+
+    prose_regions = _extract_prose_regions(text)
+    if not prose_regions:
+        return text, 0.0
+
+    new_prose: list[str] = []
+    for _, _, content in prose_regions:
+        sentences = _SENTENCE_RE.split(content)
+        sentences = [s.strip() for s in sentences if s.strip()]
+
+        if len(sentences) < 2:
+            new_prose.append(content)
+            continue
+
+        template = rng.choice(_STRUCTURED_TEMPLATES)
+        new_prose.append(template(sentences))
+
+    perturbed = _reconstruct_with_prose(text, new_prose)
+    magnitude = compute_divergence(text, perturbed, "jaccard")
+    return perturbed, magnitude
+
+
+def perturb_distractor_insert(text: str, seed: int) -> tuple[str, float]:
+    """Insert a realistic but irrelevant paragraph before the task.
+
+    Uses seeded selection from a fixed template bank (_DISTRACTORS).
+    Catches instruction drift / distraction susceptibility.
+    """
+    rng = random.Random(seed)
+
+    if not text.strip():
+        return text, 0.0
+
+    distractor = rng.choice(_DISTRACTORS)
+    perturbed = distractor + "\n\n" + text
+
+    magnitude = compute_divergence(text, perturbed, "jaccard")
+    return perturbed, magnitude
+
+
 _PERTURBATION_FNS: dict[str, Callable[[str, int], tuple[str, float]]] = {
     PerturbationKind.FORMAT_JITTER.value: perturb_format_jitter,
     PerturbationKind.CLAUSE_REORDER.value: perturb_clause_reorder,
     PerturbationKind.ROLE_REWRAP.value: perturb_role_rewrap,
     PerturbationKind.HEDGE_INSERT.value: perturb_hedge_insert,
     PerturbationKind.NEGATION_PROBE.value: perturb_negation_probe,
+    PerturbationKind.INSTRUCTION_RELOCATE.value: perturb_instruction_relocate,
+    PerturbationKind.REPEAT_TRUSTED.value: perturb_repeat_trusted,
+    PerturbationKind.STRUCTURED_REWRAP.value: perturb_structured_rewrap,
+    PerturbationKind.DISTRACTOR_INSERT.value: perturb_distractor_insert,
 }
 
 

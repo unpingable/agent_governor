@@ -58,6 +58,24 @@ SCHEMA_VERSIONED_TYPES = [
         # test from_dict rejection only (more important anyway)
         "factory": None,
     },
+    {
+        "module": "governor.clud",
+        "class_name": "CludResult",
+        "constant": "CLUD_SCHEMA_VERSION",
+        "factory": lambda mod: mod.CludResult(
+            schema_version=mod.CLUD_SCHEMA_VERSION, status=mod.CludStatus.PASS,
+            claims=[], drift_score=0.0, hidden_assumptions=[], missing_definitions=[],
+            unfalsifiable_claims=[], padded_or_implicit=False,
+            sentence_count=0, claim_count=0, summary="",
+        ),
+    },
+    {
+        "module": "governor.status_rollup",
+        "class_name": "StatusRollup",
+        "constant": "ROLLUP_SCHEMA_VERSION",
+        # StatusRollup is built via build_status_rollup(gov_dir), not directly
+        "factory": None,
+    },
 ]
 
 
@@ -92,6 +110,8 @@ class TestSchemaVersionDiscipline:
         """from_dict() must raise ValueError for schema_version > current."""
         mod = importlib.import_module(entry["module"])
         cls = getattr(mod, entry["class_name"])
+        if not hasattr(cls, "from_dict"):
+            pytest.skip(f"{entry['class_name']} has no from_dict (built via factory)")
         current = getattr(mod, entry["constant"])
         # Build a minimal dict that has a future version
         # (the rejection must happen BEFORE field parsing)

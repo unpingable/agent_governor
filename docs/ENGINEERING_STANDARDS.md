@@ -117,6 +117,8 @@ These rules are mechanically enforced by `tests/test_standards.py`:
 | `correlator_telemetry` | `CORRELATOR_SCHEMA_VERSION` | `CorrelatorTelemetry` |
 | `scope` | `SCOPE_SCHEMA_VERSION` | `ScopeGovernor` |
 | `semantic_stability` | `STABILITY_SCHEMA_VERSION` | `StabilityAuditResult` |
+| `clud` | `CLUD_SCHEMA_VERSION` | `CludResult` |
+| `status_rollup` | `ROLLUP_SCHEMA_VERSION` | `StatusRollup` |
 
 ### Known Gaps
 

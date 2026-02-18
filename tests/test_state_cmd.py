@@ -147,7 +147,7 @@ class TestFactsJson:
         (initialized_v1 / "main.py").write_text("# main")
         runner.invoke(cli, ["--root", root, "propose", "--claim", "type=file_exists,path=main.py"])
         # Find proposal ID and verify it to create a fact
-        status_result = runner.invoke(cli, ["--root", root, "status", "--json"])
+        status_result = runner.invoke(cli, ["--root", root, "status", "--proposals", "--json"])
         proposals = json.loads(status_result.output)
         if proposals:
             pid = proposals[0]["id"]
@@ -169,7 +169,16 @@ class TestDecisionsJson:
 
 class TestStatusJson:
     def test_status_json_empty(self, runner, initialized_v1):
+        """Bare status --json returns operator dashboard (dict with schema_version)."""
         result = runner.invoke(cli, ["--root", str(initialized_v1), "status", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, dict)
+        assert "schema_version" in data
+
+    def test_status_json_proposals(self, runner, initialized_v1):
+        """status --proposals --json returns proposal list."""
+        result = runner.invoke(cli, ["--root", str(initialized_v1), "status", "--proposals", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data == []
@@ -179,7 +188,7 @@ class TestStatusJson:
         (initialized_v1 / "main.py").write_text("# main")
         runner.invoke(cli, ["--root", root, "propose", "--claim", "type=file_exists,path=main.py"])
 
-        result = runner.invoke(cli, ["--root", root, "status", "--json"])
+        result = runner.invoke(cli, ["--root", root, "status", "--proposals", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert len(data) >= 1

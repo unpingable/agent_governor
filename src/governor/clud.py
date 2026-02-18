@@ -273,7 +273,8 @@ class CludResult:
         sv = data.get("schema_version", 1)
         if sv > CLUD_SCHEMA_VERSION:
             raise ValueError(
-                f"Schema version {sv} > supported {CLUD_SCHEMA_VERSION}"
+                f"Schema version {sv} is newer than supported "
+                f"({CLUD_SCHEMA_VERSION}). Upgrade governor."
             )
         try:
             status = CludStatus(data["status"])

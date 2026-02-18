@@ -38,6 +38,7 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass, field
+import time as _time
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -165,6 +166,13 @@ class KVector:
     window_step: int
     """Window step number when this vector was computed."""
 
+    window_elapsed_s: float = 0.0
+    """Seconds since the previous observation.  Zero on first window.
+
+    Enables time-normalised rate comparisons across deployments with
+    different observe() frequencies.
+    """
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "throughput": self.throughput,
@@ -172,6 +180,7 @@ class KVector:
             "authority": self.authority.value,
             "cost_budget": self.cost_budget,
             "window_step": self.window_step,
+            "window_elapsed_s": round(self.window_elapsed_s, 4),
         }
 
     @classmethod
@@ -182,6 +191,7 @@ class KVector:
             authority=AuthorityLevel(d.get("authority", "advisory")),
             cost_budget=float(d.get("cost_budget", 0.0)),
             window_step=int(d.get("window_step", 0)),
+            window_elapsed_s=float(d.get("window_elapsed_s", 0.0)),
         )
 
 
@@ -494,6 +504,7 @@ def compute_k_vector(
     authority: AuthorityLevel,
     cost_ratio: float,
     window_step: int,
+    window_elapsed_s: float = 0.0,
 ) -> KVector:
     """Construct K-vector from components."""
     return KVector(
@@ -502,6 +513,7 @@ def compute_k_vector(
         authority=authority,
         cost_budget=max(0.0, min(1.0, cost_ratio)),
         window_step=window_step,
+        window_elapsed_s=max(0.0, window_elapsed_s),
     )
 
 
@@ -883,6 +895,7 @@ class CorrelatorTelemetry:
         self._history: list[CaptureDiagnostic] = []
         self._indicator_state = IndicatorState()
         self._window_step: int = 0
+        self._last_observe_time_s: float = 0.0  # monotonic; 0 = not yet observed
 
     @property
     def window_step(self) -> int:
@@ -929,12 +942,17 @@ class CorrelatorTelemetry:
             commitment_shear=commitment_shear,
         )
 
+        now_s = _time.monotonic()
+        elapsed_s = now_s - self._last_observe_time_s if self._last_observe_time_s > 0 else 0.0
+        self._last_observe_time_s = now_s
+
         k_vec = compute_k_vector(
             throughput=throughput,
             fidelity=fidelity,
             authority=authority,
             cost_ratio=cost_ratio,
             window_step=self._window_step,
+            window_elapsed_s=elapsed_s,
         )
 
         previous = self._history[-1].signals if self._history else None
@@ -1058,6 +1076,7 @@ class CorrelatorTelemetry:
             "history": [d.to_dict() for d in self._history],
             "indicator_state": self._indicator_state.to_dict(),
             "window_step": self._window_step,
+            "last_observe_time_s": self._last_observe_time_s,
         }
 
     @classmethod
@@ -1082,6 +1101,7 @@ class CorrelatorTelemetry:
             d.get("indicator_state", {})
         )
         ct._window_step = int(d.get("window_step", 0))
+        ct._last_observe_time_s = float(d.get("last_observe_time_s", 0.0))
         return ct
 
     def save(self, gov_dir: Path) -> None:

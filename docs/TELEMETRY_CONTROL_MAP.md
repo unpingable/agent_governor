@@ -84,13 +84,13 @@ These are signals we already emit that nobody reads for control decisions:
 
 ## Window Semantics Issues
 
-### Critical (Aggregation Unsafe)
+### Critical (Aggregation Unsafe) — ALL FIXED
 
-| Module | Line | Issue |
-|--------|------|-------|
-| **regime.py** | 630 | Hardcoded `window_time = 60.0` seconds mixed with `window_size = 10` proposal counts. Rate = proposals-in-60s / count-of-10 → incommensurable |
-| **research.py** | 192 | `lambda_decay = 0.05` per undefined period. Credence degrades 5% per... turn? second? observation? |
-| **correlator_telemetry.py** | 885 | `_window_step` incremented per `observe()` call. Frequency unknown → K-vector comparisons across deployments are meaningless |
+| Module | Line | Issue | Fix |
+|--------|------|-------|-----|
+| **regime.py** | 630 | ~~Hardcoded `window_time = 60.0` seconds mixed with `window_size = 10` proposal counts~~ | **FIXED**: contradiction rates now use `events / window_time_s` (events-per-second). Denominator independent of `window_size`. 3 tests in TestWindowSemantics. |
+| **research.py** | 192 | ~~`lambda_decay = 0.05` per undefined period~~ | **FIXED**: Added `decay_half_life_s` config (wall-clock half-life). `tick()` computes `dt = monotonic() - last_tick_time` and decays `C(t) = C(t-1) * 2^(-dt/half_life)`. Legacy per-tick mode preserved when `decay_half_life_s=0`. 5 tests. |
+| **correlator_telemetry.py** | 885 | ~~`_window_step` frequency unknown~~ | **FIXED**: Added `window_elapsed_s` to KVector (monotonic dt between observations). Enables time-normalised rate comparison across deployments. 4 tests in TestWindowElapsedTime. |
 
 ### High Risk (Likely Apples-to-Oranges)
 

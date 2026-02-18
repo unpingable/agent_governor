@@ -105,9 +105,9 @@ class RegimeSignals:
     # High = system is straining against limits
     budget_pressure: float = 0.0
 
-    # Contradiction rates
-    contradiction_open_rate: float = 0.0  # New contradictions per turn
-    contradiction_close_rate: float = 0.0  # Resolved contradictions per turn
+    # Contradiction rates (events per second in 60s window)
+    contradiction_open_rate: float = 0.0  # New contradictions per second
+    contradiction_close_rate: float = 0.0  # Resolved contradictions per second
 
     # Rejection rate: proposals rejected / total proposals
     rejection_rate: float = 0.0
@@ -626,30 +626,32 @@ class SignalCollector:
         else:
             rejection_rate = 0.0
 
-        # Compute contradiction rates (per turn approximation)
-        window_time = 60.0  # 1 minute window
+        # Compute contradiction rates (events-per-second in time window).
+        # Both rates share the same denominator (window_time_s) so their
+        # ratio is meaningful for comparisons like contradictions_accumulating.
+        window_time_s = 60.0  # 1 minute window
         now = datetime.now(timezone.utc)
 
         recent_opens = [
             t for t in self.contradictions_opened
-            if (now - t).total_seconds() < window_time
+            if (now - t).total_seconds() < window_time_s
         ]
         recent_closes = [
             t for t in self.contradictions_closed
-            if (now - t).total_seconds() < window_time
+            if (now - t).total_seconds() < window_time_s
         ]
 
-        open_rate = len(recent_opens) / max(1, self.window_size)
-        close_rate = len(recent_closes) / max(1, self.window_size)
+        open_rate = len(recent_opens) / window_time_s
+        close_rate = len(recent_closes) / window_time_s
 
         # Compute dangerous claim rate
         recent_dangerous = [
             t for t in self.dangerous_claims
-            if (now - t).total_seconds() < window_time
+            if (now - t).total_seconds() < window_time_s
         ]
         recent_total = [
             t for t in self.total_claims
-            if (now - t).total_seconds() < window_time
+            if (now - t).total_seconds() < window_time_s
         ]
 
         if recent_total:

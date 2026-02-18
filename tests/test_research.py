@@ -914,6 +914,60 @@ class TestResearchLedgerDecay:
         ledger.tick()
         assert h.is_active  # not yet abandoned
 
+    def test_time_aware_decay_uses_dt(self):
+        """When decay_half_life_s > 0, decay depends on elapsed time."""
+        import time
+        config = ResearchConfig(
+            decay_half_life_s=1.0, maintenance_cost_rate=0.0,
+        )
+        ledger = create_research_ledger(config)
+        h = ledger.create_hypothesis("test")
+        initial = h.credence
+        ledger.tick()  # first tick: dt=0, no decay
+        # credence unchanged (dt=0 on first tick)
+        first_credence = h.credence
+        time.sleep(0.05)  # small sleep for measurable dt
+        ledger.tick()  # second tick: dt ≈ 0.05s, some decay
+        assert h.credence < first_credence
+
+    def test_time_aware_decay_half_life(self):
+        """After one half-life, credence should halve (approximately)."""
+        import time
+        config = ResearchConfig(
+            decay_half_life_s=0.1, maintenance_cost_rate=0.0,
+        )
+        ledger = create_research_ledger(config)
+        h = ledger.create_hypothesis("test")
+        ledger.tick()  # init last_tick_time
+        initial = h.credence
+        time.sleep(0.1)  # wait one half-life
+        ledger.tick()
+        # Should be approximately half
+        assert h.credence == pytest.approx(initial * 0.5, rel=0.3)
+
+    def test_legacy_decay_when_no_half_life(self):
+        """Without decay_half_life_s, uses legacy per-tick lambda."""
+        config = ResearchConfig(
+            default_lambda=0.1, decay_half_life_s=0.0,
+            maintenance_cost_rate=0.0,
+        )
+        ledger = create_research_ledger(config)
+        h = ledger.create_hypothesis("test")
+        initial = h.credence
+        ledger.tick()
+        expected = initial * math.exp(-0.1)
+        assert h.credence == pytest.approx(expected, abs=0.001)
+
+    def test_tick_summary_includes_decay_mode(self):
+        """tick() summary reports which decay mode was used."""
+        config = ResearchConfig(decay_half_life_s=10.0)
+        ledger = create_research_ledger(config)
+        ledger.create_hypothesis("test")
+        s1 = ledger.tick()
+        assert s1["decay_mode"] == "per_tick"  # first tick: dt=0 → per_tick
+        s2 = ledger.tick()
+        assert s2["decay_mode"] == "time_aware"
+
 
 # =============================================================================
 # TestResearchLedger_Entropy

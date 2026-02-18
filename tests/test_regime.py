@@ -516,6 +516,49 @@ class TestSignalCollector:
 
 
 # =============================================================================
+# Window Semantics Tests
+# =============================================================================
+
+
+class TestWindowSemantics:
+    """Verify contradiction rates use consistent time-based window."""
+
+    def test_contradiction_rate_is_events_per_second(self):
+        """Rates should be events-per-second, not events-per-window_size."""
+        collector = SignalCollector(window_size=10)
+        # 3 contradictions opened just now → 3 events in 60s window
+        for _ in range(3):
+            collector.record_contradiction_opened()
+        signals = collector.compute_signals()
+        # Rate = 3 / 60.0 = 0.05 events/second
+        assert abs(signals.contradiction_open_rate - 3 / 60.0) < 0.01
+
+    def test_rate_independent_of_window_size(self):
+        """Contradiction rate must not change when window_size changes."""
+        for ws in [5, 10, 50]:
+            collector = SignalCollector(window_size=ws)
+            collector.record_contradiction_opened()
+            collector.record_contradiction_opened()
+            signals = collector.compute_signals()
+            # Should always be 2/60.0 regardless of window_size
+            assert abs(signals.contradiction_open_rate - 2 / 60.0) < 0.01, (
+                f"window_size={ws} changed rate"
+            )
+
+    def test_accumulating_comparison_valid(self):
+        """open_rate vs close_rate comparison is valid (same denominator)."""
+        collector = SignalCollector(window_size=10)
+        for _ in range(4):
+            collector.record_contradiction_opened()
+        for _ in range(2):
+            collector.record_contradiction_closed()
+        signals = collector.compute_signals()
+        # open > close — accumulating
+        assert signals.contradiction_open_rate > signals.contradiction_close_rate
+        assert signals.contradictions_accumulating
+
+
+# =============================================================================
 # Integration Tests
 # =============================================================================
 

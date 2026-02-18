@@ -182,6 +182,32 @@ class TestKVector:
     def test_warning_in_docstring(self):
         assert "do not scalarize" in KVector.__doc__.lower()
 
+    def test_window_elapsed_s_default(self):
+        """window_elapsed_s defaults to 0."""
+        fp = FidelityProxy(0.5, 0.5, 0.5, 0.5)
+        kv = KVector(5.0, fp, AuthorityLevel.BLOCKING, 0.5, 1)
+        assert kv.window_elapsed_s == 0.0
+
+    def test_window_elapsed_s_roundtrip(self):
+        """window_elapsed_s survives serialization."""
+        fp = FidelityProxy(0.5, 0.5, 0.5, 0.5)
+        kv = KVector(5.0, fp, AuthorityLevel.BLOCKING, 0.5, 1, window_elapsed_s=1.5)
+        d = kv.to_dict()
+        assert d["window_elapsed_s"] == 1.5
+        kv2 = KVector.from_dict(d)
+        assert kv2.window_elapsed_s == 1.5
+
+    def test_window_elapsed_s_in_compute_k_vector(self):
+        """compute_k_vector passes elapsed_s through."""
+        fp = FidelityProxy(0.5, 0.5, 0.5, 0.5)
+        kv = compute_k_vector(
+            throughput=1.0, fidelity=fp,
+            authority=AuthorityLevel.ADVISORY,
+            cost_ratio=0.0, window_step=0,
+            window_elapsed_s=2.5,
+        )
+        assert kv.window_elapsed_s == 2.5
+
 
 class TestCaptureSignals:
     def test_construction_defaults(self):
@@ -1515,6 +1541,41 @@ class TestCorrelatorState:
         assert "schema_version" in data
         ct2 = CorrelatorTelemetry.load(tmp_path)
         assert ct2.window_step == 1
+
+
+# =============================================================================
+# Window Elapsed Time Tests
+# =============================================================================
+
+
+class TestWindowElapsedTime:
+    """Verify observe() tracks inter-observation elapsed time."""
+
+    def test_first_observe_has_zero_elapsed(self):
+        ct = CorrelatorTelemetry()
+        diag = ct.observe(exposure=10, throughput=1.0)
+        assert diag.k_vector.window_elapsed_s == 0.0
+
+    def test_second_observe_has_nonzero_elapsed(self):
+        import time
+        ct = CorrelatorTelemetry()
+        ct.observe(exposure=10, throughput=1.0)
+        time.sleep(0.05)
+        diag = ct.observe(exposure=10, throughput=1.0)
+        assert diag.k_vector.window_elapsed_s > 0
+
+    def test_elapsed_persisted_in_to_dict(self):
+        ct = CorrelatorTelemetry()
+        ct.observe(exposure=10, throughput=1.0)
+        d = ct.to_dict()
+        assert "last_observe_time_s" in d
+
+    def test_elapsed_restored_from_dict(self):
+        ct = CorrelatorTelemetry()
+        ct.observe(exposure=10, throughput=1.0)
+        d = ct.to_dict()
+        ct2 = CorrelatorTelemetry.from_dict(d)
+        assert ct2._last_observe_time_s == d["last_observe_time_s"]
 
 
 # =============================================================================

@@ -25,6 +25,7 @@ not to minimize error against a fixed reference.
 """
 
 import math
+import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -86,7 +87,15 @@ class ResearchConfig:
     """Policy profile for research mode."""
 
     default_lambda: float = 0.05
-    """Default decay rate for hypothesis credence."""
+    """Legacy per-tick decay rate.  Ignored when decay_half_life_s is set."""
+
+    decay_half_life_s: float = 0.0
+    """Wall-clock half-life for credence decay (seconds).
+
+    When >0, tick() uses time-aware decay: C(t) = C(t-1) * 2^(-dt/half_life).
+    When 0 (default), falls back to legacy per-tick: C(t) = C(t-1) * exp(-lambda).
+    Recommended: set to a concrete value (e.g. 300.0 = 5 min half-life).
+    """
 
     H_min: float = 0.5
     """Minimum epistemic entropy (below = dogma)."""
@@ -118,6 +127,7 @@ class ResearchConfig:
     def to_dict(self) -> dict[str, Any]:
         return {
             "default_lambda": self.default_lambda,
+            "decay_half_life_s": self.decay_half_life_s,
             "H_min": self.H_min,
             "H_max": self.H_max,
             "D_max": self.D_max,
@@ -546,6 +556,7 @@ class ResearchLedger:
 
         self.hypotheses: dict[str, Hypothesis] = {}
         self.tick_count: int = 0
+        self._last_tick_time_s: float = 0.0  # monotonic seconds; 0 = not yet ticked
 
         # Monitors
         self.entropy_monitor = EntropyMonitor(self.config.H_min, self.config.H_max)
@@ -783,10 +794,25 @@ class ResearchLedger:
         Advance time by one tick.
 
         Ordering: (1) decay, (2) maintenance cost, (3) auto-archive, (4) summary.
+
+        Decay semantics:
+        - When ``config.decay_half_life_s > 0``: time-aware decay using
+          wall-clock dt.  ``C(t) = C(t-1) * 2^(-dt / half_life)``.
+        - Otherwise: legacy per-tick decay ``C(t) = C(t-1) * exp(-lambda)``.
         """
         self.tick_count += 1
+        now_s = time.monotonic()
+        dt_s = now_s - self._last_tick_time_s if self._last_tick_time_s > 0 else 0.0
+        self._last_tick_time_s = now_s
+
+        # Choose decay mode: time-aware or legacy per-tick
+        half_life = self.config.decay_half_life_s
+        use_time_decay = half_life > 0 and dt_s > 0
+
         summary: dict[str, Any] = {
             "tick": self.tick_count,
+            "dt_s": round(dt_s, 4),
+            "decay_mode": "time_aware" if use_time_decay else "per_tick",
             "decayed": [],
             "maintenance_charged": [],
             "auto_archived": [],
@@ -797,9 +823,14 @@ class ResearchLedger:
             if not h.is_active:
                 continue
 
-            # (1) Exponential decay: C(t) = C(t-1) * exp(-λ)
+            # (1) Exponential decay
             old_credence = h.credence
-            h.credence *= math.exp(-h.lambda_decay)
+            if use_time_decay:
+                # Time-aware: C(t) = C(t-1) * 2^(-dt / half_life)
+                h.credence *= math.pow(2.0, -dt_s / half_life)
+            else:
+                # Legacy per-tick: C(t) = C(t-1) * exp(-λ)
+                h.credence *= math.exp(-h.lambda_decay)
             if h.credence != old_credence:
                 summary["decayed"].append(h.hypothesis_id)
 
@@ -973,6 +1004,7 @@ class ResearchLedger:
         return {
             "config": self.config.to_dict(),
             "tick_count": self.tick_count,
+            "last_tick_time_s": self._last_tick_time_s,
             "hypotheses": {
                 hid: h.to_dict() for hid, h in self.hypotheses.items()
             },
@@ -994,6 +1026,7 @@ class ResearchLedger:
             independence_scorer=independence_scorer,
         )
         ledger.tick_count = data.get("tick_count", 0)
+        ledger._last_tick_time_s = data.get("last_tick_time_s", 0.0)
         for hid, hdata in data.get("hypotheses", {}).items():
             ledger.hypotheses[hid] = Hypothesis.from_dict(hdata)
         return ledger

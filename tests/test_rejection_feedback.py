@@ -403,8 +403,8 @@ class TestRejectionPersistence:
             proposal_id = result.output.split("Proposal created: ")[1].split("\n")[0]
             runner.invoke(cli, ["verify", proposal_id])
 
-            # Check status shows rejected
-            result = runner.invoke(cli, ["status"])
+            # Check status --proposals shows rejected
+            result = runner.invoke(cli, ["status", "--proposals"])
 
             assert "rejected" in result.output.lower()
 

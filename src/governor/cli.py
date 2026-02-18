@@ -583,18 +583,13 @@ def decay(ctx: click.Context, auto_prune: bool) -> None:
 @click.option("--limit", "-n", default=20, help="Number of proposals to show")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.option("--claims", "show_claims", is_flag=True, help="Show claim status weather report")
-@click.option("--full", "full_dashboard", is_flag=True, help="Show operator dashboard")
+@click.option("--full", "full_dashboard", is_flag=True, hidden=True, help="(Alias for bare status)")
+@click.option("--proposals", "show_proposals", is_flag=True, help="Show proposal list (old default)")
 @click.pass_context
-def status(ctx: click.Context, limit: int, as_json: bool, show_claims: bool, full_dashboard: bool) -> None:
-    """Show proposal status. With --full, show operator dashboard."""
+def status(ctx: click.Context, limit: int, as_json: bool, show_claims: bool,
+           full_dashboard: bool, show_proposals: bool) -> None:
+    """Show operator dashboard (one-pager). Use --proposals for proposal list."""
     gov_dir = ensure_initialized(ctx)
-
-    # If --full flag, show operator dashboard
-    if full_dashboard:
-        from .cli_operator import dashboard_command
-        rc = dashboard_command(gov_dir, as_json)
-        ctx.exit(rc)
-        return
 
     # If --claims flag, show claim status summary
     if show_claims:
@@ -611,39 +606,45 @@ def status(ctx: click.Context, limit: int, as_json: bool, show_claims: bool, ful
             click.echo(dashboard.format_summary())
         return
 
-    proposals = load_proposals(gov_dir)
+    # If --proposals flag, show old proposal list view
+    if show_proposals:
+        proposals = load_proposals(gov_dir)
 
-    if as_json:
+        if as_json:
+            from .fsm import Proposal
+            items = list(proposals.items())[:limit]
+            result = [Proposal.from_dict(data).to_dict() for _pid, data in items]
+            click.echo(json.dumps(result, indent=2))
+            return
+
+        if not proposals:
+            click.echo("No proposals")
+            return
+
+        click.echo(f"Proposals ({len(proposals)}):\n")
+
         from .fsm import Proposal
         items = list(proposals.items())[:limit]
-        result = [Proposal.from_dict(data).to_dict() for _pid, data in items]
-        click.echo(json.dumps(result, indent=2))
+
+        for pid, data in items:
+            proposal = Proposal.from_dict(data)
+            state_icon = {
+                ProposalState.DRAFT: "\U0001f4dd",
+                ProposalState.PROPOSED: "\U0001f4cb",
+                ProposalState.VERIFIED: "\u2713",
+                ProposalState.APPLIED: "\u2705",
+                ProposalState.REJECTED: "\u274c",
+            }.get(proposal.state, "?")
+
+            click.echo(f"  {state_icon} [{proposal.state.value}] {pid[:8]}...")
+            click.echo(f"     Claims: {len(proposal.claims)}")
+            click.echo()
         return
 
-    if not proposals:
-        click.echo("No proposals")
-        return
-
-    click.echo(f"Proposals ({len(proposals)}):\n")
-
-    from .fsm import Proposal
-    items = list(proposals.items())[:limit]
-
-    for pid, data in items:
-        proposal = Proposal.from_dict(data)
-        state_icon = {
-            ProposalState.DRAFT: "📝",
-            ProposalState.PROPOSED: "📋",
-            ProposalState.VERIFIED: "✓",
-            ProposalState.APPLIED: "✅",
-            ProposalState.REJECTED: "❌",
-        }.get(proposal.state, "?")
-
-        click.echo(f"  {state_icon} [{proposal.state.value}] {pid[:8]}...")
-        click.echo(f"     Claims: {len(proposal.claims)}")
-        click.echo()
-
-    click.echo("Tip: governor status --full for operator dashboard")
+    # Default: operator dashboard (one-pager)
+    from .cli_operator import dashboard_command
+    rc = dashboard_command(gov_dir, as_json)
+    ctx.exit(rc)
 
 
 @cli.command()

@@ -291,17 +291,27 @@ class TestStatus:
     """Test governor status command."""
 
     def test_status_empty(self, runner, tmp_path):
-        """status shows empty message when no proposals."""
+        """status --proposals shows empty message when no proposals."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runner.invoke(cli, ["init"])
+
+            result = runner.invoke(cli, ["status", "--proposals"])
+
+            assert result.exit_code == 0
+            assert "No proposals" in result.output
+
+    def test_status_bare_is_dashboard(self, runner, tmp_path):
+        """Bare status shows operator dashboard."""
         with runner.isolated_filesystem(temp_dir=tmp_path):
             runner.invoke(cli, ["init"])
 
             result = runner.invoke(cli, ["status"])
 
             assert result.exit_code == 0
-            assert "No proposals" in result.output
+            assert "Governor Dashboard" in result.output
 
     def test_status_shows_proposals(self, runner, tmp_path):
-        """status shows proposal list."""
+        """status --proposals shows proposal list."""
         with runner.isolated_filesystem(temp_dir=tmp_path):
             runner.invoke(cli, ["init"])
             Path("main.py").write_text("# main")
@@ -311,7 +321,7 @@ class TestStatus:
                 "--claim", "type=file_exists,path=main.py"
             ])
 
-            result = runner.invoke(cli, ["status"])
+            result = runner.invoke(cli, ["status", "--proposals"])
 
             assert result.exit_code == 0
             assert "proposed" in result.output

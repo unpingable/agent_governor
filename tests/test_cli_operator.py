@@ -66,21 +66,22 @@ class TestDashboard:
             assert key in data
             assert "ok" in data[key]
 
-    def test_backward_compat_no_full(self, runner, gov_project):
-        """status (no --full) should show proposals, not dashboard."""
+    def test_bare_status_is_dashboard(self, runner, gov_project):
+        """status (bare) should show the operator dashboard."""
         result = runner.invoke(cli, ["status"])
         assert result.exit_code == 0
-        assert "Governor Dashboard" not in result.output
+        assert "Governor Dashboard" in result.output
 
-    def test_hint_line_in_plain_status(self, runner, gov_project):
-        """Plain status should show the tip about --full when proposals exist."""
-        # Create a proposal so we get the proposal listing view + hint
+    def test_proposals_flag_shows_proposals(self, runner, gov_project):
+        """status --proposals should show proposals, not dashboard."""
         runner.invoke(cli, [
             "propose",
             "--claim", "type=decision,topic=framework,choice=react",
         ])
-        result = runner.invoke(cli, ["status"])
-        assert "governor status --full" in result.output
+        result = runner.invoke(cli, ["status", "--proposals"])
+        assert result.exit_code == 0
+        assert "Proposals" in result.output
+        assert "Governor Dashboard" not in result.output
 
     def test_section_failure_visible_in_text(self, runner, gov_project):
         """Corrupt state files should show [err] in text."""

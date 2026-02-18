@@ -44,6 +44,7 @@ class TelemetryEventType(str, Enum):
     CONTINUITY_RESULT = "continuity_result"     # One per convergence run
     CORRELATOR_OBSERVATION = "correlator_observation"  # Per-window correlator diagnostic
     CAPTURE_DETECTED = "capture_detected"              # Capture regime declared
+    STABILITY_PROBE = "stability_probe"                # Probe decision emitted
 
 
 class TelemetryLevel(str, Enum):
@@ -1186,6 +1187,49 @@ class TelemetryCollector:
             timestamp=self._now_iso(),
             event_type=TelemetryEventType.CAPTURE_DETECTED,
             level=TelemetryLevel.WARN,
+            fields=fields,
+        )
+        self._emit(event)
+
+    def record_stability_probe(
+        self,
+        decision: str = "",
+        recommendation: str = "",
+        transforms_run: list[str] | None = None,
+        mitigations_suggested: int = 0,
+        measurement_failed: bool = False,
+        budget_exceeded: bool = False,
+        stiffness: float = 0.0,
+        escape_rate: float = 0.0,
+        unstable_axes: list[str] | None = None,
+    ) -> None:
+        """Record a stability probe event for failure telemetry.
+
+        Tracks: probe calls, tier chosen, % unstable by axis,
+        mitigations suggested, budget exceeded / measurement failed.
+        """
+        level = TelemetryLevel.INFO
+        if decision in ("block", "human_gate"):
+            level = TelemetryLevel.WARN
+        elif measurement_failed or budget_exceeded:
+            level = TelemetryLevel.WARN
+
+        fields = {
+            "decision": decision,
+            "recommendation": recommendation,
+            "transforms_run": transforms_run or [],
+            "tier_count": len(transforms_run or []),
+            "mitigations_suggested": mitigations_suggested,
+            "measurement_failed": measurement_failed,
+            "budget_exceeded": budget_exceeded,
+            "stiffness": stiffness,
+            "escape_rate": escape_rate,
+            "unstable_axes": unstable_axes or [],
+        }
+        event = TelemetryEvent(
+            timestamp=self._now_iso(),
+            event_type=TelemetryEventType.STABILITY_PROBE,
+            level=level,
             fields=fields,
         )
         self._emit(event)

@@ -1277,9 +1277,82 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         store = state.stability_store
         return [r.to_dict() for r in store.query(limit=limit)]
 
+    async def stability_probe(params: dict) -> dict:
+        from .semantic_stability import ProbeContext, PromptSegment
+
+        text = params.get("text", "")
+        if not text:
+            return {"error": "text parameter required"}
+        if len(text) > 100_000:
+            return {"error": "text exceeds 100KB limit"}
+
+        # Build ProbeContext from params
+        ctx_dict = params.get("context", {})
+        deep = params.get("deep", False)
+
+        # Build typed segments if provided
+        trusted_segments = None
+        raw_segments = ctx_dict.get("trusted_segments")
+        if raw_segments and isinstance(raw_segments, list):
+            trusted_segments = [
+                PromptSegment.make(
+                    text=s.get("text", ""),
+                    trust=s.get("trust", "untrusted"),
+                    seg_class=s.get("seg_class", "context"),
+                )
+                for s in raw_segments
+                if isinstance(s, dict)
+            ]
+
+        context = ProbeContext(
+            has_side_effects=ctx_dict.get("has_side_effects", False),
+            approx_words=ctx_dict.get("approx_words", len(text.split())),
+            is_long_prompt=ctx_dict.get("is_long_prompt", len(text.split()) > 1500 or len(text) > 8000),
+            is_strict_format=ctx_dict.get("is_strict_format", False),
+            is_retrieval_heavy=ctx_dict.get("is_retrieval_heavy", False),
+            risk_class=ctx_dict.get("risk_class", "standard"),
+            trusted_segments=trusted_segments,
+            envelope_mode=ctx_dict.get("envelope_mode", "strict"),
+            dry_run=False,  # Never dry_run in RPC — require backend
+        )
+
+        # Require a real backend — no echo fallback in RPC
+        bridge = state.chat_bridge
+        if bridge is None:
+            return {"error": "stability.probe requires a configured backend (no dry_run in RPC)"}
+
+        # Wrap async backend.chat() into a sync generate_fn for the probe.
+        # The probe runs inside an async handler, so we use asyncio to bridge.
+        from .chat_bridge import ChatMessage as CM
+        backend = bridge.backend
+        model = state.default_model or "default"
+
+        def generate_fn(prompt: str) -> str:
+            """Sync wrapper: run backend.chat() in a new event loop thread."""
+            async def _gen():
+                msgs = [CM(role="user", content=prompt)]
+                resp = await backend.chat(msgs, model, temperature=0)
+                return resp.content
+            # We're called from sync code inside an async handler;
+            # use a fresh loop in a thread.
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, _gen())
+                return future.result(timeout=120)
+
+        auditor = state.stability_auditor
+        result = auditor.probe(
+            text, text, generate_fn,
+            context=context,
+            receipt_system=state.receipt_system,
+            deep=deep,
+        )
+        return result.to_dict()
+
     dispatcher.register("stability.status", stability_status)
     dispatcher.register("stability.audit", stability_audit)
     dispatcher.register("stability.history", stability_history)
+    dispatcher.register("stability.probe", stability_probe)
 
     dispatcher.register("chat.send", chat_send)
     dispatcher.register_streaming("chat.stream", chat_stream)

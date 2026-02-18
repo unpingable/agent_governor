@@ -16933,6 +16933,99 @@ def conditioning_config(ctx, as_json):
         click.echo(f"  {key}: {value}")
 
 
+@conditioning.command("probe")
+@click.argument("text", required=False)
+@click.option("--stdin", "use_stdin", is_flag=True, help="Read text from stdin")
+@click.option("--side-effects", is_flag=True, help="Mark as having side effects (tools enabled)")
+@click.option("--risk", type=click.Choice(["standard", "elevated", "critical"]),
+              default="standard", help="Risk classification")
+@click.option("--long", "is_long", is_flag=True, help="Treat as long prompt")
+@click.option("--strict-format", is_flag=True, help="JSON/code-heavy output expected")
+@click.option("--retrieval-heavy", is_flag=True, help="Lots of context/evidence blocks")
+@click.option("--deep", is_flag=True, help="Full canary set (3 transforms) instead of default single")
+@click.option("--dry-run", is_flag=True, help="Echo mode — no real generation")
+@click.option("--full", is_flag=True, help="Include full fingerprint in output")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def conditioning_probe(ctx, text, use_stdin, side_effects, risk, is_long,
+                        strict_format, retrieval_heavy, deep, dry_run, full, as_json):
+    """Run a decision-producing stability probe.
+
+    Default: single canary transform (format_jitter). Use --deep for full set.
+    Requires a backend unless --dry-run is set.
+    """
+    import sys as _sys
+    from .semantic_stability import (
+        ProbeContext, StabilityAuditor, StabilityStore,
+    )
+    from .gate_receipt import GateReceiptSystem
+
+    if use_stdin:
+        text = _sys.stdin.read()
+    if not text:
+        click.echo("Error: provide text argument or --stdin", err=True)
+        ctx.exit(1)
+        return
+
+    gov_dir = ensure_initialized(ctx)
+
+    # Build context from flags
+    approx_words = len(text.split())
+    context = ProbeContext(
+        has_side_effects=side_effects,
+        approx_words=approx_words,
+        is_long_prompt=is_long or approx_words > 1500 or len(text) > 8000,
+        is_strict_format=strict_format,
+        is_retrieval_heavy=retrieval_heavy,
+        risk_class=risk,
+        dry_run=dry_run,
+    )
+
+    # Receipt system
+    receipt_system = None
+    try:
+        receipt_system = GateReceiptSystem(gov_dir)
+    except Exception:
+        pass
+
+    auditor = StabilityAuditor()
+    generate_fn = None  # probe() validates: requires generate_fn or dry_run
+
+    result = auditor.probe(
+        text, text, generate_fn,
+        context=context,
+        receipt_system=receipt_system,
+        deep=deep,
+    )
+
+    if as_json:
+        data = result.to_dict()
+        if full:
+            # Re-run audit to get full fingerprint (expensive but explicit)
+            data["full_fingerprint_hint"] = "use 'governor conditioning status --json' for full data"
+        click.echo(json.dumps(data, indent=2))
+        return
+
+    label = "DRY-RUN (no real generation)" if result.measurement_failed else result.decision.upper()
+    click.echo(f"Probe Decision: {label}")
+    click.echo(f"  Recommendation: {result.recommendation}")
+    click.echo(f"  Transforms run: {', '.join(result.transforms_run) or 'none'}")
+    if result.trigger_reasons:
+        click.echo(f"  Trigger: {'; '.join(result.trigger_reasons)}")
+    if result.mitigations:
+        click.echo("  Mitigations:")
+        for m in result.mitigations:
+            click.echo(f"    [{m['axis']}] {m['reason']}")
+    if result.fingerprint_summary:
+        s = result.fingerprint_summary
+        click.echo(f"  Fingerprint: stiffness={s.get('stiffness', 0):.2f} "
+                    f"anisotropy={s.get('anisotropy', 0):.2f} "
+                    f"basins={s.get('basin_entropy', 0):.0f} "
+                    f"escape={s.get('escape_rate', 0):.2f}")
+    if result.receipt_id:
+        click.echo(f"  Receipt: {result.receipt_id[:16]}...")
+
+
 @conditioning.command("reset")
 @click.option("--confirm", is_flag=True, required=True, help="Confirm reset")
 @click.pass_context

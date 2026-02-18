@@ -831,7 +831,7 @@ class TestConvergenceReport:
 
 class TestEnumUpdate:
     def test_count_is_12(self):
-        assert len(TelemetryEventType) == 12
+        assert len(TelemetryEventType) == 13
 
     def test_new_values_exist(self):
         assert TelemetryEventType.CONTINUITY_TRACE.value == "continuity_trace"

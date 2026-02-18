@@ -920,7 +920,7 @@ class TestEnums:
         assert LEVEL_ORDER[TelemetryLevel.WARN] < LEVEL_ORDER[TelemetryLevel.ERROR]
 
     def test_all_event_types_in_enum(self):
-        assert len(TelemetryEventType) == 12
+        assert len(TelemetryEventType) == 13
 
     def test_all_levels_in_enum(self):
         assert len(TelemetryLevel) == 4

@@ -26,13 +26,21 @@ import pytest
 from governor.semantic_stability import (
     STABILITY_SCHEMA_VERSION,
     DivergenceMethod,
+    MitigationSuggestion,
     PerturbationKind,
     Perturbation,
+    ProbeContext,
+    ProbeDecision,
+    ProbeDecisionKind,
+    PromptSegment,
     StabilityAuditResult,
     StabilityConfig,
     StabilityFingerprint,
     StabilityAuditor,
     StabilityStore,
+    _escalate,
+    _PROBE_DECISION_TO_VERDICT,
+    check_probe_gate,
     compute_basin_entropy,
     compute_escape_stats,
     compute_commutator_drift,
@@ -50,6 +58,8 @@ from governor.semantic_stability import (
     perturb_repeat_trusted,
     perturb_structured_rewrap,
     perturb_distractor_insert,
+    select_mitigations,
+    select_probe_transforms,
     strip_boilerplate,
     tokenize_normalize,
     _jaccard_divergence,
@@ -2398,3 +2408,645 @@ class TestStoreContention:
         expected = n_threads * n_writes
         assert store.count() == expected
         assert len(store.query(limit=10000)) == expected
+
+
+# =============================================================================
+# TestPromptSegment
+# =============================================================================
+
+
+class TestPromptSegment:
+    def test_construction_and_hash(self):
+        seg = PromptSegment.make("hello world", "trusted", "task")
+        assert seg.text == "hello world"
+        assert seg.trust == "trusted"
+        assert seg.seg_class == "task"
+        assert len(seg.seg_hash) == 64  # sha256 hex
+
+    def test_hash_deterministic(self):
+        a = PromptSegment.make("same text", "trusted", "policy")
+        b = PromptSegment.make("same text", "trusted", "policy")
+        assert a.seg_hash == b.seg_hash
+
+    def test_frozen(self):
+        seg = PromptSegment.make("text", "trusted", "task")
+        with pytest.raises(AttributeError):
+            seg.text = "other"  # type: ignore[misc]
+
+
+# =============================================================================
+# TestProbeContext
+# =============================================================================
+
+
+class TestProbeContext:
+    def test_defaults(self):
+        ctx = ProbeContext()
+        assert ctx.has_side_effects is False
+        assert ctx.approx_words == 0
+        assert ctx.is_long_prompt is False
+        assert ctx.risk_class == "standard"
+        assert ctx.trusted_segments is None
+        assert ctx.envelope_mode == "strict"
+        assert ctx.dry_run is False
+
+    def test_frozen(self):
+        ctx = ProbeContext()
+        with pytest.raises(AttributeError):
+            ctx.has_side_effects = True  # type: ignore[misc]
+
+    def test_is_long_prompt_from_words(self):
+        ctx = ProbeContext(approx_words=2000, is_long_prompt=True)
+        assert ctx.is_long_prompt is True
+
+    def test_dry_run_flag(self):
+        ctx = ProbeContext(dry_run=True)
+        assert ctx.dry_run is True
+
+    def test_risk_class_values(self):
+        for rc in ("standard", "elevated", "critical"):
+            ctx = ProbeContext(risk_class=rc)
+            assert ctx.risk_class == rc
+
+
+# =============================================================================
+# TestSelectProbeTransforms
+# =============================================================================
+
+
+class TestSelectProbeTransforms:
+    def test_default_single_canary(self):
+        """Default: only format_jitter."""
+        ctx = ProbeContext()
+        kinds = select_probe_transforms(ctx)
+        assert kinds == ["format_jitter"]
+
+    def test_deep_full_canary(self):
+        """Deep mode: format_jitter + clause_reorder + role_rewrap."""
+        ctx = ProbeContext()
+        kinds = select_probe_transforms(ctx, deep=True)
+        assert "format_jitter" in kinds
+        assert "clause_reorder" in kinds
+        assert "role_rewrap" in kinds
+
+    def test_long_prompt_adds_relocate(self):
+        ctx = ProbeContext(is_long_prompt=True)
+        kinds = select_probe_transforms(ctx)
+        assert "instruction_relocate" in kinds
+
+    def test_retrieval_heavy_adds_relocate_and_distractor(self):
+        ctx = ProbeContext(is_retrieval_heavy=True)
+        kinds = select_probe_transforms(ctx)
+        assert "instruction_relocate" in kinds
+        assert "distractor_insert" in kinds
+
+    def test_strict_format_adds_rewrap(self):
+        ctx = ProbeContext(is_strict_format=True)
+        kinds = select_probe_transforms(ctx)
+        assert "structured_rewrap" in kinds
+
+    def test_trusted_segments_adds_repeat(self):
+        segs = [PromptSegment.make("task", "trusted", "task")]
+        ctx = ProbeContext(trusted_segments=segs)
+        kinds = select_probe_transforms(ctx)
+        assert "repeat_trusted" in kinds
+
+    def test_max_cap_respected(self):
+        ctx = ProbeContext(is_long_prompt=True, is_strict_format=True,
+                          is_retrieval_heavy=True,
+                          trusted_segments=[PromptSegment.make("x", "trusted", "task")])
+        kinds = select_probe_transforms(ctx, deep=True, max_kinds=3)
+        assert len(kinds) <= 3
+
+    def test_negation_never_in_main_list(self):
+        """Negation probe must not appear in selected transforms."""
+        ctx = ProbeContext(is_long_prompt=True, is_retrieval_heavy=True)
+        kinds = select_probe_transforms(ctx, deep=True)
+        assert "negation_probe" not in kinds
+
+    def test_elevated_risk_adds_deep_tier(self):
+        ctx = ProbeContext(risk_class="elevated")
+        kinds = select_probe_transforms(ctx)
+        assert "clause_reorder" in kinds
+        assert "role_rewrap" in kinds
+
+    def test_critical_risk_adds_deep_tier(self):
+        ctx = ProbeContext(risk_class="critical")
+        kinds = select_probe_transforms(ctx)
+        assert "clause_reorder" in kinds
+
+    def test_default_no_extra_transforms(self):
+        """Standard risk, no flags → only format_jitter."""
+        ctx = ProbeContext()
+        kinds = select_probe_transforms(ctx)
+        assert kinds == ["format_jitter"]
+
+    def test_all_tiers_combined(self):
+        """All context flags set → many transforms selected."""
+        segs = [PromptSegment.make("x", "trusted", "task")]
+        ctx = ProbeContext(
+            is_long_prompt=True, is_strict_format=True,
+            is_retrieval_heavy=True, risk_class="elevated",
+            trusted_segments=segs,
+        )
+        kinds = select_probe_transforms(ctx, deep=True, max_kinds=10)
+        # Should have at least: format_jitter, clause_reorder, role_rewrap,
+        # instruction_relocate, structured_rewrap, distractor_insert, repeat_trusted
+        assert len(kinds) >= 5
+
+
+# =============================================================================
+# TestSelectMitigations
+# =============================================================================
+
+
+class TestSelectMitigations:
+    def _make_fingerprint(self, **by_kind_overrides) -> StabilityFingerprint:
+        by_kind = {
+            "format_jitter": 0.5,
+            "clause_reorder": 0.5,
+        }
+        by_kind.update(by_kind_overrides)
+        return StabilityFingerprint(
+            stiffness=1.0, anisotropy=1.5, basin_entropy=1.0,
+            commutator_drift=0.0, noise_floor=0.05,
+            control_divergence=0.5, stiffness_by_kind=by_kind,
+            commutator_kinds=("role_rewrap", "clause_reorder"),
+        )
+
+    def test_high_relocate_stiffness(self):
+        fp = self._make_fingerprint(instruction_relocate=3.0)
+        ctx = ProbeContext()
+        mitigations = select_mitigations(fp, ctx)
+        axes = [m.axis for m in mitigations]
+        assert "position_bias" in axes
+
+    def test_high_distractor_stiffness(self):
+        fp = self._make_fingerprint(distractor_insert=3.0)
+        ctx = ProbeContext()
+        mitigations = select_mitigations(fp, ctx)
+        axes = [m.axis for m in mitigations]
+        assert "instruction_drift" in axes
+
+    def test_high_structured_stiffness(self):
+        fp = self._make_fingerprint(structured_rewrap=3.0)
+        ctx = ProbeContext()
+        mitigations = select_mitigations(fp, ctx)
+        axes = [m.axis for m in mitigations]
+        assert "representation_sensitivity" in axes
+
+    def test_no_trusted_segments_suppresses_repeat(self):
+        """HARD INVARIANT: repeat_trusted mitigation blocked without typed segments."""
+        fp = self._make_fingerprint(repeat_trusted=0.5)
+        ctx = ProbeContext(trusted_segments=None)
+        mitigations = select_mitigations(fp, ctx)
+        transforms = [m.transform for m in mitigations]
+        assert "repeat_trusted" not in transforms
+
+    def test_trusted_segments_allows_repeat(self):
+        fp = self._make_fingerprint(repeat_trusted=0.5)
+        segs = [PromptSegment.make("task", "trusted", "task")]
+        ctx = ProbeContext(trusted_segments=segs)
+        mitigations = select_mitigations(fp, ctx)
+        transforms = [m.transform for m in mitigations]
+        assert "repeat_trusted" in transforms
+
+    def test_stable_returns_empty(self):
+        fp = self._make_fingerprint()  # all stiffness < 2.0
+        ctx = ProbeContext()
+        mitigations = select_mitigations(fp, ctx)
+        assert mitigations == []
+
+    def test_multiple_axes(self):
+        fp = self._make_fingerprint(
+            instruction_relocate=3.0,
+            distractor_insert=3.0,
+            structured_rewrap=3.0,
+        )
+        ctx = ProbeContext()
+        mitigations = select_mitigations(fp, ctx)
+        assert len(mitigations) >= 3
+
+    def test_no_segments_still_allows_non_repeat_mitigations(self):
+        """Other mitigations still available without typed segments."""
+        fp = self._make_fingerprint(instruction_relocate=3.0)
+        ctx = ProbeContext(trusted_segments=None)
+        mitigations = select_mitigations(fp, ctx)
+        axes = [m.axis for m in mitigations]
+        assert "position_bias" in axes  # instruction relocation still works
+
+
+# =============================================================================
+# TestEscalation
+# =============================================================================
+
+
+class TestEscalation:
+    def test_stable_proceed(self):
+        ctx = ProbeContext()
+        kind, reasons = _escalate("stable", ctx, False)
+        assert kind == ProbeDecisionKind.PROCEED
+
+    def test_calibrating_proceed(self):
+        ctx = ProbeContext()
+        kind, _ = _escalate("calibrating", ctx, False)
+        assert kind == ProbeDecisionKind.PROCEED
+
+    def test_brittle_no_tools_mitigate(self):
+        ctx = ProbeContext(has_side_effects=False)
+        kind, _ = _escalate("brittle", ctx, False)
+        assert kind == ProbeDecisionKind.MITIGATE
+
+    def test_brittle_tools_standard_mitigate(self):
+        ctx = ProbeContext(has_side_effects=True, risk_class="standard")
+        kind, _ = _escalate("brittle", ctx, False)
+        assert kind == ProbeDecisionKind.MITIGATE
+
+    def test_brittle_tools_elevated_block(self):
+        ctx = ProbeContext(has_side_effects=True, risk_class="elevated")
+        kind, _ = _escalate("brittle", ctx, False)
+        assert kind == ProbeDecisionKind.BLOCK
+
+    def test_brittle_tools_critical_block(self):
+        ctx = ProbeContext(has_side_effects=True, risk_class="critical")
+        kind, _ = _escalate("brittle", ctx, False)
+        assert kind == ProbeDecisionKind.BLOCK
+
+    def test_multimodal_no_tools_mitigate(self):
+        ctx = ProbeContext(has_side_effects=False)
+        kind, _ = _escalate("multimodal", ctx, False)
+        assert kind == ProbeDecisionKind.MITIGATE
+
+    def test_multimodal_tools_standard_block(self):
+        ctx = ProbeContext(has_side_effects=True, risk_class="standard")
+        kind, _ = _escalate("multimodal", ctx, False)
+        assert kind == ProbeDecisionKind.BLOCK
+
+    def test_multimodal_tools_critical_human_gate(self):
+        ctx = ProbeContext(has_side_effects=True, risk_class="critical")
+        kind, _ = _escalate("multimodal", ctx, False)
+        assert kind == ProbeDecisionKind.HUMAN_GATE
+
+    def test_measurement_failed_no_tools_inconclusive(self):
+        ctx = ProbeContext(has_side_effects=False)
+        kind, _ = _escalate("stable", ctx, True)
+        assert kind == ProbeDecisionKind.INCONCLUSIVE
+
+    def test_measurement_failed_tools_standard_inconclusive(self):
+        ctx = ProbeContext(has_side_effects=True, risk_class="standard")
+        kind, _ = _escalate("stable", ctx, True)
+        assert kind == ProbeDecisionKind.INCONCLUSIVE
+
+    def test_measurement_failed_tools_critical_block(self):
+        ctx = ProbeContext(has_side_effects=True, risk_class="critical")
+        kind, _ = _escalate("stable", ctx, True)
+        assert kind == ProbeDecisionKind.BLOCK
+
+    def test_exploratory_no_side_effects_no_downgrade_needed(self):
+        """Exploratory + no side effects: normal escalation applies."""
+        ctx = ProbeContext(has_side_effects=False, envelope_mode="exploratory")
+        kind, _ = _escalate("brittle", ctx, False)
+        assert kind == ProbeDecisionKind.MITIGATE
+
+    def test_exploratory_with_side_effects_no_downgrade(self):
+        """FOOTGUN TEST: exploratory + side_effects does NOT soften BLOCK."""
+        ctx = ProbeContext(has_side_effects=True, risk_class="elevated",
+                          envelope_mode="exploratory")
+        kind, _ = _escalate("brittle", ctx, False)
+        assert kind == ProbeDecisionKind.BLOCK  # NOT downgraded
+
+
+# =============================================================================
+# TestProbeDecision
+# =============================================================================
+
+
+class TestProbeDecision:
+    def test_serialization_roundtrip(self):
+        d = ProbeDecision(
+            decision="proceed",
+            trigger_reasons=["stable"],
+            transforms_run=["format_jitter"],
+            mitigations=[],
+            recommendation="stable",
+            fingerprint_summary={"stiffness": 0.1, "anisotropy": 1.0,
+                                  "basin_entropy": 1.0, "escape_rate": 0.0},
+            timestamp="2026-02-18T00:00:00+00:00",
+        )
+        serialized = d.to_dict()
+        restored = ProbeDecision.from_dict(serialized)
+        assert restored.decision == d.decision
+        assert restored.recommendation == d.recommendation
+        assert restored.fingerprint_summary == d.fingerprint_summary
+
+    def test_measurement_failed_field(self):
+        d = ProbeDecision(
+            decision="inconclusive",
+            trigger_reasons=["measurement_failed"],
+            transforms_run=[],
+            mitigations=[],
+            recommendation="calibrating",
+            measurement_failed=True,
+        )
+        assert d.measurement_failed is True
+        assert d.to_dict()["measurement_failed"] is True
+
+    def test_fingerprint_summary_compact(self):
+        d = ProbeDecision(
+            decision="proceed",
+            trigger_reasons=[],
+            transforms_run=["format_jitter"],
+            mitigations=[],
+            recommendation="stable",
+            fingerprint_summary={"stiffness": 0.2, "anisotropy": 1.1,
+                                  "basin_entropy": 1.0, "escape_rate": 0.0},
+        )
+        # Only 4 floats in compact summary
+        assert len(d.fingerprint_summary) == 4
+
+    def test_receipt_id_optional(self):
+        d = ProbeDecision(
+            decision="proceed", trigger_reasons=[], transforms_run=[],
+            mitigations=[], recommendation="stable",
+        )
+        assert d.receipt_id is None
+        assert d.to_dict()["receipt_id"] is None
+
+    def test_from_dict_defaults(self):
+        d = ProbeDecision.from_dict({"decision": "proceed"})
+        assert d.measurement_failed is False
+        assert d.trigger_reasons == []
+
+
+# =============================================================================
+# TestAuditorProbe
+# =============================================================================
+
+
+class TestAuditorProbe:
+    def test_returns_probe_decision(self):
+        auditor = StabilityAuditor()
+        result = auditor.probe(
+            "You are a coder. Write Python code.",
+            "Here is some Python code.",
+            _echo_fn,
+        )
+        assert isinstance(result, ProbeDecision)
+        assert result.decision in [k.value for k in ProbeDecisionKind]
+
+    def test_dry_run_measurement_failed(self):
+        auditor = StabilityAuditor()
+        ctx = ProbeContext(dry_run=True)
+        result = auditor.probe(
+            "test prompt", "test output",
+            generate_fn=None,
+            context=ctx,
+        )
+        assert result.measurement_failed is True
+
+    def test_no_generate_fn_no_dry_run_raises(self):
+        auditor = StabilityAuditor()
+        ctx = ProbeContext(dry_run=False)
+        with pytest.raises(ValueError, match="probe requires generate_fn"):
+            auditor.probe("test", "test", generate_fn=None, context=ctx)
+
+    def test_receipt_emission(self, tmp_gov_dir):
+        from governor.gate_receipt import GateReceiptSystem
+        receipt_system = GateReceiptSystem(tmp_gov_dir)
+        auditor = StabilityAuditor()
+        result = auditor.probe(
+            "You are a coder. Write Python.",
+            "Here is code.",
+            _echo_fn,
+            receipt_system=receipt_system,
+        )
+        assert result.receipt_id is not None
+        assert len(result.receipt_id) == 64
+
+    def test_deep_flag_propagates(self):
+        auditor = StabilityAuditor()
+        result_default = auditor.probe("You are X. Do Y.", "output", _echo_fn)
+        result_deep = auditor.probe("You are X. Do Y.", "output", _echo_fn, deep=True)
+        # Deep should run more transforms
+        assert len(result_deep.transforms_run) >= len(result_default.transforms_run)
+
+    def test_timestamp_present(self):
+        auditor = StabilityAuditor()
+        result = auditor.probe("prompt", "output", _echo_fn)
+        assert result.timestamp
+        assert "T" in result.timestamp  # ISO 8601
+
+    def test_default_context_conservative(self):
+        """Default context: no side effects, standard risk → PROCEED for echo."""
+        auditor = StabilityAuditor()
+        result = auditor.probe("test", "test", _echo_fn)
+        # Echo fn should produce a stable-looking result
+        assert result.decision in ("proceed", "inconclusive", "mitigate")
+
+    def test_fingerprint_summary_in_result(self):
+        auditor = StabilityAuditor()
+        result = auditor.probe("test prompt", "test output", _echo_fn)
+        assert result.fingerprint_summary is not None
+        assert "stiffness" in result.fingerprint_summary
+        assert "anisotropy" in result.fingerprint_summary
+        assert "basin_entropy" in result.fingerprint_summary
+        assert "escape_rate" in result.fingerprint_summary
+
+    def test_probe_with_varying_fn(self):
+        """Varying generate_fn can produce non-proceed decisions."""
+        fn = _varying_fn(["totally different output", "another thing entirely",
+                          "something completely else", "yet another response"])
+        auditor = StabilityAuditor()
+        result = auditor.probe(
+            "You are a coder. Write Python code. This is a long prompt with many words.",
+            "Here is the code.",
+            fn,
+        )
+        assert isinstance(result, ProbeDecision)
+
+    def test_probe_transforms_run_populated(self):
+        auditor = StabilityAuditor()
+        result = auditor.probe("test prompt", "test output", _echo_fn)
+        assert len(result.transforms_run) >= 1
+        assert "format_jitter" in result.transforms_run
+
+
+# =============================================================================
+# TestProbeFootgun
+# =============================================================================
+
+
+class TestProbeFootgun:
+    def test_repeat_trusted_blocked_without_segments(self):
+        """HARD INVARIANT: repeat_trusted mitigation suppressed without typed segments."""
+        fp = StabilityFingerprint(
+            stiffness=3.0, anisotropy=5.0, basin_entropy=4.0,
+            commutator_drift=0.1, noise_floor=0.05,
+            control_divergence=0.5,
+            stiffness_by_kind={"repeat_trusted": 0.3},  # low → would suggest repeat
+            commutator_kinds=("role_rewrap", "clause_reorder"),
+        )
+        ctx = ProbeContext(trusted_segments=None)
+        mitigations = select_mitigations(fp, ctx)
+        transforms = [m.transform for m in mitigations]
+        assert "repeat_trusted" not in transforms
+
+    def test_exploratory_side_effects_no_downgrade(self):
+        """Exploratory + side effects = still BLOCK, not downgraded."""
+        ctx = ProbeContext(
+            has_side_effects=True,
+            risk_class="elevated",
+            envelope_mode="exploratory",
+        )
+        kind, _ = _escalate("multimodal", ctx, False)
+        assert kind == ProbeDecisionKind.HUMAN_GATE
+
+    def test_echo_without_dry_run_raises(self):
+        """No silent echo fallback — must be explicit dry_run."""
+        auditor = StabilityAuditor()
+        with pytest.raises(ValueError, match="probe requires generate_fn"):
+            auditor.probe("test", "test", generate_fn=None)
+
+    def test_negation_excluded_from_probe_transforms(self):
+        """Negation probe must never appear in selected transforms."""
+        for risk in ("standard", "elevated", "critical"):
+            ctx = ProbeContext(risk_class=risk, is_long_prompt=True,
+                              is_retrieval_heavy=True, is_strict_format=True)
+            kinds = select_probe_transforms(ctx, deep=True)
+            assert "negation_probe" not in kinds
+
+    def test_verdict_mapping_complete(self):
+        """All ProbeDecisionKind values have a verdict mapping."""
+        for kind in ProbeDecisionKind:
+            assert kind.value in _PROBE_DECISION_TO_VERDICT
+
+
+# =============================================================================
+# TestCheckProbeGate
+# =============================================================================
+
+
+class TestCheckProbeGate:
+    def _decision(self, kind: str, mitigations: list[dict] | None = None,
+                  reasons: list[str] | None = None) -> ProbeDecision:
+        return ProbeDecision(
+            decision=kind,
+            trigger_reasons=reasons or [],
+            transforms_run=["format_jitter"],
+            mitigations=mitigations or [],
+            recommendation="stable",
+        )
+
+    def test_proceed_allowed(self):
+        d = self._decision("proceed")
+        ok, reason = check_probe_gate(d)
+        assert ok is True
+        assert "stable" in reason
+
+    def test_inconclusive_allowed_with_warning(self):
+        d = self._decision("inconclusive")
+        ok, reason = check_probe_gate(d)
+        assert ok is True
+        assert "inconclusive" in reason
+
+    def test_mitigate_without_ack_blocked(self):
+        d = self._decision("mitigate", mitigations=[
+            {"axis": "position_bias", "transform": "instruction_relocate", "reason": "test"}
+        ])
+        ok, reason = check_probe_gate(d)
+        assert ok is False
+        assert "instruction_relocate" in reason
+
+    def test_mitigate_with_ack_allowed(self):
+        d = self._decision("mitigate", mitigations=[
+            {"axis": "position_bias", "transform": "instruction_relocate", "reason": "test"}
+        ])
+        ok, reason = check_probe_gate(d, mitigations_applied=["instruction_relocate"])
+        assert ok is True
+        assert "acknowledged" in reason
+
+    def test_mitigate_partial_ack_blocked(self):
+        d = self._decision("mitigate", mitigations=[
+            {"axis": "a", "transform": "instruction_relocate", "reason": ""},
+            {"axis": "b", "transform": "structured_rewrap", "reason": ""},
+        ])
+        ok, _ = check_probe_gate(d, mitigations_applied=["instruction_relocate"])
+        assert ok is False
+
+    def test_mitigate_no_suggestions_allowed(self):
+        """MITIGATE with empty mitigations list = allowed (nothing to ack)."""
+        d = self._decision("mitigate", mitigations=[])
+        ok, _ = check_probe_gate(d)
+        assert ok is True
+
+    def test_block_always_blocked(self):
+        d = self._decision("block", reasons=["risk_class=critical"])
+        ok, reason = check_probe_gate(d)
+        assert ok is False
+        assert "blocked" in reason
+
+    def test_human_gate_always_blocked(self):
+        d = self._decision("human_gate", reasons=["multimodal + critical"])
+        ok, reason = check_probe_gate(d)
+        assert ok is False
+        assert "human gate" in reason
+
+
+# =============================================================================
+# TestProbeTelemetry
+# =============================================================================
+
+
+class TestProbeTelemetry:
+    def test_telemetry_emitted_on_probe(self):
+        """Probe with collector emits a stability_probe event."""
+        from governor.telemetry import TelemetryCollector, TelemetryConfig
+
+        collector = TelemetryCollector(TelemetryConfig(logging_enabled=False))
+        events: list = []
+
+        class CaptureBE:
+            def record(self, event):
+                events.append(event)
+
+        collector.add_backend(CaptureBE())
+
+        auditor = StabilityAuditor()
+        auditor.probe("test", "test", _echo_fn, collector=collector)
+
+        assert len(events) == 1
+        assert events[0].event_type.value == "stability_probe"
+        assert "decision" in events[0].fields
+        assert "transforms_run" in events[0].fields
+
+    def test_telemetry_captures_decision(self):
+        from governor.telemetry import TelemetryCollector, TelemetryConfig
+
+        collector = TelemetryCollector(TelemetryConfig(logging_enabled=False))
+        events: list = []
+
+        class CaptureBE:
+            def record(self, event):
+                events.append(event)
+
+        collector.add_backend(CaptureBE())
+
+        auditor = StabilityAuditor()
+        ctx = ProbeContext(dry_run=True)
+        auditor.probe("test", "test", None, context=ctx, collector=collector)
+
+        fields = events[0].fields
+        assert fields["measurement_failed"] is True
+        assert fields["tier_count"] >= 1
+
+    def test_telemetry_failure_swallowed(self):
+        """Telemetry errors must not crash probe."""
+
+        class BadCollector:
+            def record_stability_probe(self, **kwargs):
+                raise RuntimeError("telemetry broken")
+
+        auditor = StabilityAuditor()
+        # Should not raise
+        result = auditor.probe("test", "test", _echo_fn, collector=BadCollector())
+        assert isinstance(result, ProbeDecision)

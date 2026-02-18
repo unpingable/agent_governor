@@ -376,6 +376,161 @@ class StabilityAuditResult:
 
 
 # =============================================================================
+# Probe vs Mitigation Policy Types
+# =============================================================================
+
+
+class ProbeDecisionKind(str, Enum):
+    """Decision produced by a stability probe.
+
+    Probe is for measurement. Mitigation is for control. Never mix them.
+    """
+
+    PROCEED = "proceed"
+    """Stable — no action needed."""
+
+    INCONCLUSIVE = "inconclusive"
+    """Measurement failed — budget exceeded or no backend."""
+
+    MITIGATE = "mitigate"
+    """Unstable — apply targeted transforms."""
+
+    BLOCK = "block"
+    """Dangerous + tools active — refuse until resolved."""
+
+    HUMAN_GATE = "human_gate"
+    """High risk + tools active — escalate to human."""
+
+
+@dataclass(frozen=True)
+class PromptSegment:
+    """Typed prompt segment — not naked strings.
+
+    Trust metadata prevents heuristic re-derivation later.
+    """
+
+    text: str
+    trust: str       # "trusted" | "untrusted"
+    seg_class: str   # "policy" | "contract" | "task" | "context" | "evidence" | "user_query"
+    seg_hash: str    # sha256 of text
+
+    @staticmethod
+    def make(text: str, trust: str, seg_class: str) -> PromptSegment:
+        """Construct with auto-computed hash."""
+        return PromptSegment(
+            text=text,
+            trust=trust,
+            seg_class=seg_class,
+            seg_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        )
+
+
+@dataclass(frozen=True)
+class ProbeContext:
+    """Prompt features that drive transform selection and escalation."""
+
+    has_side_effects: bool = False
+    """Tools enabled, can mutate state."""
+
+    approx_words: int = 0
+    """len(text.split()) — not tokens, a heuristic."""
+
+    is_long_prompt: bool = False
+    """Derived: approx_words > 1500 or char_count > 8000."""
+
+    is_strict_format: bool = False
+    """JSON/code-heavy output expected."""
+
+    is_retrieval_heavy: bool = False
+    """Lots of context/evidence blocks."""
+
+    risk_class: str = "standard"
+    """standard | elevated | critical"""
+
+    trusted_segments: list[PromptSegment] | None = None
+    """Typed segments (if available)."""
+
+    envelope_mode: str = "strict"
+    """strict | exploratory"""
+
+    dry_run: bool = False
+    """True = echo fallback, no real generation."""
+
+
+@dataclass(frozen=True)
+class MitigationSuggestion:
+    """Axis-targeted fix suggestion from probe analysis."""
+
+    axis: str
+    """Which sensitivity axis triggered this."""
+
+    transform: str
+    """PerturbationKind value to apply as mitigation."""
+
+    reason: str
+    """Diagnostic explanation."""
+
+    def to_dict(self) -> dict[str, str]:
+        return {"axis": self.axis, "transform": self.transform, "reason": self.reason}
+
+
+@dataclass
+class ProbeDecision:
+    """Decision artifact from a stability probe."""
+
+    decision: str
+    """ProbeDecisionKind value."""
+
+    trigger_reasons: list[str]
+    """Why this decision was reached."""
+
+    transforms_run: list[str]
+    """Which probe transforms executed."""
+
+    mitigations: list[dict[str, str]]
+    """MitigationSuggestion dicts."""
+
+    recommendation: str
+    """Underlying classification (stable/brittle/etc)."""
+
+    measurement_failed: bool = False
+    """True when budget exceeded or dry_run."""
+
+    fingerprint_summary: dict[str, float] | None = None
+    """Compact: stiffness + anisotropy + basin_entropy + escape_rate."""
+
+    receipt_id: str | None = None
+    timestamp: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "decision": self.decision,
+            "trigger_reasons": list(self.trigger_reasons),
+            "transforms_run": list(self.transforms_run),
+            "mitigations": list(self.mitigations),
+            "recommendation": self.recommendation,
+            "measurement_failed": self.measurement_failed,
+            "fingerprint_summary": dict(self.fingerprint_summary) if self.fingerprint_summary else None,
+            "receipt_id": self.receipt_id,
+            "timestamp": self.timestamp,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ProbeDecision:
+        return cls(
+            decision=d["decision"],
+            trigger_reasons=d.get("trigger_reasons", []),
+            transforms_run=d.get("transforms_run", []),
+            mitigations=d.get("mitigations", []),
+            recommendation=d.get("recommendation", ""),
+            measurement_failed=d.get("measurement_failed", False),
+            fingerprint_summary=d.get("fingerprint_summary"),
+            receipt_id=d.get("receipt_id"),
+            timestamp=d.get("timestamp", ""),
+        )
+
+
+# =============================================================================
 # Helpers: Atomic segment detection
 # =============================================================================
 
@@ -1276,6 +1431,262 @@ def compute_fingerprint(
 
 
 # =============================================================================
+# Probe Transform Selection
+# =============================================================================
+
+# Short aliases for budget tier definitions
+_FJ = PerturbationKind.FORMAT_JITTER.value
+_CR = PerturbationKind.CLAUSE_REORDER.value
+_RR = PerturbationKind.ROLE_REWRAP.value
+_IR = PerturbationKind.INSTRUCTION_RELOCATE.value
+_SR = PerturbationKind.STRUCTURED_REWRAP.value
+_DI = PerturbationKind.DISTRACTOR_INSERT.value
+_RT = PerturbationKind.REPEAT_TRUSTED.value
+_NP = PerturbationKind.NEGATION_PROBE.value
+
+
+# Ordered transform sets by information value.
+# Each tier: (name, predicate on ProbeContext, list of PerturbationKind values)
+_PROBE_BUDGET_TIERS: list[tuple[str, Callable[[ProbeContext], bool], list[str]]] = [
+    # Tier 0: single canary (always, minimal cost)
+    ("canary", lambda _: True, [_FJ]),
+    # Tier 1: add for deep probe or elevated risk
+    ("canary_deep", lambda c: c.risk_class != "standard", [_CR, _RR]),
+    # Tier 2: add for long-context or retrieval-heavy
+    ("long_context", lambda c: c.is_long_prompt or c.is_retrieval_heavy, [_IR]),
+    # Tier 3: structure sensitivity
+    ("structure", lambda c: c.is_strict_format, [_SR]),
+    # Tier 4: drift detection
+    ("drift", lambda c: c.is_retrieval_heavy or c.is_long_prompt, [_DI]),
+    # Tier 5: salience probe (needs typed segments)
+    ("salience", lambda c: c.trusted_segments is not None, [_RT]),
+]
+
+
+def select_probe_transforms(
+    context: ProbeContext,
+    deep: bool = False,
+    max_kinds: int = 5,
+) -> list[str]:
+    """Select transforms based on context and budget.
+
+    Default: tier 0 only (1 transform: format_jitter). Cheap canary.
+    deep=True: also includes tier 1 (clause_reorder + role_rewrap).
+    Remaining tiers selected by context predicates.
+    Negation probe always appended as positive control (not counted against cap).
+    """
+    selected: list[str] = []
+
+    for name, predicate, kinds in _PROBE_BUDGET_TIERS:
+        if name == "canary":
+            selected.extend(kinds)
+        elif name == "canary_deep":
+            if deep or predicate(context):
+                selected.extend(kinds)
+        else:
+            if predicate(context):
+                selected.extend(kinds)
+
+        if len(selected) >= max_kinds:
+            break
+
+    selected = selected[:max_kinds]
+
+    # Negation probe is ALWAYS appended as positive control.
+    # Does NOT count against max_kinds cap.
+    # Must NOT be in the main selected list (excluded from all scoring).
+    if _NP in selected:
+        selected.remove(_NP)
+    return selected
+
+
+# =============================================================================
+# Mitigation Selection
+# =============================================================================
+
+
+def select_mitigations(
+    fingerprint: StabilityFingerprint,
+    context: ProbeContext,
+) -> list[MitigationSuggestion]:
+    """Axis-targeted diagnostic interpretation from per-kind stiffness.
+
+    Uses fingerprint.stiffness_by_kind dict. Threshold: per-kind stiffness > 2.0.
+    HARD INVARIANT: repeat_trusted mitigation only emitted when
+    context.trusted_segments is not None.
+    """
+    suggestions: list[MitigationSuggestion] = []
+    by_kind = fingerprint.stiffness_by_kind
+
+    # High instruction_relocate stiffness → position/recency bias
+    if by_kind.get(_IR, 0.0) > _STIFFNESS_BRITTLE:
+        suggestions.append(MitigationSuggestion(
+            axis="position_bias",
+            transform=_IR,
+            reason="High instruction-relocate stiffness indicates position/recency bias. "
+                   "Place critical instructions at both start and end (sandwich).",
+        ))
+
+    # High structured_rewrap stiffness → representation sensitivity
+    if by_kind.get(_SR, 0.0) > _STIFFNESS_BRITTLE:
+        suggestions.append(MitigationSuggestion(
+            axis="representation_sensitivity",
+            transform=_SR,
+            reason="High structured-rewrap stiffness indicates representation sensitivity. "
+                   "Use explicit schema form (bullet/numbered) for constraints.",
+        ))
+
+    # High distractor_insert stiffness → instruction drift
+    if by_kind.get(_DI, 0.0) > _STIFFNESS_BRITTLE:
+        suggestions.append(MitigationSuggestion(
+            axis="instruction_drift",
+            transform=_DI,
+            reason="High distractor stiffness indicates instruction drift susceptibility. "
+                   "Add stronger task boundaries and reassert instructions after context.",
+        ))
+
+    # Low stiffness with repeat_trusted → attention dilution (repeat helps)
+    # HARD INVARIANT: only suggest repeat_trusted when typed segments available
+    rt_stiffness = by_kind.get(_RT, None)
+    if rt_stiffness is not None and rt_stiffness < _STIFFNESS_BRITTLE:
+        if context.trusted_segments is not None:
+            suggestions.append(MitigationSuggestion(
+                axis="attention_dilution",
+                transform=_RT,
+                reason="Low repeat-trusted stiffness suggests attention dilution. "
+                       "Repeating trusted instruction block improves salience.",
+            ))
+        else:
+            logger.debug(
+                "repeat_trusted mitigation suppressed: no typed segments available"
+            )
+
+    # High clause_reorder stiffness → order sensitivity
+    if by_kind.get(_CR, 0.0) > _STIFFNESS_BRITTLE:
+        suggestions.append(MitigationSuggestion(
+            axis="order_sensitivity",
+            transform=_CR,
+            reason="High clause-reorder stiffness indicates order sensitivity. "
+                   "Ensure critical constraints appear first or use structured format.",
+        ))
+
+    return suggestions
+
+
+# =============================================================================
+# Escalation Ladder
+# =============================================================================
+
+
+def _escalate(
+    recommendation: str,
+    context: ProbeContext,
+    measurement_failed: bool,
+) -> tuple[ProbeDecisionKind, list[str]]:
+    """Map recommendation + context → ProbeDecisionKind + trigger reasons.
+
+    Exploratory mode downgrade: only applies when has_side_effects=False.
+    If has_side_effects=True, exploratory mode does NOT soften BLOCK/HUMAN_GATE.
+    """
+    reasons: list[str] = []
+
+    # --- Budget exceeded / measurement failed ---
+    if measurement_failed:
+        reasons.append("measurement_failed")
+        if not context.has_side_effects:
+            return ProbeDecisionKind.INCONCLUSIVE, reasons
+        if context.risk_class == "standard":
+            return ProbeDecisionKind.INCONCLUSIVE, reasons
+        reasons.append(f"risk_class={context.risk_class} + side_effects + measurement_failed")
+        return ProbeDecisionKind.BLOCK, reasons
+
+    # --- Normal (measurement succeeded) ---
+    reasons.append(f"recommendation={recommendation}")
+
+    if recommendation in ("stable", "calibrating"):
+        return ProbeDecisionKind.PROCEED, reasons
+
+    if recommendation == "brittle":
+        if not context.has_side_effects:
+            return ProbeDecisionKind.MITIGATE, reasons
+        if context.risk_class == "standard":
+            return ProbeDecisionKind.MITIGATE, reasons
+        # elevated or critical + tools
+        reasons.append(f"risk_class={context.risk_class} + side_effects")
+        return ProbeDecisionKind.BLOCK, reasons
+
+    if recommendation == "multimodal":
+        if not context.has_side_effects:
+            return ProbeDecisionKind.MITIGATE, reasons
+        if context.risk_class == "standard":
+            reasons.append("multimodal + side_effects")
+            return ProbeDecisionKind.BLOCK, reasons
+        # elevated or critical
+        reasons.append(f"risk_class={context.risk_class} + multimodal + side_effects")
+        return ProbeDecisionKind.HUMAN_GATE, reasons
+
+    # Unknown recommendation → PROCEED with warning
+    reasons.append(f"unknown_recommendation={recommendation}")
+    return ProbeDecisionKind.PROCEED, reasons
+
+
+# Verdict mapping for probe receipts
+_PROBE_DECISION_TO_VERDICT: dict[str, str] = {
+    ProbeDecisionKind.PROCEED.value: "pass",
+    ProbeDecisionKind.INCONCLUSIVE.value: "observe",
+    ProbeDecisionKind.MITIGATE.value: "warn",
+    ProbeDecisionKind.BLOCK.value: "block",
+    ProbeDecisionKind.HUMAN_GATE.value: "block",
+}
+
+
+# =============================================================================
+# Integration Gate
+# =============================================================================
+
+
+def check_probe_gate(
+    decision: ProbeDecision,
+    mitigations_applied: list[str] | None = None,
+) -> tuple[bool, str]:
+    """Check whether an action should proceed based on a probe decision.
+
+    Returns (allowed, reason).
+
+    Rules:
+      PROCEED              → allowed
+      INCONCLUSIVE         → allowed (with warning)
+      MITIGATE + ack'd     → allowed (mitigations_applied covers suggestions)
+      MITIGATE + not ack'd → blocked
+      BLOCK                → blocked
+      HUMAN_GATE           → blocked
+    """
+    kind = decision.decision
+
+    if kind == ProbeDecisionKind.PROCEED.value:
+        return True, "stable"
+
+    if kind == ProbeDecisionKind.INCONCLUSIVE.value:
+        return True, "inconclusive: measurement failed, proceeding with caution"
+
+    if kind == ProbeDecisionKind.MITIGATE.value:
+        suggested = {m["transform"] for m in decision.mitigations}
+        applied = set(mitigations_applied or [])
+        if not suggested or suggested <= applied:
+            return True, "mitigations acknowledged"
+        missing = suggested - applied
+        return False, f"mitigations not applied: {', '.join(sorted(missing))}"
+
+    if kind == ProbeDecisionKind.BLOCK.value:
+        return False, f"blocked: {'; '.join(decision.trigger_reasons)}"
+
+    if kind == ProbeDecisionKind.HUMAN_GATE.value:
+        return False, f"human gate required: {'; '.join(decision.trigger_reasons)}"
+
+    return True, f"unknown decision kind: {kind}"
+
+
+# =============================================================================
 # Auditor
 # =============================================================================
 
@@ -1617,6 +2028,175 @@ class StabilityAuditor:
             calls_used=result.calls_used,
             receipt_id=receipt.receipt_id,
         )
+
+    # -----------------------------------------------------------------
+    # probe() — decision-producing stability probe
+    # -----------------------------------------------------------------
+
+    def probe(
+        self,
+        prompt: str,
+        output: str,
+        generate_fn: Callable[[str], str] | None = None,
+        context: ProbeContext | None = None,
+        receipt_system: Any | None = None,
+        deep: bool = False,
+        collector: Any | None = None,
+    ) -> ProbeDecision:
+        """Run a decision-producing stability probe.
+
+        Unlike audit() which is purely observational, probe() produces an
+        actionable decision (PROCEED/INCONCLUSIVE/MITIGATE/BLOCK/HUMAN_GATE)
+        based on the stability fingerprint and the operational context.
+
+        Args:
+            prompt: The original prompt.
+            output: The baseline output from the model.
+            generate_fn: Model generation function. Required unless dry_run=True.
+            context: Operational context (tools, risk, segments). Conservative defaults if None.
+            receipt_system: Optional GateReceiptSystem for receipt emission.
+            deep: If True, run full canary set (3 transforms) instead of default single.
+            collector: Optional TelemetryCollector for failure telemetry.
+
+        Returns:
+            ProbeDecision with decision kind, trigger reasons, and mitigations.
+
+        Raises:
+            ValueError: If generate_fn is None and dry_run is False.
+        """
+        if context is None:
+            context = ProbeContext()
+
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        # Validate generate_fn requirement
+        if generate_fn is None and not context.dry_run:
+            raise ValueError(
+                "probe requires generate_fn or dry_run=True"
+            )
+
+        # Dry run: echo function, labeled as measurement failure
+        measurement_failed = False
+        if context.dry_run:
+            generate_fn = lambda p: p  # noqa: E731
+            measurement_failed = True
+
+        # Select transforms
+        selected_kinds = select_probe_transforms(context, deep=deep)
+
+        # Build temporary config with only selected kinds + negation control
+        # Force temperature=0 for deterministic probe runs
+        probe_kinds = selected_kinds + [_NP]
+        probe_config = StabilityConfig(
+            n_perturbations=len(probe_kinds),
+            kinds=probe_kinds,
+            divergence_method=self.config.divergence_method,
+            noise_floor_samples=self.config.noise_floor_samples,
+            basin_threshold=self.config.basin_threshold,
+            seed=self.config.seed,
+            store_raw_outputs=False,
+            sample_rate=1.0,  # Always run when explicitly probed
+            max_generate_calls=self.config.max_generate_calls,
+            commutator_pair=self.config.commutator_pair,
+            decoding_params={"temperature": 0},
+        )
+
+        # Run via existing audit machinery
+        probe_auditor = StabilityAuditor(probe_config)
+        audit_result = probe_auditor.audit(
+            prompt, output, generate_fn,
+            receipt_system=None,  # We emit our own receipt below
+        )
+
+        # If audit itself exceeded budget, mark as measurement failure
+        if audit_result.budget_exceeded:
+            measurement_failed = True
+
+        # Escalate
+        decision_kind, trigger_reasons = _escalate(
+            audit_result.recommendation, context, measurement_failed,
+        )
+
+        # Mitigations (only for MITIGATE or higher)
+        mitigations: list[MitigationSuggestion] = []
+        if decision_kind in (
+            ProbeDecisionKind.MITIGATE,
+            ProbeDecisionKind.BLOCK,
+            ProbeDecisionKind.HUMAN_GATE,
+        ):
+            mitigations = select_mitigations(audit_result.fingerprint, context)
+
+        # Compact fingerprint summary (4 floats)
+        fp = audit_result.fingerprint
+        fingerprint_summary = {
+            "stiffness": fp.stiffness,
+            "anisotropy": fp.anisotropy,
+            "basin_entropy": fp.basin_entropy,
+            "escape_rate": fp.escape_rate,
+        }
+
+        result = ProbeDecision(
+            decision=decision_kind.value,
+            trigger_reasons=trigger_reasons,
+            transforms_run=selected_kinds,
+            mitigations=[m.to_dict() for m in mitigations],
+            recommendation=audit_result.recommendation,
+            measurement_failed=measurement_failed,
+            fingerprint_summary=fingerprint_summary,
+            timestamp=timestamp,
+        )
+
+        # Emit receipt
+        if receipt_system is not None:
+            try:
+                from .gate_receipt import canonical_json
+
+                subject_bytes = canonical_json({
+                    "prompt_hash": audit_result.prompt_hash,
+                    "output_hash": audit_result.output_hash,
+                })
+                evidence_dict = {
+                    "decision": result.decision,
+                    "recommendation": result.recommendation,
+                    "measurement_failed": result.measurement_failed,
+                    "transforms_run": result.transforms_run,
+                    "stiffness": fp.stiffness,
+                    "anisotropy": fp.anisotropy,
+                    "basin_entropy": fp.basin_entropy,
+                    "escape_rate": fp.escape_rate,
+                }
+                verdict = _PROBE_DECISION_TO_VERDICT.get(result.decision, "observe")
+                receipt = receipt_system.emit(
+                    gate="stability_probe",
+                    verdict=verdict,
+                    subject_kind="stability_probe",
+                    subject_bytes=subject_bytes,
+                    evidence_bundle=evidence_dict,
+                    gate_config=probe_config.to_dict(),
+                )
+                result.receipt_id = receipt.receipt_id
+            except Exception:
+                logger.warning("Failed to emit stability probe receipt", exc_info=True)
+
+        # Emit telemetry
+        if collector is not None:
+            try:
+                unstable_axes = [m.axis for m in mitigations]
+                collector.record_stability_probe(
+                    decision=result.decision,
+                    recommendation=result.recommendation,
+                    transforms_run=selected_kinds,
+                    mitigations_suggested=len(mitigations),
+                    measurement_failed=measurement_failed,
+                    budget_exceeded=audit_result.budget_exceeded,
+                    stiffness=fp.stiffness,
+                    escape_rate=fp.escape_rate,
+                    unstable_axes=unstable_axes,
+                )
+            except Exception:
+                logger.debug("Failed to emit probe telemetry", exc_info=True)
+
+        return result
 
 
 # =============================================================================

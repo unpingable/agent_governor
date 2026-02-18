@@ -1655,3 +1655,92 @@ class TestCooldownRouterIntegration:
         status = lr.get_status()
         assert "cooldown_stats" in status
         assert "window_s" in status["cooldown_stats"]
+
+
+class TestProbeFailRate:
+    """Probe failure rate derived from cooldown store entries."""
+
+    def _make_result(self, model, lane, probe_decision, escalated=False):
+        return CascadeResult(
+            output="x", lane_used=lane, model_used=model,
+            escalated=escalated, escalation_chain=[], mitigations_attempted=[],
+            probe_decision=probe_decision, artifact_hit=False, vary_key="abc",
+            budget_spent_usd=0.0, budget_exhausted=False,
+            validators_passed=["format"], validators_failed=[],
+        )
+
+    def test_no_probes_returns_zero(self, tmp_path):
+        """No probe entries → rate=0, attempts=0."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        rate, attempts = store.probe_fail_rate("m1", 2)
+        assert rate == 0.0
+        assert attempts == 0
+
+    def test_below_min_samples_returns_zero(self, tmp_path):
+        """Below min sample count → rate=0 (no opinion)."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        # Record 2 probe failures (below default min of 3)
+        for _ in range(2):
+            store.record(self._make_result("m1", 2, "mitigate"))
+        rate, attempts = store.probe_fail_rate("m1", 2)
+        assert rate == 0.0
+        assert attempts == 2
+
+    def test_at_min_samples_produces_rate(self, tmp_path):
+        """At min sample count → produces meaningful rate."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        store.record(self._make_result("m1", 2, "mitigate"))
+        store.record(self._make_result("m1", 2, "proceed"))
+        store.record(self._make_result("m1", 2, "mitigate"))
+        rate, attempts = store.probe_fail_rate("m1", 2)
+        assert attempts == 3
+        assert abs(rate - 2/3) < 0.01
+
+    def test_proceed_not_counted_as_failure(self, tmp_path):
+        """probe_decision=proceed is not a probe failure."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        for _ in range(5):
+            store.record(self._make_result("m1", 2, "proceed"))
+        rate, attempts = store.probe_fail_rate("m1", 2)
+        assert attempts == 5
+        assert rate == 0.0
+
+    def test_block_counted_as_failure(self, tmp_path):
+        """probe_decision=block counts as probe failure."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        for _ in range(3):
+            store.record(self._make_result("m1", 2, "block"))
+        rate, attempts = store.probe_fail_rate("m1", 2)
+        assert rate == 1.0
+
+    def test_none_probe_decision_not_counted(self, tmp_path):
+        """Entries with probe_decision=None are not probe attempts."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        # Non-probed entries
+        for _ in range(5):
+            store.record(self._make_result("m1", 2, None))
+        # 3 probed entries (all failures)
+        for _ in range(3):
+            store.record(self._make_result("m1", 2, "mitigate"))
+        rate, attempts = store.probe_fail_rate("m1", 2)
+        assert attempts == 3  # only probed entries count
+        assert rate == 1.0
+
+    def test_different_lane_isolated(self, tmp_path):
+        """Probe fail rate is per (model, lane)."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        for _ in range(4):
+            store.record(self._make_result("m1", 2, "mitigate"))
+        rate_lane2, _ = store.probe_fail_rate("m1", 2)
+        rate_lane1, attempts1 = store.probe_fail_rate("m1", 1)
+        assert rate_lane2 == 1.0
+        assert attempts1 == 0
+
+    def test_human_gate_counted_as_failure(self, tmp_path):
+        """probe_decision=human_gate counts as probe failure."""
+        store = CooldownStore(path=tmp_path / "cool.jsonl")
+        store.record(self._make_result("m1", 2, "human_gate"))
+        store.record(self._make_result("m1", 2, "proceed"))
+        store.record(self._make_result("m1", 2, "proceed"))
+        rate, _ = store.probe_fail_rate("m1", 2)
+        assert abs(rate - 1/3) < 0.01

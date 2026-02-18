@@ -1153,6 +1153,26 @@ class LaneRouter:
                     f"cooldown: ALL candidates cooled at Lane {lane}, proceeding anyway"
                 )
 
+        # --- probe fail-rate penalty (soft: prefer low-probe-fail models) ---
+        if self.cooldown_store is not None and len(candidates) > 1:
+            probe_rates: dict[str, float] = {}
+            for n, _c in candidates:
+                rate, attempts = self.cooldown_store.probe_fail_rate(n, lane)
+                if attempts >= CooldownStore._PROBE_MIN_SAMPLES:
+                    probe_rates[n] = rate
+
+            if probe_rates:
+                # Sort: low probe-fail-rate first (stable sort preserves prior order for ties)
+                candidates.sort(key=lambda nc: probe_rates.get(nc[0], 0.0))
+                high_rate_models = [
+                    f"{n}({probe_rates[n]:.0%})"
+                    for n in probe_rates if probe_rates[n] > 0.3
+                ]
+                if high_rate_models:
+                    reasons.append(
+                        f"probe_fail_rate: penalized {high_rate_models} at Lane {lane}"
+                    )
+
         # --- nice_to_have ranking ---
         nice_to_have = set(contract.nice_to_have_strengths)
         if extra_nice_to_have:
@@ -1463,6 +1483,45 @@ class CooldownStore:
             ):
                 count += 1
         return count
+
+    # --- Probe-specific failure view ---
+
+    _PROBE_DECISIONS_BAD = {"mitigate", "block", "human_gate"}
+    _PROBE_MIN_SAMPLES: int = 3  # ignore rate until this many probe attempts
+
+    def probe_fail_rate(
+        self,
+        model: str,
+        lane: int,
+    ) -> tuple[float, int]:
+        """Probe failure rate for a (model, lane) in the current window.
+
+        A "probe attempt" is any entry where probe_decision is not None.
+        A "probe failure" is probe_decision in {mitigate, block, human_gate}.
+
+        Returns (rate, attempts).  Rate is 0.0 when attempts < _PROBE_MIN_SAMPLES
+        (not enough data to form an opinion).
+        """
+        self._ensure_loaded()
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._window_s)
+        cutoff_iso = cutoff.isoformat()
+
+        attempts = 0
+        failures = 0
+        for e in self._entries:
+            if (
+                e.model == model
+                and e.lane == lane
+                and e.timestamp >= cutoff_iso
+                and e.probe_decision is not None
+            ):
+                attempts += 1
+                if e.probe_decision in self._PROBE_DECISIONS_BAD:
+                    failures += 1
+
+        if attempts < self._PROBE_MIN_SAMPLES:
+            return 0.0, attempts
+        return failures / attempts, attempts
 
     def stats(self) -> dict[str, Any]:
         """Summary statistics."""

@@ -1038,15 +1038,18 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 explicit_risk = params.get("risk_class")
                 if explicit_risk:
                     risk_class = explicit_risk
+                    risk_class_source = "explicit"
                 else:
                     regime_val = state.regime_detector.current_regime.value
                     risk_class, known = regime_to_risk_class(regime_val)
+                    risk_class_source = f"regime:{regime_val}"
                     if not known:
                         logger.warning(
                             "Unknown regime %r → fail-open standard; "
                             "regime detector may be broken",
                             regime_val,
                         )
+                        risk_class_source = f"regime:{regime_val}(unknown)"
 
                 plan = lr.route(
                     task_hint=params.get("task_hint"),
@@ -1091,6 +1094,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "escalated": cascade_result.escalated,
                     "artifact_hit": cascade_result.artifact_hit,
                     "risk_class": risk_class,
+                    "risk_class_source": risk_class_source,
                 }
             except Exception as e:
                 logger.warning("Lane routing failed, falling back: %s", e)

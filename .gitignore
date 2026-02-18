@@ -32,3 +32,6 @@ baselines/
 # Misc
 ingest/
 old/
+
+# Claude Code local session data
+.claude/projects/

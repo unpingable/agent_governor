@@ -61,7 +61,8 @@ class TestDashboard:
         data = json.loads(result.output)
         assert data["schema_version"] == 1
         for key in ("envelope", "regime", "drift", "scars", "scope",
-                     "correlator", "stability", "violations", "recent_receipts"):
+                     "correlator", "stability", "violations", "recent_receipts",
+                     "lanes"):
             assert key in data
             assert "ok" in data[key]
 
@@ -464,7 +465,8 @@ class TestGoldenOutput:
                 labels.append(label)
         expected_labels = [
             "Envelope", "Regime", "Drift", "Scars", "Scope",
-            "Correlator", "Stability", "Violations", "Recent Receipts",
+            "Correlator", "Stability", "Violations", "Lanes",
+            "Recent Receipts",
         ]
         assert labels == expected_labels
         # No line exceeds 80 cols
@@ -547,3 +549,114 @@ class TestJsonPurity:
         assert isinstance(data, dict)
         assert result.output.strip().startswith("{")
         assert result.output.strip().endswith("}")
+
+
+# =========================================================================
+# TestStatusRollup (shared truth object)
+# =========================================================================
+
+
+class TestStatusRollup:
+    """Tests for StatusRollup: build, render, no-divergence tripwire."""
+
+    def test_build_returns_frozen(self, runner, gov_project):
+        from governor.status_rollup import build_status_rollup
+        gov_dir = gov_project / ".governor"
+        rollup = build_status_rollup(gov_dir)
+        assert rollup.schema_version == 1
+        # Frozen — should raise on mutation
+        with pytest.raises(AttributeError):
+            rollup.schema_version = 2  # type: ignore[misc]
+
+    def test_to_dict_roundtrip(self, runner, gov_project):
+        from governor.status_rollup import build_status_rollup
+        gov_dir = gov_project / ".governor"
+        rollup = build_status_rollup(gov_dir)
+        d = rollup.to_dict()
+        assert d["schema_version"] == 1
+        assert all(k in d for k in (
+            "envelope", "regime", "drift", "scars", "scope",
+            "correlator", "stability", "violations", "recent_receipts", "lanes",
+        ))
+
+    def test_all_sections_ok_on_fresh_init(self, runner, gov_project):
+        from governor.status_rollup import build_status_rollup
+        gov_dir = gov_project / ".governor"
+        rollup = build_status_rollup(gov_dir)
+        for section_name in ("envelope", "regime", "drift", "scars", "scope",
+                             "correlator", "stability", "violations",
+                             "recent_receipts", "lanes"):
+            section = getattr(rollup, section_name)
+            assert section["ok"] is True, f"{section_name} not ok: {section}"
+
+    def test_lanes_section_has_expected_keys(self, runner, gov_project):
+        from governor.status_rollup import build_status_rollup
+        gov_dir = gov_project / ".governor"
+        rollup = build_status_rollup(gov_dir)
+        ln = rollup.lanes
+        assert ln["ok"] is True
+        assert "autopilot_level" in ln
+        assert "policy_version" in ln
+        assert "artifact_count" in ln
+
+    def test_render_text_includes_lanes(self, runner, gov_project):
+        from governor.status_rollup import build_status_rollup, render_text
+        gov_dir = gov_project / ".governor"
+        rollup = build_status_rollup(gov_dir)
+        text = render_text(rollup)
+        assert "Lanes:" in text
+        assert "autopilot" in text
+
+    def test_render_json_parses_clean(self, runner, gov_project):
+        from governor.status_rollup import build_status_rollup, render_json
+        gov_dir = gov_project / ".governor"
+        rollup = build_status_rollup(gov_dir)
+        data = json.loads(render_json(rollup))
+        assert data["schema_version"] == 1
+        assert "lanes" in data
+
+    def test_dashboard_json_matches_rollup(self, runner, gov_project):
+        """Tripwire: dashboard JSON and rollup JSON share identical keys.
+
+        This ensures dashboard_command delegates to StatusRollup and
+        can never silently diverge.
+        """
+        from governor.status_rollup import build_status_rollup
+        gov_dir = gov_project / ".governor"
+
+        # Get dashboard JSON via CLI
+        result = runner.invoke(cli, ["status", "--full", "--json"])
+        assert result.exit_code == 0
+        dashboard_data = json.loads(result.output)
+
+        # Get rollup JSON directly
+        rollup = build_status_rollup(gov_dir)
+        rollup_data = rollup.to_dict()
+
+        # Keys must be identical
+        assert set(dashboard_data.keys()) == set(rollup_data.keys()), \
+            f"Key mismatch: dashboard={set(dashboard_data.keys())}, rollup={set(rollup_data.keys())}"
+
+        # Section keys must match (not values — state may differ between calls)
+        for key in rollup_data:
+            if isinstance(rollup_data[key], dict):
+                assert set(dashboard_data[key].keys()) == set(rollup_data[key].keys()), \
+                    f"Section {key} key mismatch"
+
+    def test_corrupt_section_survives(self, runner, gov_project):
+        """Corrupt state files don't crash the rollup builder."""
+        from governor.status_rollup import build_status_rollup
+        gov_dir = gov_project / ".governor"
+        (gov_dir / "scars.json").write_text("{bad json")
+        rollup = build_status_rollup(gov_dir)
+        assert rollup.scars["ok"] is False
+        assert "error" in rollup.scars
+
+    def test_readonly(self, runner, gov_project):
+        """Building a rollup must not create files."""
+        from governor.status_rollup import build_status_rollup
+        gov_dir = gov_project / ".governor"
+        before = _snapshot_tree(gov_dir)
+        build_status_rollup(gov_dir)
+        after = _snapshot_tree(gov_dir)
+        assert before == after, f"New files: {after - before}"

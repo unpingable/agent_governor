@@ -540,109 +540,18 @@ def _lookup_code(code: str) -> list[ExplainEntry]:
 # ---------------------------------------------------------------------------
 
 def dashboard_command(gov_dir: Path, as_json: bool) -> int:
-    """Operator dashboard (status --full). Returns exit code."""
-    sections = {
-        "envelope": _load_envelope(gov_dir),
-        "regime": _load_regime(gov_dir),
-        "drift": _load_drift(gov_dir),
-        "scars": _load_scars(gov_dir),
-        "scope": _load_scope(gov_dir),
-        "correlator": _load_correlator(gov_dir),
-        "stability": _load_stability(gov_dir),
-        "violations": _load_violations(gov_dir),
-        "recent_receipts": _load_recent_receipts(gov_dir),
-    }
+    """Operator dashboard (status --full). Returns exit code.
+
+    Delegates to StatusRollup: build once, render once.
+    """
+    from .status_rollup import build_status_rollup, render_json, render_text
+
+    rollup = build_status_rollup(gov_dir)
 
     if as_json:
-        output = {"schema_version": 1}
-        output.update(sections)
-        print(json.dumps(output, indent=2))
-        return 0
-
-    # Text output
-    print("Governor Dashboard")
-
-    # Envelope
-    env = sections["envelope"]
-    if env["ok"]:
-        print(f"  Envelope:    {env['mode']}")
+        print(render_json(rollup))
     else:
-        print(f"  {GLYPH_ERR} Envelope:    {_truncate(env['error'])}")
-
-    # Regime
-    reg = sections["regime"]
-    if reg["ok"]:
-        print(f"  Regime:      {reg['name'].upper()}")
-    else:
-        print(f"  {GLYPH_ERR} Regime:      {_truncate(reg['error'])}")
-
-    # Drift
-    dft = sections["drift"]
-    if dft["ok"]:
-        print(f"  Drift:       {dft['alert_level']} ({dft['quarantined']} quarantined)")
-    else:
-        print(f"  {GLYPH_ERR} Drift:       {_truncate(dft['error'])}")
-
-    # Scars
-    sc = sections["scars"]
-    if sc["ok"]:
-        print(f"  Scars:       {sc['health']} ({sc['hard']} hard, {sc['soft']} soft)")
-    else:
-        print(f"  {GLYPH_ERR} Scars:       {_truncate(sc['error'])}")
-
-    # Scope
-    scp = sections["scope"]
-    if scp["ok"]:
-        if scp.get("configured"):
-            lvl = scp["level"] or "?"
-            a = scp["escalations_allowed"]
-            d = scp["escalations_denied"]
-            print(f"  Scope:       level {lvl} ({scp['grants']} grants, {a}/{d} allow/deny)")
-        else:
-            print("  Scope:       not configured")
-    else:
-        print(f"  {GLYPH_ERR} Scope:       {_truncate(scp['error'])}")
-
-    # Correlator
-    cor = sections["correlator"]
-    if cor["ok"]:
-        cap = "CAPTURE" if cor["capture"] else "no capture"
-        print(f"  Correlator:  {cor['regime']} ({cap})")
-    else:
-        print(f"  {GLYPH_ERR} Correlator:  {_truncate(cor['error'])}")
-
-    # Stability
-    stb = sections["stability"]
-    if stb["ok"]:
-        stiff = f" (stiffness {stb['stiffness']})" if stb["stiffness"] is not None else ""
-        print(f"  Stability:   {stb['recommendation'].upper()}{stiff}")
-    else:
-        print(f"  {GLYPH_ERR} Stability:   {_truncate(stb['error'])}")
-
-    # Violations
-    vio = sections["violations"]
-    if vio["ok"]:
-        print(f"  Violations:  {vio['pending']} pending")
-    else:
-        print(f"  {GLYPH_ERR} Violations:  {_truncate(vio['error'])}")
-
-    # Recent receipts
-    rcpt = sections["recent_receipts"]
-    if rcpt["ok"] and rcpt["items"]:
-        print()
-        print("  Recent Receipts:")
-        for item in rcpt["items"]:
-            glyph = _RECEIPT_VERDICT_GLYPH.get(item["verdict"], f"[{item['verdict']}]")
-            gate = item["gate"]
-            rid = item["receipt_id"]
-            ts = item["timestamp"]
-            print(f"    {glyph:>6} {gate:<20} {rid}  {ts}")
-    elif rcpt["ok"]:
-        print()
-        print("  Recent Receipts: none")
-    else:
-        print()
-        print(f"  {GLYPH_ERR} Recent Receipts: {_truncate(rcpt['error'])}")
+        print(render_text(rollup))
 
     return 0
 

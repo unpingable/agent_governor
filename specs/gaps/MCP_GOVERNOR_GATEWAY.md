@@ -127,19 +127,21 @@ Receipt v1 stays the shared evidence layer; the governor owns meaning. The gatew
 
 ---
 
-## Seatbelt v1: Definition of Done
+## Seatbelt v1 — SHIPPED
+
+**Status:** Implemented. Phase 0 + hardening + read-side store + versioned RPC.
 
 Phase 0 plus the minimum stuff that prevents it from looking like a toy.
 This is the "local seatbelt" — gets real users without promising enterprise anything.
 
-### Must have
+### Must have (all done)
 
-- **Interposition works:** gateway sits between client and tool server (stdio) and reliably proxies `initialize → tools/list → tools/call`.
-- **Receipts always emitted for `tools/call`:** JSONL, chained, verifiable (`verify-chain` passes) with sane defaults (no args/results leaked).
-- **Tool visibility control:** `tools/list` filtering so denied tools never appear to the client.
-- **Policy v0:** allow-all-warn + denylist regex (explicit reason codes for "default allow" vs "explicit deny").
-- **Operational hygiene:** stdout is *only* protocol; logs to stderr; upstream child lifecycle handled (kill on exit, no deadlocks).
-- **Safety hygiene:** receipt file is `0600`, rotation exists (size/day), and summary/error strings are single-line + capped.
+- [x] **Interposition works:** gateway sits between client and tool server (stdio) and reliably proxies `initialize → tools/list → tools/call`.
+- [x] **Receipts always emitted for `tools/call`:** JSONL, chained, verifiable (`verify-chain` passes) with sane defaults (no args/results leaked).
+- [x] **Tool visibility control:** `tools/list` filtering so denied tools never appear to the client.
+- [x] **Policy v0:** allow-all-warn + denylist regex (explicit reason codes for "default allow" vs "explicit deny").
+- [x] **Operational hygiene:** stdout is *only* protocol; logs to stderr; upstream child lifecycle handled (kill on exit, no deadlocks).
+- [x] **Safety hygiene:** receipt file is `0600`, rotation exists (size-based), and summary/error strings are single-line + capped.
 
 ### Must not have
 
@@ -153,11 +155,13 @@ This is the "local seatbelt" — gets real users without promising enterprise an
 - Minimal transforms that are mechanically safe: timeout injection, path clamping.
 - A tiny CLI wrapper around verify (`mcp-gov verify receipts.jsonl`), but not required if library verify is easy.
 
-### Seatbelt v1 Delta (all done)
+### Seatbelt v1 Delta
 
 - [x] Receipt file permissions: `RotatingFileSink` creates with `0o600` from the start, warns if existing file is too open
 - [x] Receipt file rotation: size-based (default 10 MB, keep 5 files), no day-based complexity
 - [x] Hardening doc: `HARDENING.md` — stdout/stderr rule, bypass patterns, env var leaks, debug dumps, child process hygiene, policy shim disclaimer
+- [x] ReceiptStore read abstraction: `JsonlStore` with `iter_receipts(session_id, since, limit)`, `get_receipt(receipt_id)`, `verify_chain(session_id)`. Handles rotation transparently.
+- [x] Daemon RPC versioning: `receipts_v1.{list,detail,verify}` endpoints independent from legacy `receipts.*`. `since` is `timestamp_wall` (ISO 8601 UTC, lexicographic >=). Verify returns structured errors, chain metadata (`count`, `first_receipt_id`, `last_receipt_id`, `gaps`).
 
 ---
 

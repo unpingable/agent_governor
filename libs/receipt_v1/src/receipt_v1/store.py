@@ -41,7 +41,9 @@ class ReceiptStore(Protocol):
 
         Args:
             session_id: Filter by actor.session_id.
-            since: ISO 8601 timestamp — only receipts at or after this time.
+            since: ``timestamp_wall`` (ISO 8601 UTC, e.g. ``"2026-02-19T12:00:00Z"``).
+                   Only receipts with ``timestamp_wall >= since`` are returned.
+                   Lexicographic comparison — both sides must be UTC with ``Z`` suffix.
             limit: Maximum number of receipts to yield.
         """
         ...
@@ -148,7 +150,10 @@ class JsonlStore:
     ) -> Iterator[Receipt]:
         """Iterate receipts, newest first.
 
-        Reads all files, filters, reverses for newest-first ordering.
+        Args:
+            session_id: Filter by actor.session_id.
+            since: ``timestamp_wall`` (ISO 8601 UTC). Lexicographic >=.
+            limit: Maximum number of receipts to yield.
         """
         dicts = self._all_dicts_chronological()
         # Newest first

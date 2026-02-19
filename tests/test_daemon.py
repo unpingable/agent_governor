@@ -780,11 +780,16 @@ class TestReceiptsV1:
     @pytest.mark.asyncio
     async def test_verify_valid_chain(self, dispatcher_and_state):
         d, state = dispatcher_and_state
-        _write_receipt_v1(state.governor_dir, count=4)
+        written = _write_receipt_v1(state.governor_dir, count=4)
         resp = await roundtrip(d, "receipts_v1.verify")
         result = resp["result"]
         assert result["valid"] is True
         assert result["errors"] == []
+        # Chain metadata
+        assert result["count"] == 4
+        assert result["first_receipt_id"] == written[0].receipt_id
+        assert result["last_receipt_id"] == written[-1].receipt_id
+        assert result["gaps"] == []
 
     @pytest.mark.asyncio
     async def test_verify_empty_chain(self, dispatcher_and_state):
@@ -792,6 +797,10 @@ class TestReceiptsV1:
         resp = await roundtrip(d, "receipts_v1.verify")
         result = resp["result"]
         assert result["valid"] is True
+        assert result["count"] == 0
+        assert result["first_receipt_id"] is None
+        assert result["last_receipt_id"] is None
+        assert result["gaps"] == []
 
     @pytest.mark.asyncio
     async def test_endpoints_independent_from_legacy(self, dispatcher_and_state):

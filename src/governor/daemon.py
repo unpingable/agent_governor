@@ -888,6 +888,14 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     # --- Receipt v1 (new format — separate from legacy gate receipts) ---
 
     async def receipts_v1_list(params: dict) -> list:
+        """List Receipt v1 records.
+
+        Params:
+            session_id (str?): Filter by actor.session_id.
+            since (str?): timestamp_wall (ISO 8601 UTC, e.g. "2026-02-19T12:00:00Z").
+                          Lexicographic >= comparison. Both sides must be UTC with Z suffix.
+            limit (int?): Maximum number of receipts to return.
+        """
         session_id = params.get("session_id")
         since = params.get("since")
         limit = params.get("limit")
@@ -911,12 +919,60 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         return {"receipt": receipt.to_dict()}
 
     async def receipts_v1_verify(params: dict) -> dict:
+        """Verify chain integrity across stored Receipt v1 records.
+
+        Returns structured result with chain metadata that UIs need:
+        valid, errors (structured), warnings, count, endpoints, gaps.
+        """
         session_id = params.get("session_id")
-        result = state.receipt_v1_store.verify_chain(session_id=session_id)
+        store = state.receipt_v1_store
+
+        # Collect all dicts in chronological order for metadata extraction
+        dicts = store._all_dicts_chronological()
+        if session_id is not None:
+            dicts = [
+                d for d in dicts
+                if d.get("actor", {}).get("session_id") == session_id
+            ]
+
+        result = store.verify_chain(session_id=session_id)
+
+        # Structure errors: extract receipt_id from error messages when possible
+        import re
+        _SEQ_RE = re.compile(r"seq=(\d+)")
+        structured_errors = []
+        for err in result.errors:
+            entry: dict[str, Any] = {"message": err}
+            m = _SEQ_RE.search(err)
+            if m:
+                seq = int(m.group(1))
+                # Find receipt_id for this seq
+                for d in dicts:
+                    if d.get("chain", {}).get("seq") == seq:
+                        entry["receipt_id"] = d.get("receipt_id")
+                        break
+            structured_errors.append(entry)
+
+        # Chain metadata
+        first_id = dicts[0].get("receipt_id") if dicts else None
+        last_id = dicts[-1].get("receipt_id") if dicts else None
+
+        # Detect gaps from warnings
+        _GAP_RE = re.compile(r"Seq gap: (\d+) -> (\d+)")
+        gaps = []
+        for w in result.warnings:
+            m = _GAP_RE.search(w)
+            if m:
+                gaps.append({"from_seq": int(m.group(1)), "to_seq": int(m.group(2))})
+
         return {
             "valid": result.valid,
-            "errors": result.errors,
+            "errors": structured_errors,
             "warnings": result.warnings,
+            "count": len(dicts),
+            "first_receipt_id": first_id,
+            "last_receipt_id": last_id,
+            "gaps": gaps,
         }
 
     # --- Scars ---

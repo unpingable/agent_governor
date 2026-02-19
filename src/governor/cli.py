@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 
 import click
 
+from .cli_group import CuratedGroup
 from .claims import Claim, ClaimType, decision, file_exists, claim_tests_pass, changeset, work_reservation
 from .envelopes import EnvelopeMode, get_current_envelope, set_envelope, clear_envelope
 from .fsm import ProposalFSM, ProposalState, RejectionInfo, ClaimError, create_proposal
@@ -62,12 +63,25 @@ def save_proposals(gov_dir: Path, proposals: dict[str, dict]) -> None:
     proposals_path.write_text(json.dumps(proposals, indent=2))
 
 
-@click.group(invoke_without_command=True)
+def _set_help_all(ctx: click.Context, param: click.Parameter, value: bool) -> None:
+    """Stash --help-all on ctx.obj so CuratedGroup can see it."""
+    ctx.ensure_object(dict)
+    ctx.obj["help_all"] = value
+    if value:
+        click.echo(ctx.get_help())
+        ctx.exit(0)
+
+
+@click.group(cls=CuratedGroup, invoke_without_command=True)
 @click.option(
     "--root", "-r",
     type=click.Path(exists=True, file_okay=False, resolve_path=True),
     default=".",
     help="Project root directory",
+)
+@click.option(
+    "--help-all", is_flag=True, is_eager=True, expose_value=False,
+    callback=_set_help_all, help="Show all commands (100+)",
 )
 @click.pass_context
 def cli(ctx: click.Context, root: str) -> None:
@@ -750,7 +764,58 @@ def rejections(ctx: click.Context, limit: int, json_output: bool) -> None:
         click.echo()
 
 
-@cli.command()
+import os as _os
+import re as _re
+
+_UUID7_RE = _re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+_HEX64_RE = _re.compile(r"^[a-f0-9]{64}$")
+
+
+def _get_format_default() -> str:
+    return _os.environ.get("GOV_RECEIPTS_DEFAULT", "legacy")
+
+
+def _get_v1_store(gov_dir: Path):
+    """Lazy-construct a JsonlStore for receipt_v1."""
+    from receipt_v1.store import JsonlStore
+    return JsonlStore(gov_dir / "receipts" / "receipt_v1.jsonl")
+
+
+@cli.group(invoke_without_command=True)
+@click.option("--gate", "-g", default=None, hidden=True, help="(compat) Filter by gate name")
+@click.option("--verdict", "-v", default=None, type=click.Choice(["pass", "warn", "block"]),
+              hidden=True, help="(compat) Filter by verdict")
+@click.option("--last", "-n", default=20, hidden=True, help="(compat) Number of receipts to show")
+@click.option("--json", "as_json", is_flag=True, hidden=True, help="(compat) Output as JSON")
+@click.option("--id", "receipt_id", default=None, hidden=True, help="(compat) Show a specific receipt")
+@click.option("--evidence", is_flag=True, hidden=True, help="(compat) Include evidence bundle")
+@click.pass_context
+def receipts(ctx: click.Context, gate: str | None, verdict: str | None,
+             last: int, as_json: bool, receipt_id: str | None, evidence: bool) -> None:
+    """Query gate receipts (legacy or v1).
+
+    \b
+    Subcommands:
+      governor receipts list       List receipts (default)
+      governor receipts show <id>  Show a single receipt
+      governor receipts verify     Verify v1 receipt chain
+
+    \b
+    Backwards-compatible shortcuts:
+      governor receipts --gate G   Same as: governor receipts list --gate G
+      governor receipts --json     Same as: governor receipts list --json
+    """
+    # If no subcommand, delegate to 'list' with backward-compat options.
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(receipts_list, gate=gate, verdict=verdict, last=last,
+                   as_json=as_json, receipt_id=receipt_id, evidence=evidence,
+                   fmt=_get_format_default())
+
+
+@receipts.command("list")
+@click.option("--format", "fmt", type=click.Choice(["v1", "legacy"]),
+              default=_get_format_default,
+              help="Receipt format (default: legacy, env: GOV_RECEIPTS_DEFAULT)")
 @click.option("--gate", "-g", default=None, help="Filter by gate name (e.g. evidence_gate)")
 @click.option("--verdict", "-v", default=None, type=click.Choice(["pass", "warn", "block"]),
               help="Filter by verdict")
@@ -758,44 +823,48 @@ def rejections(ctx: click.Context, limit: int, json_output: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.option("--id", "receipt_id", default=None, help="Show a specific receipt by ID")
 @click.option("--evidence", is_flag=True, help="Include evidence bundle (with --id or --json)")
+@click.option("--since", default=None, help="Receipt ID cursor — show receipts newer than this (v1 only)")
 @click.pass_context
-def receipts(ctx: click.Context, gate: str | None, verdict: str | None,
-             last: int, as_json: bool, receipt_id: str | None, evidence: bool) -> None:
-    """
-    Query gate receipts.
-
-    Gate receipts are content-addressed decision records emitted by governor
-    gates (evidence gate, pre-commit, wrapper, etc.).  Each receipt proves
-    that a gate checked a subject and reached a verdict.
+def receipts_list(ctx: click.Context, fmt: str, gate: str | None, verdict: str | None,
+                  last: int, as_json: bool, receipt_id: str | None, evidence: bool,
+                  since: str | None) -> None:
+    """List gate receipts.
 
     \b
     Examples:
-        governor receipts                           # Last 20 receipts
-        governor receipts --gate evidence_gate      # Filter by gate
-        governor receipts --verdict block --last 10 # Last 10 blocks
-        governor receipts --id abc123... --evidence # Show receipt + evidence
-        governor receipts --json                    # Machine-readable
+        governor receipts list                           # Last 20 legacy receipts
+        governor receipts list --format v1               # Last 20 v1 receipts
+        governor receipts list --gate evidence_gate      # Filter by gate
+        governor receipts list --verdict block --last 10 # Last 10 blocks
+        governor receipts list --id abc123... --evidence # Show receipt + evidence
+        governor receipts list --json                    # Machine-readable
+        governor receipts list --format v1 --since <id>  # Since cursor (v1 only)
     """
     gov_dir = ensure_initialized(ctx)
 
+    # --since only valid for v1
+    if since and fmt != "v1":
+        click.echo("Error: --since is only supported with --format v1", err=True)
+        ctx.exit(1)
+        return
+
+    # --id redirects to show
+    if receipt_id:
+        ctx.invoke(receipts_show, receipt_id=receipt_id, fmt=fmt, as_json=True, evidence=evidence)
+        return
+
+    if fmt == "v1":
+        _receipts_list_v1(ctx, gov_dir, gate, verdict, last, as_json, evidence, since)
+    else:
+        _receipts_list_legacy(ctx, gov_dir, gate, verdict, last, as_json, evidence)
+
+
+def _receipts_list_legacy(ctx: click.Context, gov_dir: Path, gate: str | None,
+                          verdict: str | None, last: int, as_json: bool, evidence: bool) -> None:
+    """List legacy gate_receipt receipts."""
     from .gate_receipt import GateReceiptSystem
 
     system = GateReceiptSystem(gov_dir)
-
-    # Single receipt lookup
-    if receipt_id:
-        receipt = system.receipt_store.get_by_id(receipt_id)
-        if receipt is None:
-            click.echo(f"Receipt not found: {receipt_id}")
-            ctx.exit(1)
-            return
-        output: dict = receipt.to_dict()
-        if evidence:
-            blob = system.evidence_for(receipt)
-            output["evidence"] = blob
-        click.echo(json.dumps(output, indent=2))
-        return
-
     results = system.query(gate=gate, verdict=verdict, limit=last)
 
     if not results:
@@ -818,7 +887,194 @@ def receipts(ctx: click.Context, gate: str | None, verdict: str | None,
         icon = verdict_icon.get(r.verdict, r.verdict)
         click.echo(f"  [{icon:>5}] {r.receipt_id[:12]}...  gate={r.gate}  {r.timestamp}")
 
-    click.echo("\nUse --id <receipt_id> --evidence to inspect a specific receipt.")
+    click.echo("\nUse 'governor receipts show <id>' to inspect a specific receipt.")
+
+
+def _receipts_list_v1(ctx: click.Context, gov_dir: Path, gate: str | None,
+                      verdict: str | None, last: int, as_json: bool, evidence: bool,
+                      since: str | None) -> None:
+    """List receipt_v1 receipts."""
+    store = _get_v1_store(gov_dir)
+
+    # Resolve --since cursor to a timestamp
+    since_ts: str | None = None
+    if since:
+        cursor_receipt = store.get_receipt(since)
+        if cursor_receipt is None:
+            click.echo(
+                f"Receipt not found: {since}. "
+                f"Use 'governor receipts show {since}' to check.",
+                err=True,
+            )
+            ctx.exit(1)
+            return
+        since_ts = cursor_receipt.timestamp_wall
+
+    items = []
+    for r in store.iter_receipts(since=since_ts, limit=last):
+        # Skip the cursor receipt itself
+        if since and r.receipt_id == since:
+            continue
+
+        # Filter by gate (tool_id in v1)
+        if gate and r.tool.tool_id != gate:
+            continue
+
+        # Filter by verdict (decision.action in v1)
+        if verdict:
+            action_str = r.decision.action.value if hasattr(r.decision.action, "value") else str(r.decision.action)
+            if action_str != verdict:
+                continue
+
+        items.append(r)
+
+    if not items:
+        click.echo("No v1 receipts found.")
+        return
+
+    if as_json:
+        click.echo(json.dumps([r.to_dict() for r in items], indent=2))
+        return
+
+    click.echo(f"Receipt v1 ({len(items)}, newest first):\n")
+    for r in items:
+        action = r.decision.action.value if hasattr(r.decision.action, "value") else str(r.decision.action)
+        action_icon = {"allow": "OK", "deny": "DENY", "transform": "XFRM", "escalate": "ESC"}
+        icon = action_icon.get(action, action.upper())
+        tool = r.tool.tool_id
+        ts = r.timestamp_wall[:19] if len(r.timestamp_wall) >= 19 else r.timestamp_wall
+        click.echo(f"  [{icon:>5}] {r.receipt_id[:12]}...  tool={tool}  {ts}")
+
+    click.echo("\nUse 'governor receipts show <id>' to inspect a specific receipt.")
+
+
+@receipts.command("show")
+@click.argument("receipt_id")
+@click.option("--format", "fmt", type=click.Choice(["v1", "legacy"]), default=None,
+              help="Receipt format (auto-detected from ID shape if omitted)")
+@click.option("--json", "as_json", is_flag=True, default=True, hidden=True, help="Output as JSON (always on)")
+@click.option("--evidence", is_flag=True, help="Include evidence bundle")
+@click.pass_context
+def receipts_show(ctx: click.Context, receipt_id: str, fmt: str | None,
+                  as_json: bool, evidence: bool) -> None:
+    """Show a single receipt by ID.
+
+    Auto-detects format from ID shape (uuid7 → v1, hex64 → legacy).
+    Use --format to override.
+
+    \b
+    Examples:
+        governor receipts show abc123...def456        # Legacy (64-char hex)
+        governor receipts show 01234567-...           # v1 (uuid7)
+        governor receipts show <id> --evidence        # Include evidence
+        governor receipts show <id> --format legacy   # Force legacy lookup
+    """
+    gov_dir = ensure_initialized(ctx)
+
+    # Auto-route by ID shape if no explicit format
+    if fmt is None:
+        if _UUID7_RE.match(receipt_id):
+            fmt = "v1"
+        elif _HEX64_RE.match(receipt_id):
+            fmt = "legacy"
+        else:
+            # Ambiguous — try both, v1 first
+            fmt = "auto"
+
+    if fmt == "v1" or fmt == "auto":
+        try:
+            store = _get_v1_store(gov_dir)
+            receipt = store.get_receipt(receipt_id)
+            if receipt is not None:
+                click.echo(json.dumps(receipt.to_dict(), indent=2))
+                return
+            if fmt == "v1":
+                click.echo(f"Receipt not found: {receipt_id}", err=True)
+                ctx.exit(1)
+                return
+        except Exception:
+            if fmt == "v1":
+                click.echo(f"Error reading v1 store for receipt: {receipt_id}", err=True)
+                ctx.exit(1)
+                return
+
+    # Legacy lookup (or auto fallback)
+    if fmt == "legacy" or fmt == "auto":
+        from .gate_receipt import GateReceiptSystem
+        system = GateReceiptSystem(gov_dir)
+        receipt_obj = system.receipt_store.get_by_id(receipt_id)
+        if receipt_obj is None:
+            click.echo(f"Receipt not found: {receipt_id}", err=True)
+            ctx.exit(1)
+            return
+        output: dict = receipt_obj.to_dict()
+        if evidence:
+            blob = system.evidence_for(receipt_obj)
+            output["evidence"] = blob
+        click.echo(json.dumps(output, indent=2))
+        return
+
+    click.echo(f"Receipt not found: {receipt_id}", err=True)
+    ctx.exit(1)
+
+
+@receipts.command("verify")
+@click.option("--format", "fmt", type=click.Choice(["v1"]), default="v1",
+              help="Receipt format (only v1 supports chain verification)")
+@click.option("--session", "session_id", default=None, help="Filter by session ID")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def receipts_verify(ctx: click.Context, fmt: str, session_id: str | None, as_json: bool) -> None:
+    """Verify receipt chain integrity.
+
+    Only v1 receipts support chain verification (hash-linked sequence).
+
+    \b
+    Examples:
+        governor receipts verify                    # Verify all v1 receipts
+        governor receipts verify --session S        # Verify specific session
+        governor receipts verify --json             # Machine-readable output
+    """
+    gov_dir = ensure_initialized(ctx)
+
+    store = _get_v1_store(gov_dir)
+    result = store.verify_chain(session_id=session_id)
+
+    # Collect summary stats
+    all_receipts = list(store.iter_receipts(session_id=session_id))
+    count = len(all_receipts)
+    first_id = all_receipts[-1].receipt_id if all_receipts else None  # oldest (list is newest-first)
+    last_id = all_receipts[0].receipt_id if all_receipts else None   # newest
+
+    if as_json:
+        output = {
+            "valid": result.valid,
+            "errors": result.errors,
+            "warnings": result.warnings,
+            "count": count,
+            "first_receipt_id": first_id,
+            "last_receipt_id": last_id,
+        }
+        click.echo(json.dumps(output, indent=2))
+    else:
+        if result.valid:
+            click.echo(f"Chain valid: {count} receipts verified.")
+        else:
+            click.echo(f"Chain INVALID: {count} receipts, {len(result.errors)} error(s).")
+            for err in result.errors[:5]:
+                click.echo(f"  - {err}")
+
+        if result.warnings:
+            click.echo(f"\nWarnings ({len(result.warnings)}):")
+            for w in result.warnings[:5]:
+                click.echo(f"  - {w}")
+
+        if first_id:
+            click.echo(f"\nFirst: {first_id}")
+            click.echo(f"Last:  {last_id}")
+
+    if not result.valid:
+        ctx.exit(1)
 
 
 @cli.command()
@@ -17814,6 +18070,97 @@ def trace(ctx: click.Context, last: int, source: str | None, as_json: bool) -> N
     from .cli_operator import trace_command
     rc = trace_command(gov_dir, as_json, last, source)
     ctx.exit(rc)
+
+
+# =============================================================================
+# Operator group (canonical namespace — delegates to same functions)
+# =============================================================================
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def operator(ctx: click.Context) -> None:
+    """Operator commands: status, diagnostics, timeline.
+
+    \b
+    Commands:
+      governor operator status     One-page dashboard
+      governor operator doctor     Walk subsystems, suggest fixes
+      governor operator explain    Look up a diagnostic code
+      governor operator trace      Unified event timeline
+      governor operator receipts   Query gate receipts
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@operator.command("status")
+@click.option("--limit", "-n", default=20, help="Number of proposals to show")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--claims", "show_claims", is_flag=True, help="Show claim status weather report")
+@click.option("--proposals", "show_proposals", is_flag=True, help="Show proposal list (old default)")
+@click.pass_context
+def operator_status(ctx: click.Context, limit: int, as_json: bool, show_claims: bool,
+                    show_proposals: bool) -> None:
+    """Show operator dashboard (one-pager). Use --proposals for proposal list."""
+    # Delegate to the top-level status command's logic
+    ctx.invoke(status, limit=limit, as_json=as_json, show_claims=show_claims,
+               full_dashboard=False, show_proposals=show_proposals)
+
+
+@operator.command("doctor")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--strict", is_flag=True, help="Exit 1 on warnings too (CI mode)")
+@click.pass_context
+def operator_doctor(ctx: click.Context, as_json: bool, strict: bool) -> None:
+    """Walk subsystems, report non-nominal, suggest next commands."""
+    gov_dir = ensure_initialized(ctx)
+    from .cli_operator import doctor_command
+    rc = doctor_command(gov_dir, as_json, strict)
+    ctx.exit(rc)
+
+
+@operator.command("explain")
+@click.argument("code", default="")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--list", "list_all", is_flag=True, help="List all diagnostic codes")
+@click.pass_context
+def operator_explain(ctx: click.Context, code: str, as_json: bool, list_all: bool) -> None:
+    """Explain a diagnostic code (e.g. ELASTIC, CAPTURE, BLOCK)."""
+    from .cli_operator import explain_command
+    rc = explain_command(code, as_json, list_all)
+    ctx.exit(rc)
+
+
+@operator.command("trace")
+@click.option("--last", "-n", default=20, help="Number of events to show")
+@click.option("--source", "-s", type=click.Choice(["receipt", "scar", "scope", "violation"]),
+              help="Filter by event source")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def operator_trace(ctx: click.Context, last: int, source: str | None, as_json: bool) -> None:
+    """Unified timeline of receipts, scars, scope, and violations."""
+    gov_dir = ensure_initialized(ctx)
+    from .cli_operator import trace_command
+    rc = trace_command(gov_dir, as_json, last, source)
+    ctx.exit(rc)
+
+
+@operator.command("receipts")
+@click.option("--gate", "-g", default=None, help="Filter by gate name")
+@click.option("--verdict", "-v", default=None, type=click.Choice(["pass", "warn", "block"]),
+              help="Filter by verdict")
+@click.option("--last", "-n", default=20, help="Number of receipts to show")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--id", "receipt_id", default=None, help="Show a specific receipt by ID")
+@click.option("--evidence", is_flag=True, help="Include evidence bundle")
+@click.pass_context
+def operator_receipts(ctx: click.Context, gate: str | None, verdict: str | None,
+                      last: int, as_json: bool, receipt_id: str | None, evidence: bool) -> None:
+    """Query gate receipts."""
+    # Delegate to the top-level receipts group's list command
+    ctx.invoke(receipts_list, gate=gate, verdict=verdict, last=last,
+               as_json=as_json, receipt_id=receipt_id, evidence=evidence, fmt="legacy")
 
 
 def main() -> None:

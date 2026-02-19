@@ -15819,22 +15819,9 @@ def chat_command(
 @cli.group(invoke_without_command=True)
 @click.pass_context
 def advanced(ctx: click.Context) -> None:
-    """Power user commands (50+).
+    """Power-user and subsystem commands.
 
-    These are the full set of governor commands for advanced use cases.
-    Most users won't need them - they're also available at the top level.
-
-    \b
-    Categories:
-      Continuity:    continuity, lite, docket, rule, precedent, claim
-      Epistemic:     epistemic, regime, jurisdiction, drift, signals
-      Multi-agent:   agent, task, quorum, independence
-      Automation:    hook, mcp, wrap, autonomous, spine, invariant
-      Monitoring:    adapt, audit, strict, telemetry, dashboard, prometheus
-      Modes:         profile, puppet, boil
-      Security:      security, scar, taint
-      Tuning:        tune, semvar
-      Other:         graph, routing, watch, claude-hooks, issue
+    All commands below are also available at the top level.
     """
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
@@ -18310,6 +18297,25 @@ def operator_receipts(ctx: click.Context, gate: str | None, verdict: str | None,
     # Delegate to the top-level receipts group's list command
     ctx.invoke(receipts_list, gate=gate, verdict=verdict, last=last,
                as_json=as_json, receipt_id=receipt_id, evidence=evidence, fmt="legacy")
+
+
+# ---------------------------------------------------------------------------
+# Populate advanced group — dual-register all attic commands
+# ---------------------------------------------------------------------------
+
+def _populate_advanced() -> None:
+    """Register every non-curated root command under the advanced group."""
+    from .cli_group import CATEGORIES
+    curated: set[str] = set()
+    for names in CATEGORIES.values():
+        curated.update(names)
+    for name, cmd in sorted(cli.commands.items()):
+        if name in curated or name == "advanced":
+            continue
+        if name not in advanced.commands:
+            advanced.add_command(cmd, name)
+
+_populate_advanced()
 
 
 def main() -> None:

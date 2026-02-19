@@ -185,3 +185,47 @@ def render_text(rollup: StatusRollup) -> str:
     lines.append("  Details: governor status --json")
 
     return "\n".join(lines)
+
+
+def render_bare(rollup: StatusRollup) -> str:
+    """Render rollup as a minimal "what now" summary. Pure formatting.
+
+    Three sections max: state line, top 2 findings, one next command.
+    For the bare ``governor`` invocation — one finger, one button.
+    """
+    from .operator_snapshot import classify_rollup, count_checks, classify_overall_state
+
+    checks = classify_rollup(rollup)
+    counts = count_checks(checks)
+    state = classify_overall_state(counts)
+
+    lines: list[str] = []
+    lines.append(f"Governor: {state}")
+
+    findings = [c for c in checks if c.status != "ok"]
+
+    if not findings:
+        lines.append("No findings.")
+        lines.append("")
+        lines.append("  governor status --full")
+    else:
+        _sev = {"error": 0, "warn": 1, "info": 2}
+        ranked = sorted(findings, key=lambda x: _sev.get(x.status, 3))
+
+        for c in ranked[:2]:
+            glyph = {"error": "[err]", "warn": "[WARN]", "info": "[info]"
+                      }.get(c.status, "[info]")
+            summary = c.summary if len(c.summary) <= 50 else c.summary[:49] + "\u2026"
+            lines.append(f"  {glyph:>6} {c.name}: {summary}")
+
+        # One next command — from the highest-severity finding
+        for c in ranked:
+            if c.status in ("error", "warn") and c.next_commands:
+                lines.append("")
+                lines.append(f"  {c.next_commands[0]}")
+                break
+        else:
+            lines.append("")
+            lines.append("  governor status --full")
+
+    return "\n".join(lines)

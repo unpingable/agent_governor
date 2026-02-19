@@ -363,6 +363,66 @@ class TestGoldenRendering:
 
 
 # ---------------------------------------------------------------------------
+# render_bare tests (bare invocation "what now")
+# ---------------------------------------------------------------------------
+
+class TestRenderBare:
+    def test_nominal_shows_no_findings(self):
+        from governor.status_rollup import render_bare
+        rollup = StatusRollup(**{
+            **_make_ok_rollup().to_dict(),
+            "scope": {"ok": True, "configured": True, "level": 1,
+                      "grants": 0, "escalations_allowed": 0,
+                      "escalations_denied": 0},
+        })
+        text = render_bare(rollup)
+        assert text.startswith("Governor: Nominal")
+        assert "No findings." in text
+        assert "governor status --full" in text
+
+    def test_degraded_shows_findings_and_next(self):
+        from governor.status_rollup import render_bare
+        rollup = StatusRollup(**{
+            **_make_ok_rollup().to_dict(),
+            "regime": {"ok": True, "name": "warm", "warnings": []},
+        })
+        text = render_bare(rollup)
+        assert text.startswith("Governor: Degraded")
+        assert "[WARN]" in text
+        assert "regime" in text
+        assert "governor regime status" in text
+
+    def test_unsafe_shows_errors_first(self):
+        from governor.status_rollup import render_bare
+        text = render_bare(_make_error_rollup())
+        assert text.startswith("Governor: Unsafe")
+        assert "[err]" in text
+
+    def test_bare_at_most_two_findings(self):
+        from governor.status_rollup import render_bare
+        text = render_bare(_make_error_rollup())
+        # Count finding lines (lines containing [err] or [WARN] or [info])
+        finding_lines = [l for l in text.split("\n")
+                         if "[err]" in l or "[WARN]" in l or "[info]" in l]
+        assert len(finding_lines) <= 2
+
+    def test_bare_one_next_command(self):
+        from governor.status_rollup import render_bare
+        text = render_bare(_make_error_rollup())
+        # Only one command line (starts with governor)
+        cmd_lines = [l.strip() for l in text.split("\n")
+                     if l.strip().startswith("governor")]
+        assert len(cmd_lines) == 1
+
+    def test_width_invariant_bare(self):
+        """No line in bare text exceeds 80 columns."""
+        from governor.status_rollup import render_bare
+        text = render_bare(_make_error_rollup())
+        for line in text.split("\n"):
+            assert len(line) <= 80, f"Line too wide ({len(line)}): {line!r}"
+
+
+# ---------------------------------------------------------------------------
 # collect_trace_events tests
 # ---------------------------------------------------------------------------
 

@@ -1054,96 +1054,25 @@ def resolve_allow(ctx: click.Context, reason: str | None) -> None:
 # =============================================================================
 
 def show_friendly_status(ctx: click.Context) -> None:
-    """Show friendly status when governor is run with no arguments."""
-    from . import cli as main_cli
-    from .violation_resolver import ViolationResolver
+    """Show friendly status when governor is run with no arguments.
 
+    Initialized projects get the "one finger, one button" output:
+    state, top findings, one next command.
+    """
     root = Path(ctx.obj.get("root", "."))
     gov_dir = root / ".governor"
 
-    # Get version
-    version = "0.9.0"  # TODO: Get from package
-
-    click.echo()
-    click.echo(f"  Agent Governor v{version}")
-    click.echo()
-
-    # Not initialized
+    # Not initialized — welcome message
     if not gov_dir.exists():
-        click.echo("  Welcome! Looks like this is a new project.")
         click.echo()
-        click.echo("  What are you working on?")
+        click.echo("  Not initialized.")
         click.echo()
         click.echo("    governor fiction init        Start a story")
         click.echo("    governor code init           Start a code project")
         click.echo()
-        click.echo("  Or run 'governor help' to explore.")
-        click.echo()
         return
 
-    mode = get_mode(gov_dir)
-
-    # Check for pending violation
-    resolver = ViolationResolver(gov_dir)
-    pending = resolver.get_pending()
-
-    if pending:
-        click.echo("  There's an unresolved issue")
-        click.echo()
-        click.echo(f"  This contradicts your {'canon' if mode == 'fiction' else 'decisions'}:")
-        click.echo(f"    {pending.anchor_description}")
-        click.echo()
-        click.echo("  Run 'governor resolve' to handle it.")
-        click.echo()
-        click.echo("  Or choose now:")
-        click.echo("    governor resolve fix         Rewrite to comply")
-        click.echo("    governor resolve change      Update your canon")
-        click.echo("    governor resolve allow       Allow it this time")
-        click.echo()
-        return
-
-    # Fiction mode status
-    if mode == "fiction":
-        story_name = get_story_name(gov_dir)
-        registry = create_registry(gov_dir)
-        anchors = registry.all()
-
-        characters = len([a for a in anchors if "char-" in a.id])
-        rules = len([a for a in anchors if a.anchor_type == AnchorType.DEFINITION])
-        prohibitions = len([a for a in anchors if a.anchor_type == AnchorType.PROHIBITION and "char-" not in a.id])
-
-        click.echo("  Mode: Fiction")
-        click.echo(f"  Story: \"{story_name}\"")
-        click.echo(f"     {characters} characters * {rules} world rules * {prohibitions} boundaries")
-        click.echo()
-        click.echo("  No unresolved issues")
-        click.echo()
-        click.echo("  Quick start:")
-        click.echo("    governor fiction status      Full story overview")
-        click.echo("    governor fiction character   Manage characters")
-        click.echo("    governor check <file>        Check a file")
-        click.echo()
-
-    # Code mode status
-    else:
-        from .ledgers import DecisionLedger
-
-        decision_ledger = DecisionLedger(gov_dir)
-        decisions = len(list(decision_ledger.all()))
-
-        registry = create_registry(gov_dir)
-        constraints = len([a for a in registry.all() if a.anchor_type == AnchorType.PROHIBITION])
-
-        click.echo("  Mode: Code")
-        click.echo(f"     {decisions} decisions * {constraints} constraints")
-        click.echo()
-        click.echo("  No unresolved issues")
-        click.echo()
-        click.echo("  Quick start:")
-        click.echo("    governor code status         Full project overview")
-        click.echo("    governor code decision       Manage decisions")
-        click.echo("    governor check <file>        Check a file")
-        click.echo()
-
-    click.echo("  Run 'governor help' for all commands.")
-    click.echo()
+    # Initialized — rollup-based "what now"
+    from .status_rollup import build_status_rollup, render_bare
+    rollup = build_status_rollup(gov_dir)
+    click.echo(render_bare(rollup))

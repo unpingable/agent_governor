@@ -21,6 +21,7 @@ CATEGORIES: OrderedDict[str, list[str]] = OrderedDict([
     ("Workflow",  ["init", "propose", "verify", "apply", "wrap", "serve"]),
     ("Config",    ["envelope", "profile", "intent", "session", "config"]),
     ("Debug",     ["rpc"]),
+    ("Advanced",  ["advanced"]),
 ])
 
 # Flat set for fast membership test
@@ -66,5 +67,5 @@ class CuratedGroup(click.Group):
         # Footer
         formatter.write_paragraph()
         formatter.write_text(
-            "Run 'governor --help-all' for all commands."
+            "Run 'governor advanced --help' for all commands."
         )

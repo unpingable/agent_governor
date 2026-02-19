@@ -78,7 +78,7 @@ def test_cli():
 class TestCategoriesStructure:
     def test_categories_is_ordered_dict(self):
         assert isinstance(CATEGORIES, dict)
-        assert list(CATEGORIES.keys()) == ["Operator", "Workflow", "Config", "Debug"]
+        assert list(CATEGORIES.keys()) == ["Operator", "Workflow", "Config", "Debug", "Advanced"]
 
     def test_operator_category_has_status(self):
         assert "status" in CATEGORIES["Operator"]
@@ -121,7 +121,7 @@ class TestCuratedHelp:
 
     def test_default_help_shows_footer(self, runner, test_cli):
         result = runner.invoke(test_cli, ["--help"])
-        assert "--help-all" in result.output
+        assert "advanced --help" in result.output
 
     def test_help_all_shows_everything(self, runner, test_cli):
         result = runner.invoke(test_cli, ["--help-all"])
@@ -160,7 +160,7 @@ class TestRealCLI:
     def test_governor_help_shows_footer(self, runner):
         from governor.cli import cli
         result = runner.invoke(cli, ["--help"])
-        assert "--help-all" in result.output
+        assert "advanced --help" in result.output
 
     def test_governor_help_all_shows_many_commands(self, runner):
         from governor.cli import cli
@@ -238,3 +238,55 @@ class TestCuratedGuardrail:
             f"Stale entries in ALLOWED_UNCATEGORIZED (commands no longer exist): "
             f"{sorted(stale)}. Remove them."
         )
+
+
+# ---------------------------------------------------------------------------
+# Advanced group tests
+# ---------------------------------------------------------------------------
+
+class TestAdvancedGroup:
+    @pytest.fixture(autouse=True)
+    def _load_cli(self):
+        from governor.cli import cli, advanced
+        self.cli = cli
+        self.advanced = advanced
+
+    def test_advanced_commands_match_attic(self):
+        """Advanced group contains exactly the non-curated, non-self commands."""
+        all_cmds = set(self.cli.commands.keys())
+        expected = all_cmds - _CURATED_NAMES - {"advanced"}
+        actual = set(self.advanced.commands.keys())
+        assert actual == expected
+
+    def test_advanced_excludes_curated(self):
+        """No curated command should appear in the advanced group."""
+        overlap = set(self.advanced.commands.keys()) & _CURATED_NAMES
+        assert overlap == set(), f"Curated commands leaked into advanced: {overlap}"
+
+    def test_advanced_excludes_self(self):
+        """The advanced group must not contain itself."""
+        assert "advanced" not in self.advanced.commands
+
+    def test_advanced_help_output(self, runner):
+        """'governor advanced --help' lists subcommands."""
+        result = runner.invoke(self.cli, ["advanced", "--help"])
+        assert result.exit_code == 0
+        # Should list many commands (the attic)
+        assert "Commands:" in result.output
+        assert len(result.output) > 500
+
+    def test_help_all_still_works(self, runner):
+        """--help-all still produces the flat listing."""
+        result = runner.invoke(self.cli, ["--help-all"])
+        assert result.exit_code == 0
+        assert "Commands:" in result.output
+        assert len(result.output) > 2000
+
+    def test_every_noncurated_in_advanced(self):
+        """Every non-curated root command is accessible via advanced."""
+        for name in self.cli.commands:
+            if name in _CURATED_NAMES or name == "advanced":
+                continue
+            assert name in self.advanced.commands, (
+                f"Non-curated command '{name}' missing from advanced group"
+            )

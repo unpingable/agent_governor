@@ -393,6 +393,7 @@ governor gate fix                # Resolve pending violation by fixing the respo
 governor gate revise             # Resolve pending violation by updating the anchor
 governor gate proceed            # Resolve pending violation by logging an exception (--scope, --expiry)
 governor gate exceptions         # List logged exceptions (--format json)
+governor gate heartbeat          # Show when the evidence gate last fired (--json)
 
 # Continuity Enforcement (Deferred 5: closed-loop generation control)
 governor continuity status              # Registry stats, anchor count by type

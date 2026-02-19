@@ -11408,6 +11408,55 @@ def gate_exceptions(ctx, fmt):
             click.echo()
 
 
+@gate_cmd.command("heartbeat")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def gate_heartbeat_cmd(ctx, as_json):
+    """Show when the evidence gate last fired.
+
+    Checks the gate receipt log and reports whether the evidence gate
+    has been called recently.  Uses a missed-heartbeat model: if more
+    than N expected intervals have passed, the gate is stale.
+
+    \b
+    Examples:
+        governor gate heartbeat          # text summary
+        governor gate heartbeat --json   # machine-readable
+    """
+    from .gate_heartbeat import gate_heartbeat, HeartbeatConfig
+
+    gov_dir = ensure_initialized(ctx)
+    status = gate_heartbeat(gov_dir)
+
+    if as_json:
+        click.echo(json.dumps(status.to_dict(), indent=2))
+        return
+
+    if status.last_check_timestamp is None:
+        click.echo("Gate: no receipts yet")
+        return
+
+    # Human-friendly elapsed
+    elapsed = status.seconds_since_last
+    if elapsed is not None:
+        if elapsed < 60:
+            age = f"{elapsed:.0f}s ago"
+        elif elapsed < 3600:
+            age = f"{elapsed / 60:.0f}m ago"
+        else:
+            age = f"{elapsed / 3600:.1f}h ago"
+    else:
+        age = "unknown"
+
+    if status.is_stale:
+        click.echo(f"Gate: stale (last check {age}, {status.missed_count} missed)")
+    else:
+        click.echo(f"Gate: active (last check {age}, {status.missed_count} missed)")
+
+    if status.gate:
+        click.echo(f"  Last gate: {status.gate}")
+
+
 # =============================================================================
 # Docket Commands (Adjudicator UX)
 # =============================================================================

@@ -513,6 +513,58 @@ def check_codex_config(project_dir: Path) -> PreflightCheck:
     )
 
 
+def check_gate_heartbeat(project_dir: Path) -> PreflightCheck:
+    """Check that the evidence gate fired in the last session.
+
+    Logic:
+    - No .governor/ → skip (check #1 handles this)
+    - No receipts AND no session artifacts → pass (clean install)
+    - No receipts BUT session artifacts exist → warn
+    - Receipts exist → pass
+    """
+    gov_dir = project_dir / ".governor"
+    if not gov_dir.exists():
+        return PreflightCheck(
+            name="gate_heartbeat",
+            status="pass",
+            detail="No .governor/ directory — skipping gate heartbeat",
+        )
+
+    receipt_path = gov_dir / "receipts" / "gate_receipts.jsonl"
+    has_receipts = receipt_path.exists() and receipt_path.stat().st_size > 0
+
+    if has_receipts:
+        return PreflightCheck(
+            name="gate_heartbeat",
+            status="pass",
+            detail="Gate receipts present — evidence gate has fired",
+        )
+
+    # No receipts — check if there are session artifacts indicating
+    # a session has run (sessions index, telemetry logs, etc.)
+    session_indicators = [
+        gov_dir / "sessions" / "index.json",
+        gov_dir / "telemetry",
+        gov_dir / "hook_invocations.jsonl",
+    ]
+    has_session = any(p.exists() for p in session_indicators)
+
+    if has_session:
+        return PreflightCheck(
+            name="gate_heartbeat",
+            status="warn",
+            detail="Session artifacts exist but gate never fired — evidence gate may be bypassed",
+            fix="governor gate check <file>",
+        )
+
+    # Clean install: no receipts, no session artifacts
+    return PreflightCheck(
+        name="gate_heartbeat",
+        status="pass",
+        detail="No receipts or session artifacts — clean install",
+    )
+
+
 # ── Agent detection ────────────────────────────────────────────────────────
 
 
@@ -576,6 +628,9 @@ def run_preflight(
     # 8. Restart advisory (claude only)
     if agent == "claude":
         checks.append(check_restart_advisory(project_dir))
+
+    # 9. Gate heartbeat (all agents)
+    checks.append(check_gate_heartbeat(project_dir))
 
     overall = _compute_overall(checks)
 

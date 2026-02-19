@@ -3,13 +3,23 @@
 
 import json
 import os
+import shutil
 import socket
+import tempfile
 import threading
 import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
+
+
+@pytest.fixture()
+def short_tmp():
+    """Temp dir with a short path — avoids AF_UNIX 104-byte limit on macOS."""
+    d = tempfile.mkdtemp(prefix="gov_")
+    yield Path(d)
+    shutil.rmtree(d, ignore_errors=True)
 
 from governor.cli_backend import (
     _read_frame,
@@ -71,9 +81,9 @@ def _start_echo_server(sock_path: Path, response: dict | None = None) -> socket.
 # ---------------------------------------------------------------------------
 
 class TestFraming:
-    def test_roundtrip(self, tmp_path):
+    def test_roundtrip(self, short_tmp):
         """Write + read a frame through a real socket pair."""
-        sock_path = tmp_path / "test.sock"
+        sock_path = short_tmp / "test.sock"
         msg = {"jsonrpc": "2.0", "method": "test", "id": 1}
 
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -117,9 +127,9 @@ class TestFraming:
 # ---------------------------------------------------------------------------
 
 class TestSyncRpcCall:
-    def test_successful_call(self, tmp_path):
+    def test_successful_call(self, short_tmp):
         """sync_rpc_call returns result on success."""
-        sock_path = tmp_path / "rpc.sock"
+        sock_path = short_tmp / "rpc.sock"
         srv = _start_echo_server(sock_path)
         try:
             result = sync_rpc_call(sock_path, "governor.hello", {})
@@ -133,9 +143,9 @@ class TestSyncRpcCall:
         result = sync_rpc_call(tmp_path / "nonexistent.sock", "test", {})
         assert result is None
 
-    def test_returns_none_on_rpc_error(self, tmp_path):
+    def test_returns_none_on_rpc_error(self, short_tmp):
         """Returns None when server returns an RPC error."""
-        sock_path = tmp_path / "err.sock"
+        sock_path = short_tmp / "err.sock"
         error_response = {
             "jsonrpc": "2.0",
             "id": None,  # Will be overwritten by server
@@ -166,9 +176,9 @@ class TestSyncRpcCall:
         srv.close()
         assert result is None
 
-    def test_skips_notifications(self, tmp_path):
+    def test_skips_notifications(self, short_tmp):
         """sync_rpc_call skips notification frames and returns the response."""
-        sock_path = tmp_path / "notify.sock"
+        sock_path = short_tmp / "notify.sock"
 
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         srv.bind(str(sock_path))
@@ -200,10 +210,10 @@ class TestSyncRpcCall:
         assert result is not None
         assert result["ok"] is True
 
-    def test_increments_request_id(self, tmp_path):
+    def test_increments_request_id(self, short_tmp):
         """Each call gets a unique request ID."""
         reset_rpc_counter()
-        sock_path = tmp_path / "id.sock"
+        sock_path = short_tmp / "id.sock"
 
         ids_seen = []
 
@@ -237,9 +247,9 @@ class TestSyncRpcCall:
         assert len(ids_seen) == 2
         assert ids_seen[0] != ids_seen[1]
 
-    def test_timeout_returns_none(self, tmp_path):
+    def test_timeout_returns_none(self, short_tmp):
         """Returns None on timeout (server doesn't respond)."""
-        sock_path = tmp_path / "slow.sock"
+        sock_path = short_tmp / "slow.sock"
 
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         srv.bind(str(sock_path))
@@ -353,9 +363,9 @@ class TestGetOperatorBackend:
 # ---------------------------------------------------------------------------
 
 class TestSyncRpcCallRaw:
-    def test_returns_full_frame_on_success(self, tmp_path):
+    def test_returns_full_frame_on_success(self, short_tmp):
         """sync_rpc_call_raw returns the full frame dict including 'result'."""
-        sock_path = tmp_path / "raw.sock"
+        sock_path = short_tmp / "raw.sock"
         srv = _start_echo_server(sock_path)
         try:
             frame = sync_rpc_call_raw(sock_path, "governor.hello", {})
@@ -366,9 +376,9 @@ class TestSyncRpcCallRaw:
         finally:
             srv.close()
 
-    def test_returns_full_frame_on_rpc_error(self, tmp_path):
+    def test_returns_full_frame_on_rpc_error(self, short_tmp):
         """Returns frame with 'error' key on RPC errors (not None)."""
-        sock_path = tmp_path / "raw_err.sock"
+        sock_path = short_tmp / "raw_err.sock"
 
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         srv.bind(str(sock_path))
@@ -443,8 +453,8 @@ class TestCheckMethodAllowed:
     def teardown_method(self):
         reset_methods_cache()
 
-    def test_blocks_mutating_when_not_armed(self, tmp_path):
-        sock_path = tmp_path / "methods.sock"
+    def test_blocks_mutating_when_not_armed(self, short_tmp):
+        sock_path = short_tmp / "methods.sock"
         methods = [
             {"method": "governor.hello", "classification": "read_only"},
             {"method": "sessions.create", "classification": "mutating"},
@@ -461,9 +471,9 @@ class TestCheckMethodAllowed:
         finally:
             srv.close()
 
-    def test_message_shows_only_missing_lock(self, tmp_path):
+    def test_message_shows_only_missing_lock(self, short_tmp):
         """When CLI flag is set but env var is not, only env var is listed."""
-        sock_path = tmp_path / "methods_msg.sock"
+        sock_path = short_tmp / "methods_msg.sock"
         methods = [
             {"method": "sessions.create", "classification": "mutating"},
         ]
@@ -479,8 +489,8 @@ class TestCheckMethodAllowed:
         finally:
             srv.close()
 
-    def test_allows_mutating_when_armed(self, tmp_path):
-        sock_path = tmp_path / "methods2.sock"
+    def test_allows_mutating_when_armed(self, short_tmp):
+        sock_path = short_tmp / "methods2.sock"
         methods = [
             {"method": "sessions.create", "classification": "mutating"},
         ]
@@ -491,8 +501,8 @@ class TestCheckMethodAllowed:
         finally:
             srv.close()
 
-    def test_allows_read_only_unconditionally(self, tmp_path):
-        sock_path = tmp_path / "methods3.sock"
+    def test_allows_read_only_unconditionally(self, short_tmp):
+        sock_path = short_tmp / "methods3.sock"
         methods = [
             {"method": "governor.hello", "classification": "read_only"},
         ]
@@ -508,9 +518,9 @@ class TestCheckMethodAllowed:
         err = check_method_allowed(tmp_path / "no.sock", "anything", allow_mutating=False)
         assert err is None
 
-    def test_returns_none_for_unknown_method(self, tmp_path):
+    def test_returns_none_for_unknown_method(self, short_tmp):
         """Unknown methods pass through — let the daemon reject them."""
-        sock_path = tmp_path / "methods4.sock"
+        sock_path = short_tmp / "methods4.sock"
         methods = [
             {"method": "governor.hello", "classification": "read_only"},
         ]

@@ -97,7 +97,7 @@ def verify_structure(receipt_dict: dict[str, Any]) -> VerifyResult:
     # Hash format
     rh = receipt_dict.get("receipt_hash", "")
     if not HASH_PATTERN.match(rh):
-        errors.append(f"receipt_hash is not a valid 64-char hex string")
+        errors.append("receipt_hash is not a valid 64-char hex string")
 
     # Actor
     actor = receipt_dict.get("actor", {})

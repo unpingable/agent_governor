@@ -1,0 +1,12 @@
+# Demo: allow-all-warn (passthrough mode)
+# Denied tools are still allowed through, but tagged as passthrough in receipts
+[gateway]
+agent_id = "demo-agent"
+receipt_path = "./receipts/demo_passthrough.jsonl"
+
+[upstream]
+command = ["python", "demos/echo_server.py"]
+
+[policy]
+default_policy = "allow-warn"
+deny_tools = ["shell_exec"]

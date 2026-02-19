@@ -1,0 +1,11 @@
+# Demo: deny shell.* tools
+[gateway]
+agent_id = "demo-agent"
+receipt_path = "./receipts/demo_deny.jsonl"
+
+[upstream]
+command = ["python", "demos/echo_server.py"]
+
+[policy]
+default_policy = "allow"
+deny_tools = ["shell_exec"]

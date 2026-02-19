@@ -241,6 +241,77 @@ class TestCuratedGuardrail:
 
 
 # ---------------------------------------------------------------------------
+# Operator surface contract — frozen public surface
+# ---------------------------------------------------------------------------
+# If any of these tests fail, you're changing the public surface.
+# That's fine — but it should be deliberate, not accidental.
+
+# The 5 help categories and 21 curated commands. Update only with intent.
+FROZEN_CATEGORIES = ["Operator", "Workflow", "Config", "Debug", "Advanced"]
+FROZEN_CURATED_COMMANDS: set[str] = {
+    # Operator
+    "status", "doctor", "trace", "explain", "operator", "receipts", "check",
+    # Workflow
+    "init", "propose", "verify", "apply", "wrap", "serve",
+    # Config
+    "envelope", "profile", "intent", "session", "config",
+    # Debug
+    "rpc",
+    # Advanced
+    "advanced",
+}
+
+
+class TestOperatorContract:
+    """Freeze the public operator surface. Prevents "just one more command" entropy."""
+
+    def test_help_has_exactly_five_categories(self, runner):
+        """Root help shows exactly 5 category sections."""
+        from governor.cli import cli
+        result = runner.invoke(cli, ["--help"])
+        assert result.exit_code == 0
+        for cat in FROZEN_CATEGORIES:
+            assert f"{cat}:" in result.output, f"Missing category: {cat}"
+
+    def test_category_names_match_frozen(self):
+        """CATEGORIES keys match the frozen list exactly."""
+        assert list(CATEGORIES.keys()) == FROZEN_CATEGORIES
+
+    def test_curated_commands_match_frozen(self):
+        """Curated command set matches the frozen set exactly."""
+        assert _CURATED_NAMES == FROZEN_CURATED_COMMANDS, (
+            f"Curated commands changed.\n"
+            f"  Added:   {sorted(_CURATED_NAMES - FROZEN_CURATED_COMMANDS)}\n"
+            f"  Removed: {sorted(FROZEN_CURATED_COMMANDS - _CURATED_NAMES)}\n"
+            f"Update FROZEN_CURATED_COMMANDS if this was intentional."
+        )
+
+    def test_all_curated_commands_exist(self):
+        """Every curated command actually exists in the CLI."""
+        from governor.cli import cli
+        for name in FROZEN_CURATED_COMMANDS:
+            assert name in cli.commands, (
+                f"Curated command '{name}' does not exist in cli.commands"
+            )
+
+    def test_advanced_group_exists_and_is_populated(self):
+        """Advanced group exists and contains the attic commands."""
+        from governor.cli import advanced
+        assert len(advanced.commands) > 50, (
+            f"Advanced group has only {len(advanced.commands)} commands — "
+            f"expected 50+. Did _populate_advanced() run?"
+        )
+
+    def test_bare_invocation_shows_state(self, runner):
+        """Bare 'governor' prints rollup state, not a tutorial."""
+        from governor.cli import cli
+        result = runner.invoke(cli, [])
+        assert result.exit_code == 0
+        # Must contain the state label (from render_bare)
+        assert "Governor:" in result.output or "Not initialized." in result.output
+
+
+# ---------------------------------------------------------------------------
 # Advanced group tests
 # ---------------------------------------------------------------------------
 

@@ -22,10 +22,13 @@ from receipt_v1.verify import verify, verify_chain
 EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
 SCHEMA_PATH = Path(__file__).parent.parent / "schema" / "receipt.schema.json"
 
-# Collect all single-receipt examples (not the chain array)
+# Array examples (chain files, demo traces) — excluded from single-receipt tests
+_ARRAY_EXAMPLES = {"07_chain_two.json", "demo_trace.json"}
+
+# Collect all single-receipt examples (not the chain arrays)
 SINGLE_EXAMPLES = sorted(
     p for p in EXAMPLES_DIR.glob("*.json")
-    if p.name != "07_chain_two.json"
+    if p.name not in _ARRAY_EXAMPLES
 )
 
 
@@ -134,6 +137,60 @@ class TestExamplesCompleteness:
         for name in expected:
             path = EXAMPLES_DIR / name
             assert path.exists(), f"Missing example: {name}"
+
+
+class TestDemoTrace:
+    """Verify demo_trace.json: 4-receipt chain (deny + allow + failure + retry)."""
+
+    def test_demo_trace_exists(self):
+        path = EXAMPLES_DIR / "demo_trace.json"
+        assert path.exists(), "Missing demo_trace.json"
+
+    def test_demo_trace_structure(self):
+        path = EXAMPLES_DIR / "demo_trace.json"
+        with open(path) as f:
+            data = json.load(f)
+        assert isinstance(data, list)
+        assert len(data) == 4
+
+        # Expected sequence: deny, allow+success, allow+failure, allow+success(retry)
+        assert data[0]["decision"]["action"] == "deny"
+        assert data[1]["decision"]["action"] == "allow"
+        assert data[1]["execution"]["status"] == "success"
+        assert data[2]["execution"]["status"] == "failure"
+        assert data[3]["execution"]["status"] == "success"
+        assert data[3]["execution"]["attempt"] == 2
+
+        # Same call_id on failure+retry
+        assert data[2]["tool"]["call_id"] == data[3]["tool"]["call_id"]
+
+    def test_demo_trace_hash_integrity(self):
+        path = EXAMPLES_DIR / "demo_trace.json"
+        with open(path) as f:
+            data = json.load(f)
+        for i, receipt in enumerate(data):
+            result = verify(receipt)
+            assert result.ok, f"demo_trace[{i}]: {result.errors}"
+
+    def test_demo_trace_chain_integrity(self):
+        path = EXAMPLES_DIR / "demo_trace.json"
+        with open(path) as f:
+            data = json.load(f)
+        result = verify_chain(data)
+        assert result.ok, f"demo_trace chain: {result.errors}"
+        assert not result.warnings, f"demo_trace chain warnings: {result.warnings}"
+
+    def test_demo_trace_schema_validation(self):
+        jsonschema = _try_import_jsonschema()
+        schema = _load_schema()
+        path = EXAMPLES_DIR / "demo_trace.json"
+        with open(path) as f:
+            data = json.load(f)
+        for i, receipt in enumerate(data):
+            try:
+                jsonschema.validate(receipt, schema)
+            except jsonschema.ValidationError as e:
+                pytest.fail(f"demo_trace[{i}] failed schema: {e.message}")
 
 
 class TestResourceAccess:

@@ -675,12 +675,14 @@ class EvidenceGate:
         log_path: Path | None = None,
         receipt_system: Any | None = None,
         kernel_bridge: Any | None = None,
+        receipt_v1_bridge: Any | None = None,
     ):
         self.config = config or EvidenceGateConfig()
         self.logger = EvidenceGateLogger(log_path)
         self.prior_claims: list[EvidenceGateClaim] = []
         self._receipt_system = receipt_system  # GateReceiptSystem or None
         self._kernel_bridge = kernel_bridge  # ReceiptKernelBridge or None
+        self._receipt_v1_bridge = receipt_v1_bridge  # ReceiptV1Bridge or None
 
     def check(
         self,
@@ -794,22 +796,27 @@ class EvidenceGate:
         self.logger.log("output", status=result.status.value, warnings=result.warnings, blocking_reasons=result.blocking_reasons)
 
         # Emit gate receipt (if receipt system is configured)
-        self._emit_receipt(output, result)
+        gate_receipt = self._emit_receipt(output, result)
+
+        # Emit receipt v1 (dual-emit alongside gate_receipt)
+        self._emit_receipt_v1(output, result, gate_receipt)
 
         # Emit receipt kernel run (if bridge is configured)
         self._emit_kernel_run(task, output, result, custody, oracle_evidence or [])
 
         return result
 
-    def _emit_receipt(self, output: str, result: EvidenceGateOutput) -> None:
+    def _emit_receipt(self, output: str, result: EvidenceGateOutput) -> Any:
         """Emit a gate receipt for this check.
 
         If no receipt_system is configured, logs a 'receipt_suppressed' event
         so the absence is auditable.
+
+        Returns the GateReceipt (for correlation with receipt_v1) or None.
         """
         if self._receipt_system is None:
             self.logger.log("receipt_suppressed", reason="no receipt system configured")
-            return
+            return None
 
         verdict_map = {
             EvidenceGateStatus.OK: "pass",
@@ -824,7 +831,7 @@ class EvidenceGate:
             "claim_ids": result.claim_ids,
         }
 
-        self._receipt_system.emit(
+        return self._receipt_system.emit(
             gate="evidence_gate",
             verdict=verdict_map[result.status],
             subject_kind="text",
@@ -832,6 +839,47 @@ class EvidenceGate:
             evidence_bundle=evidence_bundle,
             gate_config=self.config.to_dict(),
         )
+
+    def _emit_receipt_v1(
+        self,
+        output: str,
+        result: EvidenceGateOutput,
+        gate_receipt: Any | None,
+    ) -> None:
+        """Emit a Receipt v1 record (dual-emit alongside gate_receipt).
+
+        If no receipt_v1_bridge is configured, this is a no-op.
+        Errors are logged but never block the gate (fail-open).
+        """
+        bridge = self._receipt_v1_bridge
+        if bridge is None or not bridge.enabled:
+            return
+
+        try:
+            from governor.receipt_v1_bridge import BridgeContext
+
+            verdict_map = {
+                EvidenceGateStatus.OK: "pass",
+                EvidenceGateStatus.WARN: "warn",
+                EvidenceGateStatus.BLOCKED: "block",
+            }
+
+            ctx = BridgeContext(
+                gate="evidence_gate",
+                verdict=verdict_map[result.status],
+                blocking_reasons=result.blocking_reasons,
+            )
+
+            # Correlate with gate_receipt if available
+            if gate_receipt is not None:
+                ctx.legacy_receipt_id = gate_receipt.receipt_id
+                ctx.evidence_hash = gate_receipt.evidence_hash
+                ctx.policy_hash = gate_receipt.policy_hash
+                ctx.subject_hash = gate_receipt.subject_hash
+
+            bridge.emit(ctx)
+        except Exception as exc:
+            logger.warning("receipt_v1 emission failed: %s", exc)
 
     def _emit_kernel_run(
         self,

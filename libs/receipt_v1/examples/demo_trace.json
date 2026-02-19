@@ -1,0 +1,176 @@
+[
+  {
+    "receipt_id": "019c73c6-d7b0-7dcd-a1b7-a2a30dc2db68",
+    "receipt_version": "1.0",
+    "receipt_hash": "d87c42bca879382721c8cb564077ee08fa30f63ea9fe220eef32628040bc7a95",
+    "chain": {
+      "seq": 1
+    },
+    "timestamp_wall": "2026-02-19T00:00:00.000Z",
+    "actor": {
+      "agent_id": "claude-code",
+      "session_id": "demo-session-001",
+      "auth_context": "stdio"
+    },
+    "tool": {
+      "tool_id": "gov.evidence_gate",
+      "args_hash": "eaf1126475440d3a27f11e9418d09c8d48d17392f87cfa7d67e9590b325b1312",
+      "args_summary": "Check agent output (283 chars)"
+    },
+    "decision": {
+      "action": "deny",
+      "reason_code": "gov.blocked",
+      "reason_human": "Claim \"tests pass\" has no supporting evidence"
+    },
+    "provenance": {
+      "deployment_id": "demo-local",
+      "instance_id": "demo-inst-001",
+      "governor_version": "2.3.0",
+      "hash_alg": "sha-256",
+      "hash_encoding": "hex"
+    },
+    "ext": {
+      "gov.legacy_receipt_id": "gate-receipt-aaa111",
+      "gov.evidence_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "gov.policy_hash": "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"
+    }
+  },
+  {
+    "receipt_id": "019c73c6-d7b0-74b0-bda3-8d7f5fb2eb9a",
+    "receipt_version": "1.0",
+    "receipt_hash": "9a3c11544b7d88a020c3375fc059e2b92a2e13d5236e15124b378f64d2148080",
+    "chain": {
+      "seq": 2,
+      "parent_receipt_id": "019c73c6-d7b0-7dcd-a1b7-a2a30dc2db68",
+      "parent_receipt_hash": "d87c42bca879382721c8cb564077ee08fa30f63ea9fe220eef32628040bc7a95"
+    },
+    "timestamp_wall": "2026-02-19T00:00:00.150Z",
+    "actor": {
+      "agent_id": "claude-code",
+      "session_id": "demo-session-001",
+      "auth_context": "stdio"
+    },
+    "tool": {
+      "tool_id": "gov.evidence_gate",
+      "args_hash": "699209ff4d32f7a81f4b5cdff2bc5104e7bd03781f65bb37fb984ba6db120012",
+      "call_id": "call-fs-read-42",
+      "args_summary": "Read /src/auth.py"
+    },
+    "decision": {
+      "action": "allow",
+      "reason_code": "gov.passthrough"
+    },
+    "provenance": {
+      "deployment_id": "demo-local",
+      "instance_id": "demo-inst-001",
+      "governor_version": "2.3.0",
+      "hash_alg": "sha-256",
+      "hash_encoding": "hex"
+    },
+    "execution": {
+      "status": "success",
+      "attempt": 1,
+      "side_effects": [
+        "fs:read"
+      ],
+      "duration_ms": 12
+    },
+    "ext": {
+      "gov.legacy_receipt_id": "gate-receipt-bbb222",
+      "gov.evidence_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "gov.policy_hash": "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"
+    }
+  },
+  {
+    "receipt_id": "019c73c6-d7b0-7294-885b-1e389382da2c",
+    "receipt_version": "1.0",
+    "receipt_hash": "303fb19f86b829815052e6bb3cccb17ad74a67224fc8dca82a5f2e1801e25ca0",
+    "chain": {
+      "seq": 3,
+      "parent_receipt_id": "019c73c6-d7b0-74b0-bda3-8d7f5fb2eb9a",
+      "parent_receipt_hash": "9a3c11544b7d88a020c3375fc059e2b92a2e13d5236e15124b378f64d2148080"
+    },
+    "timestamp_wall": "2026-02-19T00:00:00.300Z",
+    "actor": {
+      "agent_id": "claude-code",
+      "session_id": "demo-session-001",
+      "auth_context": "stdio"
+    },
+    "tool": {
+      "tool_id": "gov.evidence_gate",
+      "args_hash": "e86c2fab8c636d1ab0a14b8f11386b699ef8d378e5942b90f2b47c4e2cd02a89",
+      "call_id": "call-fs-write-43",
+      "args_summary": "Write /etc/shadow"
+    },
+    "decision": {
+      "action": "allow",
+      "reason_code": "gov.passthrough"
+    },
+    "provenance": {
+      "deployment_id": "demo-local",
+      "instance_id": "demo-inst-001",
+      "governor_version": "2.3.0",
+      "hash_alg": "sha-256",
+      "hash_encoding": "hex"
+    },
+    "execution": {
+      "status": "failure",
+      "attempt": 1,
+      "side_effects": [
+        "fs:write"
+      ],
+      "error": "EACCES: permission denied"
+    },
+    "ext": {
+      "gov.legacy_receipt_id": "gate-receipt-ccc333",
+      "gov.evidence_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "gov.policy_hash": "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"
+    }
+  },
+  {
+    "receipt_id": "019c73c6-d7b1-79aa-b821-6c6aa3bdcec8",
+    "receipt_version": "1.0",
+    "receipt_hash": "983904ee974d11b6128b84ffd92b9618333ded83321bbb2032dacec2e9f5cedc",
+    "chain": {
+      "seq": 4,
+      "parent_receipt_id": "019c73c6-d7b0-7294-885b-1e389382da2c",
+      "parent_receipt_hash": "303fb19f86b829815052e6bb3cccb17ad74a67224fc8dca82a5f2e1801e25ca0"
+    },
+    "timestamp_wall": "2026-02-19T00:00:00.380Z",
+    "actor": {
+      "agent_id": "claude-code",
+      "session_id": "demo-session-001",
+      "auth_context": "stdio"
+    },
+    "tool": {
+      "tool_id": "gov.evidence_gate",
+      "args_hash": "5f1b43a399f9648c614ff8aa868818e8bd5c5cc32f60542be7d2855a196f780f",
+      "call_id": "call-fs-write-43",
+      "args_summary": "Write /tmp/output.txt"
+    },
+    "decision": {
+      "action": "allow",
+      "reason_code": "gov.passthrough"
+    },
+    "provenance": {
+      "deployment_id": "demo-local",
+      "instance_id": "demo-inst-001",
+      "governor_version": "2.3.0",
+      "hash_alg": "sha-256",
+      "hash_encoding": "hex"
+    },
+    "execution": {
+      "status": "success",
+      "attempt": 2,
+      "side_effects": [
+        "fs:write"
+      ],
+      "duration_ms": 8
+    },
+    "ext": {
+      "gov.legacy_receipt_id": "gate-receipt-ddd444",
+      "gov.evidence_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "gov.policy_hash": "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"
+    }
+  }
+]

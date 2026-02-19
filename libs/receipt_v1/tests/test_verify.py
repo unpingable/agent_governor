@@ -103,6 +103,34 @@ class TestVerifyStructure:
         result = verify_structure(d)
         assert not result.valid
 
+    def test_ext_unnamespaced_key(self):
+        d = _make_receipt_dict()
+        d["ext"] = {"bad_key": "value"}
+        # Recompute hash so hash check doesn't mask structural error
+        from receipt_v1.canonical import receipt_hash as rh
+        d["receipt_hash"] = rh(d)
+        result = verify_structure(d)
+        assert not result.valid
+        assert any("namespaced" in e for e in result.errors)
+
+    def test_ext_float_rejected(self):
+        d = _make_receipt_dict()
+        d["ext"] = {"acme.score": 3.14}
+        # Don't recompute hash — canonical_json rejects floats too.
+        # verify_structure should catch it independently.
+        result = verify_structure(d)
+        assert not result.valid
+        assert any("Float" in e for e in result.errors)
+
+    def test_ext_empty_rejected(self):
+        d = _make_receipt_dict()
+        d["ext"] = {}
+        from receipt_v1.canonical import receipt_hash as rh
+        d["receipt_hash"] = rh(d)
+        result = verify_structure(d)
+        assert not result.valid
+        assert any("empty" in e for e in result.errors)
+
     def test_chain_seq1_with_parents(self):
         d = _make_receipt_dict()
         d["chain"]["parent_receipt_id"] = "abc"

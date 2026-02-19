@@ -100,6 +100,21 @@ class TestExamplesHashIntegrity:
         assert not result.warnings, f"Chain warnings: {result.warnings}"
 
 
+class TestExamplesSchemaRejectsJunk:
+    """Verify schema rejects invalid ext keys."""
+
+    def test_ext_unnamespaced_key_rejected_by_schema(self):
+        jsonschema = _try_import_jsonschema()
+        schema = _load_schema()
+
+        # Load a valid example and add bad ext
+        with open(SINGLE_EXAMPLES[0]) as f:
+            data = json.load(f)
+        data["ext"] = {"bad_key": "value"}
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(data, schema)
+
+
 class TestExamplesCompleteness:
     """Verify we have all 10 expected examples."""
 
@@ -119,3 +134,19 @@ class TestExamplesCompleteness:
         for name in expected:
             path = EXAMPLES_DIR / name
             assert path.exists(), f"Missing example: {name}"
+
+
+class TestResourceAccess:
+    """Verify schema is accessible at runtime."""
+
+    def test_schema_path_exists(self):
+        from receipt_v1.resources import schema_path
+        p = schema_path()
+        assert p.exists()
+        assert p.name == "receipt.schema.json"
+
+    def test_schema_json_loads(self):
+        from receipt_v1.resources import schema_json
+        s = schema_json()
+        assert s["title"] == "Receipt v1"
+        assert s["properties"]["receipt_version"]["const"] == "1.0"

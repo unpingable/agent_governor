@@ -23,6 +23,7 @@ Low-level (importable, cross-language contract, but not in __all__):
 __version__ = "0.1.0"
 
 from receipt_v1.receipt import ReceiptBuilder, ReceiptChain
+from receipt_v1.resources import schema_path
 from receipt_v1.sinks import FileSink, Sink, StdoutSink
 from receipt_v1.types import (
     Action,
@@ -55,4 +56,6 @@ __all__ = [
     "Sink", "FileSink", "StdoutSink",
     # Verify
     "verify", "verify_structure", "verify_hash", "verify_chain", "VerifyResult",
+    # Resources
+    "schema_path",
 ]

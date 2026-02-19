@@ -7,13 +7,18 @@ ReceiptChain: seq tracking, parent linking, automatic chaining.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any
 
+from receipt_v1.canonical import _check_no_floats
 from receipt_v1.canonical import args_hash as compute_args_hash
 from receipt_v1.canonical import receipt_hash as compute_receipt_hash
 from receipt_v1.canonical import result_hash as compute_result_hash
 from receipt_v1.canonical import uuid7
+
+# ext keys must be namespaced: "vendor.field" (lowercase + digits + dots/underscores)
+_EXT_KEY_PATTERN = re.compile(r"^[a-z0-9]+\.[a-z0-9_.]+$")
 from receipt_v1.types import (
     Action,
     Actor,
@@ -135,6 +140,15 @@ class ReceiptBuilder:
         return self
 
     def ext(self, ext: dict[str, Any]) -> ReceiptBuilder:
+        """Set extension fields. Keys must be namespaced (e.g. 'vendor.field').
+        Values must not contain floats (breaks cross-language hash parity).
+        """
+        for key in ext:
+            if not _EXT_KEY_PATTERN.match(key):
+                raise ValueError(
+                    f"ext key {key!r} must be namespaced (e.g. 'vendor.field_name')"
+                )
+        _check_no_floats(ext, "ext")
         self._ext = ext
         return self
 

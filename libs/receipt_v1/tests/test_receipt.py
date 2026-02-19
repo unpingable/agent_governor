@@ -113,6 +113,22 @@ class TestReceiptBuilder:
         d = r.to_dict()
         assert "ext" in d
 
+    def test_ext_rejects_unnamespaced_key(self):
+        with pytest.raises(ValueError, match="must be namespaced"):
+            _base_builder().ext({"bad_key": "value"})
+
+    def test_ext_rejects_float_values(self):
+        with pytest.raises(ValueError, match="Float values are forbidden"):
+            _base_builder().ext({"acme.score": 3.14})
+
+    def test_ext_rejects_nested_float(self):
+        with pytest.raises(ValueError, match="Float values are forbidden"):
+            _base_builder().ext({"acme.data": {"nested": 1.0}})
+
+    def test_ext_accepts_int_values(self):
+        r = _base_builder().ext({"acme.count": 42}).build(Chain(seq=1))
+        assert r.ext == {"acme.count": 42}
+
     def test_missing_actor_raises(self):
         with pytest.raises(ValueError, match="actor is required"):
             (

@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from receipt_v1.canonical import receipt_hash as compute_receipt_hash
+from receipt_v1.canonical import _check_no_floats, receipt_hash as compute_receipt_hash
 from receipt_v1.types import MAX_HUMAN_LEN, Action, Receipt
 
 # ── Secret detection patterns ────────────────────────────────────────────────
@@ -194,6 +194,23 @@ def verify_structure(receipt_dict: dict[str, Any]) -> VerifyResult:
     for opt_field in ("tool_version", "call_id", "capability_asserted"):
         if tool.get(opt_field) == "":
             errors.append(f"tool.{opt_field} must not be empty string; omit instead")
+
+    # ext validation: namespaced keys, no floats
+    ext = receipt_dict.get("ext")
+    if ext is not None:
+        if not isinstance(ext, dict):
+            errors.append("ext must be an object")
+        elif not ext:
+            errors.append("ext must not be empty (omit instead)")
+        else:
+            ext_key_pattern = re.compile(r"^[a-z0-9]+\.[a-z0-9_.]+$")
+            for key in ext:
+                if not ext_key_pattern.match(key):
+                    errors.append(f"ext key {key!r} must be namespaced (e.g. 'vendor.field')")
+            try:
+                _check_no_floats(ext, "ext")
+            except ValueError as e:
+                errors.append(str(e))
 
     # Size warning
     import json

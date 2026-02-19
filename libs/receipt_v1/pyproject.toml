@@ -22,6 +22,16 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/receipt_v1"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/",
+    "schema/",
+    "examples/",
+    "tests/",
+    "pyproject.toml",
+    "py.typed",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

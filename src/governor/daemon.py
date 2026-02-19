@@ -332,6 +332,7 @@ class DaemonState:
         self._artifact_store = None
         self._regime_detector = None
         self._cooldown_store = None
+        self._receipt_v1_store = None
 
     @property
     def cooldown_store(self):
@@ -416,6 +417,15 @@ class DaemonState:
             from .gate_receipt import GateReceiptSystem
             self._receipt_system = GateReceiptSystem(self.governor_dir)
         return self._receipt_system
+
+    @property
+    def receipt_v1_store(self):
+        if self._receipt_v1_store is None:
+            from receipt_v1.store import JsonlStore
+            self._receipt_v1_store = JsonlStore(
+                self.governor_dir / "receipts" / "receipt_v1.jsonl"
+            )
+        return self._receipt_v1_store
 
     @property
     def scar_ledger(self):
@@ -873,6 +883,40 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         return {
             "receipt": receipt.to_dict(),
             "evidence": evidence,
+        }
+
+    # --- Receipt v1 (new format — separate from legacy gate receipts) ---
+
+    async def receipts_v1_list(params: dict) -> list:
+        session_id = params.get("session_id")
+        since = params.get("since")
+        limit = params.get("limit")
+        if limit is not None:
+            limit = int(limit)
+        store = state.receipt_v1_store
+        results = []
+        for receipt in store.iter_receipts(
+            session_id=session_id, since=since, limit=limit
+        ):
+            results.append(receipt.to_dict())
+        return results
+
+    async def receipts_v1_detail(params: dict) -> dict:
+        receipt_id = params.get("receipt_id")
+        if not receipt_id:
+            raise ValueError("Missing required param: receipt_id")
+        receipt = state.receipt_v1_store.get_receipt(receipt_id)
+        if receipt is None:
+            raise ValueError(f"Receipt v1 not found: {receipt_id}")
+        return {"receipt": receipt.to_dict()}
+
+    async def receipts_v1_verify(params: dict) -> dict:
+        session_id = params.get("session_id")
+        result = state.receipt_v1_store.verify_chain(session_id=session_id)
+        return {
+            "valid": result.valid,
+            "errors": result.errors,
+            "warnings": result.warnings,
         }
 
     # --- Scars ---
@@ -1457,6 +1501,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
     dispatcher.register("receipts.list", receipts_list)
     dispatcher.register("receipts.detail", receipts_detail)
+
+    dispatcher.register("receipts_v1.list", receipts_v1_list)
+    dispatcher.register("receipts_v1.detail", receipts_v1_detail)
+    dispatcher.register("receipts_v1.verify", receipts_v1_verify)
 
     dispatcher.register("scars.list", scars_list)
     dispatcher.register("scars.history", scars_history)

@@ -25,6 +25,7 @@ __version__ = "0.1.0"
 from receipt_v1.receipt import ReceiptBuilder, ReceiptChain
 from receipt_v1.resources import schema_path
 from receipt_v1.sinks import FileSink, Sink, StdoutSink
+from receipt_v1.store import JsonlStore, ReceiptStore
 from receipt_v1.types import (
     Action,
     Actor,
@@ -54,6 +55,8 @@ __all__ = [
     "Provenance", "Receipt",
     # Sinks
     "Sink", "FileSink", "StdoutSink",
+    # Stores (read side)
+    "ReceiptStore", "JsonlStore",
     # Verify
     "verify", "verify_structure", "verify_hash", "verify_chain", "VerifyResult",
     # Resources

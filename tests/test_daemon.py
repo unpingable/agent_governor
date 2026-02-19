@@ -664,6 +664,158 @@ class TestReceipts:
 
 
 # =============================================================================
+# Handler: receipts_v1.* (new Receipt v1 format, separate from legacy)
+# =============================================================================
+
+
+def _write_receipt_v1(gov_dir: Path, session_id: str = "s1", count: int = 1):
+    """Write Receipt v1 records to the standard path."""
+    from receipt_v1 import (
+        Action, Actor, AuthContext, Provenance,
+        ReceiptBuilder, ReceiptChain,
+    )
+    from receipt_v1.sinks import FileSink
+
+    path = gov_dir / "receipts" / "receipt_v1.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sink = FileSink(path, fsync=False)
+    chain = ReceiptChain()
+    receipts = []
+    for i in range(count):
+        r = (
+            ReceiptBuilder()
+            .actor(Actor(agent_id="test", session_id=session_id,
+                         auth_context=AuthContext.STDIO))
+            .tool("echo", {"text": f"msg-{i}"}, call_id=str(i + 1))
+            .decision(Action.ALLOW, "gov.policy_allow")
+            .provenance(Provenance(
+                deployment_id="test", instance_id="test-1",
+                governor_version="0.1.0"))
+            .build(chain.next())
+        )
+        chain.append(r)
+        sink.write(r)
+        receipts.append(r)
+    return receipts
+
+
+class TestReceiptsV1:
+
+    @pytest.mark.asyncio
+    async def test_list_empty(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "receipts_v1.list")
+        assert resp["result"] == []
+
+    @pytest.mark.asyncio
+    async def test_list_with_receipts(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        written = _write_receipt_v1(state.governor_dir, count=3)
+        resp = await roundtrip(d, "receipts_v1.list")
+        assert len(resp["result"]) == 3
+        # Newest first
+        assert resp["result"][0]["chain"]["seq"] == 3
+
+    @pytest.mark.asyncio
+    async def test_list_with_limit(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        _write_receipt_v1(state.governor_dir, count=5)
+        resp = await roundtrip(d, "receipts_v1.list", {"limit": 2})
+        assert len(resp["result"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_list_filter_session(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        _write_receipt_v1(state.governor_dir, session_id="sess-a", count=2)
+        # Write more with different session (separate chain)
+        from receipt_v1 import (
+            Action, Actor, AuthContext, Provenance,
+            ReceiptBuilder, ReceiptChain,
+        )
+        from receipt_v1.sinks import FileSink
+        path = state.governor_dir / "receipts" / "receipt_v1.jsonl"
+        chain = ReceiptChain()
+        # Advance past the 2 already written (they have seq 1,2 in their chain)
+        # These are independent — just appending to same file
+        for i in range(2):
+            r = (
+                ReceiptBuilder()
+                .actor(Actor(agent_id="test", session_id="sess-b",
+                             auth_context=AuthContext.STDIO))
+                .tool("echo", {"text": f"b-{i}"}, call_id=str(i + 10))
+                .decision(Action.ALLOW, "gov.policy_allow")
+                .provenance(Provenance(
+                    deployment_id="test", instance_id="test-1",
+                    governor_version="0.1.0"))
+                .build(chain.next())
+            )
+            chain.append(r)
+            FileSink(path, fsync=False).write(r)
+
+        resp = await roundtrip(d, "receipts_v1.list", {"session_id": "sess-a"})
+        assert len(resp["result"]) == 2
+        assert all(r["actor"]["session_id"] == "sess-a" for r in resp["result"])
+
+    @pytest.mark.asyncio
+    async def test_detail(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        written = _write_receipt_v1(state.governor_dir, count=1)
+        rid = written[0].receipt_id
+        resp = await roundtrip(d, "receipts_v1.detail", {"receipt_id": rid})
+        assert resp["result"]["receipt"]["receipt_id"] == rid
+
+    @pytest.mark.asyncio
+    async def test_detail_not_found(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "receipts_v1.detail",
+                               {"receipt_id": "nonexistent"})
+        assert resp["error"]["code"] == GOVERNOR_ERROR
+
+    @pytest.mark.asyncio
+    async def test_detail_missing_id(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "receipts_v1.detail", {})
+        assert resp["error"]["code"] == GOVERNOR_ERROR
+
+    @pytest.mark.asyncio
+    async def test_verify_valid_chain(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        _write_receipt_v1(state.governor_dir, count=4)
+        resp = await roundtrip(d, "receipts_v1.verify")
+        result = resp["result"]
+        assert result["valid"] is True
+        assert result["errors"] == []
+
+    @pytest.mark.asyncio
+    async def test_verify_empty_chain(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "receipts_v1.verify")
+        result = resp["result"]
+        assert result["valid"] is True
+
+    @pytest.mark.asyncio
+    async def test_endpoints_independent_from_legacy(self, dispatcher_and_state):
+        """receipts_v1.* and receipts.* are completely independent."""
+        d, state = dispatcher_and_state
+        # Write legacy receipt
+        state.receipt_system.emit(
+            gate="test_gate", verdict="pass", subject_kind="test",
+            subject_bytes=b"test", evidence_bundle={}, gate_config={},
+        )
+        # Write v1 receipt
+        _write_receipt_v1(state.governor_dir, count=1)
+
+        legacy = await roundtrip(d, "receipts.list")
+        v1 = await roundtrip(d, "receipts_v1.list")
+
+        # Each sees only its own
+        assert len(legacy["result"]) == 1
+        assert legacy["result"][0]["gate"] == "test_gate"
+        assert len(v1["result"]) == 1
+        assert "chain" in v1["result"][0]  # Receipt v1 structure
+
+
+# =============================================================================
 # Handler: scars.*
 # =============================================================================
 
@@ -931,7 +1083,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 40
+        assert total == 43
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):

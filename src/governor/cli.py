@@ -17742,6 +17742,155 @@ def serve(ctx: click.Context, stdio: bool, socket_path: str | None,
 
 
 # =============================================================================
+# Config group (effective configuration)
+# =============================================================================
+
+
+@cli.group()
+@click.pass_context
+def config(ctx: click.Context) -> None:
+    """Configuration management."""
+    pass
+
+
+@config.command("effective")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def config_effective(ctx: click.Context, as_json: bool) -> None:
+    """Show effective configuration with sources and explanations."""
+    gov_dir = ensure_initialized(ctx)
+    from .config_effective import collect_effective_config
+    entries = collect_effective_config(gov_dir)
+
+    if as_json:
+        click.echo(json.dumps({"entries": [e.to_dict() for e in entries]}, indent=2))
+        return
+
+    click.echo("Effective configuration:\n")
+    for entry in entries:
+        source_tag = entry.source.value
+        click.echo(f"  {entry.key:<20s} {entry.display_value():<24s} [{source_tag}]")
+        # Show source detail
+        detail = entry.source_detail
+        if detail:
+            if "var" in detail:
+                click.echo(f"    ${detail['var']}={entry.display_value()}")
+            elif "path" in detail:
+                parts = [detail["path"]]
+                if "section" in detail:
+                    parts.append(f"[{detail['section']}]")
+                if "field" in detail:
+                    parts.append(detail["field"])
+                click.echo(f"    {' '.join(parts)}")
+            elif "computed_from" in detail:
+                click.echo(f"    computed from {detail['computed_from']}")
+        click.echo(f"    {entry.explain}")
+
+
+# =============================================================================
+# RPC group (raw daemon interface)
+# =============================================================================
+
+
+@cli.group()
+@click.pass_context
+def rpc(ctx: click.Context) -> None:
+    """Raw daemon RPC escape hatch (debug only).
+
+    \b
+    Direct access to the daemon's JSON-RPC methods.
+    You almost certainly want a higher-level command instead.
+    Mutating calls are blocked by default — see 'rpc call --help'.
+    """
+    pass
+
+
+@rpc.command("list")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def rpc_list(ctx: click.Context, as_json: bool) -> None:
+    """List all RPC methods supported by the daemon."""
+    gov_dir = ensure_initialized(ctx)
+    from .daemon import default_socket_path
+    from .cli_backend import sync_rpc_call
+    sock_path = default_socket_path(gov_dir)
+
+    result = sync_rpc_call(sock_path, "governor.methods", {}, timeout=2.0)
+    if result is None:
+        click.echo("Error: daemon not running. Start with: governor serve", err=True)
+        ctx.exit(1)
+        return
+
+    methods = result.get("methods", [])
+
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+        return
+
+    click.echo(f"RPC methods ({result.get('count', len(methods))}):\n")
+    for entry in methods:
+        marker = "[rw]" if entry["classification"] == "mutating" else "[ro]"
+        click.echo(f"  {marker} {entry['method']}")
+
+
+@rpc.command("call")
+@click.argument("method")
+@click.option("--params", "-p", default="{}", help="JSON params (default: {})")
+@click.option("--timeout", "-t", default=5.0, type=float, help="Timeout in seconds")
+@click.option("--mutating", is_flag=True,
+              help="Allow mutating methods (requires GOV_RPC_ALLOW_MUTATING=1)")
+@click.pass_context
+def rpc_call(ctx: click.Context, method: str, params: str, timeout: float,
+             mutating: bool) -> None:
+    """Call a raw RPC method on the daemon (debug escape hatch).
+
+    \b
+    Read-only by default. Mutating methods are blocked unless BOTH:
+      1. --mutating flag is passed (explicit intent)
+      2. GOV_RPC_ALLOW_MUTATING=1 env var is set (deployment opt-in)
+    The daemon may also enforce its own policy via daemon.conf.
+    """
+    import os as _os
+    gov_dir = ensure_initialized(ctx)
+    from .daemon import default_socket_path
+    from .cli_backend import sync_rpc_call_raw, check_method_allowed
+    sock_path = default_socket_path(gov_dir)
+
+    # Parse params
+    try:
+        params_dict = json.loads(params)
+    except json.JSONDecodeError as e:
+        click.echo(f"Error: invalid JSON params: {e}", err=True)
+        ctx.exit(1)
+        return
+
+    # Safety interlock: both flag AND env var required for mutating
+    has_env = _os.environ.get("GOV_RPC_ALLOW_MUTATING") == "1"
+    allow_mutating = mutating and has_env
+    err = check_method_allowed(
+        sock_path, method, allow_mutating,
+        cli_flag=mutating, env_var=has_env,
+    )
+    if err:
+        click.echo(err, err=True)
+        ctx.exit(1)
+        return
+
+    frame = sync_rpc_call_raw(sock_path, method, params_dict, timeout=timeout)
+    if frame is None:
+        click.echo("Error: daemon not running. Start with: governor serve", err=True)
+        ctx.exit(1)
+        return
+
+    if "error" in frame:
+        click.echo(json.dumps(frame["error"], indent=2), err=True)
+        ctx.exit(1)
+        return
+
+    click.echo(json.dumps(frame.get("result"), indent=2))
+
+
+# =============================================================================
 # Receipt Kernel CLI
 # =============================================================================
 

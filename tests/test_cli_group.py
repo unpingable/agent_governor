@@ -78,7 +78,7 @@ def test_cli():
 class TestCategoriesStructure:
     def test_categories_is_ordered_dict(self):
         assert isinstance(CATEGORIES, dict)
-        assert list(CATEGORIES.keys()) == ["Operator", "Workflow", "Config"]
+        assert list(CATEGORIES.keys()) == ["Operator", "Workflow", "Config", "Debug"]
 
     def test_operator_category_has_status(self):
         assert "status" in CATEGORIES["Operator"]
@@ -180,3 +180,61 @@ class TestRealCLI:
         assert "trace" in result.output
         assert "explain" in result.output
         assert "receipts" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Guardrail: explicit allowlist for uncategorized commands
+# ---------------------------------------------------------------------------
+
+# Attic surface: deep/kernel commands that are intentionally not in the
+# curated help.  Add here only when adding a new top-level CLI group.
+# If this set grows past ~120, it's time to nest under `governor advanced`.
+ALLOWED_UNCATEGORIZED: set[str] = {
+    "adapt", "admit", "advanced", "agent", "anchor", "audit",
+    "autonomous", "backend", "boil", "cbi", "changes", "chat",
+    "claim", "claim-diff", "claude-hooks", "code", "codex-exec",
+    "codex-hooks", "collapse", "conditioning", "constraints",
+    "context", "continuity", "correlator", "dashboard",
+    "dashboard-ux", "decay", "decide", "decisions", "demo",
+    "deploy", "detector", "doc", "docket", "drift", "epistemic",
+    "evasion", "explore", "external", "facts", "fiction", "gate",
+    "git-gov", "graph", "hook", "hysteresis", "independence",
+    "instrument", "interferometry", "invariant", "issue",
+    "jurisdiction", "kernel", "lanes", "lock", "mcp", "measure",
+    "metrics", "mode", "must-exist", "must-pass", "ops",
+    "override", "p4", "phase", "precedent", "preflight",
+    "prometheus", "puppet", "quorum", "quorum-ext", "regime",
+    "rejections", "resolve", "revise", "risk", "routing", "rule",
+    "scar", "scope", "security", "selfcheck", "semvar", "signals",
+    "slim", "spine", "stability", "state", "strict", "taint",
+    "task", "telemetry", "temporal", "transport", "tune", "unlock",
+    "vitals", "watch",
+}
+
+
+class TestCuratedGuardrail:
+    def test_no_unknown_uncategorized_commands(self):
+        """New commands must be curated or explicitly allowlisted."""
+        from governor.cli import cli
+
+        ctx = click.Context(cli)
+        all_commands = set(cli.list_commands(ctx))
+        uncategorized = all_commands - _CURATED_NAMES
+        unknown = uncategorized - ALLOWED_UNCATEGORIZED
+        assert not unknown, (
+            f"New uncategorized command(s) not in allowlist: {sorted(unknown)}. "
+            f"Add to CATEGORIES in cli_group.py or to ALLOWED_UNCATEGORIZED "
+            f"in test_cli_group.py."
+        )
+
+    def test_allowlist_not_stale(self):
+        """Removed commands must be cleaned from the allowlist."""
+        from governor.cli import cli
+
+        ctx = click.Context(cli)
+        all_commands = set(cli.list_commands(ctx))
+        stale = ALLOWED_UNCATEGORIZED - all_commands
+        assert not stale, (
+            f"Stale entries in ALLOWED_UNCATEGORIZED (commands no longer exist): "
+            f"{sorted(stale)}. Remove them."
+        )

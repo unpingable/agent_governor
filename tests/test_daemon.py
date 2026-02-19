@@ -1040,6 +1040,7 @@ class TestAllMethodsRegistered:
         "governor.hello",
         "governor.now",
         "governor.status",
+        "governor.methods",
         "governor.selfcheck",
         "sessions.list",
         "sessions.create",
@@ -1092,7 +1093,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 43
+        assert total == 46
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1106,6 +1107,205 @@ class TestAllMethodsRegistered:
                 assert resp["error"]["code"] != METHOD_NOT_FOUND, (
                     f"{method} returned method-not-found"
                 )
+
+
+# =============================================================================
+# Method classification (read_only vs mutating)
+# =============================================================================
+
+class TestMethodClassification:
+    """Verify every RPC method is classified and the mutating set is explicit."""
+
+    EXPECTED_MUTATING = {
+        "sessions.create",
+        "sessions.delete",
+        "intent.compile",
+        "commit.fix",
+        "commit.revise",
+        "commit.proceed",
+        "scope.escalate",
+        "stability.audit",
+        "lanes.route",
+        "chat.send",
+        "chat.stream",
+    }
+
+    def test_all_methods_have_flags(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        info = d.get_method_info()
+        all_methods = set(d._handlers) | set(d._streaming_handlers)
+        for method in all_methods:
+            assert method in info, f"{method} has no classification flag"
+
+    def test_mutating_set_matches(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        actual_mutating = {m for m, flag in d.get_method_info().items() if flag == "mutating"}
+        assert actual_mutating == self.EXPECTED_MUTATING
+
+    def test_read_only_methods_not_mutating(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        for method in ["governor.hello", "governor.now", "sessions.list",
+                       "receipts.list", "operator.snapshot", "trace.tail"]:
+            assert not d.is_mutating(method), f"{method} should be read_only"
+
+    def test_mutating_methods_are_mutating(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        for method in self.EXPECTED_MUTATING:
+            assert d.is_mutating(method), f"{method} should be mutating"
+
+    def test_unknown_method_not_mutating(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        assert not d.is_mutating("nonexistent.method")
+
+
+# =============================================================================
+# governor.methods RPC handler
+# =============================================================================
+
+
+class TestGovernorMethods:
+    """Test the governor.methods introspection endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_returns_methods_list(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "governor.methods")
+        result = resp["result"]
+        assert "methods" in result
+        assert "count" in result
+        assert isinstance(result["methods"], list)
+        assert result["count"] == len(result["methods"])
+
+    @pytest.mark.asyncio
+    async def test_method_entries_have_required_keys(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "governor.methods")
+        for entry in resp["result"]["methods"]:
+            assert "method" in entry
+            assert "classification" in entry
+            assert entry["classification"] in ("read_only", "mutating")
+
+    @pytest.mark.asyncio
+    async def test_spot_check_classifications(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "governor.methods")
+        by_name = {e["method"]: e["classification"] for e in resp["result"]["methods"]}
+        assert by_name["governor.hello"] == "read_only"
+        assert by_name["chat.send"] == "mutating"
+        assert by_name["receipts.list"] == "read_only"
+        assert by_name["commit.fix"] == "mutating"
+
+    @pytest.mark.asyncio
+    async def test_methods_sorted_by_name(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "governor.methods")
+        names = [e["method"] for e in resp["result"]["methods"]]
+        assert names == sorted(names)
+
+    @pytest.mark.asyncio
+    async def test_count_matches_registered(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "governor.methods")
+        total_registered = len(d._handlers) + len(d._streaming_handlers)
+        assert resp["result"]["count"] == total_registered
+
+
+# =============================================================================
+# Response contracts (operator.snapshot + trace.tail)
+# =============================================================================
+
+
+class TestResponseContracts:
+    """Verify response shape contracts: caps, limits, truncated flags."""
+
+    @pytest.mark.asyncio
+    async def test_snapshot_has_limits_dict(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "operator.snapshot")
+        result = resp["result"]
+        assert "limits" in result
+        assert "suggestions" in result["limits"]
+        assert "receipt_items" in result["limits"]
+        assert isinstance(result["limits"]["suggestions"], int)
+        assert isinstance(result["limits"]["receipt_items"], int)
+
+    @pytest.mark.asyncio
+    async def test_snapshot_limits_match_constants(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "operator.snapshot")
+        limits = resp["result"]["limits"]
+        assert limits["suggestions"] == 5
+        assert limits["receipt_items"] == 5
+
+    @pytest.mark.asyncio
+    async def test_trace_tail_returns_limit_and_max(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "trace.tail")
+        result = resp["result"]
+        assert "limit" in result
+        assert "max_limit" in result
+        assert "truncated" in result
+        assert result["max_limit"] == 100
+
+    @pytest.mark.asyncio
+    async def test_trace_tail_default_limit_is_20(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "trace.tail")
+        assert resp["result"]["limit"] == 20
+
+    @pytest.mark.asyncio
+    async def test_trace_tail_clamps_to_max(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "trace.tail", {"limit": 500})
+        assert resp["result"]["limit"] == 100
+
+    @pytest.mark.asyncio
+    async def test_trace_tail_clamps_minimum_to_1(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "trace.tail", {"limit": 0})
+        assert resp["result"]["limit"] == 1
+
+
+# =============================================================================
+# Mutating gate (daemon-side enforcement)
+# =============================================================================
+
+
+class TestMutatingGate:
+    """Verify Dispatcher blocks mutating methods when configured."""
+
+    @pytest.mark.asyncio
+    async def test_mutating_allowed_by_default(self, state):
+        d = Dispatcher(allow_mutating=True)
+        register_handlers(d, state)
+        resp = await roundtrip(d, "sessions.create", {"title": "test"})
+        # Should succeed (no error key)
+        assert "result" in resp
+
+    @pytest.mark.asyncio
+    async def test_mutating_blocked_when_disallowed(self, state):
+        d = Dispatcher(allow_mutating=False)
+        register_handlers(d, state)
+        resp = await roundtrip(d, "sessions.create", {"title": "test"})
+        assert "error" in resp
+        assert resp["error"]["code"] == AUTH_ERROR
+        assert "blocked" in resp["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_read_only_always_allowed(self, state):
+        d = Dispatcher(allow_mutating=False)
+        register_handlers(d, state)
+        resp = await roundtrip(d, "governor.hello")
+        assert "result" in resp
+        assert "error" not in resp
+
+    @pytest.mark.asyncio
+    async def test_mutating_gate_applies_to_streaming(self, state):
+        d = Dispatcher(allow_mutating=False)
+        register_handlers(d, state)
+        resp = await roundtrip(d, "chat.stream", {"messages": [{"role": "user", "content": "hi"}]})
+        assert "error" in resp
+        assert resp["error"]["code"] == AUTH_ERROR
 
 
 # =============================================================================

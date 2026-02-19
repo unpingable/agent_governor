@@ -19,7 +19,8 @@ import click
 CATEGORIES: OrderedDict[str, list[str]] = OrderedDict([
     ("Operator",  ["status", "doctor", "trace", "explain", "operator", "receipts", "check"]),
     ("Workflow",  ["init", "propose", "verify", "apply", "wrap", "serve"]),
-    ("Config",    ["envelope", "profile", "intent", "session"]),
+    ("Config",    ["envelope", "profile", "intent", "session", "config"]),
+    ("Debug",     ["rpc"]),
 ])
 
 # Flat set for fast membership test

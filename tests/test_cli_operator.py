@@ -453,7 +453,7 @@ class TestGoldenOutput:
 
     def test_dashboard_layout(self, runner, gov_project):
         """Dashboard text has expected structure and glyph casing."""
-        result = runner.invoke(cli, ["status", "--full"])
+        result = runner.invoke(cli, ["status", "--full"], env={"GOV_BACKEND": "local"})
         lines = result.output.strip().split("\n")
         # First line is the header
         assert lines[0] == "Governor Dashboard"
@@ -476,7 +476,7 @@ class TestGoldenOutput:
 
     def test_doctor_layout(self, runner, gov_project):
         """Doctor text uses canonical glyphs and consistent formatting."""
-        result = runner.invoke(cli, ["doctor"])
+        result = runner.invoke(cli, ["doctor"], env={"GOV_BACKEND": "local"})
         lines = result.output.strip().split("\n")
         # Every check line contains a canonical glyph
         check_lines = [l for l in lines if l.strip().startswith("[")]

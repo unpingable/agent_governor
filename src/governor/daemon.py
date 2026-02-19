@@ -92,18 +92,48 @@ StreamingHandler = Callable[[dict[str, Any], NotifyFn], Awaitable[Any]]
 
 
 class Dispatcher:
-    """JSON-RPC 2.0 method dispatcher."""
+    """JSON-RPC 2.0 method dispatcher with read/mutating classification.
 
-    def __init__(self) -> None:
+    Every registered method is classified as ``read_only`` (default) or
+    ``mutating``.  The classification is metadata today (logged, exposed
+    via ``get_method_info``); it becomes a hard gate when TCP transport
+    lands.
+    """
+
+    def __init__(self, *, allow_mutating: bool = True) -> None:
         self._handlers: dict[str, Handler] = {}
         self._streaming_handlers: dict[str, StreamingHandler] = {}
+        self._method_flags: dict[str, str] = {}  # method → "read_only" | "mutating"
+        self._mutating_allowed = allow_mutating
 
-    def register(self, method: str, handler: Handler) -> None:
+    def register(
+        self,
+        method: str,
+        handler: Handler,
+        *,
+        mutating: bool = False,
+    ) -> None:
         self._handlers[method] = handler
+        self._method_flags[method] = "mutating" if mutating else "read_only"
 
-    def register_streaming(self, method: str, handler: StreamingHandler) -> None:
+    def register_streaming(
+        self,
+        method: str,
+        handler: StreamingHandler,
+        *,
+        mutating: bool = False,
+    ) -> None:
         """Register a streaming handler that can send notifications during execution."""
         self._streaming_handlers[method] = handler
+        self._method_flags[method] = "mutating" if mutating else "read_only"
+
+    def is_mutating(self, method: str) -> bool:
+        """Return True if *method* is classified as mutating."""
+        return self._method_flags.get(method) == "mutating"
+
+    def get_method_info(self) -> dict[str, str]:
+        """Return {method: "read_only"|"mutating"} for all registered methods."""
+        return dict(self._method_flags)
 
     async def dispatch(
         self,
@@ -131,6 +161,15 @@ class Dispatcher:
 
         # Notifications (no id) don't get responses
         is_notification = "id" not in request
+
+        # Mutating gate: daemon-side enforcement
+        if self.is_mutating(method) and not self._mutating_allowed:
+            if is_notification:
+                return None
+            return _error_response(
+                request_id, AUTH_ERROR,
+                f"Mutating method {method!r} blocked by daemon policy"
+            )
 
         # Check streaming handlers first
         streaming_handler = self._streaming_handlers.get(method)
@@ -1540,19 +1579,29 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
     # --- Register all ---
 
+    async def governor_methods(params: dict) -> dict:
+        """List all registered RPC methods with classification."""
+        info = dispatcher.get_method_info()
+        methods = [
+            {"method": m, "classification": c}
+            for m, c in sorted(info.items())
+        ]
+        return {"methods": methods, "count": len(methods)}
+
     dispatcher.register("governor.hello", governor_hello)
     dispatcher.register("governor.now", governor_now)
     dispatcher.register("governor.status", governor_status)
+    dispatcher.register("governor.methods", governor_methods)
 
     dispatcher.register("sessions.list", sessions_list)
-    dispatcher.register("sessions.create", sessions_create)
-    dispatcher.register("sessions.delete", sessions_delete)
+    dispatcher.register("sessions.create", sessions_create, mutating=True)
+    dispatcher.register("sessions.delete", sessions_delete, mutating=True)
     dispatcher.register("sessions.get", sessions_get)
 
     dispatcher.register("intent.templates", intent_templates)
     dispatcher.register("intent.schema", intent_schema)
     dispatcher.register("intent.validate", intent_validate)
-    dispatcher.register("intent.compile", intent_compile)
+    dispatcher.register("intent.compile", intent_compile, mutating=True)
     dispatcher.register("intent.policy", intent_policy)
 
     dispatcher.register("receipts.list", receipts_list)
@@ -1593,9 +1642,9 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("correlator.kvector", correlator_kvector)
 
     dispatcher.register("commit.pending", commit_pending)
-    dispatcher.register("commit.fix", commit_fix)
-    dispatcher.register("commit.revise", commit_revise)
-    dispatcher.register("commit.proceed", commit_proceed)
+    dispatcher.register("commit.fix", commit_fix, mutating=True)
+    dispatcher.register("commit.revise", commit_revise, mutating=True)
+    dispatcher.register("commit.proceed", commit_proceed, mutating=True)
     dispatcher.register("commit.exceptions", commit_exceptions)
 
     # --- Selfcheck ---
@@ -1611,6 +1660,93 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         }
 
     dispatcher.register("governor.selfcheck", governor_selfcheck)
+
+    # --- Operator snapshot + trace ---
+
+    # Hard caps to prevent operator.snapshot from becoming a CLI avalanche
+    # over JSON. Rollup sections are already fixed-shape (one dict each).
+    _SNAPSHOT_MAX_SUGGESTIONS = 5
+    _SNAPSHOT_MAX_RECEIPT_ITEMS = 5  # recent_receipts already capped by loader
+    _TRACE_MAX_EVENTS = 100
+
+    async def operator_snapshot(params: dict) -> dict:
+        """Full operator snapshot: rollup + doctor checks + suggestions.
+
+        Response is overview-only. Large lists are capped; callers must
+        use dedicated RPC methods (receipts.list, scars.history, etc.)
+        for full data.
+        """
+        from .status_rollup import build_status_rollup
+        from .operator_snapshot import classify_rollup, count_checks
+
+        rollup = await asyncio.to_thread(build_status_rollup, state.governor_dir)
+        checks = classify_rollup(rollup)
+        counts = count_checks(checks)
+
+        suggestions = []
+        for c in checks:
+            if c.next_commands:
+                suggestions.append({
+                    "cmd": c.next_commands[0],
+                    "why": c.summary,
+                    "severity": c.status,
+                })
+
+        rollup_dict = rollup.to_dict()
+
+        # Cap receipt items in rollup to prevent payload bloat
+        rcpt = rollup_dict.get("recent_receipts", {})
+        items = rcpt.get("items", [])
+        truncated = False
+        if len(items) > _SNAPSHOT_MAX_RECEIPT_ITEMS:
+            rcpt["items"] = items[:_SNAPSHOT_MAX_RECEIPT_ITEMS]
+            truncated = True
+
+        return {
+            "schema": "operator-snapshot/1",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "backend": "daemon",
+            "gov_dir": str(state.governor_dir),
+            "rollup": rollup_dict,
+            "checks": [c.to_dict() for c in checks],
+            "counts": counts,
+            "suggestions": suggestions[:_SNAPSHOT_MAX_SUGGESTIONS],
+            "truncated": truncated,
+            "limits": {
+                "suggestions": _SNAPSHOT_MAX_SUGGESTIONS,
+                "receipt_items": _SNAPSHOT_MAX_RECEIPT_ITEMS,
+            },
+        }
+
+    async def trace_tail(params: dict) -> dict:
+        """Tail the unified trace timeline.
+
+        Limit is clamped to _TRACE_MAX_EVENTS to prevent unbounded responses.
+        Fetches limit+1 to detect truncation accurately (avoids false positive
+        when source has exactly limit events).
+        """
+        from .operator_snapshot import collect_trace_events
+
+        limit = min(max(int(params.get("limit", 20)), 1), _TRACE_MAX_EVENTS)
+        source = params.get("source")
+
+        # Fetch one extra to detect whether more events exist
+        events = await asyncio.to_thread(
+            collect_trace_events, state.governor_dir, limit + 1, source
+        )
+        truncated = len(events) > limit
+        if truncated:
+            events = events[:limit]
+
+        return {
+            "events": [e.to_dict() for e in events],
+            "truncated": truncated,
+            "limit": limit,
+            "max_limit": _TRACE_MAX_EVENTS,
+        }
+
+    dispatcher.register("operator.snapshot", operator_snapshot)
+    dispatcher.register("trace.tail", trace_tail)
 
     # --- Scope ---
 
@@ -1645,7 +1781,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
     dispatcher.register("scope.status", scope_status)
     dispatcher.register("scope.check", scope_check)
-    dispatcher.register("scope.escalate", scope_escalate)
+    dispatcher.register("scope.escalate", scope_escalate, mutating=True)
     dispatcher.register("scope.grants", scope_grants)
 
     # --- Semantic Stability ---
@@ -1761,7 +1897,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         return result.to_dict()
 
     dispatcher.register("stability.status", stability_status)
-    dispatcher.register("stability.audit", stability_audit)
+    dispatcher.register("stability.audit", stability_audit, mutating=True)
     dispatcher.register("stability.history", stability_history)
     dispatcher.register("stability.probe", stability_probe)
 
@@ -1804,12 +1940,12 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         """Return lane routing configuration status."""
         return state.lane_router.get_status()
 
-    dispatcher.register("lanes.route", lanes_route)
+    dispatcher.register("lanes.route", lanes_route, mutating=True)
     dispatcher.register("lanes.explain", lanes_explain)
     dispatcher.register("lanes.status", lanes_status)
 
-    dispatcher.register("chat.send", chat_send)
-    dispatcher.register_streaming("chat.stream", chat_stream)
+    dispatcher.register("chat.send", chat_send, mutating=True)
+    dispatcher.register_streaming("chat.stream", chat_stream, mutating=True)
     dispatcher.register("chat.models", chat_models)
     dispatcher.register("chat.backend", chat_backend)
 
@@ -1819,9 +1955,15 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 # =============================================================================
 
 
+def _allow_mutating_from_config(state: DaemonState) -> bool:
+    """Read allow_mutating_rpc from daemon config. Defaults to True (trusted local)."""
+    val = state.daemon_config.get("daemon.allow_mutating_rpc", "true").strip().lower()
+    return val in ("1", "true", "yes")
+
+
 async def serve_stdio(state: DaemonState) -> None:
     """Serve JSON-RPC over stdin/stdout. Electron child process mode."""
-    dispatcher = Dispatcher()
+    dispatcher = Dispatcher(allow_mutating=_allow_mutating_from_config(state))
     register_handlers(dispatcher, state)
 
     loop = asyncio.get_event_loop()
@@ -1856,7 +1998,7 @@ async def serve_stdio(state: DaemonState) -> None:
 
 async def serve_unix(socket_path: Path, state: DaemonState) -> None:
     """Serve JSON-RPC over Unix socket. Shared daemon mode."""
-    dispatcher = Dispatcher()
+    dispatcher = Dispatcher(allow_mutating=_allow_mutating_from_config(state))
     register_handlers(dispatcher, state)
 
     async def handle_client(

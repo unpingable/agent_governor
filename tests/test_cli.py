@@ -308,7 +308,7 @@ class TestStatus:
             result = runner.invoke(cli, ["status"])
 
             assert result.exit_code == 0
-            assert "Governor Dashboard" in result.output
+            assert "Governor:" in result.output
 
     def test_status_shows_proposals(self, runner, tmp_path):
         """status --proposals shows proposal list."""

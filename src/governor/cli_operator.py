@@ -25,6 +25,7 @@ from .operator_snapshot import (  # noqa: F401
     _trace_sort_key,
     _SOURCE_PRIORITY,
     classify_rollup,
+    classify_overall_state,
     count_checks,
     collect_trace_events,
     # Collectors re-exported for any direct callers
@@ -410,31 +411,56 @@ def _lookup_code(code: str) -> list[ExplainEntry]:
 # Rendering helpers (used by doctor_command and dashboard_command)
 # ---------------------------------------------------------------------------
 
-def _render_doctor_text(checks: list[CheckItem], counts: dict[str, int]) -> None:
-    """Render doctor checks as text to stdout."""
-    for c in checks:
-        glyph = {
-            "ok": GLYPH_OK,
-            "info": GLYPH_INFO,
-            "warn": GLYPH_WARN,
-            "error": GLYPH_ERR,
-        }.get(c.status, GLYPH_ERR)
-        line = f"  {glyph:>6} {c.name:<14} {_truncate(c.summary, 50)}"
-        print(line)
-        for cmd in c.next_commands:
-            print(f"         -> {cmd}")
+# Severity sort order for findings
+_SEVERITY_ORDER = {"error": 0, "warn": 1, "info": 2}
 
+
+def _render_doctor_text(checks: list[CheckItem], counts: dict[str, int]) -> None:
+    """Render doctor checks as findings-first text to stdout.
+
+    Format: top-line state, then findings with Run: commands, then summary.
+    OK checks are suppressed — only findings shown.
+    """
+    state = classify_overall_state(counts)
+    print(f"Governor Doctor: {state}")
+    print()
+
+    findings = [c for c in checks if c.status != "ok"]
+
+    if not findings:
+        total = sum(counts.values())
+        print(f"  All checks passed ({total} ok)")
+        print()
+        print("  Tip: governor status for details")
+        return
+
+    # Show findings sorted by severity (error first)
+    print("  Findings:")
+    for c in sorted(findings, key=lambda x: _SEVERITY_ORDER.get(x.status, 3)):
+        glyph = {
+            "error": GLYPH_ERR,
+            "warn": GLYPH_WARN,
+            "info": GLYPH_INFO,
+        }.get(c.status, GLYPH_INFO)
+        print(f"    {glyph:>6} {c.name}: {_truncate(c.summary, 44)}")
+        for cmd in c.next_commands[:1]:
+            print(f"           Run: {cmd}")
+
+    # Summary line
     print()
     parts = []
-    if counts["ok"]:
-        parts.append(f"{counts['ok']} ok")
-    if counts["info"]:
-        parts.append(f"{counts['info']} info")
-    if counts["warn"]:
-        parts.append(f"{counts['warn']} warn")
     if counts["error"]:
         parts.append(f"{counts['error']} error")
-    print(f"  {', '.join(parts)}")
+    if counts["warn"]:
+        parts.append(f"{counts['warn']} warn")
+    if counts["info"]:
+        parts.append(f"{counts['info']} info")
+    finding_desc = ", ".join(parts)
+    ok_count = counts["ok"]
+    n = len(findings)
+    print(f"  {n} finding{'s' if n != 1 else ''} ({finding_desc}), {ok_count} ok")
+    print()
+    print("  Tip: governor explain <CODE> for details")
 
 
 def _render_doctor_json(checks: list[CheckItem], counts: dict[str, int]) -> None:

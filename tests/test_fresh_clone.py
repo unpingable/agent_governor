@@ -159,7 +159,7 @@ class TestCLIHappyPath:
         run_gov(["init"], cwd=tmp_path)
         result = run_gov(["doctor"], cwd=tmp_path)
         assert result.returncode == 0, f"doctor failed: {result.stderr}"
-        assert "[ok]" in result.stdout
+        assert "Nominal" in result.stdout
 
     def test_operator_status_full(self, tmp_path):
         """governor status --full shows dashboard."""
@@ -167,7 +167,7 @@ class TestCLIHappyPath:
         run_gov(["init"], cwd=tmp_path)
         result = run_gov(["status", "--full"], cwd=tmp_path)
         assert result.returncode == 0, f"status --full failed: {result.stderr}"
-        assert "Governor Dashboard" in result.stdout
+        assert "Governor:" in result.stdout
 
     def test_operator_status_full_json(self, tmp_path):
         """governor status --full --json returns valid JSON."""

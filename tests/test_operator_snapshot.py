@@ -14,6 +14,7 @@ from governor.operator_snapshot import (
     TraceEvent,
     _safe_parse_ts,
     _trace_sort_key,
+    classify_overall_state,
     classify_rollup,
     collect_trace_events,
     count_checks,
@@ -186,6 +187,179 @@ class TestCountChecks:
         ]
         counts = count_checks(checks)
         assert counts == {"ok": 2, "info": 0, "warn": 1, "error": 1}
+
+
+class TestClassifyOverallState:
+    def test_all_ok_is_nominal(self):
+        assert classify_overall_state({"ok": 5, "info": 1, "warn": 0, "error": 0}) == "Nominal"
+
+    def test_warn_is_degraded(self):
+        assert classify_overall_state({"ok": 3, "info": 0, "warn": 2, "error": 0}) == "Degraded"
+
+    def test_error_is_unsafe(self):
+        assert classify_overall_state({"ok": 3, "info": 0, "warn": 1, "error": 1}) == "Unsafe"
+
+    def test_error_takes_priority_over_warn(self):
+        """Error overrides warn — the state is Unsafe, not Degraded."""
+        assert classify_overall_state({"ok": 0, "info": 0, "warn": 5, "error": 1}) == "Unsafe"
+
+    def test_empty_counts_is_nominal(self):
+        assert classify_overall_state({}) == "Nominal"
+
+
+# ---------------------------------------------------------------------------
+# Golden output tests: rendering regression anchors
+# ---------------------------------------------------------------------------
+
+class TestGoldenRendering:
+    """Pin the exact text layout for doctor and status renderers.
+
+    Three scenarios: Nominal, Degraded, Unsafe.
+    These serve as regression anchors — if the format changes,
+    update these fixtures deliberately.
+    """
+
+    def test_doctor_nominal(self, capsys):
+        """Nominal: no findings shown, just summary."""
+        from governor.cli_operator import _render_doctor_text
+        rollup = _make_ok_rollup()
+        checks = classify_rollup(rollup)
+        counts = count_checks(checks)
+        # Scope is "info" (not configured), so not fully clean
+        # Override scope to ok for a truly clean test
+        clean_rollup = StatusRollup(**{
+            **rollup.to_dict(),
+            "scope": {"ok": True, "configured": True, "level": 1,
+                      "grants": 0, "escalations_allowed": 0,
+                      "escalations_denied": 0},
+        })
+        checks = classify_rollup(clean_rollup)
+        counts = count_checks(checks)
+        _render_doctor_text(checks, counts)
+        out = capsys.readouterr().out
+        assert out.startswith("Governor Doctor: Nominal")
+        assert "All checks passed (9 ok)" in out
+        assert "Findings:" not in out
+
+    def test_doctor_degraded(self, capsys):
+        """Degraded: warn findings shown with Run: commands."""
+        from governor.cli_operator import _render_doctor_text
+        rollup = StatusRollup(**{
+            **_make_ok_rollup().to_dict(),
+            "regime": {"ok": True, "name": "warm", "warnings": []},
+        })
+        checks = classify_rollup(rollup)
+        counts = count_checks(checks)
+        _render_doctor_text(checks, counts)
+        out = capsys.readouterr().out
+        assert out.startswith("Governor Doctor: Degraded")
+        assert "Findings:" in out
+        assert "[WARN]" in out
+        assert "Run:" in out
+        assert "[err]" not in out
+
+    def test_doctor_unsafe(self, capsys):
+        """Unsafe: error findings sorted first, then warn, then info."""
+        from governor.cli_operator import _render_doctor_text
+        rollup = _make_error_rollup()
+        checks = classify_rollup(rollup)
+        counts = count_checks(checks)
+        _render_doctor_text(checks, counts)
+        out = capsys.readouterr().out
+        assert out.startswith("Governor Doctor: Unsafe")
+        assert "Findings:" in out
+        # Errors come before warnings in the listing
+        err_pos = out.index("[err]")
+        warn_pos = out.index("[WARN]")
+        assert err_pos < warn_pos
+
+    def test_status_nominal(self):
+        """Nominal status: compact state line, no findings, details pointer."""
+        from governor.status_rollup import render_text
+        rollup = StatusRollup(**{
+            **_make_ok_rollup().to_dict(),
+            "scope": {"ok": True, "configured": True, "level": 1,
+                      "grants": 0, "escalations_allowed": 0,
+                      "escalations_denied": 0},
+        })
+        text = render_text(rollup)
+        assert text.startswith("Governor: Nominal")
+        assert "envelope=strict" in text
+        assert "regime=ELASTIC" in text
+        assert "No findings." in text
+        assert "Findings:" not in text
+        assert "Details: governor status --json" in text
+
+    def test_status_degraded(self):
+        """Degraded: findings + Next: section."""
+        from governor.status_rollup import render_text
+        rollup = StatusRollup(**{
+            **_make_ok_rollup().to_dict(),
+            "regime": {"ok": True, "name": "warm", "warnings": []},
+        })
+        text = render_text(rollup)
+        assert text.startswith("Governor: Degraded")
+        assert "Findings:" in text
+        assert "Next:" in text
+        assert "governor regime status" in text
+
+    def test_status_unsafe(self):
+        """Unsafe: errors dominate findings + Next: section."""
+        from governor.status_rollup import render_text
+        rollup = _make_error_rollup()
+        text = render_text(rollup)
+        assert text.startswith("Governor: Unsafe")
+        assert "Findings:" in text
+        assert "Next:" in text
+        # Error findings listed before warn findings
+        err_pos = text.index("[err]")
+        warn_pos = text.index("[WARN]")
+        assert err_pos < warn_pos
+        # Next section has commands from error-level findings (not info)
+        next_section = text[text.index("Next:"):]
+        cmds = [l.strip() for l in next_section.split("\n")
+                if l.strip().startswith("governor")]
+        assert len(cmds) >= 1
+        # All Next commands should come from error/warn findings, not info
+        assert not any("scope set" in c for c in cmds)
+
+    def test_status_next_deduplicates(self):
+        """Next: section deduplicates identical commands."""
+        from governor.status_rollup import render_text
+        rollup = _make_error_rollup()
+        text = render_text(rollup)
+        next_section = text[text.index("Next:"):]
+        # Each command appears at most once
+        cmds = [l.strip() for l in next_section.split("\n")
+                if l.strip().startswith("governor")]
+        assert len(cmds) == len(set(cmds)), f"Duplicate Next: commands: {cmds}"
+
+    def test_status_next_capped_at_3(self):
+        """Next: section shows at most 3 commands."""
+        from governor.status_rollup import render_text
+        rollup = _make_error_rollup()
+        text = render_text(rollup)
+        next_section = text[text.index("Next:"):]
+        cmds = [l.strip() for l in next_section.split("\n")
+                if l.strip().startswith("governor")]
+        assert len(cmds) <= 3
+
+    def test_width_invariant_status(self):
+        """No line in status text exceeds 80 columns."""
+        from governor.status_rollup import render_text
+        text = render_text(_make_error_rollup())
+        for line in text.split("\n"):
+            assert len(line) <= 80, f"Line too wide ({len(line)}): {line!r}"
+
+    def test_width_invariant_doctor(self, capsys):
+        """No line in doctor text exceeds 80 columns."""
+        from governor.cli_operator import _render_doctor_text
+        checks = classify_rollup(_make_error_rollup())
+        counts = count_checks(checks)
+        _render_doctor_text(checks, counts)
+        out = capsys.readouterr().out
+        for line in out.split("\n"):
+            assert len(line) <= 80, f"Line too wide ({len(line)}): {line!r}"
 
 
 # ---------------------------------------------------------------------------

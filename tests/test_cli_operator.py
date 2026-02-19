@@ -41,19 +41,18 @@ def _snapshot_tree(root: Path) -> set[str]:
 class TestDashboard:
     """Tests for governor status --full."""
 
-    def test_text_has_all_sections(self, runner, gov_project):
+    def test_text_has_top_line_and_state(self, runner, gov_project):
         result = runner.invoke(cli, ["status", "--full"])
         assert result.exit_code == 0
-        assert "Governor Dashboard" in result.output
-        assert "Envelope:" in result.output
-        assert "Regime:" in result.output
-        assert "Drift:" in result.output
-        assert "Scars:" in result.output
-        assert "Scope:" in result.output
-        assert "Correlator:" in result.output
-        assert "Stability:" in result.output
-        assert "Violations:" in result.output
-        assert "Recent Receipts:" in result.output
+        assert "Governor:" in result.output
+        assert any(s in result.output for s in ("Nominal", "Degraded", "Unsafe"))
+        # Compact state line shows key subsystem modes
+        assert "envelope=" in result.output
+        assert "regime=" in result.output
+        assert "drift=" in result.output
+        assert "scars=" in result.output
+        # Details pointer
+        assert "Details:" in result.output
 
     def test_json_has_expected_keys(self, runner, gov_project):
         result = runner.invoke(cli, ["status", "--full", "--json"])
@@ -70,7 +69,7 @@ class TestDashboard:
         """status (bare) should show the operator dashboard."""
         result = runner.invoke(cli, ["status"])
         assert result.exit_code == 0
-        assert "Governor Dashboard" in result.output
+        assert "Governor:" in result.output
 
     def test_proposals_flag_shows_proposals(self, runner, gov_project):
         """status --proposals should show proposals, not dashboard."""
@@ -81,15 +80,17 @@ class TestDashboard:
         result = runner.invoke(cli, ["status", "--proposals"])
         assert result.exit_code == 0
         assert "Proposals" in result.output
-        assert "Governor Dashboard" not in result.output
+        assert "envelope=" not in result.output  # not showing dashboard
 
     def test_section_failure_visible_in_text(self, runner, gov_project):
-        """Corrupt state files should show [err] in text."""
+        """Corrupt state files should surface as finding."""
         # Corrupt the scars file
         (gov_project / ".governor" / "scars.json").write_text("{bad json")
         result = runner.invoke(cli, ["status", "--full"])
         assert result.exit_code == 0
-        assert "[err]" in result.output
+        # Should appear in Findings section
+        assert "Findings:" in result.output
+        assert "scars:" in result.output
 
     def test_section_failure_visible_in_json(self, runner, gov_project):
         """Corrupt state files should show ok:false in JSON."""
@@ -123,10 +124,13 @@ class TestDashboard:
 class TestDoctor:
     """Tests for governor doctor."""
 
-    def test_fresh_init_all_ok(self, runner, gov_project):
+    def test_fresh_init_nominal(self, runner, gov_project):
         result = runner.invoke(cli, ["doctor"])
         assert result.exit_code == 0
-        assert "[ok]" in result.output
+        assert "Nominal" in result.output
+        # Fresh init has scope unconfigured (info), but no errors or warnings
+        assert "Unsafe" not in result.output
+        assert "Degraded" not in result.output
 
     def test_json_valid_and_schema(self, runner, gov_project):
         result = runner.invoke(cli, ["doctor", "--json"])
@@ -179,8 +183,8 @@ class TestDoctor:
         scar_path = gov_project / ".governor" / "scars.json"
         scar_path.write_text(json.dumps(ledger.to_dict(), indent=2))
         result = runner.invoke(cli, ["doctor"])
-        # CAUTIOUS is warn-level, so exit 0 (no --strict)
-        if "[err]" not in result.output:
+        # CAUTIOUS is warn-level, so exit 0 (no --strict); check no errors
+        if "Unsafe" not in result.output:
             assert result.exit_code == 0
 
     def test_exit_1_on_error(self, runner, gov_project):
@@ -204,16 +208,18 @@ class TestDoctor:
         scar_path.write_text(json.dumps(ledger.to_dict(), indent=2))
         result = runner.invoke(cli, ["doctor", "--strict"])
         # Should exit 1 because CAUTIOUS is a warn
-        if "CAUTIOUS" in result.output or "[WARN]" in result.output:
+        if "CAUTIOUS" in result.output or "Degraded" in result.output:
             assert result.exit_code == 1
 
     def test_partial_failure_continues(self, runner, gov_project):
-        """Corrupt subsystem should show [err] but other checks continue."""
+        """Corrupt subsystem should surface as finding; other checks still run."""
         (gov_project / ".governor" / "scars.json").write_text("not json")
         result = runner.invoke(cli, ["doctor"])
-        # Should see error for scars but still check other subsystems
+        # Should see the finding for scars
         assert "[err]" in result.output
-        assert "[ok]" in result.output  # other checks still ran
+        assert "scars:" in result.output
+        # Other checks still ran — summary shows ok count
+        assert "ok" in result.output
 
     def test_doctor_checks_all_nine(self, runner, gov_project):
         """Doctor should produce exactly 9 checks."""
@@ -449,46 +455,58 @@ class TestReadOnlyInvariant:
 
 
 class TestGoldenOutput:
-    """Assert exact text layout so future tweaks don't break formatting."""
+    """Assert text layout so future tweaks don't break formatting."""
 
     def test_dashboard_layout(self, runner, gov_project):
-        """Dashboard text has expected structure and glyph casing."""
+        """Dashboard text has top-line state + compact state + findings."""
         result = runner.invoke(cli, ["status", "--full"], env={"GOV_BACKEND": "local"})
         lines = result.output.strip().split("\n")
-        # First line is the header
-        assert lines[0] == "Governor Dashboard"
-        # Section labels are indented with consistent alignment
-        labels = []
-        for line in lines[1:]:
-            stripped = line.strip()
-            if stripped and ":" in stripped and not stripped.startswith(("[", "Tip")):
-                label = stripped.split(":")[0]
-                labels.append(label)
-        expected_labels = [
-            "Envelope", "Regime", "Drift", "Scars", "Scope",
-            "Correlator", "Stability", "Violations", "Lanes",
-            "Recent Receipts",
-        ]
-        assert labels == expected_labels
+        # First line: "Governor: <state>"
+        assert lines[0].startswith("Governor:")
+        assert any(s in lines[0] for s in ("Nominal", "Degraded", "Unsafe"))
+        # Compact state line with key subsystem modes
+        state_line = [l for l in lines if "envelope=" in l]
+        assert len(state_line) == 1
+        assert "regime=" in state_line[0]
+        assert "drift=" in state_line[0]
+        assert "scars=" in state_line[0]
+        # Details pointer
+        assert any("Details:" in l for l in lines)
         # No line exceeds 80 cols
         for line in lines:
             assert len(line) <= 80, f"Line too wide ({len(line)}): {line!r}"
 
     def test_doctor_layout(self, runner, gov_project):
-        """Doctor text uses canonical glyphs and consistent formatting."""
+        """Doctor text shows top-line state and findings (not BIOS listing)."""
         result = runner.invoke(cli, ["doctor"], env={"GOV_BACKEND": "local"})
         lines = result.output.strip().split("\n")
-        # Every check line contains a canonical glyph
-        check_lines = [l for l in lines if l.strip().startswith("[")]
-        assert len(check_lines) == 9
-        for line in check_lines:
-            assert any(g in line for g in ("[ok]", "[info]", "[WARN]", "[err]")), \
-                f"Non-canonical glyph in: {line!r}"
-        # Summary line at the end
-        assert "ok" in lines[-1]
+        # First line: "Governor Doctor: <state>"
+        assert lines[0].startswith("Governor Doctor:")
+        assert any(s in lines[0] for s in ("Nominal", "Degraded", "Unsafe"))
+        # Fresh init: all ok, no findings listed
+        assert "All checks passed" in result.output or "Findings:" in result.output
         # Width check
         for line in lines:
             assert len(line) <= 80, f"Line too wide ({len(line)}): {line!r}"
+
+    def test_doctor_findings_use_canonical_glyphs(self, runner, gov_project):
+        """When findings exist, they use canonical glyphs."""
+        from governor.violation_resolver import ViolationResolver
+        resolver = ViolationResolver(gov_project / ".governor")
+        resolver.create_pending(
+            violations=[{"type": "test", "message": "test"}],
+            blocked_response="blocked",
+            run_id="test-run-layout",
+        )
+        result = runner.invoke(cli, ["doctor"], env={"GOV_BACKEND": "local"})
+        # Should have Findings section with canonical glyphs
+        assert "Findings:" in result.output
+        finding_lines = [l for l in result.output.split("\n")
+                         if l.strip().startswith("[")]
+        assert len(finding_lines) >= 1
+        for line in finding_lines:
+            assert any(g in line for g in ("[err]", "[WARN]", "[info]")), \
+                f"Non-canonical glyph in: {line!r}"
 
     def test_explain_layout(self, runner):
         """Explain text has category:CODE header and detail."""
@@ -600,13 +618,14 @@ class TestStatusRollup:
         assert "policy_version" in ln
         assert "artifact_count" in ln
 
-    def test_render_text_includes_lanes(self, runner, gov_project):
+    def test_render_text_shows_state_and_pointer(self, runner, gov_project):
         from governor.status_rollup import build_status_rollup, render_text
         gov_dir = gov_project / ".governor"
         rollup = build_status_rollup(gov_dir)
         text = render_text(rollup)
-        assert "Lanes:" in text
-        assert "autopilot" in text
+        assert "Governor:" in text
+        assert "Details:" in text
+        assert "envelope=" in text
 
     def test_render_json_parses_clean(self, runner, gov_project):
         from governor.status_rollup import build_status_rollup, render_json

@@ -10,7 +10,7 @@ dashboard_command, status (bare), and future consumers all share this builder.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -121,122 +121,67 @@ def build_status_rollup(gov_dir: Path) -> StatusRollup:
 # Renderers — dumb formatters, no computation, no loader calls
 # ---------------------------------------------------------------------------
 
-_MAX_WIDTH = 80
-
-_RECEIPT_VERDICT_GLYPH = {
-    "pass": "[ok]",
-    "warn": "[WARN]",
-    "block": "[err]",
-    "fail": "[err]",
-}
-
-
-def _truncate(s: str, width: int = _MAX_WIDTH - 4) -> str:
-    if len(s) <= width:
-        return s
-    return s[: width - 1] + "\u2026"
-
-
 def render_json(rollup: StatusRollup) -> str:
     """Render rollup as JSON string. Pure formatting."""
     return json.dumps(rollup.to_dict(), indent=2)
 
 
 def render_text(rollup: StatusRollup) -> str:
-    """Render rollup as human-readable text. Pure formatting."""
+    """Render rollup as findings-first text. Pure formatting.
+
+    Format: top-line state, compact state summary, findings, next actions,
+    details pointer.  OK checks are suppressed.
+    """
+    from .operator_snapshot import classify_rollup, count_checks, classify_overall_state
+
+    checks = classify_rollup(rollup)
+    counts = count_checks(checks)
+    state = classify_overall_state(counts)
+
     lines: list[str] = []
-    lines.append("Governor Dashboard")
+    lines.append(f"Governor: {state}")
+    lines.append("")
 
-    # Envelope
-    env = rollup.envelope
-    if env["ok"]:
-        lines.append(f"  Envelope:    {env['mode']}")
-    else:
-        lines.append(f"  [err] Envelope:    {_truncate(env['error'])}")
+    # Compact state line — the 4 most important subsystem modes
+    env_mode = rollup.envelope.get("mode", "?") if rollup.envelope["ok"] else "err"
+    regime = (rollup.regime.get("name", "?").upper()
+              if rollup.regime["ok"] else "err")
+    drift = rollup.drift.get("alert_level", "?") if rollup.drift["ok"] else "err"
+    scars_health = rollup.scars.get("health", "?") if rollup.scars["ok"] else "err"
+    lines.append(
+        f"  envelope={env_mode}  regime={regime}"
+        f"  drift={drift}  scars={scars_health}"
+    )
+    lines.append("")
 
-    # Regime
-    reg = rollup.regime
-    if reg["ok"]:
-        lines.append(f"  Regime:      {reg['name'].upper()}")
-    else:
-        lines.append(f"  [err] Regime:      {_truncate(reg['error'])}")
+    findings = [c for c in checks if c.status != "ok"]
 
-    # Drift
-    dft = rollup.drift
-    if dft["ok"]:
-        lines.append(f"  Drift:       {dft['alert_level']} ({dft['quarantined']} quarantined)")
+    if not findings:
+        lines.append("  No findings.")
     else:
-        lines.append(f"  [err] Drift:       {_truncate(dft['error'])}")
+        _sev = {"error": 0, "warn": 1, "info": 2}
+        lines.append("  Findings:")
+        for c in sorted(findings, key=lambda x: _sev.get(x.status, 3)):
+            glyph = {"error": "[err]", "warn": "[WARN]", "info": "[info]"
+                      }.get(c.status, "[info]")
+            summary = c.summary if len(c.summary) <= 50 else c.summary[:49] + "\u2026"
+            lines.append(f"    {glyph:>6} {c.name}: {summary}")
 
-    # Scars
-    sc = rollup.scars
-    if sc["ok"]:
-        lines.append(f"  Scars:       {sc['health']} ({sc['hard']} hard, {sc['soft']} soft)")
-    else:
-        lines.append(f"  [err] Scars:       {_truncate(sc['error'])}")
+        # Next actions (deduplicated, from error/warn findings only)
+        next_cmds: list[str] = []
+        for c in sorted(findings, key=lambda x: _sev.get(x.status, 3)):
+            if c.status in ("error", "warn"):
+                for cmd in c.next_commands[:1]:
+                    if cmd not in next_cmds:
+                        next_cmds.append(cmd)
 
-    # Scope
-    scp = rollup.scope
-    if scp["ok"]:
-        if scp.get("configured"):
-            lvl = scp["level"] or "?"
-            a = scp["escalations_allowed"]
-            d = scp["escalations_denied"]
-            lines.append(f"  Scope:       level {lvl} ({scp['grants']} grants, {a}/{d} allow/deny)")
-        else:
-            lines.append("  Scope:       not configured")
-    else:
-        lines.append(f"  [err] Scope:       {_truncate(scp['error'])}")
+        if next_cmds:
+            lines.append("")
+            lines.append("  Next:")
+            for cmd in next_cmds[:3]:
+                lines.append(f"    {cmd}")
 
-    # Correlator
-    cor = rollup.correlator
-    if cor["ok"]:
-        cap = "CAPTURE" if cor["capture"] else "no capture"
-        lines.append(f"  Correlator:  {cor['regime']} ({cap})")
-    else:
-        lines.append(f"  [err] Correlator:  {_truncate(cor['error'])}")
-
-    # Stability
-    stb = rollup.stability
-    if stb["ok"]:
-        stiff = f" (stiffness {stb['stiffness']})" if stb["stiffness"] is not None else ""
-        lines.append(f"  Stability:   {stb['recommendation'].upper()}{stiff}")
-    else:
-        lines.append(f"  [err] Stability:   {_truncate(stb['error'])}")
-
-    # Violations
-    vio = rollup.violations
-    if vio["ok"]:
-        lines.append(f"  Violations:  {vio['pending']} pending")
-    else:
-        lines.append(f"  [err] Violations:  {_truncate(vio['error'])}")
-
-    # Lanes
-    ln = rollup.lanes
-    if ln["ok"]:
-        lines.append(
-            f"  Lanes:       autopilot {ln['autopilot_level']}"
-            f" (v{ln['policy_version']}, {ln['artifact_count']} artifacts)"
-        )
-    else:
-        lines.append(f"  [err] Lanes:       {_truncate(ln['error'])}")
-
-    # Recent receipts
-    rcpt = rollup.recent_receipts
-    if rcpt["ok"] and rcpt["items"]:
-        lines.append("")
-        lines.append("  Recent Receipts:")
-        for item in rcpt["items"]:
-            glyph = _RECEIPT_VERDICT_GLYPH.get(item["verdict"], f"[{item['verdict']}]")
-            gate = item["gate"]
-            rid = item["receipt_id"]
-            ts = item["timestamp"]
-            lines.append(f"    {glyph:>6} {gate:<20} {rid}  {ts}")
-    elif rcpt["ok"]:
-        lines.append("")
-        lines.append("  Recent Receipts: none")
-    else:
-        lines.append("")
-        lines.append(f"  [err] Recent Receipts: {_truncate(rcpt['error'])}")
+    lines.append("")
+    lines.append("  Details: governor status --json")
 
     return "\n".join(lines)

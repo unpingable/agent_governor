@@ -378,6 +378,18 @@ def count_checks(checks: list[CheckItem]) -> dict[str, int]:
     return counts
 
 
+def classify_overall_state(counts: dict[str, int]) -> str:
+    """Compute overall state label from check counts.
+
+    Returns "Nominal", "Degraded", or "Unsafe".
+    """
+    if counts.get("error", 0) > 0:
+        return "Unsafe"
+    if counts.get("warn", 0) > 0:
+        return "Degraded"
+    return "Nominal"
+
+
 # ---------------------------------------------------------------------------
 # collect_trace_events — unified trace from all sources
 # ---------------------------------------------------------------------------

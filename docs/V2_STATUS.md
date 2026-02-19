@@ -1,6 +1,6 @@
 # V2 Status
 
-As of 2.3.0. This document is the boundary between "shipped" and "next."
+As of 2.3.1. This document is the boundary between "shipped" and "next."
 
 ---
 
@@ -46,6 +46,15 @@ StatusRollup shared truth object. `governor status` flipped from proposals to op
 dashboard (one-pager). CLUD Clarity Sensor (compression-based precision detection,
 contract + harness, no LLM calls). Doc updates: telemetry control map, CLI reference,
 security model.
+
+### 2.3.1 — Operator UX + Receipt Infrastructure
+
+Receipt v1 library + bridge. MCP Governor Gateway (Phase 0, Seatbelt v1). Daemon:
+receipts_v1 RPC, method introspection (`rpc.list`), mutating gate, response contracts,
+`config effective`. CLI: curated help (5 categories, 21 commands), `governor advanced`
+attic door, bare invocation rollup ("one finger, one button"), findings-first
+doctor/status. Operator surface contract frozen in tests. Stability + lane routing
+hardening.
 
 ---
 
@@ -105,11 +114,11 @@ Four gap specs are explicitly 3.x:
 
 ---
 
-## Known-Good Bundle (2.3.0)
+## Known-Good Bundle (2.3.1)
 
 | Repo | Version | Coupling |
 |------|---------|----------|
-| [agent_gov](https://github.com/unpingable/agent_governor) | 2.3.0 | — |
+| [agent_gov](https://github.com/unpingable/agent_governor) | 2.3.1 | — |
 | [maude](https://github.com/unpingable/maude) | 2.3.0 | hard (mirrors major.minor) |
 | [vscode-governor](https://github.com/unpingable/vscode-governor) | 2.3.0 | hard (mirrors major.minor) |
 | [guvnah](https://github.com/unpingable/guvnah) | 2.3.0 | hard (mirrors major.minor) |
@@ -118,7 +127,7 @@ Four gap specs are explicitly 3.x:
 **Sanity check** (run these to verify you're not in version hell):
 
 ```bash
-governor --version                      # should say 2.3.0
+governor --version                      # should say 2.3.1
 governor status --json | python3 -c "import sys,json; print(json.load(sys.stdin)['schema_version'])"  # should say 1
 governor doctor                         # walk 9 subsystems, flag non-nominal
 make test                               # in each repo

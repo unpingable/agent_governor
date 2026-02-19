@@ -41,6 +41,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev,webui]"
           pip install -e libs/receipt_kernel
+          pip install -e libs/receipt_v1
 
       - name: Run tests
         run: |

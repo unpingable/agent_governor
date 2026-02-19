@@ -1,9 +1,8 @@
 # Changelog
 
-## v2.3.0 — 2026-02-19
+## v2.3.1 — 2026-02-19
 
-**Theme:** operator UX and receipt infrastructure. The CLI now has a front door
-instead of a fire hose.
+**Theme:** operator UX. The CLI now has a front door instead of a fire hose.
 
 ### Receipt v1 Library + Bridge
 

@@ -10,15 +10,21 @@ from pathlib import Path
 
 import pytest
 
+try:
+    from receipt_v1.types import Receipt
+    from receipt_v1.verify import verify, verify_chain
+    HAS_RECEIPT_V1 = True
+except ImportError:
+    HAS_RECEIPT_V1 = False
+
+pytestmark = pytest.mark.skipif(not HAS_RECEIPT_V1, reason="receipt_v1 not installed")
+
 from governor.receipt_v1_bridge import (
     BridgeContext,
     ReceiptV1Bridge,
     _ChainTracker,
     _VERDICT_MAP,
 )
-
-from receipt_v1.types import Receipt
-from receipt_v1.verify import verify, verify_chain
 
 
 @pytest.fixture

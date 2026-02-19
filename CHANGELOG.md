@@ -1,5 +1,59 @@
 # Changelog
 
+## v2.3.0 — 2026-02-19
+
+**Theme:** operator UX and receipt infrastructure. The CLI now has a front door
+instead of a fire hose.
+
+### Receipt v1 Library + Bridge
+
+Standalone receipt library (`libs/receipt_v1/`): schema, types, builder, 5 sink
+backends, verifier with 10 golden examples. Bridge module dual-emits receipt_v1
+alongside gate_receipt. ReceiptStore abstraction with JSONL rotation.
+
+### MCP Governor Gateway (Phase 0)
+
+Policy-enforcing MCP proxy (`libs/mcp_governor/`): StdioGateway, PolicyEngine
+(allow/deny/allow-warn from denylist regex), ReceiptEmitter with hash-chained
+FileSink. 78 tests. Seatbelt v1 shipped: 3 demo configs, echo server.
+
+### Daemon: receipts_v1 RPC + introspection
+
+5 new RPC endpoints for receipt queries (`receipts_v1.*`). Method introspection
+(`rpc.list` with classification), mutating gate (rejects writes without both
+locks), response contracts. `governor rpc` escape hatch for raw daemon calls.
+`governor config effective` shows resolved config with provenance.
+
+### CLI: operator UX rewrite
+
+- **Curated help**: `governor --help` shows 5 categories (21 commands), not 117.
+  Everything else lives under `governor advanced --help`.
+- **`governor` (bare)**: one-line state + top findings + one next command.
+  Built on StatusRollup, not persona-specific code.
+- **`governor status`**: findings-first operator dashboard (not BIOS listing).
+- **`governor doctor`**: walks 9 subsystems, surfaces non-nominal, suggests
+  next commands. `--strict` for CI (exit 1 on warnings).
+- **Operator surface contract**: frozen in tests. Categories, curated commands,
+  and advanced group existence are asserted. Prevents entropy.
+
+### Stability + Lane Routing Hardening
+
+Glass cannon detection (worst-case perturbation + margin-to-cap). 4 stability
+transforms (relocate, repeat, rewrap, distract). Probe-vs-mitigation policy.
+Lane routing: dt-aware EMA, regime→risk_class coupling, cooldown store,
+capability-based model selection, LLM telemetry for autopilot level 2.
+
+### Versioned Interfaces
+
+| Interface | Version | Change |
+|-----------|---------|--------|
+| Daemon protocol | 1.0 | +5 receipts_v1 methods, +rpc.list, +config.effective |
+| Receipt schema | 2 | No change |
+| Receipt v1 schema | 1 | New |
+| MCP gateway | 0.1 | New |
+
+---
+
 ## v2.0.0 — 2026-02-10
 
 **Status:** milestone release. Public interfaces are intended to be stable, but

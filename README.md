@@ -162,19 +162,18 @@ governor check chapter-3.md --mode fiction
 
 ### Operator Commands
 
-Once initialized, four front-door commands collapse subsystem state into obvious workflows:
+If you only learn 6 commands:
 
 ```bash
-governor status --full        # One-page dashboard (envelope, regime, scars, etc.)
-governor doctor               # Walk 9 subsystems, flag non-nominal, suggest next commands
-governor doctor --strict      # CI mode: exit 1 on warnings too
-governor explain ELASTIC      # What does this code mean?
-governor explain --list       # All diagnostic codes, grouped
+governor                      # What's happening? (state + findings + next command)
+governor status --full        # One-page dashboard (envelope, regime, scars, drift, …)
+governor doctor               # Walk 9 subsystems, suggest fixes
 governor trace                # Unified timeline (receipts, scars, scope, violations)
-governor trace --source scar  # Filter by event source
+governor receipts             # Query gate receipts
+governor advanced --help      # Everything else (100+ subsystem commands)
 ```
 
-All four are read-only, `--json` capable, and width-capped at 80 columns.
+All operator commands are read-only, `--json` capable, and width-capped at 80 columns. The daemon (`governor serve`) adds `governor rpc` for raw JSON-RPC access and `governor config effective` for resolved configuration.
 
 ---
 
@@ -311,50 +310,45 @@ Both are useful. Validators check shape. Governors constrain behavior over time.
 
 ---
 
-## CLI Highlights
+## CLI Surface
+
+**Front door** — the commands most users need:
 
 ```bash
-# Core
-governor init / propose / verify / apply
-governor facts / decisions / status
+# Operator (read-only, what's happening)
+governor                                # State + findings + next command
+governor status --full                  # One-page dashboard
+governor doctor                         # Walk subsystems, suggest fixes
+governor trace                          # Unified event timeline
+governor explain ELASTIC                # Look up a diagnostic code
+governor receipts                       # Query gate receipts
 
-# Evidence gate
-governor gate check <text>              # Evidence-gated coding harness
-governor kernel verify --run <id>       # Verify kernel run (12 invariants)
+# Workflow (mutating, do things)
+governor init                           # Initialize .governor/
+governor propose / verify / apply       # Claim lifecycle
+governor wrap -- <cmd>                  # Wrap agent with enforcement
+governor serve                          # Start daemon
 
-# Checking
-governor check <path>                   # Unified security + continuity
-
-# Profiles & Intent
+# Config
+governor envelope                       # Get/set operating mode
 governor profile use production         # Named governance presets
 governor intent set --profile hotfix    # Intent-based governance
+governor session create <name>          # Session management
 
-# Interferometry
-governor compare "task" --backends a,b  # Multi-model comparison
-governor interferometry divergence      # Disagreement signals
-
-# Epistemic
-governor epistemic status / claims / dangerous
-governor drift status / update
-governor quorum status <id>
-
-# Adaptive
-governor regime status                  # ELASTIC/WARM/DUCTILE/UNSTABLE
-governor boil set oolong                # Named control presets
-governor explore enter research         # Exploration budgets
-
-# Autonomous
-governor autonomous run --task "..."    # Step-function execution
-governor spine lock <id>                # Lock project structure
-governor invariant check                # Mechanically verify rules
-
-# Integration
-governor hook install                   # Git pre-commit
-governor mcp serve                      # MCP server for Claude
-governor claude-hooks install           # Claude Code hooks
+# Debug
+governor rpc list                       # Daemon method introspection
+governor rpc call operator.snapshot     # Raw JSON-RPC escape hatch
 ```
 
-Full CLI reference: 100+ commands across 30+ subsystems. See `.claude/rules/cli-reference.md`.
+**Advanced** — 100+ subsystem commands, also callable at root level:
+
+```bash
+governor advanced --help                # Full index
+governor advanced gate check <text>     # Evidence gate (same as governor gate check)
+governor advanced drift status          # Drift detector (same as governor drift status)
+```
+
+Full CLI reference: `.claude/rules/cli-reference.md`.
 
 ---
 

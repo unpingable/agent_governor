@@ -1,0 +1,42 @@
+{
+  "receipt_id": "019505a0-0004-7000-8000-000000000004",
+  "receipt_version": "1.0",
+  "receipt_hash": "9bfd8f503ef06bd1ad1c8647ee085d49c5fb3fe6d08137648f19547032d7d7af",
+  "chain": {
+    "seq": 1
+  },
+  "timestamp_wall": "2026-02-18T03:14:15.926Z",
+  "actor": {
+    "agent_id": "agent-001",
+    "session_id": "sess-2026-02-18-001",
+    "runtime": "claude-code",
+    "auth_context": "stdio"
+  },
+  "tool": {
+    "tool_id": "fs.read",
+    "args_hash": "b1046c965d3118804e824fd510d8b07c9c779a49a49f57b86d619c96ea6bc36b",
+    "args_summary": "read dir: /home/user (recursive)"
+  },
+  "decision": {
+    "action": "transform",
+    "reason_code": "gov.transform_applied",
+    "reason_human": "Recursive read narrowed to single directory listing",
+    "transformed_args_hash": "b855cea00e958ce0f647c0f1d214fc52671367c266c8e2df046161d90b0efad5"
+  },
+  "provenance": {
+    "deployment_id": "gov-prod-01",
+    "instance_id": "inst-a1b2c3",
+    "governor_version": "2.3.0",
+    "hash_alg": "sha-256",
+    "hash_encoding": "hex"
+  },
+  "execution": {
+    "status": "success",
+    "attempt": 1,
+    "side_effects": [
+      "fs:read"
+    ],
+    "effects_confidence": "coarse",
+    "duration_ms": 8
+  }
+}

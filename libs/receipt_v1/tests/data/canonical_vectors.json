@@ -1,0 +1,151 @@
+{
+  "_comment": "Golden canonical JSON vectors for Receipt Canonicalization v1. Treat as cryptographic test vectors. Cross-language contract.",
+  "vectors": [
+    {
+      "name": "empty_object",
+      "input": {},
+      "canonical_utf8": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "simple_string",
+      "input": {
+        "key": "value"
+      },
+      "canonical_utf8": "{\"key\":\"value\"}",
+      "sha256": "e43abcf3375244839c012f9633f95862d232a95b00d5bc7348b3098b9fed7f32"
+    },
+    {
+      "name": "sorted_keys",
+      "input": {
+        "z": 1,
+        "a": 2,
+        "m": 3
+      },
+      "canonical_utf8": "{\"a\":2,\"m\":3,\"z\":1}",
+      "sha256": "ebba85cfdc0a724b6cc327ecc545faeb38b9fe02eca603b430eb872f5cf75370"
+    },
+    {
+      "name": "nested_sorted",
+      "input": {
+        "outer": {
+          "z": true,
+          "a": false
+        }
+      },
+      "canonical_utf8": "{\"outer\":{\"a\":false,\"z\":true}}",
+      "sha256": "cc6b3ffb5a2092251b0f7b3e9ab21ff9ff9bd1c9d507023c068b1bd5612d788f"
+    },
+    {
+      "name": "array_preserved_order",
+      "input": {
+        "items": [
+          3,
+          1,
+          2
+        ]
+      },
+      "canonical_utf8": "{\"items\":[3,1,2]}",
+      "sha256": "de21aef9c6d6b65cfe6dc3c9159d9969659d1f5b854c6249d871036c57a26966"
+    },
+    {
+      "name": "null_value",
+      "input": {
+        "key": null
+      },
+      "canonical_utf8": "{\"key\":null}",
+      "sha256": "059c12e9b015b4ac525b4016e72f003640ffee220ede6d488caca2672e3c4650"
+    },
+    {
+      "name": "boolean_values",
+      "input": {
+        "f": false,
+        "t": true
+      },
+      "canonical_utf8": "{\"f\":false,\"t\":true}",
+      "sha256": "c22848c47426fcf4d27e55573c22f1d23546315c251e8e4bc384820ba5fae568"
+    },
+    {
+      "name": "unicode_escaped",
+      "input": {
+        "emoji": "☃"
+      },
+      "canonical_utf8": "{\"emoji\":\"\\u2603\"}",
+      "sha256": "4f90f36d9584208e98feb053af282b701022ad9ba2ea213bc64383362ad793d6"
+    },
+    {
+      "name": "integer_value",
+      "input": {
+        "count": 42
+      },
+      "canonical_utf8": "{\"count\":42}",
+      "sha256": "b35539ce83f07b2fe8fb4bdce27fb9666c2122af4ad9a5850a711d906fb58998"
+    },
+    {
+      "name": "deeply_nested",
+      "input": {
+        "a": {
+          "b": {
+            "c": {
+              "d": 1
+            }
+          }
+        }
+      },
+      "canonical_utf8": "{\"a\":{\"b\":{\"c\":{\"d\":1}}}}",
+      "sha256": "abe39bc6e74bfd75fe45ff647cb05daff2175da7aed62e81849f77bfdfae61ee"
+    },
+    {
+      "name": "combined_edge_case",
+      "input": {
+        "z_last": "should sort last",
+        "a_first": "should sort first",
+        "nested": {
+          "z_inner": true,
+          "a_inner": [
+            3,
+            1,
+            2
+          ],
+          "deep": {
+            "key": null
+          }
+        },
+        "unicode": "☃éü世界",
+        "escaping": "tab\there\nback\\slash\"quote",
+        "empty_array": [],
+        "mixed_types": [
+          1,
+          "two",
+          true,
+          null,
+          {
+            "k": "v"
+          }
+        ],
+        "negative_int": -42
+      },
+      "canonical_utf8": "{\"a_first\":\"should sort first\",\"empty_array\":[],\"escaping\":\"tab\\there\\nback\\\\slash\\\"quote\",\"mixed_types\":[1,\"two\",true,null,{\"k\":\"v\"}],\"negative_int\":-42,\"nested\":{\"a_inner\":[3,1,2],\"deep\":{\"key\":null},\"z_inner\":true},\"unicode\":\"\\u2603\\u00e9\\u00fc\\u4e16\\u754c\",\"z_last\":\"should sort last\"}",
+      "sha256": "fceaceae0e80341f93bae2d3a2b5fc9e235db92bbe714d6b838db17d47c9be04"
+    }
+  ],
+  "domain_hash_vectors": [
+    {
+      "name": "args_v1_fs_read",
+      "domain": "args-v1",
+      "tool_id": "fs.read",
+      "args": {
+        "path": "/etc/config"
+      },
+      "expected": "0b6db862762abf34e07c7fd70e5f11871efe0d45e6f3b168a5cef4e67166b62f"
+    },
+    {
+      "name": "receipt_v1_empty",
+      "domain": "receipt-v1",
+      "parts_utf8": [
+        "{}"
+      ],
+      "expected": "755763fab876418d52ba7d74b13e8c7cd5be5b562357d15a7898f174505b6a71"
+    }
+  ]
+}

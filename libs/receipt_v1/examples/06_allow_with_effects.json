@@ -1,0 +1,44 @@
+{
+  "receipt_id": "019505a0-0006-7000-8000-000000000006",
+  "receipt_version": "1.0",
+  "receipt_hash": "31e5c7ccafe7f0fd55321e2a23a24dc685c514ffb254d82bb47d8f6eb1a17b34",
+  "chain": {
+    "seq": 1
+  },
+  "timestamp_wall": "2026-02-18T03:14:15.926Z",
+  "actor": {
+    "agent_id": "agent-001",
+    "session_id": "sess-2026-02-18-001",
+    "runtime": "claude-code",
+    "auth_context": "stdio"
+  },
+  "tool": {
+    "tool_id": "net.fetch",
+    "args_hash": "994c789231ee0a646508e8635f64573614e55266104ef20d699f9966d5b2bd43",
+    "args_summary": "POST: api.example.com/submit"
+  },
+  "decision": {
+    "action": "allow",
+    "reason_code": "acme.explicit_grant",
+    "reason_human": "Allowed by explicit grant for api.example.com"
+  },
+  "provenance": {
+    "deployment_id": "gov-prod-01",
+    "instance_id": "inst-a1b2c3",
+    "governor_version": "2.3.0",
+    "hash_alg": "sha-256",
+    "hash_encoding": "hex"
+  },
+  "execution": {
+    "status": "success",
+    "attempt": 1,
+    "side_effects": [
+      "net:outbound",
+      "state:modify"
+    ],
+    "effects_confidence": "instrumented",
+    "result_hash": "1febeed083350c57a0638b366796510d5a2245b664fe70931c72344432ffbe8b",
+    "result_summary": "HTTP 200 OK",
+    "duration_ms": 342
+  }
+}

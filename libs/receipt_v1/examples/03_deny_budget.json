@@ -1,0 +1,37 @@
+{
+  "receipt_id": "019505a0-0003-7000-8000-000000000003",
+  "receipt_version": "1.0",
+  "receipt_hash": "a835fe6bdd39f38e86b9cd559503b8a6457875f9c2376b54a9e82512fbdfcab1",
+  "chain": {
+    "seq": 1
+  },
+  "timestamp_wall": "2026-02-18T03:14:15.926Z",
+  "actor": {
+    "agent_id": "agent-001",
+    "session_id": "sess-2026-02-18-001",
+    "runtime": "claude-code",
+    "auth_context": "stdio"
+  },
+  "tool": {
+    "tool_id": "net.fetch",
+    "args_hash": "e34e3a605c7fcc50ea1a7975c66bafc01fa42c821db101d204c23eedc802eedd",
+    "args_summary": "fetch: api.example.com/data"
+  },
+  "decision": {
+    "action": "deny",
+    "reason_code": "gov.budget_exhausted",
+    "reason_human": "Rate limit exceeded (0 remaining)",
+    "budget": {
+      "rate_remaining": 0,
+      "cost_remaining": 500,
+      "retries_remaining": 0
+    }
+  },
+  "provenance": {
+    "deployment_id": "gov-prod-01",
+    "instance_id": "inst-a1b2c3",
+    "governor_version": "2.3.0",
+    "hash_alg": "sha-256",
+    "hash_encoding": "hex"
+  }
+}

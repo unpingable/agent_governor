@@ -1,0 +1,35 @@
+{
+  "receipt_id": "019505a0-0002-7000-8000-000000000002",
+  "receipt_version": "1.0",
+  "receipt_hash": "aef3033cb9066d153d90f444a541466bd79381a77063e97cf9417da2f1b32479",
+  "chain": {
+    "seq": 1
+  },
+  "timestamp_wall": "2026-02-18T03:14:15.926Z",
+  "actor": {
+    "agent_id": "agent-001",
+    "session_id": "sess-2026-02-18-001",
+    "runtime": "claude-code",
+    "auth_context": "stdio"
+  },
+  "tool": {
+    "tool_id": "fs.write",
+    "args_hash": "a19f17fe04206abe19778285f07e321e19d6876ab5f5934bb90911a528bf829a",
+    "args_summary": "write file: /etc/shadow",
+    "capability_asserted": "fs:read"
+  },
+  "decision": {
+    "action": "deny",
+    "reason_code": "gov.scope_exceeded",
+    "reason_human": "Agent claimed fs:read but attempted fs:write to /etc/shadow",
+    "policy_id": "scope-check-v1",
+    "policy_version": "1.0"
+  },
+  "provenance": {
+    "deployment_id": "gov-prod-01",
+    "instance_id": "inst-a1b2c3",
+    "governor_version": "2.3.0",
+    "hash_alg": "sha-256",
+    "hash_encoding": "hex"
+  }
+}

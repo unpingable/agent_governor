@@ -1,0 +1,41 @@
+{
+  "receipt_id": "019505a0-0001-7000-8000-000000000001",
+  "receipt_version": "1.0",
+  "receipt_hash": "d2103c50192fc507ca44e887f0c3aca8a4aa24aacd061cfcc5e5fbd575835498",
+  "chain": {
+    "seq": 1
+  },
+  "timestamp_wall": "2026-02-18T03:14:15.926Z",
+  "actor": {
+    "agent_id": "agent-001",
+    "session_id": "sess-2026-02-18-001",
+    "runtime": "claude-code",
+    "auth_context": "stdio"
+  },
+  "tool": {
+    "tool_id": "fs.read",
+    "args_hash": "0b6db862762abf34e07c7fd70e5f11871efe0d45e6f3b168a5cef4e67166b62f",
+    "args_summary": "read file: /etc/config"
+  },
+  "decision": {
+    "action": "allow",
+    "reason_code": "gov.passthrough",
+    "reason_human": "No policy matched; default-allow applied"
+  },
+  "provenance": {
+    "deployment_id": "gov-prod-01",
+    "instance_id": "inst-a1b2c3",
+    "governor_version": "2.3.0",
+    "hash_alg": "sha-256",
+    "hash_encoding": "hex"
+  },
+  "execution": {
+    "status": "success",
+    "attempt": 1,
+    "side_effects": [
+      "fs:read"
+    ],
+    "effects_confidence": "coarse",
+    "duration_ms": 12
+  }
+}

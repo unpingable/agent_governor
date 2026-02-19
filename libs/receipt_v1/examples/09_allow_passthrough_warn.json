@@ -1,0 +1,41 @@
+{
+  "receipt_id": "019505a0-0010-7000-8000-000000000010",
+  "receipt_version": "1.0",
+  "receipt_hash": "b46c0ef68473168ac0c5f415fa65bb8b4bfe130b62decd59ab6162c616272a47",
+  "chain": {
+    "seq": 1
+  },
+  "timestamp_wall": "2026-02-18T03:14:15.926Z",
+  "actor": {
+    "agent_id": "agent-001",
+    "session_id": "sess-2026-02-18-001",
+    "runtime": "claude-code",
+    "auth_context": "stdio"
+  },
+  "tool": {
+    "tool_id": "env.read",
+    "args_hash": "76219bee6641bb3577fbb9d202d4e7f459f3b2725255740c909c5cbc9e8c996a",
+    "args_summary": "read env: HOME"
+  },
+  "decision": {
+    "action": "allow",
+    "reason_code": "gov.passthrough",
+    "reason_human": "No policy matched; default-allow applied"
+  },
+  "provenance": {
+    "deployment_id": "gov-prod-01",
+    "instance_id": "inst-a1b2c3",
+    "governor_version": "2.3.0",
+    "hash_alg": "sha-256",
+    "hash_encoding": "hex"
+  },
+  "execution": {
+    "status": "success",
+    "attempt": 1,
+    "side_effects": [
+      "env:read"
+    ],
+    "effects_confidence": "none",
+    "duration_ms": 1
+  }
+}

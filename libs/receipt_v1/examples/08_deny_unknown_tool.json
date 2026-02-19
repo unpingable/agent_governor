@@ -1,0 +1,32 @@
+{
+  "receipt_id": "019505a0-0009-7000-8000-000000000009",
+  "receipt_version": "1.0",
+  "receipt_hash": "845d1f62a09b6a9d43fa8b25639c308d9a9afa66d7d9834d84ab37c56fc56cab",
+  "chain": {
+    "seq": 1
+  },
+  "timestamp_wall": "2026-02-18T03:14:15.926Z",
+  "actor": {
+    "agent_id": "agent-001",
+    "session_id": "sess-2026-02-18-001",
+    "runtime": "claude-code",
+    "auth_context": "stdio"
+  },
+  "tool": {
+    "tool_id": "custom.evil_tool",
+    "args_hash": "c1946668ae33dce17a7e61972390812bb4287424b52274243703d1ceffd3d7a6",
+    "args_summary": "unknown tool: custom.evil_tool"
+  },
+  "decision": {
+    "action": "deny",
+    "reason_code": "gov.tool_unknown",
+    "reason_human": "Tool custom.evil_tool not in approved registry"
+  },
+  "provenance": {
+    "deployment_id": "gov-prod-01",
+    "instance_id": "inst-a1b2c3",
+    "governor_version": "2.3.0",
+    "hash_alg": "sha-256",
+    "hash_encoding": "hex"
+  }
+}

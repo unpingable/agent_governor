@@ -1,0 +1,85 @@
+[
+  {
+    "receipt_id": "019505a0-0007-7000-8000-000000000007",
+    "receipt_version": "1.0",
+    "receipt_hash": "4cdb58e043251e5e7d2eb1c761698d00eccc8596b7d3f60297bf0b4fc8a31014",
+    "chain": {
+      "seq": 1
+    },
+    "timestamp_wall": "2026-02-18T03:14:15.926Z",
+    "actor": {
+      "agent_id": "agent-001",
+      "session_id": "sess-2026-02-18-001",
+      "runtime": "claude-code",
+      "auth_context": "stdio"
+    },
+    "tool": {
+      "tool_id": "fs.read",
+      "args_hash": "ec444b921478c49355b49a1e5568624bad4efb5d404148ee9f7e57a5e0eea3c9",
+      "args_summary": "read file: /src/main.py"
+    },
+    "decision": {
+      "action": "allow",
+      "reason_code": "gov.passthrough"
+    },
+    "provenance": {
+      "deployment_id": "gov-prod-01",
+      "instance_id": "inst-a1b2c3",
+      "governor_version": "2.3.0",
+      "hash_alg": "sha-256",
+      "hash_encoding": "hex"
+    },
+    "execution": {
+      "status": "success",
+      "attempt": 1,
+      "side_effects": [
+        "fs:read"
+      ],
+      "effects_confidence": "coarse",
+      "duration_ms": 5
+    }
+  },
+  {
+    "receipt_id": "019505a0-0008-7000-8000-000000000008",
+    "receipt_version": "1.0",
+    "receipt_hash": "a2aef84c0c60e27c67e2f37aa2b6ab2109a37ec67663f827a6ae25cee3a69b74",
+    "chain": {
+      "seq": 2,
+      "parent_receipt_id": "019505a0-0007-7000-8000-000000000007",
+      "parent_receipt_hash": "4cdb58e043251e5e7d2eb1c761698d00eccc8596b7d3f60297bf0b4fc8a31014"
+    },
+    "timestamp_wall": "2026-02-18T03:14:16.100Z",
+    "actor": {
+      "agent_id": "agent-001",
+      "session_id": "sess-2026-02-18-001",
+      "runtime": "claude-code",
+      "auth_context": "stdio"
+    },
+    "tool": {
+      "tool_id": "fs.write",
+      "args_hash": "1b430401379035de419c0653ccfa002ce0abe7bf403cfe99890e7df73a1e5df9",
+      "args_summary": "write file: /src/main.py"
+    },
+    "decision": {
+      "action": "allow",
+      "reason_code": "gov.passthrough"
+    },
+    "provenance": {
+      "deployment_id": "gov-prod-01",
+      "instance_id": "inst-a1b2c3",
+      "governor_version": "2.3.0",
+      "hash_alg": "sha-256",
+      "hash_encoding": "hex"
+    },
+    "execution": {
+      "status": "success",
+      "attempt": 1,
+      "side_effects": [
+        "fs:read",
+        "fs:write"
+      ],
+      "effects_confidence": "coarse",
+      "duration_ms": 15
+    }
+  }
+]

@@ -1,0 +1,46 @@
+{
+  "receipt_id": "019505a0-0005-7000-8000-000000000005",
+  "receipt_version": "1.0",
+  "receipt_hash": "0d17e451188788018ae7a2a52904fcb1ee792bc2f481ca519813dfbe35d148b4",
+  "chain": {
+    "seq": 1
+  },
+  "timestamp_wall": "2026-02-18T03:14:15.926Z",
+  "actor": {
+    "agent_id": "agent-001",
+    "session_id": "sess-2026-02-18-001",
+    "runtime": "claude-code",
+    "auth_context": "stdio"
+  },
+  "tool": {
+    "tool_id": "proc.spawn",
+    "args_hash": "0eeeee9a8ba01ee757e8ba64a5255a8313dadc060a8937b48dc8b2f6ee2e61e3",
+    "args_summary": "spawn: rm -rf /var/data"
+  },
+  "decision": {
+    "action": "escalate",
+    "reason_code": "gov.escalate_required",
+    "reason_human": "Destructive operation requires human approval",
+    "policy_id": "destructive-ops-v1",
+    "policy_version": "2.0",
+    "policy_path": [
+      {
+        "id": "scope-check",
+        "version": "1.0",
+        "outcome": "pass"
+      },
+      {
+        "id": "destructive-check",
+        "version": "2.0",
+        "outcome": "escalate"
+      }
+    ]
+  },
+  "provenance": {
+    "deployment_id": "gov-prod-01",
+    "instance_id": "inst-a1b2c3",
+    "governor_version": "2.3.0",
+    "hash_alg": "sha-256",
+    "hash_encoding": "hex"
+  }
+}

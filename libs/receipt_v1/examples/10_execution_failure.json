@@ -1,0 +1,41 @@
+{
+  "receipt_id": "019505a0-0011-7000-8000-000000000011",
+  "receipt_version": "1.0",
+  "receipt_hash": "aef1d7e1c63f0773b7fb1b672cb2b8cc74140a0a68c5d890a60ee459afa93771",
+  "chain": {
+    "seq": 1
+  },
+  "timestamp_wall": "2026-02-18T03:14:15.926Z",
+  "actor": {
+    "agent_id": "agent-001",
+    "session_id": "sess-2026-02-18-001",
+    "runtime": "claude-code",
+    "auth_context": "stdio"
+  },
+  "tool": {
+    "tool_id": "net.fetch",
+    "args_hash": "e34e3a605c7fcc50ea1a7975c66bafc01fa42c821db101d204c23eedc802eedd",
+    "args_summary": "fetch: api.example.com/data"
+  },
+  "decision": {
+    "action": "allow",
+    "reason_code": "gov.passthrough"
+  },
+  "provenance": {
+    "deployment_id": "gov-prod-01",
+    "instance_id": "inst-a1b2c3",
+    "governor_version": "2.3.0",
+    "hash_alg": "sha-256",
+    "hash_encoding": "hex"
+  },
+  "execution": {
+    "status": "failure",
+    "attempt": 2,
+    "side_effects": [
+      "net:outbound"
+    ],
+    "effects_confidence": "coarse",
+    "duration_ms": 5032,
+    "error": "Connection timeout after 5000ms (attempt 2 of 3)"
+  }
+}

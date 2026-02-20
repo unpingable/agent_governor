@@ -1,0 +1,77 @@
+{
+  "dsl_version": 1,
+  "seed": 7,
+  "name": "gate_disabled",
+  "actors": ["mallory"],
+  "session_id": "sim-fault-001",
+  "run_id": "run-fault-001",
+  "steps": [
+    {
+      "actor": "mallory",
+      "type": "call",
+      "t": 0,
+      "payload": {
+        "target": "gate_check",
+        "output": "Legitimate first check.",
+        "task": "initial work"
+      }
+    },
+    {
+      "type": "fault",
+      "t": 1000,
+      "payload": {
+        "flag": "gate_enabled",
+        "value": false
+      }
+    },
+    {
+      "actor": "mallory",
+      "type": "call",
+      "t": 60000,
+      "payload": {
+        "target": "gate_check",
+        "output": "This should be silently skipped.",
+        "task": "unmonitored work"
+      }
+    },
+    {
+      "actor": "mallory",
+      "type": "call",
+      "t": 120000,
+      "payload": {
+        "target": "gate_check",
+        "output": "Still skipped, gate is off.",
+        "task": "more unmonitored work"
+      }
+    },
+    {
+      "type": "fault",
+      "t": 180000,
+      "payload": {
+        "flag": "gate_enabled",
+        "value": true
+      }
+    },
+    {
+      "actor": "mallory",
+      "type": "call",
+      "t": 240000,
+      "payload": {
+        "target": "gate_check",
+        "output": "Gate back on, this one counts.",
+        "task": "resumed work"
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "check": "expect_receipt_count",
+      "value": 2
+    },
+    {
+      "check": "expect_fault_state",
+      "flag": "gate_enabled",
+      "value": true
+    }
+  ]
+}

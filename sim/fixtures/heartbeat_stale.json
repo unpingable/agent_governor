@@ -1,0 +1,52 @@
+{
+  "dsl_version": 1,
+  "seed": 99,
+  "name": "heartbeat_stale",
+  "actors": ["eve"],
+  "session_id": "sim-stale-001",
+  "run_id": "run-stale-001",
+  "steps": [
+    {
+      "actor": "eve",
+      "type": "emit",
+      "t": 0,
+      "payload": {
+        "kind": "receipt",
+        "data": {
+          "gate": "evidence_gate",
+          "verdict": "pass",
+          "subject_kind": "sim_event",
+          "subject_bytes": "",
+          "evidence_bundle": {"note": "initial receipt"},
+          "gate_config": {}
+        }
+      }
+    },
+    {
+      "actor": "eve",
+      "type": "call",
+      "t": 1200000,
+      "payload": {
+        "target": "gate_heartbeat",
+        "session_active": true
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "check": "expect_stale",
+      "value": true,
+      "session_active": true
+    },
+    {
+      "check": "expect_receipt_count",
+      "value": 1
+    },
+    {
+      "check": "expect_missed_count",
+      "op": "gte",
+      "value": 3,
+      "session_active": true
+    }
+  ]
+}

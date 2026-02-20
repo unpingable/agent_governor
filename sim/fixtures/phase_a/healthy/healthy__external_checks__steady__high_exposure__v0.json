@@ -1,0 +1,161 @@
+{
+  "dsl_version": 1,
+  "seed": 42,
+  "name": "healthy__external_checks__steady__high_exposure__v0",
+  "actors": ["agent"],
+  "session_id": "sim-healthy-001",
+  "run_id": "run-healthy-001",
+
+  "metadata": {
+    "intent": "control",
+    "purpose": "Pure healthy baseline with high external verification",
+    "expected_findings": [],
+    "expected_non_findings": ["silent_suppression", "capture", "shear"],
+    "family": "healthy",
+    "mechanism": "external_checks",
+    "profile": "steady",
+    "exposure": "high_exposure",
+    "version": 0,
+    "notes": [
+      "12 ticks at 500ms intervals, steady workload",
+      "~75% external/tool receipts, ~10% peer, ~15% self",
+      "Nonzero contradiction rate (~18%)",
+      "No detector should fire"
+    ]
+  },
+
+  "params": {
+    "evidence_gate_strict": false
+  },
+
+  "steps": [
+    {"actor": "agent", "type": "call", "t": 0,
+     "payload": {"target": "gate_check", "output": "Read config file.", "task": "setup"}},
+    {"type": "emit", "t": 100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "read_config",
+       "evidence_bundle": {"independence_class": "tool", "source_channel": "cli"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 500,
+     "payload": {"target": "gate_check", "output": "Write user model.", "task": "feature"}},
+    {"type": "emit", "t": 600,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "write_user_model",
+       "evidence_bundle": {"independence_class": "external", "source_channel": "cli"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 1000,
+     "payload": {"target": "gate_check", "output": "Run pytest.", "task": "verify"}},
+    {"type": "emit", "t": 1100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "run_pytest",
+       "evidence_bundle": {"independence_class": "tool", "source_channel": "subprocess"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 1500,
+     "payload": {"target": "gate_check", "output": "Contradicts earlier claim about API.", "task": "review"}},
+    {"type": "emit", "t": 1600,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "warn",
+       "subject_kind": "sim_event", "subject_bytes": "api_contradiction",
+       "evidence_bundle": {"independence_class": "tool", "source_channel": "cli", "contradiction": true},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 2000,
+     "payload": {"target": "gate_check", "output": "Execute migration script.", "task": "deploy"}},
+    {"type": "emit", "t": 2100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "run_migration",
+       "evidence_bundle": {"independence_class": "tool", "source_channel": "subprocess"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 2500,
+     "payload": {"target": "gate_check", "output": "Check lint results.", "task": "verify"}},
+    {"type": "emit", "t": 2600,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "lint_check",
+       "evidence_bundle": {"independence_class": "external", "source_channel": "cli"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 3000,
+     "payload": {"target": "gate_check", "output": "Peer review feedback.", "task": "review"}},
+    {"type": "emit", "t": 3100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "peer_review",
+       "evidence_bundle": {"independence_class": "peer", "source_channel": "api"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 3500,
+     "payload": {"target": "gate_check", "output": "Self-assessment of progress.", "task": "status"}},
+    {"type": "emit", "t": 3600,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "self_assessment",
+       "evidence_bundle": {"independence_class": "self", "source_channel": "cli"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 4000,
+     "payload": {"target": "gate_check", "output": "Contradicts config assumption.", "task": "review"}},
+    {"type": "emit", "t": 4100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "warn",
+       "subject_kind": "sim_event", "subject_bytes": "config_contradiction",
+       "evidence_bundle": {"independence_class": "tool", "source_channel": "cli", "contradiction": true},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 4500,
+     "payload": {"target": "gate_check", "output": "Write test file.", "task": "feature"}},
+    {"type": "emit", "t": 4600,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "write_tests",
+       "evidence_bundle": {"independence_class": "tool", "source_channel": "subprocess"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 5000,
+     "payload": {"target": "gate_check", "output": "Final integration test.", "task": "verify"}},
+    {"type": "emit", "t": 5100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "integration_test",
+       "evidence_bundle": {"independence_class": "external", "source_channel": "subprocess"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 5500,
+     "payload": {"target": "gate_check", "output": "Self-check on completeness.", "task": "status"}},
+    {"type": "emit", "t": 5600,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "self_completeness",
+       "evidence_bundle": {"independence_class": "self", "source_channel": "cli"},
+       "gate_config": {}
+     }}}
+  ],
+
+  "asserts": [
+    {"check": "expect_receipt_count", "value": 12},
+    {"check": "expect_receipt_provenance_ratio",
+     "independence_class": "self", "op": "lte", "value": 0.20,
+     "comment": "self-receipts should be minority"},
+    {"check": "expect_contradiction_count", "op": "gte", "value": 2,
+     "comment": "healthy systems have nonzero contradictions"}
+  ]
+}

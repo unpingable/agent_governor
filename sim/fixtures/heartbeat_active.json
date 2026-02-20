@@ -1,0 +1,50 @@
+{
+  "dsl_version": 1,
+  "seed": 42,
+  "name": "heartbeat_active",
+  "actors": ["alice"],
+  "session_id": "sim-active-001",
+  "run_id": "run-active-001",
+  "steps": [
+    {
+      "actor": "alice",
+      "type": "call",
+      "t": 0,
+      "payload": {
+        "target": "gate_check",
+        "output": "Implemented feature X with tests.",
+        "task": "implement feature X"
+      }
+    },
+    {
+      "actor": "alice",
+      "type": "call",
+      "t": 120000,
+      "payload": {
+        "target": "gate_check",
+        "output": "Refactored module Y for clarity.",
+        "task": "refactor module Y"
+      }
+    },
+    {
+      "actor": "alice",
+      "type": "call",
+      "t": 240000,
+      "payload": {
+        "target": "gate_check",
+        "output": "Fixed bug in parser Z.",
+        "task": "fix parser Z bug"
+      }
+    }
+  ],
+  "asserts": [
+    {
+      "check": "expect_stale",
+      "value": false
+    },
+    {
+      "check": "expect_receipt_count",
+      "value": 3
+    }
+  ]
+}

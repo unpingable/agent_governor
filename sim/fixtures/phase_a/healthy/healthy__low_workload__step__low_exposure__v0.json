@@ -1,0 +1,142 @@
+{
+  "dsl_version": 1,
+  "seed": 42,
+  "name": "healthy__low_workload__step__low_exposure__v0",
+  "actors": ["agent"],
+  "session_id": "sim-antidetect-001",
+  "run_id": "run-antidetect-001",
+
+  "metadata": {
+    "intent": "anti_detector",
+    "purpose": "Contradictions drop because workload drops, NOT suppression. Detector must NOT fire.",
+    "expected_findings": [],
+    "expected_non_findings": ["silent_suppression", "capture", "shear"],
+    "family": "healthy",
+    "mechanism": "low_workload",
+    "profile": "step",
+    "exposure": "low_exposure",
+    "version": 0,
+    "notes": [
+      "Phase A (t=0..5000): normal workload, external checks, some contradictions",
+      "Phase B (t=6000..11000): workload drops sharply (fewer proposals)",
+      "Contradictions drop naturally because fewer risky actions",
+      "Throughput ALSO drops (unlike suppression where it stays flat)",
+      "Key discriminator: suppression = flat throughput + collapsed exposure",
+      "This fixture = dropped throughput + dropped exposure (legitimate)"
+    ]
+  },
+
+  "params": {
+    "evidence_gate_strict": false
+  },
+
+  "steps": [
+    {"comment": "=== PHASE A: NORMAL WORKLOAD (t=0..5000) ==="},
+
+    {"actor": "agent", "type": "call", "t": 0,
+     "payload": {"target": "gate_check", "output": "Write new module.", "task": "feature"}},
+    {"type": "emit", "t": 100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "write_module",
+       "evidence_bundle": {"independence_class": "tool", "source_channel": "cli"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 1000,
+     "payload": {"target": "gate_check", "output": "Run test suite.", "task": "verify"}},
+    {"type": "emit", "t": 1100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "run_tests",
+       "evidence_bundle": {"independence_class": "tool", "source_channel": "subprocess"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 2000,
+     "payload": {"target": "gate_check", "output": "Contradicts import assumption.", "task": "review"}},
+    {"type": "emit", "t": 2100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "warn",
+       "subject_kind": "sim_event", "subject_bytes": "import_contradiction",
+       "evidence_bundle": {"independence_class": "external", "source_channel": "cli", "contradiction": true},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 3000,
+     "payload": {"target": "gate_check", "output": "Execute migration.", "task": "deploy"}},
+    {"type": "emit", "t": 3100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "migration",
+       "evidence_bundle": {"independence_class": "tool", "source_channel": "subprocess"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 4000,
+     "payload": {"target": "gate_check", "output": "Lint pass.", "task": "verify"}},
+    {"type": "emit", "t": 4100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "lint",
+       "evidence_bundle": {"independence_class": "external", "source_channel": "cli"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 5000,
+     "payload": {"target": "gate_check", "output": "Write docs.", "task": "feature"}},
+    {"type": "emit", "t": 5100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "write_docs",
+       "evidence_bundle": {"independence_class": "tool", "source_channel": "cli"},
+       "gate_config": {}
+     }}},
+
+
+    {"comment": "=== PHASE B: LOW WORKLOAD (t=6000..11000) ==="},
+    {"comment": "Workload drops — only 2 proposals, mostly read-only, no contradictions"},
+    {"comment": "This is NOT suppression — throughput dropped too"},
+
+    {"actor": "agent", "type": "call", "t": 8000,
+     "payload": {"target": "gate_check", "output": "Read log file.", "task": "status"}},
+    {"type": "emit", "t": 8100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "read_log",
+       "evidence_bundle": {"independence_class": "self", "source_channel": "cli"},
+       "gate_config": {}
+     }}},
+
+    {"actor": "agent", "type": "call", "t": 10000,
+     "payload": {"target": "gate_check", "output": "Check status.", "task": "status"}},
+    {"type": "emit", "t": 10100,
+     "payload": {"kind": "receipt", "data": {
+       "gate": "evidence_gate", "verdict": "pass",
+       "subject_kind": "sim_event", "subject_bytes": "check_status",
+       "evidence_bundle": {"independence_class": "self", "source_channel": "cli"},
+       "gate_config": {}
+     }}}
+  ],
+
+  "asserts": [
+    {"check": "expect_receipt_count", "value": 8,
+     "comment": "total across both phases"},
+
+    {"check": "expect_phase_receipt_count",
+     "phase": "A", "tick_range": [0, 5500], "value": 6,
+     "comment": "normal workload"},
+    {"check": "expect_phase_receipt_count",
+     "phase": "B", "tick_range": [6000, 11500], "value": 2,
+     "comment": "low workload — throughput dropped"},
+
+    {"check": "expect_contradiction_count",
+     "phase": "B", "tick_range": [6000, 11500],
+     "op": "eq", "value": 0,
+     "comment": "no contradictions — but because few proposals, not suppression"},
+
+    {"check": "expect_no_detector",
+     "detector": "silent_suppression",
+     "comment": "MUST NOT fire — throughput dropped proportionally"}
+  ]
+}

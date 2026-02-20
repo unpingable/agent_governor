@@ -18348,6 +18348,134 @@ def operator_receipts(ctx: click.Context, gate: str | None, verdict: str | None,
                as_json=as_json, receipt_id=receipt_id, evidence=evidence, fmt="legacy")
 
 
+# =============================================================================
+# Replay Commands (Replay Harness)
+# =============================================================================
+
+
+@cli.group()
+def replay():
+    """Replay and diff run artifacts."""
+    pass
+
+
+@replay.command("run")
+@click.argument("artifact_path", type=click.Path(exists=True))
+@click.option("--out", "-o", default=None, type=click.Path(), help="Output artifact dir (auto-generated if omitted)")
+@click.option("--set", "overrides", multiple=True, help="Override param (key=value)")
+@click.option("--params", "params_file", type=click.Path(exists=True), help="JSON params override file")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def replay_run_cmd(artifact_path: str, out: str | None, overrides: tuple[str, ...],
+                   params_file: str | None, as_json: bool) -> None:
+    """Replay a run artifact under different knobs."""
+    from .replay import RunArtifact, replay_run as do_replay
+
+    artifact = RunArtifact.load(Path(artifact_path))
+
+    # Parse --set key=value pairs
+    param_overrides: dict[str, Any] = {}
+    if params_file:
+        param_overrides.update(json.loads(Path(params_file).read_text()))
+    for kv in overrides:
+        if "=" not in kv:
+            click.echo(f"Error: --set requires key=value format, got {kv!r}", err=True)
+            sys.exit(1)
+        key, val = kv.split("=", 1)
+        # Try to parse as number
+        try:
+            param_overrides[key] = int(val)
+        except ValueError:
+            try:
+                param_overrides[key] = float(val)
+            except ValueError:
+                param_overrides[key] = val
+
+    out_path = Path(out) if out else None
+    result = do_replay(artifact, out_dir=out_path, param_overrides=param_overrides or None)
+
+    if as_json:
+        click.echo(json.dumps({
+            "artifact_path": str(result.path),
+            "artifact_id": result.header.artifact_id,
+            "trace_sha256": result.header.trace_sha256,
+            "params": result.header.params,
+            "provenance": result.header.provenance,
+            "outputs": result.output_names(),
+        }, indent=2))
+    else:
+        click.echo(f"Replay complete: {result.path}")
+        click.echo(f"  Artifact ID: {result.header.artifact_id}")
+        click.echo(f"  Source: {result.header.provenance.get('source_artifact_id', '?')}")
+        names = result.output_names()
+        if names:
+            click.echo(f"  Outputs: {', '.join(names)}")
+
+
+@replay.command("diff")
+@click.argument("baseline", type=click.Path(exists=True))
+@click.argument("replay_path", type=click.Path(exists=True))
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def replay_diff_cmd(baseline: str, replay_path: str, as_json: bool) -> None:
+    """Diff two run artifacts."""
+    from .replay import RunArtifact, replay_diff as do_diff
+
+    b = RunArtifact.load(Path(baseline))
+    r = RunArtifact.load(Path(replay_path))
+    diff = do_diff(b, r)
+
+    if as_json:
+        click.echo(json.dumps(diff.to_dict(), indent=2))
+    else:
+        if diff.passed:
+            click.echo("PASS: No differences detected.")
+        else:
+            click.echo(f"DIFF: {diff.summary}")
+            if diff.receipt_fingerprints.get("added"):
+                click.echo(f"  Added fingerprints: {len(diff.receipt_fingerprints['added'])}")
+            if diff.receipt_fingerprints.get("removed"):
+                click.echo(f"  Removed fingerprints: {len(diff.receipt_fingerprints['removed'])}")
+            if diff.heartbeat_delta:
+                click.echo(f"  Heartbeat deltas: {len(diff.heartbeat_delta)} time point(s)")
+            if diff.first_divergence:
+                fd = diff.first_divergence
+                click.echo(f"  First divergence: t_ms={fd['t_ms']} stream={fd['stream']}")
+
+
+@replay.command("record-receipts")
+@click.option("--scenario", default="live", help="Scenario name tag")
+@click.option("--out", "-o", default=None, type=click.Path(), help="Output artifact dir")
+@click.pass_context
+def replay_record_receipts_cmd(ctx: click.Context, scenario: str, out: str | None) -> None:
+    """Record live receipts into a trace artifact. Ctrl-C to stop."""
+    import time as _time
+    from .trace_recorder import ReceiptRecorder
+
+    gov_dir = ensure_initialized(ctx)
+    recorder = ReceiptRecorder(gov_dir, scenario=scenario)
+
+    if out is None:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        out = str(Path(".") / f"recorded_{scenario}_{ts}")
+
+    click.echo(f"Recording receipts to {out}... Ctrl-C to stop.")
+
+    try:
+        count = 0
+        while True:
+            new = recorder.poll()
+            if new:
+                count += len(new)
+                click.echo(f"\r  Receipts captured: {count}", nl=False)
+            _time.sleep(1)
+    except KeyboardInterrupt:
+        click.echo()  # newline after progress
+
+    artifact = recorder.finalize(Path(out))
+    click.echo(f"Artifact written: {artifact.path}")
+    click.echo(f"  Events: {len(artifact.events)}")
+    click.echo(f"  Artifact ID: {artifact.header.artifact_id}")
+
+
 # ---------------------------------------------------------------------------
 # Populate advanced group — dual-register all attic commands
 # ---------------------------------------------------------------------------

@@ -169,6 +169,123 @@ pre-failure hash.
 
 ---
 
+## Addendum: Paper 16 (Signed Geometry) Cross-Reference
+
+Added 2026-02-20. Paper 16 provides formal theoretical backing for several items
+above and introduces one new reframe that belongs in the 3.x spec.
+
+Source: `papers/preprint/16-signed-geometry/signed_geometry.md` (DOI pending)
+
+### 7. Governor as Correlator (Positive Theory)
+
+**Status:** `capture` — species-level reframe for 3.x spec
+
+The existing spec frames the governor as an admissibility gate: it prevents bad
+things. Paper 16 reframes it as a **correlator that extracts epistemic resolution
+from the baseline between proposal speed and verification speed**.
+
+Old: governor = enforcement ("no" machine)
+New: governor = instrument (signal extraction from structured disagreement)
+
+This is a different species of claim. The governor doesn't just block unverified
+commits — it *produces* discriminating power by maintaining the temporal separation
+between "the model said X" and "evidence confirms X." The contradiction ledger
+isn't a cost center; it's the instrument's readout.
+
+**One-line invariant from Paper 16:**
+> Baseline without a correlator is shear; a correlator without fidelity is capture;
+> baseline with a high-fidelity correlator is leverage.
+
+**Maps to:** `specs/core/SELF_GOVERNANCE_SPEC.md` (needs updating — currently has
+no positive theory of what the governor *produces*),
+`src/governor/correlator_telemetry.py` (implements K-vector but without this
+theoretical backing)
+
+### 8. Formal Capture Detection (Prop 4.2 + Prop 5.3)
+
+**Status:** `capture` — formal grounding for item #6
+
+Paper 16 Proposition 4.2 gives four formal indicators that a system is in capture:
+
+1. **Mode count decreasing** over time (eigenstructure evaporation)
+2. **Shannon entropy nonincreasing** in reconciled outputs
+3. **Contradiction generation rate → 0** (the dangerous one)
+4. **Commitment shear** under representation change exceeds threshold
+
+These are more rigorous than the "external entropy" test proposed in item #6. They
+should ground the compliance-theater hardening invariant.
+
+**Proposition 5.3 (Healthy Contradiction Rate):** A leverage-mode system produces
+contradictions at a rate proportional to its epistemic exposure. Zero contradictions
+under nonzero epistemic exposure is a capture signal, not a sign of health.
+
+This is the formal version of "confessional as compliance theater." If recovery
+plans always succeed, if violations always resolve cleanly, if the system never
+disagrees with itself — it's not healthy. It's captured.
+
+**Maps to:** Item #6 above, `src/governor/correlator_telemetry.py` (capture
+indicators already partially wired — Paper 16 supplies the *why*),
+`src/governor/research.py` (entropy monitoring)
+
+### 9. Theoretical vs Operational Regime Mapping
+
+**Status:** `capture` — prevents a bad 1:1 flattening
+
+The existing runtime regimes (ELASTIC / WARM / DUCTILE / UNSTABLE) are
+**operational** — they describe execution behavior.
+
+Paper 16's three regimes (Shear / Leverage / Capture) are **theoretical** — they
+describe epistemic condition.
+
+These are different layers. The critical insight: **capture is not a runtime regime
+state. It's a fidelity-collapse overlay that can masquerade as a healthy runtime
+regime.** A system can be operationally ELASTIC (everything looks nominal) while
+theoretically in Capture (the correlator is achieving apparent coherence by
+destroying degrees of freedom).
+
+Do NOT map:
+- ELASTIC ↔ Leverage
+- UNSTABLE ↔ Shear
+- ??? ↔ Capture
+
+Instead:
+- **Operational regimes** = execution behavior (what the system is *doing*)
+- **Theoretical regimes** = epistemic condition (what the system is *achieving*)
+- **Capture can co-occur with any operational regime**, which is exactly why it's
+  dangerous — it passes every operational health check
+
+**Maps to:** `src/governor/regime.py` (operational), `src/governor/correlator_telemetry.py`
+(theoretical — the K-vector indicators are the capture detection layer)
+
+### 10. Recovery as Correlator Fidelity Restoration
+
+**Status:** `capture` — sharpens recovery ontology (items #2, #3, #6)
+
+From the design review: "Recovery isn't resetting the agent; it's restoring
+correlator fidelity."
+
+This connects Paper 16 directly to the recovery ontology. When the system enters
+LOCKED, the problem isn't "the model misbehaved" — the problem is **the measurement
+relationship degraded**. Recovery means restoring the governor's ability to
+distinguish legitimate proposals from noise, not just restarting the proposer.
+
+Concretely: a RecoveryPlanReceipt (artifact #4 from item #2) should demonstrate
+that correlator fidelity metrics (F in the K-vector) are improving, not just that
+the proposer has been reset.
+
+**Maps to:** Items #2 (artifact ontology), #3 (confessional path), #6 (compliance
+theater), `src/governor/correlator_telemetry.py`
+
+### Implementation note
+
+`correlator_telemetry.py` already implements the K-vector (T, F, A, C) and partial
+capture indicators. These were built as telemetry features. Paper 16 supplies the
+classification semantics: *what regime these indicators are detecting and why those
+four components matter*. The telemetry fields weren't arbitrary — they're the
+formal correlator quality vector from Definition 2.3.
+
+---
+
 ## Summary
 
 | # | Item | Status | Leverage |
@@ -179,3 +296,7 @@ pre-failure hash.
 | 4 | Failure geometry | `capture` | High — modeling upgrade |
 | 5 | Semantic tar pit | `capture` | High — unmapped failure class |
 | 6 | Confessional as compliance theater | `invariant` | High — recovery defense |
+| 7 | Governor as correlator (positive theory) | `capture` | High — species-level reframe |
+| 8 | Formal capture detection (P16 Prop 4.2) | `capture` | High — grounds item #6 |
+| 9 | Theoretical vs operational regimes | `capture` | High — prevents bad flattening |
+| 10 | Recovery as fidelity restoration | `capture` | Medium — sharpens #2/#3/#6 |

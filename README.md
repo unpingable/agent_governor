@@ -126,6 +126,8 @@ python3 govlab/serve.py
 
 Opens a one-screen lab where you can type agent output, see the gate decision (PASS / BLOCKED), inspect the receipt, tweak the text, and re-run. Same CLI, same receipts — just visual. No dependencies beyond governor.
 
+![Governor Lab — BLOCKED verdict with receipt](docs/govlab.png)
+
 ### With Oracle Evidence
 
 ```bash

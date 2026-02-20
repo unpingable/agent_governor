@@ -118,6 +118,14 @@ governor gate check "All tests pass. The auth module is thread-safe."
 
 Zero config. One command. The agent claimed something it can't prove — blocked.
 
+### Try the Demo
+
+```bash
+python3 govlab/serve.py
+```
+
+Opens a one-screen lab where you can type agent output, see the gate decision (PASS / BLOCKED), inspect the receipt, tweak the text, and re-run. Same CLI, same receipts — just visual. No dependencies beyond governor.
+
 ### With Oracle Evidence
 
 ```bash

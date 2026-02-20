@@ -1,0 +1,14 @@
+{
+  "receipt_id": "d1f79fdfb6184c5a05e9d0f32d6d3af48e87df7ca3b5e64e7741eace6a05b578",
+  "schema_version": 3,
+  "timestamp": "2026-02-20T00:00:00+00:00",
+  "gate": "system_reset_request",
+  "verdict": "pass",
+  "subject_hash": "3fa60f97289e6d53ca673e802ac3312c9adf816705611ca78b8e5f74649ab430",
+  "evidence_hash": "192980d06af6ed3fd7329a76d7447560279a635dbbc051a293bcb6812f261a97",
+  "policy_hash": "f463a66ebd99d06087d7f9c7155763d701cf2c5f856693e53ccf6f30a82452a7",
+  "principal_id": "local",
+  "tenant_id": "default",
+  "auth_method": "none",
+  "receipt_role": "reset"
+}

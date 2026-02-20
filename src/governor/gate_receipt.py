@@ -7,9 +7,10 @@ after checking a subject. Receipts are append-only, content-addressed,
 and queryable.
 
 Design choices (informed by ChatGPT review):
-- receipt_id = H(schema_version + gate + subject_hash + evidence_hash + policy_hash)
-  This is truly content-addressed: same policy + same subject + same evidence
-  = same receipt_id.  Timestamp is metadata, not identity.
+- receipt_id = H(schema_version + gate + subject_hash + evidence_hash + policy_hash + receipt_role)
+  This is truly content-addressed: same policy + same subject + same evidence + same role
+  = same receipt_id.  Timestamp is metadata, not identity.  receipt_role is included because
+  role changes semantics — a measurement and a reset with the same payload are different.
 - Evidence blobs are stored separately by evidence_hash (content-addressed).
   Receipt rows are tiny and queryable; evidence is deduplicated.
 - Canonical JSON (sorted keys, no whitespace, stable floats) prevents hash
@@ -32,7 +33,22 @@ from typing import Any
 # Schema
 # =============================================================================
 
-RECEIPT_SCHEMA_VERSION = 2
+RECEIPT_SCHEMA_VERSION = 3
+
+
+# =============================================================================
+# Receipt Roles (3.x seam — what role does this receipt play?)
+# =============================================================================
+
+ROLE_MEASUREMENT = "measurement"
+ROLE_PROPOSAL = "proposal"
+ROLE_AUTHORITY = "authority"
+ROLE_RECOVERY_PLAN = "recovery_plan"
+ROLE_RESET = "reset"
+VALID_RECEIPT_ROLES = frozenset({
+    ROLE_MEASUREMENT, ROLE_PROPOSAL, ROLE_AUTHORITY,
+    ROLE_RECOVERY_PLAN, ROLE_RESET,
+})
 
 
 # =============================================================================
@@ -79,13 +95,16 @@ def _compute_receipt_id(
     s_hash: str,
     e_hash: str,
     p_hash: str,
+    receipt_role: str = ROLE_MEASUREMENT,
 ) -> str:
     """Content-addressed receipt identity.
 
-    Same policy + same subject + same evidence = same receipt_id.
+    Same policy + same subject + same evidence + same role = same receipt_id.
     Timestamp is deliberately excluded — it's metadata, not identity.
+    receipt_role is included because role changes semantics — two receipts with
+    the same payload but different roles are not the same thing.
     """
-    payload = f"{schema_version}:{gate}:{s_hash}:{e_hash}:{p_hash}"
+    payload = f"{schema_version}:{gate}:{s_hash}:{e_hash}:{p_hash}:{receipt_role}"
     return content_hash(payload.encode("utf-8"))
 
 
@@ -99,7 +118,7 @@ class GateReceipt:
     """A content-addressed decision receipt from a governor gate.
 
     Fields:
-        receipt_id       H(schema_version + gate + subject_hash + evidence_hash + policy_hash)
+        receipt_id       H(schema_version + gate + subject_hash + evidence_hash + policy_hash + receipt_role)
         schema_version   Protocol version (bump on breaking changes)
         timestamp        ISO 8601 UTC — ordering metadata, NOT identity
         gate             Which gate produced this receipt
@@ -114,6 +133,9 @@ class GateReceipt:
     principal_id, tenant_id, and auth_method are metadata (like timestamp) —
     they do NOT affect receipt_id.  They exist so the audit log has the right
     shape before multi-tenant auth is implemented.
+
+    receipt_role IS part of receipt_id — role changes semantics (a measurement
+    receipt and a reset receipt with the same payload are not the same thing).
     """
 
     receipt_id: str
@@ -127,6 +149,7 @@ class GateReceipt:
     principal_id: str = "local"
     tenant_id: str = "default"
     auth_method: str = "none"
+    receipt_role: str = ROLE_MEASUREMENT
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -141,6 +164,7 @@ class GateReceipt:
             "principal_id": self.principal_id,
             "tenant_id": self.tenant_id,
             "auth_method": self.auth_method,
+            "receipt_role": self.receipt_role,
         }
 
     def to_json(self) -> str:
@@ -169,6 +193,7 @@ class GateReceipt:
             principal_id=data.get("principal_id", "local"),
             tenant_id=data.get("tenant_id", "default"),
             auth_method=data.get("auth_method", "none"),
+            receipt_role=data.get("receipt_role", ROLE_MEASUREMENT),
         )
 
 
@@ -183,14 +208,20 @@ def create_receipt(
     principal_id: str = "local",
     tenant_id: str = "default",
     auth_method: str = "none",
+    receipt_role: str = ROLE_MEASUREMENT,
 ) -> GateReceipt:
     """Create a GateReceipt with proper content-addressed identity."""
+    if receipt_role not in VALID_RECEIPT_ROLES:
+        raise ValueError(
+            f"Invalid receipt_role {receipt_role!r}; "
+            f"must be one of {sorted(VALID_RECEIPT_ROLES)}"
+        )
     ts = timestamp or datetime.now(timezone.utc).isoformat()
     s_hash = subject_hash(subject_kind, subject_bytes)
     e_hash = content_hash(canonical_json(evidence_bundle))
     p_hash = policy_hash(gate_config)
     rid = _compute_receipt_id(
-        RECEIPT_SCHEMA_VERSION, gate, s_hash, e_hash, p_hash,
+        RECEIPT_SCHEMA_VERSION, gate, s_hash, e_hash, p_hash, receipt_role,
     )
     return GateReceipt(
         receipt_id=rid,
@@ -204,6 +235,7 @@ def create_receipt(
         principal_id=principal_id,
         tenant_id=tenant_id,
         auth_method=auth_method,
+        receipt_role=receipt_role,
     )
 
 
@@ -347,6 +379,7 @@ class GateReceiptSystem:
         principal_id: str = "local",
         tenant_id: str = "default",
         auth_method: str = "none",
+        receipt_role: str = ROLE_MEASUREMENT,
     ) -> GateReceipt:
         """Create receipt, store evidence, append receipt to log."""
         # Store evidence blob (deduped by content)
@@ -363,6 +396,7 @@ class GateReceiptSystem:
             principal_id=principal_id,
             tenant_id=tenant_id,
             auth_method=auth_method,
+            receipt_role=receipt_role,
         )
         # Append to log
         self.receipt_store.append(receipt)

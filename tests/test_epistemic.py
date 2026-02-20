@@ -14,6 +14,7 @@ from governor.epistemic import (
     # Evidence
     EvidenceType,
     EvidenceRef,
+    INDEPENDENCE_CLASSES,
     # Claims
     GroundedClaim,
     GroundedClaimStatus,
@@ -731,3 +732,109 @@ class TestEpistemicIntegration:
         # Now active but not dangerous (has evidence)
         assert claim.is_active
         assert not claim.is_dangerous
+
+
+# =============================================================================
+# Provenance Independence Fields (3.x seam)
+# =============================================================================
+
+
+class TestProvenanceIndependence:
+    """independence_class, source_channel, derived_from on EvidenceRef."""
+
+    def test_default_none(self):
+        ref = EvidenceRef(
+            ref_id="ev_test", ref_type=EvidenceType.TOOL_TRACE,
+            locator="trace-1", scope="full",
+        )
+        assert ref.independence_class is None
+        assert ref.source_channel is None
+        assert ref.derived_from is None
+
+    def test_explicit_values(self):
+        ref = EvidenceRef(
+            ref_id="ev_test", ref_type=EvidenceType.TOOL_TRACE,
+            locator="trace-1", scope="full",
+            independence_class="external",
+            source_channel="api",
+            derived_from=("ev_parent1", "ev_parent2"),
+        )
+        assert ref.independence_class == "external"
+        assert ref.source_channel == "api"
+        assert ref.derived_from == ("ev_parent1", "ev_parent2")
+
+    def test_round_trip(self):
+        ref = EvidenceRef(
+            ref_id="ev_rt", ref_type=EvidenceType.URL,
+            locator="https://example.com", scope="citation",
+            independence_class="peer",
+            source_channel="daemon_rpc",
+            derived_from=("ev_a",),
+        )
+        d = ref.to_dict()
+        ref2 = EvidenceRef.from_dict(d)
+        assert ref2.independence_class == "peer"
+        assert ref2.source_channel == "daemon_rpc"
+        assert ref2.derived_from == ("ev_a",)
+
+    def test_none_fields_absent_from_dict(self):
+        """When None, independence fields should not appear in serialized dict."""
+        ref = EvidenceRef(
+            ref_id="ev_test", ref_type=EvidenceType.TOOL_TRACE,
+            locator="t", scope="s",
+        )
+        d = ref.to_dict()
+        assert "independence_class" not in d
+        assert "source_channel" not in d
+        assert "derived_from" not in d
+
+    def test_backwards_compat(self):
+        """Old dicts without independence fields deserialize cleanly."""
+        d = {
+            "ref_id": "ev_old",
+            "ref_type": "tool_trace",
+            "locator": "trace-1",
+            "scope": "full",
+            "confidence": 0.9,
+        }
+        ref = EvidenceRef.from_dict(d)
+        assert ref.independence_class is None
+        assert ref.source_channel is None
+        assert ref.derived_from is None
+
+    def test_factory_defaults_tool_trace(self):
+        ref = EvidenceRef.from_tool_trace("t1", "scope")
+        assert ref.independence_class == "tool"
+
+    def test_factory_defaults_url(self):
+        ref = EvidenceRef.from_url("https://example.com", "scope")
+        assert ref.independence_class == "external"
+
+    def test_factory_defaults_receipt(self):
+        ref = EvidenceRef.from_receipt("hash123", "scope")
+        assert ref.independence_class == "tool"
+
+    def test_factory_defaults_human(self):
+        ref = EvidenceRef.from_human("user said X", "scope")
+        assert ref.independence_class == "operator"
+
+    def test_invalid_independence_class_raises(self):
+        with pytest.raises(ValueError, match="Invalid independence_class"):
+            EvidenceRef(
+                ref_id="ev_bad", ref_type=EvidenceType.TOOL_TRACE,
+                locator="t", scope="s",
+                independence_class="bogus",
+            )
+
+    def test_derived_from_as_tuple(self):
+        """derived_from must be a tuple (from_dict accepts list → tuple)."""
+        d = {
+            "ref_id": "ev_t",
+            "ref_type": "tool_trace",
+            "locator": "t",
+            "scope": "s",
+            "derived_from": ["ev_a", "ev_b"],
+        }
+        ref = EvidenceRef.from_dict(d)
+        assert isinstance(ref.derived_from, tuple)
+        assert ref.derived_from == ("ev_a", "ev_b")

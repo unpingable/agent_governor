@@ -49,6 +49,67 @@ def ensure_initialized(ctx: click.Context) -> Path:
     return gov_dir
 
 
+def _emit_reset_receipt(
+    gov_dir: Path,
+    target: str,
+    pre_state_summary: dict,
+    reset_reason: str | None = None,
+    request_id: str | None = None,
+) -> None:
+    """Emit a reset receipt BEFORE state is mutated.
+
+    All CLI reset commands must call this. See the list:
+    regime, boil, jurisdiction, strict, drift, claim_diff,
+    tune, taint, correlator, conditioning, scope.
+
+    Loud fail-open: prints warning to stderr on error, attempts to log
+    to reset_audit_errors.log, then continues (never blocks the reset).
+    No-op if gov_dir doesn't exist.
+    """
+    import time as _time
+    import uuid as _uuid
+    from .regime import ResetReason as _ResetReason
+
+    if not gov_dir.exists():
+        return
+
+    if reset_reason is None:
+        reset_reason = _ResetReason.MANUAL_CLI.value
+    if request_id is None:
+        request_id = _uuid.uuid4().hex
+
+    try:
+        from .gate_receipt import GateReceiptSystem, ROLE_RESET
+
+        system = GateReceiptSystem(gov_dir)
+        evidence = {
+            "target": target,
+            "initiator": "cli",
+            "reset_reason": reset_reason,
+            "request_id": request_id,
+            "pre_state_summary": pre_state_summary,
+            "wall_ts": _time.time(),
+            "monotonic_ts": _time.monotonic(),
+        }
+        system.emit(
+            gate="system_reset_request",
+            verdict="pass",
+            subject_kind="reset",
+            subject_bytes=target.encode("utf-8"),
+            evidence_bundle=evidence,
+            gate_config={"target": target},
+            receipt_role=ROLE_RESET,
+        )
+    except Exception as exc:
+        click.echo(f"Warning: reset receipt failed: {exc}", err=True)
+        try:
+            log_path = gov_dir / "reset_audit_errors.log"
+            with open(log_path, "a") as f:
+                f.write(f"{_time.time()} target={target} error={exc}\n")
+        except Exception:
+            pass  # Fallback log write failed — already warned on stderr
+
+
 def load_proposals(gov_dir: Path) -> dict[str, dict]:
     """Load proposals from disk."""
     proposals_path = gov_dir / PROPOSALS_FILE
@@ -5000,6 +5061,11 @@ def regime_reset(ctx: click.Context, confirm: bool) -> None:
         click.echo("Use --confirm to reset regime detector state.")
         return
 
+    old = get_regime_detector(gov_dir)
+    _emit_reset_receipt(gov_dir, "regime", {
+        "current_regime": old.current_regime.value,
+        "transition_count": len(old.transition_history),
+    })
     detector = RegimeDetector()
     save_regime_detector(gov_dir, detector)
     click.echo("Regime detector reset to default state (ELASTIC).")
@@ -5263,6 +5329,8 @@ def boil_reset(ctx: click.Context, confirm: bool, mode: str) -> None:
         click.echo(f"This will reset to {mode.upper()} mode with ELASTIC regime.")
         return
 
+    old = get_boil_controller(gov_dir)
+    _emit_reset_receipt(gov_dir, "boil", {"mode": old.preset.mode.value})
     new_mode = ControlMode(mode.lower())
     controller = BoilController(new_mode)
     save_boil_controller(gov_dir, controller)
@@ -5513,6 +5581,10 @@ def jurisdiction_reset(ctx: click.Context, confirm: bool, to_jurisdiction: str) 
         click.echo(f"This will reset to {to_jurisdiction.upper()} jurisdiction with full budget.")
         return
 
+    old = get_jurisdiction_manager(gov_dir)
+    _emit_reset_receipt(gov_dir, "jurisdiction", {
+        "current_jurisdiction": old.current_jurisdiction,
+    })
     manager = JurisdictionManager(to_jurisdiction.lower())
     save_jurisdiction_manager(gov_dir, manager)
     click.echo(f"Jurisdiction manager reset to {click.style(to_jurisdiction.upper(), fg='cyan')}.")
@@ -7629,6 +7701,7 @@ def strict_reset(ctx, confirm):
     gov_dir = ensure_initialized(ctx)
     gate = get_strict_gate(gov_dir)
     old_count = gate.total_evaluations
+    _emit_reset_receipt(gov_dir, "strict", {"total_evaluations": old_count})
     gate.reset()
     save_strict_gate(gov_dir, gate)
     click.echo(f"Reset strict mode gate. Cleared {old_count} evaluations.")
@@ -7804,6 +7877,8 @@ def drift_reset(ctx, confirm):
     """Reset drift detector state."""
     from .drift import DriftDetector
     gov_dir = ensure_initialized(ctx)
+    old = get_drift_detector(gov_dir)
+    _emit_reset_receipt(gov_dir, "drift", {"alert_level": old.current_alert})
     detector = DriftDetector()
     save_drift_detector(gov_dir, detector)
     click.echo("Drift detector reset to initial state.")
@@ -8117,6 +8192,11 @@ def claim_diff_reset(ctx, confirm):
 
     snapshot_path = gov_dir / CLAIM_DIFF_SNAPSHOT_FILE
     history_path = gov_dir / CLAIM_DIFF_HISTORY_FILE
+
+    _emit_reset_receipt(gov_dir, "claim_diff", {
+        "snapshot_exists": snapshot_path.exists(),
+        "history_exists": history_path.exists(),
+    })
 
     removed = 0
     if snapshot_path.exists():
@@ -8923,6 +9003,7 @@ def tune_reset(ctx, confirm):
 
     gov_dir = ensure_initialized(ctx)
     tuner_path = gov_dir / "auto_tuner.json"
+    _emit_reset_receipt(gov_dir, "tune", {"exists": tuner_path.exists()})
     at = AutoTuner()
     tuner_path.write_text(json.dumps(at.to_dict(), indent=2))
     click.echo("Tuning state cleared.")
@@ -9303,6 +9384,7 @@ def taint_reset(ctx, confirm):
     idx = TaintIndex(governor_dir=gov_dir)
     old_count = idx.count()
     old_events = len(idx.events())
+    _emit_reset_receipt(gov_dir, "taint", {"claim_count": old_count})
 
     idx._claims.clear()
     idx._inverted.clear()
@@ -17281,6 +17363,8 @@ def correlator_reset(ctx, confirm):
     from .correlator_telemetry import CorrelatorTelemetry
 
     gov_dir = ensure_initialized(ctx)
+    old = CorrelatorTelemetry.load(gov_dir)
+    _emit_reset_receipt(gov_dir, "correlator", {"window_step": old.window_step})
     ct = CorrelatorTelemetry()
     ct.save(gov_dir)
     click.echo("Correlator state reset.")
@@ -17508,6 +17592,9 @@ def conditioning_reset(ctx, confirm):
 
     gov_dir = ensure_initialized(ctx)
     store = StabilityStore(gov_dir)
+    _emit_reset_receipt(gov_dir, "conditioning", {
+        "log_exists": store.log_path.exists(),
+    })
     if store.log_path.exists():
         store.log_path.unlink()
     click.echo("Conditioning audit history reset.")
@@ -17743,6 +17830,7 @@ def scope_reset(ctx, confirm):
 
     gov_dir = ensure_initialized(ctx)
     sg = ScopeGovernor.load(gov_dir)
+    _emit_reset_receipt(gov_dir, "scope", {"grant_count": len(sg._grants)})
     sg.reset()
     sg.save(gov_dir)
     click.echo("Scope governor state reset.")

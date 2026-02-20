@@ -11,6 +11,9 @@ import pytest
 
 from governor.gate_receipt import (
     RECEIPT_SCHEMA_VERSION,
+    ROLE_MEASUREMENT,
+    ROLE_RESET,
+    VALID_RECEIPT_ROLES,
     EvidenceStore,
     GateReceipt,
     GateReceiptSystem,
@@ -301,8 +304,8 @@ class TestPrincipalTenantMetadata:
         assert parsed["tenant_id"] == "default"
         assert parsed["auth_method"] == "none"
 
-    def test_schema_version_is_2(self):
-        assert RECEIPT_SCHEMA_VERSION == 2
+    def test_schema_version_is_3(self):
+        assert RECEIPT_SCHEMA_VERSION == 3
 
     def test_emit_passes_through(self, tmp_path):
         system = GateReceiptSystem(tmp_path)
@@ -665,3 +668,87 @@ class TestSchemaVersionEnforcement:
         d = self._make_receipt_dict(schema_version=1)
         r = GateReceipt.from_dict(d)
         assert r.schema_version == 1
+
+
+# =============================================================================
+# Receipt Role (3.x seam)
+# =============================================================================
+
+
+class TestReceiptRole:
+    """receipt_role field — included in receipt_id, validated on create."""
+
+    def test_default_is_measurement(self):
+        r = create_receipt(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+        )
+        assert r.receipt_role == ROLE_MEASUREMENT
+
+    def test_custom_role_accepted(self):
+        r = create_receipt(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+            receipt_role="reset",
+        )
+        assert r.receipt_role == "reset"
+
+    def test_different_role_different_receipt_id(self):
+        """Role is part of identity — same payload, different role = different id."""
+        base = dict(gate="g", verdict="pass", subject_kind="text",
+                    subject_bytes=b"same", evidence_bundle={}, gate_config={})
+        r1 = create_receipt(**base, receipt_role="measurement")
+        r2 = create_receipt(**base, receipt_role="reset")
+        assert r1.receipt_id != r2.receipt_id
+
+    def test_invalid_role_raises(self):
+        with pytest.raises(ValueError, match="Invalid receipt_role"):
+            create_receipt(
+                gate="g", verdict="pass", subject_kind="text",
+                subject_bytes=b"x", evidence_bundle={}, gate_config={},
+                receipt_role="nonsense",
+            )
+
+    def test_serialization_round_trip(self):
+        r = create_receipt(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+            receipt_role="authority",
+        )
+        d = r.to_dict()
+        assert d["receipt_role"] == "authority"
+        r2 = GateReceipt.from_dict(d)
+        assert r2.receipt_role == "authority"
+        assert r == r2
+
+    def test_backwards_compat_missing_field(self):
+        """Old receipts without receipt_role deserialize as 'measurement'."""
+        d = {
+            "receipt_id": "abc123",
+            "schema_version": 2,
+            "timestamp": "2026-01-01T00:00:00Z",
+            "gate": "evidence_gate",
+            "verdict": "pass",
+            "subject_hash": "s",
+            "evidence_hash": "e",
+            "policy_hash": "p",
+        }
+        r = GateReceipt.from_dict(d)
+        assert r.receipt_role == ROLE_MEASUREMENT
+
+    def test_system_emit_accepts_role(self, tmp_path):
+        system = GateReceiptSystem(tmp_path)
+        receipt = system.emit(
+            gate="system_reset_request", verdict="pass",
+            subject_kind="reset", subject_bytes=b"regime",
+            evidence_bundle={"target": "regime"}, gate_config={},
+            receipt_role="reset",
+        )
+        assert receipt.receipt_role == "reset"
+        found = system.receipt_store.get_by_id(receipt.receipt_id)
+        assert found is not None
+        assert found.receipt_role == "reset"
+
+    def test_schema_version_bumped_for_role(self):
+        """Schema v3: receipt_role added to identity hash."""
+        assert RECEIPT_SCHEMA_VERSION == 3

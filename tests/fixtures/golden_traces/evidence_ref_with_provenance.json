@@ -1,0 +1,11 @@
+{
+  "ref_id": "ref-tool-trace-001",
+  "ref_type": "tool_trace",
+  "locator": "pytest tests/test_gate_receipt.py -v",
+  "scope": "tests/test_gate_receipt.py",
+  "confidence": 0.95,
+  "retrieved_at": "2026-02-20T00:00:00+00:00",
+  "independence_class": "tool",
+  "source_channel": "cli",
+  "derived_from": ["ref-snapshot-abc123", "ref-snapshot-def456"]
+}

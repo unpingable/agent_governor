@@ -117,6 +117,11 @@ PROMOTIONS_REQUIRING_EVIDENCE: set[tuple[Provenance, Provenance]] = {
 # Evidence References
 # =============================================================================
 
+# Independence classes for provenance tracking (3.x seam)
+INDEPENDENCE_CLASSES = frozenset({
+    "self", "tool", "peer", "external", "operator", "unknown",
+})
+
 
 class EvidenceType(str, Enum):
     """Types of evidence that can support claims."""
@@ -187,6 +192,11 @@ class EvidenceRef:
     retrieved_at: datetime | None = None
     confidence: float = 1.0  # How reliable is this evidence? [0, 1]
 
+    # Provenance independence fields (3.x seam — who produced this evidence?)
+    independence_class: str | None = None   # self|tool|peer|external|operator|unknown
+    source_channel: str | None = None       # cli|api|daemon_rpc|subprocess|...
+    derived_from: tuple[str, ...] | None = None  # parent ref_ids (many-to-one OK)
+
     # Persistence fields (populated when stored in SQLite)
     evidence_id: str | None = None       # SQLite PK
     claim_id: str | None = None          # Which claim this evidence supports
@@ -194,6 +204,13 @@ class EvidenceRef:
     run_id: str | None = None            # FK to run_provenance
     content_hash: str | None = None      # SHA-256 of ref_type:locator:scope
     persisted_at: datetime | None = None # When written to DB
+
+    def __post_init__(self):
+        if self.independence_class is not None and self.independence_class not in INDEPENDENCE_CLASSES:
+            raise ValueError(
+                f"Invalid independence_class {self.independence_class!r}; "
+                f"must be one of {sorted(INDEPENDENCE_CLASSES)}"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -204,6 +221,13 @@ class EvidenceRef:
             "confidence": self.confidence,
             "retrieved_at": self.retrieved_at.isoformat() if self.retrieved_at else None,
         }
+        # Include provenance independence fields only when set
+        if self.independence_class is not None:
+            d["independence_class"] = self.independence_class
+        if self.source_channel is not None:
+            d["source_channel"] = self.source_channel
+        if self.derived_from is not None:
+            d["derived_from"] = list(self.derived_from)
         # Include persistence fields only when set (no JSON bloat on existing data)
         if self.evidence_id is not None:
             d["evidence_id"] = self.evidence_id
@@ -221,6 +245,8 @@ class EvidenceRef:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "EvidenceRef":
+        derived_raw = data.get("derived_from")
+        derived = tuple(derived_raw) if derived_raw is not None else None
         return cls(
             ref_id=data["ref_id"],
             ref_type=EvidenceType(data["ref_type"]),
@@ -232,6 +258,9 @@ class EvidenceRef:
                 if data.get("retrieved_at")
                 else None
             ),
+            independence_class=data.get("independence_class"),
+            source_channel=data.get("source_channel"),
+            derived_from=derived,
             evidence_id=data.get("evidence_id"),
             claim_id=data.get("claim_id"),
             collected_by=data.get("collected_by"),
@@ -253,6 +282,7 @@ class EvidenceRef:
             locator=trace_id,
             scope=scope,
             retrieved_at=datetime.now(),
+            independence_class="tool",
         )
 
     @classmethod
@@ -264,17 +294,23 @@ class EvidenceRef:
             locator=url,
             scope=scope,
             retrieved_at=datetime.now(),
+            independence_class="external",
         )
 
     @classmethod
     def from_receipt(cls, receipt_hash: str, scope: str) -> "EvidenceRef":
-        """Create evidence ref from a governor receipt."""
+        """Create evidence ref from a governor receipt.
+
+        Note: independence_class="tool" is imprecise — some receipts are
+        operator artifacts. Callers may override if they know the source.
+        """
         return cls(
             ref_id=f"ev_{uuid.uuid4().hex[:8]}",
             ref_type=EvidenceType.RECEIPT,
             locator=receipt_hash,
             scope=scope,
             retrieved_at=datetime.now(),
+            independence_class="tool",
         )
 
     @classmethod
@@ -286,6 +322,7 @@ class EvidenceRef:
             locator=description,
             scope=scope,
             retrieved_at=datetime.now(),
+            independence_class="operator",
         )
 
     @classmethod

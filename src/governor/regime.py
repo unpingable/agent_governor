@@ -48,6 +48,11 @@ class OperationalRegime(str, Enum):
     """Positive feedback cascade. Emergency stop."""
 
     @property
+    def allowed_action_classes(self) -> frozenset["ActionClass"]:
+        """Action classes permitted in this regime."""
+        return _REGIME_ACTION_CLASSES[self]
+
+    @property
     def severity(self) -> int:
         """Severity level (higher = worse)."""
         return {
@@ -66,6 +71,100 @@ class OperationalRegime(str, Enum):
             OperationalRegime.DUCTILE: "RESET",
             OperationalRegime.UNSTABLE: "EMERGENCY_STOP",
         }[self]
+
+
+# =============================================================================
+# Action Classification (3.x seam — what kind of action is this?)
+# =============================================================================
+
+
+class ActionClass(str, Enum):
+    """Classification of governor actions for regime-gated admission."""
+
+    READ = "read"
+    WRITE = "write"
+    EXECUTE = "execute"
+    CONFIGURE = "configure"
+    RESET = "reset"
+    STATUS = "status"
+    RECOVERY_SUBMIT = "recovery_submit"
+
+
+class DenyReason(str, Enum):
+    """Why an action was denied. Append-only — never rename existing codes."""
+
+    REGIME_RESTRICTED = "regime_restricted"
+    LOCKED_ROUTE = "locked_route"
+    STALE_SNAPSHOT = "stale_snapshot"
+    BUDGET_EXHAUSTED = "budget_exhausted"
+    SCOPE_VIOLATION = "scope_violation"
+    CAPTURE_DETECTED = "capture_detected"
+
+
+class ResetReason(str, Enum):
+    """Why a reset was initiated. Append-only — never rename existing codes."""
+
+    OPERATOR_REQUEST = "operator_request"
+    RECOVERY_FAILURE = "recovery_failure"
+    REGIME_TRANSITION = "regime_transition"
+    MANUAL_CLI = "manual_cli"
+    SCHEDULED = "scheduled"
+
+
+# Regime → allowed action classes (frozenset for immutability)
+_ALL_ACTIONS = frozenset(ActionClass)
+_REGIME_ACTION_CLASSES: dict[OperationalRegime, frozenset[ActionClass]] = {
+    OperationalRegime.ELASTIC: _ALL_ACTIONS,
+    OperationalRegime.WARM: _ALL_ACTIONS,
+    OperationalRegime.DUCTILE: frozenset({
+        ActionClass.READ, ActionClass.STATUS,
+        ActionClass.RESET, ActionClass.RECOVERY_SUBMIT,
+    }),
+    OperationalRegime.UNSTABLE: frozenset({
+        ActionClass.STATUS, ActionClass.RECOVERY_SUBMIT,
+    }),
+}
+
+
+def check_regime_allows(
+    regime: OperationalRegime,
+    action_class: ActionClass,
+) -> tuple[bool, DenyReason | None]:
+    """Canonical check: is this action class permitted in this regime?
+
+    Returns (allowed, deny_reason). All callers should use this rather
+    than ad-hoc string matching against regime values.
+    """
+    allowed = regime.allowed_action_classes
+    if action_class in allowed:
+        return True, None
+    return False, DenyReason.REGIME_RESTRICTED
+
+
+def classify_action(operation: str) -> ActionClass:
+    """Classify an operation description into an ActionClass.
+
+    Central classifier. All callers must use this, not ad-hoc matching.
+    2.x implementation is keyword-based; 3.x may use richer heuristics.
+    """
+    op = operation.lower()
+    # Check reset before configure ("reset" contains "set")
+    if any(kw in op for kw in ("reset", "clear", "wipe")):
+        return ActionClass.RESET
+    if any(kw in op for kw in ("write", "edit", "modify", "create", "delete", "patch")):
+        return ActionClass.WRITE
+    if any(kw in op for kw in ("run", "exec", "invoke", "call", "command")):
+        return ActionClass.EXECUTE
+    if any(kw in op for kw in ("config", "set", "tune", "adjust")):
+        return ActionClass.CONFIGURE
+    if any(kw in op for kw in ("status", "show", "list", "info", "query")):
+        return ActionClass.STATUS
+    if any(kw in op for kw in ("recover", "remediat", "fix", "repair")):
+        return ActionClass.RECOVERY_SUBMIT
+    if any(kw in op for kw in ("read", "get", "fetch", "view", "inspect")):
+        return ActionClass.READ
+    # Default: READ is the safest classification
+    return ActionClass.READ
 
 
 # =============================================================================

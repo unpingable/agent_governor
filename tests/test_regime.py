@@ -9,6 +9,12 @@ from datetime import datetime, timezone, timedelta
 from governor.regime import (
     # Regimes
     OperationalRegime,
+    # Action classification (3.x seams)
+    ActionClass,
+    DenyReason,
+    ResetReason,
+    check_regime_allows,
+    classify_action,
     # Signals and thresholds
     RegimeSignals,
     RegimeThresholds,
@@ -651,3 +657,143 @@ class TestRegimeIntegration:
 
         # Should be at least WARM due to dangerous claims
         assert detector.current_regime.severity >= OperationalRegime.WARM.severity
+
+
+# =============================================================================
+# Action Classification (3.x seams)
+# =============================================================================
+
+
+class TestActionClass:
+    """ActionClass enum values and serialization."""
+
+    def test_all_values_lowercase(self):
+        for ac in ActionClass:
+            assert ac.value == ac.value.lower()
+
+    def test_seven_members(self):
+        assert len(ActionClass) == 7
+
+    def test_str_serializable(self):
+        """ActionClass is a str enum — works in JSON without custom encoder."""
+        import json
+        assert json.dumps(ActionClass.WRITE) == '"write"'
+
+
+class TestDenyReason:
+    """DenyReason enum values."""
+
+    def test_all_values_lowercase(self):
+        for dr in DenyReason:
+            assert dr.value == dr.value.lower()
+
+    def test_members_complete(self):
+        expected = {
+            "regime_restricted", "locked_route", "stale_snapshot",
+            "budget_exhausted", "scope_violation", "capture_detected",
+        }
+        assert {dr.value for dr in DenyReason} == expected
+
+
+class TestResetReason:
+    """ResetReason enum values."""
+
+    def test_all_values_lowercase(self):
+        for rr in ResetReason:
+            assert rr.value == rr.value.lower()
+
+    def test_members_complete(self):
+        expected = {
+            "operator_request", "recovery_failure", "regime_transition",
+            "manual_cli", "scheduled",
+        }
+        assert {rr.value for rr in ResetReason} == expected
+
+    def test_str_serializable(self):
+        import json
+        assert json.dumps(ResetReason.MANUAL_CLI) == '"manual_cli"'
+
+
+class TestAllowedActionClasses:
+    """OperationalRegime.allowed_action_classes property."""
+
+    def test_elastic_allows_all(self):
+        assert OperationalRegime.ELASTIC.allowed_action_classes == frozenset(ActionClass)
+
+    def test_warm_allows_all(self):
+        assert OperationalRegime.WARM.allowed_action_classes == frozenset(ActionClass)
+
+    def test_ductile_no_write_execute_configure(self):
+        allowed = OperationalRegime.DUCTILE.allowed_action_classes
+        assert ActionClass.READ in allowed
+        assert ActionClass.STATUS in allowed
+        assert ActionClass.RESET in allowed
+        assert ActionClass.RECOVERY_SUBMIT in allowed
+        assert ActionClass.WRITE not in allowed
+        assert ActionClass.EXECUTE not in allowed
+        assert ActionClass.CONFIGURE not in allowed
+
+    def test_unstable_minimal(self):
+        allowed = OperationalRegime.UNSTABLE.allowed_action_classes
+        assert allowed == frozenset({ActionClass.STATUS, ActionClass.RECOVERY_SUBMIT})
+
+    def test_returns_frozenset(self):
+        for regime in OperationalRegime:
+            assert isinstance(regime.allowed_action_classes, frozenset)
+
+    def test_ductile_allows_reset(self):
+        """DUCTILE allows reset — you need to be able to reset to recover."""
+        assert ActionClass.RESET in OperationalRegime.DUCTILE.allowed_action_classes
+
+
+class TestCheckRegimeAllows:
+    """check_regime_allows() — canonical admission check."""
+
+    def test_elastic_allows_write(self):
+        ok, reason = check_regime_allows(OperationalRegime.ELASTIC, ActionClass.WRITE)
+        assert ok is True
+        assert reason is None
+
+    def test_ductile_denies_write(self):
+        ok, reason = check_regime_allows(OperationalRegime.DUCTILE, ActionClass.WRITE)
+        assert ok is False
+        assert reason == DenyReason.REGIME_RESTRICTED
+
+    def test_unstable_allows_status(self):
+        ok, reason = check_regime_allows(OperationalRegime.UNSTABLE, ActionClass.STATUS)
+        assert ok is True
+        assert reason is None
+
+    def test_unstable_denies_read(self):
+        ok, reason = check_regime_allows(OperationalRegime.UNSTABLE, ActionClass.READ)
+        assert ok is False
+        assert reason == DenyReason.REGIME_RESTRICTED
+
+    def test_unstable_allows_recovery_submit(self):
+        ok, reason = check_regime_allows(OperationalRegime.UNSTABLE, ActionClass.RECOVERY_SUBMIT)
+        assert ok is True
+        assert reason is None
+
+
+class TestClassifyAction:
+    """classify_action() — keyword-based action classifier."""
+
+    def test_write_keywords(self):
+        assert classify_action("write to file") == ActionClass.WRITE
+        assert classify_action("edit config") == ActionClass.WRITE
+        assert classify_action("delete entry") == ActionClass.WRITE
+
+    def test_execute_keywords(self):
+        assert classify_action("run tests") == ActionClass.EXECUTE
+        assert classify_action("exec command") == ActionClass.EXECUTE
+
+    def test_status_keywords(self):
+        assert classify_action("show status") == ActionClass.STATUS
+        assert classify_action("list items") == ActionClass.STATUS
+
+    def test_reset_keywords(self):
+        assert classify_action("reset detector") == ActionClass.RESET
+        assert classify_action("clear history") == ActionClass.RESET
+
+    def test_default_is_read(self):
+        assert classify_action("unknown operation") == ActionClass.READ

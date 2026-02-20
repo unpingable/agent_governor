@@ -1,0 +1,14 @@
+{
+  "receipt_id": "5fb3e7b7890d1290ef91a14ec0c7c569ce4238fa38c1df13f1a0ac8437c41ce9",
+  "schema_version": 3,
+  "timestamp": "2026-02-20T00:00:00+00:00",
+  "gate": "evidence_gate",
+  "verdict": "pass",
+  "subject_hash": "8f75229b47b43535ce7af30a5a8ea5095d9c83c7dde742b53682b35e71288522",
+  "evidence_hash": "b932668da0cae23afc05b84740fcb0cb0d20aac2b49830ad907a31d6e7beed58",
+  "policy_hash": "78223d46fdb183493f1317458f0099631d4bda40a2652720b7a6c28f516b6135",
+  "principal_id": "local",
+  "tenant_id": "default",
+  "auth_method": "none",
+  "receipt_role": "authority"
+}

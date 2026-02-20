@@ -203,7 +203,7 @@ ALLOWED_UNCATEGORIZED: set[str] = {
     "jurisdiction", "kernel", "lanes", "lock", "mcp", "measure",
     "metrics", "mode", "must-exist", "must-pass", "ops",
     "override", "p4", "phase", "precedent", "preflight",
-    "prometheus", "puppet", "quorum", "quorum-ext", "regime",
+    "prometheus", "puppet", "quorum", "quorum-ext", "regime", "replay",
     "rejections", "resolve", "revise", "risk", "routing", "rule",
     "scar", "scope", "security", "selfcheck", "semvar", "signals",
     "slim", "spine", "stability", "state", "strict", "taint",

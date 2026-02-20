@@ -916,34 +916,42 @@ class TestResearchLedgerDecay:
 
     def test_time_aware_decay_uses_dt(self):
         """When decay_half_life_s > 0, decay depends on elapsed time."""
-        import time
+        from unittest.mock import patch
         config = ResearchConfig(
             decay_half_life_s=1.0, maintenance_cost_rate=0.0,
         )
         ledger = create_research_ledger(config)
         h = ledger.create_hypothesis("test")
         initial = h.credence
-        ledger.tick()  # first tick: dt=0, no decay
-        # credence unchanged (dt=0 on first tick)
-        first_credence = h.credence
-        time.sleep(0.05)  # small sleep for measurable dt
-        ledger.tick()  # second tick: dt ≈ 0.05s, some decay
+        t = [100.0]
+        with patch("governor.research.time") as mock_time:
+            mock_time.monotonic = lambda: t[0]
+            ledger.tick()  # first tick: dt=0, no decay
+            first_credence = h.credence
+            t[0] = 100.05  # advance 50ms
+            mock_time.monotonic = lambda: t[0]
+            ledger.tick()  # second tick: dt=0.05s, some decay
         assert h.credence < first_credence
 
     def test_time_aware_decay_half_life(self):
         """After one half-life, credence should halve (approximately)."""
-        import time
+        from unittest.mock import patch
         config = ResearchConfig(
-            decay_half_life_s=0.1, maintenance_cost_rate=0.0,
+            decay_half_life_s=1.0, maintenance_cost_rate=0.0,
         )
         ledger = create_research_ledger(config)
         h = ledger.create_hypothesis("test")
-        ledger.tick()  # init last_tick_time
-        initial = h.credence
-        time.sleep(0.1)  # wait one half-life
-        ledger.tick()
-        # Should be approximately half
-        assert h.credence == pytest.approx(initial * 0.5, rel=0.3)
+        # Use mock monotonic to control dt precisely
+        t = [100.0]
+        with patch("governor.research.time") as mock_time:
+            mock_time.monotonic = lambda: t[0]
+            ledger.tick()  # init last_tick_time at t=100
+            initial = h.credence
+            t[0] = 101.0  # advance exactly 1 half-life (1.0s)
+            mock_time.monotonic = lambda: t[0]
+            ledger.tick()
+        # After exactly one half-life, credence should halve
+        assert h.credence == pytest.approx(initial * 0.5, rel=0.01)
 
     def test_legacy_decay_when_no_half_life(self):
         """Without decay_half_life_s, uses legacy per-tick lambda."""

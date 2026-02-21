@@ -271,6 +271,17 @@ Structured telemetry, Prometheus metrics, config profiles, continuity enforcemen
 
 ---
 
+## PCAR: Proof-Carrying Agent Runtime
+
+Agent Governor is a reference implementation of the **PCAR** protocol family — a runtime constitution for LLM-based systems where language has no direct execution authority. PCAR separates proposal (model output), verification (proof objects), control (constraint decisions), provenance (receipts), and actuation (proof-carrying execution). The specs live in [`docs/spec/`](docs/spec/):
+
+- [**PCAR-000**](docs/spec/PCAR-000.md) — Root protocol: architecture model, cross-tier invariants, state machine
+- [**PCAR-A**](docs/spec/PCAR-A.md) — Typed Claim Envelope: speech-act discipline, downgrade rules, error model
+
+> Constitutional AI (Anthropic) governs model behavior at training time. PCAR governs executable authority at runtime. They are complementary.
+
+---
+
 ## Key Concepts
 
 | Concept | What It Means |
@@ -392,6 +403,8 @@ bash start-codex.sh                     # Codex backend
 | `docs/COMPLIANCE.md` | Fiduciary law mapping (ERISA, SEC, process-based prudence) |
 | `docs/CLIENT_ECOSYSTEM.md` | Client roles, transport posture, fleet primitives |
 | `specs/gaps/ETHICAL_HARDENING.md` | Ethical failure modes + enforceable invariants |
+| `docs/spec/PCAR-000.md` | PCAR root protocol: runtime constitution for evidence-bound actuation |
+| `docs/spec/PCAR-A.md` | Typed Claim Envelope: speech-act discipline, downgrade rules |
 | `specs/` | 25+ design specs |
 
 ---

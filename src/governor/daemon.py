@@ -372,6 +372,16 @@ class DaemonState:
         self._regime_detector = None
         self._cooldown_store = None
         self._receipt_v1_store = None
+        self._claim_correlation_store = None
+
+    @property
+    def claim_correlation_store(self):
+        if self._claim_correlation_store is None:
+            from .claim_correlation import ClaimCorrelationStore
+            self._claim_correlation_store = ClaimCorrelationStore.load(
+                self.governor_dir
+            )
+        return self._claim_correlation_store
 
     @property
     def cooldown_store(self):
@@ -1943,6 +1953,90 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("lanes.route", lanes_route, mutating=True)
     dispatcher.register("lanes.explain", lanes_explain)
     dispatcher.register("lanes.status", lanes_status)
+
+    # --- Claims (claim↔receipt correlation) ---
+
+    async def claims_list(params: dict) -> list:
+        """List claims with verification status summaries. Newest first."""
+        cs = state.claim_correlation_store
+        run_id = params.get("run_id")
+        since = params.get("since")
+        limit = min(max(int(params.get("limit", 50)), 1), 500)
+        claims = cs.list_claims(run_id=run_id, since=since, limit=limit)
+        result = []
+        for claim in claims:
+            summary = cs.summarize(claim.claim_id, state.receipt_system)
+            if summary:
+                result.append(summary.to_dict())
+        return result
+
+    async def claims_detail(params: dict) -> dict:
+        """Single claim + linked receipt stubs."""
+        cs = state.claim_correlation_store
+        claim_id = params.get("claim_id")
+        if not claim_id:
+            raise ValueError("Missing required param: claim_id")
+        summary = cs.summarize(claim_id, state.receipt_system)
+        if summary is None:
+            raise ValueError(f"Claim not found: {claim_id}")
+        links = cs.get_links(claim_id)
+        # Build receipt stubs (no N+1 — bounded by link count)
+        receipt_stubs = []
+        for link in links:
+            try:
+                r = state.receipt_system.receipt_store.get_by_id(link.receipt_id)
+                if r is not None:
+                    receipt_stubs.append({
+                        "receipt_id": r.receipt_id,
+                        "timestamp": r.timestamp,
+                        "verdict": r.verdict,
+                        "gate": r.gate,
+                    })
+            except Exception:
+                pass
+        return {
+            "summary": summary.to_dict(),
+            "links": [l.to_dict() for l in links],
+            "receipts": receipt_stubs,
+        }
+
+    async def claims_for_receipt(params: dict) -> list:
+        """Which claims does a receipt relate to?"""
+        cs = state.claim_correlation_store
+        receipt_id = params.get("receipt_id")
+        if not receipt_id:
+            raise ValueError("Missing required param: receipt_id")
+        claims = cs.get_claims_for_receipt(receipt_id)
+        result = []
+        for claim in claims:
+            summary = cs.summarize(claim.claim_id, state.receipt_system)
+            if summary:
+                result.append(summary.to_dict())
+        return result
+
+    async def claims_window(params: dict) -> dict:
+        """Time-window bundle for Guvnah timeline."""
+        cs = state.claim_correlation_store
+        since = params.get("since")
+        if not since:
+            raise ValueError("Missing required param: since")
+        until = params.get("until")
+        limit = min(max(int(params.get("limit", 50)), 1), 500)
+        result = cs.window(
+            since=since, until=until,
+            receipt_system=state.receipt_system, limit=limit,
+        )
+        return result.to_dict()
+
+    async def claims_stats(params: dict) -> dict:
+        """Quick rollup for top-card."""
+        return state.claim_correlation_store.stats()
+
+    dispatcher.register("claims.list", claims_list)
+    dispatcher.register("claims.detail", claims_detail)
+    dispatcher.register("claims.for_receipt", claims_for_receipt)
+    dispatcher.register("claims.window", claims_window)
+    dispatcher.register("claims.stats", claims_stats)
 
     dispatcher.register("chat.send", chat_send, mutating=True)
     dispatcher.register_streaming("chat.stream", chat_stream, mutating=True)

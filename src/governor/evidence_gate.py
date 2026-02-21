@@ -692,6 +692,7 @@ class EvidenceGate:
         constraints: list[str] | None = None,
         prior_claims: list[EvidenceGateClaim] | None = None,
         oracle_evidence: list[Any] | None = None,
+        correlation_ctx: Any | None = None,
     ) -> EvidenceGateOutput:
         """
         Validate agent output against kernel constraints.
@@ -705,6 +706,9 @@ class EvidenceGate:
             oracle_evidence: Oracle artifacts (e.g. OraclePytestLog) to
                 attach as STRONG evidence. These are produced by real
                 tool execution, not model narration.
+            correlation_ctx: Optional CorrelationContext for claim↔receipt
+                correlation. If provided, extracted claims are minted as
+                ClaimRecords and linked to the emitted gate receipt.
 
         Returns:
             EvidenceGateOutput with status, claims, and any issues
@@ -803,6 +807,9 @@ class EvidenceGate:
 
         # Emit receipt kernel run (if bridge is configured)
         self._emit_kernel_run(task, output, result, custody, oracle_evidence or [])
+
+        # Mint correlation claims + link receipt (if correlation context provided)
+        self._emit_correlation_claims(correlation_ctx, result, gate_receipt)
 
         return result
 
@@ -1132,6 +1139,51 @@ class EvidenceGate:
             "message": f"Ap={custody.ap:.2f} Ip={custody.ip:.2f} Fp={custody.fp:.2f}",
         })
         return results
+
+    def _emit_correlation_claims(
+        self,
+        correlation_ctx: Any | None,
+        result: EvidenceGateOutput,
+        gate_receipt: Any | None,
+    ) -> None:
+        """Mint ClaimRecords and link to the gate receipt.
+
+        Fail-open: errors logged but never block the gate.
+        If correlation_ctx is None, this is a no-op (backwards compat).
+        """
+        if correlation_ctx is None:
+            return
+
+        try:
+            store = correlation_ctx.claim_store
+            for eg_claim in result.claims:
+                record = store.mint_claim(
+                    kind=correlation_ctx.source_gate,
+                    text=eg_claim.text,
+                    level=eg_claim.level.value.lower(),
+                    run_id=correlation_ctx.run_id,
+                    task_id=correlation_ctx.task_id,
+                    step_id=correlation_ctx.step_id,
+                    source_gate=correlation_ctx.source_gate,
+                )
+
+                # Link to the gate receipt if we have one
+                if gate_receipt is not None:
+                    receipt_id = gate_receipt.receipt_id
+                    if eg_claim.conflicts_with:
+                        store.link_receipt(record.claim_id, receipt_id, "contradicts")
+                    else:
+                        # Determine role from verdict
+                        verdict = getattr(gate_receipt, "verdict", "unknown")
+                        if verdict in ("pass", "warn"):
+                            store.link_receipt(record.claim_id, receipt_id, "supports")
+                        elif verdict == "block":
+                            store.link_receipt(record.claim_id, receipt_id, "contradicts")
+                        else:
+                            store.link_receipt(record.claim_id, receipt_id, "neutral")
+
+        except Exception as exc:
+            logger.warning("correlation claim emission failed: %s", exc)
 
     def validate_input(self, input_data: EvidenceGateInput) -> EvidenceGateOutput:
         """

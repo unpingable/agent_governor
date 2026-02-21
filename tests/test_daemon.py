@@ -1077,6 +1077,11 @@ class TestAllMethodsRegistered:
         "lanes.route",
         "lanes.explain",
         "lanes.status",
+        "claims.list",
+        "claims.detail",
+        "claims.for_receipt",
+        "claims.window",
+        "claims.stats",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -1093,7 +1098,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 46
+        assert total == 51
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -3062,3 +3067,83 @@ class TestLaneRoutingE2E:
         assert routing["enabled"] is True
         assert routing["risk_class"] == "nonsense"
         assert routing["risk_class_source"] == "explicit"
+
+
+# =============================================================================
+# Claims (claim↔receipt correlation)
+# =============================================================================
+
+
+class TestClaims:
+    """Tests for claims.* RPC endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_claims_list_empty(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "claims.list")
+        assert resp["result"] == []
+
+    @pytest.mark.asyncio
+    async def test_claims_stats_empty(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "claims.stats")
+        result = resp["result"]
+        assert result["total"] == 0
+        assert result["total_links"] == 0
+
+    @pytest.mark.asyncio
+    async def test_claims_list_with_minted_claims(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        # Mint claims directly via the store
+        cs = state.claim_correlation_store
+        c1 = cs.mint_claim("evidence_gate", "test claim A", "hard", run_id="run1")
+        c2 = cs.mint_claim("evidence_gate", "test claim B", "soft", run_id="run1")
+        resp = await roundtrip(d, "claims.list")
+        result = resp["result"]
+        assert len(result) == 2
+        # Newest first
+        assert result[0]["claim_id"] in (c1.claim_id, c2.claim_id)
+
+    @pytest.mark.asyncio
+    async def test_claims_detail_valid(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        cs = state.claim_correlation_store
+        c = cs.mint_claim("evidence_gate", "claim X", "hard")
+        resp = await roundtrip(d, "claims.detail", {"claim_id": c.claim_id})
+        result = resp["result"]
+        assert result["summary"]["claim_id"] == c.claim_id
+        assert isinstance(result["links"], list)
+        assert isinstance(result["receipts"], list)
+
+    @pytest.mark.asyncio
+    async def test_claims_detail_invalid_id(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "claims.detail", {"claim_id": "nonexistent"})
+        assert "error" in resp
+
+    @pytest.mark.asyncio
+    async def test_claims_for_receipt_empty(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "claims.for_receipt", {"receipt_id": "unknown"})
+        assert resp["result"] == []
+
+    @pytest.mark.asyncio
+    async def test_claims_window(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        cs = state.claim_correlation_store
+        cs.mint_claim("evidence_gate", "window test", "hard")
+        resp = await roundtrip(d, "claims.window", {
+            "since": "2020-01-01T00:00:00+00:00",
+        })
+        result = resp["result"]
+        assert result["schema"] == "claims_window.v1"
+        assert result["count"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_existing_rpcs_unaffected(self, dispatcher_and_state):
+        """Backwards compat: existing RPCs still work after adding claims.*."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "governor.hello")
+        assert "protocol_version" in resp["result"]
+        resp2 = await roundtrip(d, "receipts.list")
+        assert isinstance(resp2["result"], list)

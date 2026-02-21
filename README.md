@@ -20,6 +20,14 @@ Next:      provide test results, downgrade to hypothesis, or request override
 
 > *Language is a proposal, not an authority.*
 
+## Background
+
+Agent Governor applies platform reliability patterns to LLM agent runtimes. The model is treated as an unreliable component crossing a trust boundary: it can propose actions, but it cannot authorize state change. The design center is not "make the model morally correct," but "make consequential actions require proof, freshness, and receipts." This is complementary to training-time alignment, and operates at a different layer: runtime authority control.
+
+> See [docs/BACKGROUND.md](docs/BACKGROUND.md) for design lineage and prior art.
+
+---
+
 ## How It Works
 
 **The short version:** every tool call hits a policy gate. The gate checks rules, requires evidence for hard claims, and emits a receipt. Allow, deny, or downgrade — no silent pass-throughs.
@@ -395,6 +403,7 @@ bash start-codex.sh                     # Codex backend
 
 | Document | Contents |
 |----------|----------|
+| `docs/BACKGROUND.md` | Design lineage: platform reliability → agent runtime governance |
 | `docs/WHY.md` | Motivation and field context |
 | `CLAUDE.md` | Architecture rules, claim types, receipt types |
 | `BUILD_SPEC.md` | Step-by-step build guide, FSM, receipt design |

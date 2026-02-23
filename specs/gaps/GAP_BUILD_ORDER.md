@@ -86,6 +86,13 @@ SIGMA_RATE ──────────────────────┘
                │                    └──→ REGIME_CAPTURE_2D
                │
                └──→ CROSS_DOMAIN_SCHEMA ──→ PAAS_SHARDING
+
+GOV_PRIM_PROV_001 ──┬──→ GOV_GAP_CHAIN_001 ──→ GOV_GAP_EGRESS_001
+                    │
+                    └──→ GOV_GAP_EGRESS_001
+
+GOV_GAP_MCP_SUPPLY_001 (v3, standalone)
+GOV_GAP_SESSION_001 (v3, needs principal model)
 ```
 
 ## v2→v3 Migration Trick
@@ -373,6 +380,42 @@ All specs honor the invariants in `GAP_INVARIANTS.md`:
 5. **No temporary adapters** — v2 signals emit via SignalEnvelope or are marked `local_only` (deleted in v3)
 6. **Receipt integrity** — content-addressed IDs, per-run hash chains, epoch roots at compaction boundaries
 
+## v2.x — Threat Intelligence Hardening (Feb 2026)
+
+From threat intelligence review mapping real-world LLM attack patterns to
+governor controls. Three gaps need v2 hook points now (interface + receipt);
+two are v3 roadmap items.
+
+### v2 Hook Points Required
+
+| Spec | What | Depends On |
+|------|------|------------|
+| GOV_PRIM_PROV_001 | Provenance labels on tool outputs | None (primitive) |
+| GOV_GAP_CHAIN_001 | Composition-aware capability gating | Provenance labels (soft) |
+| GOV_GAP_EGRESS_001 | Outbound data-flow policy gate | Provenance labels, chain gate (soft) |
+
+Build order: provenance labels first (other gates consume them), then
+chain gate (sequence-level), then egress gate (payload-level).
+
+### v3 Roadmap
+
+| Spec | What | Why Deferred |
+|------|------|--------------|
+| GOV_GAP_MCP_SUPPLY_001 | Signed tool manifests + hash pinning | MCP ecosystem immature |
+| GOV_GAP_SESSION_001 | Cryptographic session binding | v2 is local-only; needs principal model |
+
+### v2 Bake-In Checklist
+
+Even for v3-deferred items, v2 must include placeholder fields:
+
+- [ ] Receipt schema: `principal_ref` field (null in v2)
+- [ ] Daemon config: `[security]` section (commented out in v2)
+- [ ] `governor.hello` response: `auth_method` field (= "local" in v2)
+- [ ] Capability taxonomy: enumerated capability classes for chain gate
+- [ ] Policy engine: abstract interface (chain + egress share evaluation pattern)
+
+---
+
 ## Files
 
 ```
@@ -387,6 +430,11 @@ specs/gaps/CROSS_DOMAIN_SCHEMA_GAP.md       # v3.0
 specs/gaps/PAAS_SHARDING_GAP.md             # v3.0
 specs/gaps/KAPPA_DIAL_GAP.md                # v3.1
 specs/gaps/REGIME_CAPTURE_2D_GAP.md         # v3.2
+specs/gaps/GOV_PRIM_PROV_001.md             # v2.x threat hardening (provenance labels)
+specs/gaps/GOV_GAP_CHAIN_001.md             # v2.x threat hardening (composition gate)
+specs/gaps/GOV_GAP_EGRESS_001.md            # v2.x threat hardening (egress gate)
+specs/gaps/GOV_GAP_MCP_SUPPLY_001.md        # v3.x roadmap (tool supply chain)
+specs/gaps/GOV_GAP_SESSION_001.md           # v3.x roadmap (session binding)
 specs/gaps/GAP_BUILD_ORDER.md               # this file
 specs/gaps/GAP_INVARIANTS.md                # cross-cutting contracts (clock, determinism, severity, emissions)
 ```

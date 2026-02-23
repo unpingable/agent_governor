@@ -2,7 +2,7 @@
 ## Control Law for Proof-Carrying Agent Runtime
 
 - **Status:** Draft
-- **Version:** 0.1.0
+- **Version:** 0.1.1
 - **Family:** PCAR
 - **Depends on:** PCAR-000, PCAR-A, PCAR-B
 - **Last Updated:** 2026-02-23
@@ -101,7 +101,8 @@ The constraint engine accepts:
 - associated Proof Objects (PCAR-B),
 - the current Policy Pack,
 - runtime state (regime signals, prior decisions, active constraints),
-- action context (action type, target scope, requested by).
+- action context (action type, target scope, requested by),
+- `evaluation_time` (timestamp, RFC 3339 UTC) — the declared "now" for freshness comparison. Callers own the clock; the engine MUST NOT read wall-clock time. This field MUST be threaded into receipts (PCAR-D) for replay correctness.
 
 ### 6.2 Output
 
@@ -116,7 +117,7 @@ The constraint engine MUST be a pure function of its inputs. Specifically:
 - No network calls during evaluation.
 - No model consultation.
 - No random number generation.
-- No dependency on wall-clock time other than for freshness comparison (using `observed_at` from proofs, not system clock).
+- No dependency on ambient wall-clock time. Freshness comparison MUST use the explicit `evaluation_time` input (see Section 6.1), not the system clock. This makes the "now" used for freshness a declared input, preserving determinism and replay correctness.
 
 If implementation-defined tie-breakers are necessary (e.g., between equally valid decisions), they MUST be deterministic and documented.
 
@@ -239,6 +240,7 @@ Policy evaluation MUST accept:
 | Target scope | Claim envelope / action request | Yes |
 | Proof set | PCAR-B proof objects | Yes |
 | Proof freshness status | Derived from proof `freshness` fields | Yes |
+| Evaluation time | Caller-provided timestamp (not wall clock) | Yes |
 | Policy version | Policy Pack metadata | Yes |
 | Regime | Derived from signals (Section 9) | Yes |
 | Prior failure counters | Runtime state | No |
@@ -629,7 +631,16 @@ An implementation is **PCAR-C conformant** if it:
 
 ---
 
-## 20. References (Informative)
+## 20. Changelog
+
+### 0.1.1
+Spec editor fixes; no architectural changes.
+- Added explicit `evaluation_time` input to §6.1 and §8.2. The constraint engine MUST use this caller-provided timestamp for freshness comparison, not the ambient wall clock. This closes a determinism gap: without it, "deterministic" silently depends on runtime clock, breaking replay.
+- §6.3 determinism wording tightened to reference `evaluation_time`.
+
+---
+
+## 21. References (Informative)
 
 - PCAR-000: Proof-Carrying Agent Runtime
 - PCAR-A: Typed Claim Envelope

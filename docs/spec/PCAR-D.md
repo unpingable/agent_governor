@@ -2,7 +2,7 @@
 ## Receipted Consequence for Proof-Carrying Agent Runtime
 
 - **Status:** Draft
-- **Version:** 0.1.0
+- **Version:** 0.1.1
 - **Family:** PCAR
 - **Depends on:** PCAR-000, PCAR-A, PCAR-B
 - **Last Updated:** 2026-02-23
@@ -257,7 +257,24 @@ This is where systems usually "forget." PCAR-D does not forget.
 #### `reverify_required`
 A stale proof or state change triggered a re-verification requirement. REQUIRED.
 
-### 8.2 Chain Management Events
+### 8.2 Evidence Lifecycle Events
+
+#### `evidence_redacted`
+Evidence payload was redacted or tombstoned. REQUIRED when evidence is removed post-facto.
+
+The redaction receipt MUST reference the original evidence digest and the proof/receipt that originally stored it. This preserves the append-only invariant: the original receipt is never mutated; the redaction is a separate event in the chain that declares the payload is no longer retrievable.
+
+Required `subject_refs`:
+- `{ref_type: "evidence", ref_id: "<original_evidence_digest>"}`
+
+Required `metadata` members:
+- `redaction_reason` (string) — e.g. `retention_policy`, `privacy_compliance`, `secret_detected`
+- `original_receipt_ref` (string, optional) — receipt_id of the receipt that originally stored the evidence
+
+#### `evidence_expired`
+Evidence payload was purged due to retention policy. REQUIRED when retention-based purging occurs. Same schema as `evidence_redacted` but with distinct event type for auditability.
+
+### 8.3 Chain Management Events
 
 #### `epoch_start`
 Beginning of a new epoch in the receipt chain. REQUIRED for epoch support.
@@ -265,7 +282,7 @@ Beginning of a new epoch in the receipt chain. REQUIRED for epoch support.
 #### `epoch_end`
 End of an epoch, including epoch root hash. REQUIRED for epoch support.
 
-### 8.3 Extended Events
+### 8.4 Extended Events
 
 Implementations MAY define additional event types. Extended event types:
 - MUST follow the naming pattern `ext.*` or `vendor.*`
@@ -740,7 +757,16 @@ An implementation is **PCAR-D conformant** if it:
 
 ---
 
-## 21. References (Informative)
+## 21. Changelog
+
+### 0.1.1
+Spec editor fixes; no architectural changes.
+- Added `evidence_redacted` and `evidence_expired` event types to §8.2. Redaction/expiry of evidence is now a receipted append-only event, not a mutation of existing receipts. Original receipts are never modified.
+- Renumbered: Chain Management Events → §8.3, Extended Events → §8.4.
+
+---
+
+## 22. References (Informative)
 
 - PCAR-000: Proof-Carrying Agent Runtime
 - PCAR-A: Typed Claim Envelope

@@ -2,7 +2,7 @@
 ## Claim Serialization and Speech-Act Discipline for Proof-Carrying Agent Runtime
 
 - **Status:** Draft
-- **Version:** 0.1.0
+- **Version:** 0.1.1
 - **Family:** PCAR
 - **Depends on:** PCAR-000
 - **Last Updated:** 2026-02-21
@@ -186,7 +186,7 @@ Expected evidence categories required for verification.
 
 Each placeholder object SHOULD include:
 - `placeholder_id`
-- `expected_proof_type` (aligned with PCAR-B type vocabulary when available)
+- `expected_proof_type` (MUST use PCAR-B namespaced proof types, e.g. `core.TEST_RESULT`; see PCAR-B §8)
 - `subject` (what needs to be proven)
 - `freshness_required` (boolean, optional)
 - `notes` (optional)
@@ -653,7 +653,7 @@ Implementations MAY be profiled as:
   "evidence_placeholders": [
     {
       "placeholder_id": "ep-001",
-      "expected_proof_type": "TEST_RESULT",
+      "expected_proof_type": "core.TEST_RESULT",
       "subject": "pytest -q result",
       "freshness_required": true
     }
@@ -742,7 +742,16 @@ Compiled output:
 
 ---
 
-## 22. References (Informative)
+## 22. Changelog
+
+### 0.1.1
+Spec editor fixes; no architectural changes.
+- `expected_proof_type` in examples and prose now uses PCAR-B namespaced form (`core.TEST_RESULT`, not `TEST_RESULT`).
+- §8.2 `evidence_placeholders` wording tightened: proof type namespace is MUST, not SHOULD.
+
+---
+
+## 23. References (Informative)
 
 * PCAR-000: Proof-Carrying Agent Runtime
 * RFC 2119

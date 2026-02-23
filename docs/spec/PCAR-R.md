@@ -2,7 +2,7 @@
 ## Replayable Governance for Proof-Carrying Agent Runtime
 
 - **Status:** Draft
-- **Version:** 0.1.0
+- **Version:** 0.1.1
 - **Family:** PCAR
 - **Depends on:** PCAR-000, PCAR-A, PCAR-B, PCAR-C, PCAR-D, PCAR-E
 - **Last Updated:** 2026-02-23
@@ -149,7 +149,7 @@ Identifier of the governed run this bundle represents.
 When the bundle was created. RFC 3339, UTC.
 
 #### `manifest_hash` (string)
-Content hash of the manifest (excluding this field). Computed last.
+Content hash of the manifest (excluding this field). Computed last using the PCAR-D canonical JSON profile (PCAR-D §10.1): `sha256(canonical_json(manifest_without_manifest_hash))`. This ensures manifest hashes are portable across implementations.
 
 #### `artifacts` (object)
 Inventory of all artifacts in the bundle.
@@ -200,7 +200,9 @@ All references within the bundle (claim → proof, decision → proof, receipt �
 
 ### 7.1 EXACT Replay
 
-Reconstruct the original decision path and verify consistency.
+Reconstruct the original decision path **from claim envelopes forward** and verify consistency.
+
+EXACT replay does NOT re-run model inference or claim compilation. It starts from the persisted PCAR-A claim batches and replays verification + constraint evaluation + actuation validation. Raw proposer/model output is not part of the replay bundle — if exact claim-compilation replay is needed in the future, a `raw_inputs/` bundle section would be required (see Open Questions).
 
 Purpose:
 - Verify that the receipt chain matches the actual artifacts.
@@ -209,14 +211,14 @@ Purpose:
 
 Process:
 1. Load the policy pack from the bundle.
-2. For each claim batch, re-evaluate through the constraint engine with the original proofs.
+2. For each claim batch, re-evaluate through the constraint engine (PCAR-C) with the original proofs and the original `evaluation_time` (from receipt timestamps or decision metadata).
 3. Compare replayed decisions against original decisions.
 4. Divergence = audit finding.
 
 Requirements:
 - All non-redacted artifacts MUST be present.
-- Deterministic components MUST produce identical results.
-- Non-deterministic components (external tool outputs) are compared by digest, not re-executed.
+- Deterministic components (PCAR-C constraint engine, PCAR-D receipt hashing) MUST produce identical results.
+- Non-deterministic components (external tool outputs) are compared by stored digest, not re-executed.
 
 ### 7.2 DIFF_POLICY Replay
 
@@ -570,7 +572,17 @@ PCAR-R conformance is RECOMMENDED for PCAR-family conformance but not REQUIRED.
 
 ---
 
-## 17. References (Informative)
+## 17. Changelog
+
+### 0.1.1
+Spec editor fixes; no architectural changes.
+- §7.1 EXACT replay: narrowed scope to "from claim envelopes forward." Raw model/proposer output is not in the replay bundle; exact claim-compilation replay deferred (see Open Questions).
+- §7.1: EXACT replay now references `evaluation_time` (from PCAR-C 0.1.1) for deterministic freshness comparison.
+- §6.2 `manifest_hash`: now explicitly references PCAR-D §10.1 canonical JSON profile for portable hash computation.
+
+---
+
+## 18. References (Informative)
 
 - PCAR-000: Proof-Carrying Agent Runtime
 - PCAR-A: Typed Claim Envelope

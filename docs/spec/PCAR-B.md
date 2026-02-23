@@ -2,7 +2,7 @@
 ## Evidence Substrate for Proof-Carrying Agent Runtime
 
 - **Status:** Draft
-- **Version:** 0.1.0
+- **Version:** 0.1.1
 - **Family:** PCAR
 - **Depends on:** PCAR-000, PCAR-A
 - **Last Updated:** 2026-02-23
@@ -405,7 +405,7 @@ Evidence digests MUST be computed as:
 
 ### 11.2 Multi-Hash Support
 
-Implementations MAY support additional hash algorithms. If multiple algorithms are supported, the proof object SHOULD include a `digest_algorithm` field.
+Implementations MAY support additional hash algorithms. If multiple algorithms are supported, the proof object SHOULD include a `digest_algorithm` field. Note: this field is technically redundant with the `algorithm:hex_digest` format in `evidence_digest` (§7.1), but is retained for cases where implementations need a separate parseable field. If they disagree, `evidence_digest` is authoritative.
 
 The default (`sha256`) MUST always be supported.
 
@@ -602,11 +602,13 @@ Before persistence or transmission, a Proof Object MUST be normalized for:
 
 ### 16.2 Canonical Serialization
 
-If proof objects are hashed directly (outside PCAR-D receipts), the implementation MUST document the canonical form. The recommended profile is:
+If proof objects are hashed directly (outside PCAR-D receipts), the implementation MUST use the PCAR-D canonical JSON profile (PCAR-D §10.1):
 
 ```
 json.dumps(obj, sort_keys=True, separators=(',',':'), ensure_ascii=True)
 ```
+
+This is the single canonical serialization profile for the entire PCAR family. Do not define a separate profile per spec.
 
 ### 16.3 Proof Identity
 
@@ -739,6 +741,7 @@ An implementation is **PCAR-B conformant** if it:
   },
   "observed_at": "2026-02-23T14:31:00Z",
   "freshness": {
+    "freshness_policy_ref": "default_short_lived",
     "max_age_seconds": 300
   },
   "confidence": 0.4,
@@ -771,6 +774,7 @@ An implementation is **PCAR-B conformant** if it:
   },
   "observed_at": "2026-02-23T14:32:00Z",
   "freshness": {
+    "freshness_policy_ref": "default_volatile",
     "max_age_seconds": 60,
     "invalidation_triggers": ["file_modified"]
   }
@@ -789,7 +793,17 @@ An implementation is **PCAR-B conformant** if it:
 
 ---
 
-## 22. References (Informative)
+## 22. Changelog
+
+### 0.1.1
+Spec editor fixes; no architectural changes.
+- Examples 20.2 and 20.3: added `freshness_policy_ref` to comply with §7.1 freshness schema (requires at least one of `valid_until` or `freshness_policy_ref`).
+- §11.2: noted `digest_algorithm` redundancy with `algorithm:hex_digest` format; `evidence_digest` is authoritative.
+- §16.2: canonical serialization now explicitly references PCAR-D §10.1 as the single family-wide profile.
+
+---
+
+## 23. References (Informative)
 
 - PCAR-000: Proof-Carrying Agent Runtime
 - PCAR-A: Typed Claim Envelope

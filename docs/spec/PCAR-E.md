@@ -2,7 +2,7 @@
 ## Proof-Carrying Action at the Execution Boundary
 
 - **Status:** Draft
-- **Version:** 0.1.0
+- **Version:** 0.1.1
 - **Family:** PCAR
 - **Depends on:** PCAR-000, PCAR-A, PCAR-B, PCAR-C, PCAR-D
 - **Last Updated:** 2026-02-23
@@ -107,8 +107,8 @@ The actuator MUST validate action contracts in this exact order. Validation is f
 6. **Proofs fresh**: All referenced proofs are within their freshness window.
 7. **Proofs status-compatible**: All referenced proofs have status `PASS` (or as specified by policy for the action type).
 8. **Scope valid**: The action's `target_scope` falls within the scope allowed by the decision's constraints.
-9. **Nonce valid**: The nonce has not been previously used (no replay).
-10. **Contract unexpired**: The action contract's `expires_at` has not passed.
+9. **Contract unexpired**: The action contract's `expires_at` has not passed. (Checked before nonce to reject stale contracts cheaply without polluting the nonce store; see §14.5.)
+10. **Nonce valid**: The nonce has not been previously used (no replay).
 11. **Constraints compatible**: Any constraints on the decision are compatible with the action (e.g., `read_only` + write action = reject).
 
 If all 11 checks pass: **execute**.
@@ -669,7 +669,15 @@ Result:
 
 ---
 
-## 19. References (Informative)
+## 19. Changelog
+
+### 0.1.1
+Spec editor fixes; no architectural changes.
+- §6.1: swapped steps 9 and 10. Contract expiry is now checked before nonce replay. This avoids polluting the nonce store with stale contracts and aligns with §14.5 security note.
+
+---
+
+## 20. References (Informative)
 
 - PCAR-000: Proof-Carrying Agent Runtime
 - PCAR-A: Typed Claim Envelope

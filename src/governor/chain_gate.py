@@ -1,14 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
 """
-Composition-aware capability gating (GOV-GAP-CHAIN-001, Phase 2B).
+Composition-aware capability gating (GOV-GAP-CHAIN-001, Phase 2B+2C).
 
-Detects denied action compositions — sequences of tool calls that are
-individually benign but harmful in combination (e.g. read_file(secrets.env)
-followed by http_post(attacker.com)).
+Detects and optionally enforces denied action compositions — sequences of
+tool calls that are individually benign but harmful in combination
+(e.g. read_file(secrets.env) followed by http_post(attacker.com)).
 
-Phase 2B is **detect-only**: signals + receipts, no execution blocking.
-ChainGate.evaluate() is pure — returns results, no side effects.
-Daemon owns persistence and receipt emission.
+Phase 2B: detect-only mode (signals + receipts, no execution blocking).
+Phase 2C: enforcement ratchet (detect_only → enforce_shadow → enforce),
+preflight/record split, CAS binding, record idempotency.
+
+ChainGate.evaluate() and preflight() are pure — returns results, no side
+effects.  Daemon owns persistence and receipt emission.
 """
 
 from __future__ import annotations
@@ -79,6 +82,112 @@ class AnnotationSource(str, Enum):
     INLINE_PATH_HEURISTIC = "path_heuristic"
     TOOL_METADATA = "tool_metadata"
     FALLBACK = "fallback"
+
+
+class ChainMode(str, Enum):
+    """Enforcement ratchet modes (Phase 2C)."""
+    DETECT_ONLY = "detect_only"
+    ENFORCE_SHADOW = "enforce_shadow"
+    ENFORCE = "enforce"
+
+
+# =============================================================================
+# Decision mapping (Phase 2C)
+# =============================================================================
+
+
+def compute_decision(
+    kernel_verdict: str,
+    effective_verdict: str,
+    mode: ChainMode,
+) -> str:
+    """Map kernel/effective verdict + mode → runtime decision.
+
+    Returns: "allow" | "would_block" | "blocked"
+    """
+    has_deny = effective_verdict == "deny" or kernel_verdict == "deny"
+    if not has_deny:
+        return "allow"
+    if mode == ChainMode.DETECT_ONLY:
+        return "allow"       # signal only, no enforcement
+    if mode == ChainMode.ENFORCE_SHADOW:
+        return "would_block"  # signal + warning, no enforcement
+    return "blocked"          # actual enforcement
+
+
+def compute_proposed_step_hash(step_dict: dict[str, Any]) -> str:
+    """Hash of a proposed step using only stable (non-volatile) fields.
+
+    Excludes timestamp, duration_ms, and annotation source fields so that
+    independent annotate_step() calls for the same (tool_id, args, status)
+    produce the same hash — essential for CAS token binding.
+    """
+    stable = {k: step_dict[k] for k in HASHED_STEP_FIELDS if k in step_dict}
+    return hashlib.sha256(canonical_json(stable)).hexdigest()
+
+
+def compute_preflight_token(action_log_hash: str, proposed_step_hash: str) -> str:
+    """CAS binding token: H(log_hash + step_hash).
+
+    Proves preflight matched this exact state.  chain.record validates
+    this token to prevent silent TOCTOU drift.
+    """
+    return hashlib.sha256(
+        (action_log_hash + proposed_step_hash).encode()
+    ).hexdigest()
+
+
+def _fragment_reason(mode: ChainMode) -> str:
+    """Policy fragment reason string by mode."""
+    if mode == ChainMode.DETECT_ONLY:
+        return "detect_only_mode"
+    if mode == ChainMode.ENFORCE_SHADOW:
+        return "enforce_shadow_mode"
+    return "enforce_mode"
+
+
+def _fragment_applied(mode: ChainMode, policy_changed_outcome: bool) -> bool:
+    """applied=True only in enforce mode when policy actually changed the outcome."""
+    if mode != ChainMode.ENFORCE:
+        return False
+    return policy_changed_outcome
+
+
+def render_block_reasons(
+    matched_rule_ids: list[str],
+    exception_results: dict[str, bool],
+    rules: ChainRuleSet,
+    action_log: "ActionLog",
+    proposed_step: "ActionStep",
+) -> list[dict]:
+    """Operator-readable block reasons.  One entry per unsatisfied deny rule."""
+    # Build rule lookup
+    rule_map = {r.rule_id: r for r in rules.rules}
+    reasons: list[dict] = []
+    for rule_id in matched_rule_ids:
+        if exception_results.get(rule_id, False):
+            continue  # exception satisfied
+        rule = rule_map.get(rule_id)
+        if rule is None or rule.effect != "deny":
+            continue
+        # Find first matching prior step index
+        prior_index = -1
+        if rule is not None:
+            gate = ChainGate()
+            for i, prior_step in enumerate(action_log.steps):
+                if gate._prior_matches(rule, prior_step):
+                    prior_index = i
+                    break
+        message = rule.description if rule and rule.description else (
+            f"Rule {rule_id} denied composition"
+        )
+        reasons.append({
+            "rule_id": rule_id,
+            "message": message,
+            "prior_step_index": prior_index,
+            "proposed_tool_id": proposed_step.tool_id,
+        })
+    return reasons
 
 
 # =============================================================================
@@ -260,6 +369,8 @@ class ActionLog:
     created_at: str = ""
     # Dedupe state: key = "{rule_id}:{edge_key}" → count
     dedupe_counts: dict[str, int] = field(default_factory=dict)
+    # Record idempotency: record_id → True (Phase 2C)
+    seen_record_ids: set[str] = field(default_factory=set)
 
     def append(self, step: ActionStep) -> None:
         self.steps.append(step)
@@ -275,6 +386,7 @@ class ActionLog:
             "steps": [s.to_dict() for s in self.steps],
             "created_at": self.created_at,
             "dedupe_counts": dict(self.dedupe_counts),
+            "seen_record_ids": sorted(self.seen_record_ids),
         }
 
     @classmethod
@@ -284,6 +396,7 @@ class ActionLog:
             steps=[ActionStep.from_dict(s) for s in data.get("steps", [])],
             created_at=data.get("created_at", ""),
             dedupe_counts=dict(data.get("dedupe_counts", {})),
+            seen_record_ids=set(data.get("seen_record_ids", [])),
         )
 
 
@@ -503,6 +616,57 @@ class ChainEvalResult:
 
 
 # =============================================================================
+# ChainPreflightResult (Phase 2C)
+# =============================================================================
+
+
+@dataclass
+class ChainPreflightResult:
+    """Result of preflight evaluation — extends ChainEvalResult with
+    decision, block_reasons, and CAS binding token.
+    """
+    decision: str                   # "allow" | "would_block" | "blocked"
+    mode: str                       # ChainMode value
+    kernel_verdict: str             # "deny" | "allow"
+    effective_verdict: str          # after policy augmentation
+    composition_match: bool
+    matched_rule_ids: list[str]
+    exception_results: dict[str, bool]
+    block_reasons: list[dict]       # operator-readable
+    history_length: int
+    action_log_hash: str
+    action_log_bytes: bytes         # canonical (for receipt subject)
+    proposed_step_dict: dict
+    proposed_step_hash: str         # H(canonical_json(proposed_step_dict))
+    preflight_token: str            # H(action_log_hash + proposed_step_hash)
+    policy_fragment: dict | None
+    dedupe_candidates: dict[str, str]  # rule_id → dedupe_key
+    verdict_reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "decision": self.decision,
+            "mode": self.mode,
+            "kernel_verdict": self.kernel_verdict,
+            "effective_verdict": self.effective_verdict,
+            "composition_match": self.composition_match,
+            "matched_rule_ids": self.matched_rule_ids,
+            "exception_results": self.exception_results,
+            "block_reasons": self.block_reasons,
+            "history_length": self.history_length,
+            "action_log_hash": self.action_log_hash,
+            "proposed_step": self.proposed_step_dict,
+            "proposed_step_hash": self.proposed_step_hash,
+            "preflight_token": self.preflight_token,
+            "verdict_reason": self.verdict_reason,
+            "dedupe_candidates": self.dedupe_candidates,
+        }
+        if self.policy_fragment is not None:
+            d["policy_fragment"] = self.policy_fragment
+        return d
+
+
+# =============================================================================
 # ChainGate — pure evaluation, no side effects
 # =============================================================================
 
@@ -510,30 +674,30 @@ class ChainEvalResult:
 class ChainGate:
     """Composition-aware capability gate.
 
-    evaluate() is pure: returns ChainEvalResult, does NOT persist
+    evaluate() and preflight() are pure: return results, do NOT persist
     action logs or emit receipts. Daemon owns those side effects.
     """
 
-    def evaluate(
+    # ------------------------------------------------------------------
+    # Shared evaluation core (Phase 2C refactor)
+    # ------------------------------------------------------------------
+
+    def _evaluate_rules(
         self,
         action_log: ActionLog,
         proposed_step: ActionStep,
         rules: ChainRuleSet,
         exceptions: set[str] | None = None,
         policy: Any = None,
-    ) -> ChainEvalResult:
-        """Evaluate proposed step against composition rules and action history.
+        mode: ChainMode = ChainMode.DETECT_ONLY,
+    ) -> dict[str, Any]:
+        """Shared rule evaluation logic.
 
-        Args:
-            action_log: Current action log (prior steps).
-            proposed_step: The step being proposed.
-            rules: Composition rules to evaluate.
-            exceptions: Active exception keys (for unless_condition clauses).
-            policy: Optional PolicyRuleSet for severity augmentation.
-
-        Returns:
-            ChainEvalResult with kernel + effective verdicts, matched rules,
-            dedupe keys, and receipt payload data.
+        Returns a dict with all intermediate results:
+            matched_rule_ids, exception_results, unsatisfied_denies,
+            dedupe_keys, kernel_verdict, effective_verdict, composition_match,
+            verdict_reason, policy_fragment, history_length,
+            action_log_hash, action_log_bytes, proposed_step_dict.
         """
         active_exceptions = exceptions or set()
 
@@ -541,24 +705,6 @@ class ChainGate:
         all_steps = list(action_log.steps) + [proposed_step]
         action_log_bytes, action_log_hash_hex = compute_action_log_hash(all_steps)
         history_length = len(all_steps)
-
-        # Failed proposed step short-circuit: skip proposed-step matching
-        if proposed_step.result_status != "ok":
-            return ChainEvalResult(
-                kernel_verdict="allow",
-                effective_verdict="allow",
-                mode="detect_only",
-                composition_match=False,
-                matched_rule_ids=[],
-                exception_results={},
-                history_length=history_length,
-                action_log_hash=action_log_hash_hex,
-                action_log_bytes=action_log_bytes,
-                proposed_step_dict=proposed_step.to_dict(),
-                policy_fragment=None,
-                dedupe_keys=[],
-                verdict_reason="failed_step_skipped",
-            )
 
         # Evaluate all rules — not first-match-wins
         matched_rule_ids: list[str] = []
@@ -618,25 +764,176 @@ class ChainGate:
         if policy is not None:
             policy_fragment, augmented_verdict = self._evaluate_policy(
                 action_log, proposed_step, kernel_verdict,
-                composition_match, history_length, policy,
+                composition_match, history_length, policy, mode,
             )
             if augmented_verdict is not None:
                 effective_verdict = augmented_verdict
 
+        return {
+            "matched_rule_ids": matched_rule_ids,
+            "exception_results": exception_results,
+            "unsatisfied_denies": unsatisfied_denies,
+            "dedupe_keys": dedupe_keys,
+            "kernel_verdict": kernel_verdict,
+            "effective_verdict": effective_verdict,
+            "composition_match": composition_match,
+            "verdict_reason": verdict_reason,
+            "policy_fragment": policy_fragment,
+            "history_length": history_length,
+            "action_log_hash": action_log_hash_hex,
+            "action_log_bytes": action_log_bytes,
+            "proposed_step_dict": proposed_step.to_dict(),
+        }
+
+    # ------------------------------------------------------------------
+    # evaluate() — 2B-compatible detect-only path
+    # ------------------------------------------------------------------
+
+    def evaluate(
+        self,
+        action_log: ActionLog,
+        proposed_step: ActionStep,
+        rules: ChainRuleSet,
+        exceptions: set[str] | None = None,
+        policy: Any = None,
+    ) -> ChainEvalResult:
+        """Evaluate proposed step against composition rules and action history.
+
+        Args:
+            action_log: Current action log (prior steps).
+            proposed_step: The step being proposed.
+            rules: Composition rules to evaluate.
+            exceptions: Active exception keys (for unless_condition clauses).
+            policy: Optional PolicyRuleSet for severity augmentation.
+
+        Returns:
+            ChainEvalResult with kernel + effective verdicts, matched rules,
+            dedupe keys, and receipt payload data.
+        """
+        # Failed proposed step short-circuit: skip proposed-step matching
+        if proposed_step.result_status != "ok":
+            all_steps = list(action_log.steps) + [proposed_step]
+            action_log_bytes, action_log_hash_hex = compute_action_log_hash(all_steps)
+            return ChainEvalResult(
+                kernel_verdict="allow",
+                effective_verdict="allow",
+                mode="detect_only",
+                composition_match=False,
+                matched_rule_ids=[],
+                exception_results={},
+                history_length=len(all_steps),
+                action_log_hash=action_log_hash_hex,
+                action_log_bytes=action_log_bytes,
+                proposed_step_dict=proposed_step.to_dict(),
+                policy_fragment=None,
+                dedupe_keys=[],
+                verdict_reason="failed_step_skipped",
+            )
+
+        core = self._evaluate_rules(
+            action_log, proposed_step, rules, exceptions, policy,
+            mode=ChainMode.DETECT_ONLY,
+        )
+
         return ChainEvalResult(
-            kernel_verdict=kernel_verdict,
-            effective_verdict=effective_verdict,
+            kernel_verdict=core["kernel_verdict"],
+            effective_verdict=core["effective_verdict"],
             mode="detect_only",
-            composition_match=composition_match,
-            matched_rule_ids=matched_rule_ids,
-            exception_results=exception_results,
-            history_length=history_length,
-            action_log_hash=action_log_hash_hex,
-            action_log_bytes=action_log_bytes,
-            proposed_step_dict=proposed_step.to_dict(),
-            policy_fragment=policy_fragment,
-            dedupe_keys=dedupe_keys,
-            verdict_reason=verdict_reason,
+            composition_match=core["composition_match"],
+            matched_rule_ids=core["matched_rule_ids"],
+            exception_results=core["exception_results"],
+            history_length=core["history_length"],
+            action_log_hash=core["action_log_hash"],
+            action_log_bytes=core["action_log_bytes"],
+            proposed_step_dict=core["proposed_step_dict"],
+            policy_fragment=core["policy_fragment"],
+            dedupe_keys=core["dedupe_keys"],
+            verdict_reason=core["verdict_reason"],
+        )
+
+    # ------------------------------------------------------------------
+    # preflight() — Phase 2C mode-aware pre-dispatch evaluation
+    # ------------------------------------------------------------------
+
+    def preflight(
+        self,
+        action_log: ActionLog,
+        proposed_step: ActionStep,
+        rules: ChainRuleSet,
+        mode: ChainMode = ChainMode.DETECT_ONLY,
+        exceptions: set[str] | None = None,
+        policy: Any = None,
+    ) -> ChainPreflightResult:
+        """Pre-dispatch evaluation with mode-aware decision and CAS binding.
+
+        Same rule evaluation as evaluate(), but:
+        - Accepts explicit mode parameter (not hardcoded detect_only)
+        - Returns decision field based on compute_decision()
+        - Returns block_reasons list (operator-readable)
+        - Returns preflight_token (CAS binding for record validation)
+        - Returns dedupe_candidates (rule_id → dedupe_key)
+        - Does NOT accept result_status != "ok" (preflight is pre-dispatch)
+
+        Raises:
+            ValueError: If proposed_step.result_status is not "ok".
+        """
+        if proposed_step.result_status != "ok":
+            raise ValueError(
+                f"preflight requires result_status='ok', "
+                f"got '{proposed_step.result_status}'"
+            )
+
+        core = self._evaluate_rules(
+            action_log, proposed_step, rules, exceptions, policy, mode,
+        )
+
+        # Decision mapping
+        decision = compute_decision(
+            core["kernel_verdict"], core["effective_verdict"], mode,
+        )
+
+        # Block reasons
+        block_reasons = render_block_reasons(
+            core["matched_rule_ids"],
+            core["exception_results"],
+            rules,
+            action_log,
+            proposed_step,
+        )
+
+        # Proposed step hash (for CAS binding — stable fields only)
+        proposed_step_hash = compute_proposed_step_hash(core["proposed_step_dict"])
+
+        # Preflight token
+        preflight_token = compute_preflight_token(
+            core["action_log_hash"], proposed_step_hash,
+        )
+
+        # Dedupe candidates: rule_id → first dedupe_key for that rule
+        dedupe_candidates: dict[str, str] = {}
+        for dk in core["dedupe_keys"]:
+            rule_id = dk.split(":", 1)[0]
+            if rule_id not in dedupe_candidates:
+                dedupe_candidates[rule_id] = dk
+
+        return ChainPreflightResult(
+            decision=decision,
+            mode=mode.value,
+            kernel_verdict=core["kernel_verdict"],
+            effective_verdict=core["effective_verdict"],
+            composition_match=core["composition_match"],
+            matched_rule_ids=core["matched_rule_ids"],
+            exception_results=core["exception_results"],
+            block_reasons=block_reasons,
+            history_length=core["history_length"],
+            action_log_hash=core["action_log_hash"],
+            action_log_bytes=core["action_log_bytes"],
+            proposed_step_dict=core["proposed_step_dict"],
+            proposed_step_hash=proposed_step_hash,
+            preflight_token=preflight_token,
+            policy_fragment=core["policy_fragment"],
+            dedupe_candidates=dedupe_candidates,
+            verdict_reason=core["verdict_reason"],
         )
 
     def _proposed_matches(self, rule: CompositionRule, step: ActionStep) -> bool:
@@ -678,6 +975,7 @@ class ChainGate:
         composition_match: bool,
         history_length: int,
         policy: Any,
+        mode: ChainMode = ChainMode.DETECT_ONLY,
     ) -> tuple[dict | None, str | None]:
         """Evaluate policy and return (fragment_dict, augmented_verdict).
 
@@ -745,14 +1043,15 @@ class ChainGate:
                     augmented_verdict = "deny"  # warn escalates to deny in composition context
             # ESCALATE and PASS: no change
 
-            # Detect-only: applied=False on ALL fragments, reason="detect_only_mode"
+            # Mode-aware fragment semantics (Phase 2C)
+            policy_changed = augmented_verdict is not None
             fragment = PolicyReceiptFragment(
                 policy_verdict=eval_result.verdict.value,
                 matched_rule_ids=tuple(r.rule_id for r in eval_result.matched_rules),
                 obligation_kinds=tuple(o.kind for o in eval_result.obligations),
                 policy_identity=eval_result.policy_identity,
-                applied=False,
-                reason="detect_only_mode",
+                applied=_fragment_applied(mode, policy_changed),
+                reason=_fragment_reason(mode),
                 duration_ms=duration_ms,
             )
 

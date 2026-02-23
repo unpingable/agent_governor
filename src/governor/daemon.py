@@ -373,6 +373,10 @@ class DaemonState:
         self._cooldown_store = None
         self._receipt_v1_store = None
         self._claim_correlation_store = None
+        self._policy_rule_set = None
+        self._policy_load_status: str | None = None
+        self._policy_loaded_at: str | None = None
+        self._policy_content_hash: str | None = None
 
     @property
     def claim_correlation_store(self):
@@ -382,6 +386,51 @@ class DaemonState:
                 self.governor_dir
             )
         return self._claim_correlation_store
+
+    @property
+    def policy_rule_set(self):
+        """Lazy-loaded policy rule set. Cached for daemon lifetime (no auto-reload).
+
+        Sources (in order): $GOVERNOR_DIR/policy.json → default deny-all.
+        Corrupt files fall back to default with load_status='corrupt_file_fallback'.
+        """
+        if self._policy_rule_set is None:
+            from .policy_engine import load_policy, default_policy
+            policy_path = self.governor_dir / "policy.json"
+            if policy_path.exists():
+                try:
+                    raw = policy_path.read_bytes()
+                    self._policy_content_hash = hashlib.sha256(raw).hexdigest()
+                    self._policy_rule_set = load_policy(policy_path)
+                    self._policy_load_status = "loaded"
+                except Exception:
+                    logger.warning(
+                        "Failed to load policy.json, using default deny-all",
+                        exc_info=True,
+                    )
+                    try:
+                        self._policy_content_hash = hashlib.sha256(
+                            policy_path.read_bytes()
+                        ).hexdigest()
+                    except Exception:
+                        self._policy_content_hash = None
+                    self._policy_rule_set = default_policy()
+                    self._policy_load_status = "corrupt_file_fallback"
+            else:
+                self._policy_rule_set = default_policy()
+                self._policy_load_status = "missing_file"
+                self._policy_content_hash = None
+            self._policy_loaded_at = datetime.now(
+                timezone.utc
+            ).isoformat()
+            logger.info(
+                "policy_loaded: source=%s bundle=%s version=%s hash=%s",
+                self._policy_load_status,
+                self._policy_rule_set.policy_bundle_id,
+                self._policy_rule_set.policy_bundle_version,
+                self._policy_content_hash,
+            )
+        return self._policy_rule_set
 
     @property
     def cooldown_store(self):
@@ -2037,6 +2086,125 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("claims.for_receipt", claims_for_receipt)
     dispatcher.register("claims.window", claims_window)
     dispatcher.register("claims.stats", claims_stats)
+
+    # --- Policy Engine ---
+
+    async def policy_evaluate(params: dict) -> dict:
+        """Evaluate a request against the loaded policy rule set.
+
+        Params:
+            request (dict, required): PolicyEvalRequest as dict.
+            strict_taxonomy (bool|str, default True): If True, unknown
+                capabilities cause immediate BLOCK.
+
+        Returns PolicyEvalResult as dict. Emits a gate receipt.
+        """
+        from .policy_engine import (
+            PolicyEvalRequest as PER,
+            evaluate,
+            request_content_hash,
+            POLICY_ENGINE_VERSION,
+        )
+
+        raw_request = params.get("request")
+        if not raw_request:
+            raise ValueError("Missing required param: request")
+
+        # Coerce strict_taxonomy: accept bool or "true"/"false" strings
+        raw_strict = params.get("strict_taxonomy", True)
+        if isinstance(raw_strict, bool):
+            strict_taxonomy = raw_strict
+        elif isinstance(raw_strict, str):
+            lower = raw_strict.strip().lower()
+            if lower == "true":
+                strict_taxonomy = True
+            elif lower == "false":
+                strict_taxonomy = False
+            else:
+                raise ValueError(
+                    f"strict_taxonomy must be true/false, got: {raw_strict!r}"
+                )
+        else:
+            raise ValueError(
+                f"strict_taxonomy must be bool or string, got: {type(raw_strict).__name__}"
+            )
+
+        request = PER.from_dict(raw_request)
+        t0 = time.monotonic()
+        result = evaluate(request, state.policy_rule_set, strict_taxonomy=strict_taxonomy)
+        duration_ms = round((time.monotonic() - t0) * 1000, 2)
+
+        # Emit gate receipt with bounded payload
+        try:
+            state.receipt_system.emit(
+                gate="policy_engine",
+                verdict=result.verdict.value,
+                subject_kind="policy_eval_request",
+                subject_bytes=request_content_hash(request).encode("utf-8"),
+                evidence_bundle={
+                    "request_id": request.request_id,
+                    "matched_rule_ids": [r.rule_id for r in result.matched_rules],
+                    "obligations_count": len(result.obligations),
+                    "reason_codes": list(result.rationale.reason_codes),
+                    "duration_ms": duration_ms,
+                    "policy_bundle_id": result.policy_identity.policy_bundle_id,
+                    "policy_bundle_version": result.policy_identity.policy_bundle_version,
+                },
+                gate_config={
+                    "strict_taxonomy": strict_taxonomy,
+                    "policy_engine_version": POLICY_ENGINE_VERSION,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "receipt_emit_failed: policy_engine gate receipt not written",
+                exc_info=True,
+            )
+
+        return result.to_dict()
+
+    async def policy_info(params: dict) -> dict:
+        """Return policy metadata.
+
+        Policy is loaded lazily and cached for daemon lifetime (no auto-reload).
+        """
+        from .policy_engine import POLICY_ENGINE_VERSION
+        rs = state.policy_rule_set  # triggers lazy load if needed
+        return {
+            "source": "file" if state._policy_load_status == "loaded" else "default",
+            "load_status": state._policy_load_status,
+            "policy_bundle_id": rs.policy_bundle_id,
+            "policy_bundle_version": rs.policy_bundle_version,
+            "rule_count": len(rs.rules),
+            "default_verdict": rs.default_verdict,
+            "description": rs.description,
+            "capability_vocab_version": rs.capability_vocab_version,
+            "obligation_vocab_version": rs.obligation_vocab_version,
+            "policy_engine_version": POLICY_ENGINE_VERSION,
+            "policy_content_hash": state._policy_content_hash,
+            "loaded_at": state._policy_loaded_at,
+        }
+
+    async def policy_capabilities(params: dict) -> dict:
+        """Return the capability and obligation vocabularies."""
+        from .policy_engine import (
+            Capability,
+            ObligationKind,
+            CAPABILITY_VOCAB_VERSION,
+            OBLIGATION_VOCAB_VERSION,
+            POLICY_ENGINE_VERSION,
+        )
+        return {
+            "policy_engine_version": POLICY_ENGINE_VERSION,
+            "capability_vocab_version": CAPABILITY_VOCAB_VERSION,
+            "obligation_vocab_version": OBLIGATION_VOCAB_VERSION,
+            "capabilities": [c.value for c in Capability],
+            "obligations": [o.value for o in ObligationKind],
+        }
+
+    dispatcher.register("policy.evaluate", policy_evaluate)
+    dispatcher.register("policy.info", policy_info)
+    dispatcher.register("policy.capabilities", policy_capabilities)
 
     dispatcher.register("chat.send", chat_send, mutating=True)
     dispatcher.register_streaming("chat.stream", chat_stream, mutating=True)

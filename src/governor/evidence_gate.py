@@ -693,6 +693,7 @@ class EvidenceGate:
         prior_claims: list[EvidenceGateClaim] | None = None,
         oracle_evidence: list[Any] | None = None,
         correlation_ctx: Any | None = None,
+        policy: Any | None = None,
     ) -> EvidenceGateOutput:
         """
         Validate agent output against kernel constraints.
@@ -709,6 +710,9 @@ class EvidenceGate:
             correlation_ctx: Optional CorrelationContext for claim↔receipt
                 correlation. If provided, extracted claims are minted as
                 ClaimRecords and linked to the emitted gate receipt.
+            policy: Optional PolicyRuleSet. When provided, policy evaluation
+                augments the inline result (can escalate OK→WARN or
+                OK/WARN→BLOCKED, but never downgrades inline BLOCKED).
 
         Returns:
             EvidenceGateOutput with status, claims, and any issues
@@ -799,8 +803,13 @@ class EvidenceGate:
 
         self.logger.log("output", status=result.status.value, warnings=result.warnings, blocking_reasons=result.blocking_reasons)
 
+        # Policy augmentation (if policy rule set provided)
+        policy_fragment = None
+        if policy is not None:
+            policy_fragment = self._evaluate_policy(output, result, policy)
+
         # Emit gate receipt (if receipt system is configured)
-        gate_receipt = self._emit_receipt(output, result)
+        gate_receipt = self._emit_receipt(output, result, policy_fragment=policy_fragment)
 
         # Emit receipt v1 (dual-emit alongside gate_receipt)
         self._emit_receipt_v1(output, result, gate_receipt)
@@ -813,7 +822,137 @@ class EvidenceGate:
 
         return result
 
-    def _emit_receipt(self, output: str, result: EvidenceGateOutput) -> Any:
+    def _evaluate_policy(
+        self,
+        output: str,
+        result: EvidenceGateOutput,
+        policy: Any,
+    ) -> Any:
+        """Evaluate policy against gate context and augment result.
+
+        Policy augments, never replaces: PASS from policy never downgrades
+        inline BLOCKED. ESCALATE is an explicit no-op (no handler).
+
+        Returns a PolicyReceiptFragment for receipt embedding, or None on error.
+        Fail-open: errors logged but never block the gate.
+        """
+        try:
+            import time as _time
+            from .policy_engine import (
+                PolicyEvalRequest,
+                SubjectInfo,
+                ContextInfo,
+                AttributesInfo,
+                PolicyReceiptFragment,
+                PolicyVerdict,
+                evaluate,
+                request_content_hash,
+            )
+
+            # Build synthetic capabilities from gate context
+            # synthetic.* = adapter-local, non-canonical capabilities.
+            # Not in Capability enum.
+            caps: list[str] = []
+            has_hard = any(c.level == ClaimLevel.HARD for c in result.claims)
+            has_conflicts = any(c.conflicts_with for c in result.claims)
+            if has_hard:
+                caps.append("synthetic.claim_hard")
+            if has_conflicts:
+                caps.append("synthetic.claim_contradicts")
+
+            request = PolicyEvalRequest(
+                subject=SubjectInfo(
+                    kind="gate_event",
+                    subject_id="evidence_gate",
+                    action="check",
+                    capabilities=tuple(caps),
+                ),
+                context=ContextInfo(
+                    gate_name="evidence_gate",
+                    trust_mode="local",
+                ),
+                attributes=AttributesInfo(
+                    extra={
+                        "strict": self.config.strict,
+                        "claim_count": len(result.claims),
+                        "has_contradictions": has_conflicts,
+                    },
+                ),
+            )
+
+            t0 = _time.monotonic()
+            eval_result = evaluate(
+                request, policy, strict_taxonomy=False,
+            )
+            duration_ms = round((_time.monotonic() - t0) * 1000, 2)
+
+            inline_status = result.status.value
+
+            # Augmentation logic: escalate severity, never downgrade
+            if eval_result.verdict == PolicyVerdict.BLOCK:
+                if result.status != EvidenceGateStatus.BLOCKED:
+                    result.status = EvidenceGateStatus.BLOCKED
+                result.blocking_reasons.append(
+                    f"policy: {eval_result.rationale.summary}"
+                )
+                self.logger.log(
+                    "policy_block",
+                    inline_status=inline_status,
+                    rules=[r.rule_id for r in eval_result.matched_rules],
+                    duration_ms=duration_ms,
+                )
+            elif eval_result.verdict == PolicyVerdict.WARN:
+                if result.status == EvidenceGateStatus.OK:
+                    result.status = EvidenceGateStatus.WARN
+                result.warnings.append(
+                    f"policy: {eval_result.rationale.summary}"
+                )
+                self.logger.log(
+                    "policy_warn",
+                    inline_status=inline_status,
+                    rules=[r.rule_id for r in eval_result.matched_rules],
+                    duration_ms=duration_ms,
+                )
+            elif eval_result.verdict == PolicyVerdict.ESCALATE:
+                # Explicit no-op: no escalation handler in evidence gate
+                self.logger.log(
+                    "policy_escalate_noop",
+                    inline_status=inline_status,
+                    rules=[r.rule_id for r in eval_result.matched_rules],
+                    duration_ms=duration_ms,
+                )
+            # PASS: no change
+
+            # Build receipt fragment
+            applied = eval_result.verdict not in (
+                PolicyVerdict.PASS,
+                PolicyVerdict.ESCALATE,
+            )
+            fragment = PolicyReceiptFragment(
+                policy_eval_request_ref=request_content_hash(request),
+                policy_verdict=eval_result.verdict.value,
+                matched_rules=eval_result.matched_rules,
+                obligations=eval_result.obligations,
+                policy_identity=eval_result.policy_identity,
+            )
+            # Annotate escalate no-op in the fragment dict (added post-construction)
+            fragment_dict = fragment.to_dict()
+            fragment_dict["applied"] = applied
+            if eval_result.verdict == PolicyVerdict.ESCALATE:
+                fragment_dict["reason"] = "no_escalation_handler"
+            fragment_dict["inline_status"] = inline_status
+            fragment_dict["duration_ms"] = duration_ms
+            return fragment_dict
+
+        except Exception:
+            logger.warning(
+                "policy evaluation failed in evidence gate — fail-open",
+                exc_info=True,
+            )
+            return None
+
+    def _emit_receipt(self, output: str, result: EvidenceGateOutput,
+                      policy_fragment: dict | None = None) -> Any:
         """Emit a gate receipt for this check.
 
         If no receipt_system is configured, logs a 'receipt_suppressed' event
@@ -837,6 +976,8 @@ class EvidenceGate:
             "warnings": result.warnings,
             "claim_ids": result.claim_ids,
         }
+        if policy_fragment is not None:
+            evidence_bundle["policy_fragment"] = policy_fragment
 
         return self._receipt_system.emit(
             gate="evidence_gate",

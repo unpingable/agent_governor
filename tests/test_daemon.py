@@ -1082,6 +1082,9 @@ class TestAllMethodsRegistered:
         "claims.for_receipt",
         "claims.window",
         "claims.stats",
+        "policy.evaluate",
+        "policy.info",
+        "policy.capabilities",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -1098,7 +1101,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 51
+        assert total == 54
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1150,7 +1153,8 @@ class TestMethodClassification:
     def test_read_only_methods_not_mutating(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         for method in ["governor.hello", "governor.now", "sessions.list",
-                       "receipts.list", "operator.snapshot", "trace.tail"]:
+                       "receipts.list", "operator.snapshot", "trace.tail",
+                       "policy.evaluate", "policy.info", "policy.capabilities"]:
             assert not d.is_mutating(method), f"{method} should be read_only"
 
     def test_mutating_methods_are_mutating(self, dispatcher_and_state):
@@ -3142,6 +3146,312 @@ class TestClaims:
     @pytest.mark.asyncio
     async def test_existing_rpcs_unaffected(self, dispatcher_and_state):
         """Backwards compat: existing RPCs still work after adding claims.*."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "governor.hello")
+        assert "protocol_version" in resp["result"]
+        resp2 = await roundtrip(d, "receipts.list")
+        assert isinstance(resp2["result"], list)
+
+
+# =============================================================================
+# Policy engine RPC handlers
+# =============================================================================
+
+
+def _make_pass_rule(rule_id: str = "r1", caps_any: list[str] | None = None,
+                    subject_kinds: list[str] | None = None) -> dict:
+    """Helper: build a pass rule dict for policy.json."""
+    rule: dict[str, Any] = {
+        "rule_id": rule_id,
+        "effect": "pass",
+        "priority": 10,
+    }
+    if caps_any:
+        rule["match_capabilities_any"] = caps_any
+    if subject_kinds:
+        rule["match_subject_kinds"] = subject_kinds
+    return rule
+
+
+def _make_warn_rule(rule_id: str = "w1", obligations: list[dict] | None = None,
+                    subject_kinds: list[str] | None = None) -> dict:
+    rule: dict[str, Any] = {
+        "rule_id": rule_id,
+        "effect": "warn",
+        "priority": 10,
+    }
+    if obligations:
+        rule["obligations"] = obligations
+    if subject_kinds:
+        rule["match_subject_kinds"] = subject_kinds
+    return rule
+
+
+def _write_policy(gov_dir: Path, rules: list[dict], **kwargs: Any) -> None:
+    """Write a policy.json to the governor directory."""
+    policy = {
+        "policy_bundle_id": kwargs.get("bundle_id", "test.bundle"),
+        "policy_bundle_version": kwargs.get("bundle_version", "1.0.0"),
+        "default_verdict": kwargs.get("default_verdict", "block"),
+        "rules": rules,
+    }
+    (gov_dir / "policy.json").write_text(json.dumps(policy))
+
+
+def _make_eval_request(caps: list[str] | None = None,
+                       kind: str = "gate_event",
+                       action: str = "check") -> dict:
+    """Build a minimal PolicyEvalRequest dict for testing."""
+    return {
+        "subject": {
+            "kind": kind,
+            "subject_id": "test",
+            "action": action,
+            "capabilities": caps or [],
+        },
+        "context": {
+            "gate_name": "test_gate",
+            "trust_mode": "local",
+        },
+    }
+
+
+class TestPolicy:
+    """Tests for policy.* RPC endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_policy_info_default(self, dispatcher_and_state):
+        """No policy.json → source='default', load_status='missing_file'."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "policy.info")
+        result = resp["result"]
+        assert result["source"] == "default"
+        assert result["load_status"] == "missing_file"
+        assert result["policy_bundle_id"] == "governor.default"
+        assert result["policy_content_hash"] is None
+        assert result["loaded_at"] is not None
+
+    @pytest.mark.asyncio
+    async def test_policy_info_from_file(self, dispatcher_and_state):
+        """policy.json exists → source='file', load_status='loaded'."""
+        d, state = dispatcher_and_state
+        # Reset cache so it reloads
+        state._policy_rule_set = None
+        state._policy_load_status = None
+        _write_policy(state.governor_dir, [_make_pass_rule()],
+                      bundle_id="test.file", bundle_version="2.0.0")
+        resp = await roundtrip(d, "policy.info")
+        result = resp["result"]
+        assert result["source"] == "file"
+        assert result["load_status"] == "loaded"
+        assert result["policy_bundle_id"] == "test.file"
+        assert result["policy_bundle_version"] == "2.0.0"
+        assert result["policy_content_hash"] is not None
+        assert len(result["policy_content_hash"]) == 64  # sha256 hex
+
+    @pytest.mark.asyncio
+    async def test_policy_info_corrupt_file(self, dispatcher_and_state):
+        """Corrupt policy.json → source='default', load_status='corrupt_file_fallback'."""
+        d, state = dispatcher_and_state
+        state._policy_rule_set = None
+        state._policy_load_status = None
+        (state.governor_dir / "policy.json").write_text("NOT VALID JSON {{{")
+        resp = await roundtrip(d, "policy.info")
+        result = resp["result"]
+        assert result["source"] == "default"
+        assert result["load_status"] == "corrupt_file_fallback"
+        # Still hashes corrupt bytes for debugging
+        assert result["policy_content_hash"] is not None
+
+    @pytest.mark.asyncio
+    async def test_policy_capabilities(self, dispatcher_and_state):
+        """Returns vocabulary lists and version."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "policy.capabilities")
+        result = resp["result"]
+        assert result["capability_vocab_version"] == "cap-v1"
+        assert result["obligation_vocab_version"] == "obl-v1"
+        assert result["policy_engine_version"] == "1.0.0"
+        assert isinstance(result["capabilities"], list)
+        assert "read_fs" in result["capabilities"]
+        assert isinstance(result["obligations"], list)
+        assert "require_human_approval" in result["obligations"]
+
+    @pytest.mark.asyncio
+    async def test_policy_evaluate_requires_request(self, dispatcher_and_state):
+        """Missing 'request' param → error."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "policy.evaluate", {})
+        assert "error" in resp
+
+    @pytest.mark.asyncio
+    async def test_policy_evaluate_default_blocks(self, dispatcher_and_state):
+        """Default deny-all policy → verdict=block."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(),
+        })
+        result = resp["result"]
+        assert result["verdict"] == "block"
+
+    @pytest.mark.asyncio
+    async def test_policy_evaluate_with_pass_rule(self, dispatcher_and_state):
+        """Matching pass rule → verdict=pass."""
+        d, state = dispatcher_and_state
+        state._policy_rule_set = None
+        state._policy_load_status = None
+        _write_policy(state.governor_dir, [
+            _make_pass_rule("r-gate", subject_kinds=["gate_event"]),
+        ])
+        resp = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(kind="gate_event"),
+        })
+        result = resp["result"]
+        assert result["verdict"] == "pass"
+
+    @pytest.mark.asyncio
+    async def test_policy_evaluate_emits_receipt_content(self, dispatcher_and_state):
+        """Receipt has gate='policy_engine' with bounded payload fields."""
+        d, state = dispatcher_and_state
+        resp = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(),
+        })
+        assert resp["result"]["verdict"] == "block"
+
+        receipts = state.receipt_system.query(gate="policy_engine")
+        assert len(receipts) >= 1
+        r = receipts[0]
+        assert r.gate == "policy_engine"
+        evidence = state.receipt_system.evidence_for(r)
+        assert "matched_rule_ids" in evidence
+        assert isinstance(evidence["matched_rule_ids"], list)
+        assert "obligations_count" in evidence
+        assert "reason_codes" in evidence
+        assert "duration_ms" in evidence
+        assert "policy_bundle_id" in evidence
+
+    @pytest.mark.asyncio
+    async def test_policy_evaluate_strict_taxonomy_blocks_unknown(
+        self, dispatcher_and_state
+    ):
+        """Unknown capability + strict_taxonomy=True → block."""
+        d, state = dispatcher_and_state
+        state._policy_rule_set = None
+        state._policy_load_status = None
+        _write_policy(state.governor_dir, [_make_pass_rule()])
+        resp = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(caps=["totally_unknown_cap"]),
+            "strict_taxonomy": True,
+        })
+        result = resp["result"]
+        assert result["verdict"] == "block"
+        assert any("unknown_capability" in rc for rc in result["rationale"]["reason_codes"])
+
+    @pytest.mark.asyncio
+    async def test_policy_evaluate_returns_obligations(self, dispatcher_and_state):
+        """Warn rule with obligations → obligations in result."""
+        d, state = dispatcher_and_state
+        state._policy_rule_set = None
+        state._policy_load_status = None
+        _write_policy(state.governor_dir, [
+            _make_warn_rule("w-obl", obligations=[
+                {"kind": "require_evidence", "params": {"type": "test_result"}},
+            ], subject_kinds=["gate_event"]),
+        ])
+        resp = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(kind="gate_event"),
+        })
+        result = resp["result"]
+        assert result["verdict"] == "warn"
+        assert len(result["obligations"]) == 1
+        assert result["obligations"][0]["kind"] == "require_evidence"
+
+    @pytest.mark.asyncio
+    async def test_policy_evaluate_result_schema(self, dispatcher_and_state):
+        """All top-level fields present in result."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(),
+        })
+        result = resp["result"]
+        for key in ("schema", "request_id", "evaluated_at", "verdict",
+                     "matched_rules", "obligations", "rationale",
+                     "policy_identity"):
+            assert key in result, f"Missing key: {key}"
+
+    @pytest.mark.asyncio
+    async def test_policy_all_three_read_only(self, dispatcher_and_state):
+        """All 3 policy methods are classified as read_only."""
+        d, _ = dispatcher_and_state
+        for m in ("policy.evaluate", "policy.info", "policy.capabilities"):
+            assert not d.is_mutating(m), f"{m} should be read_only"
+
+    @pytest.mark.asyncio
+    async def test_policy_evaluate_identity_fields(self, dispatcher_and_state):
+        """policy_identity populated in result."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(),
+        })
+        identity = resp["result"]["policy_identity"]
+        assert identity["policy_engine_version"] == "1.0.0"
+        assert identity["policy_bundle_id"] == "governor.default"
+
+    @pytest.mark.asyncio
+    async def test_policy_evaluate_malformed_strict_taxonomy(
+        self, dispatcher_and_state
+    ):
+        """String 'true'/'false' coerced; garbage rejected."""
+        d, _ = dispatcher_and_state
+        # String "true" should work
+        resp = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(),
+            "strict_taxonomy": "true",
+        })
+        assert "result" in resp
+
+        # String "false" should work
+        resp2 = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(),
+            "strict_taxonomy": "false",
+        })
+        assert "result" in resp2
+
+        # Garbage string → error
+        resp3 = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(),
+            "strict_taxonomy": "maybe",
+        })
+        assert "error" in resp3
+
+    @pytest.mark.asyncio
+    async def test_policy_cached_no_auto_reload(self, dispatcher_and_state):
+        """Write policy A → evaluate → overwrite with B → evaluate → still A."""
+        d, state = dispatcher_and_state
+        state._policy_rule_set = None
+        state._policy_load_status = None
+        _write_policy(state.governor_dir, [
+            _make_pass_rule("rA", subject_kinds=["gate_event"]),
+        ], bundle_id="bundle.A")
+
+        # First eval triggers lazy load of bundle.A
+        resp1 = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(kind="gate_event"),
+        })
+        assert resp1["result"]["policy_identity"]["policy_bundle_id"] == "bundle.A"
+
+        # Overwrite with bundle.B — but do NOT reset cache
+        _write_policy(state.governor_dir, [], bundle_id="bundle.B")
+
+        # Second eval still uses cached bundle.A
+        resp2 = await roundtrip(d, "policy.evaluate", {
+            "request": _make_eval_request(kind="gate_event"),
+        })
+        assert resp2["result"]["policy_identity"]["policy_bundle_id"] == "bundle.A"
+
+    @pytest.mark.asyncio
+    async def test_existing_rpcs_unaffected_after_policy(self, dispatcher_and_state):
+        """governor.hello + receipts.list still work after adding policy.*."""
         d, _ = dispatcher_and_state
         resp = await roundtrip(d, "governor.hello")
         assert "protocol_version" in resp["result"]

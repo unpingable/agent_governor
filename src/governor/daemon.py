@@ -377,6 +377,11 @@ class DaemonState:
         self._policy_load_status: str | None = None
         self._policy_loaded_at: str | None = None
         self._policy_content_hash: str | None = None
+        self._chain_rule_set = None
+        self._chain_load_status: str | None = None
+        self._chain_content_hash: str | None = None
+        self._chain_loaded_at: str | None = None
+        self._chain_action_logs = None
 
     @property
     def claim_correlation_store(self):
@@ -431,6 +436,47 @@ class DaemonState:
                 self._policy_content_hash,
             )
         return self._policy_rule_set
+
+    @property
+    def chain_rule_set(self):
+        """Lazy-loaded chain composition rules. Cached for daemon lifetime.
+
+        Sources: $GOVERNOR_DIR/chain_rules.json → empty (no rules).
+        Four load states: loaded, missing_policy, corrupt_fallback, loaded_empty.
+        """
+        if self._chain_rule_set is None:
+            from .chain_gate import load_chain_rules
+            rules_path = self.governor_dir / "chain_rules.json"
+            self._chain_rule_set, self._chain_load_status = load_chain_rules(
+                rules_path
+            )
+            if rules_path.exists():
+                try:
+                    self._chain_content_hash = hashlib.sha256(
+                        rules_path.read_bytes()
+                    ).hexdigest()
+                except Exception:
+                    self._chain_content_hash = None
+            else:
+                self._chain_content_hash = None
+            self._chain_loaded_at = datetime.now(timezone.utc).isoformat()
+            logger.info(
+                "chain_rules_loaded: status=%s rule_count=%d hash=%s",
+                self._chain_load_status,
+                len(self._chain_rule_set.rules),
+                self._chain_content_hash,
+            )
+        return self._chain_rule_set
+
+    @property
+    def chain_action_logs(self):
+        """Lazy-initialized action log store for chain composition gate."""
+        if self._chain_action_logs is None:
+            from .chain_gate import ActionLogStore
+            self._chain_action_logs = ActionLogStore(
+                self.governor_dir / "chain_logs"
+            )
+        return self._chain_action_logs
 
     @property
     def cooldown_store(self):
@@ -2207,6 +2253,234 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("policy.evaluate", policy_evaluate)
     dispatcher.register("policy.info", policy_info)
     dispatcher.register("policy.capabilities", policy_capabilities)
+
+    # --- Chain Composition Gate (Phase 2B: detect-only) ---
+
+    async def chain_evaluate(params: dict) -> dict:
+        """Evaluate a tool action against composition rules.
+
+        Server-owned annotation: daemon calls annotate_step() to build
+        the ActionStep. Caller supplies tool_id + args + result_status;
+        classification fields are ignored (trust boundary).
+
+        Persists action log, emits gate receipt, returns ChainEvalResult.
+        """
+        from .chain_gate import (
+            ChainGate,
+            ActionLog,
+            annotate_step as _annotate_step,
+            compute_action_log_hash,
+        )
+        from .gate_receipt import canonical_json as _cj
+
+        tool_id = params.get("tool_id")
+        if not tool_id:
+            raise TypeError("tool_id is required")
+        correlation_id = params.get("correlation_id")
+        if not correlation_id:
+            raise TypeError("correlation_id is required")
+
+        args = params.get("args") or {}
+        result_status = params.get("result_status", "ok")
+        exceptions = set(params.get("exceptions", []))
+
+        # Server-owned annotation
+        proposed_step = _annotate_step(tool_id, args, result_status)
+
+        # Load or create action log
+        action_log = state.chain_action_logs.get(correlation_id)
+        if action_log is None:
+            action_log = ActionLog(
+                correlation_id=correlation_id,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+
+        # Pure evaluation
+        gate = ChainGate()
+        result = gate.evaluate(
+            action_log,
+            proposed_step,
+            state.chain_rule_set,
+            exceptions=exceptions,
+            policy=state.policy_rule_set,
+        )
+
+        # Append proposed step + persist BEFORE receipt emission
+        action_log.append(proposed_step)
+
+        # Dedupe: record matches and determine receipt style
+        dedupe_info: list[dict[str, Any]] = []
+        for dk in result.dedupe_keys:
+            count = action_log.record_match(dk)
+            dedupe_info.append({
+                "key": dk,
+                "count": count,
+                "is_repeat": count > 1,
+            })
+
+        state.chain_action_logs.put(action_log)
+
+        # Receipt emission (daemon owns this, not ChainGate)
+        verdict_map = {"deny": "block", "allow": "pass"}
+        receipt_verdict = verdict_map.get(result.effective_verdict, "pass")
+
+        evidence_bundle: dict[str, Any] = {
+            "action_log_hash": result.action_log_hash,
+            "proposed_step": result.proposed_step_dict,
+            "matched_rule_ids": result.matched_rule_ids,
+            "exception_results": result.exception_results,
+            "history_length": result.history_length,
+            "mode": result.mode,
+            "correlation_id": correlation_id,
+            "verdict_reason": result.verdict_reason,
+            "dedupe_counts": dict(action_log.dedupe_counts),
+        }
+        if result.policy_fragment is not None:
+            evidence_bundle["policy_fragment"] = result.policy_fragment
+
+        gate_config: dict[str, Any] = {
+            "load_status": state._chain_load_status,
+            "rule_count": len(state.chain_rule_set.rules),
+            "mode": "detect_only",
+            "correlation_id": correlation_id,
+        }
+
+        try:
+            state.receipt_system.emit(
+                gate="chain_composition",
+                verdict=receipt_verdict,
+                subject_kind="action_sequence",
+                subject_bytes=result.action_log_bytes,
+                evidence_bundle=evidence_bundle,
+                gate_config=gate_config,
+            )
+        except Exception:
+            logger.warning(
+                "receipt_suppressed: chain_composition gate receipt not written",
+                exc_info=True,
+            )
+
+        resp = result.to_dict()
+        resp["dedupe"] = dedupe_info
+        return resp
+
+    async def chain_status(params: dict) -> dict:
+        """Return chain gate status.  Optionally include action log info."""
+        # Trigger lazy load of rules
+        rs = state.chain_rule_set
+        result: dict[str, Any] = {
+            "load_status": state._chain_load_status,
+            "rule_count": len(rs.rules),
+            "content_hash": state._chain_content_hash,
+            "loaded_at": state._chain_loaded_at,
+            "mode": "detect_only",
+        }
+
+        correlation_id = params.get("correlation_id")
+        if correlation_id:
+            log = state.chain_action_logs.get(correlation_id)
+            if log is not None:
+                from .chain_gate import compute_action_log_hash
+                _, log_hash = compute_action_log_hash(log.steps)
+                result["log_exists"] = True
+                result["history_length"] = len(log.steps)
+                result["action_log_hash"] = log_hash
+            else:
+                result["log_exists"] = False
+                result["history_length"] = 0
+                result["action_log_hash"] = None
+
+        return result
+
+    async def chain_rules(params: dict) -> dict:
+        """Return loaded chain composition rules."""
+        rs = state.chain_rule_set
+        return {
+            "load_status": state._chain_load_status,
+            "rule_set_version": rs.rule_set_version,
+            "rule_count": len(rs.rules),
+            "rules": [
+                {
+                    "rule_id": r.rule_id,
+                    "description": r.description,
+                    "effect": r.effect,
+                    "prior_sensitivity_gte": (
+                        r.prior_sensitivity_gte.value
+                        if r.prior_sensitivity_gte else None
+                    ),
+                    "prior_capability": (
+                        r.prior_capability.value if r.prior_capability else None
+                    ),
+                    "prior_trust_domain": (
+                        r.prior_trust_domain.value if r.prior_trust_domain else None
+                    ),
+                    "proposed_capability": (
+                        r.proposed_capability.value if r.proposed_capability else None
+                    ),
+                    "proposed_trust_domain": (
+                        r.proposed_trust_domain.value
+                        if r.proposed_trust_domain else None
+                    ),
+                    "unless_condition": r.unless_condition,
+                }
+                for r in rs.rules
+            ],
+        }
+
+    async def chain_reset(params: dict) -> dict:
+        """Reset the action log for a correlation_id."""
+        from .gate_receipt import canonical_json as _cj
+
+        correlation_id = params.get("correlation_id")
+        if not correlation_id:
+            raise TypeError("correlation_id is required")
+
+        # Get previous length before reset
+        prev_log = state.chain_action_logs.get(correlation_id)
+        prev_length = len(prev_log.steps) if prev_log else 0
+
+        state.chain_action_logs.reset(correlation_id)
+
+        # Emit reset receipt
+        try:
+            subject_bytes = _cj({
+                "correlation_id": correlation_id,
+                "reset": True,
+            })
+            state.receipt_system.emit(
+                gate="chain_composition",
+                verdict="pass",
+                subject_kind="action_sequence",
+                subject_bytes=subject_bytes,
+                evidence_bundle={
+                    "correlation_id": correlation_id,
+                    "previous_history_length": prev_length,
+                    "verdict_reason": "explicit_reset",
+                },
+                gate_config={
+                    "load_status": state._chain_load_status,
+                    "rule_count": len(state.chain_rule_set.rules),
+                    "mode": "detect_only",
+                    "correlation_id": correlation_id,
+                },
+                receipt_role="reset",
+            )
+        except Exception:
+            logger.warning(
+                "receipt_suppressed: chain_composition reset receipt not written",
+                exc_info=True,
+            )
+
+        return {
+            "reset": True,
+            "correlation_id": correlation_id,
+            "previous_history_length": prev_length,
+        }
+
+    dispatcher.register("chain.evaluate", chain_evaluate, mutating=True)
+    dispatcher.register("chain.status", chain_status)
+    dispatcher.register("chain.rules", chain_rules)
+    dispatcher.register("chain.reset", chain_reset, mutating=True)
 
     dispatcher.register("chat.send", chat_send, mutating=True)
     dispatcher.register_streaming("chat.stream", chat_stream, mutating=True)

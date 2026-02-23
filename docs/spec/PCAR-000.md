@@ -461,9 +461,9 @@ All artifacts are stored for replay.
 
 ## 21. Open Questions (to resolve in companion specs)
 
-- Canonical JSON vs CBOR for hashable serialization
-- Receipt chain strategy (linear chain vs DAG)
-- Standardized `Δt` signal vocabulary
+- ~~Canonical JSON vs CBOR for hashable serialization~~ — Resolved: Canonical JSON (PCAR-D §10). CBOR deferred.
+- ~~Receipt chain strategy (linear chain vs DAG)~~ — Resolved: Linear chain (PCAR-D §13). DAG deferred.
+- ~~Standardized `Δt` signal vocabulary~~ — Partially resolved: Minimal signal vocabulary in PCAR-C §9.2.
 - Cross-runtime verifier identity and trust roots
 - Policy profile definitions (dev / enterprise / regulated)
 - Partial-proof semantics for streaming workflows

@@ -285,6 +285,11 @@ Agent Governor is a reference implementation of the **PCAR** protocol family —
 
 - [**PCAR-000**](docs/spec/PCAR-000.md) — Root protocol: architecture model, cross-tier invariants, state machine
 - [**PCAR-A**](docs/spec/PCAR-A.md) — Typed Claim Envelope: speech-act discipline, downgrade rules, error model
+- [**PCAR-B**](docs/spec/PCAR-B.md) — Proof Objects + Verifier Contract: evidence substrate, freshness, state binding
+- [**PCAR-C**](docs/spec/PCAR-C.md) — Constraint Decisions + Regime: control law, policy packs, signal-derived regimes
+- [**PCAR-D**](docs/spec/PCAR-D.md) — Receipt Canonicalization: hash-chained provenance, canonical JSON, evidence store
+- [**PCAR-E**](docs/spec/PCAR-E.md) — Actuator Contract: proof-carrying execution, scope enforcement, no free-text paths
+- [**PCAR-R**](docs/spec/PCAR-R.md) — Replay Artifacts: differential replay, counterfactual analysis, redaction-compatible
 
 > Constitutional AI (Anthropic) governs model behavior at training time. PCAR governs executable authority at runtime. They are complementary.
 
@@ -414,6 +419,11 @@ bash start-codex.sh                     # Codex backend
 | `specs/gaps/ETHICAL_HARDENING.md` | Ethical failure modes + enforceable invariants |
 | `docs/spec/PCAR-000.md` | PCAR root protocol: runtime constitution for evidence-bound actuation |
 | `docs/spec/PCAR-A.md` | Typed Claim Envelope: speech-act discipline, downgrade rules |
+| `docs/spec/PCAR-B.md` | Proof Objects + Verifier Contract: evidence substrate |
+| `docs/spec/PCAR-C.md` | Constraint Decisions + Regime Derivation: control law |
+| `docs/spec/PCAR-D.md` | Receipt Canonicalization + Provenance: hash-chained audit |
+| `docs/spec/PCAR-E.md` | Actuator Contract: proof-carrying execution boundary |
+| `docs/spec/PCAR-R.md` | Replay Artifacts: differential and counterfactual replay |
 | `specs/` | 25+ design specs |
 
 ---

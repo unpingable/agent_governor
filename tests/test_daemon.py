@@ -3323,12 +3323,18 @@ class TestPolicy:
         r = receipts[0]
         assert r.gate == "policy_engine"
         evidence = state.receipt_system.evidence_for(r)
+        # Canonical fragment fields (same shape as gate fragments)
         assert "matched_rule_ids" in evidence
         assert isinstance(evidence["matched_rule_ids"], list)
-        assert "obligations_count" in evidence
-        assert "reason_codes" in evidence
+        assert "obligation_kinds" in evidence
+        assert isinstance(evidence["obligation_kinds"], list)
+        assert "policy_identity" in evidence
+        assert isinstance(evidence["policy_identity"], dict)
+        assert "applied" in evidence
         assert "duration_ms" in evidence
-        assert "policy_bundle_id" in evidence
+        # RPC-specific context
+        assert "request_id" in evidence
+        assert "reason_codes" in evidence
 
     @pytest.mark.asyncio
     async def test_policy_evaluate_strict_taxonomy_blocks_unknown(

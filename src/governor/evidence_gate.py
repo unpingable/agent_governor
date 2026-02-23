@@ -923,25 +923,30 @@ class EvidenceGate:
                 )
             # PASS: no change
 
-            # Build receipt fragment
+            # Build receipt fragment (canonical shape — see PolicyReceiptFragment docstring)
             applied = eval_result.verdict not in (
                 PolicyVerdict.PASS,
                 PolicyVerdict.ESCALATE,
             )
-            fragment = PolicyReceiptFragment(
-                policy_eval_request_ref=request_content_hash(request),
-                policy_verdict=eval_result.verdict.value,
-                matched_rules=eval_result.matched_rules,
-                obligations=eval_result.obligations,
-                policy_identity=eval_result.policy_identity,
-            )
-            # Annotate escalate no-op in the fragment dict (added post-construction)
-            fragment_dict = fragment.to_dict()
-            fragment_dict["applied"] = applied
+            reason = None
             if eval_result.verdict == PolicyVerdict.ESCALATE:
-                fragment_dict["reason"] = "no_escalation_handler"
+                reason = "no_escalation_handler"
+            fragment = PolicyReceiptFragment(
+                policy_verdict=eval_result.verdict.value,
+                matched_rule_ids=tuple(
+                    r.rule_id for r in eval_result.matched_rules
+                ),
+                obligation_kinds=tuple(
+                    o.kind for o in eval_result.obligations
+                ),
+                policy_identity=eval_result.policy_identity,
+                applied=applied,
+                reason=reason,
+                duration_ms=duration_ms,
+            )
+            fragment_dict = fragment.to_dict()
+            # Gate-specific annotation (not part of canonical fragment)
             fragment_dict["inline_status"] = inline_status
-            fragment_dict["duration_ms"] = duration_ms
             return fragment_dict
 
         except Exception:

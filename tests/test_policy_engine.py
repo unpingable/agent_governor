@@ -318,26 +318,64 @@ class TestSerialization:
 
     def test_receipt_fragment_round_trip(self):
         frag = PolicyReceiptFragment(
-            policy_eval_request_ref="abc123",
             policy_verdict="pass",
-            matched_rules=(MatchedRule(rule_id="r1", effect="pass"),),
-            obligations=(Obligation(kind="log_high_priority"),),
-            obligation_enforcement=(
-                ObligationEnforcementRecord(
-                    kind="log_high_priority",
-                    enforcement_status="satisfied",
-                    evidence_ref="ev-1",
-                ),
-            ),
+            matched_rule_ids=("r1", "r2"),
+            obligation_kinds=("log_high_priority",),
             policy_identity=PolicyIdentity(
                 policy_engine_version="1.0.0",
                 policy_bundle_id="b1",
                 policy_bundle_version="0.1",
             ),
+            applied=True,
+            reason=None,
+            duration_ms=1.23,
         )
         d = frag.to_dict()
         frag2 = PolicyReceiptFragment.from_dict(d)
         assert frag2.to_dict() == d
+
+    def test_receipt_fragment_canonical_shape(self):
+        """Lock the canonical fragment field names — composition gate depends on this."""
+        frag = PolicyReceiptFragment(
+            policy_verdict="block",
+            matched_rule_ids=("rule-1",),
+            obligation_kinds=("require_evidence",),
+            applied=False,
+            reason="no_escalation_handler",
+            duration_ms=2.5,
+        )
+        d = frag.to_dict()
+        # Canonical fields (frozen contract)
+        assert set(d.keys()) == {
+            "policy_verdict",
+            "matched_rule_ids",
+            "obligation_kinds",
+            "policy_identity",
+            "applied",
+            "reason",
+            "duration_ms",
+        }
+        assert isinstance(d["matched_rule_ids"], list)
+        assert all(isinstance(x, str) for x in d["matched_rule_ids"])
+        assert isinstance(d["obligation_kinds"], list)
+        assert all(isinstance(x, str) for x in d["obligation_kinds"])
+        assert isinstance(d["policy_identity"], dict)
+        assert set(d["policy_identity"].keys()) == {
+            "policy_engine_version",
+            "policy_bundle_id",
+            "policy_bundle_version",
+        }
+        assert isinstance(d["applied"], bool)
+        assert isinstance(d["duration_ms"], float)
+
+    def test_receipt_fragment_reason_omitted_when_none(self):
+        """reason field absent from dict when None (not null)."""
+        frag = PolicyReceiptFragment(policy_verdict="pass", applied=True)
+        d = frag.to_dict()
+        assert "reason" not in d
+        # Round-trip still works
+        frag2 = PolicyReceiptFragment.from_dict(d)
+        assert frag2.reason is None
 
     def test_obligation_enforcement_record_round_trip(self):
         rec = ObligationEnforcementRecord(

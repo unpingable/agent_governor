@@ -597,44 +597,54 @@ class ObligationEnforcementRecord:
 
 @dataclass(frozen=True)
 class PolicyReceiptFragment:
-    """What a gate can embed in receipt evidence after policy eval."""
-    policy_eval_request_ref: str
+    """Canonical policy fragment embedded in gate receipts.
+
+    Contract (frozen shape — composition gate and all future gates consume this):
+
+        policy_verdict    : PolicyVerdict value string ("block"/"pass"/"warn"/…)
+        matched_rule_ids  : Rule IDs that matched (IDs only, not full objects)
+        obligation_kinds  : ObligationKind value strings (kinds only, not objects)
+        policy_identity   : {policy_engine_version, policy_bundle_id, policy_bundle_version}
+        applied           : Whether the verdict was applied to the gate result
+        reason            : Explanation for noop/fail-open (None when applied)
+        duration_ms       : Policy evaluation latency in milliseconds
+
+    Gates may annotate the receipt with gate-specific fields (e.g. inline_status)
+    alongside this fragment, but the fragment itself uses this shape only.
+    """
     policy_verdict: str   # PolicyVerdict value
-    matched_rules: tuple[MatchedRule, ...] = ()
-    obligations: tuple[Obligation, ...] = ()
-    obligation_enforcement: tuple[ObligationEnforcementRecord, ...] = ()
+    matched_rule_ids: tuple[str, ...] = ()
+    obligation_kinds: tuple[str, ...] = ()
     policy_identity: PolicyIdentity = field(default_factory=PolicyIdentity)
+    applied: bool = True
+    reason: str | None = None
+    duration_ms: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "policy_eval_request_ref": self.policy_eval_request_ref,
+        d: dict[str, Any] = {
             "policy_verdict": self.policy_verdict,
-            "matched_rules": [r.to_dict() for r in self.matched_rules],
-            "obligations": [o.to_dict() for o in self.obligations],
-            "obligation_enforcement": [
-                e.to_dict() for e in self.obligation_enforcement
-            ],
+            "matched_rule_ids": list(self.matched_rule_ids),
+            "obligation_kinds": list(self.obligation_kinds),
             "policy_identity": self.policy_identity.to_dict(),
+            "applied": self.applied,
+            "duration_ms": self.duration_ms,
         }
+        if self.reason is not None:
+            d["reason"] = self.reason
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PolicyReceiptFragment:
         return cls(
-            policy_eval_request_ref=data["policy_eval_request_ref"],
             policy_verdict=data["policy_verdict"],
-            matched_rules=tuple(
-                MatchedRule.from_dict(r) for r in data.get("matched_rules", ())
-            ),
-            obligations=tuple(
-                Obligation.from_dict(o) for o in data.get("obligations", ())
-            ),
-            obligation_enforcement=tuple(
-                ObligationEnforcementRecord.from_dict(e)
-                for e in data.get("obligation_enforcement", ())
-            ),
+            matched_rule_ids=tuple(data.get("matched_rule_ids", ())),
+            obligation_kinds=tuple(data.get("obligation_kinds", ())),
             policy_identity=PolicyIdentity.from_dict(
                 data.get("policy_identity", {}),
             ),
+            applied=data.get("applied", True),
+            reason=data.get("reason"),
+            duration_ms=data.get("duration_ms", 0.0),
         )
 
 

@@ -2142,13 +2142,15 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 subject_kind="policy_eval_request",
                 subject_bytes=request_content_hash(request).encode("utf-8"),
                 evidence_bundle={
-                    "request_id": request.request_id,
+                    # Canonical fragment fields (same shape as gate fragments)
                     "matched_rule_ids": [r.rule_id for r in result.matched_rules],
-                    "obligations_count": len(result.obligations),
-                    "reason_codes": list(result.rationale.reason_codes),
+                    "obligation_kinds": [o.kind for o in result.obligations],
+                    "policy_identity": result.policy_identity.to_dict(),
+                    "applied": True,
                     "duration_ms": duration_ms,
-                    "policy_bundle_id": result.policy_identity.policy_bundle_id,
-                    "policy_bundle_version": result.policy_identity.policy_bundle_version,
+                    # RPC-specific context (not in gate fragments)
+                    "request_id": request.request_id,
+                    "reason_codes": list(result.rationale.reason_codes),
                 },
                 gate_config={
                     "strict_taxonomy": strict_taxonomy,

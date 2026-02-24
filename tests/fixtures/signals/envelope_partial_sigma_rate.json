@@ -1,0 +1,58 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-24T17:45:03Z",
+  "emitter": "governor.daemon",
+  "emitter_version": "2.4.0-dev",
+
+  "signal_id": "SIGMA_RATE",
+  "signal_version": 1,
+  "phase": "2.4A",
+
+  "subject_type": "window",
+  "subject_id": "win_2026-02-24T17:40:00Z_5m",
+  "correlation_id": null,
+  "session_id": "sess_01JXYZ8M7Y3B4Q2A9K6V",
+
+  "window_start": "2026-02-24T17:40:00Z",
+  "window_end": "2026-02-24T17:45:00Z",
+  "window_kind": "rolling_5m",
+
+  "value": 0.1428571429,
+  "unit": "rate",
+  "values": {
+    "sigma_events": 2,
+    "eligible_events": 14,
+    "denominator_value": 14,
+    "denominator_type": "eligible_events",
+    "match_rule_version": "sigma-match-v1",
+    "mean_lag_ms": 8420,
+    "p95_lag_ms": 12100
+  },
+
+  "quality_status": "partial",
+  "quality_reasons": [
+    "exposure_proxy_unavailable",
+    "invalidation_stream_coverage_degraded"
+  ],
+  "sample_size": 14,
+  "completeness": 0.78,
+
+  "source_receipt_ids": [
+    "rcpt_endorse_01JXYZ8S11",
+    "rcpt_inval_01JXYZ8T22"
+  ],
+  "source_streams": ["endorsement", "invalidation"],
+  "source_versions": {
+    "governor.daemon": "2.4.0-dev",
+    "matcher": "sigma-match-v1"
+  },
+
+  "derivation": "windowed_aggregate",
+  "derivation_version": "sigma-rate-v1",
+  "annotations": {
+    "fallback_denominator": true,
+    "coverage_notes": [
+      "missing 1 invalidation partition shard for 42s"
+    ]
+  }
+}

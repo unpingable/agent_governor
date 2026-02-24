@@ -1,0 +1,48 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-24T17:50:00Z",
+  "emitter": "governor.daemon",
+  "emitter_version": "2.4.0-dev",
+
+  "signal_id": "SILENT_SUPPRESSION",
+  "signal_version": 1,
+  "phase": "2.4A",
+
+  "subject_type": "runtime",
+  "subject_id": "runtime_primary",
+  "correlation_id": null,
+  "session_id": null,
+
+  "window_start": "2026-02-24T17:45:00Z",
+  "window_end": "2026-02-24T17:50:00Z",
+  "window_kind": "rolling_5m",
+
+  "value": null,
+  "unit": "ratio",
+  "values": {
+    "expected_heartbeat_count": 5,
+    "observed_heartbeat_count": 5,
+    "expected_event_markers": 0,
+    "observed_event_markers": 0,
+    "daemon_reachable": 1,
+    "in_path_evidence_present": 0,
+    "activity_observed": 0
+  },
+
+  "quality_status": "unavailable",
+  "quality_reasons": ["no_activity_in_window"],
+  "sample_size": 0,
+  "completeness": 1.0,
+
+  "source_receipt_ids": [],
+  "source_streams": ["health"],
+  "source_versions": {
+    "governor.daemon": "2.4.0-dev"
+  },
+
+  "derivation": "windowed_aggregate",
+  "derivation_version": "silent-suppression-v1",
+  "annotations": {
+    "classification": "idle"
+  }
+}

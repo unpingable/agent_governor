@@ -1,0 +1,54 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-24T17:55:19Z",
+  "emitter": "governor.daemon",
+  "emitter_version": "2.4.0-dev",
+
+  "signal_id": "SIGMA_RATE",
+  "signal_version": 1,
+  "phase": "2.4A",
+
+  "subject_type": "window",
+  "subject_id": "win_2026-02-24T17:50:00Z_5m",
+  "correlation_id": null,
+  "session_id": "sess_01JXYZ8M7Y3B4Q2A9K6V",
+
+  "window_start": "2026-02-24T17:50:00Z",
+  "window_end": "2026-02-24T17:55:00Z",
+  "window_kind": "rolling_5m",
+
+  "value": null,
+  "unit": "rate",
+  "values": {
+    "sigma_events": null,
+    "eligible_events": 11,
+    "denominator_value": 11,
+    "denominator_type": "eligible_events",
+    "match_rule_version": "sigma-match-v1"
+  },
+
+  "quality_status": "invalid",
+  "quality_reasons": [
+    "event_order_violation",
+    "negative_lag_detected"
+  ],
+  "sample_size": 11,
+  "completeness": 0.91,
+
+  "source_receipt_ids": [
+    "rcpt_endorse_01JXYZ9001",
+    "rcpt_inval_01JXYZ9002"
+  ],
+  "source_streams": ["endorsement", "invalidation"],
+  "source_versions": {
+    "governor.daemon": "2.4.0-dev",
+    "matcher": "sigma-match-v1"
+  },
+
+  "derivation": "derived",
+  "derivation_version": "sigma-rate-v1",
+  "annotations": {
+    "bad_pairs_detected": 1,
+    "first_bad_pair_lag_ms": -240
+  }
+}

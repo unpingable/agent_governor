@@ -1,0 +1,58 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-24T17:42:11Z",
+  "emitter": "governor.daemon",
+  "emitter_version": "2.4.0-dev",
+
+  "signal_id": "EXPOSURE_PROXY",
+  "signal_version": 1,
+  "phase": "2.4A",
+
+  "subject_type": "window",
+  "subject_id": "win_2026-02-24T17:40:00Z_5m",
+  "correlation_id": null,
+  "session_id": "sess_01JXYZ8M7Y3B4Q2A9K6V",
+
+  "window_start": "2026-02-24T17:40:00Z",
+  "window_end": "2026-02-24T17:45:00Z",
+  "window_kind": "rolling_5m",
+
+  "value": 18.5,
+  "unit": "exposure_points",
+  "values": {
+    "exposure_points_total": 18.5,
+    "eligible_events": 14,
+    "excluded_events": 2,
+    "weighted_event_count": 18.5,
+    "coverage_ratio": 1.0,
+    "source_event_count": 16,
+    "component_tool_dispatch_attempts": 8,
+    "component_chat_generation_calls": 4,
+    "component_violation_evaluations": 4
+  },
+
+  "quality_status": "ok",
+  "quality_reasons": [],
+  "sample_size": 16,
+  "completeness": 1.0,
+
+  "source_receipt_ids": [
+    "rcpt_pre_01JXYZ8PAA",
+    "rcpt_disp_01JXYZ8QBB",
+    "rcpt_violation_01JXYZ8RCC"
+  ],
+  "source_streams": ["preflight", "dispatch", "violation"],
+  "source_versions": {
+    "governor.daemon": "2.4.0-dev",
+    "receipt_schema": "0.3.2"
+  },
+
+  "derivation": "windowed_aggregate",
+  "derivation_version": "exposure-proxy-v1",
+  "annotations": {
+    "weight_set_id": "default-v1",
+    "excluded_reason_counts": {
+      "non_governed_ui_event": 2
+    }
+  }
+}

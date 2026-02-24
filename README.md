@@ -1,8 +1,6 @@
 # Agent Governor
 
-**A WAF at the tool boundary for LLM/agent workflows** — an enforcement kernel and receipt chain for tool-using agents.
-
-Like a WAF, but for tool calls instead of HTTP. Agents are untrusted request generators. The Governor sits between the model and its tools, enforcing invariants (scope, evidence, budgets, scars) and producing tamper-evident receipts you can audit and replay.
+A governance and provenance layer for agentic systems. It records what an agent did, under what scope and policy, and produces receipt-grade evidence you can inspect after the fact. Sits between the model and its tools — agents propose actions, the governor decides whether they're admissible, and every decision produces a tamper-evident receipt.
 
 ```text
 Agent:     edit_file("src/auth/login.py", ...)
@@ -14,17 +12,105 @@ Next:      provide test results, downgrade to hypothesis, or request override
 
 11,000+ tests. Zero trust. Agents propose — only the governor commits.
 
-> **Status:** Alpha. Under active solo development. The core kernel (evidence gate, receipt chain, claim extraction) is stable and tested. Client integrations (VS Code, TUI, desktop, WebUI) are functional but evolving. Not packaged for distribution — install from source.
+> **Status:** Alpha. Under active solo development. The core kernel (evidence gate, receipt chain, claim extraction) is stable and tested. Client integrations (VS Code, TUI, Guvnah, Phosphor) are functional but evolving. Not packaged for distribution — install from source.
 >
 > **Support:** No SLA. No DMs. File structured issues (templates provided) or post in Discussions. Paper-cut reports are gold; vague feature requests may be closed.
 
 > *Language is a proposal, not an authority.*
 
-## Background
+---
 
-Agent Governor applies platform reliability patterns to LLM agent runtimes. The model is treated as an unreliable component crossing a trust boundary: it can propose actions, but it cannot authorize state change. The design center is not "make the model morally correct," but "make consequential actions require proof, freshness, and receipts." This is complementary to training-time alignment, and operates at a different layer: runtime authority control.
+## Why This Exists
 
-> See [docs/BACKGROUND.md](docs/BACKGROUND.md) for design lineage and prior art.
+Agent demos are easy. Agent forensics are weak.
+
+When an agent runs in a demo, failures are cheap — you shrug, tweak the prompt, try again. When the same agent runs against real systems (your codebase, your infrastructure, your users), failures get expensive fast: silent overwrites, contradicted decisions, retry spirals burning budget, hallucinated claims of completion.
+
+After an incident, teams usually can't answer the basic questions:
+
+- What exactly ran, and in what order?
+- Under what permissions and scope?
+- Why was that route/policy decision made?
+- What was *claimed* vs what *actually executed*?
+- Who approved the override, and was it recorded?
+
+Without receipts, failure collapses into blame and vibes. The operator gets held responsible for outcomes they couldn't inspect. Agent Governor exists to make that inspection possible — before, during, and after incidents.
+
+> The design center is not "make the model morally correct" but "make consequential actions require proof, freshness, and receipts." This is complementary to training-time alignment, operating at a different layer: runtime authority control. See [docs/BACKGROUND.md](docs/BACKGROUND.md) for design lineage and prior art.
+
+---
+
+## What It Does
+
+- **Receipts and provenance** — every enforcement decision produces a content-addressed, hash-chained receipt. Tamper with the chain and the hash breaks.
+- **Scope controls** — define where an agent can act and what tools it can use. Missing permission = denied, not defaulted.
+- **Policy evaluation and enforcement** — check decisions before they become actions. Advisory mode or hard enforcement — your call.
+- **Routing and lanes** — make execution paths legible and controllable. Task complexity → model tier → capability contract.
+- **Claims and integrity** — agents make claims ("tests pass," "file exists"); the governor checks whether evidence supports them.
+- **Composition governance** — detect and enforce constraints on *sequences* of tool calls, not just individual ones. Secret read → network egress? Blocked.
+- **Traceability** — postmortem-friendly evidence trail instead of reconstructing what happened from chat logs.
+
+Works as a layer around existing agent systems. Does not replace your runtime, framework, or model.
+
+---
+
+## What It Is Not
+
+- **Not a model.** Does not generate text or make decisions for you.
+- **Not an agent framework.** Does not own a runtime. Governs whatever runtime you use.
+- **Not alignment research.** Does not make models good. Constrains what they can *do*.
+- **Not content moderation.** Operates at the tool boundary, not the text boundary.
+- **Not a confidence score.** Confidence without evidence is theater. Receipts or it didn't happen.
+- **Not an AI firewall or MCP gateway.** Can sit alongside gateways, but its job is admissibility and receipt-grade evidence at runtime — not perimeter filtering.
+- **Not a guarantee agents won't fail.** They will. This makes the failure inspectable and the governance boundary explicit.
+
+It is a **control and evidence layer**.
+
+---
+
+## Adopt Incrementally
+
+You don't have to swallow the whole system. Each level adds value independently.
+
+**Level 1 — Receipts only (observe)**
+Collect provenance. No enforcement. Immediate postmortem and debug value. See what the agent actually did.
+
+**Level 2 — Policy evaluation (advisory)**
+Evaluate decisions against declared rules. Surface what *would* be blocked or flagged. No hard stops yet.
+
+**Level 3 — Enforcement (scope / lanes / policy)**
+Bind execution to declared constraints. Scope boundaries enforced. Policy violations blocked. Silent drift reduced.
+
+**Level 4 — Full governance**
+Claims, integrity checks, composition governance, chain preflight/record, operator tooling. Stronger audit posture and operational control.
+
+Teams can stop at any level and still get value.
+
+---
+
+## Who This Is For
+
+- Teams running tool-calling or agent workflows headed toward production
+- Platform/infra teams that need provenance for what agents did and why
+- Security/compliance teams that need auditability after incidents
+- Builders who want postmortem-grade evidence before scaling agent autonomy
+
+**Not for:** quick demo-only chatbots with no external actions, or teams looking for a turnkey hosted assistant.
+
+---
+
+## Start Here
+
+| I want to... | Start with |
+|---|---|
+| **See what the governor catches** | [Quick Start](#quick-start) — one command, immediate feedback |
+| **Get auditability first** | `governor init` + `governor gate check` — receipts with zero enforcement |
+| **Preflight and record tool chains** | [Composition governance](#what-this-catches) — chain.preflight/record |
+| **Inspect an incident** | `governor trace` + `governor receipts` — unified timeline and receipt query |
+| **Enforce scope and policy** | [Modes](#modes) + `governor intent set --profile production` |
+| **Use a desktop UI** | [Guvnah](https://github.com/unpingable/guvnah) — governor status and inspection console |
+| **Deploy a governed agent UI** | [Phosphor](https://github.com/unpingable/gov-webui) — governed chat interface (fiction / research / code modes) |
+| **Understand the architecture** | [Architecture](#architecture) + [PCAR specs](#pcar-proof-carrying-agent-runtime) |
 
 ---
 
@@ -70,29 +156,17 @@ When things go wrong, the question shifts from "why did it do that?" (storytime)
 
 Every enforcement action produces one of these. Tamper with the chain — the hash breaks.
 
-## Non-Goals
+## What This Catches
 
-- **Not an agent framework.** Does not own a runtime. Governs whatever runtime you use.
-- **Not alignment research.** Does not make models good. Constrains what they can *do*.
-- **Not content moderation.** Operates at the tool boundary, not the text boundary.
-- **Not a confidence score.** Confidence without evidence is theater. Receipts or it didn't happen.
+Not abstract risks. Concrete examples:
 
----
-
-## Why
-
-You're using Claude Code, Cursor, or Codex. The agent says "tests pass" — did it run them? It says "file exists" — did it check? It contradicts yesterday's decision — does anyone notice? It burns $4 on a retry loop — does anything stop it?
-
-Without enforcement, every agent claim is folklore. With enforcement:
-
-- Agent says "tests pass" → Governor runs the tests, produces a receipt.
-- Agent says "file exists" → Governor hashes the file, records a snapshot.
+- Agent says "tests pass" → Governor runs the tests, produces a receipt. No evidence? Blocked.
+- Agent says "file exists" → Governor hashes the file, records a snapshot. Missing? Blocked.
 - Agent contradicts a prior decision → Governor blocks the write.
 - Agent loops on the same tool call → Governor strips the tool, forces replan.
+- Agent reads secrets, then calls a network tool → Composition governance blocks the egress.
 
 **The core invariant:** language is a proposal, not an authority. The agent can *claim* anything. It can't *write* anything until evidence exists. Evidence must come from trusted collectors (test runners, linters, filesystem probes, git diffs) — not from the agent itself.
-
----
 
 ## Failure Modes We Detect
 
@@ -195,6 +269,10 @@ All operator commands are read-only, `--json` capable, and width-capped at 80 co
 
 ---
 
+*The sections below describe the internal architecture, protocol surface, and domain modules — for implementers, auditors, and contributors.*
+
+---
+
 ## Architecture
 
 ```mermaid
@@ -270,7 +348,7 @@ Multi-model claim comparison (interferometry — parallel + serial modes), code-
 **Non-Fiction Governor (~280 tests)** — Corpus management, DOI fetching, citation verification, contextual frame intrusion detection (12-frame taxonomy).
 
 ### Integrations (~560 tests)
-[VS Code extension](https://github.com/unpingable/vscode-governor), [WebUI](https://github.com/unpingable/governor_webui) (FastAPI + chat bridge), SDK middleware, MCP safety controls, session continuity, git/Perforce governance, external constraint attachment (Wikidata/Wikipedia/Scholar).
+[VS Code extension](https://github.com/unpingable/vscode-governor), [Phosphor](https://github.com/unpingable/gov-webui) (governed chat UI — fiction/research/code modes), SDK middleware, MCP safety controls, session continuity, git/Perforce governance, external constraint attachment (Wikidata/Wikipedia/Scholar).
 
 ### Infrastructure (~960 tests)
 Structured telemetry, Prometheus metrics, config profiles, continuity enforcement, convergence auto-tuning, QA harness, golden-file/property-based/contract tests.
@@ -396,11 +474,9 @@ pip install -e ".[dev]"
 
 # Run tests
 python3 -m pytest tests/ -v
-
-# WebUI
-bash start.sh                           # Claude Code backend
-bash start-codex.sh                     # Codex backend
 ```
+
+For client UIs, see: [Guvnah](https://github.com/unpingable/guvnah) (governor console) | [Phosphor](https://github.com/unpingable/gov-webui) (governed chat UI)
 
 ---
 

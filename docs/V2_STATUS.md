@@ -58,22 +58,30 @@ hardening.
 
 ### 2.3.2 — Composition Enforcement + Governed Dispatch
 
-**Phase 2C — Composition detection (detect-only).** Chain gate (`chain_gate.py`): pure-
+Four phases shipped together. These add **within-task composition governance** — the
+daemon evaluates tool-call sequences within a single `correlation_id` and can block
+dispatch at the membrane.
+
+**Phase 2A — Policy engine substrate.** Capability taxonomy, obligation vocabulary, pure
+evaluator. Policy fragment normalization (IDs-only contract, locked by tests). `policy.*`
+daemon RPCs. Evidence gate policy adoption (policy can override kernel verdicts with
+receipted justification).
+
+**Phase 2B — Composition detection (detect-only).** Chain gate (`chain_gate.py`): pure-
 function composition evaluator over action sequences. ActionStep/ActionLog/ActionLogStore
 with content-addressed hashing. CompositionRule matches on capability class × trust domain
 × data sensitivity (not tool name patterns). Server-owned annotation (`annotate_step`) —
-daemon classifies tools, agents never self-label. Policy augmentation: policy engine can
-override kernel verdicts with receipted justification. Dedupe suppresses repeat receipts.
+daemon classifies tools, agents never self-label. Dedupe suppresses repeat receipts.
 4 daemon RPCs: `chain.evaluate`, `chain.status`, `chain.rules`, `chain.reset`. 56 module
 tests + 12 daemon integration tests.
 
-**Phase 2C+ — Enforcement ratchet.** Three modes: `detect_only` → `enforce_shadow` →
-`enforce`. Preflight/record split: `chain.preflight` (pre-dispatch) + `chain.record`
-(post-dispatch). CAS binding token `H(log_hash + step_hash)` prevents TOCTOU drift.
-Record idempotency via `record_id`. Operator-readable block reasons. Decision vs verdict
-separation (`effective_verdict` = what logic concludes; `decision` = what runtime does in
-current mode). Preflight owns dedupe mutation; record owns step-log mutation.
-`chain.evaluate` restricted to detect_only (deprecated shim).
+**Phase 2C — Enforcement ratchet + CAS binding.** Three modes: `detect_only` →
+`enforce_shadow` → `enforce`. Preflight/record split: `chain.preflight` (pre-dispatch) +
+`chain.record` (post-dispatch). CAS binding token `H(log_hash + step_hash)` prevents
+TOCTOU drift between preflight and record. Record idempotency via `record_id`. Operator-
+readable block reasons. Decision vs verdict separation (`effective_verdict` = what logic
+concludes; `decision` = what runtime does in current mode). Preflight owns dedupe mutation;
+record owns step-log mutation. `chain.evaluate` restricted to detect_only (deprecated shim).
 
 **Phase 2D — Governed dispatch membrane.** `governed_dispatch()`: single enforcement
 function — if preflight returns "blocked", transport never runs. PreflightClient protocol
@@ -81,16 +89,23 @@ function — if preflight returns "blocked", transport never runs. PreflightClie
 `fail_open` mode for graceful degradation. 38 tests including blocked-preflight receipt
 audit proof.
 
-**Policy engine substrate.** Capability taxonomy, obligation vocabulary, pure evaluator.
-Policy fragment normalization (IDs-only contract, locked by tests). `policy.*` daemon RPCs
-+ evidence gate policy adoption.
+**Scope.** Composition enforcement applies to **tool-dispatch paths** (Claude Code hooks,
+Codex hooks, governed executor). Daemon-native chat generation (Maude `chat.send`,
+Phosphor chat) remains governed by the daemon's existing inline gating (evidence gate +
+violation resolver), not by `governed_dispatch`. This is the Lane A (tool composition) vs
+Lane B (LLM generation governance) distinction. Cross-task composition (2E) and rule
+learning from receipt corpus (2F) are explicitly out of scope.
+
+**Client integration.** Maude: 3 Pydantic models + 3 RPC methods (chain_preflight,
+chain_record, chain_status). Guvnah: 6 TypeScript interfaces + 6 GovernorClient methods +
+full IPC stack (channels → handlers → preload → renderer). Both are control surfaces with
+chain RPC access, not enforcement points.
 
 **README retune.** Problem shape → capabilities → non-goals → adoption ladder → start here.
 Explicit "not an AI firewall or MCP gateway" positioning. Renamed WebUI → Phosphor (app
 name; repo URL unchanged).
 
-**Client integration.** Maude: 3 Pydantic models + 3 RPC methods. Guvnah: 6 TypeScript
-interfaces + 6 GovernorClient methods + full IPC stack. ~12,900 tests, all green.
+~12,900 tests, all green.
 
 ---
 
@@ -188,9 +203,10 @@ If you're returning to this codebase:
    Preflight/record split, enforcement ratchet, CAS binding.
 
 If you're building the instrumentation spine (v2.4):
-- Start with `specs/gaps/SILENT_SUPPRESSION_GAP.md` (Phase A, spec 1 of 7)
-- Follow `specs/gaps/GAP_BUILD_ORDER.md` strictly — dependency order matters
-- Every signal emits via `SignalEnvelope` (defined in GAP_BUILD_ORDER.md)
+- Start with `specs/gaps/V2_4A_SPINE.md` — implementation contracts for Phase A
+- Build order within A: envelope → EXPOSURE_PROXY → SILENT_SUPPRESSION → SIGMA_RATE
+- `GAP_BUILD_ORDER.md` defines `SignalEnvelope` schema + cross-cutting contracts
+- Individual gap specs (design rationale) retained alongside the spine spec
 
 If you're starting 3.x:
 - Ship v2.4 first

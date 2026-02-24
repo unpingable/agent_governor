@@ -9,11 +9,17 @@ See `docs/V2_STATUS.md` for the 2.x boundary.
 
 ### Phase A — Instrumentation Spine
 
-| Order | Spec | Why First |
-|-------|------|-----------|
-| 1 | SILENT_SUPPRESSION_GAP | Can't diagnose capture if the governor is unplugged |
-| 2 | EXPOSURE_PROXY_GAP (v0) | Non-gameable denominator for all capture metrics |
-| 3 | SIGMA_RATE_GAP (observe-only) | Cheap, portable, immediately useful time series |
+Reordered from original (SILENT_SUPPRESSION first) based on dependency analysis:
+EXPOSURE_PROXY is the denominator substrate. SIGMA_RATE depends on it, and
+CAPTURE_SELF_DIAGNOSTIC (Phase B) depends on denominator integrity. Ship the
+denominator first. See `V2_4A_SPINE.md` for full implementation contracts.
+
+| Order | Spec | Why This Order |
+|-------|------|----------------|
+| A0 | SignalEnvelope + emitter | One format, not three |
+| A1 | EXPOSURE_PROXY_GAP (v0) | Denominator substrate — everything downstream needs it |
+| A2 | SILENT_SUPPRESSION_GAP | Detects when instrumentation path is compromised |
+| A3 | SIGMA_RATE_GAP (observe-only) | Needs denominator + stable source streams for pair matching |
 
 **Exit criteria:** You can tell (a) governor ran, (b) what it touched, (c) how often it endorsed then invalidated.
 
@@ -74,9 +80,9 @@ Calibration v0 = each signal → bounded [0,1], explicit saturation, versioned p
 ## Dependency Graph
 
 ```
-SILENT_SUPPRESSION ──┐
-                     ├──→ CAPTURE_SELF_DIAGNOSTIC
-EXPOSURE_PROXY ──────┘           │
+EXPOSURE_PROXY ──────┐
+     │               ├──→ CAPTURE_SELF_DIAGNOSTIC
+SILENT_SUPPRESSION ──┘           │
      │                           │
 SIGMA_RATE ──────────────────────┘
      │
@@ -388,14 +394,15 @@ two are v3 roadmap items.
 
 ### v2 Hook Points Required
 
-| Spec | What | Depends On |
-|------|------|------------|
-| GOV_PRIM_PROV_001 | Provenance labels on tool outputs | None (primitive) |
-| GOV_GAP_CHAIN_001 | Composition-aware capability gating | Provenance labels (soft) |
-| GOV_GAP_EGRESS_001 | Outbound data-flow policy gate | Provenance labels, chain gate (soft) |
+| Spec | What | Depends On | Status |
+|------|------|------------|--------|
+| GOV_PRIM_PROV_001 | Provenance labels on tool outputs | None (primitive) | open |
+| GOV_GAP_CHAIN_001 | Composition-aware capability gating | Provenance labels (soft) | **shipped (2.3.2)** |
+| GOV_GAP_EGRESS_001 | Outbound data-flow policy gate | Provenance labels, chain gate (soft) | open |
 
-Build order: provenance labels first (other gates consume them), then
-chain gate (sequence-level), then egress gate (payload-level).
+GOV_GAP_CHAIN_001 shipped as Phase 2B/2C/2D in v2.3.2 (chain_gate.py,
+governed_dispatch.py, policy_engine.py). Within-task composition enforced via
+preflight/record split. See V2_STATUS.md §2.3.2.
 
 ### v3 Roadmap
 
@@ -411,17 +418,18 @@ Even for v3-deferred items, v2 must include placeholder fields:
 - [ ] Receipt schema: `principal_ref` field (null in v2)
 - [ ] Daemon config: `[security]` section (commented out in v2)
 - [ ] `governor.hello` response: `auth_method` field (= "local" in v2)
-- [ ] Capability taxonomy: enumerated capability classes for chain gate
-- [ ] Policy engine: abstract interface (chain + egress share evaluation pattern)
+- [x] Capability taxonomy: enumerated capability classes for chain gate (shipped 2.3.2)
+- [x] Policy engine: abstract interface (chain + egress share evaluation pattern) (shipped 2.3.2)
 
 ---
 
 ## Files
 
 ```
-specs/gaps/SILENT_SUPPRESSION_GAP.md        # v2.4 Phase A
-specs/gaps/EXPOSURE_PROXY_GAP.md            # v2.4 Phase A
-specs/gaps/SIGMA_RATE_GAP.md                # v2.4 Phase A
+specs/gaps/V2_4A_SPINE.md                   # v2.4 Phase A implementation contracts
+specs/gaps/SILENT_SUPPRESSION_GAP.md        # v2.4 Phase A (design rationale)
+specs/gaps/EXPOSURE_PROXY_GAP.md            # v2.4 Phase A (design rationale)
+specs/gaps/SIGMA_RATE_GAP.md                # v2.4 Phase A (design rationale)
 specs/gaps/CAPTURE_SELF_DIAGNOSTIC_GAP.md   # v2.4 Phase B
 specs/gaps/REPLAY_HARNESS_GAP.md            # v2.4 Phase C
 specs/gaps/CALIBRATION_LAYER_GAP.md         # v2.4 Phase C

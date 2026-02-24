@@ -1,6 +1,6 @@
 # V2 Status
 
-As of 2.3.1. This document is the boundary between "shipped" and "next."
+As of 2.3.2. This document is the boundary between "shipped" and "next."
 
 ---
 
@@ -55,6 +55,42 @@ receipts_v1 RPC, method introspection (`rpc.list`), mutating gate, response cont
 attic door, bare invocation rollup ("one finger, one button"), findings-first
 doctor/status. Operator surface contract frozen in tests. Stability + lane routing
 hardening.
+
+### 2.3.2 — Composition Enforcement + Governed Dispatch
+
+**Phase 2C — Composition detection (detect-only).** Chain gate (`chain_gate.py`): pure-
+function composition evaluator over action sequences. ActionStep/ActionLog/ActionLogStore
+with content-addressed hashing. CompositionRule matches on capability class × trust domain
+× data sensitivity (not tool name patterns). Server-owned annotation (`annotate_step`) —
+daemon classifies tools, agents never self-label. Policy augmentation: policy engine can
+override kernel verdicts with receipted justification. Dedupe suppresses repeat receipts.
+4 daemon RPCs: `chain.evaluate`, `chain.status`, `chain.rules`, `chain.reset`. 56 module
+tests + 12 daemon integration tests.
+
+**Phase 2C+ — Enforcement ratchet.** Three modes: `detect_only` → `enforce_shadow` →
+`enforce`. Preflight/record split: `chain.preflight` (pre-dispatch) + `chain.record`
+(post-dispatch). CAS binding token `H(log_hash + step_hash)` prevents TOCTOU drift.
+Record idempotency via `record_id`. Operator-readable block reasons. Decision vs verdict
+separation (`effective_verdict` = what logic concludes; `decision` = what runtime does in
+current mode). Preflight owns dedupe mutation; record owns step-log mutation.
+`chain.evaluate` restricted to detect_only (deprecated shim).
+
+**Phase 2D — Governed dispatch membrane.** `governed_dispatch()`: single enforcement
+function — if preflight returns "blocked", transport never runs. PreflightClient protocol
+(transport-agnostic). DaemonPreflightClient adapter. GovernanceError for membrane failures.
+`fail_open` mode for graceful degradation. 38 tests including blocked-preflight receipt
+audit proof.
+
+**Policy engine substrate.** Capability taxonomy, obligation vocabulary, pure evaluator.
+Policy fragment normalization (IDs-only contract, locked by tests). `policy.*` daemon RPCs
++ evidence gate policy adoption.
+
+**README retune.** Problem shape → capabilities → non-goals → adoption ladder → start here.
+Explicit "not an AI firewall or MCP gateway" positioning. Renamed WebUI → Phosphor (app
+name; repo URL unchanged).
+
+**Client integration.** Maude: 3 Pydantic models + 3 RPC methods. Guvnah: 6 TypeScript
+interfaces + 6 GovernorClient methods + full IPC stack. ~12,900 tests, all green.
 
 ---
 
@@ -114,20 +150,20 @@ Four gap specs are explicitly 3.x:
 
 ---
 
-## Known-Good Bundle (2.3.1)
+## Known-Good Bundle (2.3.2)
 
 | Repo | Version | Coupling |
 |------|---------|----------|
-| [agent_gov](https://github.com/unpingable/agent_governor) | 2.3.1 | — |
-| [maude](https://github.com/unpingable/maude) | 2.3.0 | hard (mirrors major.minor) |
-| [vscode-governor](https://github.com/unpingable/vscode-governor) | 2.3.0 | hard (mirrors major.minor) |
-| [guvnah](https://github.com/unpingable/guvnah) | 2.3.0 | hard (mirrors major.minor) |
-| [gov-webui](https://github.com/unpingable/governor_webui) | 0.3.0 | loose (targets contract v1) |
+| [agent_gov](https://github.com/unpingable/agent_governor) | 2.3.2 | — |
+| [maude](https://github.com/unpingable/maude) | 2.3.2 | hard (mirrors major.minor) |
+| [vscode-governor](https://github.com/unpingable/vscode-governor) | 2.2.0 | hard (mirrors major.minor) |
+| [guvnah](https://github.com/unpingable/guvnah) | 2.3.2 | hard (mirrors major.minor) |
+| [gov-webui (Phosphor)](https://github.com/unpingable/governor_webui) | 0.4.0 | loose (targets contract v1) |
 
 **Sanity check** (run these to verify you're not in version hell):
 
 ```bash
-governor --version                      # should say 2.3.1
+governor --version                      # should say 2.3.2
 governor status --json | python3 -c "import sys,json; print(json.load(sys.stdin)['schema_version'])"  # should say 1
 governor doctor                         # walk 9 subsystems, flag non-nominal
 make test                               # in each repo
@@ -141,13 +177,15 @@ See `docs/VERSIONING.md` for the coupling rules and contract version table.
 
 If you're returning to this codebase:
 
-1. **Run the tests.** `python3 -m pytest tests/ -v` — ~11,200 tests, all should pass.
+1. **Run the tests.** `python3 -m pytest tests/ -v` — ~12,900 tests, all should pass.
 2. **Read the gate.** `src/governor/evidence_gate.py` is the enforcement surface.
    Everything else feeds into it or reads from it.
-3. **Read the daemon.** `src/governor/daemon.py` is the control plane. 36 RPC methods,
+3. **Read the daemon.** `src/governor/daemon.py` is the control plane. 60 RPC methods,
    lazy subsystem init, Unix socket or stdio.
 4. **Read the receipts.** `src/governor/gate_receipt.py` (decision receipts) and
    `libs/receipt_kernel/` (audit trail). Content-addressed, hash-chained, append-only.
+5. **Read the chain gate.** `src/governor/chain_gate.py` is the composition evaluator.
+   Preflight/record split, enforcement ratchet, CAS binding.
 
 If you're building the instrumentation spine (v2.4):
 - Start with `specs/gaps/SILENT_SUPPRESSION_GAP.md` (Phase A, spec 1 of 7)

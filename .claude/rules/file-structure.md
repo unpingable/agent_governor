@@ -94,7 +94,8 @@ src/governor/
 │   ├── exposure_proxy.py            # A1: EXPOSURE_PROXY weighted denominator
 │   ├── silent_suppression.py        # A2: SILENT_SUPPRESSION in-path health
 │   ├── sigma_rate.py                # A3: SIGMA_RATE endorsement→invalidation matching
-│   └── capture_self_diagnostic.py   # B1: CAPTURE_SELF_DIAGNOSTIC advisory diagnostic
+│   ├── capture_self_diagnostic.py   # B1: CAPTURE_SELF_DIAGNOSTIC advisory diagnostic
+│   └── decision_evidence_lag.py     # B2: DECISION_EVIDENCE_LAG per-decision timing
 │
 # W5 Writing Modules (Deferred 2, W5):
 ├── writing_patterns.py    # 18 pattern banks for governance/tone/regime detection

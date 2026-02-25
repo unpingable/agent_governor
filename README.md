@@ -10,7 +10,9 @@ Receipt:   rct_a7f3c91e (hash-chained, tamper-evident)
 Next:      provide test results, downgrade to hypothesis, or request override
 ```
 
-11,000+ tests. Zero trust. Agents propose — only the governor commits.
+13,000+ tests. Zero trust. Agents propose — only the governor commits.
+
+This project governs actions, not beliefs.
 
 > **Status:** Alpha. Under active solo development. The core kernel (evidence gate, receipt chain, claim extraction) is stable and tested. Client integrations (VS Code, TUI, Guvnah, Phosphor) are functional but evolving. Not packaged for distribution — install from source.
 >

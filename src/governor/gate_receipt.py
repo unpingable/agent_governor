@@ -52,6 +52,21 @@ VALID_RECEIPT_ROLES = frozenset({
 
 
 # =============================================================================
+# Verdict vocabulary (closed set — see GOVERNANCE_ABUSE_AUDIT.md §P3/A3)
+# =============================================================================
+
+VERDICT_PASS = "pass"
+VERDICT_WARN = "warn"
+VERDICT_BLOCK = "block"
+VERDICT_OBSERVE = "observe"
+VERDICT_PROCEED = "proceed"
+VALID_VERDICTS = frozenset({
+    VERDICT_PASS, VERDICT_WARN, VERDICT_BLOCK,
+    VERDICT_OBSERVE, VERDICT_PROCEED,
+})
+
+
+# =============================================================================
 # Canonicalization
 # =============================================================================
 
@@ -122,7 +137,7 @@ class GateReceipt:
         schema_version   Protocol version (bump on breaking changes)
         timestamp        ISO 8601 UTC — ordering metadata, NOT identity
         gate             Which gate produced this receipt
-        verdict          "pass" | "warn" | "block"
+        verdict          one of VALID_VERDICTS: "pass" | "warn" | "block" | "observe" | "proceed"
         subject_hash     H(subject_kind + \\x00 + subject_bytes)
         evidence_hash    H(canonical_json(evidence_bundle))
         policy_hash      H(canonical_json(gate_config))
@@ -150,6 +165,13 @@ class GateReceipt:
     tenant_id: str = "default"
     auth_method: str = "none"
     receipt_role: str = ROLE_MEASUREMENT
+
+    def __post_init__(self) -> None:
+        if self.verdict not in VALID_VERDICTS:
+            raise ValueError(
+                f"Invalid verdict {self.verdict!r}; "
+                f"must be one of {sorted(VALID_VERDICTS)}"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -215,6 +237,11 @@ def create_receipt(
         raise ValueError(
             f"Invalid receipt_role {receipt_role!r}; "
             f"must be one of {sorted(VALID_RECEIPT_ROLES)}"
+        )
+    if verdict not in VALID_VERDICTS:
+        raise ValueError(
+            f"Invalid verdict {verdict!r}; "
+            f"must be one of {sorted(VALID_VERDICTS)}"
         )
     ts = timestamp or datetime.now(timezone.utc).isoformat()
     s_hash = subject_hash(subject_kind, subject_bytes)

@@ -14,6 +14,10 @@ status: canonical
 
 **Status**: `canonical` (design constraint, not feature spec)
 
+See also: [`GOVERNANCE_ABUSE_AUDIT.md`](GOVERNANCE_ABUSE_AUDIT.md) — recurring
+abuse audit rubric. This spec is an example of a design constraint that passes
+the rubric (abuse path P4: Telemetry as Surveillance).
+
 ---
 
 ## 1. The Constraint

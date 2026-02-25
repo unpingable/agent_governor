@@ -8,6 +8,9 @@ It is not an essay.
 
 Status: `deferred` (v3 hardening, orthogonal to current kernel work)
 
+See also: [`GOVERNANCE_ABUSE_AUDIT.md`](../core/GOVERNANCE_ABUSE_AUDIT.md) — the
+recurring audit rubric that generates items for this backlog.
+
 ## Scope
 
 Applies to any pipeline run capable of:

@@ -154,6 +154,11 @@ pure function. Integration surfaces are a separate lane (post-2.4).
 
 **Test counts:** 867 tests across A0-A3 + B1-B2 + C1-C2 + D. All green.
 
+**Governance abuse audit rubric:** `specs/core/GOVERNANCE_ABUSE_AUDIT.md` — recurring
+anti-capture review discipline. 8 abuse paths, 7-question per-feature test, 3-bucket
+finding classification. First audit record: Phase D (PASS). Verdict field in gate
+receipts hardened from bare string to validated vocabulary (`VALID_VERDICTS`).
+
 **Sim harness:** `sim/governor_sim/` — scenario DSL, InprocRunner, typed trace events.
 Currently wired to gate/heartbeat layer. Extension to v2.4 signal pipeline is the next
 validation lane.

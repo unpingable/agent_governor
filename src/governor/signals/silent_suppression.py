@@ -23,6 +23,14 @@ Key invariants:
   - missing != zero
   - observe-only (no gating/policy changes)
   - at least one indicator external to daemon self-report
+
+Window boundary semantics (shared across all Phase A signals):
+  - window_start is INCLUSIVE (event.timestamp >= window_start)
+  - window_end is EXCLUSIVE (event.timestamp < window_end)
+  - Comparison is lexicographic on ISO 8601 UTC strings
+  - Duplicate receipt_ids counted once (deduped by receipt_id)
+  - Late-arriving events included if within window bounds
+  - No "late arrival" concept at derivation layer
 """
 
 from __future__ import annotations

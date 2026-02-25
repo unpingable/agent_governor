@@ -11,19 +11,19 @@
   "subject_type": "window",
   "subject_id": "win_2026-02-24T17:40:00Z_rolling_5m",
   "correlation_id": null,
-  "session_id": "sess_golden_sigma_partial",
+  "session_id": "sess_golden_sigma_ok",
 
   "window_start": "2026-02-24T17:40:00Z",
   "window_end": "2026-02-24T17:45:00Z",
   "window_kind": "rolling_5m",
 
-  "value": 0.14285714285714285,
+  "value": 0.08695652173913043,
   "unit": "rate",
   "values": {
     "sigma_events": 2,
     "eligible_events": 14,
-    "denominator_value": 14,
-    "denominator_type": "eligible_events",
+    "denominator_value": 23.0,
+    "denominator_type": "exposure_proxy",
     "match_rule_version": "sigma-match-v1",
     "mean_lag_ms": 8420.0,
     "p95_lag_ms": 12100.0,
@@ -33,10 +33,10 @@
     "invalid_pairs_count": 0
   },
 
-  "quality_status": "partial",
-  "quality_reasons": ["fallback_denominator_used"],
+  "quality_status": "ok",
+  "quality_reasons": [],
   "sample_size": 14,
-  "completeness": 0.8,
+  "completeness": 1.0,
 
   "source_receipt_ids": [
     "rcpt_endorse_01", "rcpt_endorse_02", "rcpt_endorse_03",
@@ -52,7 +52,6 @@
   "derivation_version": "sigma-rate-v1",
   "annotations": {
     "match_rule_version": "sigma-match-v1",
-    "denominator_fallback": true,
-    "note": "EXPOSURE_PROXY not available. Fell back to eligible_events denominator (annotated as partial, completeness=0.8)."
+    "note": "2 sigma pairs out of 23 exposure points. Preferred EXPOSURE_PROXY denominator used."
   }
 }

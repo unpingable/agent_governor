@@ -24,6 +24,7 @@ from .exposure_proxy import (
 )
 from .sigma_rate import (
     MATCH_RULE_VERSION,
+    SIGMA_FALLBACK_COMPLETENESS,
     ReceiptEvent,
     SigmaEvent,
     SigmaMatchResult,
@@ -48,6 +49,7 @@ __all__ = [
     "SignalEnvelope",
     "SuppressionIndicators",
     "MATCH_RULE_VERSION",
+    "SIGMA_FALLBACK_COMPLETENESS",
     "ReceiptEvent",
     "SigmaEvent",
     "SigmaMatchResult",

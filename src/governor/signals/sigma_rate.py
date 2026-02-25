@@ -21,6 +21,24 @@ Key invariants:
   - Raw counts always emitted alongside rate (never rate-only)
   - missing != zero (no denominator → unavailable, not zero)
   - observe-only (no gating/policy changes)
+
+subject_hash provenance (from gate_receipt.py):
+  - Algorithm: SHA-256
+  - Input: kind_tag (UTF-8) + b"\\x00" + content_bytes
+  - Output: hex digest (64 chars, no prefix)
+  - Kind tags include "text", "diff", "file_snapshot", "action_sequence", etc.
+  - Canonical JSON: json.dumps(sort_keys=True, separators=(',',':'), ensure_ascii=True)
+  - Version: RECEIPT_SCHEMA_VERSION in gate_receipt.py (currently 3)
+  - WARNING: changing canonicalization or hash algorithm breaks time-series
+    continuity.  Bump MATCH_RULE_VERSION if subject_hash semantics change.
+
+Window boundary semantics (shared across all Phase A signals):
+  - window_start is INCLUSIVE (event.timestamp >= window_start)
+  - window_end is EXCLUSIVE (event.timestamp < window_end)
+  - Comparison is lexicographic on ISO 8601 UTC strings
+  - Duplicate receipt_ids counted once (deduped by receipt_id)
+  - Late-arriving events included if within window bounds
+  - No "late arrival" concept at derivation layer
 """
 
 from __future__ import annotations
@@ -46,6 +64,11 @@ ENDORSEMENT_VERDICTS = frozenset({"pass"})
 
 # Invalidation verdicts (receipt says "not ok")
 INVALIDATION_VERDICTS = frozenset({"block"})
+
+# Completeness value when using eligible_events as fallback denominator.
+# Signals known degradation: we have a denominator, but it's not the
+# preferred EXPOSURE_PROXY value.  0.8 = "computable but not ideal."
+SIGMA_FALLBACK_COMPLETENESS = 0.8
 
 
 # ── Event model ─────────────────────────────────────────────────────────────
@@ -354,7 +377,7 @@ def derive_sigma_rate(
 
     if quality_reasons_list:
         quality_status = QualityStatus.PARTIAL.value
-        completeness_val = 0.8  # Signal known degradation
+        completeness_val = SIGMA_FALLBACK_COMPLETENESS
     else:
         quality_status = QualityStatus.OK.value
         completeness_val = 1.0

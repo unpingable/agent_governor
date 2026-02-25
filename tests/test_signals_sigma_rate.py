@@ -13,6 +13,7 @@ from governor.signals.sigma_rate import (
     ENDORSEMENT_VERDICTS,
     INVALIDATION_VERDICTS,
     MATCH_RULE_VERSION,
+    SIGMA_FALLBACK_COMPLETENESS,
     ReceiptEvent,
     SigmaEvent,
     SigmaMatchResult,
@@ -21,6 +22,12 @@ from governor.signals.sigma_rate import (
     derive_sigma_rate,
     match_sigma_pairs,
 )
+
+
+import json
+from pathlib import Path
+
+FIXTURES = Path(__file__).parent / "fixtures" / "signals"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -545,7 +552,7 @@ class TestExposureProxyPreference:
         env = _derive(match_result=match_result)
         assert "fallback_denominator_used" in env.quality_reasons
         assert env.annotations.get("denominator_fallback") is True
-        assert env.completeness == pytest.approx(0.8)
+        assert env.completeness == pytest.approx(SIGMA_FALLBACK_COMPLETENESS)
 
     def test_proxy_no_fallback_annotation(self):
         """When proxy is used, no fallback annotation."""
@@ -830,3 +837,132 @@ class TestObserveOnly:
         # Rate = 0.5 which is very high, but quality is about data quality
         assert env.value == pytest.approx(0.5)
         assert env.quality_status == "ok"
+
+
+# ── Golden fixtures ────────────────────────────────────────────────────────────
+
+
+class TestGoldenFixtures:
+    """Golden fixtures lock the envelope shape against refactoring drift."""
+
+    def _load(self, name: str) -> dict:
+        path = FIXTURES / name
+        return json.loads(path.read_text())
+
+    def test_ok_fixture_parses(self):
+        from governor.signals.envelope import SignalEnvelope
+        data = self._load("envelope_ok_sigma_rate.json")
+        env = SignalEnvelope.from_dict(data)
+        assert env.signal_id == "SIGMA_RATE"
+        assert env.quality_status == "ok"
+        assert env.value is not None
+        assert env.value > 0
+
+    def test_ok_fixture_validates(self):
+        from governor.signals.envelope import SignalEnvelope
+        data = self._load("envelope_ok_sigma_rate.json")
+        env = SignalEnvelope.from_dict(data)
+        errors = validate_envelope(env)
+        assert errors == [], f"Validation errors: {errors}"
+
+    def test_ok_fixture_uses_exposure_proxy(self):
+        data = self._load("envelope_ok_sigma_rate.json")
+        assert data["values"]["denominator_type"] == "exposure_proxy"
+        assert "denominator_fallback" not in data["annotations"] or not data["annotations"]["denominator_fallback"]
+
+    def test_partial_fixture_parses(self):
+        from governor.signals.envelope import SignalEnvelope
+        data = self._load("envelope_partial_sigma_rate.json")
+        env = SignalEnvelope.from_dict(data)
+        assert env.quality_status == "partial"
+        assert env.completeness == pytest.approx(SIGMA_FALLBACK_COMPLETENESS)
+
+    def test_partial_fixture_validates(self):
+        from governor.signals.envelope import SignalEnvelope
+        data = self._load("envelope_partial_sigma_rate.json")
+        env = SignalEnvelope.from_dict(data)
+        errors = validate_envelope(env)
+        assert errors == [], f"Validation errors: {errors}"
+
+    def test_partial_fixture_has_fallback_annotation(self):
+        data = self._load("envelope_partial_sigma_rate.json")
+        assert data["values"]["denominator_type"] == "eligible_events"
+        assert data["annotations"]["denominator_fallback"] is True
+        assert "fallback_denominator_used" in data["quality_reasons"]
+
+    def test_unavailable_fixture_parses(self):
+        from governor.signals.envelope import SignalEnvelope
+        data = self._load("envelope_unavailable_sigma_rate.json")
+        env = SignalEnvelope.from_dict(data)
+        assert env.quality_status == "unavailable"
+        assert env.value is None
+
+    def test_unavailable_fixture_validates(self):
+        from governor.signals.envelope import SignalEnvelope
+        data = self._load("envelope_unavailable_sigma_rate.json")
+        env = SignalEnvelope.from_dict(data)
+        errors = validate_envelope(env)
+        assert errors == [], f"Validation errors: {errors}"
+
+    def test_unavailable_fixture_missing_not_zero(self):
+        data = self._load("envelope_unavailable_sigma_rate.json")
+        assert data["value"] is None
+        assert data["quality_status"] == "unavailable"
+        # Not zero — the invariant
+        assert data["value"] != 0.0
+
+    def test_invalid_fixture_parses(self):
+        from governor.signals.envelope import SignalEnvelope
+        data = self._load("envelope_invalid_sigma_rate.json")
+        env = SignalEnvelope.from_dict(data)
+        assert env.quality_status == "invalid"
+        assert env.value is None
+
+    def test_invalid_fixture_validates(self):
+        from governor.signals.envelope import SignalEnvelope
+        data = self._load("envelope_invalid_sigma_rate.json")
+        env = SignalEnvelope.from_dict(data)
+        errors = validate_envelope(env)
+        assert errors == [], f"Validation errors: {errors}"
+
+    def test_invalid_fixture_has_invalid_pairs(self):
+        data = self._load("envelope_invalid_sigma_rate.json")
+        assert data["values"]["invalid_pairs_count"] > 0
+        assert any("invalid_pairs_detected" in r for r in data["quality_reasons"])
+
+    def test_all_fixtures_share_schema_version(self):
+        for name in [
+            "envelope_ok_sigma_rate.json",
+            "envelope_partial_sigma_rate.json",
+            "envelope_unavailable_sigma_rate.json",
+            "envelope_invalid_sigma_rate.json",
+        ]:
+            data = self._load(name)
+            assert data["schema_version"] == "0.4.0", f"{name}: wrong schema_version"
+
+    def test_all_fixtures_have_match_rule_version(self):
+        for name in [
+            "envelope_ok_sigma_rate.json",
+            "envelope_partial_sigma_rate.json",
+            "envelope_unavailable_sigma_rate.json",
+            "envelope_invalid_sigma_rate.json",
+        ]:
+            data = self._load(name)
+            assert data["values"]["match_rule_version"] == MATCH_RULE_VERSION, \
+                f"{name}: wrong match_rule_version"
+
+
+# ── Named constant contract ───────────────────────────────────────────────────
+
+
+class TestNamedConstants:
+    """Verify named constants are used, not magic numbers."""
+
+    def test_fallback_completeness_constant_exists(self):
+        assert SIGMA_FALLBACK_COMPLETENESS == 0.8
+
+    def test_fallback_completeness_used_in_derivation(self):
+        """Derivation with fallback denominator uses the named constant."""
+        match_result = SigmaMatchResult(pairs=[], eligible_events=10)
+        env = _derive(match_result=match_result)
+        assert env.completeness == pytest.approx(SIGMA_FALLBACK_COMPLETENESS)

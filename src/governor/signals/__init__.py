@@ -22,6 +22,14 @@ from .exposure_proxy import (
     count_from_receipts,
     derive_exposure_proxy,
 )
+from .sigma_rate import (
+    MATCH_RULE_VERSION,
+    ReceiptEvent,
+    SigmaEvent,
+    SigmaMatchResult,
+    derive_sigma_rate,
+    match_sigma_pairs,
+)
 from .silent_suppression import (
     SuppressionIndicators,
     classify_suppression,
@@ -39,10 +47,16 @@ __all__ = [
     "SignalEmitter",
     "SignalEnvelope",
     "SuppressionIndicators",
+    "MATCH_RULE_VERSION",
+    "ReceiptEvent",
+    "SigmaEvent",
+    "SigmaMatchResult",
     "classify_suppression",
     "compute_exposure_points",
     "count_from_receipts",
     "derive_exposure_proxy",
+    "derive_sigma_rate",
     "derive_silent_suppression",
+    "match_sigma_pairs",
     "validate_envelope",
 ]

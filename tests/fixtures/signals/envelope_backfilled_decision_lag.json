@@ -1,0 +1,54 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-25T10:05:00Z",
+  "emitter": "governor.signals.decision_evidence_lag",
+  "emitter_version": "2.4.0-dev",
+  "signal_id": "DECISION_EVIDENCE_LAG",
+  "signal_version": 1,
+  "phase": "2.4B",
+  "subject_type": "window",
+  "subject_id": "lag_2026-02-25T10:00:00Z_rolling_5m",
+  "correlation_id": null,
+  "session_id": null,
+  "window_start": "2026-02-25T10:00:00Z",
+  "window_end": "2026-02-25T10:05:00Z",
+  "window_kind": "rolling_5m",
+  "value": 0.6666666666666666,
+  "unit": "rate",
+  "values": {
+    "total_decisions": 3,
+    "classifiable_decisions": 3,
+    "supported_count": 1,
+    "backfilled_count": 2,
+    "unsupported_count": 0,
+    "policy_exempt_count": 0,
+    "backfill_rate": 0.6666666666666666,
+    "unsupported_rate": 0.0,
+    "mean_backfill_delay_ms": 10000.0,
+    "p95_backfill_delay_ms": 10000.0,
+    "mean_support_staleness_ms": 4000.0,
+    "p95_support_staleness_ms": 4000.0,
+    "config_version": "decision-evidence-lag-v1"
+  },
+  "quality_status": "ok",
+  "quality_reasons": [],
+  "sample_size": 3,
+  "completeness": 1.0,
+  "source_receipt_ids": [],
+  "source_streams": [],
+  "source_versions": {},
+  "derivation": "windowed_aggregate",
+  "derivation_version": "decision-evidence-lag-v1",
+  "annotations": {
+    "config_version": "decision-evidence-lag-v1",
+    "decision_gates": [
+      "chain_composition",
+      "evidence_gate",
+      "pre_commit",
+      "scope_escalation"
+    ],
+    "policy_exempt_gates": [
+      "intent_compiler"
+    ]
+  }
+}

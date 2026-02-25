@@ -43,6 +43,20 @@ from .capture_self_diagnostic import (
     DiagnosticInputs,
     derive_capture_self_diagnostic,
 )
+from .decision_evidence_lag import (
+    CLASSIFICATION_BACKFILLED,
+    CLASSIFICATION_POLICY_EXEMPT,
+    CLASSIFICATION_SUPPORTED,
+    CLASSIFICATION_UNSUPPORTED,
+    DECISION_GATES,
+    LAG_CONFIG_VERSION,
+    POLICY_EXEMPT_GATES,
+    DecisionClassification,
+    LagAggregateResult,
+    ReceiptRecord,
+    classify_decisions,
+    derive_decision_evidence_lag,
+)
 
 __all__ = [
     # Envelope
@@ -77,4 +91,17 @@ __all__ = [
     "DIAG_CONFIG_VERSION",
     "DiagnosticInputs",
     "derive_capture_self_diagnostic",
+    # B2: Decision Evidence Lag
+    "CLASSIFICATION_BACKFILLED",
+    "CLASSIFICATION_POLICY_EXEMPT",
+    "CLASSIFICATION_SUPPORTED",
+    "CLASSIFICATION_UNSUPPORTED",
+    "DECISION_GATES",
+    "LAG_CONFIG_VERSION",
+    "POLICY_EXEMPT_GATES",
+    "DecisionClassification",
+    "LagAggregateResult",
+    "ReceiptRecord",
+    "classify_decisions",
+    "derive_decision_evidence_lag",
 ]

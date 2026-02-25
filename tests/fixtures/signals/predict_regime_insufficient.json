@@ -1,0 +1,63 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-25T13:00:00Z",
+  "emitter": "governor.signals.predict_regime",
+  "emitter_version": "2.4.0-dev",
+  "signal_id": "PREDICT_REGIME_PREFLIGHT",
+  "signal_version": 1,
+  "phase": "2.4D",
+  "subject_type": "session",
+  "subject_id": null,
+  "correlation_id": null,
+  "session_id": null,
+  "window_start": null,
+  "window_end": null,
+  "window_kind": null,
+  "value": null,
+  "unit": "score",
+  "values": {
+    "predicted_regime": "insufficient_history",
+    "confidence": 0.0,
+    "risk_score": 0.0,
+    "input_count_expected": 5,
+    "input_count_present": 0,
+    "input_count_usable": 0,
+    "feature_values": {
+      "CAPTURE_SELF_DIAGNOSTIC": null,
+      "SIGMA_RATE": null,
+      "DECISION_EVIDENCE_LAG": null,
+      "EXPOSURE_PROXY": null
+    },
+    "input_quality_statuses": {
+      "CAPTURE_SELF_DIAGNOSTIC": "unavailable",
+      "DECISION_EVIDENCE_LAG": "unavailable",
+      "EXPOSURE_PROXY": "unavailable",
+      "SIGMA_RATE": "unavailable",
+      "SILENT_SUPPRESSION": "unavailable"
+    },
+    "reason_codes": [
+      "missing_required_signals",
+      "missing:CAPTURE_SELF_DIAGNOSTIC",
+      "missing:EXPOSURE_PROXY",
+      "missing:SIGMA_RATE"
+    ],
+    "model_version": "predict-regime-preflight-v1"
+  },
+  "quality_status": "unavailable",
+  "quality_reasons": [
+    "missing_required:['CAPTURE_SELF_DIAGNOSTIC', 'EXPOSURE_PROXY', 'SIGMA_RATE']",
+    "missing_optional:['DECISION_EVIDENCE_LAG', 'SILENT_SUPPRESSION']"
+  ],
+  "sample_size": 0,
+  "completeness": 0.0,
+  "source_receipt_ids": [],
+  "source_streams": [],
+  "source_versions": {},
+  "derivation": "derived",
+  "derivation_version": "predict-regime-preflight-v1",
+  "annotations": {
+    "input_envelope_hashes": {},
+    "suppression_precedence_applied": false,
+    "config_version": "predict-regime-preflight-v1"
+  }
+}

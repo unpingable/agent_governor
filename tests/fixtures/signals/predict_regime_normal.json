@@ -1,0 +1,61 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-25T13:00:00Z",
+  "emitter": "governor.signals.predict_regime",
+  "emitter_version": "2.4.0-dev",
+  "signal_id": "PREDICT_REGIME_PREFLIGHT",
+  "signal_version": 1,
+  "phase": "2.4D",
+  "subject_type": "session",
+  "subject_id": null,
+  "correlation_id": null,
+  "session_id": null,
+  "window_start": null,
+  "window_end": null,
+  "window_kind": null,
+  "value": 1.0,
+  "unit": "score",
+  "values": {
+    "predicted_regime": "normal",
+    "confidence": 1.0,
+    "risk_score": 0.05000000000000001,
+    "input_count_expected": 5,
+    "input_count_present": 5,
+    "input_count_usable": 5,
+    "feature_values": {
+      "CAPTURE_SELF_DIAGNOSTIC": 0.05,
+      "SIGMA_RATE": 0.05,
+      "DECISION_EVIDENCE_LAG": 0.05,
+      "EXPOSURE_PROXY": 0.05
+    },
+    "input_quality_statuses": {
+      "CAPTURE_SELF_DIAGNOSTIC": "ok",
+      "DECISION_EVIDENCE_LAG": "ok",
+      "EXPOSURE_PROXY": "ok",
+      "SIGMA_RATE": "ok",
+      "SILENT_SUPPRESSION": "ok"
+    },
+    "reason_codes": [],
+    "model_version": "predict-regime-preflight-v1"
+  },
+  "quality_status": "ok",
+  "quality_reasons": [],
+  "sample_size": 5,
+  "completeness": 1.0,
+  "source_receipt_ids": [],
+  "source_streams": [],
+  "source_versions": {},
+  "derivation": "derived",
+  "derivation_version": "predict-regime-preflight-v1",
+  "annotations": {
+    "input_envelope_hashes": {
+      "CAPTURE_SELF_DIAGNOSTIC": "sha256:10c16e536c0e4a954917f491d04d71e03dede1b2ca84e98389198f492aa304dc",
+      "DECISION_EVIDENCE_LAG": "sha256:aef059630175e18399ef68ab90677080f4bcfaaf161ebf324c53a7c80117f94a",
+      "EXPOSURE_PROXY": "sha256:6c3a72a9be9819b243b849cafafbafeb2443d37a96318541e9b23233e7e50429",
+      "SIGMA_RATE": "sha256:9367504d807f99376df338aa750acd812b59462a28b2be7ccc3d611f65411c2c",
+      "SILENT_SUPPRESSION": "sha256:b9f3ea508de0950af0ac38d52832c429079ac11e06d2fdf9385d0cd67ee648ad"
+    },
+    "suppression_precedence_applied": false,
+    "config_version": "predict-regime-preflight-v1"
+  }
+}

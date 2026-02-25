@@ -1,0 +1,63 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-25T13:00:00Z",
+  "emitter": "governor.signals.predict_regime",
+  "emitter_version": "2.4.0-dev",
+  "signal_id": "PREDICT_REGIME_PREFLIGHT",
+  "signal_version": 1,
+  "phase": "2.4D",
+  "subject_type": "session",
+  "subject_id": null,
+  "correlation_id": null,
+  "session_id": null,
+  "window_start": null,
+  "window_end": null,
+  "window_kind": null,
+  "value": 0.3,
+  "unit": "score",
+  "values": {
+    "predicted_regime": "instrumentation_compromised",
+    "confidence": 0.3,
+    "risk_score": 1.0,
+    "input_count_expected": 5,
+    "input_count_present": 5,
+    "input_count_usable": 5,
+    "feature_values": {
+      "CAPTURE_SELF_DIAGNOSTIC": 0.15,
+      "SIGMA_RATE": 0.1,
+      "DECISION_EVIDENCE_LAG": 0.05,
+      "EXPOSURE_PROXY": 0.2
+    },
+    "input_quality_statuses": {
+      "CAPTURE_SELF_DIAGNOSTIC": "ok",
+      "DECISION_EVIDENCE_LAG": "ok",
+      "EXPOSURE_PROXY": "ok",
+      "SIGMA_RATE": "ok",
+      "SILENT_SUPPRESSION": "ok"
+    },
+    "reason_codes": [
+      "suppression_precedence"
+    ],
+    "model_version": "predict-regime-preflight-v1"
+  },
+  "quality_status": "ok",
+  "quality_reasons": [],
+  "sample_size": 5,
+  "completeness": 1.0,
+  "source_receipt_ids": [],
+  "source_streams": [],
+  "source_versions": {},
+  "derivation": "derived",
+  "derivation_version": "predict-regime-preflight-v1",
+  "annotations": {
+    "input_envelope_hashes": {
+      "CAPTURE_SELF_DIAGNOSTIC": "sha256:df98b5566ba9d5f29768c32a0408263b88d51ee5d22f708f35cfa65b54ee39d2",
+      "DECISION_EVIDENCE_LAG": "sha256:aef059630175e18399ef68ab90677080f4bcfaaf161ebf324c53a7c80117f94a",
+      "EXPOSURE_PROXY": "sha256:9aa0e0b9cee813c486f935a2deee20fdc85114f3eab90fe0d6d96953645c0c0b",
+      "SIGMA_RATE": "sha256:3b461edaf04f895854d75c02b6a53969c6d1e94130bef882c4f64f689e7f44e9",
+      "SILENT_SUPPRESSION": "sha256:fd632db9f31619fff6108c2adabcda425d16d0264ec7b154eeb9d8968dcbfb58"
+    },
+    "suppression_precedence_applied": true,
+    "config_version": "predict-regime-preflight-v1"
+  }
+}

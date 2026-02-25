@@ -6,6 +6,7 @@ Phase A substrate: envelope model, quality semantics, JSONL emission.
 Signal derivation modules: exposure_proxy, silent_suppression, sigma_rate.
 Phase B: advisory diagnostics over Phase A signals.
 Phase C: replay harness and calibration layer.
+Phase D: regime prediction from calibrated signals.
 """
 
 from .envelope import (
@@ -97,6 +98,20 @@ from .calibration_fitting import (
     fit_summary_envelope,
     validate_fit_spec,
 )
+from .predict_regime import (
+    ALL_EXPECTED_SIGNALS,
+    ALL_REGIMES,
+    DEFAULT_CONFIG,
+    OPTIONAL_SIGNALS,
+    PREFLIGHT_CONFIG_VERSION,
+    REQUIRED_SIGNALS,
+    PreflightConfig,
+    PreflightInput,
+    PreflightInputSet,
+    PreflightRegime,
+    extract_preflight_inputs,
+    predict_regime_preflight,
+)
 
 __all__ = [
     # Envelope
@@ -176,4 +191,17 @@ __all__ = [
     "fit_param_set_from_corpus",
     "fit_summary_envelope",
     "validate_fit_spec",
+    # D: Predict Regime Preflight
+    "ALL_EXPECTED_SIGNALS",
+    "ALL_REGIMES",
+    "DEFAULT_CONFIG",
+    "OPTIONAL_SIGNALS",
+    "PREFLIGHT_CONFIG_VERSION",
+    "REQUIRED_SIGNALS",
+    "PreflightConfig",
+    "PreflightInput",
+    "PreflightInputSet",
+    "PreflightRegime",
+    "extract_preflight_inputs",
+    "predict_regime_preflight",
 ]

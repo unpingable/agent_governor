@@ -159,6 +159,19 @@ class ReplayManifest:
     source_path: str | None          # filesystem path for audit trail
 ```
 
+**Manifest hash semantics (pinned):**
+
+The manifest hash must be computed over a **canonicalized inventory**, not
+filesystem discovery order. Rules:
+
+1. `input_hashes` sorted lexicographically before hashing
+2. Manifest hash = `H(canonical_json({"input_hashes": sorted_hashes, "source_mode": mode}))`
+3. Uses `canonical_json()` from `envelope.py` (same convention as gate receipts)
+4. Stable independent of traversal order, filesystem layout, or platform
+
+If two runs consume the same input artifacts in different order, their
+manifest hashes MUST be identical.
+
 ### 2.4 Replay Outputs
 
 #### A) Per-Window Replay Outputs (optional, controlled by `emit_per_window`)
@@ -209,6 +222,7 @@ derivation_version = "replay-harness-v1"
     "source_mode": str,                  # "envelope" | "receipt" | "mixed"
     "target_signals": list[str],
     "target_signal_count": int,
+    "derivation_error_count": int,       # errors caught during replay
     "config_version": str,               # "replay-harness-v1"
 }
 ```
@@ -224,6 +238,7 @@ derivation_version = "replay-harness-v1"
     "derivation_version_overrides": dict,
     "include_quality_statuses": list[str],
     "exclude_classifications": list[str],
+    "derivation_errors": list[str],      # first N error messages (cap at 10)
 }
 ```
 
@@ -239,6 +254,12 @@ Skip reasons (exhaustive):
 
 If replay silently drops bad windows, calibration gets fake confidence.
 
+**derivation_error visibility (pinned):** `derivation_error` is not a black
+hole. The summary `values` dict includes `derivation_error_count` (int).
+The summary `annotations` dict includes `derivation_errors` — a list of the
+first N (e.g., 10) error messages/types for diagnosis. Errors beyond N are
+counted but not stored verbatim.
+
 ### 2.5 Replay Semantics
 
 Key rules:
@@ -248,25 +269,55 @@ Key rules:
 4. Skipped windows must be counted and reasoned
 5. Replay of unavailable windows stays unavailable (missing ≠ zero)
 6. Derivation errors are caught, counted, and logged — never fatal
+7. Deterministic ordering: windows processed in `(window_start, signal_id)`
+   sort order. Per-window outputs emitted in same order. Summary aggregates
+   computed from this stable sequence. No implicit ordering from filesystem
+   discovery or dict iteration.
+8. Per-window companion outputs keep the original `signal_id` (not
+   `REPLAYED_<name>` — that gets ugly fast). Phase and annotations
+   distinguish replay outputs from originals.
 
 ### 2.6 Replay Derivation Dispatch
 
 The harness doesn't hardcode derivation logic. It dispatches to registered
-derivation functions:
+derivation functions via a keyed registry.
+
+**Registry keying (pinned):** `(signal_id, signal_version)` with optional
+`derivation_version` override from `ReplaySpec.derivation_version_overrides`.
+
+Default path is simple: look up `(signal_id, signal_version)` → get
+derivation callable. Override path: if `derivation_version_overrides`
+contains the signal_id, use it to select an alternate version (future-proof
+for threshold evolution, but default stays one-lookup).
 
 ```python
-# Registry maps signal_id → derivation callable
-ENVELOPE_DERIVATIONS: dict[str, Callable] = {
-    "CAPTURE_SELF_DIAGNOSTIC": derive_capture_self_diagnostic,
-}
+# Registry entry: (signal_id, signal_version) → derivation callable
+@dataclass(frozen=True)
+class DerivationEntry:
+    signal_id: str
+    signal_version: int
+    mode: str                        # "envelope" | "receipt"
+    derive: Callable                 # the derivation function
 
-RECEIPT_DERIVATIONS: dict[str, Callable] = {
-    "DECISION_EVIDENCE_LAG": derive_decision_evidence_lag,
+DERIVATION_REGISTRY: dict[tuple[str, int], DerivationEntry] = {
+    ("CAPTURE_SELF_DIAGNOSTIC", 1): DerivationEntry(
+        signal_id="CAPTURE_SELF_DIAGNOSTIC",
+        signal_version=1,
+        mode="envelope",
+        derive=derive_capture_self_diagnostic,
+    ),
+    ("DECISION_EVIDENCE_LAG", 1): DerivationEntry(
+        signal_id="DECISION_EVIDENCE_LAG",
+        signal_version=1,
+        mode="receipt",
+        derive=derive_decision_evidence_lag,
+    ),
 }
 ```
 
 This keeps the harness generic and makes adding new signals to replay
-mechanical (register, don't modify).
+mechanical (register, don't modify). Unknown `(signal_id, signal_version)`
+lookups return a structured error, not a silent skip.
 
 ### 2.7 Acceptance Criteria (C1)
 
@@ -436,6 +487,20 @@ def log_minmax(value: float, params: dict) -> float:
 No z-score wizardry unless explicitly needed. Can add `piecewise_linear`
 later if signal distributions demand it.
 
+**`log_minmax` domain guards (pinned):**
+
+| Input condition | Behavior |
+|----------------|----------|
+| `raw_value <= 0` | Treated as epsilon (1e-10). Not invalid, not unavailable. |
+| `raw_value = None` | Pass through as None. Calibration does not apply. |
+| `observed_min <= 0` | Epsilon-shifted in params (same 1e-10 floor). |
+| `log_base <= 0` or `log_base == 1` | `CalibrationMismatchError` (invalid params). |
+
+The epsilon shift is a **domain guard**, not a data repair. It prevents
+log(0) crashes without pretending the input was something it wasn't. The
+shift value (1e-10) is hardcoded and not configurable — if your signal
+produces values near 1e-10, you need a different method.
+
 ### 3.6 Quality Propagation
 
 Calibration must propagate quality honestly:
@@ -475,6 +540,11 @@ When a param set doesn't match the source signal:
 | Method not recognized | Refuse. |
 
 Never silently produce garbage when params don't match.
+
+**Refuse behavior (pinned):** "Refuse" means raise a deterministic
+`CalibrationMismatchError` (offline apply path). Do NOT emit an `invalid`
+calibrated envelope — that creates ambiguous artifacts. Refuse must be
+unmistakable: caller gets an exception, not a degraded output.
 
 ### 3.9 Acceptance Criteria (C2)
 

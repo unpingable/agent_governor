@@ -73,6 +73,19 @@ from .replay_sources import (
     prepare_envelope_windows,
     prepare_receipt_windows,
 )
+from .calibration_methods import (
+    CALIBRATION_METHODS,
+    REQUIRED_PARAMS,
+    CalibrationMismatchError,
+    identity_clip,
+    linear_minmax,
+    log_minmax,
+)
+from .calibration_layer import (
+    CALIBRATION_CONFIG_VERSION,
+    CalibrationParamSet,
+    apply_calibration,
+)
 
 __all__ = [
     # Envelope
@@ -132,4 +145,14 @@ __all__ = [
     "replay_windows",
     "prepare_envelope_windows",
     "prepare_receipt_windows",
+    # C2: Calibration Layer
+    "CALIBRATION_CONFIG_VERSION",
+    "CALIBRATION_METHODS",
+    "REQUIRED_PARAMS",
+    "CalibrationMismatchError",
+    "CalibrationParamSet",
+    "apply_calibration",
+    "identity_clip",
+    "linear_minmax",
+    "log_minmax",
 ]

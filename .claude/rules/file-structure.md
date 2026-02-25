@@ -97,7 +97,9 @@ src/governor/
 │   ├── capture_self_diagnostic.py   # B1: CAPTURE_SELF_DIAGNOSTIC advisory diagnostic
 │   ├── decision_evidence_lag.py     # B2: DECISION_EVIDENCE_LAG per-decision timing
 │   ├── replay_harness.py            # C1: REPLAY_HARNESS deterministic offline replay
-│   └── replay_sources.py            # C1: Replay source adapters (envelope + receipt grouping)
+│   ├── replay_sources.py            # C1: Replay source adapters (envelope + receipt grouping)
+│   ├── calibration_methods.py       # C2: CALIBRATION_LAYER transform functions (identity_clip, linear_minmax, log_minmax)
+│   └── calibration_layer.py         # C2: CalibrationParamSet, apply_calibration, companion envelope builder
 │
 # W5 Writing Modules (Deferred 2, W5):
 ├── writing_patterns.py    # 18 pattern banks for governance/tone/regime detection

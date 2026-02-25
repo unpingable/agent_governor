@@ -1,0 +1,55 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-25T12:05:00Z",
+  "emitter": "governor.signals.calibration_layer",
+  "emitter_version": "2.4.0-dev",
+  "signal_id": "EXPOSURE_PROXY",
+  "signal_version": 1,
+  "phase": "2.4C",
+  "subject_type": "window",
+  "subject_id": "win_2026-02-24T17:40:00Z_5m",
+  "correlation_id": null,
+  "session_id": "sess_01JXYZ8M7Y3B4Q2A9K6V",
+  "window_start": "2026-02-24T17:40:00Z",
+  "window_end": "2026-02-24T17:45:00Z",
+  "window_kind": "rolling_5m",
+  "value": 0.5601062954264164,
+  "unit": "normalized",
+  "values": {
+    "raw_value": 18.5,
+    "normalized_value": 0.5601062954264164,
+    "calibration_method": "log_minmax",
+    "param_set_id": "golden_exposure_log",
+    "input_quality_status": "ok",
+    "config_version": "calibration-layer-v1",
+    "target_field": "value",
+    "source_unit": "exposure_points"
+  },
+  "quality_status": "ok",
+  "quality_reasons": [],
+  "sample_size": 16,
+  "completeness": 1.0,
+  "source_receipt_ids": [
+    "rcpt_pre_01JXYZ8PAA",
+    "rcpt_disp_01JXYZ8QBB",
+    "rcpt_violation_01JXYZ8RCC"
+  ],
+  "source_streams": [
+    "preflight",
+    "dispatch",
+    "violation"
+  ],
+  "source_versions": {
+    "governor.daemon": "2.4.0-dev",
+    "receipt_schema": "0.3.2"
+  },
+  "derivation": "derived",
+  "derivation_version": "calibration-layer-v1",
+  "annotations": {
+    "source_signal_hash": "sha256:dab0d1535086a155b43cf4bf7cf47cd93fe90081c71bd8fb4bdef652d97f0eed",
+    "calibration_applied": true,
+    "param_set_id": "golden_exposure_log",
+    "param_set_hash": "sha256:674f7ef027dc6216ba221d78ce891f35fddb6a5a1e70ba481e8d01b04edc7756",
+    "config_version": "calibration-layer-v1"
+  }
+}

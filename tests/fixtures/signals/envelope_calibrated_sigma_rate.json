@@ -1,0 +1,56 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-25T12:05:00Z",
+  "emitter": "governor.signals.calibration_layer",
+  "emitter_version": "2.4.0-dev",
+  "signal_id": "SIGMA_RATE",
+  "signal_version": 1,
+  "phase": "2.4C",
+  "subject_type": "window",
+  "subject_id": "win_2026-02-24T17:40:00Z_rolling_5m",
+  "correlation_id": null,
+  "session_id": "sess_golden_sigma_ok",
+  "window_start": "2026-02-24T17:40:00Z",
+  "window_end": "2026-02-24T17:45:00Z",
+  "window_kind": "rolling_5m",
+  "value": 0.08695652173913043,
+  "unit": "normalized",
+  "values": {
+    "raw_value": 0.08695652173913043,
+    "normalized_value": 0.08695652173913043,
+    "calibration_method": "identity_clip",
+    "param_set_id": "golden_sigma_clip",
+    "input_quality_status": "ok",
+    "config_version": "calibration-layer-v1",
+    "target_field": "value",
+    "source_unit": "rate"
+  },
+  "quality_status": "ok",
+  "quality_reasons": [],
+  "sample_size": 14,
+  "completeness": 1.0,
+  "source_receipt_ids": [
+    "rcpt_endorse_01",
+    "rcpt_endorse_02",
+    "rcpt_endorse_03",
+    "rcpt_inval_01",
+    "rcpt_inval_02"
+  ],
+  "source_streams": [
+    "endorsement",
+    "invalidation"
+  ],
+  "source_versions": {
+    "governor.daemon": "2.4.0-dev",
+    "matcher": "sigma-match-v1"
+  },
+  "derivation": "derived",
+  "derivation_version": "calibration-layer-v1",
+  "annotations": {
+    "source_signal_hash": "sha256:a4ae1e3fe52345be05fe8574339bbd1a4fe48add63b49c8427fe3e91e2fd9761",
+    "calibration_applied": true,
+    "param_set_id": "golden_sigma_clip",
+    "param_set_hash": "sha256:6130c85a284ff609c021e9141331aa6ad9ac1c1e5456ce5b71a02e43c22a2ede",
+    "config_version": "calibration-layer-v1"
+  }
+}

@@ -99,7 +99,7 @@ class TestGoldenVectors:
 
         # Process through the gate (TTL disabled for golden vectors since
         # created_at is static. Override TTL to be very large.)
-        config = HandoffConfig(default_ttl_ms=999_999_999)
+        config = HandoffConfig(default_ttl_ms=999_999_999_999)
         gate_with_config = DetectorHandoffGate(
             receipt_system=gate.receipt_system,
             config=config,
@@ -127,7 +127,7 @@ class TestGoldenVectors:
         if not expected_error:
             pytest.skip("No expected_validation_error in this vector")
 
-        config = HandoffConfig(default_ttl_ms=999_999_999)
+        config = HandoffConfig(default_ttl_ms=999_999_999_999)
         gate_with_config = DetectorHandoffGate(
             receipt_system=gate.receipt_system,
             config=config,
@@ -152,7 +152,7 @@ class TestGoldenVectors:
         expected_nonce = meta.get("expected_nonce")
         expected_error = meta.get("expected_validation_error")
 
-        config = HandoffConfig(default_ttl_ms=999_999_999)
+        config = HandoffConfig(default_ttl_ms=999_999_999_999)
         gate_with_config = DetectorHandoffGate(
             receipt_system=gate.receipt_system,
             config=config,

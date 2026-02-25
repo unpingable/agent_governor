@@ -1,6 +1,6 @@
 # V2 Status
 
-As of 2.3.2. This document is the boundary between "shipped" and "next."
+As of 2.4.0. This document is the boundary between "shipped" and "next."
 
 ---
 
@@ -107,32 +107,56 @@ name; repo URL unchanged).
 
 ~12,900 tests, all green.
 
----
+### 2.4.0 — Instrumentation Spine
 
-## Parked: Instrumentation Spine (v2.4)
+Observe-only signal substrate for operators. No gating, no policy changes, no enforcement.
+All signals emit via `SignalEnvelope` (23-field frozen dataclass, schema v0.4.0). The
+envelope is intentionally isomorphic to the eventual v3 schema — v3 promotes and freezes.
 
-Seven gap specs designed but not built. These are the "observe, measure, warn" layer
-that precedes any 3.x self-governance work. All are observe-first — no gating, no
-policy changes, no new enforcement.
+**Phase A — Signal Substrate** (`src/governor/signals/`)
 
-| Phase | Spec | What It Does |
-|-------|------|-------------|
-| A | SILENT_SUPPRESSION_GAP | Detect when the governor is plugged in but not running |
-| A | EXPOSURE_PROXY_GAP | Non-gameable denominator for capture metrics |
-| A | SIGMA_RATE_GAP | Endorsement-then-invalidation rate as time series |
-| B | CAPTURE_SELF_DIAGNOSTIC_GAP | Advisory warning on declining contradiction rates |
-| C | REPLAY_HARNESS_GAP | Replay stored runs with different thresholds |
-| C | CALIBRATION_LAYER_GAP | Normalize signals to [0,1] with versioned params |
-| D | PREDICT_REGIME_PREFLIGHT_GAP | Predict regime from pre-session metrics |
+| Module | Signal | What It Does |
+|--------|--------|-------------|
+| `envelope.py` | SignalEnvelope | Typed envelope: identity, quality semantics, canonical JSON, JSONL emission |
+| `emit.py` | SignalEmitter + JsonlSink | O_APPEND + flock emission, deterministic ordering |
+| `exposure_proxy.py` | EXPOSURE_PROXY | Weighted denominator from tool dispatch, chat gen, evidence checks |
+| `silent_suppression.py` | SILENT_SUPPRESSION | In-path health from multi-source indicators |
+| `sigma_rate.py` | SIGMA_RATE | Endorsement→invalidation pair matching with lag statistics |
 
-All emit via SignalEnvelope (defined in `GAP_BUILD_ORDER.md`). The envelope is
-intentionally isomorphic to the eventual v3 schema — v3 promotes and freezes; no rewrite.
+**Phase B — Reflexive Health** (advisory, warn-only)
 
-**Build order:** A→B→C→D. See `specs/gaps/GAP_BUILD_ORDER.md` for dependency graph.
+| Module | Signal | What It Does |
+|--------|--------|-------------|
+| `capture_self_diagnostic.py` | CAPTURE_SELF_DIAGNOSTIC | Windowed diagnostic consuming Phase A envelopes. 6 classifications. Suppression precedence. |
+| `decision_evidence_lag.py` | DECISION_EVIDENCE_LAG | Per-decision timing from gate receipt pairs. 4 classifications. Backfill rate. |
 
-**Why parked:** The core gate works. These are diagnostic tools for operators who want
-to understand *why* the gate fired, not *whether* it fires. Ship them when someone needs
-them, not before.
+**Phase C — Make It Measurable** (offline replay + calibration)
+
+| Module | Signal | What It Does |
+|--------|--------|-------------|
+| `replay_harness.py` | REPLAY_HARNESS | Deterministic offline replay under alternative thresholds. Envelope + receipt modes. |
+| `replay_sources.py` | — | Window grouping adapters for replay inputs |
+| `calibration_layer.py` | CALIBRATION_LAYER | Apply-only normalization to [0,1]. 3 transforms. Frozen versioned param sets. |
+| `calibration_methods.py` | — | Transform functions: identity_clip, linear_minmax, log_minmax |
+| `calibration_fitting.py` | CALIBRATION_FITTING | Offline param-set fitting from replay corpus. Deterministic sample extraction. |
+
+**Phase D — Preflight as Lint** (pure prediction)
+
+| Module | Signal | What It Does |
+|--------|--------|-------------|
+| `predict_regime.py` | PREDICT_REGIME_PREFLIGHT | Weighted heuristic over calibrated A/B envelopes → predicted regime + confidence |
+
+**Deferred:** B3 (POSTERIOR_SHIFT_ATTRIBUTION) — deferred to after Phase C calibration
+proves stable. Not spec'd, not built, not needed for 3.x prerequisite.
+
+**Intentionally not wired:** No CLI commands, no daemon RPC, no policy effects. D is a
+pure function. Integration surfaces are a separate lane (post-2.4).
+
+**Test counts:** 867 tests across A0-A3 + B1-B2 + C1-C2 + D. All green.
+
+**Sim harness:** `sim/governor_sim/` — scenario DSL, InprocRunner, typed trace events.
+Currently wired to gate/heartbeat layer. Extension to v2.4 signal pipeline is the next
+validation lane.
 
 ---
 
@@ -151,8 +175,8 @@ security architecture:
 > Any θ update requires: admissible measurement coverage + independent validator
 > quorum + no valid veto witness.
 
-**Prerequisite:** The instrumentation spine (v2.4) must ship first — 3.x needs
-calibrated signals and replay for validation.
+**Prerequisite:** The instrumentation spine (v2.4) shipped. 3.x now has calibrated
+signals, replay, and prediction available as measurement substrate.
 
 Four gap specs are explicitly 3.x:
 
@@ -165,20 +189,23 @@ Four gap specs are explicitly 3.x:
 
 ---
 
-## Known-Good Bundle (2.3.2)
+## Known-Good Bundle (2.4.0)
 
 | Repo | Version | Coupling |
 |------|---------|----------|
-| [agent_gov](https://github.com/unpingable/agent_governor) | 2.3.2 | — |
+| [agent_gov](https://github.com/unpingable/agent_governor) | 2.4.0 | — |
 | [maude](https://github.com/unpingable/maude) | 2.3.2 | hard (mirrors major.minor) |
 | [vscode-governor](https://github.com/unpingable/vscode-governor) | 2.2.0 | hard (mirrors major.minor) |
 | [guvnah](https://github.com/unpingable/guvnah) | 2.3.2 | hard (mirrors major.minor) |
 | [gov-webui (Phosphor)](https://github.com/unpingable/governor_webui) | 0.4.0 | loose (targets contract v1) |
 
+Note: maude/guvnah are still on 2.3.2 — v2.4 signals are internal-only (no daemon
+RPC, no client surface). Clients don't need to bump for this release.
+
 **Sanity check** (run these to verify you're not in version hell):
 
 ```bash
-governor --version                      # should say 2.3.2
+governor --version                      # should say 2.4.0
 governor status --json | python3 -c "import sys,json; print(json.load(sys.stdin)['schema_version'])"  # should say 1
 governor doctor                         # walk 9 subsystems, flag non-nominal
 make test                               # in each repo
@@ -192,7 +219,7 @@ See `docs/VERSIONING.md` for the coupling rules and contract version table.
 
 If you're returning to this codebase:
 
-1. **Run the tests.** `python3 -m pytest tests/ -v` — ~12,900 tests, all should pass.
+1. **Run the tests.** `python3 -m pytest tests/ -v` — ~13,000 tests, all should pass.
 2. **Read the gate.** `src/governor/evidence_gate.py` is the enforcement surface.
    Everything else feeds into it or reads from it.
 3. **Read the daemon.** `src/governor/daemon.py` is the control plane. 60 RPC methods,
@@ -201,14 +228,16 @@ If you're returning to this codebase:
    `libs/receipt_kernel/` (audit trail). Content-addressed, hash-chained, append-only.
 5. **Read the chain gate.** `src/governor/chain_gate.py` is the composition evaluator.
    Preflight/record split, enforcement ratchet, CAS binding.
+6. **Read the signals.** `src/governor/signals/` is the v2.4 instrumentation spine.
+   Pure derivation, observe-only, typed envelopes. `predict_regime.py` is the capstone.
 
-If you're building the instrumentation spine (v2.4):
-- Start with `specs/gaps/V2_4A_SPINE.md` — implementation contracts for Phase A
-- Build order within A: envelope → EXPOSURE_PROXY → SILENT_SUPPRESSION → SIGMA_RATE
+If you're extending the instrumentation spine:
+- Spec files: `specs/gaps/V2_4{A,B,C,D}_*.md` — implementation contracts per phase
 - `GAP_BUILD_ORDER.md` defines `SignalEnvelope` schema + cross-cutting contracts
-- Individual gap specs (design rationale) retained alongside the spine spec
+- B3 (posterior shift attribution) is the next unbuilt signal spec
+- Integration lane (CLI/RPC for D) and sim validation lane are both open
 
 If you're starting 3.x:
-- Ship v2.4 first
+- v2.4 shipped — calibrated signals, replay, and prediction are available
 - Read `specs/core/SELF_GOVERNANCE_SPEC.md`
 - Review the 8 hardening items with a human before writing code

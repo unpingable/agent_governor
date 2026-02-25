@@ -2,55 +2,47 @@
 
 Sequencing based on dependency analysis. Each phase has exit criteria.
 
-## v2.4 — Instrumentation Spine (Observe, Measure, Warn)
+## v2.4 — Instrumentation Spine (Observe, Measure, Warn) — SHIPPED
 
-None of this shipped in 2.0–2.3. The entire instrumentation spine is parked for v2.4.
-See `docs/V2_STATUS.md` for the 2.x boundary.
+All phases shipped. B3 (POSTERIOR_SHIFT_ATTRIBUTION) explicitly deferred.
+See `docs/V2_STATUS.md` for the full module listing.
 
-### Phase A — Instrumentation Spine
+### Phase A — Instrumentation Spine ✓
 
 Reordered from original (SILENT_SUPPRESSION first) based on dependency analysis:
 EXPOSURE_PROXY is the denominator substrate. SIGMA_RATE depends on it, and
 CAPTURE_SELF_DIAGNOSTIC (Phase B) depends on denominator integrity. Ship the
 denominator first. See `V2_4A_SPINE.md` for full implementation contracts.
 
-| Order | Spec | Why This Order |
-|-------|------|----------------|
-| A0 | SignalEnvelope + emitter | One format, not three |
-| A1 | EXPOSURE_PROXY_GAP (v0) | Denominator substrate — everything downstream needs it |
-| A2 | SILENT_SUPPRESSION_GAP | Detects when instrumentation path is compromised |
-| A3 | SIGMA_RATE_GAP (observe-only) | Needs denominator + stable source streams for pair matching |
+| Order | Spec | Status |
+|-------|------|--------|
+| A0 | SignalEnvelope + emitter | **shipped** |
+| A1 | EXPOSURE_PROXY_GAP (v0) | **shipped** |
+| A2 | SILENT_SUPPRESSION_GAP | **shipped** |
+| A3 | SIGMA_RATE_GAP (observe-only) | **shipped** |
 
-**Exit criteria:** You can tell (a) governor ran, (b) what it touched, (c) how often it endorsed then invalidated.
+### Phase B — Reflexive Health (Warn-Only) ✓
 
-### Phase B — Reflexive Health (Warn-Only)
+| Order | Spec | Status |
+|-------|------|--------|
+| B1 | CAPTURE_SELF_DIAGNOSTIC_GAP | **shipped** |
+| B2 | DECISION_EVIDENCE_LAG_GAP | **shipped** |
+| B3 | POSTERIOR_SHIFT_ATTRIBUTION | **deferred** (post-C calibration) |
 
-| Order | Spec | Depends On |
-|-------|------|------------|
-| 4 | CAPTURE_SELF_DIAGNOSTIC_GAP | EXPOSURE_PROXY (hard), SIGMA_RATE (soft) |
+### Phase C — Make It Measurable ✓
 
-**Invariant:** "no contradictions" must be distinguishable from "no contradiction recording" (SILENT_SUPPRESSION provides this).
+| Order | Spec | Status |
+|-------|------|--------|
+| C1 | REPLAY_HARNESS_GAP | **shipped** |
+| C2 | CALIBRATION_LAYER_GAP (apply + fit) | **shipped** |
 
-**Exit criteria:** Advisory warning fires on synthetic declining-rate scenarios. No gating.
+### Phase D — Preflight as Lint ✓
 
-### Phase C — Make It Measurable
+| Order | Spec | Status |
+|-------|------|--------|
+| D | PREDICT_REGIME_PREFLIGHT | **shipped** |
 
-| Order | Spec | Depends On |
-|-------|------|------------|
-| 5 | REPLAY_HARNESS_GAP (Tier B-lite) | Receipt kernel (shipped), σ-rate data |
-| 6 | CALIBRATION_LAYER_GAP (v0) | Replay harness (for validation) |
-
-Calibration v0 = each signal → bounded [0,1], explicit saturation, versioned params in receipts. Not perfect — iterate via replay.
-
-**Exit criteria:** You can sweep thresholds and see the effect on "would have warned" over stored runs.
-
-### Phase D — Preflight as Lint
-
-| Order | Spec | Depends On |
-|-------|------|------------|
-| 7 | PREDICT_REGIME_PREFLIGHT_GAP | Calibration layer (for calibrated risk scores), replay (for validation) |
-
-**Exit criteria:** Predicted regime matches empirical CollapseDetector >80% of the time on replay data.
+**Total:** 795 tests across A0-A3 + B1-B2 + C1-C2 + D. All green.
 
 ---
 

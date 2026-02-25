@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-governor"
-version = "2.3.2"
+version = "2.4.0"
 description = "Agent Governor - constraint system that makes AI coding agents production-safe"
 readme = "README.md"
 license = "Apache-2.0"

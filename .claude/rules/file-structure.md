@@ -86,6 +86,16 @@ src/governor/
 ├── scope.py              # Scope Governor: locality-first policy, escalation receipts, tool contracts, absence-restrictive containment
 ├── semantic_stability.py # Semantic stability: perturbation-based conditioning audit, 4 signals, noise floor, basin clustering, JSONL store
 │
+# v2.4 Instrumentation Spine (Phase A + B):
+├── signals/
+│   ├── __init__.py                  # Public API: SignalEnvelope, derivation functions
+│   ├── envelope.py                  # SignalEnvelope, QualityStatus, DerivationType, canonical_json
+│   ├── emit.py                      # SignalEmitter + JsonlSink
+│   ├── exposure_proxy.py            # A1: EXPOSURE_PROXY weighted denominator
+│   ├── silent_suppression.py        # A2: SILENT_SUPPRESSION in-path health
+│   ├── sigma_rate.py                # A3: SIGMA_RATE endorsement→invalidation matching
+│   └── capture_self_diagnostic.py   # B1: CAPTURE_SELF_DIAGNOSTIC advisory diagnostic
+│
 # W5 Writing Modules (Deferred 2, W5):
 ├── writing_patterns.py    # 18 pattern banks for governance/tone/regime detection
 ├── writing_governance.py  # GovernanceVisibilityScorer, GovernanceLeakDetector, SmoothingSuppressor, ExitShapeChecker

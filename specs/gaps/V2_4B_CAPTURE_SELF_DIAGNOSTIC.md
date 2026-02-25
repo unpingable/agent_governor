@@ -203,6 +203,10 @@ DIAG_CONFIG_VERSION = "capture-selfdiag-v1"
 Version string MUST be bumped if any threshold changes. Downstream
 consumers (dashboards, alerting) depend on consistent semantics.
 
+**Pre-calibration notice:** B1 thresholds are heuristic starting points.
+Phase C replay/calibration will replace these with data-driven baselines.
+Consumers MUST NOT treat B1 scores as ground truth until calibrated.
+
 ---
 
 ## 6. Quality Semantics

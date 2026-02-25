@@ -569,3 +569,15 @@ The gap specs say *why*. This file says *what to build* and *when it's done*.
 - Alert escalation
 - NLP-based sigma matching
 - Cross-task exposure aggregation
+
+---
+
+## 10. Phase A Status & Downstream
+
+Phase A shipped (A0–A3 all implemented and tested). Downstream:
+
+- **B1** `CAPTURE_SELF_DIAGNOSTIC` — shipped. Advisory diagnostic over A signals.
+  See `V2_4B_CAPTURE_SELF_DIAGNOSTIC.md`.
+- **B2** `DECISION_EVIDENCE_LAG` — queued. Paper-derived timing diagnostics.
+- **B3** `POSTERIOR_SHIFT_ATTRIBUTION` — queued. Heuristic decomposition (higher risk).
+- **C** Replay/calibration harness — queued. Hardens all B thresholds.

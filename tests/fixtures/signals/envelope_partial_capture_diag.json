@@ -1,0 +1,54 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-25T10:05:00Z",
+  "emitter": "governor.signals.capture_self_diagnostic",
+  "emitter_version": "2.4.0-dev",
+  "signal_id": "CAPTURE_SELF_DIAGNOSTIC",
+  "signal_version": 1,
+  "phase": "2.4B",
+  "subject_type": "window",
+  "subject_id": "diag_2026-02-25T10:00:00Z_rolling_5m",
+  "correlation_id": null,
+  "session_id": null,
+  "window_start": "2026-02-25T10:00:00Z",
+  "window_end": "2026-02-25T10:05:00Z",
+  "window_kind": "rolling_5m",
+  "value": 0.09999999999999999,
+  "unit": "score",
+  "values": {
+    "capture_decline_score": 0.09999999999999999,
+    "classification": "normal",
+    "sigma_rate_input": 0.05,
+    "sigma_rate_quality": "partial",
+    "sigma_score_component": 0.06999999999999999,
+    "invalid_pairs_count": 0,
+    "exposure_proxy_input": null,
+    "exposure_proxy_quality": "unavailable",
+    "coverage_ratio": 0.0,
+    "coverage_score_component": 0.0,
+    "suppression_input": 1.0,
+    "suppression_classification": "healthy",
+    "input_signal_count": 2,
+    "config_version": "capture-selfdiag-v1"
+  },
+  "quality_status": "partial",
+  "quality_reasons": [
+    "missing_input_signals (EXPOSURE_PROXY)"
+  ],
+  "sample_size": 2,
+  "completeness": 0.8,
+  "source_receipt_ids": [],
+  "source_streams": [
+    "SILENT_SUPPRESSION",
+    "SIGMA_RATE"
+  ],
+  "source_versions": {},
+  "derivation": "derived",
+  "derivation_version": "capture-selfdiag-v1",
+  "annotations": {
+    "config_version": "capture-selfdiag-v1",
+    "a1_content_hash": null,
+    "a2_content_hash": "sha256:8cbff770e1e58326f914da37f54a7167fca82d476c7780bbbbfa21ac190668a3",
+    "a3_content_hash": "sha256:fa36bbcb25c9d96a4f79baef5681175d065953c97b13f80d517d362f15a29b03"
+  }
+}

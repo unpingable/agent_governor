@@ -4,6 +4,7 @@ v2.4 Instrumentation Spine — signal envelope, emitter, and derivations.
 
 Phase A substrate: envelope model, quality semantics, JSONL emission.
 Signal derivation modules: exposure_proxy, silent_suppression, sigma_rate.
+Phase B: advisory diagnostics over Phase A signals.
 """
 
 from .envelope import (
@@ -36,29 +37,44 @@ from .silent_suppression import (
     classify_suppression,
     derive_silent_suppression,
 )
+from .capture_self_diagnostic import (
+    ALL_CLASSIFICATIONS,
+    DIAG_CONFIG_VERSION,
+    DiagnosticInputs,
+    derive_capture_self_diagnostic,
+)
 
 __all__ = [
+    # Envelope
     "CURRENT_SCHEMA_VERSION",
-    "DEFAULT_WEIGHT_SET_ID",
-    "DEFAULT_WEIGHTS",
     "DerivationType",
-    "ExposureComponents",
-    "JsonlSink",
     "QualityStatus",
     "SignalEmitter",
     "SignalEnvelope",
+    "JsonlSink",
+    "validate_envelope",
+    # A1: Exposure Proxy
+    "DEFAULT_WEIGHT_SET_ID",
+    "DEFAULT_WEIGHTS",
+    "ExposureComponents",
+    "compute_exposure_points",
+    "count_from_receipts",
+    "derive_exposure_proxy",
+    # A2: Silent Suppression
     "SuppressionIndicators",
+    "classify_suppression",
+    "derive_silent_suppression",
+    # A3: Sigma Rate
     "MATCH_RULE_VERSION",
     "SIGMA_FALLBACK_COMPLETENESS",
     "ReceiptEvent",
     "SigmaEvent",
     "SigmaMatchResult",
-    "classify_suppression",
-    "compute_exposure_points",
-    "count_from_receipts",
-    "derive_exposure_proxy",
     "derive_sigma_rate",
-    "derive_silent_suppression",
     "match_sigma_pairs",
-    "validate_envelope",
+    # B1: Capture Self Diagnostic
+    "ALL_CLASSIFICATIONS",
+    "DIAG_CONFIG_VERSION",
+    "DiagnosticInputs",
+    "derive_capture_self_diagnostic",
 ]

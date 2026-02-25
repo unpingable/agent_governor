@@ -86,6 +86,17 @@ from .calibration_layer import (
     CalibrationParamSet,
     apply_calibration,
 )
+from .calibration_fitting import (
+    CALIBRATION_FIT_CONFIG_VERSION,
+    CalibrationFitSpec,
+    FitResult,
+    FitSample,
+    FitSampleSelection,
+    extract_fit_samples,
+    fit_param_set_from_corpus,
+    fit_summary_envelope,
+    validate_fit_spec,
+)
 
 __all__ = [
     # Envelope
@@ -155,4 +166,14 @@ __all__ = [
     "identity_clip",
     "linear_minmax",
     "log_minmax",
+    # C2: Calibration Fitting
+    "CALIBRATION_FIT_CONFIG_VERSION",
+    "CalibrationFitSpec",
+    "FitResult",
+    "FitSample",
+    "FitSampleSelection",
+    "extract_fit_samples",
+    "fit_param_set_from_corpus",
+    "fit_summary_envelope",
+    "validate_fit_spec",
 ]

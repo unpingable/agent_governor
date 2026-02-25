@@ -1,0 +1,59 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-24T17:42:11Z",
+  "emitter": "governor.signals.exposure_proxy",
+  "emitter_version": "2.4.0-dev",
+
+  "signal_id": "EXPOSURE_PROXY",
+  "signal_version": 1,
+  "phase": "2.4A",
+
+  "subject_type": "window",
+  "subject_id": "win_2026-02-24T17:40:00Z_rolling_5m",
+  "correlation_id": null,
+  "session_id": "sess_correlated_test",
+
+  "window_start": "2026-02-24T17:40:00Z",
+  "window_end": "2026-02-24T17:45:00Z",
+  "window_kind": "rolling_5m",
+
+  "value": 23.0,
+  "unit": "exposure_points",
+  "values": {
+    "exposure_points_total": 23.0,
+    "eligible_events": 27,
+    "excluded_events": 0,
+    "weighted_event_count": 23.0,
+    "coverage_ratio": 1.0,
+    "source_event_count": 27,
+    "component_tool_dispatch_attempts": 10,
+    "component_chat_generation_calls": 6,
+    "component_evidence_checks": 5,
+    "component_violation_evaluations": 6
+  },
+
+  "quality_status": "ok",
+  "quality_reasons": [],
+  "sample_size": 27,
+  "completeness": 1.0,
+
+  "source_receipt_ids": [
+    "rcpt_chain_01", "rcpt_chain_02", "rcpt_chain_03", "rcpt_chain_04", "rcpt_chain_05",
+    "rcpt_chat_01", "rcpt_chat_02", "rcpt_chat_03",
+    "rcpt_ev_01", "rcpt_ev_02", "rcpt_ev_03",
+    "rcpt_viol_01", "rcpt_viol_02", "rcpt_viol_03"
+  ],
+  "source_streams": ["preflight", "dispatch", "chat", "evidence", "violation"],
+  "source_versions": {
+    "governor.daemon": "2.4.0-dev",
+    "receipt_schema": "0.3.2"
+  },
+
+  "derivation": "windowed_aggregate",
+  "derivation_version": "exposure-proxy-v1",
+  "annotations": {
+    "weight_set_id": "default-v1",
+    "overlap_policy": "composite_opportunity_accounting",
+    "note": "All 4 component streams active in one window. chat_generation and evidence_checks are correlated (each generation triggers an evidence check). This is intentional composite accounting."
+  }
+}

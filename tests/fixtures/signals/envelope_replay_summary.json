@@ -1,0 +1,64 @@
+{
+  "schema_version": "0.4.0",
+  "emitted_at": "2026-02-25T10:05:00Z",
+  "emitter": "governor.signals.replay_harness",
+  "emitter_version": "",
+  "signal_id": "REPLAY_HARNESS",
+  "signal_version": 1,
+  "phase": "2.4C",
+  "subject_type": "replay_run",
+  "subject_id": "replay_sha256:91d10",
+  "correlation_id": null,
+  "session_id": null,
+  "window_start": null,
+  "window_end": null,
+  "window_kind": null,
+  "value": 0.0,
+  "unit": "score",
+  "values": {
+    "window_count_total": 1,
+    "window_count_replayed": 1,
+    "window_count_skipped": 0,
+    "skip_reasons": {},
+    "mean_abs_delta": 0.0,
+    "p95_abs_delta": 0.0,
+    "max_abs_delta": 0.0,
+    "classification_change_count": 0,
+    "quality_status_change_count": 0,
+    "value_increase_count": 0,
+    "value_decrease_count": 0,
+    "value_unchanged_count": 1,
+    "source_mode": "envelope",
+    "target_signals": [
+      "CAPTURE_SELF_DIAGNOSTIC"
+    ],
+    "target_signal_count": 1,
+    "derivation_error_count": 0,
+    "config_version": "replay-harness-v1"
+  },
+  "quality_status": "ok",
+  "quality_reasons": [],
+  "sample_size": 1,
+  "completeness": 1.0,
+  "source_receipt_ids": [],
+  "source_streams": [
+    "CAPTURE_SELF_DIAGNOSTIC"
+  ],
+  "source_versions": {},
+  "derivation": "derived",
+  "derivation_version": "replay-harness-v1",
+  "annotations": {
+    "config_version": "replay-harness-v1",
+    "replay_spec_hash": "sha256:bef909f5ef6d555d579cee1b34557fc2136eddebc18d2ccc3a0e0557adfbae26",
+    "manifest_hash": "sha256:91d10ae1926d24cb2cfe4ec0eb8c3bda1dbdd237eb8a2613b16d2f521a108e90",
+    "threshold_overrides": {},
+    "derivation_version_overrides": {},
+    "include_quality_statuses": [
+      "ok",
+      "partial"
+    ],
+    "exclude_classifications": [],
+    "derivation_errors": [],
+    "replay_run_id": "golden-test"
+  }
+}

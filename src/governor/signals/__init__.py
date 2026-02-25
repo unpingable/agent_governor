@@ -5,6 +5,7 @@ v2.4 Instrumentation Spine — signal envelope, emitter, and derivations.
 Phase A substrate: envelope model, quality semantics, JSONL emission.
 Signal derivation modules: exposure_proxy, silent_suppression, sigma_rate.
 Phase B: advisory diagnostics over Phase A signals.
+Phase C: replay harness and calibration layer.
 """
 
 from .envelope import (
@@ -57,6 +58,21 @@ from .decision_evidence_lag import (
     classify_decisions,
     derive_decision_evidence_lag,
 )
+from .replay_harness import (
+    DERIVATION_REGISTRY,
+    REPLAY_CONFIG_VERSION,
+    DerivationEntry,
+    ReplayManifest,
+    ReplaySpec,
+    ReplayWindowInput,
+    ReplayWindowResult,
+    replay_summary_envelope,
+    replay_windows,
+)
+from .replay_sources import (
+    prepare_envelope_windows,
+    prepare_receipt_windows,
+)
 
 __all__ = [
     # Envelope
@@ -104,4 +120,16 @@ __all__ = [
     "ReceiptRecord",
     "classify_decisions",
     "derive_decision_evidence_lag",
+    # C1: Replay Harness
+    "DERIVATION_REGISTRY",
+    "REPLAY_CONFIG_VERSION",
+    "DerivationEntry",
+    "ReplayManifest",
+    "ReplaySpec",
+    "ReplayWindowInput",
+    "ReplayWindowResult",
+    "replay_summary_envelope",
+    "replay_windows",
+    "prepare_envelope_windows",
+    "prepare_receipt_windows",
 ]

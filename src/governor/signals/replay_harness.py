@@ -258,6 +258,10 @@ def _replay_decision_evidence_lag(
     )
 
 
+# Keyed on (signal_id, signal_version).  Dispatch looks up the tuple
+# and calls the matching ReplayAdapter.  Optional derivation_version
+# override comes from ReplaySpec, not the registry key.
+# See specs/gaps/V2_4C_SPINE.md §2.6 for the keying contract.
 DERIVATION_REGISTRY: dict[tuple[str, int], DerivationEntry] = {
     ("CAPTURE_SELF_DIAGNOSTIC", 1): DerivationEntry(
         signal_id="CAPTURE_SELF_DIAGNOSTIC",

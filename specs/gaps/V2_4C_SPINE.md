@@ -326,7 +326,9 @@ lookups return a structured error, not a silent skip.
 3. Emit per-window companion outputs (on/off via spec)
 4. Emit a replay summary artifact with drift stats
 5. Preserve provenance (input hashes + replay spec hash + manifest hash)
-6. Be deterministic on repeated runs
+6. Be deterministic on repeated runs (callers must inject `emitted_at`
+   for full determinism; if omitted, `emitted_at` defaults to wall-clock
+   time and outputs are timestamp-dependent)
 7. Stay observe-only
 8. Skipped windows are counted with reasons
 9. Missing ≠ zero preserved through replay

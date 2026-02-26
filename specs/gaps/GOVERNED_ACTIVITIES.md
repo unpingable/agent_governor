@@ -3,7 +3,7 @@
 Receipted side-effect capsules for workflow orchestration. Deterministic
 orchestration calls non-deterministic actions through a governed gate.
 
-status: gap spec (v2.x foundation + v3 extensions)
+status: gap spec (v2.x foundation + v3 extensions, v2 types implemented)
 
 ---
 
@@ -222,11 +222,119 @@ No new engine. Just: receipts + a lookup + a rule.
 
 ---
 
+## Canonicalization Rules (normative, v2)
+
+### String normalization
+
+All optional string fields in `fingerprint_dict()` normalize to `""`, never
+`None`. Fields always present in fingerprint dict:
+
+- `fact_type`, `subject`, `source`, `request_fingerprint`,
+  `response_fingerprint`, `etag_or_version`
+
+### Fields excluded from fingerprint
+
+- `observed_at` — volatile timestamp
+- `confidence` — advisory
+- `freshness_s` — policy TTL, not world state
+
+### Fields included in fingerprint (world state)
+
+- `fact_type`, `subject`, `source`, `request_fingerprint`,
+  `response_fingerprint`, `etag_or_version`
+
+### Serialization
+
+Reuses `canonical_json()` from `gate_receipt.py`: UTF-8, `ensure_ascii=True`,
+sorted keys, compact separators. `ensure_ascii=True` sidesteps NFC/NFD Unicode
+normalization issues by escaping all non-ASCII. No floats. All fingerprint
+fields always present (never dropped).
+
+**Unicode normalization stance:** `ensure_ascii=True` makes fingerprints
+byte-stable across platforms but does NOT normalize visually-identical Unicode
+(e.g., `e + combining-accent` vs `precomposed-e`). Machine-generated
+identifiers (etags, hashes) are unaffected. Callers producing fingerprint
+input from human-authored text should NFC-normalize before construction if
+visual equivalence matters.
+
+### `response_fingerprint` stability contract
+
+The drift gate assumes `response_fingerprint` is semantically stable across
+observations of the same logical state. It must be computed from a canonical
+subset of the provider response — sorted keys, deterministic serialization,
+non-deterministic fields (request IDs, timestamps, unordered collections)
+excluded before hashing. False drift from unstable `response_fingerprint` is
+a caller bug, not a gate bug.
+
+### Sort order
+
+`(fact_type, subject, request_fingerprint, response_fingerprint,
+etag_or_version, source)` — all normalized to `""` for sort comparison.
+
+---
+
+## Tiered Drift Detection (v2 decision)
+
+Resolves Open Question 1. Neither token-only nor fingerprint-only — tiered:
+
+### Etag key
+
+`f"{fact_type}:{subject or ''}:{source or ''}"` — includes source so the same
+subject observed from two different providers doesn't collide.
+
+**Why `request_fingerprint` is excluded from etag key:** etag_or_version is a
+provider-assigned concurrency token for a *resource*, not a *query*. If the
+same resource returns different etags depending on request parameters (filters,
+regions, credentials), the caller should encode that distinction into `subject`
+or `source` — not silently overload the same etag key. Including
+request_fingerprint would split one provider token across multiple keys,
+defeating the "did the resource change?" question etags answer.
+
+### Decision tree
+
+1. **Compute overlap**: `prior_etag_keys ∩ current_etag_keys`
+2. **If overlap non-empty**:
+   - Any overlapping token differs → `ETAG_DIVERGED` (retry_class = unsafe)
+   - All match → fall through to fingerprint
+3. **If prior had etags but current doesn't** (or vice versa) →
+   `CONTINUITY_LOST` (retry_class = operator_required). Loss of tracking
+   signal is not "no overlap" — it's a continuity break.
+4. **If neither has etags**: fall through to fingerprint
+5. **Fingerprint comparison**:
+   - Match → `NO_DRIFT` (safe_transient)
+   - Mismatch → `FINGERPRINT_DIVERGED` (unsafe)
+
+### `operator_required` retry class
+
+New classification for ambiguous situations:
+
+| Error pattern | retry_class |
+|---------------|-------------|
+| Timeout after write | operator_required |
+| Network error / throttle | safe_transient |
+| Validation / quota / conflict | none (business_failure, don't retry) |
+| Unknown / unclassified | unknown |
+| Precondition diverged | unsafe |
+| Continuity lost (etag tracking gap) | operator_required |
+
+### Receipt emission observability
+
+`DriftCheckResult` and `AttemptRecord` carry `receipt_emission_ok` (bool) and
+`receipt_emission_error` (str). Drift verdict remains authoritative regardless,
+but "auditing died" is never silent.
+
+### AttemptStore performance
+
+All queries do full JSONL scan — O(n) in total records. Acceptable for v2
+foundation (not wired to production paths). Production wiring requires an
+index or in-memory cache to avoid linear scans.
+
+---
+
 ## Open Questions
 
-1. **How strict is drift detection?** Token-only (etag changed → stop) vs
-   full fingerprint (any precondition field changed → stop)? Token-only
-   is cheaper but misses semantic drift.
+1. ~~**How strict is drift detection?**~~ **RESOLVED in v2:** Tiered —
+   etag overlap first, fingerprint fallback. See "Tiered Drift Detection."
 
 2. **Override semantics.** When divergence is detected, can the operator
    force a retry? If so, that's a receipted override (existing pattern).
@@ -265,3 +373,4 @@ No new engine. Just: receipts + a lookup + a rule.
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1 | 2026-02-26 | Initial gap spec. Drift-gated retries, FactObservation, envelope shapes, v2/v3 split. |
+| 0.2 | 2026-02-26 | v2 foundation implemented: canonicalization rules, tiered drift (etag→fingerprint), `operator_required` retry class, `continuity_lost` verdict, JSONL AttemptStore. Resolved Open Question 1. Module: `src/governor/governed_activity.py`. |

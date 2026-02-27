@@ -441,6 +441,7 @@ class GateReceiptSystem:
         tenant_id: str = "default",
         auth_method: str = "none",
         receipt_role: str = ROLE_MEASUREMENT,
+        timing: dict[str, Any] | None = None,
     ) -> GateReceipt:
         """Create receipt, store evidence, append receipt to log."""
         # Store evidence blob (deduped by content)
@@ -458,6 +459,7 @@ class GateReceiptSystem:
             tenant_id=tenant_id,
             auth_method=auth_method,
             receipt_role=receipt_role,
+            timing=timing,
         )
         # Append to log
         self.receipt_store.append(receipt)

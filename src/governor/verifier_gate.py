@@ -32,9 +32,15 @@ from governor.gate_receipt import (
     GateReceiptSystem,
     canonical_json,
     content_hash,
+    make_timing,
 )
+from governor.signals.envelope import SignalEnvelope, QualityStatus
+from governor.signals.emit import SignalEmitter
 
 logger = logging.getLogger(__name__)
+
+VERIFY_SUMMARY_SIGNAL = "VERIFY_SUMMARY"
+VERIFY_SUMMARY_VERSION = 1
 
 
 # =============================================================================
@@ -656,6 +662,7 @@ def _try_emit_receipt(
     verdict: Verdict,
     stable_evidence: dict[str, Any],
     receipt_system: GateReceiptSystem | None,
+    timing_ns: tuple[int, int] | None = None,
 ) -> _ReceiptEmissionResult:
     """Best-effort receipt emission. Fail-open."""
     if receipt_system is None:
@@ -663,6 +670,9 @@ def _try_emit_receipt(
     try:
         gate_verdict = _VERDICT_TO_GATE_VERDICT[verdict]
         subject = f"{candidate.content_hash()}:{suite.suite_id}@{suite.version}"
+        timing = None
+        if timing_ns is not None:
+            timing = make_timing(timing_ns[0], timing_ns[1])
         receipt = receipt_system.emit(
             gate=VERIFIER_GATE,
             verdict=gate_verdict,
@@ -670,6 +680,7 @@ def _try_emit_receipt(
             subject_bytes=subject.encode("utf-8"),
             evidence_bundle=stable_evidence,
             gate_config=suite.policy_dict(),
+            timing=timing,
         )
         return _ReceiptEmissionResult(receipt_hash=receipt.receipt_id, ok=True)
     except Exception as exc:
@@ -678,6 +689,161 @@ def _try_emit_receipt(
             "Failed to emit verifier_gate receipt: %s", error_str, exc_info=True,
         )
         return _ReceiptEmissionResult(receipt_hash=None, ok=False, error=error_str)
+
+
+# =============================================================================
+# VERIFY_SUMMARY signal emission
+# =============================================================================
+
+# Verdict rank for the scalar `value` field: count_block + count_error.
+# Higher = more alarming.  Sorts naturally in `signals tail`.
+_VERDICT_RANK: dict[Verdict, str] = {
+    Verdict.PASS: "pass",
+    Verdict.FAIL: "block",
+    Verdict.QUARANTINE: "warn",
+    Verdict.NEEDS_HUMAN: "observe",
+    Verdict.INCONCLUSIVE: "observe",
+}
+
+# RunStatus → severity bucket for counts_by_severity
+_STATUS_SEVERITY: dict[RunStatus, str] = {
+    RunStatus.PASS: "info",
+    RunStatus.FAIL: "error",
+    RunStatus.ERROR: "error",
+    RunStatus.MISSING: "warn",
+}
+
+
+def build_verify_summary(
+    suite_result: SuiteResult,
+    *,
+    receipt_id: str | None = None,
+    timing_ns: tuple[int, int] | None = None,
+    session_id: str | None = None,
+    emitter_version: str = "0.0.0",
+) -> SignalEnvelope:
+    """Build a VERIFY_SUMMARY signal envelope from a suite result.
+
+    Pure function. Does not emit — caller decides where to send it.
+
+    Args:
+        suite_result: Completed suite result.
+        receipt_id: Gate receipt ID from the verifier run (for drill-down).
+        timing_ns: (start_ns, end_ns) monotonic nanoseconds, if measured.
+        session_id: Session ID for correlation.
+        emitter_version: Governor version string.
+    """
+    results = suite_result.results
+
+    # Counts by verdict (gate verdict vocabulary)
+    counts_by_verdict: dict[str, int] = {}
+    for r in results:
+        gate_v = _VERDICT_RANK.get(
+            Verdict.PASS if r.passed else Verdict.FAIL,
+            "observe",
+        )
+        counts_by_verdict[gate_v] = counts_by_verdict.get(gate_v, 0) + 1
+
+    # Counts by severity
+    counts_by_severity: dict[str, int] = {}
+    for r in results:
+        sev = _STATUS_SEVERITY.get(r.status, "info")
+        counts_by_severity[sev] = counts_by_severity.get(sev, 0) + 1
+
+    # Top codes: verifier IDs that failed, by failure count
+    top_codes = sorted(
+        [
+            {"code": r.verifier_id, "count": r.failures}
+            for r in results
+            if r.failures > 0
+        ],
+        key=lambda x: x["count"],
+        reverse=True,
+    )[:5]
+
+    # value = count_block + count_error ("how annoyed should I be")
+    count_block = counts_by_verdict.get("block", 0)
+    count_error = counts_by_severity.get("error", 0)
+
+    # Quality: mirrors suite run quality
+    # missing≠zero: unavailable → value=None, not 0.0
+    if not results:
+        quality = QualityStatus.UNAVAILABLE.value
+        value: float | None = None
+    elif any(r.status == RunStatus.ERROR for r in results):
+        quality = QualityStatus.PARTIAL.value
+        value = float(count_block + count_error)
+    else:
+        quality = QualityStatus.OK.value
+        value = float(count_block + count_error)
+
+    # Values dict (the "pleasantly boring" detail)
+    values: dict[str, Any] = {
+        "aggregate_verdict": suite_result.verdict.value,
+        "counts_by_verdict": counts_by_verdict,
+        "counts_by_severity": counts_by_severity,
+        "top_codes": top_codes,
+        "suite_id": suite_result.suite_id,
+        "suite_version": suite_result.suite_version,
+        "suite_hash": suite_result.policy_version,
+        "verifier_count": len(results),
+        "count_block": count_block,
+        "count_error": count_error,
+    }
+
+    if timing_ns is not None:
+        start_ns, end_ns = timing_ns
+        values["duration_ms"] = (end_ns - start_ns) / 1_000_000
+
+    # Source receipt IDs: just the verifier run receipt (and nothing else)
+    source_receipt_ids = [receipt_id] if receipt_id else []
+
+    from datetime import datetime, timezone
+    from governor.signals.envelope import CURRENT_SCHEMA_VERSION
+
+    return SignalEnvelope(
+        schema_version=CURRENT_SCHEMA_VERSION,
+        emitted_at=datetime.now(timezone.utc).isoformat(),
+        emitter="governor.verifier_gate",
+        emitter_version=emitter_version,
+        signal_id=VERIFY_SUMMARY_SIGNAL,
+        signal_version=VERIFY_SUMMARY_VERSION,
+        phase="2.5",
+        derivation="direct",
+        derivation_version="1",
+        subject_type="session",
+        subject_id=session_id,
+        session_id=session_id,
+        value=value,
+        quality_status=quality,
+        values=values,
+        source_receipt_ids=source_receipt_ids,
+    )
+
+
+def _try_emit_verify_summary(
+    suite_result: SuiteResult,
+    signal_sink: SignalEmitter | None,
+    *,
+    receipt_id: str | None = None,
+    timing_ns: tuple[int, int] | None = None,
+    session_id: str | None = None,
+) -> None:
+    """Best-effort signal emission. Fail-open, never raises."""
+    if signal_sink is None:
+        return
+    try:
+        envelope = build_verify_summary(
+            suite_result,
+            receipt_id=receipt_id,
+            timing_ns=timing_ns,
+            session_id=session_id,
+        )
+        signal_sink.emit(envelope)
+    except Exception:
+        logger.warning(
+            "Failed to emit VERIFY_SUMMARY signal", exc_info=True,
+        )
 
 
 # =============================================================================
@@ -691,6 +857,8 @@ def run_suite(
     checks: dict[str, Callable[[], bool | tuple[bool, dict[str, Any]] | CheckOutcome]],
     env: EnvFingerprint | None = None,
     receipt_system: GateReceiptSystem | None = None,
+    signal_sink: SignalEmitter | None = None,
+    session_id: str | None = None,
 ) -> SuiteResult:
     """Run a full verifier suite against a candidate.
 
@@ -700,10 +868,14 @@ def run_suite(
         checks: Mapping of verifier_id → callable.
         env: Optional environment fingerprint.
         receipt_system: Optional receipt system for emission.
+        signal_sink: Optional signal emitter for VERIFY_SUMMARY.
+        session_id: Session ID for signal correlation.
 
     Returns:
         SuiteResult with aggregated verdict and per-verifier results.
     """
+    t_start = time.monotonic_ns()
+
     candidate_hash = candidate.content_hash()
     env_fp = env.fingerprint() if env is not None else None
     policy_ver = suite.policy_hash()
@@ -727,8 +899,9 @@ def run_suite(
         })
         emission = _try_emit_receipt(
             candidate, suite, verdict, evidence, receipt_system,
+            timing_ns=(t_start, time.monotonic_ns()),
         )
-        return SuiteResult(
+        sr = SuiteResult(
             suite_id=suite.suite_id,
             suite_version=suite.version,
             candidate_hash=candidate_hash,
@@ -742,6 +915,13 @@ def run_suite(
             receipt_emission_ok=emission.ok,
             receipt_emission_error=emission.error,
         )
+        _try_emit_verify_summary(
+            sr, signal_sink,
+            receipt_id=emission.receipt_hash,
+            timing_ns=(t_start, time.monotonic_ns()),
+            session_id=session_id,
+        )
+        return sr
 
     # Run verifiers in suite order
     result_list: list[VerifierResult] = []
@@ -779,9 +959,10 @@ def run_suite(
 
     emission = _try_emit_receipt(
         candidate, suite, verdict, evidence, receipt_system,
+        timing_ns=(t_start, time.monotonic_ns()),
     )
 
-    return SuiteResult(
+    sr = SuiteResult(
         suite_id=suite.suite_id,
         suite_version=suite.version,
         candidate_hash=candidate_hash,
@@ -795,6 +976,15 @@ def run_suite(
         receipt_emission_ok=emission.ok,
         receipt_emission_error=emission.error,
     )
+
+    _try_emit_verify_summary(
+        sr, signal_sink,
+        receipt_id=emission.receipt_hash,
+        timing_ns=(t_start, time.monotonic_ns()),
+        session_id=session_id,
+    )
+
+    return sr
 
 
 def _build_stable_evidence(

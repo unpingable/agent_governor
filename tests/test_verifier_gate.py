@@ -1093,3 +1093,175 @@ class TestPolicyDrift:
         s1 = _make_suite(env_fingerprint_required=False)
         s2 = _make_suite(env_fingerprint_required=True)
         assert s1.policy_hash() != s2.policy_hash()
+
+
+# =============================================================================
+# VERIFY_SUMMARY signal emission
+# =============================================================================
+
+
+class TestVerifySummarySignal:
+    """Tests for VERIFY_SUMMARY signal emission from run_suite."""
+
+    def test_emitted_envelope_ingests_into_signal_store(self, tmp_path: Path) -> None:
+        from governor.signal_store import SignalStore
+        from governor.signals.emit import JsonlSink
+
+        jsonl = tmp_path / "signals.jsonl"
+        sink = JsonlSink(jsonl)
+        c = _make_candidate()
+        s = _make_suite()
+        run_suite(c, s, {"v1": _pass_fn}, signal_sink=sink)
+
+        store = SignalStore(tmp_path / "signals.db")
+        store.ingest_from_jsonl(jsonl)
+        assert store.count() == 1
+        rows = store.query(signal_name="VERIFY_SUMMARY")
+        assert len(rows) == 1
+        assert rows[0]["signal_name"] == "VERIFY_SUMMARY"
+        store.close()
+
+    def test_value_matches_counts(self, tmp_path: Path) -> None:
+        from governor.signals.emit import JsonlSink
+
+        jsonl = tmp_path / "signals.jsonl"
+        sink = JsonlSink(jsonl)
+        # 2 verifiers: one passes, one fails
+        e1 = _make_entry(verifier_id="v1")
+        e2 = _make_entry(verifier_id="v2")
+        c = _make_candidate()
+        s = _make_suite(entries=(e1, e2))
+        run_suite(c, s, {"v1": _pass_fn, "v2": _fail_fn}, signal_sink=sink)
+
+        envs = sink.read_all()
+        assert len(envs) == 1
+        env = envs[0]
+        # value = count_block + count_error
+        # v2 fails → block=1, error=1 → value should be 2
+        assert env.value == 2.0
+
+    def test_value_zero_when_all_pass(self, tmp_path: Path) -> None:
+        from governor.signals.emit import JsonlSink
+
+        jsonl = tmp_path / "signals.jsonl"
+        sink = JsonlSink(jsonl)
+        c = _make_candidate()
+        s = _make_suite()
+        run_suite(c, s, {"v1": _pass_fn}, signal_sink=sink)
+
+        envs = sink.read_all()
+        assert len(envs) == 1
+        assert envs[0].value == 0.0
+
+    def test_timing_fragment_present_and_non_negative(self, tmp_path: Path) -> None:
+        from governor.signals.emit import JsonlSink
+
+        jsonl = tmp_path / "signals.jsonl"
+        sink = JsonlSink(jsonl)
+        c = _make_candidate()
+        s = _make_suite()
+        run_suite(c, s, {"v1": _pass_fn}, signal_sink=sink)
+
+        envs = sink.read_all()
+        assert len(envs) == 1
+        assert "duration_ms" in envs[0].values
+        assert envs[0].values["duration_ms"] >= 0
+
+    def test_source_receipt_ids_includes_run_receipt(self, tmp_path: Path) -> None:
+        from governor.signals.emit import JsonlSink
+
+        jsonl = tmp_path / "signals.jsonl"
+        sink = JsonlSink(jsonl)
+        rs = GateReceiptSystem(tmp_path / "receipts")
+        c = _make_candidate()
+        s = _make_suite()
+        sr = run_suite(c, s, {"v1": _pass_fn}, receipt_system=rs, signal_sink=sink)
+
+        envs = sink.read_all()
+        assert len(envs) == 1
+        assert sr.receipt_hash in envs[0].source_receipt_ids
+
+    def test_no_signal_sink_no_crash(self) -> None:
+        c = _make_candidate()
+        s = _make_suite()
+        # signal_sink=None should not raise
+        sr = run_suite(c, s, {"v1": _pass_fn}, signal_sink=None)
+        assert sr.verdict == Verdict.PASS
+
+    def test_receipt_has_timing(self, tmp_path: Path) -> None:
+        rs = GateReceiptSystem(tmp_path / "receipts")
+        c = _make_candidate()
+        s = _make_suite()
+        sr = run_suite(c, s, {"v1": _pass_fn}, receipt_system=rs)
+        receipts = rs.query(gate=VERIFIER_GATE)
+        assert len(receipts) == 1
+        assert receipts[0].timing is not None
+        assert receipts[0].timing["duration_ms"] >= 0
+        assert "start_ns" in receipts[0].timing
+
+    def test_values_dict_shape(self, tmp_path: Path) -> None:
+        from governor.signals.emit import JsonlSink
+
+        jsonl = tmp_path / "signals.jsonl"
+        sink = JsonlSink(jsonl)
+        c = _make_candidate()
+        s = _make_suite()
+        run_suite(c, s, {"v1": _pass_fn}, signal_sink=sink)
+
+        envs = sink.read_all()
+        v = envs[0].values
+        assert "aggregate_verdict" in v
+        assert "counts_by_verdict" in v
+        assert "counts_by_severity" in v
+        assert "top_codes" in v
+        assert "suite_id" in v
+        assert "suite_version" in v
+        assert "suite_hash" in v
+        assert "verifier_count" in v
+
+    def test_early_return_path_also_emits(self, tmp_path: Path) -> None:
+        """env_fingerprint_required early return still emits signal."""
+        from governor.signals.emit import JsonlSink
+
+        jsonl = tmp_path / "signals.jsonl"
+        sink = JsonlSink(jsonl)
+        c = _make_candidate()
+        s = _make_suite(env_fingerprint_required=True)
+        run_suite(c, s, {"v1": _pass_fn}, env=None, signal_sink=sink)
+
+        envs = sink.read_all()
+        assert len(envs) == 1
+        assert envs[0].values["aggregate_verdict"] == "inconclusive"
+
+    def test_quality_partial_on_error(self, tmp_path: Path) -> None:
+        from governor.signals.emit import JsonlSink
+        from governor.verifier_gate import build_verify_summary
+
+        e1 = _make_entry(verifier_id="v1")
+        e2 = _make_entry(verifier_id="v2")
+        c = _make_candidate()
+        s = _make_suite(entries=(e1, e2))
+        sr = run_suite(c, s, {"v1": _pass_fn, "v2": _error_fn})
+        env = build_verify_summary(sr)
+        assert env.quality_status == "partial"
+
+    def test_quality_ok_when_clean(self, tmp_path: Path) -> None:
+        from governor.verifier_gate import build_verify_summary
+
+        c = _make_candidate()
+        s = _make_suite()
+        sr = run_suite(c, s, {"v1": _pass_fn})
+        env = build_verify_summary(sr)
+        assert env.quality_status == "ok"
+
+    def test_session_id_propagated(self, tmp_path: Path) -> None:
+        from governor.signals.emit import JsonlSink
+
+        jsonl = tmp_path / "signals.jsonl"
+        sink = JsonlSink(jsonl)
+        c = _make_candidate()
+        s = _make_suite()
+        run_suite(c, s, {"v1": _pass_fn}, signal_sink=sink, session_id="sess-42")
+
+        envs = sink.read_all()
+        assert envs[0].session_id == "sess-42"

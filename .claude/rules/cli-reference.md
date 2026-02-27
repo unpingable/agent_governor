@@ -218,10 +218,20 @@ governor claim-diff laundering        # Shortcut: run + show only laundering
 governor claim-diff reset --confirm   # Clear history and snapshots
 
 # Claim Signal Extraction (implicit claim detection)
-governor signals extract <text>       # Extract signals from provided text
-governor signals scan <path>          # Scan a file for claim signals
-governor signals register <text>      # Extract signals AND register as ASSUMED claims
-governor signals score <text>         # Show assertiveness score only
+governor claim-signals extract <text> # Extract signals from provided text
+governor claim-signals scan <path>    # Scan a file for claim signals
+governor claim-signals register <text> # Extract signals AND register as ASSUMED claims
+governor claim-signals score <text>   # Show assertiveness score only
+
+# Instrumentation Signals (Signal Plane v1)
+governor signals list                 # List signals with filters
+    [--name X] [--phase X] [--quality X] [--session X]
+    [--since ISO] [--until ISO] [--limit N] [--after-seq N] [--json]
+governor signals tail                 # Show newest signals
+    [--limit N] [--name X] [--poll-ms N] [--json]
+governor signals explain <hash>       # Full envelope details [--json]
+governor signals stats                # Index health and counts [--json]
+governor signals rebuild [--confirm]  # Drop and rebuild SQLite from JSONL
 
 # Config Profiles (named governance presets)
 governor profile list                 # List available profiles (builtin + custom)

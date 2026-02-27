@@ -85,6 +85,11 @@
 **Phase C2 CALIBRATION_LAYER** — Apply-only calibration for raw A/B signals. Normalizes signal values to [0,1] using frozen, versioned parameter sets. Three transform methods: identity_clip (pass-through with clamping), linear_minmax (linear rescaling from observed range), log_minmax (log-space rescaling with explicit epsilon_shift — user-pinned policy). CalibrationParamSet (frozen dataclass, MappingProxyType copy+wrap for true immutability, content-addressed param_set_hash). CalibrationMismatchError (exception, not degraded output). Bounds validation: clip bounds enforced in [0,1], inverted bounds refused, bool excluded from numeric check. Quality propagation: ok/partial calibrated normally, unavailable/invalid → value=None. Companion envelope builder (phase="2.4C", unit="normalized", rich provenance in values + annotations). Missing≠zero preserved.
 **Phase C2 CALIBRATION_FITTING** — Offline param-set fitting from replay corpus. CalibrationFitSpec (frozen config with content-addressed hash), deterministic sample extraction with explicit exclusion reason taxonomy (8 reasons, one per dropped item, no silent drops). Three method fits: identity_clip (fixed clip bounds), linear_minmax (corpus min/max), log_minmax (domain-filtered with explicit epsilon_shift). FitResult structured return (param_set on success, summary_envelope always). Fit summary as SignalEnvelope (CALIBRATION_FIT_SUMMARY, phase="2.4C") with corpus stats, exclusion counts, provenance hashes, degenerate_fit flag. Suppression-aware by default. No param set emitted on failure. Integration gate: fitted param sets accepted by apply_calibration().
 **Phase D PREDICT_REGIME_PREFLIGHT** — Observe-only pre-session regime prediction from calibrated A/B signal envelopes. Pure function, no IO, no hidden state. 6-regime taxonomy (normal, watch, warning, instrumentation_compromised, insufficient_history, indeterminate). Weighted heuristic: capture_diagnostic (0.40) + sigma_rate (0.30) + decision_lag (0.20) + exposure_proxy (0.10). Threshold-based classification with configurable boundaries. Suppression precedence (SILENT_SUPPRESSION + CAPTURE_SELF_DIAGNOSTIC gate all scoring). Confidence from input completeness + quality + hard caps. Missing≠zero (unavailable → value=None). Provenance closure (input envelope hashes, config version, quality statuses). Goldens for all 4 primary regimes. 72 tests.
+**Verifier Gate** — Composition boundary for mechanical verification. VerifierSuite (frozen, content-addressed policy_version), Candidate (subject under test), CheckOutcome (tri-state with detail), RunStatus/SuiteVerdict enums. run_suite() executes checks with timeout enforcement, flake detection (quarantine after N consecutive failures), environment fingerprint gating. Gate receipt emission (fail-open). Monotonicity property: superset of checks cannot weaken verdict. VERIFY_SUMMARY signal emission (one envelope per suite run, value = count_block + count_error, timing fragment, source_receipt_ids). 124 tests.
+**Governed Activities** — Drift-gated retry substrate. FactObservation (ops-native observation), PreconditionBundle (sorted, fingerprinted), AttemptRecord (per-attempt with etag snapshot), DriftCheckResult (tiered verdict). Tiered drift detection: etag overlap first → fingerprint fallback. DriftVerdict enum (no_drift, etag_diverged, fingerprint_diverged, no_prior, continuity_lost). JSONL store with receipt emission tracking. Etag key = fact_type:subject:source (excludes request_fingerprint by design). 110 tests.
+**Signal Plane v1** — SQLite projection cache over instrumentation JSONL. SignalStore with byte-offset cursor, inode/shrink detection, transactional ingest (BEGIN IMMEDIATE), fcntl.flock write exclusivity. project_envelope() pure function. Query/get/tail/stats/rebuild. CLI: `governor signals list|tail|explain|stats|rebuild`, renamed `signals` → `claim-signals` for claim extraction. Daemon RPC: signals.query/get/tail/stats. Tail with --name filter and --poll-ms follow mode. SIGNAL_EMIT_FAILED self-diagnostic (emission failures queryable in same plane, no recursion). 104 tests.
+**Process Session Identity** — Canonical process-scoped session_id for signal/receipt correlation. get_session_id() (lazy, stable per process), set_session_id() (override), new_session_id() (fresh without setting global). "gov_{uuid12}" format. DaemonState owns one for its lifetime, exposed in governor.hello RPC. JsonlSink threads session_id into SIGNAL_EMIT_FAILED. 9 tests.
+**Operational SLA Gap Spec** — Two-path availability contracts for governor as control plane. Decision path (fast, p99 budget in ms, fail-closed or fail-open+debt receipt) vs evidence path (slower, accountable, debt tracking). Per-lane SLO routing. Temporal coherence constraints (policy freshness, index lag). Timing fragment on gate receipts (make_timing with monotonic_ns). Gap spec at specs/gaps/OPERATIONAL_SLA.md.
 **Test Hardening (v2.0.2)** — Fresh-clone smoke tests (CLI happy path + daemon stdio via subprocess, @smoke marker). Adversarial hook bypass tests (symlinks, script tampering, malformed payloads, unicode tricks, --no-verify documentation). Upgrade path tests (SQLite V1/V3/V5→V6 migration, receipt forward compat, session capsule compat, from_dict robustness). Scale/performance tests (10k receipts, 1k claims, SQLite concurrency with 20 threads, 1MB security scan, 100-anchor continuity check, @scale marker). CI matrix expanded to macOS + Python 3.13.
 
 ## Test Counts by Module
@@ -171,10 +176,10 @@
 | Git Governance | 99 |
 | Context Compact | 49 |
 | Perforce Support | 71 |
-| Gate Receipt System | 50 |
+| Gate Receipt System | 70 |
 | Maude Contract Tests | 19 (+7 skipped) |
 | Intent Compiler | 131 |
-| Governor Daemon | 124 |
+| Governor Daemon | 265 |
 | Correlator Telemetry | 140 |
 | Scope Governor | 182 |
 | Semantic Stability | 181 |
@@ -185,5 +190,9 @@
 | Lane Routing | 149 |
 | Receipt Kernel (libs/receipt_kernel) | 89 |
 | v2.4 Instrumentation Spine (A0-A3 + B1-B2 + C1-C2 + D) | 867 |
+| Verifier Gate | 124 |
+| Governed Activities | 110 |
+| Signal Plane (signal_store + CLI + RPC) | 104 |
+| Process Session Identity | 9 |
 
-**Total: ~12,073 tests** (12,049 unit + 24 integration)
+**Total: ~14,170 tests** (14,134 unit + 36 skipped + 24 integration)

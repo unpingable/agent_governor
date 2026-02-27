@@ -85,12 +85,16 @@ src/governor/
 ├── daemon.py             # Governor daemon: JSON-RPC 2.0 over stdio/Unix socket, 36 RPC methods, DaemonState
 ├── scope.py              # Scope Governor: locality-first policy, escalation receipts, tool contracts, absence-restrictive containment
 ├── semantic_stability.py # Semantic stability: perturbation-based conditioning audit, 4 signals, noise floor, basin clustering, JSONL store
+├── session.py            # Process-scoped session identity: get_session_id, set_session_id, new_session_id
+├── signal_store.py       # Signal Plane v1: SQLite projection cache, byte-offset cursor, query/tail/stats/rebuild
+├── verifier_gate.py      # Verifier gate: composition boundary, VerifierSuite, VERIFY_SUMMARY signal emission
+├── governed_activity.py  # Governed activities: drift-gated retry, FactObservation, PreconditionBundle, AttemptRecord
 │
 # v2.4 Instrumentation Spine (Phase A + B + C):
 ├── signals/
 │   ├── __init__.py                  # Public API: SignalEnvelope, derivation functions
 │   ├── envelope.py                  # SignalEnvelope, QualityStatus, DerivationType, canonical_json
-│   ├── emit.py                      # SignalEmitter + JsonlSink
+│   ├── emit.py                      # SignalEmitter + JsonlSink + SIGNAL_EMIT_FAILED self-diagnostic
 │   ├── exposure_proxy.py            # A1: EXPOSURE_PROXY weighted denominator
 │   ├── silent_suppression.py        # A2: SILENT_SUPPRESSION in-path health
 │   ├── sigma_rate.py                # A3: SIGMA_RATE endorsement→invalidation matching

@@ -83,9 +83,16 @@ class JsonlSink:
     as semantic_stability.py JSONL persistence).
     """
 
-    def __init__(self, path: Path, *, validate: bool = True) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        validate: bool = True,
+        session_id: str | None = None,
+    ) -> None:
         self._path = path
         self._validate = validate
+        self._session_id = session_id
 
     @property
     def path(self) -> Path:
@@ -136,6 +143,7 @@ class JsonlSink:
                 failed_signal_id=failed_signal_id,
                 error_type=type(exc).__name__,
                 error_message=str(exc),
+                session_id=self._session_id,
             )
             line = json.dumps(
                 fail_env.to_dict(), separators=(",", ":"), ensure_ascii=True,

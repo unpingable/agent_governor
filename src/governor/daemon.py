@@ -350,9 +350,12 @@ class DaemonState:
     """Lazy wrapper around governor subsystems for daemon handlers."""
 
     def __init__(self, governor_dir: Path, mode: str = "general") -> None:
+        from .session import get_session_id
+
         self.governor_dir = governor_dir
         self.root = governor_dir.parent
         self.mode = mode
+        self.session_id = get_session_id()
         self._config: dict[str, str] | None = None
         self._session_store = None
         self._receipt_system = None
@@ -887,6 +890,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 else "default",
                 "mode": state.mode,
                 "initialized": initialized,
+                "session_id": state.session_id,
             },
         }
 
@@ -2876,7 +2880,8 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         store = state.signal_store
         limit = params.get("limit", 20)
         after_seq = params.get("after_seq")
-        rows = store.tail(limit=limit, after_seq=after_seq)
+        signal_name = params.get("signal_name")
+        rows = store.tail(limit=limit, after_seq=after_seq, signal_name=signal_name)
         return {"signals": rows, "count": len(rows), "has_more": len(rows) >= limit}
 
     async def signals_stats(params: dict) -> dict:

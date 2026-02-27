@@ -1,5 +1,61 @@
 # Changelog
 
+## Unreleased
+
+**Theme:** the governor can see itself. Signal Plane v1 wires the v2.4
+instrumentation spine (867 tests, observe-only) into a queryable surface:
+persisted JSONL → SQLite projection → CLI + daemon RPC. Verifier gate emits
+VERIFY_SUMMARY signals; emission failures are self-diagnosed via
+SIGNAL_EMIT_FAILED. Process-scoped session identity enables per-run
+correlation. Operational SLA gap spec lays groundwork for 3.x self-monitoring.
+
+### Signal Plane v1
+
+SQLite projection cache over signal JSONL. Byte-offset cursor with
+inode/shrink detection, transactional ingest, fcntl.flock write exclusivity.
+CLI: `governor signals list|tail|explain|stats|rebuild`. Daemon RPC:
+`signals.query|get|tail|stats`. `--poll-ms` enables follow mode:
+
+```bash
+governor signals tail --name VERIFY_SUMMARY --poll-ms 1000
+governor signals tail --name SIGNAL_EMIT_FAILED --poll-ms 1000
+```
+
+Old claim signal extraction moved to `governor claim-signals`.
+
+### VERIFY_SUMMARY Signal
+
+First live signal from a gate. One envelope per verifier suite run.
+`value = count_block + count_error`. Timing fragment, source receipt IDs,
+quality semantics (ok/partial/unavailable). Fail-open: emission failure
+never blocks verification.
+
+### SIGNAL_EMIT_FAILED Self-Diagnostic
+
+When signal emission fails, a best-effort diagnostic envelope is written to
+the same JSONL. No recursion — bypasses `emit()` directly. Queryable in the
+same plane: `governor signals list --name SIGNAL_EMIT_FAILED`.
+
+### Process Session Identity
+
+Canonical `gov_{uuid12}` session ID per process. Stable within a daemon
+lifetime, fresh per CLI invocation. Exposed in `governor.hello` RPC response.
+Threads into SIGNAL_EMIT_FAILED envelopes and signal queries (`--session`).
+
+### Operational SLA (Gap Spec)
+
+Two-path availability contracts: decision path (fast, fail-closed/open) vs
+evidence path (slower, debt receipts). Per-lane SLO routing. Timing fragment
+on gate receipts (`make_timing` with monotonic_ns). See
+`specs/gaps/OPERATIONAL_SLA.md`.
+
+### Verifier Gate + Governed Activities
+
+Composition boundary for mechanical verification (124 tests). Drift-gated
+retry substrate (110 tests). Both observe-only, not wired to daemon/CLI.
+
+---
+
 ## v2.3.1 — 2026-02-19
 
 **Theme:** operator UX. The CLI now has a front door instead of a fire hose.

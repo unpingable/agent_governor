@@ -383,6 +383,7 @@ class DaemonState:
         self._chain_loaded_at: str | None = None
         self._chain_action_logs = None
         self._chain_mode: str | None = None
+        self._signal_store = None
 
     @property
     def chain_mode(self) -> str:
@@ -641,6 +642,19 @@ class DaemonState:
             from .scope import ScopeGovernor
             self._scope_governor = ScopeGovernor.load(self.governor_dir)
         return self._scope_governor
+
+    @property
+    def signal_store(self):
+        if self._signal_store is None:
+            from .signal_store import SignalStore
+            signals_dir = self.governor_dir / "signals"
+            signals_dir.mkdir(exist_ok=True)
+            db_path = signals_dir / "signals.db"
+            jsonl_path = signals_dir / "signals.jsonl"
+            self._signal_store = SignalStore(db_path)
+            if jsonl_path.exists():
+                self._signal_store.ingest_from_jsonl(jsonl_path)
+        return self._signal_store
 
     @property
     def stability_store(self):
@@ -2824,6 +2838,57 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register_streaming("chat.stream", chat_stream, mutating=True)
     dispatcher.register("chat.models", chat_models)
     dispatcher.register("chat.backend", chat_backend)
+
+    # --- Signals (Signal Plane v1) ---
+
+    async def signals_query(params: dict) -> dict:
+        """Query instrumentation signals with filters."""
+        store = state.signal_store
+        rows = store.query(
+            signal_name=params.get("signal_name"),
+            phase=params.get("phase"),
+            quality=params.get("quality"),
+            session_id=params.get("session_id"),
+            since=params.get("since"),
+            until=params.get("until"),
+            limit=params.get("limit", 50),
+            after_seq=params.get("after_seq"),
+        )
+        limit = params.get("limit", 50)
+        truncated = len(rows) > limit
+        if truncated:
+            rows = rows[:limit]
+        return {"signals": rows, "count": len(rows), "truncated": truncated}
+
+    async def signals_get(params: dict) -> dict:
+        """Get a single signal by hash."""
+        signal_hash = params.get("signal_hash")
+        if not signal_hash:
+            raise ValueError("signal_hash is required")
+        store = state.signal_store
+        row = store.get(signal_hash)
+        if row is None:
+            raise ValueError(f"Signal not found: {signal_hash}")
+        return row
+
+    async def signals_tail(params: dict) -> dict:
+        """Tail recent signals."""
+        store = state.signal_store
+        limit = params.get("limit", 20)
+        after_seq = params.get("after_seq")
+        rows = store.tail(limit=limit, after_seq=after_seq)
+        return {"signals": rows, "count": len(rows), "has_more": len(rows) >= limit}
+
+    async def signals_stats(params: dict) -> dict:
+        """Signal index statistics and ingest health."""
+        store = state.signal_store
+        jsonl_path = state.governor_dir / "signals" / "signals.jsonl"
+        return store.stats(jsonl_path=jsonl_path if jsonl_path.exists() else None)
+
+    dispatcher.register("signals.query", signals_query)
+    dispatcher.register("signals.get", signals_get)
+    dispatcher.register("signals.tail", signals_tail)
+    dispatcher.register("signals.stats", signals_stats)
 
 
 # =============================================================================

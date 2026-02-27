@@ -192,7 +192,7 @@ class TestRealCLI:
 ALLOWED_UNCATEGORIZED: set[str] = {
     "adapt", "admit", "advanced", "agent", "anchor", "audit",
     "autonomous", "backend", "boil", "cbi", "changes", "chat",
-    "claim", "claim-diff", "claude-hooks", "code", "codex-exec",
+    "claim", "claim-diff", "claim-signals", "claude-hooks", "code", "codex-exec",
     "codex-hooks", "collapse", "conditioning", "constraints",
     "context", "continuity", "correlator", "dashboard",
     "dashboard-ux", "decay", "decide", "decisions", "demo",

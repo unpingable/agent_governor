@@ -8214,14 +8214,14 @@ def claim_diff_reset(ctx, confirm):
 # =============================================================================
 
 
-@cli.group("signals")
+@cli.group("claim-signals")
 @click.pass_context
-def signals_cmd(ctx):
+def claim_signals_cmd(ctx):
     """Claim signal extraction — detect implicit claims from text."""
     pass
 
 
-@signals_cmd.command("extract")
+@claim_signals_cmd.command("extract")
 @click.argument("text")
 @click.pass_context
 def signals_extract(ctx, text):
@@ -8250,7 +8250,7 @@ def signals_extract(ctx, text):
             )
 
 
-@signals_cmd.command("scan")
+@claim_signals_cmd.command("scan")
 @click.argument("path", type=click.Path(exists=True))
 @click.pass_context
 def signals_scan(ctx, path):
@@ -8277,7 +8277,7 @@ def signals_scan(ctx, path):
             click.echo(f"  [{m.category.value}] {m.value}{line_info}")
 
 
-@signals_cmd.command("register")
+@claim_signals_cmd.command("register")
 @click.argument("text")
 @click.option("--agent-id", default=None, help="Source agent ID for registered claims")
 @click.option("--confidence", type=float, default=0.2, help="Confidence for registered claims")
@@ -8318,7 +8318,7 @@ def signals_register(ctx, text, agent_id, confidence):
         click.echo(f"  {cid}: {claim.content} (conf={claim.confidence:.2f})")
 
 
-@signals_cmd.command("score")
+@claim_signals_cmd.command("score")
 @click.argument("text")
 @click.pass_context
 def signals_score(ctx, text):
@@ -8336,6 +8336,237 @@ def signals_score(ctx, text):
         click.echo("  Moderate assertiveness.")
     else:
         click.echo("  High assertiveness — review for unsupported claims.")
+
+
+# =============================================================================
+# Instrumentation Signals (Signal Plane v1)
+# =============================================================================
+
+
+def _get_signal_store(gov_dir: Path):
+    """Open signal store, auto-ingest from JSONL, return (store, jsonl_path)."""
+    from .signal_store import SignalStore
+
+    signals_dir = gov_dir / "signals"
+    signals_dir.mkdir(exist_ok=True)
+    db_path = signals_dir / "signals.db"
+    jsonl_path = signals_dir / "signals.jsonl"
+
+    store = SignalStore(db_path)
+    if jsonl_path.exists():
+        store.ingest_from_jsonl(jsonl_path)
+    return store, jsonl_path
+
+
+@cli.group("signals")
+@click.pass_context
+def signals_cmd(ctx):
+    """Instrumentation signal query — list, tail, explain, stats."""
+    pass
+
+
+@signals_cmd.command("list")
+@click.option("--name", default=None, help="Filter by signal name (e.g. EXPOSURE_PROXY)")
+@click.option("--phase", default=None, help="Filter by phase (e.g. 2.4A)")
+@click.option("--quality", default=None, help="Filter by quality status")
+@click.option("--session", default=None, help="Filter by session ID")
+@click.option("--since", default=None, help="ISO 8601 UTC lower bound")
+@click.option("--until", default=None, help="ISO 8601 UTC upper bound")
+@click.option("--limit", default=50, type=int, help="Max results (default 50)")
+@click.option("--after-seq", default=None, type=int, help="Cursor: only rows after this seq")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def signals_list(ctx, name, phase, quality, session, since, until, limit, after_seq, as_json):
+    """List instrumentation signals with optional filters."""
+    import json as _json
+
+    gov_dir = ensure_initialized(ctx)
+    store, jsonl_path = _get_signal_store(gov_dir)
+
+    try:
+        rows = store.query(
+            signal_name=name, phase=phase, quality=quality,
+            session_id=session, since=since, until=until,
+            limit=limit + 1, after_seq=after_seq,
+        )
+        truncated = len(rows) > limit
+        if truncated:
+            rows = rows[:limit]
+
+        if as_json:
+            click.echo(_json.dumps({
+                "signals": rows,
+                "count": len(rows),
+                "truncated": truncated,
+            }, indent=2))
+        else:
+            if not rows:
+                click.echo("No signals found.")
+                return
+            click.echo(f"{'EMITTED_AT':<28} {'SIGNAL_NAME':<30} {'VALUE':>8}  {'QUALITY':<12} {'PHASE':<8}")
+            click.echo("-" * 90)
+            for r in rows:
+                val = f"{r['value']:.4f}" if r["value"] is not None else "   None"
+                click.echo(
+                    f"{r['emitted_at']:<28} {r['signal_name']:<30} {val:>8}  "
+                    f"{r['quality_status']:<12} {r['phase']:<8}"
+                )
+            if truncated:
+                click.echo(f"\n(truncated at {limit} — use --after-seq {rows[-1]['seq']} for next page)")
+    finally:
+        store.close()
+
+
+@signals_cmd.command("tail")
+@click.option("--limit", default=20, type=int, help="Number of signals (default 20)")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def signals_tail(ctx, limit, as_json):
+    """Show newest instrumentation signals."""
+    import json as _json
+
+    gov_dir = ensure_initialized(ctx)
+    store, jsonl_path = _get_signal_store(gov_dir)
+
+    try:
+        rows = store.tail(limit=limit)
+
+        if as_json:
+            click.echo(_json.dumps({
+                "signals": rows,
+                "count": len(rows),
+            }, indent=2))
+        else:
+            if not rows:
+                click.echo("No signals yet.")
+                return
+            click.echo(f"{'EMITTED_AT':<28} {'SIGNAL_NAME':<30} {'VALUE':>8}  {'QUALITY':<12}")
+            click.echo("-" * 82)
+            for r in rows:
+                val = f"{r['value']:.4f}" if r["value"] is not None else "   None"
+                click.echo(
+                    f"{r['emitted_at']:<28} {r['signal_name']:<30} {val:>8}  "
+                    f"{r['quality_status']:<12}"
+                )
+    finally:
+        store.close()
+
+
+@signals_cmd.command("explain")
+@click.argument("signal_hash")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def signals_explain(ctx, signal_hash, as_json):
+    """Show full envelope details for a signal by hash."""
+    import json as _json
+
+    gov_dir = ensure_initialized(ctx)
+    store, jsonl_path = _get_signal_store(gov_dir)
+
+    try:
+        row = store.get(signal_hash)
+        if row is None:
+            click.echo(f"Signal not found: {signal_hash}", err=True)
+            return
+
+        if as_json:
+            click.echo(_json.dumps(row, indent=2))
+        else:
+            env = row.get("envelope", {})
+            click.echo(f"Signal: {row['signal_name']}")
+            click.echo(f"Hash:   {row['signal_hash']}")
+            click.echo(f"Phase:  {row['phase']}")
+            click.echo(f"Time:   {row['emitted_at']}")
+            click.echo(f"Value:  {row['value']}")
+            click.echo(f"Quality: {row['quality_status']}")
+            click.echo(f"Schema: {row['schema_version']}")
+            if env:
+                if env.get("source_receipt_ids"):
+                    click.echo(f"Receipt IDs: {', '.join(env['source_receipt_ids'])}")
+                if env.get("source_streams"):
+                    click.echo(f"Streams: {', '.join(env['source_streams'])}")
+                if env.get("source_versions"):
+                    click.echo(f"Source versions: {env['source_versions']}")
+                if env.get("quality_reasons"):
+                    click.echo(f"Quality reasons: {env['quality_reasons']}")
+                if env.get("values"):
+                    click.echo(f"Values: {_json.dumps(env['values'], indent=2)}")
+                if env.get("annotations"):
+                    click.echo(f"Annotations: {_json.dumps(env['annotations'], indent=2)}")
+    finally:
+        store.close()
+
+
+@signals_cmd.command("stats")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def signals_stats(ctx, as_json):
+    """Show signal index statistics and ingest health."""
+    import json as _json
+
+    gov_dir = ensure_initialized(ctx)
+    store, jsonl_path = _get_signal_store(gov_dir)
+
+    try:
+        s = store.stats(jsonl_path=jsonl_path)
+
+        if as_json:
+            click.echo(_json.dumps(s, indent=2))
+        else:
+            click.echo(f"Total indexed: {s['total']}")
+            if s["by_signal_name"]:
+                click.echo("\nBy signal:")
+                for name, cnt in sorted(s["by_signal_name"].items()):
+                    click.echo(f"  {name}: {cnt}")
+            if s["by_phase"]:
+                click.echo("\nBy phase:")
+                for phase, cnt in sorted(s["by_phase"].items()):
+                    click.echo(f"  {phase}: {cnt}")
+            if s["by_quality"]:
+                click.echo("\nBy quality:")
+                for q, cnt in sorted(s["by_quality"].items()):
+                    click.echo(f"  {q}: {cnt}")
+            tr = s["time_range"]
+            if tr["earliest"]:
+                click.echo(f"\nTime range: {tr['earliest']} → {tr['latest']}")
+            health = s["ingest_health"]
+            click.echo(f"\nIngest health:")
+            click.echo(f"  Cursor offset: {health['cursor_offset']}")
+            click.echo(f"  File size:     {health['file_size']}")
+            click.echo(f"  Lag bytes:     {health['lag_bytes']}")
+            if health.get("cursor_reset_detected"):
+                click.echo("  WARNING: cursor reset detected (file rotation/shrink)")
+    finally:
+        store.close()
+
+
+@signals_cmd.command("rebuild")
+@click.option("--confirm", is_flag=True, help="Required to proceed")
+@click.pass_context
+def signals_rebuild(ctx, confirm):
+    """Drop signal index and rebuild from JSONL source of truth."""
+    if not confirm:
+        click.echo("Rebuild drops the SQLite index and re-ingests from JSONL.")
+        click.echo("Use --confirm to proceed.")
+        return
+
+    gov_dir = ensure_initialized(ctx)
+    from .signal_store import SignalStore
+
+    signals_dir = gov_dir / "signals"
+    db_path = signals_dir / "signals.db"
+    jsonl_path = signals_dir / "signals.jsonl"
+
+    if not jsonl_path.exists():
+        click.echo("No signals JSONL found. Nothing to rebuild.")
+        return
+
+    store = SignalStore(db_path)
+    try:
+        total = store.rebuild(jsonl_path)
+        click.echo(f"Rebuilt signal index: {total} signals indexed.")
+    finally:
+        store.close()
 
 
 # =============================================================================

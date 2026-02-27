@@ -16,7 +16,13 @@ from .envelope import (
     SignalEnvelope,
     validate_envelope,
 )
-from .emit import JsonlSink, SignalEmitter
+from .emit import (
+    SIGNAL_EMIT_FAILED,
+    SIGNAL_EMIT_FAILED_VERSION,
+    JsonlSink,
+    SignalEmitter,
+    build_emit_failed_envelope,
+)
 from .exposure_proxy import (
     DEFAULT_WEIGHT_SET_ID,
     DEFAULT_WEIGHTS,
@@ -118,9 +124,12 @@ __all__ = [
     "CURRENT_SCHEMA_VERSION",
     "DerivationType",
     "QualityStatus",
+    "SIGNAL_EMIT_FAILED",
+    "SIGNAL_EMIT_FAILED_VERSION",
     "SignalEmitter",
     "SignalEnvelope",
     "JsonlSink",
+    "build_emit_failed_envelope",
     "validate_envelope",
     # A1: Exposure Proxy
     "DEFAULT_WEIGHT_SET_ID",

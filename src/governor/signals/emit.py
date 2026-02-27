@@ -12,12 +12,56 @@ import fcntl
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-from .envelope import SignalEnvelope, validate_envelope
+from .envelope import CURRENT_SCHEMA_VERSION, SignalEnvelope, validate_envelope
 
 logger = logging.getLogger(__name__)
+
+SIGNAL_EMIT_FAILED = "SIGNAL_EMIT_FAILED"
+SIGNAL_EMIT_FAILED_VERSION = 1
+
+
+def build_emit_failed_envelope(
+    failed_signal_id: str,
+    error_type: str,
+    error_message: str,
+    *,
+    emitter: str = "governor.signals.emit",
+    emitter_version: str = "1",
+    session_id: str | None = None,
+) -> SignalEnvelope:
+    """Build a SIGNAL_EMIT_FAILED envelope for a failed emission.
+
+    Pure function. The envelope records what failed and why, so the failure
+    is queryable in the same signal plane. quality_status is always "partial"
+    because we know something happened but the original signal was lost.
+    """
+    values: dict[str, Any] = {
+        "failed_signal_id": failed_signal_id,
+        "error_type": error_type,
+        "error_message": error_message[:500],  # cap message length
+    }
+
+    return SignalEnvelope(
+        schema_version=CURRENT_SCHEMA_VERSION,
+        emitted_at=datetime.now(timezone.utc).isoformat(),
+        emitter=emitter,
+        emitter_version=emitter_version,
+        signal_id=SIGNAL_EMIT_FAILED,
+        signal_version=SIGNAL_EMIT_FAILED_VERSION,
+        phase="2.5",
+        derivation="direct",
+        derivation_version="1",
+        subject_type="signal",
+        subject_id=failed_signal_id,
+        session_id=session_id or "",
+        value=None,
+        quality_status="partial",
+        values=values,
+    )
 
 
 @runtime_checkable
@@ -76,12 +120,40 @@ class JsonlSink:
             finally:
                 os.close(fd)
 
-        except Exception:
+        except Exception as exc:
             # Observe-only: emission failure must never block execution
+            signal_id = getattr(envelope, "signal_id", "unknown")
             logger.exception(
-                "Failed to emit signal envelope for %s",
-                getattr(envelope, "signal_id", "unknown"),
+                "Failed to emit signal envelope for %s", signal_id,
             )
+            # Best-effort: record the failure in the same JSONL
+            self._try_write_emit_failed(signal_id, exc)
+
+    def _try_write_emit_failed(self, failed_signal_id: str, exc: Exception) -> None:
+        """Best-effort write of SIGNAL_EMIT_FAILED. No recursion, no raise."""
+        try:
+            fail_env = build_emit_failed_envelope(
+                failed_signal_id=failed_signal_id,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
+            line = json.dumps(
+                fail_env.to_dict(), separators=(",", ":"), ensure_ascii=True,
+            )
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(
+                str(self._path),
+                os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+                0o644,
+            )
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+                os.write(fd, (line + "\n").encode("utf-8"))
+            finally:
+                os.close(fd)
+        except Exception:
+            # If even the failure signal can't be written, just log
+            logger.debug("Could not emit SIGNAL_EMIT_FAILED (sink broken)", exc_info=True)
 
     def read_all(self) -> list[SignalEnvelope]:
         """Read all envelopes from the JSONL file. For testing/replay."""

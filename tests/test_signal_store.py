@@ -946,6 +946,46 @@ class TestTail:
         finally:
             store.close()
 
+    def test_signal_name_filter(self, tmp_path):
+        store = SignalStore(tmp_path / "test.db")
+        try:
+            store.insert(_envelope(signal_id="A", emitted_at="2026-01-01T00:00:00Z"))
+            store.insert(_envelope(signal_id="B", emitted_at="2026-01-01T00:01:00Z"))
+            store.insert(_envelope(signal_id="A", emitted_at="2026-01-01T00:02:00Z"))
+
+            rows = store.tail(signal_name="A")
+            assert len(rows) == 2
+            assert all(r["signal_name"] == "A" for r in rows)
+        finally:
+            store.close()
+
+    def test_signal_name_filter_with_after_seq(self, tmp_path):
+        store = SignalStore(tmp_path / "test.db")
+        try:
+            store.insert(_envelope(signal_id="A", emitted_at="2026-01-01T00:00:00Z"))
+            store.insert(_envelope(signal_id="B", emitted_at="2026-01-01T00:01:00Z"))
+            store.insert(_envelope(signal_id="A", emitted_at="2026-01-01T00:02:00Z"))
+
+            # Get first A's seq
+            all_rows = store.query(signal_name="A", limit=1)
+            first_seq = all_rows[0]["seq"]
+
+            rows = store.tail(after_seq=first_seq, signal_name="A")
+            assert len(rows) == 1
+            assert rows[0]["signal_name"] == "A"
+            assert rows[0]["seq"] > first_seq
+        finally:
+            store.close()
+
+    def test_signal_name_filter_no_match(self, tmp_path):
+        store = SignalStore(tmp_path / "test.db")
+        try:
+            store.insert(_envelope(signal_id="A", emitted_at="2026-01-01T00:00:00Z"))
+            rows = store.tail(signal_name="NONEXISTENT")
+            assert rows == []
+        finally:
+            store.close()
+
 
 # =============================================================================
 # Stats
@@ -1371,3 +1411,121 @@ class TestEdgeCases:
             assert store.count() == 1
         finally:
             store.close()
+
+
+# =============================================================================
+# SIGNAL_EMIT_FAILED
+# =============================================================================
+
+
+class TestSignalEmitFailed:
+    """Tests for the SIGNAL_EMIT_FAILED self-diagnostic signal."""
+
+    def test_build_emit_failed_envelope_shape(self):
+        from governor.signals.emit import build_emit_failed_envelope
+        env = build_emit_failed_envelope(
+            failed_signal_id="VERIFY_SUMMARY",
+            error_type="OSError",
+            error_message="disk full",
+        )
+        assert env.signal_id == "SIGNAL_EMIT_FAILED"
+        assert env.quality_status == "partial"
+        assert env.value is None
+        assert env.subject_id == "VERIFY_SUMMARY"
+        assert env.values["failed_signal_id"] == "VERIFY_SUMMARY"
+        assert env.values["error_type"] == "OSError"
+        assert env.values["error_message"] == "disk full"
+
+    def test_emit_failed_envelope_is_valid(self):
+        from governor.signals.emit import build_emit_failed_envelope
+        from governor.signals.envelope import validate_envelope
+        env = build_emit_failed_envelope(
+            failed_signal_id="X",
+            error_type="ValueError",
+            error_message="test",
+        )
+        errors = validate_envelope(env)
+        assert not errors, f"Validation errors: {errors}"
+
+    def test_emit_failed_envelope_ingests(self, tmp_path):
+        """The failure envelope can be ingested into the signal store."""
+        from governor.signals.emit import build_emit_failed_envelope
+        env = build_emit_failed_envelope(
+            failed_signal_id="EXPOSURE_PROXY",
+            error_type="IOError",
+            error_message="broken pipe",
+        )
+        store = SignalStore(tmp_path / "test.db")
+        try:
+            inserted = store.insert(env)
+            assert inserted
+            rows = store.query(signal_name="SIGNAL_EMIT_FAILED")
+            assert len(rows) == 1
+            assert rows[0]["signal_name"] == "SIGNAL_EMIT_FAILED"
+            assert rows[0]["value"] is None
+        finally:
+            store.close()
+
+    def test_jsonl_sink_emits_failed_on_write_error(self, tmp_path):
+        """When normal emission fails, a SIGNAL_EMIT_FAILED is written."""
+        from governor.signals.emit import JsonlSink
+        jsonl = tmp_path / "signals.jsonl"
+        sink = JsonlSink(jsonl)
+
+        # Emit one good envelope first to prove the sink works
+        good = _envelope(emitted_at="2026-01-01T00:00:00Z")
+        sink.emit(good)
+
+        # Now make the path a directory so writes fail
+        bad_path = tmp_path / "broken.jsonl"
+        bad_path.mkdir()
+        broken_sink = JsonlSink(bad_path)
+
+        bad_env = _envelope(signal_id="DOOMED", emitted_at="2026-01-01T00:01:00Z")
+        broken_sink.emit(bad_env)  # should not raise
+
+        # The failure signal should have been attempted on the broken path,
+        # but since the path is a directory, even that fails silently.
+        # Just verify no exception propagated.
+
+    def test_jsonl_sink_emit_failed_actually_written(self, tmp_path, monkeypatch):
+        """Simulate a failure that still allows the failure signal to be written."""
+        from governor.signals.emit import JsonlSink
+        jsonl = tmp_path / "signals.jsonl"
+        sink = JsonlSink(jsonl)
+
+        call_count = 0
+        original_open = os.open
+
+        def failing_open(path, flags, mode=0o644):
+            nonlocal call_count
+            call_count += 1
+            # Fail on first call (the original signal), succeed on second (the failure signal)
+            if call_count == 1:
+                raise OSError("simulated disk error")
+            return original_open(path, flags, mode)
+
+        monkeypatch.setattr(os, "open", failing_open)
+
+        env = _envelope(
+            signal_id="DOOMED", emitted_at="2026-01-01T00:00:00Z",
+            derivation="direct", derivation_version="1",
+        )
+        sink.emit(env)  # should not raise
+
+        # The failure signal should have been written
+        envs = sink.read_all()
+        assert len(envs) == 1
+        assert envs[0].signal_id == "SIGNAL_EMIT_FAILED"
+        assert envs[0].values["failed_signal_id"] == "DOOMED"
+        assert envs[0].values["error_type"] == "OSError"
+
+    def test_error_message_capped(self):
+        from governor.signals.emit import build_emit_failed_envelope
+        long_msg = "x" * 1000
+        env = build_emit_failed_envelope(
+            failed_signal_id="X",
+            error_type="ValueError",
+            error_message=long_msg,
+        )
+        assert len(env.values["error_message"]) == 500

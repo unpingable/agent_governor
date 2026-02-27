@@ -8419,35 +8419,75 @@ def signals_list(ctx, name, phase, quality, session, since, until, limit, after_
 
 @signals_cmd.command("tail")
 @click.option("--limit", default=20, type=int, help="Number of signals (default 20)")
+@click.option("--name", default=None, help="Filter by signal name (e.g. VERIFY_SUMMARY)")
+@click.option("--poll-ms", default=None, type=int, help="Poll interval in ms (enables follow mode)")
 @click.option("--json", "as_json", is_flag=True, help="JSON output")
 @click.pass_context
-def signals_tail(ctx, limit, as_json):
-    """Show newest instrumentation signals."""
+def signals_tail(ctx, limit, name, poll_ms, as_json):
+    """Show newest instrumentation signals.
+
+    With --poll-ms: re-ingest and print new signals every N ms (Ctrl-C to stop).
+    """
     import json as _json
+    import time
 
     gov_dir = ensure_initialized(ctx)
     store, jsonl_path = _get_signal_store(gov_dir)
 
-    try:
-        rows = store.tail(limit=limit)
+    def _format_row(r):
+        val = f"{r['value']:.4f}" if r["value"] is not None else "   None"
+        return (
+            f"{r['emitted_at']:<28} {r['signal_name']:<30} {val:>8}  "
+            f"{r['quality_status']:<12}"
+        )
 
-        if as_json:
+    try:
+        rows = store.tail(limit=limit, signal_name=name)
+
+        if as_json and poll_ms is None:
             click.echo(_json.dumps({
                 "signals": rows,
                 "count": len(rows),
             }, indent=2))
-        else:
-            if not rows:
-                click.echo("No signals yet.")
-                return
+            return
+
+        if not rows and poll_ms is None:
+            click.echo("No signals yet.")
+            return
+
+        if not poll_ms:
             click.echo(f"{'EMITTED_AT':<28} {'SIGNAL_NAME':<30} {'VALUE':>8}  {'QUALITY':<12}")
             click.echo("-" * 82)
             for r in rows:
-                val = f"{r['value']:.4f}" if r["value"] is not None else "   None"
-                click.echo(
-                    f"{r['emitted_at']:<28} {r['signal_name']:<30} {val:>8}  "
-                    f"{r['quality_status']:<12}"
-                )
+                click.echo(_format_row(r))
+            return
+
+        # -- Follow mode: print initial batch, then poll --
+        click.echo(f"{'EMITTED_AT':<28} {'SIGNAL_NAME':<30} {'VALUE':>8}  {'QUALITY':<12}")
+        click.echo("-" * 82)
+        for r in rows:
+            click.echo(_format_row(r))
+
+        # Cursor = highest seq we've seen
+        cursor = max((r["seq"] for r in rows), default=0)
+        interval_s = max(poll_ms, 100) / 1000.0  # floor at 100ms
+
+        try:
+            while True:
+                time.sleep(interval_s)
+                # Re-ingest any new JSONL lines
+                if jsonl_path.exists():
+                    store.ingest_from_jsonl(jsonl_path)
+                new_rows = store.tail(limit=100, after_seq=cursor, signal_name=name)
+                for r in new_rows:
+                    if as_json:
+                        click.echo(_json.dumps(r))
+                    else:
+                        click.echo(_format_row(r))
+                    cursor = max(cursor, r["seq"])
+        except KeyboardInterrupt:
+            click.echo("\nStopped.")
+
     finally:
         store.close()
 

@@ -490,22 +490,36 @@ class SignalStore:
         self,
         limit: int = _DEFAULT_TAIL_LIMIT,
         after_seq: int | None = None,
+        signal_name: str | None = None,
     ) -> list[dict[str, Any]]:
         """Tail signals.
 
         With after_seq: rows with seq > after_seq, ascending (polling).
         Without: newest N, descending (display).
+        signal_name: optional filter (e.g. "VERIFY_SUMMARY").
         """
         limit = max(1, min(limit, _MAX_QUERY_LIMIT))
         cols = ", ".join(_PROJECTED_COLS)
 
-        if after_seq is not None:
-            sql = f"SELECT {cols} FROM signals WHERE seq > ? ORDER BY seq ASC LIMIT ?"
-            rows = self._conn.execute(sql, (after_seq, limit)).fetchall()
-        else:
-            sql = f"SELECT {cols} FROM signals ORDER BY seq DESC LIMIT ?"
-            rows = self._conn.execute(sql, (limit,)).fetchall()
+        conditions: list[str] = []
+        params: list[Any] = []
 
+        if after_seq is not None:
+            conditions.append("seq > ?")
+            params.append(after_seq)
+        if signal_name is not None:
+            conditions.append("signal_name = ?")
+            params.append(signal_name)
+
+        where = " AND ".join(conditions) if conditions else "1=1"
+        params.append(limit)
+
+        if after_seq is not None:
+            sql = f"SELECT {cols} FROM signals WHERE {where} ORDER BY seq ASC LIMIT ?"
+        else:
+            sql = f"SELECT {cols} FROM signals WHERE {where} ORDER BY seq DESC LIMIT ?"
+
+        rows = self._conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------

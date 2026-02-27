@@ -104,6 +104,33 @@ def policy_hash(config_dict: dict[str, Any]) -> str:
     return content_hash(canonical_json(config_dict))
 
 
+def make_timing(
+    start_ns: int,
+    end_ns: int,
+    *,
+    budget_ms: float | None = None,
+    budget_source: str | None = None,
+) -> dict[str, Any]:
+    """Create a timing fragment for a gate receipt.
+
+    start_ns/end_ns: monotonic nanoseconds (time.monotonic_ns()).
+    budget_ms/budget_source: which budget applied and where it came from.
+
+    Timing is metadata — NOT part of receipt_id.  It exists so SLA
+    measurement is possible before SLA enforcement.
+    """
+    t: dict[str, Any] = {
+        "start_ns": start_ns,
+        "end_ns": end_ns,
+        "duration_ms": (end_ns - start_ns) / 1_000_000,
+    }
+    if budget_ms is not None:
+        t["budget_ms"] = budget_ms
+    if budget_source is not None:
+        t["budget_source"] = budget_source
+    return t
+
+
 def _compute_receipt_id(
     schema_version: int,
     gate: str,
@@ -165,6 +192,7 @@ class GateReceipt:
     tenant_id: str = "default"
     auth_method: str = "none"
     receipt_role: str = ROLE_MEASUREMENT
+    timing: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if self.verdict not in VALID_VERDICTS:
@@ -174,7 +202,7 @@ class GateReceipt:
             )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "receipt_id": self.receipt_id,
             "schema_version": self.schema_version,
             "timestamp": self.timestamp,
@@ -188,6 +216,9 @@ class GateReceipt:
             "auth_method": self.auth_method,
             "receipt_role": self.receipt_role,
         }
+        if self.timing is not None:
+            d["timing"] = self.timing
+        return d
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict())
@@ -216,6 +247,7 @@ class GateReceipt:
             tenant_id=data.get("tenant_id", "default"),
             auth_method=data.get("auth_method", "none"),
             receipt_role=data.get("receipt_role", ROLE_MEASUREMENT),
+            timing=data.get("timing"),
         )
 
 
@@ -231,6 +263,7 @@ def create_receipt(
     tenant_id: str = "default",
     auth_method: str = "none",
     receipt_role: str = ROLE_MEASUREMENT,
+    timing: dict[str, Any] | None = None,
 ) -> GateReceipt:
     """Create a GateReceipt with proper content-addressed identity."""
     if receipt_role not in VALID_RECEIPT_ROLES:
@@ -263,6 +296,7 @@ def create_receipt(
         tenant_id=tenant_id,
         auth_method=auth_method,
         receipt_role=receipt_role,
+        timing=timing,
     )
 
 

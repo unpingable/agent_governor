@@ -8570,7 +8570,7 @@ def signals_stats(ctx, as_json):
             if tr["earliest"]:
                 click.echo(f"\nTime range: {tr['earliest']} → {tr['latest']}")
             health = s["ingest_health"]
-            click.echo(f"\nIngest health:")
+            click.echo("\nIngest health:")
             click.echo(f"  Cursor offset: {health['cursor_offset']}")
             click.echo(f"  File size:     {health['file_size']}")
             click.echo(f"  Lag bytes:     {health['lag_bytes']}")

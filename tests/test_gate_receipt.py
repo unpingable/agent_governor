@@ -60,6 +60,20 @@ class TestCanonicalJson:
         b = canonical_json({"v": 0.5})
         assert a == b
 
+    def test_rejects_nan(self):
+        """NaN is not valid JSON — canonical_json must reject it."""
+        with pytest.raises(ValueError):
+            canonical_json({"v": float("nan")})
+
+    def test_rejects_infinity(self):
+        """Infinity is not valid JSON — canonical_json must reject it."""
+        with pytest.raises(ValueError):
+            canonical_json({"v": float("inf")})
+
+    def test_rejects_negative_infinity(self):
+        with pytest.raises(ValueError):
+            canonical_json({"v": float("-inf")})
+
 
 class TestContentHash:
     def test_deterministic(self):

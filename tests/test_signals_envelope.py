@@ -214,6 +214,16 @@ class TestCanonicalJson:
         assert h.startswith("sha256:")
         assert len(h) == 7 + 64  # "sha256:" + 64 hex chars
 
+    def test_rejects_nan(self):
+        """NaN is not valid JSON — canonical_json must reject it."""
+        with pytest.raises(ValueError):
+            canonical_json({"v": float("nan")})
+
+    def test_rejects_infinity(self):
+        """Infinity is not valid JSON — canonical_json must reject it."""
+        with pytest.raises(ValueError):
+            canonical_json({"v": float("inf")})
+
 
 # ── Validation ───────────────────────────────────────────────────────────────
 

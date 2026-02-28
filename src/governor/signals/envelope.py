@@ -53,6 +53,7 @@ def canonical_json(obj: dict) -> bytes:
     """Deterministic JSON bytes for hashing. Matches gate_receipt.py convention."""
     return json.dumps(
         obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+        allow_nan=False,
     ).encode("utf-8")
 
 

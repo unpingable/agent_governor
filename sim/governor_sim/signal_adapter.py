@@ -57,6 +57,11 @@ def derive_signals_from_run(
         return []
 
     # 2. Derive EXPOSURE_PROXY (pure function)
+    #
+    # Pin emitted_at to window_end so the same run context always produces
+    # the same envelope → same content_hash → dedupe via INSERT OR IGNORE
+    # in SignalStore. Without this, each derivation call gets a different
+    # wall-clock timestamp and bypasses dedupe.
     envelope = derive_exposure_proxy(
         components,
         window_start=ctx.window_start,
@@ -67,6 +72,7 @@ def derive_signals_from_run(
         session_id=ctx.session_id,
         source_streams=["sim"],
         source_versions={"scenario": ctx.scenario, "run_id": ctx.run_id},
+        emitted_at=ctx.window_end,
     )
 
     # 3. Emit to signals JSONL (if directory exists)

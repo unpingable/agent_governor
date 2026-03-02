@@ -154,12 +154,11 @@ class TestDeriveSignals:
         parsed = json.loads(lines[0])
         assert parsed["signal_id"] == "EXPOSURE_PROXY"
 
-    def test_signal_values_are_stable(self, tmp_path):
-        """Same receipts → same signal values (deterministic derivation).
+    def test_signal_hash_is_deterministic(self, tmp_path):
+        """Same run context + same receipts → same content_hash.
 
-        content_hash differs between calls because emitted_at uses wall
-        clock (each emission is a unique event). But the computed values
-        must be identical — same receipts, same counts, same weights.
+        emitted_at is pinned to window_end so derivation is fully
+        deterministic. This enables INSERT OR IGNORE dedupe in SignalStore.
         """
         runner = InprocRunner(work_dir=tmp_path)
         events = [
@@ -176,11 +175,11 @@ class TestDeriveSignals:
         r1 = derive_signals_from_run(runner.gov_dir, ctx)
         r2 = derive_signals_from_run(runner.gov_dir, ctx)
 
-        # Values (the computed payload) must be identical
+        # Content hashes must be identical (deterministic derivation)
+        assert r1[0].content_hash() == r2[0].content_hash()
         assert r1[0].values == r2[0].values
         assert r1[0].value == r2[0].value
-        assert r1[0].quality_status == r2[0].quality_status
-        assert r1[0].signal_id == r2[0].signal_id
+        assert r1[0].emitted_at == r2[0].emitted_at
 
 
 # ── InprocRunner integration (emit_signals=True) ────────────────────────────
@@ -282,6 +281,87 @@ class TestRunnerSignalIntegration:
         ]
         runner.run(events)
         assert runner.emitted_signals == []
+
+
+# ── Dedupe / idempotence ─────────────────────────────────────────────────────
+
+class TestDedupeIdempotence:
+    def test_double_derive_same_hash(self, tmp_path):
+        """Same context + same receipts → same content_hash (pinned emitted_at)."""
+        runner = InprocRunner(work_dir=tmp_path)
+        events = [
+            _make_gate_check_event(0, 0, "dedupe"),
+            _make_receipt_event(100, 1),
+        ]
+        runner.run(events)
+
+        ctx = SimRunContext(
+            run_id="run-dd", session_id="s1", scenario="dedupe",
+            window_start="1970-01-01T00:00:00+00:00",
+            window_end="1970-01-01T00:00:01+00:00",
+        )
+        r1 = derive_signals_from_run(runner.gov_dir, ctx)
+        r2 = derive_signals_from_run(runner.gov_dir, ctx)
+
+        assert r1[0].content_hash() == r2[0].content_hash()
+
+    def test_double_run_ingest_dedupes(self, tmp_path):
+        """Canary: run fixture twice with emit_signals=True, ingest both,
+        SignalStore should have 1 row (not 2). This is the test ChatGPT
+        said to write."""
+        from governor.signal_store import SignalStore
+
+        runner = InprocRunner(work_dir=tmp_path, emit_signals=True)
+        events = [
+            _make_gate_check_event(0, 0, "canary"),
+            _make_receipt_event(100, 1),
+        ]
+
+        # Run 1
+        runner.run(events)
+        assert len(runner.emitted_signals) == 1
+
+        # Run 2 (same events, same receipts accumulate)
+        runner.emitted_signals.clear()
+        runner.run(events)
+        assert len(runner.emitted_signals) == 1
+
+        # Both runs wrote to JSONL — should be 2 lines
+        signals_jsonl = runner.gov_dir / "signals" / "signals.jsonl"
+        lines = [l for l in signals_jsonl.read_text().splitlines() if l.strip()]
+        assert len(lines) == 2  # two writes happened
+
+        # But ingest should dedupe to 1 row
+        store = SignalStore(tmp_path / "dedupe.db")
+        result = store.ingest_from_jsonl(signals_jsonl)
+        assert result.inserted == 1
+        assert result.duplicates == 1
+        assert store.count() == 1
+
+    def test_different_run_ids_produce_different_signals(self, tmp_path):
+        """Different run_id → different signal (not deduplicated)."""
+        runner = InprocRunner(work_dir=tmp_path)
+        events = [
+            _make_gate_check_event(0, 0, "diff"),
+            _make_receipt_event(100, 1),
+        ]
+        runner.run(events)
+
+        ctx1 = SimRunContext(
+            run_id="run-A", session_id="s1", scenario="diff",
+            window_start="1970-01-01T00:00:00+00:00",
+            window_end="1970-01-01T00:00:01+00:00",
+        )
+        ctx2 = SimRunContext(
+            run_id="run-B", session_id="s1", scenario="diff",
+            window_start="1970-01-01T00:00:00+00:00",
+            window_end="1970-01-01T00:00:01+00:00",
+        )
+        r1 = derive_signals_from_run(runner.gov_dir, ctx1)
+        r2 = derive_signals_from_run(runner.gov_dir, ctx2)
+
+        # Different run_id → different source_versions → different hash
+        assert r1[0].content_hash() != r2[0].content_hash()
 
 
 # ── Golden: full fixture scenario → signal → CLI-queryable ──────────────────

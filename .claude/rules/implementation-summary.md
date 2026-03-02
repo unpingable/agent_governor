@@ -193,6 +193,7 @@
 | Verifier Gate | 124 |
 | Governed Activities | 110 |
 | Signal Plane (signal_store + CLI + RPC) | 104 |
+| Sim→Signal Pipeline (signal_adapter + dedupe) | 15 |
 | Process Session Identity | 9 |
 
-**Total: ~14,170 tests** (14,134 unit + 36 skipped + 24 integration)
+**Total: ~14,211 tests** (14,175 unit + 36 skipped + 24 integration)

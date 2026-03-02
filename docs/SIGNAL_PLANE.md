@@ -1,6 +1,6 @@
 # Signal Plane — Operator Guide
 
-The signal plane makes the v2.4 instrumentation spine queryable.
+Shipped in v2.5.0. The signal plane makes the v2.4 instrumentation spine queryable.
 Signals are observe-only — they never gate or block.
 
 ## Architecture

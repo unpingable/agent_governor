@@ -2,12 +2,19 @@
 
 ## Unreleased
 
+(Nothing yet.)
+
+---
+
+## v2.5.0 — 2026-03-02
+
 **Theme:** the governor can see itself. Signal Plane v1 wires the v2.4
 instrumentation spine (867 tests, observe-only) into a queryable surface:
 persisted JSONL → SQLite projection → CLI + daemon RPC. Verifier gate emits
 VERIFY_SUMMARY signals; emission failures are self-diagnosed via
 SIGNAL_EMIT_FAILED. Process-scoped session identity enables per-run
-correlation. Operational SLA gap spec lays groundwork for 3.x self-monitoring.
+correlation. Sim→signal pipeline proves the spine is connected to blood flow.
+Verifier gate and governed activity foundations ship as observe-only substrates.
 
 ### Signal Plane v1
 
@@ -49,10 +56,31 @@ evidence path (slower, debt receipts). Per-lane SLO routing. Timing fragment
 on gate receipts (`make_timing` with monotonic_ns). See
 `specs/gaps/OPERATIONAL_SLA.md`.
 
+### Sim→Signal Pipeline
+
+Proves the instrumentation spine is connected to blood flow. One fixture →
+gate receipts → EXPOSURE_PROXY signal → JSONL → SignalStore → queryable.
+Deterministic derivation: `emitted_at` pinned to `window_end`, so replay is
+idempotent (INSERT OR IGNORE dedupe). 15 tests including golden fixture and
+canary dedupe.
+
+### Canonical JSON Hardening
+
+`allow_nan=False` added to `gate_receipt.py` and `signals/envelope.py`.
+Prevents NaN/Infinity from sneaking through canonical JSON serialization.
+5 regression tests.
+
 ### Verifier Gate + Governed Activities
 
 Composition boundary for mechanical verification (124 tests). Drift-gated
 retry substrate (110 tests). Both observe-only, not wired to daemon/CLI.
+
+### Verified Kernel (Gap Spec)
+
+Audited 5 canonical JSON implementations across the codebase. Documents
+divergences (allow_nan, hash prefix, float policy, NFC normalization) and
+defines normative rules K1-K6 for a 3.x pure deterministic kernel. See
+`specs/gaps/VERIFIED_KERNEL.md`.
 
 ---
 

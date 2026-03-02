@@ -133,7 +133,17 @@ def _set_help_all(ctx: click.Context, param: click.Parameter, value: bool) -> No
         ctx.exit(0)
 
 
+def _get_version() -> str:
+    """Read version from package metadata (pyproject.toml is canonical source)."""
+    try:
+        from importlib.metadata import version
+        return version("agent-governor")
+    except Exception:
+        return "0.0.0"
+
+
 @click.group(cls=CuratedGroup, invoke_without_command=True)
+@click.version_option(version=_get_version(), prog_name="governor")
 @click.option(
     "--root", "-r",
     type=click.Path(exists=True, file_okay=False, resolve_path=True),

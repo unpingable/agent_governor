@@ -1,6 +1,6 @@
 # V2 Status
 
-As of 2.4.0. This document is the boundary between "shipped" and "next."
+As of 2.5.0. This document is the boundary between "shipped" and "next."
 
 ---
 
@@ -107,6 +107,12 @@ name; repo URL unchanged).
 
 ~12,900 tests, all green.
 
+### 2.4.0 — Instrumentation Spine (see below)
+
+### 2.5.0 — Signal Plane (see below)
+
+---
+
 ### 2.4.0 — Instrumentation Spine
 
 Observe-only signal substrate for operators. No gating, no policy changes, no enforcement.
@@ -163,6 +169,49 @@ receipts hardened from bare string to validated vocabulary (`VALID_VERDICTS`).
 Currently wired to gate/heartbeat layer. Extension to v2.4 signal pipeline is the next
 validation lane.
 
+### 2.5.0 — Signal Plane
+
+The governor can see itself. The v2.4 instrumentation spine (867 tests, observe-only)
+is now queryable: persisted JSONL → SQLite projection → CLI + daemon RPC.
+
+**Signal Plane v1** — SignalStore SQLite projection cache over signal JSONL. Byte-offset
+cursor with inode/shrink detection, transactional ingest, fcntl.flock write exclusivity.
+CLI: `governor signals list|tail|explain|stats|rebuild`. Daemon RPC:
+`signals.query|get|tail|stats`. `--poll-ms` enables follow mode. Old claim signal
+extraction moved to `governor claim-signals`. 104 tests.
+
+**VERIFY_SUMMARY signal** — First live signal from a gate. One envelope per verifier
+suite run. `value = count_block + count_error`. Fail-open: emission failure never blocks
+verification.
+
+**SIGNAL_EMIT_FAILED self-diagnostic** — When signal emission fails, a best-effort
+diagnostic envelope is written. Queryable:
+`governor signals list --name SIGNAL_EMIT_FAILED`.
+
+**Process session identity** — Canonical `gov_{uuid12}` session ID per process. Stable
+within a daemon lifetime, fresh per CLI invocation. Threads into signal envelopes and
+queries (`--session`). 9 tests.
+
+**Sim→signal pipeline** — Proves the instrumentation spine is connected to blood flow.
+One fixture → gate receipts → EXPOSURE_PROXY signal → JSONL → SignalStore → queryable.
+Deterministic derivation (emitted_at pinned to window_end) enables INSERT OR IGNORE
+dedupe. 15 tests.
+
+**Canonical JSON hardening** — `allow_nan=False` added to `gate_receipt.py` and
+`signals/envelope.py`. Prevents NaN/Infinity in canonical serialization. 5 tests.
+
+**Verifier gate foundation** — Composition boundary for mechanical verification. 124
+tests. Observe-only, not wired to daemon/CLI.
+
+**Governed activity foundation** — Drift-gated retry substrate. Tiered drift detection
+(etag → fingerprint), JSONL store. 110 tests. Observe-only, not wired to daemon/CLI.
+
+**Gap specs** — Operational SLA (two-path availability contracts), Verified Kernel
+(canonical JSON audit, K1-K6 normative rules for 3.x), Governed Activities (receipted
+side-effect capsules).
+
+~14,200 tests, all green.
+
 ---
 
 ## Explicit 3.x
@@ -194,23 +243,24 @@ Four gap specs are explicitly 3.x:
 
 ---
 
-## Known-Good Bundle (2.4.0)
+## Known-Good Bundle (2.5.0)
 
 | Repo | Version | Coupling |
 |------|---------|----------|
-| [agent_gov](https://github.com/unpingable/agent_governor) | 2.4.0 | — |
+| [agent_gov](https://github.com/unpingable/agent_governor) | 2.5.0 | — |
 | [maude](https://github.com/unpingable/maude) | 2.3.2 | hard (mirrors major.minor) |
 | [vscode-governor](https://github.com/unpingable/vscode-governor) | 2.2.0 | hard (mirrors major.minor) |
 | [guvnah](https://github.com/unpingable/guvnah) | 2.3.2 | hard (mirrors major.minor) |
 | [gov-webui (Phosphor)](https://github.com/unpingable/governor_webui) | 0.4.0 | loose (targets contract v1) |
 
-Note: maude/guvnah are still on 2.3.2 — v2.4 signals are internal-only (no daemon
-RPC, no client surface). Clients don't need to bump for this release.
+Note: maude/guvnah are still on 2.3.2. Signal Plane v1 adds new daemon RPCs
+(`signals.*`) but doesn't change existing contracts. Clients don't need to bump
+for this release unless they want to query signals.
 
 **Sanity check** (run these to verify you're not in version hell):
 
 ```bash
-governor --version                      # should say 2.4.0
+governor --version                      # should say 2.5.0
 governor status --json | python3 -c "import sys,json; print(json.load(sys.stdin)['schema_version'])"  # should say 1
 governor doctor                         # walk 9 subsystems, flag non-nominal
 make test                               # in each repo
@@ -224,7 +274,7 @@ See `docs/VERSIONING.md` for the coupling rules and contract version table.
 
 If you're returning to this codebase:
 
-1. **Run the tests.** `python3 -m pytest tests/ -v` — ~13,000 tests, all should pass.
+1. **Run the tests.** `python3 -m pytest tests/ -v` — ~14,200 tests, all should pass.
 2. **Read the gate.** `src/governor/evidence_gate.py` is the enforcement surface.
    Everything else feeds into it or reads from it.
 3. **Read the daemon.** `src/governor/daemon.py` is the control plane. 60 RPC methods,

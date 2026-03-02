@@ -10,7 +10,7 @@ Receipt:   rct_a7f3c91e (hash-chained, tamper-evident)
 Next:      provide test results, downgrade to hypothesis, or request override
 ```
 
-13,000+ tests. Zero trust. Agents propose — only the governor commits.
+14,200+ tests. Zero trust. Agents propose — only the governor commits.
 
 This project governs actions, not beliefs.
 
@@ -355,7 +355,7 @@ Multi-model claim comparison (interferometry — parallel + serial modes), code-
 ### Infrastructure (~960 tests)
 Structured telemetry, Prometheus metrics, config profiles, continuity enforcement, convergence auto-tuning, QA harness, golden-file/property-based/contract tests.
 
-**Total: ~11,000 tests across 60+ modules.**
+**Total: ~14,200 tests across 60+ modules.**
 
 ---
 

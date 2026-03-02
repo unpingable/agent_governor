@@ -71,15 +71,26 @@ class InprocRunner:
         Root directory containing (or to contain) the ``.governor/`` tree.
     params:
         Override thresholds forwarded to SimAPI.
+    emit_signals:
+        If True, derive and emit signal envelopes after the run completes.
+        Default False (opt-in — doesn't break existing callers).
     """
 
-    def __init__(self, work_dir: Path, params: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        work_dir: Path,
+        params: dict[str, Any] | None = None,
+        *,
+        emit_signals: bool = False,
+    ) -> None:
         self.work_dir = work_dir
         self.gov_dir = work_dir / ".governor"
         self.params = params or {}
+        self.emit_signals = emit_signals
         self.clock = SimClock()
         self._fault_state: dict[str, bool] = {}
         self._api: SimAPI | None = None
+        self.emitted_signals: list[Any] = []
 
     def _get_api(self) -> SimAPI:
         if self._api is None:
@@ -93,8 +104,20 @@ class InprocRunner:
         receipts_dir = self.gov_dir / "receipts"
         receipts_dir.mkdir(exist_ok=True)
 
-    def run(self, events: list[TraceEvent]) -> RunResult:
-        """Execute events in order, return results summary."""
+    def run(
+        self,
+        events: list[TraceEvent],
+        *,
+        run_id: str | None = None,
+        session_id: str | None = None,
+        scenario: str | None = None,
+    ) -> RunResult:
+        """Execute events in order, return results summary.
+
+        If emit_signals=True, derives signal envelopes from the run's
+        receipts after execution completes. Emitted envelopes are stored
+        in self.emitted_signals for inspection.
+        """
         result = RunResult()
 
         # Sort by (t_ms, seq) to ensure deterministic ordering
@@ -108,7 +131,52 @@ class InprocRunner:
             except Exception as exc:
                 result.errors.append(f"event seq={event.seq}: {exc}")
 
+        # Post-run signal emission
+        if self.emit_signals:
+            self._emit_post_run_signals(
+                events=sorted_events,
+                run_id=run_id,
+                session_id=session_id,
+                scenario=scenario,
+            )
+
         return result
+
+    def _emit_post_run_signals(
+        self,
+        events: list[TraceEvent],
+        *,
+        run_id: str | None = None,
+        session_id: str | None = None,
+        scenario: str | None = None,
+    ) -> None:
+        """Derive and emit signals from the run's receipts."""
+        from .signal_adapter import SimRunContext, derive_signals_from_run
+
+        # Infer context from events if not provided
+        _run_id = run_id or (events[0].run_id if events else None) or "unknown"
+        _session_id = session_id or (events[0].session_id if events else None) or ""
+        _scenario = scenario or (events[0].scenario if events else "unknown")
+
+        # Window from sim clock (epoch-based)
+        start_ms = events[0].t_ms if events else 0
+        end_ms = events[-1].t_ms if events else 0
+        window_start = datetime.fromtimestamp(start_ms / 1000.0, tz=timezone.utc).isoformat()
+        window_end = datetime.fromtimestamp(end_ms / 1000.0, tz=timezone.utc).isoformat()
+
+        ctx = SimRunContext(
+            run_id=_run_id,
+            session_id=_session_id,
+            scenario=_scenario,
+            window_start=window_start,
+            window_end=window_end,
+        )
+
+        try:
+            envelopes = derive_signals_from_run(self.gov_dir, ctx)
+            self.emitted_signals.extend(envelopes)
+        except Exception as exc:
+            logger.warning("sim signal emission failed: %s", exc)
 
     def _dispatch(self, event: TraceEvent, result: RunResult) -> None:
         """Route an event to the appropriate handler."""

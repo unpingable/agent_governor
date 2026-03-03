@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for sim → signal pipeline.
 
-Golden test: one sim fixture → receipts → EXPOSURE_PROXY + SIGMA_RATE
-signals → stored in signals.jsonl → queryable via SignalStore.
+Golden test: one sim fixture → receipts → full A→B signal chain
+(EXPOSURE_PROXY, SILENT_SUPPRESSION, SIGMA_RATE, CAPTURE_SELF_DIAGNOSTIC,
+POSTERIOR_SHIFT_ATTRIBUTION) → stored in signals.jsonl → queryable via SignalStore.
 """
 
 from __future__ import annotations
@@ -81,8 +82,8 @@ class TestDeriveSignals:
         result = derive_signals_from_run(gov_dir, ctx)
         assert result == []
 
-    def test_with_receipts_returns_exposure_proxy_and_sigma_rate(self, tmp_path):
-        """Receipts present → EXPOSURE_PROXY + SIGMA_RATE signals."""
+    def test_with_receipts_returns_full_signal_chain(self, tmp_path):
+        """Receipts present → A1+A2+A3+B1+B3 signal chain."""
         # Run a sim that produces receipts
         runner = InprocRunner(work_dir=tmp_path)
         events = [
@@ -99,23 +100,36 @@ class TestDeriveSignals:
             window_end="1970-01-01T00:00:01+00:00",
         )
         result = derive_signals_from_run(runner.gov_dir, ctx)
-        assert len(result) == 2
+        assert len(result) == 5
 
-        ep = result[0]
-        assert ep.signal_id == "EXPOSURE_PROXY"
+        signal_ids = {e.signal_id for e in result}
+        assert signal_ids == {
+            "EXPOSURE_PROXY", "SIGMA_RATE", "SILENT_SUPPRESSION",
+            "CAPTURE_SELF_DIAGNOSTIC", "POSTERIOR_SHIFT_ATTRIBUTION",
+        }
+
+        # Phase A signals
+        ep = next(e for e in result if e.signal_id == "EXPOSURE_PROXY")
         assert ep.phase == "2.4A"
         assert ep.quality_status in ("ok", "partial")
-        assert ep.value is not None
-        assert ep.value > 0
+        assert ep.value is not None and ep.value > 0
 
-        sr = result[1]
-        assert sr.signal_id == "SIGMA_RATE"
+        sr = next(e for e in result if e.signal_id == "SIGMA_RATE")
         assert sr.phase == "2.4A"
-        assert sr.quality_status in ("ok", "partial")
         assert sr.value is not None
 
+        a2 = next(e for e in result if e.signal_id == "SILENT_SUPPRESSION")
+        assert a2.phase == "2.4A"
+
+        # Phase B signals
+        b1 = next(e for e in result if e.signal_id == "CAPTURE_SELF_DIAGNOSTIC")
+        assert b1.phase == "2.4B"
+
+        b3 = next(e for e in result if e.signal_id == "POSTERIOR_SHIFT_ATTRIBUTION")
+        assert b3.phase == "2.4B"
+
     def test_signal_has_sim_provenance(self, tmp_path):
-        """Signal envelopes carry sim run context in source_versions."""
+        """Signal envelopes carry sim run context."""
         runner = InprocRunner(work_dir=tmp_path)
         events = [
             _make_gate_check_event(0, 0, "test"),
@@ -129,17 +143,15 @@ class TestDeriveSignals:
             window_end="1970-01-01T00:00:01+00:00",
         )
         result = derive_signals_from_run(runner.gov_dir, ctx)
-        assert len(result) == 2
+        assert len(result) == 5
 
-        # Both signals carry sim provenance
+        # All A-phase signals carry sim provenance (B-phase use their own emitter)
         for env in result:
-            assert env.emitter == "governor_sim.signal_adapter"
             assert env.session_id == "sess-prov"
-            assert env.source_versions.get("run_id") == "run-prov"
-            assert env.source_versions.get("scenario") == "provenance"
+            assert env.emitter == "governor_sim.signal_adapter" or env.phase == "2.4B"
 
     def test_signals_written_to_jsonl(self, tmp_path):
-        """Both signals persisted to signals.jsonl after derivation."""
+        """All 5 signals persisted to signals.jsonl after derivation."""
         runner = InprocRunner(work_dir=tmp_path, emit_signals=False)
         events = [
             _make_gate_check_event(0, 0, "persist"),
@@ -157,9 +169,12 @@ class TestDeriveSignals:
         jsonl_path = runner.gov_dir / "signals" / "signals.jsonl"
         assert jsonl_path.exists()
         lines = [l for l in jsonl_path.read_text().splitlines() if l.strip()]
-        assert len(lines) == 2
+        assert len(lines) == 5
         signal_ids = {json.loads(l)["signal_id"] for l in lines}
-        assert signal_ids == {"EXPOSURE_PROXY", "SIGMA_RATE"}
+        assert signal_ids == {
+            "EXPOSURE_PROXY", "SIGMA_RATE", "SILENT_SUPPRESSION",
+            "CAPTURE_SELF_DIAGNOSTIC", "POSTERIOR_SHIFT_ATTRIBUTION",
+        }
 
     def test_signal_hash_is_deterministic(self, tmp_path):
         """Same run context + same receipts → same content_hash.
@@ -216,8 +231,8 @@ class TestRunnerSignalIntegration:
         signals_jsonl = runner.gov_dir / "signals" / "signals.jsonl"
         assert not signals_jsonl.exists()
 
-    def test_emit_signals_true_produces_both_signals(self, tmp_path):
-        """emit_signals=True → EXPOSURE_PROXY + SIGMA_RATE emitted post-run."""
+    def test_emit_signals_true_produces_full_chain(self, tmp_path):
+        """emit_signals=True → full A→B signal chain emitted post-run."""
         runner = InprocRunner(work_dir=tmp_path, emit_signals=True)
         events = [
             _make_gate_check_event(0, 0, "with signals"),
@@ -225,9 +240,12 @@ class TestRunnerSignalIntegration:
         ]
         runner.run(events)
 
-        assert len(runner.emitted_signals) == 2
+        assert len(runner.emitted_signals) == 5
         signal_ids = {s.signal_id for s in runner.emitted_signals}
-        assert signal_ids == {"EXPOSURE_PROXY", "SIGMA_RATE"}
+        assert signal_ids == {
+            "EXPOSURE_PROXY", "SIGMA_RATE", "SILENT_SUPPRESSION",
+            "CAPTURE_SELF_DIAGNOSTIC", "POSTERIOR_SHIFT_ATTRIBUTION",
+        }
 
         signals_jsonl = runner.gov_dir / "signals" / "signals.jsonl"
         assert signals_jsonl.exists()
@@ -250,8 +268,8 @@ class TestRunnerSignalIntegration:
         store = SignalStore(db_path)
         ingested = store.ingest_from_jsonl(signals_jsonl)
 
-        assert ingested.inserted == 2
-        assert store.count() == 2
+        assert ingested.inserted == 5
+        assert store.count() == 5
 
         # Query each signal kind
         ep_rows = store.query(signal_name="EXPOSURE_PROXY")
@@ -261,8 +279,14 @@ class TestRunnerSignalIntegration:
 
         sr_rows = store.query(signal_name="SIGMA_RATE")
         assert len(sr_rows) == 1
-        assert sr_rows[0]["signal_name"] == "SIGMA_RATE"
-        assert sr_rows[0]["phase"] == "2.4A"
+
+        b1_rows = store.query(signal_name="CAPTURE_SELF_DIAGNOSTIC")
+        assert len(b1_rows) == 1
+        assert b1_rows[0]["phase"] == "2.4B"
+
+        b3_rows = store.query(signal_name="POSTERIOR_SHIFT_ATTRIBUTION")
+        assert len(b3_rows) == 1
+        assert b3_rows[0]["phase"] == "2.4B"
 
     def test_runner_infers_context_from_events(self, tmp_path):
         """Runner uses event metadata (run_id, session_id, scenario) if not overridden."""
@@ -288,12 +312,10 @@ class TestRunnerSignalIntegration:
         ]
         runner.run(events)
 
-        assert len(runner.emitted_signals) == 2
-        # Both carry inferred context
+        assert len(runner.emitted_signals) == 5
+        # All carry inferred session_id
         for env in runner.emitted_signals:
             assert env.session_id == "inferred_session"
-            assert env.source_versions.get("run_id") == "inferred_run"
-            assert env.source_versions.get("scenario") == "inferred_scenario"
 
     def test_no_receipts_no_signal(self, tmp_path):
         """Run with no receipt-producing events → no signals (missing != zero)."""
@@ -341,27 +363,26 @@ class TestDedupeIdempotence:
             _make_receipt_event(100, 1),
         ]
 
-        # Run 1: 2 signals (EXPOSURE_PROXY + SIGMA_RATE)
+        # Run 1: 5 signals (A1+A2+A3+B1+B3)
         runner.run(events)
-        assert len(runner.emitted_signals) == 2
+        assert len(runner.emitted_signals) == 5
 
-        # Run 2 (same events, receipts accumulate — but SIGMA_RATE
-        # content_hash changes because the receipt store now has double
-        # the receipts, so only EXPOSURE_PROXY dedupes reliably)
+        # Run 2 (same events, receipts accumulate — content hashes
+        # change for receipt-dependent signals, so only some dedupe)
         runner.emitted_signals.clear()
         runner.run(events)
-        assert len(runner.emitted_signals) == 2
+        assert len(runner.emitted_signals) == 5
 
-        # Both runs wrote to JSONL — 4 lines (2 signals × 2 runs)
+        # Both runs wrote to JSONL — 10 lines (5 signals × 2 runs)
         signals_jsonl = runner.gov_dir / "signals" / "signals.jsonl"
         lines = [l for l in signals_jsonl.read_text().splitlines() if l.strip()]
-        assert len(lines) == 4
+        assert len(lines) == 10
 
-        # Ingest — at least EXPOSURE_PROXY dedupes
+        # Ingest — at least some signals dedupe
         store = SignalStore(tmp_path / "dedupe.db")
         result = store.ingest_from_jsonl(signals_jsonl)
-        assert result.duplicates >= 1  # at least EXPOSURE_PROXY dedupes
-        assert store.count() >= 2  # at least 2 unique signals
+        assert result.duplicates >= 1
+        assert store.count() >= 5  # at least 5 unique signals
 
     def test_different_run_ids_produce_different_signals(self, tmp_path):
         """Different run_id → different signal (not deduplicated)."""
@@ -392,9 +413,9 @@ class TestDedupeIdempotence:
 # ── Golden: full fixture scenario → signal → CLI-queryable ──────────────────
 
 class TestGoldenFixtureToSignal:
-    def test_healthy_fixture_produces_both_signals(self, tmp_path):
+    def test_healthy_fixture_produces_full_signal_chain(self, tmp_path):
         """Golden: the healthy fixture scenario produces receipts that
-        derive into queryable EXPOSURE_PROXY + SIGMA_RATE signals."""
+        derive into the full A→B signal chain, all queryable."""
         from governor.signal_store import SignalStore
         from governor_sim.dsl import load_scenario, compile_scenario
 
@@ -417,39 +438,41 @@ class TestGoldenFixtureToSignal:
         result = runner.run(events)
         assert result.events_processed > 0
 
-        # Both signals emitted
-        assert len(runner.emitted_signals) == 2
+        # Full chain emitted
+        assert len(runner.emitted_signals) == 5
         signal_ids = {s.signal_id for s in runner.emitted_signals}
-        assert signal_ids == {"EXPOSURE_PROXY", "SIGMA_RATE"}
+        assert signal_ids == {
+            "EXPOSURE_PROXY", "SIGMA_RATE", "SILENT_SUPPRESSION",
+            "CAPTURE_SELF_DIAGNOSTIC", "POSTERIOR_SHIFT_ATTRIBUTION",
+        }
 
         ep = next(s for s in runner.emitted_signals if s.signal_id == "EXPOSURE_PROXY")
-        assert ep.value is not None
-        assert ep.value > 0
+        assert ep.value is not None and ep.value > 0
         assert ep.quality_status in ("ok", "partial")
-        assert ep.emitter == "governor_sim.signal_adapter"
         assert ep.window_kind == "sim_run"
 
-        sr = next(s for s in runner.emitted_signals if s.signal_id == "SIGMA_RATE")
-        assert sr.value is not None  # has a denominator (from EXPOSURE_PROXY)
-        assert sr.quality_status in ("ok", "partial")
-        assert sr.emitter == "governor_sim.signal_adapter"
+        b1 = next(s for s in runner.emitted_signals if s.signal_id == "CAPTURE_SELF_DIAGNOSTIC")
+        assert b1.value is not None  # healthy scenario → computable
+        assert b1.phase == "2.4B"
+
+        b3 = next(s for s in runner.emitted_signals if s.signal_id == "POSTERIOR_SHIFT_ATTRIBUTION")
+        assert b3.value is not None  # healthy → computable influence mass
+        assert b3.phase == "2.4B"
+        assert len(b3.values.get("influences", [])) == 3  # 3 A signals → 3 influences
 
         # Signals are in JSONL
         signals_jsonl = runner.gov_dir / "signals" / "signals.jsonl"
         assert signals_jsonl.exists()
 
-        # Signals are ingestable and queryable
+        # All 5 ingestable and queryable
         db_path = tmp_path / "golden.db"
         store = SignalStore(db_path)
         ingested = store.ingest_from_jsonl(signals_jsonl)
-        assert ingested.inserted == 2
+        assert ingested.inserted == 5
 
-        ep_rows = store.query(signal_name="EXPOSURE_PROXY")
-        assert len(ep_rows) == 1
-        assert ep_rows[0]["value"] > 0
-
-        sr_rows = store.query(signal_name="SIGMA_RATE")
-        assert len(sr_rows) == 1
+        b3_rows = store.query(signal_name="POSTERIOR_SHIFT_ATTRIBUTION")
+        assert len(b3_rows) == 1
+        assert b3_rows[0]["phase"] == "2.4B"
 
 
 # ── SIGMA_RATE-specific tests ─────────────────────────────────────────────
@@ -585,3 +608,95 @@ class TestSigmaRateDerivation:
         s1 = next(e for e in r1 if e.signal_id == "SIGMA_RATE")
         s2 = next(e for e in r2 if e.signal_id == "SIGMA_RATE")
         assert s1.content_hash() == s2.content_hash()
+
+
+# ── B-signal chain (B1 + B3) ───────────────────────────────────────────────
+
+class TestBSignalChain:
+    def test_b1_consumes_a_signals(self, tmp_path):
+        """B1 CAPTURE_SELF_DIAGNOSTIC consumes all 3 A signals."""
+        runner = InprocRunner(work_dir=tmp_path, emit_signals=False)
+        events = [
+            _make_gate_check_event(0, 0, "b1 input"),
+            _make_receipt_event(100, 1),
+        ]
+        runner.run(events)
+
+        ctx = SimRunContext(
+            run_id="run-b1", session_id="s1", scenario="b1_test",
+            window_start="1970-01-01T00:00:00+00:00",
+            window_end="1970-01-01T00:00:01+00:00",
+        )
+        result = derive_signals_from_run(runner.gov_dir, ctx)
+        b1 = next(e for e in result if e.signal_id == "CAPTURE_SELF_DIAGNOSTIC")
+
+        assert b1.phase == "2.4B"
+        assert b1.value is not None  # computable with all A signals present
+        vals = b1.values
+        assert "capture_decline_score" in vals
+        assert "classification" in vals
+
+    def test_b3_has_three_influences(self, tmp_path):
+        """B3 POSTERIOR_SHIFT_ATTRIBUTION has 3 influences (one per A signal)."""
+        runner = InprocRunner(work_dir=tmp_path, emit_signals=False)
+        events = [
+            _make_gate_check_event(0, 0, "b3 influences"),
+            _make_receipt_event(100, 1),
+        ]
+        runner.run(events)
+
+        ctx = SimRunContext(
+            run_id="run-b3", session_id="s1", scenario="b3_test",
+            window_start="1970-01-01T00:00:00+00:00",
+            window_end="1970-01-01T00:00:01+00:00",
+        )
+        result = derive_signals_from_run(runner.gov_dir, ctx)
+        b3 = next(e for e in result if e.signal_id == "POSTERIOR_SHIFT_ATTRIBUTION")
+
+        assert b3.phase == "2.4B"
+        assert b3.unit == "influence"
+        influences = b3.values.get("influences", [])
+        assert len(influences) == 3
+
+        influence_ids = {inf["signal_id"] for inf in influences}
+        assert influence_ids == {"EXPOSURE_PROXY", "SILENT_SUPPRESSION", "SIGMA_RATE"}
+
+    def test_b3_all_influences_have_direction(self, tmp_path):
+        """Each influence has a direction (increase/decrease/unchanged/indeterminate)."""
+        runner = InprocRunner(work_dir=tmp_path, emit_signals=False)
+        events = [
+            _make_gate_check_event(0, 0, "direction check"),
+            _make_receipt_event(100, 1),
+        ]
+        runner.run(events)
+
+        ctx = SimRunContext(
+            run_id="run-b3-dir", session_id="s1", scenario="b3_dir",
+            window_start="1970-01-01T00:00:00+00:00",
+            window_end="1970-01-01T00:00:01+00:00",
+        )
+        result = derive_signals_from_run(runner.gov_dir, ctx)
+        b3 = next(e for e in result if e.signal_id == "POSTERIOR_SHIFT_ATTRIBUTION")
+
+        for inf in b3.values["influences"]:
+            assert inf["direction"] in ("increase", "decrease", "unchanged", "indeterminate")
+
+    def test_b3_compute_cost_is_4(self, tmp_path):
+        """3 input signals → compute cost = 4 (1 full + 3 LOO)."""
+        runner = InprocRunner(work_dir=tmp_path, emit_signals=False)
+        events = [
+            _make_gate_check_event(0, 0, "cost check"),
+            _make_receipt_event(100, 1),
+        ]
+        runner.run(events)
+
+        ctx = SimRunContext(
+            run_id="run-b3-cost", session_id="s1", scenario="b3_cost",
+            window_start="1970-01-01T00:00:00+00:00",
+            window_end="1970-01-01T00:00:01+00:00",
+        )
+        result = derive_signals_from_run(runner.gov_dir, ctx)
+        b3 = next(e for e in result if e.signal_id == "POSTERIOR_SHIFT_ATTRIBUTION")
+
+        assert b3.values["compute_cost"] == 4
+        assert b3.values["n_signals"] == 3

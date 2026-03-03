@@ -5,9 +5,14 @@ Post-run step: reads receipts produced during a sim run, derives signal
 envelopes from them, emits via JsonlSink. Proves the instrumentation
 spine is connected to blood flow.
 
-Two signal kinds:
-  - EXPOSURE_PROXY: weighted denominator from receipt gate counts
-  - SIGMA_RATE: endorsement→invalidation rate from receipt pairs
+Five signal kinds (full A→B chain):
+  Phase A:
+    - EXPOSURE_PROXY (A1): weighted denominator from receipt gate counts
+    - SILENT_SUPPRESSION (A2): healthy indicator (sim is running)
+    - SIGMA_RATE (A3): endorsement→invalidation rate from receipt pairs
+  Phase B:
+    - CAPTURE_SELF_DIAGNOSTIC (B1): advisory diagnostic from A signals
+    - POSTERIOR_SHIFT_ATTRIBUTION (B3): LOO influence on B1
 """
 
 from __future__ import annotations
@@ -54,6 +59,15 @@ def derive_signals_from_run(
         derive_sigma_rate,
         match_sigma_pairs,
     )
+    from governor.signals.silent_suppression import (
+        SuppressionIndicators,
+        derive_silent_suppression,
+    )
+    from governor.signals.capture_self_diagnostic import (
+        DiagnosticInputs,
+        derive_capture_self_diagnostic,
+    )
+    from governor.signals.posterior_shift import derive_posterior_shift
 
     # 1. Load receipts
     system = GateReceiptSystem(gov_dir)
@@ -117,7 +131,73 @@ def derive_signals_from_run(
         len(match_result.pairs),
     )
 
-    # 4. Emit all envelopes to signals JSONL
+    # 4. Derive SILENT_SUPPRESSION (A2) — sim is running, so healthy
+    a2_indicators = SuppressionIndicators(
+        activity_observed=True,
+        in_path_evidence_present=len(all_receipts) > 0,
+        daemon_reachable=True,  # sim harness is the "daemon"
+    )
+    a2_envelope = derive_silent_suppression(
+        a2_indicators,
+        source_receipt_ids=[r.receipt_id for r in all_receipts[:1]],
+        **sim_kwargs,
+    )
+    envelopes.append(a2_envelope)
+    logger.debug(
+        "sim run %s: emitted SILENT_SUPPRESSION (value=%s, quality=%s)",
+        ctx.run_id,
+        a2_envelope.value,
+        a2_envelope.quality_status,
+    )
+
+    # 5. Derive CAPTURE_SELF_DIAGNOSTIC (B1) from A signals
+    a1_envelope = envelopes[0] if envelopes and envelopes[0].signal_id == "EXPOSURE_PROXY" else None
+    a3_envelope = next((e for e in envelopes if e.signal_id == "SIGMA_RATE"), None)
+
+    b1_inputs = DiagnosticInputs(
+        a1_exposure_proxy=a1_envelope,
+        a2_silent_suppression=a2_envelope,
+        a3_sigma_rate=a3_envelope,
+    )
+    b1_envelope = derive_capture_self_diagnostic(
+        b1_inputs,
+        window_start=ctx.window_start,
+        window_end=ctx.window_end,
+        window_kind="sim_run",
+        emitter="governor_sim.signal_adapter",
+        emitter_version="1",
+        session_id=ctx.session_id,
+        emitted_at=ctx.window_end,
+    )
+    envelopes.append(b1_envelope)
+    logger.debug(
+        "sim run %s: emitted CAPTURE_SELF_DIAGNOSTIC (value=%s, quality=%s)",
+        ctx.run_id,
+        b1_envelope.value,
+        b1_envelope.quality_status,
+    )
+
+    # 6. Derive POSTERIOR_SHIFT_ATTRIBUTION (B3) from A signals
+    b3_envelope = derive_posterior_shift(
+        a1_envelope, a2_envelope, a3_envelope,
+        window_start=ctx.window_start,
+        window_end=ctx.window_end,
+        window_kind="sim_run",
+        emitter="governor_sim.signal_adapter",
+        emitter_version="1",
+        session_id=ctx.session_id,
+        emitted_at=ctx.window_end,
+    )
+    envelopes.append(b3_envelope)
+    logger.debug(
+        "sim run %s: emitted POSTERIOR_SHIFT_ATTRIBUTION (value=%s, quality=%s, n_influences=%d)",
+        ctx.run_id,
+        b3_envelope.value,
+        b3_envelope.quality_status,
+        len(b3_envelope.values.get("influences", [])),
+    )
+
+    # 7. Emit all envelopes to signals JSONL
     signals_dir = gov_dir / "signals"
     signals_dir.mkdir(parents=True, exist_ok=True)
     signals_jsonl = signals_dir / "signals.jsonl"

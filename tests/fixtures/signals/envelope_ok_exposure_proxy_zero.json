@@ -3,20 +3,16 @@
   "emitted_at": "2026-02-24T17:42:11Z",
   "emitter": "governor.signals.exposure_proxy",
   "emitter_version": "2.4.0-dev",
-
   "signal_id": "EXPOSURE_PROXY",
   "signal_version": 1,
   "phase": "2.4A",
-
   "subject_type": "window",
   "subject_id": "win_2026-02-24T17:40:00Z_rolling_5m",
   "correlation_id": null,
   "session_id": null,
-
   "window_start": "2026-02-24T17:40:00Z",
   "window_end": "2026-02-24T17:45:00Z",
   "window_kind": "rolling_5m",
-
   "value": 0.0,
   "unit": "exposure_points",
   "values": {
@@ -31,16 +27,16 @@
     "component_evidence_checks": 0,
     "component_violation_evaluations": 0
   },
-
   "quality_status": "ok",
   "quality_reasons": [],
   "sample_size": 3,
   "completeness": 1.0,
-
   "source_receipt_ids": [],
   "source_streams": [],
-  "source_versions": {},
-
+  "source_versions": {
+    "governor": "2.5.0",
+    "envelope_schema": "0.4.0"
+  },
   "derivation": "windowed_aggregate",
   "derivation_version": "exposure-proxy-v1",
   "annotations": {

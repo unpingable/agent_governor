@@ -36,6 +36,7 @@ from .envelope import (
     SignalEnvelope,
     canonical_json,
     content_hash,
+    default_source_versions,
 )
 
 
@@ -314,7 +315,7 @@ def apply_calibration(
         completeness=source_env.completeness,
         source_receipt_ids=list(source_env.source_receipt_ids),
         source_streams=list(source_env.source_streams),
-        source_versions=dict(source_env.source_versions),
+        source_versions=dict(source_env.source_versions) or default_source_versions(),
         derivation=DerivationType.DERIVED.value,
         derivation_version=CALIBRATION_CONFIG_VERSION,
         annotations=annotations,

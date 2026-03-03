@@ -73,7 +73,7 @@ class InprocRunner:
         Override thresholds forwarded to SimAPI.
     emit_signals:
         If True, derive and emit signal envelopes after the run completes.
-        Default False (opt-in — doesn't break existing callers).
+        Default True — every sim run exercises the signal pipeline.
     """
 
     def __init__(
@@ -81,7 +81,7 @@ class InprocRunner:
         work_dir: Path,
         params: dict[str, Any] | None = None,
         *,
-        emit_signals: bool = False,
+        emit_signals: bool = True,
     ) -> None:
         self.work_dir = work_dir
         self.gov_dir = work_dir / ".governor"

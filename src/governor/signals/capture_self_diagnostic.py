@@ -38,6 +38,7 @@ from .envelope import (
     DerivationType,
     QualityStatus,
     SignalEnvelope,
+    default_source_versions,
 )
 
 
@@ -300,6 +301,11 @@ def derive_capture_self_diagnostic(
     a1 = _extract_a1(inputs.a1_exposure_proxy)
     a2 = _extract_a2(inputs.a2_silent_suppression)
     a3 = _extract_a3(inputs.a3_sigma_rate)
+    _inp_envs = (
+        inputs.a1_exposure_proxy,
+        inputs.a2_silent_suppression,
+        inputs.a3_sigma_rate,
+    )
 
     # ── Window alignment check ──────────────────────────────────────────
     alignment_errors = _validate_window_alignment(inputs)
@@ -322,6 +328,7 @@ def derive_capture_self_diagnostic(
             emitter_version=emitter_version,
             session_id=session_id,
             emitted_at=emitted_at,
+            input_envelopes=_inp_envs,
         )
 
     # ── Missing A2 → unavailable ────────────────────────────────────────
@@ -344,6 +351,7 @@ def derive_capture_self_diagnostic(
             emitter_version=emitter_version,
             session_id=session_id,
             emitted_at=emitted_at,
+            input_envelopes=_inp_envs,
         )
 
     # ── Suppression precedence (Step 1) ─────────────────────────────────
@@ -368,6 +376,7 @@ def derive_capture_self_diagnostic(
             emitter_version=emitter_version,
             session_id=session_id,
             emitted_at=emitted_at,
+            input_envelopes=_inp_envs,
         )
 
     if a2["value"] is None:
@@ -390,6 +399,7 @@ def derive_capture_self_diagnostic(
             emitter_version=emitter_version,
             session_id=session_id,
             emitted_at=emitted_at,
+            input_envelopes=_inp_envs,
         )
 
     # ── A2 is healthy (value=1.0) — proceed to capture scoring ──────────
@@ -418,6 +428,7 @@ def derive_capture_self_diagnostic(
             emitter_version=emitter_version,
             session_id=session_id,
             emitted_at=emitted_at,
+            input_envelopes=_inp_envs,
         )
 
     # ── Capture scoring (Step 2) ────────────────────────────────────────
@@ -443,6 +454,7 @@ def derive_capture_self_diagnostic(
             emitter_version=emitter_version,
             session_id=session_id,
             emitted_at=emitted_at,
+            input_envelopes=_inp_envs,
         )
 
     # ── Classification from score (Step 3) ──────────────────────────────
@@ -506,6 +518,7 @@ def derive_capture_self_diagnostic(
         emitter_version=emitter_version,
         session_id=session_id,
         emitted_at=emitted_at,
+        input_envelopes=_inp_envs,
     )
 
 
@@ -535,6 +548,7 @@ def _build_envelope(
     emitter_version: str,
     session_id: str | None,
     emitted_at: str | None,
+    input_envelopes: tuple[SignalEnvelope | None, ...] = (),
 ) -> SignalEnvelope:
     """Internal helper to build the output SignalEnvelope."""
     values: dict[str, Any] = {
@@ -570,6 +584,12 @@ def _build_envelope(
     if a3["content_hash"] is not None:
         source_streams.append("SIGMA_RATE")
 
+    # Monotonic propagation: union source_receipt_ids from input signals
+    propagated_receipt_ids: list[str] = []
+    for inp_env in input_envelopes:
+        if inp_env is not None:
+            propagated_receipt_ids.extend(inp_env.source_receipt_ids)
+
     return SignalEnvelope(
         schema_version=CURRENT_SCHEMA_VERSION,
         emitted_at=emitted_at or datetime.now(timezone.utc).isoformat(),
@@ -591,9 +611,9 @@ def _build_envelope(
         quality_reasons=quality_reasons,
         sample_size=sample_size,
         completeness=completeness,
-        source_receipt_ids=[],
+        source_receipt_ids=propagated_receipt_ids,
         source_streams=source_streams,
-        source_versions={},
+        source_versions=default_source_versions(),
         derivation=DerivationType.DERIVED.value,
         derivation_version=DIAG_CONFIG_VERSION,
         annotations=annotations,

@@ -44,7 +44,10 @@
   "source_streams": [
     "CAPTURE_SELF_DIAGNOSTIC"
   ],
-  "source_versions": {},
+  "source_versions": {
+    "governor": "2.5.0",
+    "envelope_schema": "0.4.0"
+  },
   "derivation": "derived",
   "derivation_version": "replay-harness-v1",
   "annotations": {

@@ -32,6 +32,7 @@ from .envelope import (
     SignalEnvelope,
     canonical_json,
     content_hash,
+    default_source_versions,
 )
 
 logger = logging.getLogger(__name__)
@@ -631,9 +632,9 @@ def replay_summary_envelope(
         completeness=(
             len(replayed) / total if total > 0 else None
         ),
-        source_receipt_ids=[],
+        source_receipt_ids=[],  # intentional: corpus summary, not directly receipt-derived
         source_streams=sorted(spec.target_signals),
-        source_versions={},
+        source_versions=default_source_versions(),
         derivation=DerivationType.DERIVED.value,
         derivation_version=REPLAY_CONFIG_VERSION,
         annotations=annotations,

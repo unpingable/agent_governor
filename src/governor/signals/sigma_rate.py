@@ -52,6 +52,7 @@ from .envelope import (
     DerivationType,
     QualityStatus,
     SignalEnvelope,
+    default_source_versions,
 )
 
 
@@ -473,7 +474,7 @@ def _build_envelope(
         completeness=completeness,
         source_receipt_ids=source_receipt_ids or [],
         source_streams=source_streams or [],
-        source_versions=source_versions or {},
+        source_versions=source_versions if source_versions is not None else default_source_versions(),
         derivation=DerivationType.WINDOWED_AGGREGATE.value,
         derivation_version="sigma-rate-v1",
         annotations=annotations,

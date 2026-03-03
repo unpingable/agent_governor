@@ -34,6 +34,7 @@ from .envelope import (
     SignalEnvelope,
     canonical_json,
     content_hash,
+    default_source_versions,
 )
 
 
@@ -546,6 +547,8 @@ def fit_summary_envelope(
         quality_status=quality_status,
         quality_reasons=quality_reasons or [],
         sample_size=selection.sample_count_total,
+        source_receipt_ids=[],  # intentional: corpus summary, not directly receipt-derived
+        source_versions=default_source_versions(),
         derivation=DerivationType.DERIVED.value,
         derivation_version=CALIBRATION_FIT_CONFIG_VERSION,
         annotations=annotations,

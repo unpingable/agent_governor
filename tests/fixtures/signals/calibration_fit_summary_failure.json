@@ -41,7 +41,10 @@
   "completeness": null,
   "source_receipt_ids": [],
   "source_streams": [],
-  "source_versions": {},
+  "source_versions": {
+    "governor": "2.5.0",
+    "envelope_schema": "0.4.0"
+  },
   "derivation": "derived",
   "derivation_version": "calibration-fitting-v1",
   "annotations": {

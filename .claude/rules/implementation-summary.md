@@ -89,6 +89,9 @@
 **Governed Activities** — Drift-gated retry substrate. FactObservation (ops-native observation), PreconditionBundle (sorted, fingerprinted), AttemptRecord (per-attempt with etag snapshot), DriftCheckResult (tiered verdict). Tiered drift detection: etag overlap first → fingerprint fallback. DriftVerdict enum (no_drift, etag_diverged, fingerprint_diverged, no_prior, continuity_lost). JSONL store with receipt emission tracking. Etag key = fact_type:subject:source (excludes request_fingerprint by design). 110 tests.
 **Signal Plane v1** — SQLite projection cache over instrumentation JSONL. SignalStore with byte-offset cursor, inode/shrink detection, transactional ingest (BEGIN IMMEDIATE), fcntl.flock write exclusivity. project_envelope() pure function. Query/get/tail/stats/rebuild. CLI: `governor signals list|tail|explain|stats|rebuild`, renamed `signals` → `claim-signals` for claim extraction. Daemon RPC: signals.query/get/tail/stats. Tail with --name filter and --poll-ms follow mode. SIGNAL_EMIT_FAILED self-diagnostic (emission failures queryable in same plane, no recursion). 104 tests.
 **Process Session Identity** — Canonical process-scoped session_id for signal/receipt correlation. get_session_id() (lazy, stable per process), set_session_id() (override), new_session_id() (fresh without setting global). "gov_{uuid12}" format. DaemonState owns one for its lifetime, exposed in governor.hello RPC. JsonlSink threads session_id into SIGNAL_EMIT_FAILED. 9 tests.
+**GATE_CHECK_SUMMARY (first live signal)** — One SignalEnvelope per `gate.check()` invocation. build_gate_check_summary (pure) + build_gate_check_error_summary (for exceptions) + try_emit_gate_check_summary (fail-open wrapper). Wired into CLI `lite_check` with timing. Values: verdict, claims_count, violations_count, warnings_count, has_oracle, timing_ms. Quality: ok for successful checks, unavailable for exceptions. Provenance: source_versions via default_source_versions(), session_id from get_session_id(). 21 tests.
+**Signal Provenance Tightening** — source_versions populated with default_source_versions() (governor pkg version + envelope_schema version) across all signal builders. source_receipt_ids monotonic propagation: Phase A accepts, B1 unions from A inputs, C calibration preserves, D unions from all inputs. session_id in Phase D: explicit parameter or inferred from most recent input envelope. 22 tests.
+**Sim→Signal SIGMA_RATE** — Second Phase A signal derived from sim receipts alongside EXPOSURE_PROXY. Receipts mapped to ReceiptEvent, match_sigma_pairs() finds endorsement→invalidation pairs, derive_sigma_rate() uses EXPOSURE_PROXY value as preferred denominator. Contradiction scenarios produce nonzero sigma rate. Deterministic (pinned emitted_at). 5 SIGMA_RATE-specific tests.
 **Operational SLA Gap Spec** — Two-path availability contracts for governor as control plane. Decision path (fast, p99 budget in ms, fail-closed or fail-open+debt receipt) vs evidence path (slower, accountable, debt tracking). Per-lane SLO routing. Temporal coherence constraints (policy freshness, index lag). Timing fragment on gate receipts (make_timing with monotonic_ns). Gap spec at specs/gaps/OPERATIONAL_SLA.md.
 **Test Hardening (v2.0.2)** — Fresh-clone smoke tests (CLI happy path + daemon stdio via subprocess, @smoke marker). Adversarial hook bypass tests (symlinks, script tampering, malformed payloads, unicode tricks, --no-verify documentation). Upgrade path tests (SQLite V1/V3/V5→V6 migration, receipt forward compat, session capsule compat, from_dict robustness). Scale/performance tests (10k receipts, 1k claims, SQLite concurrency with 20 threads, 1MB security scan, 100-anchor continuity check, @scale marker). CI matrix expanded to macOS + Python 3.13.
 
@@ -193,7 +196,9 @@
 | Verifier Gate | 124 |
 | Governed Activities | 110 |
 | Signal Plane (signal_store + CLI + RPC) | 104 |
-| Sim→Signal Pipeline (signal_adapter + dedupe) | 15 |
+| Gate Check Summary (first live signal) | 21 |
+| Signal Provenance (source_versions, receipt_ids, session_id) | 22 |
+| Sim→Signal Pipeline (EXPOSURE_PROXY + SIGMA_RATE + dedupe) | 21 |
 | Process Session Identity | 9 |
 
-**Total: ~14,211 tests** (14,175 unit + 36 skipped + 24 integration)
+**Total: ~14,295 tests** (14,218 unit + 77 sim + 36 skipped + 24 integration)

@@ -36,7 +36,10 @@
   "completeness": 1.0,
   "source_receipt_ids": [],
   "source_streams": [],
-  "source_versions": {},
+  "source_versions": {
+    "governor": "2.5.0",
+    "envelope_schema": "0.4.0"
+  },
   "derivation": "windowed_aggregate",
   "derivation_version": "decision-evidence-lag-v1",
   "annotations": {

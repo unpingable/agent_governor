@@ -3,20 +3,16 @@
   "emitted_at": "2026-02-24T17:45:00Z",
   "emitter": "governor.signals.sigma_rate",
   "emitter_version": "2.4.0-dev",
-
   "signal_id": "SIGMA_RATE",
   "signal_version": 1,
   "phase": "2.4A",
-
   "subject_type": "window",
   "subject_id": "win_2026-02-24T17:40:00Z_rolling_5m",
   "correlation_id": null,
   "session_id": null,
-
   "window_start": "2026-02-24T17:40:00Z",
   "window_end": "2026-02-24T17:45:00Z",
   "window_kind": "rolling_5m",
-
   "value": null,
   "unit": "rate",
   "values": {
@@ -32,16 +28,18 @@
     "dropped_invalidations": 0,
     "invalid_pairs_count": 0
   },
-
   "quality_status": "unavailable",
-  "quality_reasons": ["no_denominator"],
+  "quality_reasons": [
+    "no_denominator"
+  ],
   "sample_size": null,
   "completeness": null,
-
   "source_receipt_ids": [],
   "source_streams": [],
-  "source_versions": {},
-
+  "source_versions": {
+    "governor": "2.5.0",
+    "envelope_schema": "0.4.0"
+  },
   "derivation": "windowed_aggregate",
   "derivation_version": "sigma-rate-v1",
   "annotations": {

@@ -24,6 +24,23 @@ from typing import Any
 CURRENT_SCHEMA_VERSION = "0.4.0"
 
 
+def default_source_versions() -> dict[str, str]:
+    """Default source version annotations for provenance tracking.
+
+    Ensures source_versions is never an empty dict in production signals.
+    Callers may augment or replace via the source_versions parameter.
+    """
+    try:
+        from importlib.metadata import version as _pkg_version
+        gov_version = _pkg_version("agent-governor")
+    except Exception:
+        gov_version = "unknown"
+    return {
+        "governor": gov_version,
+        "envelope_schema": CURRENT_SCHEMA_VERSION,
+    }
+
+
 class QualityStatus(str, Enum):
     """Quality of a signal computation.
 

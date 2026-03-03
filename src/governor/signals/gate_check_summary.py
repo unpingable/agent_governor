@@ -23,6 +23,7 @@ from .envelope import (
     DerivationType,
     QualityStatus,
     SignalEnvelope,
+    default_source_versions,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ def build_gate_check_summary(
         unit="event",
         values=values,
         quality_status=QualityStatus.OK.value,
+        source_versions=default_source_versions(),
         derivation=DerivationType.DIRECT.value,
         derivation_version=DERIVATION_VERSION,
     )
@@ -118,7 +120,7 @@ def build_gate_check_error_summary(
         emitter_version="1",
         signal_id=SIGNAL_ID,
         signal_version=SIGNAL_VERSION,
-        phase="",
+        phase="2.5",
         subject_type="gate_invocation",
         session_id=session_id,
         value=None,
@@ -126,6 +128,7 @@ def build_gate_check_error_summary(
         values=values,
         quality_status=QualityStatus.UNAVAILABLE.value,
         quality_reasons=["gate_exception"],
+        source_versions=default_source_versions(),
         derivation=DerivationType.DIRECT.value,
         derivation_version=DERIVATION_VERSION,
     )

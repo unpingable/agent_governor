@@ -14,6 +14,7 @@ from .envelope import (
     DerivationType,
     QualityStatus,
     SignalEnvelope,
+    default_source_versions,
     validate_envelope,
 )
 from .emit import (
@@ -130,6 +131,7 @@ __all__ = [
     "CURRENT_SCHEMA_VERSION",
     "DerivationType",
     "QualityStatus",
+    "default_source_versions",
     "SIGNAL_EMIT_FAILED",
     "SIGNAL_EMIT_FAILED_VERSION",
     "SignalEmitter",

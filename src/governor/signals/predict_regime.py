@@ -23,6 +23,7 @@ from .envelope import (
     QualityStatus,
     SignalEnvelope,
     content_hash,
+    default_source_versions,
 )
 
 
@@ -385,12 +386,19 @@ def predict_regime_preflight(
     envelopes: Sequence[SignalEnvelope],
     *,
     config: PreflightConfig | None = None,
+    session_id: str | None = None,
     emitted_at: str | None = None,
 ) -> SignalEnvelope:
     """Predict operational regime from calibrated signal envelopes.
 
     Pure function. No IO, no hidden state, no policy effects.
     Returns a single SignalEnvelope with predicted regime + confidence.
+
+    Args:
+        envelopes: Calibrated A/B signal envelopes.
+        config: Override prediction config (default: DEFAULT_CONFIG).
+        session_id: Session context. If None, inferred from most recent input.
+        emitted_at: Override emission timestamp (default: now).
     """
     cfg = config or DEFAULT_CONFIG
 
@@ -482,6 +490,19 @@ def predict_regime_preflight(
             input_hashes[sig_id] = inp.source_hash
         input_quality_statuses[sig_id] = inp.quality_status
 
+    # Monotonic propagation: union source_receipt_ids from input envelopes
+    propagated_receipt_ids: list[str] = []
+    for env in envelopes:
+        propagated_receipt_ids.extend(env.source_receipt_ids)
+
+    # Infer session_id from most recent input if not provided
+    resolved_session_id = session_id
+    if resolved_session_id is None:
+        for env in sorted(envelopes, key=lambda e: e.emitted_at, reverse=True):
+            if env.session_id:
+                resolved_session_id = env.session_id
+                break
+
     values: dict[str, Any] = {
         "predicted_regime": regime.value,
         "confidence": confidence,
@@ -510,6 +531,7 @@ def predict_regime_preflight(
         signal_version=1,
         phase="2.4D",
         subject_type="session",
+        session_id=resolved_session_id,
         value=output_value,
         unit="score",
         values=values,
@@ -521,6 +543,8 @@ def predict_regime_preflight(
             if input_set.input_count_expected > 0
             else None
         ),
+        source_receipt_ids=propagated_receipt_ids,
+        source_versions=default_source_versions(),
         derivation=DerivationType.DERIVED.value,
         derivation_version=PREFLIGHT_CONFIG_VERSION,
         annotations=annotations,

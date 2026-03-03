@@ -236,8 +236,8 @@ class TestSessionContinuityRoundtrip:
             session_id="sess_cp_test",
             name="before-risky-change",
             created_at=now,
-            ledger_hash=capsule.ledger.content_hash(),
-            workspace_hash=capsule.workspace.content_hash(),
+            ledger_hash=capsule.ledger.dedup_fingerprint(),
+            workspace_hash=capsule.workspace.dedup_fingerprint(),
             capsule=capsule,
         )
 

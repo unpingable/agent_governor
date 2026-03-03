@@ -66,8 +66,8 @@ class TestAcceptanceCreateResume:
         # Create
         capsule = manager.create("test-session", mode="fiction")
         session_id = capsule.metadata.session_id
-        original_ledger_hash = capsule.ledger.content_hash()
-        original_workspace_hash = capsule.workspace.content_hash()
+        original_ledger_hash = capsule.ledger.dedup_fingerprint()
+        original_workspace_hash = capsule.workspace.dedup_fingerprint()
 
         # Clear active to simulate new process
         manager._active_session = None
@@ -77,8 +77,8 @@ class TestAcceptanceCreateResume:
 
         assert resumed is not None
         assert resumed.metadata.session_id == session_id
-        assert resumed.ledger.content_hash() == original_ledger_hash
-        assert resumed.workspace.content_hash() == original_workspace_hash
+        assert resumed.ledger.dedup_fingerprint() == original_ledger_hash
+        assert resumed.workspace.dedup_fingerprint() == original_workspace_hash
 
     def test_create_resume_with_ledger_state(self, manager):
         """Create session with governance state, resume, verify identical."""
@@ -101,14 +101,14 @@ class TestAcceptanceCreateResume:
 
         session_id = capsule.metadata.session_id
         original_ledger = manager.active.ledger.to_dict()
-        original_ledger_hash = manager.active.ledger.content_hash()
+        original_ledger_hash = manager.active.ledger.dedup_fingerprint()
 
         # Clear and resume
         manager._active_session = None
         resumed = manager.resume(session_id)
 
         assert resumed is not None
-        assert resumed.ledger.content_hash() == original_ledger_hash
+        assert resumed.ledger.dedup_fingerprint() == original_ledger_hash
         assert resumed.ledger.to_dict() == original_ledger
         assert len(resumed.ledger.anchors) == 2
         assert len(resumed.ledger.decisions) == 2
@@ -129,14 +129,14 @@ class TestAcceptanceCreateResume:
 
         session_id = capsule.metadata.session_id
         original_workspace = manager.active.workspace.to_dict()
-        original_workspace_hash = manager.active.workspace.content_hash()
+        original_workspace_hash = manager.active.workspace.dedup_fingerprint()
 
         # Clear and resume
         manager._active_session = None
         resumed = manager.resume(session_id)
 
         assert resumed is not None
-        assert resumed.workspace.content_hash() == original_workspace_hash
+        assert resumed.workspace.dedup_fingerprint() == original_workspace_hash
         assert resumed.workspace.to_dict() == original_workspace
         assert resumed.workspace.active_thread_ids == ["thread-1", "thread-2"]
         assert resumed.workspace.active_character_ids == ["alice", "bob"]
@@ -292,7 +292,7 @@ class TestAcceptanceForkDivergePromote:
             context_summary="Climax scene",
         )
 
-        mainline_ledger_hash = manager.active.ledger.content_hash()
+        mainline_ledger_hash = manager.active.ledger.dedup_fingerprint()
 
         # Step 2: Fork for alternate ending
         fork = manager.fork("alternate-ending")
@@ -312,7 +312,7 @@ class TestAcceptanceForkDivergePromote:
             context_summary="Triumphant climax scene",
         )
 
-        fork_ledger_hash = manager.active.ledger.content_hash()
+        fork_ledger_hash = manager.active.ledger.dedup_fingerprint()
         assert fork_ledger_hash != mainline_ledger_hash  # Confirmed divergence
 
         # Step 4: Decide fork is better, promote it
@@ -324,7 +324,7 @@ class TestAcceptanceForkDivergePromote:
         new_mainline = manager.resume(new_mainline_id)
 
         assert new_mainline.metadata.session_id == fork_id
-        assert new_mainline.ledger.content_hash() == fork_ledger_hash
+        assert new_mainline.ledger.dedup_fingerprint() == fork_ledger_hash
         assert new_mainline.ledger.anchors[1]["id"] == "c2-alt"  # The alternate version
         assert new_mainline.workspace.current_section == "chapter-10-alt"
 
@@ -379,8 +379,8 @@ class TestAcceptanceCompactThreshold:
         # Checkpoint
         checkpoint = manager.checkpoint("before-risk")
         assert checkpoint is not None
-        assert checkpoint.ledger_hash == manager.active.ledger.content_hash()
-        assert checkpoint.workspace_hash == manager.active.workspace.content_hash()
+        assert checkpoint.ledger_hash == manager.active.ledger.dedup_fingerprint()
+        assert checkpoint.workspace_hash == manager.active.workspace.dedup_fingerprint()
 
         # Modify state
         manager.update_ledger(
@@ -510,15 +510,15 @@ class TestLedgerState:
 
     def test_content_hash_deterministic(self):
         ledger = LedgerState(anchors=[{"id": "a1"}], intent="test")
-        hash1 = ledger.content_hash()
-        hash2 = ledger.content_hash()
+        hash1 = ledger.dedup_fingerprint()
+        hash2 = ledger.dedup_fingerprint()
         assert hash1 == hash2
         assert len(hash1) == 16  # Truncated SHA256
 
     def test_content_hash_changes_with_content(self):
         ledger1 = LedgerState(intent="one")
         ledger2 = LedgerState(intent="two")
-        assert ledger1.content_hash() != ledger2.content_hash()
+        assert ledger1.dedup_fingerprint() != ledger2.dedup_fingerprint()
 
     def test_to_dict_roundtrip(self):
         original = LedgerState(
@@ -562,7 +562,7 @@ class TestWorkspaceState:
 
     def test_content_hash_deterministic(self):
         ws = WorkspaceState(current_section="test")
-        assert ws.content_hash() == ws.content_hash()
+        assert ws.dedup_fingerprint() == ws.dedup_fingerprint()
 
     def test_to_dict_roundtrip(self):
         original = WorkspaceState(
@@ -660,8 +660,8 @@ class TestCheckpoint:
             session_id="sess_1",
             name="before-change",
             created_at=now,
-            ledger_hash=capsule.ledger.content_hash(),
-            workspace_hash=capsule.workspace.content_hash(),
+            ledger_hash=capsule.ledger.dedup_fingerprint(),
+            workspace_hash=capsule.workspace.dedup_fingerprint(),
             capsule=capsule,
         )
         assert checkpoint.checkpoint_id == "cp_1"
@@ -686,8 +686,8 @@ class TestCheckpoint:
             session_id="sess_1",
             name="snapshot",
             created_at=now,
-            ledger_hash=capsule.ledger.content_hash(),
-            workspace_hash=capsule.workspace.content_hash(),
+            ledger_hash=capsule.ledger.dedup_fingerprint(),
+            workspace_hash=capsule.workspace.dedup_fingerprint(),
             capsule=capsule,
         )
         restored = Checkpoint.from_dict(original.to_dict())

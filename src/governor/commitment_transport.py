@@ -385,8 +385,11 @@ class ShearReport:
         return round(sheared / total, 4)
 
     @property
-    def content_hash(self) -> str:
-        """Hash of full report for receipts."""
+    def dedup_fingerprint(self) -> str:
+        """Dedup fingerprint of full report.
+
+        NOT canonical content-addressing — use only for dedup/integrity.
+        """
         import json
         data = json.dumps(self.to_dict(), sort_keys=True, default=str)
         return hashlib.sha256(data.encode()).hexdigest()[:16]

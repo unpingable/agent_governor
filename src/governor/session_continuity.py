@@ -138,8 +138,11 @@ class LedgerState:
             constraints=data.get("constraints", []),
         )
 
-    def content_hash(self) -> str:
-        """Hash of ledger content for integrity checking."""
+    def dedup_fingerprint(self) -> str:
+        """Dedup fingerprint of ledger content for integrity checking.
+
+        NOT canonical content-addressing — use only for dedup/integrity.
+        """
         content = json.dumps(self.to_dict(), sort_keys=True)
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
@@ -188,8 +191,11 @@ class WorkspaceState:
             context_summary=data.get("context_summary", ""),
         )
 
-    def content_hash(self) -> str:
-        """Hash of workspace content."""
+    def dedup_fingerprint(self) -> str:
+        """Dedup fingerprint of workspace content.
+
+        NOT canonical content-addressing — use only for dedup/integrity.
+        """
         content = json.dumps(self.to_dict(), sort_keys=True)
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
@@ -222,7 +228,7 @@ class Capsule:
 
     def integrity_hash(self) -> str:
         """Combined hash for integrity verification."""
-        combined = f"{self.ledger.content_hash()}:{self.workspace.content_hash()}"
+        combined = f"{self.ledger.dedup_fingerprint()}:{self.workspace.dedup_fingerprint()}"
         return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
 
@@ -518,8 +524,8 @@ class SessionManager:
             session_id=session_id,
             name=name or f"checkpoint-{self._active_session.metadata.checkpoint_count + 1}",
             created_at=now,
-            ledger_hash=self._active_session.ledger.content_hash(),
-            workspace_hash=self._active_session.workspace.content_hash(),
+            ledger_hash=self._active_session.ledger.dedup_fingerprint(),
+            workspace_hash=self._active_session.workspace.dedup_fingerprint(),
             capsule=Capsule.from_dict(self._active_session.to_dict()),  # Deep copy
         )
 

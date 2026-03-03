@@ -17549,7 +17549,7 @@ def demo_show(ctx: click.Context, name: str, as_json: bool) -> None:
                 click.echo(f"  - {p}")
         if scenario.tags:
             click.echo(f"Tags: {', '.join(scenario.tags)}")
-        click.echo(f"Content hash: {scenario.content_hash()}")
+        click.echo(f"Content hash: {scenario.dedup_fingerprint()}")
 
 
 # ---------------------------------------------------------------------------

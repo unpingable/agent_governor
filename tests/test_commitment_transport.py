@@ -650,7 +650,7 @@ class TestShearReport:
         report = self._make_report([
             (Modality.MUST, TransportOutcome.PRESERVED),
         ])
-        h = report.content_hash
+        h = report.dedup_fingerprint
         assert len(h) == 16
 
     def test_empty(self):

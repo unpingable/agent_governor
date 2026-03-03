@@ -74,6 +74,7 @@ src/governor/
 ├── viewmodel.py      # GovernorViewModel (schema v2), 8 section builders, read-only state derivation, V1 compat
 ├── evidence_gate.py  # EvidenceGate, evidence-gated coding harness, claim extraction, evidence linking, custody scoring
 ├── gate_receipt.py   # GateReceipt, content-addressed decision receipts, EvidenceStore, ReceiptStore, canonical JSON
+├── hash_ref.py       # HashRef: cross-module hash comparison (prefixed vs raw hex normalization)
 ├── violation_resolver.py # ViolationResolver, PendingViolation, ResolutionAction, ExceptionRecord, fix/revise/proceed actions
 ├── interferometry.py  # Interferometry: parallel + serial multi-model claim comparison, alignment, signals, ledger promotion, store
 ├── code_interferometry.py # Code interferometry: risk markers (19 types), anchor conflicts, tier determination, CheckFinding bridge

@@ -270,25 +270,25 @@ class TestDemoScenario:
         )
         assert s.screenshot_paths == []
 
-    def test_content_hash_deterministic(self):
+    def test_dedup_fingerprint_deterministic(self):
         s = DemoScenario(name="hash_test", description="Hashing", surface=DemoSurface.WEBUI)
-        h1 = s.content_hash()
-        h2 = s.content_hash()
+        h1 = s.dedup_fingerprint()
+        h2 = s.dedup_fingerprint()
         assert h1 == h2
         assert len(h1) == 16  # sha256[:16]
 
-    def test_content_hash_changes_with_content(self):
+    def test_dedup_fingerprint_changes_with_content(self):
         s1 = DemoScenario(name="a", description="v1", surface=DemoSurface.WEBUI)
         s2 = DemoScenario(name="a", description="v2", surface=DemoSurface.WEBUI)
-        assert s1.content_hash() != s2.content_hash()
+        assert s1.dedup_fingerprint() != s2.dedup_fingerprint()
 
-    def test_content_hash_changes_with_steps(self):
+    def test_dedup_fingerprint_changes_with_steps(self):
         s1 = DemoScenario(name="a", description="x", surface=DemoSurface.WEBUI)
         s2 = DemoScenario(
             name="a", description="x", surface=DemoSurface.WEBUI,
             steps=[DemoStep(action=StepAction.CLICK, target="#btn")],
         )
-        assert s1.content_hash() != s2.content_hash()
+        assert s1.dedup_fingerprint() != s2.dedup_fingerprint()
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +351,7 @@ class TestBuiltinDemos:
 
     def test_all_have_content_hash(self):
         for d in BUILTIN_DEMOS:
-            h = d.content_hash()
+            h = d.dedup_fingerprint()
             assert len(h) == 16
             assert h.isalnum()
 
@@ -436,7 +436,7 @@ class TestDemoManifest:
         m = DemoManifest()
         s = DemoScenario(name="demo", description="test", surface=DemoSurface.WEBUI)
         missing_path = str(tmp_path / "nonexistent.png")
-        m.record_generation("demo", s.content_hash(), [missing_path])
+        m.record_generation("demo", s.dedup_fingerprint(), [missing_path])
         assert not m.is_fresh(s)
 
     def test_is_fresh_all_ok(self, tmp_path):
@@ -444,13 +444,13 @@ class TestDemoManifest:
         s = DemoScenario(name="demo", description="test", surface=DemoSurface.WEBUI)
         shot_path = str(tmp_path / "shot.png")
         Path(shot_path).write_text("fake image")
-        m.record_generation("demo", s.content_hash(), [shot_path])
+        m.record_generation("demo", s.dedup_fingerprint(), [shot_path])
         assert m.is_fresh(s)
 
     def test_is_fresh_no_screenshots_needed(self):
         m = DemoManifest()
         s = DemoScenario(name="demo", description="test", surface=DemoSurface.WEBUI)
-        m.record_generation("demo", s.content_hash(), [])
+        m.record_generation("demo", s.dedup_fingerprint(), [])
         assert m.is_fresh(s)
 
 
@@ -519,7 +519,7 @@ class TestDemoStore:
             full.parent.mkdir(parents=True, exist_ok=True)
             full.write_text("fake image")
         m.record_generation(
-            demo.name, demo.content_hash(),
+            demo.name, demo.dedup_fingerprint(),
             [str(tmp_path / p) for p in demo.screenshot_paths],
         )
         store.save_manifest(m)
@@ -807,7 +807,7 @@ class TestIntegration:
             full.parent.mkdir(parents=True, exist_ok=True)
             full.write_text("image data")
         m.record_generation(
-            demo.name, demo.content_hash(),
+            demo.name, demo.dedup_fingerprint(),
             [str(tmp_path / p) for p in demo.screenshot_paths],
         )
         store.save_manifest(m)
@@ -894,7 +894,7 @@ class TestEdgeCases:
             tags=["x", "y"],
         )
         # Same content should always produce same hash
-        hashes = {s1.content_hash() for _ in range(10)}
+        hashes = {s1.dedup_fingerprint() for _ in range(10)}
         assert len(hashes) == 1
 
     def test_store_default_dir(self):

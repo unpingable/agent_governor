@@ -191,7 +191,8 @@ class CollapseReport:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
-    def content_hash(self) -> str:
+    def dedup_fingerprint(self) -> str:
+        """NOT canonical content-addressing — use only for dedup/integrity."""
         data = json.dumps(self.to_dict(), sort_keys=True, default=str)
         return hashlib.sha256(data.encode()).hexdigest()[:16]
 

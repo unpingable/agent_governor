@@ -127,8 +127,11 @@ class DemoScenario:
         """List all screenshot paths in this scenario."""
         return [s.screenshot_path for s in self.steps if s.screenshot_path]
 
-    def content_hash(self) -> str:
-        """Hash of scenario content for freshness checking."""
+    def dedup_fingerprint(self) -> str:
+        """Dedup fingerprint of scenario content for freshness checking.
+
+        NOT canonical content-addressing — use only for dedup/integrity.
+        """
         content = json.dumps(self.to_dict(), sort_keys=True)
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
@@ -385,7 +388,7 @@ class DemoManifest:
         entry = self.scenarios.get(scenario.name)
         if not entry:
             return False
-        if entry.get("scenario_hash") != scenario.content_hash():
+        if entry.get("scenario_hash") != scenario.dedup_fingerprint():
             return False
         # Check screenshots exist
         for path in entry.get("screenshots", []):
@@ -438,7 +441,7 @@ class DemoStore:
                 "name": demo.name,
                 "status": status.value,
                 "screenshots": demo.screenshot_paths,
-                "scenario_hash": demo.content_hash(),
+                "scenario_hash": demo.dedup_fingerprint(),
             })
 
         return results

@@ -204,6 +204,9 @@ class EvidenceGateOutput:
     # Release taint (computed after kernel run, dict form of RunTaint)
     release_taint: dict[str, Any] | None = None
 
+    # Provenance labels (annotation, not gate logic)
+    provenance_labels: list[Any] = field(default_factory=list)
+
     def to_dict(self) -> dict[str, Any]:
         d = {
             "patch": self.patch,
@@ -221,6 +224,8 @@ class EvidenceGateOutput:
             d["kernel_ok"] = self.kernel_ok
         if self.release_taint is not None:
             d["release_taint"] = self.release_taint
+        if self.provenance_labels:
+            d["provenance_labels"] = [lbl.to_dict() if hasattr(lbl, "to_dict") else lbl for lbl in self.provenance_labels]
         return d
 
     def to_json(self) -> str:
@@ -803,6 +808,16 @@ class EvidenceGate:
 
         self.logger.log("output", status=result.status.value, warnings=result.warnings, blocking_reasons=result.blocking_reasons)
 
+        # Assign provenance labels (annotation, fail-open)
+        try:
+            from governor.provenance_labels import LabelAssigner
+            _label_assigner = LabelAssigner()
+            result.provenance_labels = [
+                _label_assigner.assign("evidence_gate", output),
+            ]
+        except Exception:
+            pass  # provenance labels are annotation, never block the gate
+
         # Policy augmentation (if policy rule set provided)
         policy_fragment = None
         if policy is not None:
@@ -983,6 +998,11 @@ class EvidenceGate:
         }
         if policy_fragment is not None:
             evidence_bundle["policy_fragment"] = policy_fragment
+        if result.provenance_labels:
+            evidence_bundle["provenance_labels"] = [
+                lbl.to_dict() if hasattr(lbl, "to_dict") else lbl
+                for lbl in result.provenance_labels
+            ]
 
         return self._receipt_system.emit(
             gate="evidence_gate",

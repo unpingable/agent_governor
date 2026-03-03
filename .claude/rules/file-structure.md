@@ -75,6 +75,7 @@ src/governor/
 ├── evidence_gate.py  # EvidenceGate, evidence-gated coding harness, claim extraction, evidence linking, custody scoring
 ├── gate_receipt.py   # GateReceipt, content-addressed decision receipts, EvidenceStore, ReceiptStore, canonical JSON
 ├── hash_ref.py       # HashRef: cross-module hash comparison (prefixed vs raw hex normalization)
+├── provenance_labels.py # ProvenanceLabel, LabelAssigner, sensitivity propagation, secret/internal URL patterns
 ├── violation_resolver.py # ViolationResolver, PendingViolation, ResolutionAction, ExceptionRecord, fix/revise/proceed actions
 ├── interferometry.py  # Interferometry: parallel + serial multi-model claim comparison, alignment, signals, ledger promotion, store
 ├── code_interferometry.py # Code interferometry: risk markers (19 types), anchor conflicts, tier determination, CheckFinding bridge

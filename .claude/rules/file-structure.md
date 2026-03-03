@@ -104,7 +104,10 @@ src/governor/
 │   ├── replay_sources.py            # C1: Replay source adapters (envelope + receipt grouping)
 │   ├── calibration_methods.py       # C2: CALIBRATION_LAYER transform functions (identity_clip, linear_minmax, log_minmax)
 │   ├── calibration_layer.py         # C2: CalibrationParamSet, apply_calibration, companion envelope builder
-│   └── calibration_fitting.py       # C2: CalibrationFitSpec, extract_fit_samples, fit_param_set_from_corpus, FitResult
+│   ├── calibration_fitting.py       # C2: CalibrationFitSpec, extract_fit_samples, fit_param_set_from_corpus, FitResult
+│   ├── posterior_shift.py           # B3: POSTERIOR_SHIFT_ATTRIBUTION LOO influence
+│   ├── gate_check_summary.py       # GATE_CHECK_SUMMARY live signal (first production emission)
+│   └── predict_regime.py           # D: PREDICT_REGIME_PREFLIGHT observe-only regime prediction
 │
 # W5 Writing Modules (Deferred 2, W5):
 ├── writing_patterns.py    # 18 pattern banks for governance/tone/regime detection

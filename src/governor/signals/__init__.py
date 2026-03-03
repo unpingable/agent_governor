@@ -105,6 +105,13 @@ from .calibration_fitting import (
     fit_summary_envelope,
     validate_fit_spec,
 )
+from .posterior_shift import (
+    ATTRIBUTION_CONFIG_VERSION,
+    ATTRIBUTION_METHOD,
+    Influence,
+    compute_loo_influences,
+    derive_posterior_shift,
+)
 from .gate_check_summary import (
     SIGNAL_ID as GATE_CHECK_SUMMARY_SIGNAL_ID,
     build_gate_check_summary,
@@ -208,6 +215,12 @@ __all__ = [
     "fit_param_set_from_corpus",
     "fit_summary_envelope",
     "validate_fit_spec",
+    # B3: Posterior Shift Attribution
+    "ATTRIBUTION_CONFIG_VERSION",
+    "ATTRIBUTION_METHOD",
+    "Influence",
+    "compute_loo_influences",
+    "derive_posterior_shift",
     # Gate Check Summary
     "GATE_CHECK_SUMMARY_SIGNAL_ID",
     "build_gate_check_summary",

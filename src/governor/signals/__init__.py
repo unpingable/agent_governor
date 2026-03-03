@@ -104,6 +104,12 @@ from .calibration_fitting import (
     fit_summary_envelope,
     validate_fit_spec,
 )
+from .gate_check_summary import (
+    SIGNAL_ID as GATE_CHECK_SUMMARY_SIGNAL_ID,
+    build_gate_check_summary,
+    build_gate_check_error_summary,
+    try_emit_gate_check_summary,
+)
 from .predict_regime import (
     ALL_EXPECTED_SIGNALS,
     ALL_REGIMES,
@@ -200,6 +206,11 @@ __all__ = [
     "fit_param_set_from_corpus",
     "fit_summary_envelope",
     "validate_fit_spec",
+    # Gate Check Summary
+    "GATE_CHECK_SUMMARY_SIGNAL_ID",
+    "build_gate_check_summary",
+    "build_gate_check_error_summary",
+    "try_emit_gate_check_summary",
     # D: Predict Regime Preflight
     "ALL_EXPECTED_SIGNALS",
     "ALL_REGIMES",

@@ -11444,7 +11444,64 @@ def lite_check(ctx, text, use_stdin, file, task, strict, fmt, oracle_type, test_
             click.echo(f"  oracle failed: {exc}", err=True)
 
     gate = EvidenceGate(config=config, receipt_system=receipt_system, kernel_bridge=kernel_bridge)
-    result = gate.check(task=task, context="", output=content, oracle_evidence=oracle_evidence or None)
+
+    # Run gate check with timing
+    import time as _time
+    _t0 = _time.monotonic_ns()
+    _gate_error: Exception | None = None
+    try:
+        result = gate.check(task=task, context="", output=content, oracle_evidence=oracle_evidence or None)
+    except Exception as exc:
+        _gate_error = exc
+        result = None
+    _duration_ns = _time.monotonic_ns() - _t0
+
+    # Signal emission (fail-open — never blocks gate output)
+    if gov_dir.exists():
+        try:
+            from .signals.gate_check_summary import (
+                build_gate_check_summary,
+                build_gate_check_error_summary,
+                try_emit_gate_check_summary,
+            )
+            from .signals.emit import JsonlSink
+            from .session import get_session_id
+
+            signals_dir = gov_dir / "signals"
+            signals_dir.mkdir(parents=True, exist_ok=True)
+            sink = JsonlSink(
+                signals_dir / "signals.jsonl",
+                validate=True,
+                session_id=get_session_id(),
+            )
+            if result is not None:
+                envelope = build_gate_check_summary(
+                    verdict=result.status.value,
+                    claims_count=len(result.claims),
+                    violations_count=len(result.blocking_reasons),
+                    warnings_count=len(result.warnings),
+                    has_oracle_evidence=bool(oracle_evidence),
+                    duration_ns=_duration_ns,
+                    session_id=get_session_id(),
+                )
+            else:
+                envelope = build_gate_check_error_summary(
+                    error_type=type(_gate_error).__name__,
+                    error_message=str(_gate_error)[:500],
+                    has_oracle_evidence=bool(oracle_evidence),
+                    duration_ns=_duration_ns,
+                    session_id=get_session_id(),
+                )
+            try_emit_gate_check_summary(sink, envelope)
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).debug(
+                "signal sink creation failed", exc_info=True,
+            )
+
+    # Re-raise gate error after signal emission attempt
+    if _gate_error is not None:
+        raise _gate_error
 
     if fmt == "json":
         # Include oracle metadata in JSON output

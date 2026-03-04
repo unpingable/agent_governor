@@ -399,6 +399,33 @@ class TestGovernorHello:
         assert gov["mode"] == "general"
         assert gov["initialized"] is True  # tmp_gov_dir exists
 
+    @pytest.mark.asyncio
+    async def test_hello_session_block(self, dispatcher_and_state):
+        """governor.hello includes session block with expected fields."""
+        d, state = dispatcher_and_state
+        resp = await roundtrip(d, "governor.hello")
+        session = resp["result"]["session"]
+        assert session["session_id"] == state.session_id
+        assert session["principal"] is None
+        assert session["principal_ref"] is None
+        assert session["auth_method"] == "local"
+        assert session["session_token"] is None
+
+    @pytest.mark.asyncio
+    async def test_hello_session_id_backward_compat(self, dispatcher_and_state):
+        """session_id still present in governor block (backward compat)."""
+        d, state = dispatcher_and_state
+        resp = await roundtrip(d, "governor.hello")
+        assert resp["result"]["governor"]["session_id"] == state.session_id
+
+    @pytest.mark.asyncio
+    async def test_hello_signals_preflight_capability(self, dispatcher_and_state):
+        """capabilities includes signals_preflight."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "governor.hello")
+        caps = resp["result"]["capabilities"]
+        assert caps["signals_preflight"] is True
+
 
 # =============================================================================
 # Handler: governor.now
@@ -1095,6 +1122,7 @@ class TestAllMethodsRegistered:
         "signals.get",
         "signals.tail",
         "signals.stats",
+        "signals.preflight",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -1111,7 +1139,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 64
+        assert total == 65
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -4179,3 +4207,35 @@ class TestChainEnforcement:
             "correlation_id": "task-reset-nonexistent",
         })
         assert resp2["result"]["log_existed"] is False
+
+
+# =============================================================================
+# Handler: signals.preflight
+# =============================================================================
+
+
+class TestSignalsPreflight:
+    """signals.preflight RPC — predict regime from latest signal envelopes."""
+
+    @pytest.mark.asyncio
+    async def test_preflight_returns_expected_shape(self, dispatcher_and_state):
+        """Returns ok, envelope dict, and inputs count."""
+        d, state = dispatcher_and_state
+        resp = await roundtrip(d, "signals.preflight")
+        result = resp["result"]
+        assert result["ok"] is True
+        assert "envelope" in result
+        assert isinstance(result["inputs"], int)
+        # Envelope should have predicted_regime in values
+        env = result["envelope"]
+        assert "values" in env
+        assert "predicted_regime" in env["values"]
+
+    @pytest.mark.asyncio
+    async def test_preflight_no_signals_insufficient_history(self, dispatcher_and_state):
+        """No JSONL signals → predicted_regime = insufficient_history."""
+        d, state = dispatcher_and_state
+        resp = await roundtrip(d, "signals.preflight")
+        result = resp["result"]
+        assert result["inputs"] == 0
+        assert result["envelope"]["values"]["predicted_regime"] == "insufficient_history"

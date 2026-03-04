@@ -1,5 +1,7 @@
 # v2.4 Phase B1 — CAPTURE_SELF_DIAGNOSTIC
 
+**Status:** shipped (v2.5.0 — `signals/capture_self_diagnostic.py`, 908 tests across spine)
+
 Advisory-only windowed diagnostic that consumes Phase A signals (not raw
 receipts). Answers: "Is the instrumentation spine itself operating
 correctly, and does it see signs of capture?"

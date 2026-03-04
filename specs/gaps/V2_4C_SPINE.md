@@ -12,7 +12,7 @@ Both are still **observe-only**.
 - Phase A (A0–A3): signal envelope + 3 derivation signals — shipped
 - Phase B1 (CAPTURE_SELF_DIAGNOSTIC): envelope-native advisory — shipped
 - Phase B2 (DECISION_EVIDENCE_LAG): receipt-native temporal — shipped
-- B3 (POSTERIOR_SHIFT_ATTRIBUTION): deferred to post-C
+- B3 (POSTERIOR_SHIFT_ATTRIBUTION): shipped (9546b33, fb3a469; 41 tests)
 
 ---
 

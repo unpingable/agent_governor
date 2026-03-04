@@ -4,7 +4,7 @@ Sequencing based on dependency analysis. Each phase has exit criteria.
 
 ## v2.4 — Instrumentation Spine (Observe, Measure, Warn) — SHIPPED
 
-All phases shipped. B3 (POSTERIOR_SHIFT_ATTRIBUTION) explicitly deferred.
+All phases shipped including B3 (POSTERIOR_SHIFT_ATTRIBUTION).
 See `docs/V2_STATUS.md` for the full module listing.
 
 ### Phase A — Instrumentation Spine ✓
@@ -27,7 +27,7 @@ denominator first. See `V2_4A_SPINE.md` for full implementation contracts.
 |-------|------|--------|
 | B1 | CAPTURE_SELF_DIAGNOSTIC_GAP | **shipped** |
 | B2 | DECISION_EVIDENCE_LAG_GAP | **shipped** |
-| B3 | POSTERIOR_SHIFT_ATTRIBUTION | **deferred** (post-C calibration) |
+| B3 | POSTERIOR_SHIFT_ATTRIBUTION | **shipped** (9546b33, fb3a469) |
 
 ### Phase C — Make It Measurable ✓
 
@@ -42,7 +42,7 @@ denominator first. See `V2_4A_SPINE.md` for full implementation contracts.
 |-------|------|--------|
 | D | PREDICT_REGIME_PREFLIGHT | **shipped** |
 
-**Total:** 795 tests across A0-A3 + B1-B2 + C1-C2 + D. All green.
+**Total:** 908 tests across A0-A3 + B1-B3 + C1-C2 + D. All green.
 
 ---
 
@@ -381,20 +381,27 @@ All specs honor the invariants in `GAP_INVARIANTS.md`:
 ## v2.x — Threat Intelligence Hardening (Feb 2026)
 
 From threat intelligence review mapping real-world LLM attack patterns to
-governor controls. Three gaps need v2 hook points now (interface + receipt);
-two are v3 roadmap items.
+governor controls. All three v2 hook points shipped; two v3 items remain.
 
-### v2 Hook Points Required
+### v2 Hook Points — ALL SHIPPED
 
 | Spec | What | Depends On | Status |
 |------|------|------------|--------|
-| GOV_PRIM_PROV_001 | Provenance labels on tool outputs | None (primitive) | open |
-| GOV_GAP_CHAIN_001 | Composition-aware capability gating | Provenance labels (soft) | **shipped (2.3.2)** |
-| GOV_GAP_EGRESS_001 | Outbound data-flow policy gate | Provenance labels, chain gate (soft) | open |
+| GOV_PRIM_PROV_001 | Provenance labels on tool outputs | None (primitive) | **shipped** (9efc3e5) |
+| GOV_GAP_CHAIN_001 | Composition-aware capability gating | Provenance labels (soft) | **shipped** (2.3.2) |
+| GOV_GAP_EGRESS_001 | Outbound data-flow policy gate | Provenance labels, chain gate (soft) | **shipped** (post-2.5.0) |
 
 GOV_GAP_CHAIN_001 shipped as Phase 2B/2C/2D in v2.3.2 (chain_gate.py,
 governed_dispatch.py, policy_engine.py). Within-task composition enforced via
 preflight/record split. See V2_STATUS.md §2.3.2.
+
+GOV_PRIM_PROV_001 shipped as provenance_labels.py (53 tests). 7 source
+classes, 4 sensitivity hints, max_sensitivity propagation, LabelAssigner
+with 19 tool mappings, wired into evidence gate.
+
+GOV_GAP_EGRESS_001 shipped as egress_gate.py (66 tests). Policy bridge:
+classify → evaluate → receipt. 6 rules in explicit precedence, monotone
+classifiers, receipt redaction (hashes + classes only).
 
 ### v3 Roadmap
 
@@ -407,9 +414,9 @@ preflight/record split. See V2_STATUS.md §2.3.2.
 
 Even for v3-deferred items, v2 must include placeholder fields:
 
-- [ ] Receipt schema: `principal_ref` field (null in v2)
-- [ ] Daemon config: `[security]` section (commented out in v2)
-- [ ] `governor.hello` response: `auth_method` field (= "local" in v2)
+- [x] Receipt schema: `principal_ref` field (null in v2)
+- [x] Daemon config: `[security]` section (commented out in v2)
+- [x] `governor.hello` response: `auth_method` field (= "local" in v2)
 - [x] Capability taxonomy: enumerated capability classes for chain gate (shipped 2.3.2)
 - [x] Policy engine: abstract interface (chain + egress share evaluation pattern) (shipped 2.3.2)
 

@@ -1,6 +1,6 @@
 # GOV-PRIM-PROV-001: Provenance Labels for Tool Outputs
 
-Status: `deferred` (v2 hardening — label schema required now, propagation later)
+Status: `shipped` (v2.5.0 — `provenance_labels.py`, 53 tests)
 
 ## Problem
 

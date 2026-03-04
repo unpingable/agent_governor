@@ -1,5 +1,7 @@
 # v2.4 Phase B2 — DECISION_EVIDENCE_LAG
 
+**Status:** shipped (v2.5.0 — `signals/decision_evidence_lag.py`, 908 tests across spine)
+
 Per-decision timing classification: when a decision was made, was the
 evidence that justifies it available *before* the decision, or was it
 backfilled afterwards?

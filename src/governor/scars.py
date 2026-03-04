@@ -34,6 +34,13 @@ import math
 import uuid
 
 
+def _normalize_fingerprint_field(s: str) -> str:
+    """Normalize a fingerprint field: lowercase, collapse whitespace to underscores."""
+    if not s:
+        return s
+    return "_".join(s.lower().split())
+
+
 # =============================================================================
 # Failure Provenance
 # =============================================================================
@@ -104,8 +111,10 @@ class Scar:
     failure_surprise_ratio: float = 0.0
 
     def __post_init__(self):
-        """Clamp stiffness to valid range."""
+        """Clamp stiffness to valid range and normalize fingerprint fields."""
         self.stiffness = max(MIN_STIFFNESS, min(MAX_STIFFNESS, self.stiffness))
+        self.failure_kind = _normalize_fingerprint_field(self.failure_kind)
+        self.action_type = _normalize_fingerprint_field(self.action_type)
 
     @property
     def is_hard(self) -> bool:
@@ -193,6 +202,50 @@ class Scar:
         if self.action_type and action_type and self.action_type != action_type:
             return False
         return True
+
+    def matches_evidence_fingerprint(
+        self,
+        region: str,
+        failure_kind: str = "",
+        action_type: str = "",
+    ) -> bool:
+        """Check if evidence with the given fingerprint applies to this scar.
+
+        Inverted asymmetry from matches_fingerprint():
+        - For admissibility, broad scars block narrow queries (correct).
+        - For evidence, narrow success does NOT prove broad safety.
+
+        Per-field rules:
+        - Region must match.
+        - If evidence field is empty → matches (broad evidence, backward compat).
+        - If scar field is empty AND evidence field is set → NO match
+          (narrow evidence can't prove broad safety — the key fix).
+        - If both set → must be equal.
+        """
+        if self.region != region:
+            return False
+        norm_kind = _normalize_fingerprint_field(failure_kind)
+        norm_action = _normalize_fingerprint_field(action_type)
+        # Per-field matching with evidence-direction asymmetry
+        if not self._evidence_field_matches(self.failure_kind, norm_kind):
+            return False
+        if not self._evidence_field_matches(self.action_type, norm_action):
+            return False
+        return True
+
+    @staticmethod
+    def _evidence_field_matches(scar_field: str, evidence_field: str) -> bool:
+        """Check one field for evidence-direction matching.
+
+        - evidence empty → matches (broad evidence, don't care)
+        - scar empty, evidence set → no match (narrow can't prove broad)
+        - both set → must be equal
+        """
+        if not evidence_field:
+            return True  # Broad evidence matches any scar
+        if not scar_field:
+            return False  # Narrow evidence can't anneal broad scar
+        return scar_field == evidence_field
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -392,6 +445,11 @@ class FailureEvent:
     # Linked objects
     scar_id: str | None = None
     shield_id: str | None = None
+
+    def __post_init__(self):
+        """Normalize fingerprint fields."""
+        self.failure_kind = _normalize_fingerprint_field(self.failure_kind)
+        self.action_type = _normalize_fingerprint_field(self.action_type)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -654,6 +712,10 @@ class ScarLedger:
 
         Returns the classified FailureEvent.
         """
+        # 0. Normalize fingerprint fields at API boundary
+        failure_kind = _normalize_fingerprint_field(failure_kind)
+        action_type = _normalize_fingerprint_field(action_type)
+
         # 1. Create failure event
         event = FailureEvent(
             event_id=f"fe_{uuid.uuid4().hex[:12]}",
@@ -833,6 +895,8 @@ class ScarLedger:
         When multiple scars match (e.g. a region-level scar AND a
         failure_kind-specific scar), the MOST RESTRICTIVE scar wins.
         """
+        failure_kind = _normalize_fingerprint_field(failure_kind)
+        action_type = _normalize_fingerprint_field(action_type)
         scar = self._find_most_restrictive_scar(region, failure_kind, action_type)
 
         if scar is None:
@@ -941,9 +1005,18 @@ class ScarLedger:
         only scars matching that fingerprint. When omitted, evidence
         applies to ALL scars in the region (backward compat).
 
+        Uses evidence-direction matching: narrow evidence does NOT
+        anneal broad scars (proving "timeout works" doesn't prove
+        "everything works").
+
         Returns True if evidence was recorded for at least one scar.
         """
-        matched = self._find_matching_scars(region, failure_kind, action_type)
+        failure_kind = _normalize_fingerprint_field(failure_kind)
+        action_type = _normalize_fingerprint_field(action_type)
+        matched = [
+            scar for scar in self.scars.values()
+            if scar.matches_evidence_fingerprint(region, failure_kind, action_type)
+        ]
         if not matched:
             return False
 

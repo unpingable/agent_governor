@@ -5,7 +5,7 @@ Post-run step: reads receipts produced during a sim run, derives signal
 envelopes from them, emits via JsonlSink. Proves the instrumentation
 spine is connected to blood flow.
 
-Five signal kinds (full A→B chain):
+Six signal kinds (full A→B→D chain):
   Phase A:
     - EXPOSURE_PROXY (A1): weighted denominator from receipt gate counts
     - SILENT_SUPPRESSION (A2): healthy indicator (sim is running)
@@ -13,6 +13,8 @@ Five signal kinds (full A→B chain):
   Phase B:
     - CAPTURE_SELF_DIAGNOSTIC (B1): advisory diagnostic from A signals
     - POSTERIOR_SHIFT_ATTRIBUTION (B3): LOO influence on B1
+  Phase D:
+    - PREDICT_REGIME_PREFLIGHT: observe-only regime prediction from A+B signals
 """
 
 from __future__ import annotations
@@ -68,6 +70,7 @@ def derive_signals_from_run(
         derive_capture_self_diagnostic,
     )
     from governor.signals.posterior_shift import derive_posterior_shift
+    from governor.signals.predict_regime import predict_regime_preflight
 
     # 1. Load receipts
     system = GateReceiptSystem(gov_dir)
@@ -197,7 +200,22 @@ def derive_signals_from_run(
         len(b3_envelope.values.get("influences", [])),
     )
 
-    # 7. Emit all envelopes to signals JSONL
+    # 7. Derive PREDICT_REGIME_PREFLIGHT (Phase D) from all A+B signals
+    d_envelope = predict_regime_preflight(
+        envelopes,
+        session_id=ctx.session_id,
+        emitted_at=ctx.window_end,
+    )
+    envelopes.append(d_envelope)
+    logger.debug(
+        "sim run %s: emitted PREDICT_REGIME_PREFLIGHT (value=%s, quality=%s, regime=%s)",
+        ctx.run_id,
+        d_envelope.value,
+        d_envelope.quality_status,
+        d_envelope.values.get("predicted_regime", "unknown"),
+    )
+
+    # 8. Emit all envelopes to signals JSONL
     signals_dir = gov_dir / "signals"
     signals_dir.mkdir(parents=True, exist_ok=True)
     signals_jsonl = signals_dir / "signals.jsonl"

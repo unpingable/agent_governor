@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for sim → signal pipeline.
 
-Golden test: one sim fixture → receipts → full A→B signal chain
+Golden test: one sim fixture → receipts → full A→B→D signal chain
 (EXPOSURE_PROXY, SILENT_SUPPRESSION, SIGMA_RATE, CAPTURE_SELF_DIAGNOSTIC,
-POSTERIOR_SHIFT_ATTRIBUTION) → stored in signals.jsonl → queryable via SignalStore.
+POSTERIOR_SHIFT_ATTRIBUTION, PREDICT_REGIME_PREFLIGHT) → stored in signals.jsonl
+→ queryable via SignalStore.
 """
 
 from __future__ import annotations
@@ -83,7 +84,7 @@ class TestDeriveSignals:
         assert result == []
 
     def test_with_receipts_returns_full_signal_chain(self, tmp_path):
-        """Receipts present → A1+A2+A3+B1+B3 signal chain."""
+        """Receipts present → A1+A2+A3+B1+B3+D signal chain."""
         # Run a sim that produces receipts
         runner = InprocRunner(work_dir=tmp_path)
         events = [
@@ -100,12 +101,13 @@ class TestDeriveSignals:
             window_end="1970-01-01T00:00:01+00:00",
         )
         result = derive_signals_from_run(runner.gov_dir, ctx)
-        assert len(result) == 5
+        assert len(result) == 6
 
         signal_ids = {e.signal_id for e in result}
         assert signal_ids == {
             "EXPOSURE_PROXY", "SIGMA_RATE", "SILENT_SUPPRESSION",
             "CAPTURE_SELF_DIAGNOSTIC", "POSTERIOR_SHIFT_ATTRIBUTION",
+            "PREDICT_REGIME_PREFLIGHT",
         }
 
         # Phase A signals
@@ -143,15 +145,15 @@ class TestDeriveSignals:
             window_end="1970-01-01T00:00:01+00:00",
         )
         result = derive_signals_from_run(runner.gov_dir, ctx)
-        assert len(result) == 5
+        assert len(result) == 6
 
-        # All A-phase signals carry sim provenance (B-phase use their own emitter)
+        # All A-phase signals carry sim provenance (B/D-phase use their own emitter)
         for env in result:
             assert env.session_id == "sess-prov"
-            assert env.emitter == "governor_sim.signal_adapter" or env.phase == "2.4B"
+            assert env.emitter == "governor_sim.signal_adapter" or env.phase in ("2.4B", "2.4D")
 
     def test_signals_written_to_jsonl(self, tmp_path):
-        """All 5 signals persisted to signals.jsonl after derivation."""
+        """All 6 signals persisted to signals.jsonl after derivation."""
         runner = InprocRunner(work_dir=tmp_path, emit_signals=False)
         events = [
             _make_gate_check_event(0, 0, "persist"),
@@ -169,11 +171,12 @@ class TestDeriveSignals:
         jsonl_path = runner.gov_dir / "signals" / "signals.jsonl"
         assert jsonl_path.exists()
         lines = [l for l in jsonl_path.read_text().splitlines() if l.strip()]
-        assert len(lines) == 5
+        assert len(lines) == 6
         signal_ids = {json.loads(l)["signal_id"] for l in lines}
         assert signal_ids == {
             "EXPOSURE_PROXY", "SIGMA_RATE", "SILENT_SUPPRESSION",
             "CAPTURE_SELF_DIAGNOSTIC", "POSTERIOR_SHIFT_ATTRIBUTION",
+            "PREDICT_REGIME_PREFLIGHT",
         }
 
     def test_signal_hash_is_deterministic(self, tmp_path):
@@ -232,7 +235,7 @@ class TestRunnerSignalIntegration:
         assert not signals_jsonl.exists()
 
     def test_emit_signals_true_produces_full_chain(self, tmp_path):
-        """emit_signals=True → full A→B signal chain emitted post-run."""
+        """emit_signals=True → full A→B→D signal chain emitted post-run."""
         runner = InprocRunner(work_dir=tmp_path, emit_signals=True)
         events = [
             _make_gate_check_event(0, 0, "with signals"),
@@ -240,11 +243,12 @@ class TestRunnerSignalIntegration:
         ]
         runner.run(events)
 
-        assert len(runner.emitted_signals) == 5
+        assert len(runner.emitted_signals) == 6
         signal_ids = {s.signal_id for s in runner.emitted_signals}
         assert signal_ids == {
             "EXPOSURE_PROXY", "SIGMA_RATE", "SILENT_SUPPRESSION",
             "CAPTURE_SELF_DIAGNOSTIC", "POSTERIOR_SHIFT_ATTRIBUTION",
+            "PREDICT_REGIME_PREFLIGHT",
         }
 
         signals_jsonl = runner.gov_dir / "signals" / "signals.jsonl"
@@ -268,8 +272,8 @@ class TestRunnerSignalIntegration:
         store = SignalStore(db_path)
         ingested = store.ingest_from_jsonl(signals_jsonl)
 
-        assert ingested.inserted == 5
-        assert store.count() == 5
+        assert ingested.inserted == 6
+        assert store.count() == 6
 
         # Query each signal kind
         ep_rows = store.query(signal_name="EXPOSURE_PROXY")
@@ -312,7 +316,7 @@ class TestRunnerSignalIntegration:
         ]
         runner.run(events)
 
-        assert len(runner.emitted_signals) == 5
+        assert len(runner.emitted_signals) == 6
         # All carry inferred session_id
         for env in runner.emitted_signals:
             assert env.session_id == "inferred_session"
@@ -363,26 +367,26 @@ class TestDedupeIdempotence:
             _make_receipt_event(100, 1),
         ]
 
-        # Run 1: 5 signals (A1+A2+A3+B1+B3)
+        # Run 1: 6 signals (A1+A2+A3+B1+B3+D)
         runner.run(events)
-        assert len(runner.emitted_signals) == 5
+        assert len(runner.emitted_signals) == 6
 
         # Run 2 (same events, receipts accumulate — content hashes
         # change for receipt-dependent signals, so only some dedupe)
         runner.emitted_signals.clear()
         runner.run(events)
-        assert len(runner.emitted_signals) == 5
+        assert len(runner.emitted_signals) == 6
 
-        # Both runs wrote to JSONL — 10 lines (5 signals × 2 runs)
+        # Both runs wrote to JSONL — 12 lines (6 signals × 2 runs)
         signals_jsonl = runner.gov_dir / "signals" / "signals.jsonl"
         lines = [l for l in signals_jsonl.read_text().splitlines() if l.strip()]
-        assert len(lines) == 10
+        assert len(lines) == 12
 
         # Ingest — at least some signals dedupe
         store = SignalStore(tmp_path / "dedupe.db")
         result = store.ingest_from_jsonl(signals_jsonl)
         assert result.duplicates >= 1
-        assert store.count() >= 5  # at least 5 unique signals
+        assert store.count() >= 6  # at least 6 unique signals
 
     def test_different_run_ids_produce_different_signals(self, tmp_path):
         """Different run_id → different signal (not deduplicated)."""
@@ -439,11 +443,12 @@ class TestGoldenFixtureToSignal:
         assert result.events_processed > 0
 
         # Full chain emitted
-        assert len(runner.emitted_signals) == 5
+        assert len(runner.emitted_signals) == 6
         signal_ids = {s.signal_id for s in runner.emitted_signals}
         assert signal_ids == {
             "EXPOSURE_PROXY", "SIGMA_RATE", "SILENT_SUPPRESSION",
             "CAPTURE_SELF_DIAGNOSTIC", "POSTERIOR_SHIFT_ATTRIBUTION",
+            "PREDICT_REGIME_PREFLIGHT",
         }
 
         ep = next(s for s in runner.emitted_signals if s.signal_id == "EXPOSURE_PROXY")
@@ -464,11 +469,11 @@ class TestGoldenFixtureToSignal:
         signals_jsonl = runner.gov_dir / "signals" / "signals.jsonl"
         assert signals_jsonl.exists()
 
-        # All 5 ingestable and queryable
+        # All 6 ingestable and queryable
         db_path = tmp_path / "golden.db"
         store = SignalStore(db_path)
         ingested = store.ingest_from_jsonl(signals_jsonl)
-        assert ingested.inserted == 5
+        assert ingested.inserted == 6
 
         b3_rows = store.query(signal_name="POSTERIOR_SHIFT_ATTRIBUTION")
         assert len(b3_rows) == 1
@@ -700,3 +705,41 @@ class TestBSignalChain:
 
         assert b3.values["compute_cost"] == 4
         assert b3.values["n_signals"] == 3
+
+
+# ── D-signal (Phase D) ──────────────────────────────────────────────────────
+
+class TestDSignal:
+    def test_predict_regime_in_emitted_envelopes(self, tmp_path):
+        """PREDICT_REGIME_PREFLIGHT is present in emitted envelopes."""
+        runner = InprocRunner(work_dir=tmp_path, emit_signals=False)
+        events = [
+            _make_gate_check_event(0, 0, "phase d test"),
+            _make_receipt_event(100, 1),
+        ]
+        runner.run(events)
+
+        ctx = SimRunContext(
+            run_id="run-d", session_id="s1", scenario="d_test",
+            window_start="1970-01-01T00:00:00+00:00",
+            window_end="1970-01-01T00:00:01+00:00",
+        )
+        result = derive_signals_from_run(runner.gov_dir, ctx)
+        d_env = next(e for e in result if e.signal_id == "PREDICT_REGIME_PREFLIGHT")
+
+        assert d_env.phase == "2.4D"
+        assert d_env.values.get("predicted_regime") is not None
+        assert d_env.session_id == "s1"
+
+    def test_six_signal_kinds_total(self, tmp_path):
+        """Full chain produces exactly 6 signal kinds."""
+        runner = InprocRunner(work_dir=tmp_path, emit_signals=True)
+        events = [
+            _make_gate_check_event(0, 0, "six kinds"),
+            _make_receipt_event(100, 1),
+        ]
+        runner.run(events)
+
+        signal_ids = {s.signal_id for s in runner.emitted_signals}
+        assert len(signal_ids) == 6
+        assert "PREDICT_REGIME_PREFLIGHT" in signal_ids

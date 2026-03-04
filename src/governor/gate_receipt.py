@@ -177,6 +177,10 @@ class GateReceipt:
     they do NOT affect receipt_id.  They exist so the audit log has the right
     shape before multi-tenant auth is implemented.
 
+    principal_ref is a content-addressed hash of the authenticated principal,
+    format ``sha256:<64 hex chars>``.  Null in v2 — placeholder for v3 crypto
+    binding.  NOT part of receipt_id.
+
     receipt_role IS part of receipt_id — role changes semantics (a measurement
     receipt and a reset receipt with the same payload are not the same thing).
     """
@@ -194,6 +198,7 @@ class GateReceipt:
     auth_method: str = "none"
     receipt_role: str = ROLE_MEASUREMENT
     timing: dict[str, Any] | None = None
+    principal_ref: str | None = None
 
     def __post_init__(self) -> None:
         if self.verdict not in VALID_VERDICTS:
@@ -201,6 +206,13 @@ class GateReceipt:
                 f"Invalid verdict {self.verdict!r}; "
                 f"must be one of {sorted(VALID_VERDICTS)}"
             )
+        if self.principal_ref is not None:
+            import re
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", self.principal_ref):
+                raise ValueError(
+                    f"principal_ref must match 'sha256:<64 hex chars>', "
+                    f"got {self.principal_ref!r}"
+                )
 
     def to_dict(self) -> dict[str, Any]:
         d = {
@@ -219,6 +231,8 @@ class GateReceipt:
         }
         if self.timing is not None:
             d["timing"] = self.timing
+        if self.principal_ref is not None:
+            d["principal_ref"] = self.principal_ref
         return d
 
     def to_json(self) -> str:
@@ -249,6 +263,7 @@ class GateReceipt:
             auth_method=data.get("auth_method", "none"),
             receipt_role=data.get("receipt_role", ROLE_MEASUREMENT),
             timing=data.get("timing"),
+            principal_ref=data.get("principal_ref"),
         )
 
 

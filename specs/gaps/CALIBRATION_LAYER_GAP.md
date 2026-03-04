@@ -1,7 +1,7 @@
 # Gap: Calibration Layer — Normalizing Signals to Comparable Risk Scores
 
 **Branch:** v2.x
-**Status:** gap (critical path for v3 integration)
+**Status:** shipped (v2.5.0 — `signals/calibration_layer.py` + `signals/calibration_methods.py`; retained as design rationale per V2_4A_SPINE.md §8)
 **Depends on:** REPLAY_HARNESS_GAP (validation), DETECTOR_INTEGRATION_SPEC.md, SELF_GOVERNANCE_SPEC.md (baselines), regime.py, correlator_telemetry.py
 **Build phase:** v2.3 (make it measurable — build after replay harness)
 **Blocks:** KAPPA_DIAL_GAP (hard), REGIME_CAPTURE_2D_GAP (hard)

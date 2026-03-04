@@ -1,7 +1,7 @@
 # Gap: Replay Harness — Backtesting Over Stored Runs
 
 **Branch:** v2.x
-**Status:** gap (extends RECEIPT_KERNEL_ROADMAP)
+**Status:** shipped (v2.5.0 — `signals/replay_harness.py` + `signals/replay_sources.py`; retained as design rationale per V2_4A_SPINE.md §8)
 **Depends on:** receipt_kernel (Tier A shipped), receipt_bridge.py, telemetry.py, SIGMA_RATE_GAP (data source)
 **Build phase:** v2.3 (make it measurable)
 **Blocks:** CALIBRATION_LAYER_GAP (validation), KAPPA_DIAL_GAP (cost curve data)

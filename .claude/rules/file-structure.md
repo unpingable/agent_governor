@@ -56,6 +56,7 @@ src/governor/
 ├── taint.py          # TaintIndex, Fingerprint, token-set Jaccard, inverted index, recurrence detection
 ├── sybil.py          # BlocDetector, SybilDetector, NeffResult, ProvenanceVector, OriginBudgetTracker
 ├── research.py       # ResearchLedger, Hypothesis, EntropyMonitor, DominanceMonitor, TimescaleMonitor
+├── egress_gate.py    # EgressGate, EgressRequest, EgressResult, PayloadClassifier, DestinationClassifier, policy bridge
 │
 # Autonomous Execution (Phase A1-A4):
 ├── spine.py          # Spine, SpineManager, locked project structure, proposal verification

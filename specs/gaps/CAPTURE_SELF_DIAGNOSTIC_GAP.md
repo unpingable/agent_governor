@@ -1,7 +1,7 @@
 # Gap: Capture Self-Diagnostic
 
 **Branch:** v2.x
-**Status:** gap (warn-first)
+**Status:** shipped (v2.5.0 — `signals/capture_self_diagnostic.py`; retained as design rationale per V2_4A_SPINE.md §8)
 **Depends on:** EXPOSURE_PROXY_GAP (hard), SILENT_SUPPRESSION_GAP (hard), SIGMA_RATE_GAP (soft), correlator_telemetry.py, evidence_gate.py
 **Build phase:** v2.2 (after instrumentation spine)
 

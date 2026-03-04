@@ -1,6 +1,6 @@
 # GOV-GAP-EGRESS-001: Outbound Data-Flow Policy Gate
 
-Status: `deferred` (v2 hardening — interface required now, full enforcement later)
+Status: `shipped` (v2.5.0 — `egress_gate.py`, 66 tests)
 
 ## Problem
 

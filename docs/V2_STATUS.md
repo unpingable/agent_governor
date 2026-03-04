@@ -152,13 +152,15 @@ envelope is intentionally isomorphic to the eventual v3 schema — v3 promotes a
 |--------|--------|-------------|
 | `predict_regime.py` | PREDICT_REGIME_PREFLIGHT | Weighted heuristic over calibrated A/B envelopes → predicted regime + confidence |
 
-**Deferred:** B3 (POSTERIOR_SHIFT_ATTRIBUTION) — deferred to after Phase C calibration
-proves stable. Not spec'd, not built, not needed for 3.x prerequisite.
+**B3 shipped:** POSTERIOR_SHIFT_ATTRIBUTION (9546b33, fb3a469) — LOO influence
+at the A-signal level, 41 tests. Wired into sim→signal pipeline. Follow-ons:
+C2 calibration integration, dashboard surfacing, threshold tuning via replay.
 
-**Intentionally not wired:** No CLI commands, no daemon RPC, no policy effects. D is a
-pure function. Integration surfaces are a separate lane (post-2.4).
+**Integration lane shipped (post-2.5):** `governor signals preflight` CLI,
+`signals.preflight` daemon RPC, sim pipeline wiring (6 signal kinds). D remains a
+pure function — integration is observe-only.
 
-**Test counts:** 867 tests across A0-A3 + B1-B2 + C1-C2 + D. All green.
+**Test counts:** 908 tests across A0-A3 + B1-B3 + C1-C2 + D. All green.
 
 **Governance abuse audit rubric:** `specs/core/GOVERNANCE_ABUSE_AUDIT.md` — recurring
 anti-capture review discipline. 8 abuse paths, 7-question per-feature test, 3-bucket
@@ -211,6 +213,42 @@ tests. Observe-only, not wired to daemon/CLI.
 side-effect capsules).
 
 ~14,200 tests, all green.
+
+### Post-2.5.0 (untagged)
+
+**Signal provenance tightening** — `default_source_versions()` across all signal builders.
+`source_receipt_ids` monotonic propagation A→B→C→D. `session_id` in Phase D. 22 tests.
+
+**B3 POSTERIOR_SHIFT_ATTRIBUTION** — LOO influence at the A-signal level. Removes each
+Phase A signal, recomputes entire B1, measures delta. Non-conservation by design.
+Suppression (A2) always highest influence when present. Wired into sim→signal pipeline
+(full A→B chain). 41 tests + 25 sim tests.
+
+**Verified Kernel 2.x Hygiene** — HashRef for cross-module hash comparison (gate_receipt
+raw hex vs signals/receipt_kernel sha256:<hex>). Non-canonical `content_hash` renamed to
+`dedup_fingerprint` in 4 modules. 25 tests.
+
+**Provenance Labels** (GOV_PRIM_PROV_001) — Lightweight taint tracking for tool outputs.
+7 source classes, 4 sensitivity hints, max_sensitivity propagation, LabelAssigner with 19
+tool mappings. Wired into evidence gate. 53 tests.
+
+**Egress Gate** (GOV_GAP_EGRESS_001) — Outbound data-flow policy gate. Policy bridge:
+classify → evaluate → receipt. PayloadClassifier (monotone: label > path > regex),
+DestinationClassifier (URL/IP/hostname, internal detection), 6 rules in explicit
+precedence. Receipt redaction (hashes + classes only). 66 tests.
+
+v2.x threat hardening track complete: provenance labels → chain gate → egress gate.
+
+**Phase D Integration Lane** — `governor signals preflight` CLI command (local JSONL
+scan, no daemon dependency). `signals.preflight` daemon RPC. Sim pipeline wired (full
+A→B→D chain, 6 signal kinds). `load_latest_envelopes()` standalone JSONL loader.
+
+**v2 Bake-In Placeholders** — `principal_ref` on GateReceipt (null in v2, validates
+`sha256:<hex>` format). `session` block in `governor.hello` response (principal, auth,
+token — all null/local in v2). `signals_preflight` capability flag. `[security]` daemon
+config section documented.
+
+~14,560 tests, all green.
 
 ---
 
@@ -274,7 +312,7 @@ See `docs/VERSIONING.md` for the coupling rules and contract version table.
 
 If you're returning to this codebase:
 
-1. **Run the tests.** `python3 -m pytest tests/ -v` — ~14,200 tests, all should pass.
+1. **Run the tests.** `python3 -m pytest tests/ -v` — ~14,500 tests, all should pass.
 2. **Read the gate.** `src/governor/evidence_gate.py` is the enforcement surface.
    Everything else feeds into it or reads from it.
 3. **Read the daemon.** `src/governor/daemon.py` is the control plane. 60 RPC methods,
@@ -289,8 +327,8 @@ If you're returning to this codebase:
 If you're extending the instrumentation spine:
 - Spec files: `specs/gaps/V2_4{A,B,C,D}_*.md` — implementation contracts per phase
 - `GAP_BUILD_ORDER.md` defines `SignalEnvelope` schema + cross-cutting contracts
-- B3 (posterior shift attribution) is the next unbuilt signal spec
-- Integration lane (CLI/RPC for D) and sim validation lane are both open
+- B3 (posterior shift attribution) shipped — LOO influence, 41 tests, sim wired
+- D integration lane shipped — `governor signals preflight`, `signals.preflight` RPC, sim pipeline
 
 If you're starting 3.x:
 - v2.4 shipped — calibrated signals, replay, and prediction are available

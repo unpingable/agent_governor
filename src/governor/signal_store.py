@@ -608,3 +608,58 @@ class SignalStore:
         """Total number of indexed signals."""
         row = self._conn.execute("SELECT COUNT(*) as cnt FROM signals").fetchone()
         return row["cnt"] if row else 0
+
+
+# ---------------------------------------------------------------------------
+# Standalone JSONL envelope loader (no SQLite, no SignalStore)
+# ---------------------------------------------------------------------------
+
+
+def load_latest_envelopes(
+    jsonl_path: Path,
+    signal_names: list[str] | tuple[str, ...],
+) -> dict[str, SignalEnvelope]:
+    """Load the latest envelope for each requested signal name from JSONL.
+
+    "Latest" = last occurrence in append order (file is append-only).
+    Forward-scans the entire file, keeping the last-seen per name.  O(file)
+    but the JSONL is small (hundreds of lines, not millions).
+
+    Robustness:
+      - Skips lines that fail json.loads (partial last line from concurrent write).
+      - Skips envelopes whose schema_version doesn't match CURRENT_SCHEMA_VERSION.
+    """
+    from .signals.envelope import CURRENT_SCHEMA_VERSION
+
+    if not jsonl_path.exists():
+        return {}
+
+    wanted = set(signal_names)
+    latest: dict[str, SignalEnvelope] = {}
+
+    try:
+        with open(jsonl_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    logger.debug("load_latest_envelopes: skipping malformed line")
+                    continue
+                sv = data.get("schema_version")
+                if sv != CURRENT_SCHEMA_VERSION:
+                    continue
+                sid = data.get("signal_id", "")
+                if sid not in wanted:
+                    continue
+                try:
+                    env = SignalEnvelope.from_dict(data)
+                    latest[sid] = env
+                except Exception:
+                    logger.debug("load_latest_envelopes: failed to parse envelope for %s", sid)
+    except OSError:
+        logger.warning("load_latest_envelopes: cannot read %s", jsonl_path)
+
+    return latest

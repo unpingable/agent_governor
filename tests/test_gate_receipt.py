@@ -766,3 +766,82 @@ class TestReceiptRole:
     def test_schema_version_bumped_for_role(self):
         """Schema v3: receipt_role added to identity hash."""
         assert RECEIPT_SCHEMA_VERSION == 3
+
+
+# =============================================================================
+# Principal Ref (v3 placeholder)
+# =============================================================================
+
+
+class TestPrincipalRef:
+    """principal_ref: content-addressed hash of authenticated principal."""
+
+    def test_default_is_none(self):
+        r = create_receipt(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+        )
+        assert r.principal_ref is None
+
+    def test_none_survives_round_trip(self):
+        """Default None survives to_dict/from_dict."""
+        r = create_receipt(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+        )
+        d = r.to_dict()
+        assert "principal_ref" not in d  # None omitted
+        r2 = GateReceipt.from_dict(d)
+        assert r2.principal_ref is None
+        assert r == r2
+
+    def test_populated_value_survives_round_trip(self):
+        """sha256:<hex> value survives to_dict/from_dict."""
+        ref = "sha256:" + "ab" * 32
+        r = create_receipt(
+            gate="g", verdict="pass", subject_kind="text",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+        )
+        # Construct directly (create_receipt doesn't take principal_ref)
+        r_with_ref = GateReceipt(
+            receipt_id=r.receipt_id,
+            schema_version=r.schema_version,
+            timestamp=r.timestamp,
+            gate=r.gate,
+            verdict=r.verdict,
+            subject_hash=r.subject_hash,
+            evidence_hash=r.evidence_hash,
+            policy_hash=r.policy_hash,
+            principal_ref=ref,
+        )
+        d = r_with_ref.to_dict()
+        assert d["principal_ref"] == ref
+        r2 = GateReceipt.from_dict(d)
+        assert r2.principal_ref == ref
+
+    def test_malformed_principal_ref_rejected(self):
+        """Junk principal_ref in from_dict raises ValueError."""
+        d = {
+            "receipt_id": "abc123",
+            "schema_version": RECEIPT_SCHEMA_VERSION,
+            "timestamp": "2026-01-01T00:00:00Z",
+            "gate": "g",
+            "verdict": "pass",
+            "subject_hash": "s",
+            "evidence_hash": "e",
+            "policy_hash": "p",
+            "principal_ref": "not-a-valid-hash",
+        }
+        with pytest.raises(ValueError, match="principal_ref must match"):
+            GateReceipt.from_dict(d)
+
+    def test_principal_ref_not_in_receipt_id(self):
+        """principal_ref is metadata — does NOT affect receipt_id."""
+        ref = "sha256:" + "cd" * 32
+        base = dict(gate="g", verdict="pass", subject_kind="text",
+                    subject_bytes=b"same", evidence_bundle={}, gate_config={})
+        r1 = create_receipt(**base)
+        r2_dict = r1.to_dict()
+        r2_dict["principal_ref"] = ref
+        r2 = GateReceipt.from_dict(r2_dict)
+        assert r1.receipt_id == r2.receipt_id

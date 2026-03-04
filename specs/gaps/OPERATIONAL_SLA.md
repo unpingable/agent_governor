@@ -3,7 +3,7 @@
 Availability, latency, and temporal coherence constraints for the governor
 as a control plane.
 
-status: gap spec (3.x architecture, 2.x measurement hooks)
+status: partially shipped (2.x: timing fragment on gate receipts shipped; 3.x SLA contracts: open)
 
 ---
 

@@ -46,7 +46,8 @@ Output schema:
     influence_mass, normalized (bool)
   }
 
-Design authority: B3 was deferred from v2.4B to post-calibration.
+Design authority: B3 was originally deferred from v2.4B to post-calibration;
+shipped in 9546b33 after Phase C proved stable.
 """
 
 from __future__ import annotations

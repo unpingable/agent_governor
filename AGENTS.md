@@ -21,9 +21,12 @@ python3 -m pytest tests/ -q   # Run tests (use python3 on this system)
 ## Tests
 
 ```bash
-python3 -m pytest tests/ -q                    # All tests (~8000+)
+python3 -m pytest tests/ -q                    # All tests (~14,500)
 python3 -m pytest tests/test_<module>.py -v    # Single module
 python3 -m pytest tests/ -k "pattern"          # Pattern match
+python3 -m pytest sim/ -v                      # Sim harness tests (~80)
+python3 -m pytest -m smoke tests/ -v           # Fresh-clone smoke tests
+python3 -m pytest -m scale tests/ -v           # Performance/scale tests
 ```
 
 Always run tests before proposing commits. Never claim tests pass without running them.
@@ -50,18 +53,36 @@ Always run tests before proposing commits. Never claim tests pass without runnin
 ## Repository layout
 
 ```
-src/governor/          Core governor logic (authority plane, ~60 modules)
-src/fiction_governor/   Fiction mode (characters, canon, drift, guardrails)
-src/nonfiction_governor/  Nonfiction mode (corpus, DOI, citations, CFI)
-src/ops_governor/      Ops mode (runbooks, blast radius, preconditions)
-tests/                 All tests (python3 -m pytest)
-docs/                  User-facing documentation
-specs/                 Architectural specs (canonical truth for design)
-integration/           Contract tests (Docker-based, run via bash run.sh)
-vscode-governor/       VS Code extension (TypeScript)
+src/governor/              Core governor logic (~60 modules)
+src/governor/signals/      v2.4 instrumentation spine (Phase A-D)
+src/fiction_governor/       Fiction mode (characters, canon, drift, guardrails)
+src/nonfiction_governor/   Nonfiction mode (corpus, DOI, citations, CFI)
+src/ops_governor/          Ops mode (runbooks, blast radius, preconditions)
+libs/receipt_kernel/       Receipt kernel (stdlib-only, zero external deps)
+sim/governor_sim/          Sim harness (scenario DSL, signal adapter)
+tests/                     All tests (python3 -m pytest)
+docs/                      Documentation
+specs/                     Architectural specs (canonical truth for design)
+integration/               Contract tests (Docker-based, run via bash run.sh)
 ```
 
-The WebUI is a separate repo: `~/git/gov-webui` (github.com/unpingable/governor_webui).
+Extracted repos (separate GitHub repositories):
+- VS Code extension: [github.com/unpingable/vscode-governor](https://github.com/unpingable/vscode-governor)
+- WebUI (Phosphor): [github.com/unpingable/governor_webui](https://github.com/unpingable/governor_webui)
+
+---
+
+## Key entry points
+
+| What | Where |
+|------|-------|
+| Evidence gate (enforcement surface) | `src/governor/evidence_gate.py` |
+| Daemon (JSON-RPC control plane, 65 RPCs) | `src/governor/daemon.py` |
+| Gate receipts (decision receipts) | `src/governor/gate_receipt.py` |
+| Receipt kernel (audit trail) | `libs/receipt_kernel/` |
+| Instrumentation spine (signals) | `src/governor/signals/` |
+| Chain gate (composition enforcement) | `src/governor/chain_gate.py` |
+| CLI | `src/governor/cli.py` |
 
 ---
 
@@ -72,6 +93,18 @@ The WebUI is a separate repo: `~/git/gov-webui` (github.com/unpingable/governor_
 - Type hints everywhere
 - Tests in `tests/test_<module>.py`
 - No free-form string assertions — use typed claims (`ClaimType` enum)
+- License: Apache-2.0
+
+---
+
+## Core design premises
+
+- **NLAI: Natural language is a proposal, not an authority.** Agents provide pointers, the governor verifies and produces receipts.
+- **Gate, not memory.** Write-blocking, not advisory logging.
+- **Two ledgers: facts vs decisions.** Facts are empirical and decay. Decisions are normative and persist.
+- **Typed claims, not prose.** Claims are structured (`ClaimType` enum), not free-form strings.
+- **Agents don't talk to each other.** They talk to the ledger. No agent-to-agent messaging.
+- **Concurrency is transactional.** Atomic or nothing.
 
 ---
 

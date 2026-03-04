@@ -1529,3 +1529,92 @@ class TestSignalEmitFailed:
             error_message=long_msg,
         )
         assert len(env.values["error_message"]) == 500
+
+
+# =============================================================================
+# load_latest_envelopes (standalone JSONL loader)
+# =============================================================================
+
+
+class TestLoadLatestEnvelopes:
+
+    def test_happy_path(self, tmp_path):
+        """Loads the latest envelope per requested signal name."""
+        from governor.signal_store import load_latest_envelopes
+
+        e1 = _envelope(signal_id="EXPOSURE_PROXY", value=0.5, emitted_at="2026-01-01T00:00:00Z")
+        e2 = _envelope(signal_id="EXPOSURE_PROXY", value=0.8, emitted_at="2026-01-01T01:00:00Z")
+        e3 = _envelope(signal_id="SIGMA_RATE", value=0.1, emitted_at="2026-01-01T00:30:00Z")
+
+        jsonl = tmp_path / "signals.jsonl"
+        _write_jsonl(jsonl, [e1, e2, e3])
+
+        result = load_latest_envelopes(jsonl, ["EXPOSURE_PROXY", "SIGMA_RATE"])
+        assert len(result) == 2
+        assert result["EXPOSURE_PROXY"].value == 0.8  # latest
+        assert result["SIGMA_RATE"].value == 0.1
+
+    def test_empty_file(self, tmp_path):
+        """Empty JSONL returns empty dict."""
+        from governor.signal_store import load_latest_envelopes
+
+        jsonl = tmp_path / "signals.jsonl"
+        jsonl.write_text("")
+
+        result = load_latest_envelopes(jsonl, ["EXPOSURE_PROXY"])
+        assert result == {}
+
+    def test_missing_file(self, tmp_path):
+        """Missing JSONL returns empty dict."""
+        from governor.signal_store import load_latest_envelopes
+
+        result = load_latest_envelopes(tmp_path / "nonexistent.jsonl", ["EXPOSURE_PROXY"])
+        assert result == {}
+
+    def test_partial_line_tolerance(self, tmp_path):
+        """Partial last line (no closing brace) is skipped gracefully."""
+        from governor.signal_store import load_latest_envelopes
+
+        e1 = _envelope(signal_id="EXPOSURE_PROXY", value=0.5, emitted_at="2026-01-01T00:00:00Z")
+        jsonl = tmp_path / "signals.jsonl"
+        _write_jsonl(jsonl, [e1])
+        # Append a partial line
+        with open(jsonl, "a") as f:
+            f.write('{"signal_id": "EXPOSURE_PROXY", "broken')
+
+        result = load_latest_envelopes(jsonl, ["EXPOSURE_PROXY"])
+        assert len(result) == 1
+        assert result["EXPOSURE_PROXY"].value == 0.5
+
+    def test_schema_version_filtering(self, tmp_path):
+        """Envelopes with non-current schema_version are skipped."""
+        from governor.signal_store import load_latest_envelopes
+
+        e1 = _envelope(signal_id="EXPOSURE_PROXY", value=0.5, emitted_at="2026-01-01T00:00:00Z")
+        jsonl = tmp_path / "signals.jsonl"
+        _write_jsonl(jsonl, [e1])
+
+        # Append an envelope with a different schema version
+        import json as _json
+        d = e1.to_dict()
+        d["schema_version"] = "0.0.0-bogus"
+        d["signal_id"] = "SIGMA_RATE"
+        with open(jsonl, "a") as f:
+            f.write(_json.dumps(d, sort_keys=True) + "\n")
+
+        result = load_latest_envelopes(jsonl, ["EXPOSURE_PROXY", "SIGMA_RATE"])
+        assert "EXPOSURE_PROXY" in result
+        assert "SIGMA_RATE" not in result  # filtered by schema version
+
+    def test_only_requested_names(self, tmp_path):
+        """Only returns envelopes for requested signal names."""
+        from governor.signal_store import load_latest_envelopes
+
+        e1 = _envelope(signal_id="EXPOSURE_PROXY", value=0.5, emitted_at="2026-01-01T00:00:00Z")
+        e2 = _envelope(signal_id="SIGMA_RATE", value=0.1, emitted_at="2026-01-01T00:00:00Z")
+        jsonl = tmp_path / "signals.jsonl"
+        _write_jsonl(jsonl, [e1, e2])
+
+        result = load_latest_envelopes(jsonl, ["EXPOSURE_PROXY"])
+        assert len(result) == 1
+        assert "SIGMA_RATE" not in result

@@ -580,9 +580,10 @@ Phase A shipped (A0–A3 all implemented and tested). Downstream:
   See `V2_4B_CAPTURE_SELF_DIAGNOSTIC.md`.
 - **B2** `DECISION_EVIDENCE_LAG` — shipped. Per-decision timing classification
   from gate receipts. See `V2_4B_DECISION_EVIDENCE_LAG.md`.
-- **B3** `POSTERIOR_SHIFT_ATTRIBUTION` — deferred to post-C. Heuristic
-  decomposition (higher risk, needs calibration substrate first).
-- **C** Replay/calibration harness — next. Hardens all B thresholds.
+- **B3** `POSTERIOR_SHIFT_ATTRIBUTION` — shipped (9546b33). LOO influence
+  at the A-signal level, 41 tests. Follow-ons: calibration pass-through
+  (C2 integration), dashboard surfacing, threshold tuning via replay.
+- **C** Replay/calibration harness — shipped. Hardens all B thresholds.
 
 ### Phase B Layering Note
 
@@ -592,8 +593,8 @@ B1 and B2 have different input substrates by design:
   **Phase A signal envelopes** (layered — consumes A1/A2/A3 outputs)
 - **B2** (DECISION_EVIDENCE_LAG): receipt-native temporal support diagnostic
   over **gate receipt pairs** (parallel — reads receipt store, not A signals)
-- **B3** (POSTERIOR_SHIFT_ATTRIBUTION): likely receipt-native + derived mix
-  (design pending)
+- **B3** (POSTERIOR_SHIFT_ATTRIBUTION): LOO influence over A-signal envelopes
+  (shipped — `signals/posterior_shift.py`, 41 tests)
 
 "Phase B consumes Phase A only" is NOT a rule. Each B signal declares its
 own input contract. B1 happens to layer on A; B2 is parallel by necessity

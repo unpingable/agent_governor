@@ -1,7 +1,7 @@
 # Gap: predict_regime Preflight
 
 **Branch:** v2.x
-**Status:** gap (advisory)
+**Status:** shipped (v2.5.0 — `signals/predict_regime.py`, 72 tests; retained as design rationale per V2_4A_SPINE.md §8)
 **Depends on:** CALIBRATION_LAYER_GAP (for calibrated risk scores), REPLAY_HARNESS_GAP (for validation), SCALAR_COLLAPSE_GAP.md §1, regime.py, auto_tuning.py
 **Build phase:** v2.4 (preflight as lint — last v2 item)
 

@@ -1,7 +1,7 @@
 # Gap: σ-rate — Proxy/True Divergence Rate
 
 **Branch:** v2.x
-**Status:** gap (observe-first)
+**Status:** shipped (v2.5.0 — `signals/sigma_rate.py`; retained as design rationale per V2_4A_SPINE.md §8)
 **Depends on:** correlator_telemetry.py, SELF_GOVERNANCE_SPEC.md (contradiction_rate config)
 **Build phase:** v2.1 (instrumentation spine — build third, after SILENT_SUPPRESSION + EXPOSURE_PROXY)
 

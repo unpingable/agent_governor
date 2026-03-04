@@ -1,7 +1,7 @@
 # Gap: Silent Suppression — Ledger Heartbeat & Starvation Detection
 
 **Branch:** v2.x
-**Status:** gap (integrity)
+**Status:** shipped (v2.5.0 — `signals/silent_suppression.py`; retained as design rationale per V2_4A_SPINE.md §8)
 **Depends on:** evidence_gate.py, receipt_bridge.py, telemetry.py
 **Build phase:** v2.1 (instrumentation spine — build FIRST)
 **Blocks:** CAPTURE_SELF_DIAGNOSTIC_GAP (hard — can't diagnose capture if governor is unplugged)

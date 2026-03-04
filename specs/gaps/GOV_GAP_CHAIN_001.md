@@ -1,6 +1,6 @@
 # GOV-GAP-CHAIN-001: Composition-Aware Capability Gating
 
-Status: `deferred` (v2 hardening — hook point required now, full engine later)
+Status: `shipped` (v2.5.0 — composition-aware gating via `governed_activity.py` + `verifier_gate.py`)
 
 ## Problem
 

@@ -247,7 +247,11 @@ def load_daemon_config(governor_dir: Path) -> dict[str, str]:
     """Load daemon config from $GOVERNOR_DIR/daemon.conf if it exists.
 
     Returns a flat dict of key-value pairs. Env vars override config file.
-    Config file is INI format with [backend] and [daemon] sections.
+    Config file is INI format with sections:
+      - [backend]  — backend type, API keys, model names
+      - [daemon]   — allow_mutating_rpc, socket path
+      - [security] — v3 placeholder (commented out in v2; will hold
+                     auth_method, principal_ref hashing, mTLS config)
     """
     config_path = governor_dir / "daemon.conf"
     result: dict[str, str] = {}
@@ -882,6 +886,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 "receipts": True,
                 "scars": True,
                 "commit": True,
+                "signals_preflight": True,
                 "backend": backend_info,
             },
             "governor": {
@@ -891,6 +896,13 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 "mode": state.mode,
                 "initialized": initialized,
                 "session_id": state.session_id,
+            },
+            "session": {
+                "session_id": state.session_id,
+                "principal": None,           # v3: authenticated identity
+                "principal_ref": None,       # v3: H(principal) — matches receipt field
+                "auth_method": "local",      # v3: "mtls" | "token" | "local"
+                "session_token": None,       # v3: cryptographic session token
             },
         }
 
@@ -2890,10 +2902,36 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         jsonl_path = state.governor_dir / "signals" / "signals.jsonl"
         return store.stats(jsonl_path=jsonl_path if jsonl_path.exists() else None)
 
+    async def signals_preflight(params: dict) -> dict:
+        """Predict regime from latest signal envelopes in JSONL."""
+        from .signal_store import load_latest_envelopes
+        from .signals.predict_regime import predict_regime_preflight
+
+        all_expected = [
+            "EXPOSURE_PROXY", "SILENT_SUPPRESSION", "SIGMA_RATE",
+            "CAPTURE_SELF_DIAGNOSTIC", "DECISION_EVIDENCE_LAG",
+            "POSTERIOR_SHIFT_ATTRIBUTION",
+        ]
+
+        jsonl_path = state.governor_dir / "signals" / "signals.jsonl"
+        envelopes = load_latest_envelopes(jsonl_path, all_expected)
+
+        envelope = predict_regime_preflight(
+            list(envelopes.values()),
+            session_id=state.session_id,
+        )
+
+        return {
+            "ok": True,
+            "envelope": envelope.to_dict(),
+            "inputs": len(envelopes),
+        }
+
     dispatcher.register("signals.query", signals_query)
     dispatcher.register("signals.get", signals_get)
     dispatcher.register("signals.tail", signals_tail)
     dispatcher.register("signals.stats", signals_stats)
+    dispatcher.register("signals.preflight", signals_preflight)
 
 
 # =============================================================================

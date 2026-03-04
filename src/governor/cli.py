@@ -8619,6 +8619,54 @@ def signals_rebuild(ctx, confirm):
         store.close()
 
 
+@signals_cmd.command("preflight")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def signals_preflight(ctx, as_json):
+    """Predict operational regime from latest signal envelopes (local JSONL scan)."""
+    import json as _json
+
+    gov_dir = ensure_initialized(ctx)
+    from .signal_store import load_latest_envelopes
+    from .signals.predict_regime import predict_regime_preflight
+
+    # Expected Phase A+B signal names for preflight
+    all_expected = [
+        "EXPOSURE_PROXY", "SILENT_SUPPRESSION", "SIGMA_RATE",
+        "CAPTURE_SELF_DIAGNOSTIC", "DECISION_EVIDENCE_LAG",
+        "POSTERIOR_SHIFT_ATTRIBUTION",
+    ]
+
+    jsonl_path = gov_dir / "signals" / "signals.jsonl"
+    envelopes = load_latest_envelopes(jsonl_path, all_expected)
+
+    from .session import get_session_id
+    envelope = predict_regime_preflight(
+        list(envelopes.values()),
+        session_id=get_session_id(),
+    )
+
+    n_inputs = len(envelopes)
+    result = {
+        "ok": True,
+        "envelope": envelope.to_dict(),
+        "inputs": n_inputs,
+    }
+
+    if as_json:
+        click.echo(_json.dumps(result, indent=2))
+    else:
+        vals = envelope.values
+        regime = vals.get("predicted_regime", "unknown")
+        confidence = vals.get("confidence", 0.0)
+        risk = envelope.value if envelope.value is not None else 0.0
+        click.echo(
+            f"Predicted regime: {regime.upper()} "
+            f"(confidence: {confidence:.2f}, risk: {risk:.2f}, "
+            f"inputs: {n_inputs}/{len(all_expected)})"
+        )
+
+
 # =============================================================================
 # Config Profiles
 # =============================================================================

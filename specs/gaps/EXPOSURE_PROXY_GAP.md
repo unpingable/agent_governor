@@ -1,7 +1,7 @@
 # Gap: Exposure Proxy — Non-Gameable Exposure Measurement
 
 **Branch:** v2.x
-**Status:** gap (foundational for capture detection)
+**Status:** shipped (v2.5.0 — `signals/exposure_proxy.py`; retained as design rationale per V2_4A_SPINE.md §8)
 **Depends on:** correlator_telemetry.py, telemetry.py, evidence_gate.py
 **Build phase:** v2.1 (instrumentation spine — build second, after SILENT_SUPPRESSION)
 **Blocks:** CAPTURE_SELF_DIAGNOSTIC_GAP (hard)

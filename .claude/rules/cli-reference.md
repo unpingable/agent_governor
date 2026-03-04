@@ -232,6 +232,7 @@ governor signals tail                 # Show newest signals
 governor signals explain <hash>       # Full envelope details [--json]
 governor signals stats                # Index health and counts [--json]
 governor signals rebuild [--confirm]  # Drop and rebuild SQLite from JSONL
+governor signals preflight           # Predict regime from latest signals [--json]
 
 # Config Profiles (named governance presets)
 governor profile list                 # List available profiles (builtin + custom)

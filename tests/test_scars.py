@@ -32,6 +32,7 @@ from governor.scars import (
     DEFAULT_ANNEAL_FLOOR,
     create_scar_ledger,
     classify_failure,
+    _normalize_fingerprint_field,
 )
 
 
@@ -1763,3 +1764,139 @@ class TestScarCliJson:
         assert "health" in data
         assert "total_failures" in data
         assert isinstance(data["total_failures"], int)
+
+
+# =============================================================================
+# Fingerprint Normalization
+# =============================================================================
+
+
+class TestFingerprintNormalization:
+    """Normalization prevents case/whitespace variants from creating separate scars."""
+
+    def test_case_folding_same_scar(self):
+        """'Timeout' and 'timeout' produce the same normalized fingerprint."""
+        s1 = Scar(scar_id="s1", region="r", failure_kind="Timeout")
+        s2 = Scar(scar_id="s2", region="r", failure_kind="timeout")
+        assert s1.failure_kind == s2.failure_kind == "timeout"
+        assert s1.fingerprint == s2.fingerprint
+
+    def test_whitespace_stripped(self):
+        """Leading/trailing whitespace is removed."""
+        s = Scar(scar_id="s1", region="r", failure_kind=" timeout ")
+        assert s.failure_kind == "timeout"
+
+    def test_spaces_to_underscores(self):
+        """Internal spaces become underscores."""
+        s = Scar(scar_id="s1", region="r", failure_kind="net timeout")
+        assert s.failure_kind == "net_timeout"
+
+    def test_normalized_check_admissible(self):
+        """check_admissible normalizes input to match normalized scar."""
+        ledger = create_scar_ledger()
+        ledger.record_failure("r", failure_kind="timeout", action_type="write")
+        # Query with different casing — should still match
+        admissible, cost, scar = ledger.check_admissible("r", failure_kind="TIMEOUT", action_type="Write")
+        assert scar is not None
+        assert cost > 1.0
+
+    def test_failure_event_normalized(self):
+        """FailureEvent normalizes fingerprint fields on init."""
+        e = FailureEvent(event_id="e1", failure_kind=" Net Timeout ", action_type="WRITE")
+        assert e.failure_kind == "net_timeout"
+        assert e.action_type == "write"
+
+    def test_normalize_helper(self):
+        """_normalize_fingerprint_field handles edge cases."""
+        assert _normalize_fingerprint_field("") == ""
+        assert _normalize_fingerprint_field("  TIMEOUT  ") == "timeout"
+        assert _normalize_fingerprint_field("net\ttimeout") == "net_timeout"
+        assert _normalize_fingerprint_field("a  b   c") == "a_b_c"
+
+
+# =============================================================================
+# Evidence Direction
+# =============================================================================
+
+
+class TestEvidenceDirection:
+    """Evidence targeting: narrow evidence must NOT anneal broad scars."""
+
+    def test_narrow_evidence_does_not_anneal_broad_scar(self):
+        """Key fix: proving 'timeout/write works' doesn't prove 'everything works'."""
+        ledger = create_scar_ledger()
+        # Create a broad scar (no failure_kind, no action_type)
+        ledger.record_failure("r")
+        assert len(ledger.scars) == 1
+        scar = list(ledger.scars.values())[0]
+        initial_evidence = scar.evidence_count
+
+        # Narrow evidence: specific failure_kind + action_type
+        result = ledger.record_stability_evidence("r", failure_kind="timeout", action_type="write")
+        # Narrow evidence should NOT anneal a broad scar
+        assert result is False
+        assert scar.evidence_count == initial_evidence
+
+    def test_narrow_evidence_does_not_anneal_different_narrow_scar(self):
+        """Proving 'timeout/write' doesn't anneal 'auth_failure/write'."""
+        ledger = create_scar_ledger()
+        ledger.record_failure("r", failure_kind="auth_failure", action_type="write")
+        scar = list(ledger.scars.values())[0]
+        initial_evidence = scar.evidence_count
+
+        result = ledger.record_stability_evidence("r", failure_kind="timeout", action_type="write")
+        assert result is False
+        assert scar.evidence_count == initial_evidence
+
+    def test_broad_evidence_anneals_narrow_scar(self):
+        """Broad evidence (no fields) anneals any scar in region (backward compat)."""
+        ledger = create_scar_ledger()
+        ledger.record_failure("r", failure_kind="timeout", action_type="write")
+        scar = list(ledger.scars.values())[0]
+        initial_evidence = scar.evidence_count
+
+        result = ledger.record_stability_evidence("r")
+        assert result is True
+        assert scar.evidence_count == initial_evidence + 1
+
+    def test_matching_evidence_anneals_matching_scar(self):
+        """Evidence with same fingerprint anneals matching scar."""
+        ledger = create_scar_ledger()
+        ledger.record_failure("r", failure_kind="timeout", action_type="write")
+        scar = list(ledger.scars.values())[0]
+        initial_evidence = scar.evidence_count
+
+        result = ledger.record_stability_evidence("r", failure_kind="timeout", action_type="write")
+        assert result is True
+        assert scar.evidence_count == initial_evidence + 1
+
+
+# =============================================================================
+# Normalization Cross-Cutting
+# =============================================================================
+
+
+class TestNormalizationCrossCutting:
+    """Normalization + fingerprinting interact correctly."""
+
+    def test_normalized_retighten(self):
+        """Same kind with different case triggers retighten, not new scar."""
+        ledger = create_scar_ledger()
+        ledger.record_failure("r", failure_kind="Timeout", action_type="Write")
+        assert len(ledger.scars) == 1
+        ledger.record_failure("r", failure_kind="TIMEOUT", action_type="write")
+        # Should retighten, not create second scar
+        assert len(ledger.scars) == 1
+
+    def test_normalized_evidence_targets_normalized_scar(self):
+        """Evidence with different casing targets the right scar."""
+        ledger = create_scar_ledger()
+        ledger.record_failure("r", failure_kind="Net Timeout", action_type="WRITE")
+        scar = list(ledger.scars.values())[0]
+        assert scar.failure_kind == "net_timeout"
+        assert scar.action_type == "write"
+
+        initial = scar.evidence_count
+        result = ledger.record_stability_evidence("r", failure_kind="NET TIMEOUT", action_type="write")
+        assert result is True
+        assert scar.evidence_count == initial + 1

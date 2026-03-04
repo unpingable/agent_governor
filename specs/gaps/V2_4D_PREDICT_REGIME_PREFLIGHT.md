@@ -1,7 +1,7 @@
 # V2_4D_PREDICT_REGIME_PREFLIGHT
 
 **Phase D: observe-only pre-session regime prediction from calibrated signals**
-**Status:** locked
+**Status:** shipped (v2.5.0 — `signals/predict_regime.py`, 72 tests)
 **Scope:** pure derivation over calibrated A/B envelopes. No gating, no policy, no IO.
 **Design authority:** extends v2.4 instrumentation spine (A→B→C→D).
 

@@ -2,7 +2,7 @@
 
 A pure, deterministic, mechanically verifiable core for receipt math.
 
-status: gap spec (3.x architecture, 2.x hygiene patches identified)
+status: partially shipped (2.x hygiene: HashRef shipped 25 tests, NaN hardening shipped 5 tests; 3.x architecture: open)
 
 ---
 

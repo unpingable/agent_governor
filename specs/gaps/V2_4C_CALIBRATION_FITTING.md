@@ -1,7 +1,7 @@
 # V2_4C_CALIBRATION_FITTING
 
 **Phase C2 (part 2): calibration param-set fitting from replay corpus**
-**Status:** locked
+**Status:** shipped (v2.5.0 — `signals/calibration_fitting.py`)
 **Scope:** offline fitting only. Produces frozen `CalibrationParamSet` artifacts for C2 apply path.
 **Design authority:** extends `V2_4C_SPINE.md §3` (C2 apply shipped at `bcfa564`).
 

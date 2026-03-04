@@ -3,7 +3,7 @@
 Receipted side-effect capsules for workflow orchestration. Deterministic
 orchestration calls non-deterministic actions through a governed gate.
 
-status: gap spec (v2.x foundation + v3 extensions, v2 types implemented)
+status: partially shipped (v2.x foundation shipped — `governed_activity.py`, 110 tests; v3 orchestration extensions: open)
 
 ---
 

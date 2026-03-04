@@ -45,7 +45,7 @@
     "CAPTURE_SELF_DIAGNOSTIC"
   ],
   "source_versions": {
-    "governor": "2.5.0",
+    "governor": "2.6.0",
     "envelope_schema": "0.4.0"
   },
   "derivation": "derived",

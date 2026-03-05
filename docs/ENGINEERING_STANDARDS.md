@@ -119,6 +119,7 @@ These rules are mechanically enforced by `tests/test_standards.py`:
 | `semantic_stability` | `STABILITY_SCHEMA_VERSION` | `StabilityAuditResult` |
 | `clud` | `CLUD_SCHEMA_VERSION` | `CludResult` |
 | `status_rollup` | `ROLLUP_SCHEMA_VERSION` | `StatusRollup` |
+| `context_manifest` | `MANIFEST_SCHEMA_VERSION` | `ContextManifest` |
 
 ### Known Gaps
 

@@ -288,6 +288,12 @@ class ContextManifest:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ContextManifest:
+        v = data.get("manifest_version", 1)
+        if v > MANIFEST_SCHEMA_VERSION:
+            raise ValueError(
+                f"Unknown manifest schema version {v} (supported: "
+                f"{MANIFEST_SCHEMA_VERSION}). Upgrade governor."
+            )
         regions = tuple(
             ContextRegion.from_dict(r) for r in data.get("regions", [])
         )

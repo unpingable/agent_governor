@@ -76,6 +76,14 @@ SCHEMA_VERSIONED_TYPES = [
         # StatusRollup is built via build_status_rollup(gov_dir), not directly
         "factory": None,
     },
+    {
+        "module": "governor.context_manifest",
+        "class_name": "ContextManifest",
+        "constant": "MANIFEST_SCHEMA_VERSION",
+        # ContextManifest uses manifest_version, not schema_version
+        "version_field": "manifest_version",
+        "factory": None,
+    },
 ]
 
 
@@ -115,7 +123,8 @@ class TestSchemaVersionDiscipline:
         current = getattr(mod, entry["constant"])
         # Build a minimal dict that has a future version
         # (the rejection must happen BEFORE field parsing)
-        future_dict = {"schema_version": current + 1}
+        version_field = entry.get("version_field", "schema_version")
+        future_dict = {version_field: current + 1}
         with pytest.raises(ValueError, match="newer than supported|Unknown.*schema.*version"):
             cls.from_dict(future_dict)
 

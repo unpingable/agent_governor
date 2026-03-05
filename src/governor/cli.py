@@ -1608,8 +1608,10 @@ def hook_bypass(ctx: click.Context) -> None:
 @click.option("--check-continuity", "-c", is_flag=True, help="Check file changes for continuity violations")
 @click.option("--interactive", "-i", is_flag=True, help="Interactive mode: offer fix/revise/proceed on violations")
 @click.option("--mode", "wrap_mode", type=click.Choice(["code", "fiction", "nonfiction"]), default="code", help="Context mode for continuity checking")
+@click.option("--receipt-out", default=None, help="Emit CI receipt to this path (file or directory)")
+@click.option("--ci-kind", default=None, help="CI step kind (unit_tests, lint, typecheck, build, security_scan, integration_tests, e2e_tests, coverage)")
 @click.pass_context
-def wrap(ctx: click.Context, command: tuple[str, ...], auto_approve: bool, check_continuity: bool, interactive: bool, wrap_mode: str) -> None:
+def wrap(ctx: click.Context, command: tuple[str, ...], auto_approve: bool, check_continuity: bool, interactive: bool, wrap_mode: str, receipt_out: str | None, ci_kind: str | None) -> None:
     """
     Wrap an agent command with governor enforcement.
 
@@ -1618,13 +1620,28 @@ def wrap(ctx: click.Context, command: tuple[str, ...], auto_approve: bool, check
 
     With --check-continuity, file changes are checked against anchors.
     With --interactive, blocking violations trigger the resolution flow.
+    With --receipt-out, emit a CI receipt bundle (requires --ci-kind).
 
     Examples:
         governor wrap -- python script.py
         governor wrap --auto-approve -- claude-code
         governor wrap -- npm run build
         governor wrap --check-continuity --interactive -- claude-code
+        governor wrap --receipt-out /tmp/ci/ --ci-kind unit_tests -- pytest
     """
+    # CI receipt mode — early return, no AgentWrapper
+    if receipt_out is not None:
+        if ci_kind is None:
+            click.echo("Error: --ci-kind is required with --receipt-out", err=True)
+            ctx.exit(1)
+            return
+        from .ci import ci_wrap
+        result = ci_wrap(list(command), ci_kind, Path(receipt_out))
+        if result.receipt:
+            click.echo(f"Receipt: {result.receipt.receipt_id} [{result.receipt.verdict}]", err=True)
+        ctx.exit(result.exit_code)
+        return
+
     from .wrapper import wrap_agent, AgentWrapper
 
     root = Path(ctx.obj["root"])
@@ -18948,6 +18965,64 @@ def replay_record_receipts_cmd(ctx: click.Context, scenario: str, out: str | Non
     click.echo(f"Artifact written: {artifact.path}")
     click.echo(f"  Events: {len(artifact.events)}")
     click.echo(f"  Artifact ID: {artifact.header.artifact_id}")
+
+
+# ---------------------------------------------------------------------------
+# CI Lane — receipt-producing CI wrapper and verifier
+# ---------------------------------------------------------------------------
+
+@cli.group("ci")
+@click.pass_context
+def ci_group(ctx: click.Context) -> None:
+    """CI lane: verify receipt bundles against policy."""
+    pass
+
+
+@ci_group.command("verify")
+@click.argument("receipt_path", type=click.Path(exists=True))
+@click.option("--policy", "policy_file", type=click.Path(exists=True), default=None, help="JSON policy file")
+@click.option("--receipt-out", default=None, help="Write meta-receipt to this path")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def ci_verify_cmd(ctx: click.Context, receipt_path: str, policy_file: str | None, receipt_out: str | None, as_json: bool) -> None:
+    """Verify CI receipt bundles against policy.
+
+    Checks that all required receipts exist, pass, and agree on git SHA.
+
+    Exit codes: 0 = PASS, 1 = BLOCK, 2 = internal error.
+    """
+    from .ci import CiPolicy, ci_verify
+
+    try:
+        policy = None
+        if policy_file:
+            policy = CiPolicy.from_dict(json.loads(Path(policy_file).read_text()))
+
+        result = ci_verify(
+            Path(receipt_path),
+            policy,
+            receipt_out=Path(receipt_out) if receipt_out else None,
+        )
+    except Exception as exc:
+        click.echo(f"CI Verify: ERROR ({exc})", err=True)
+        ctx.exit(2)
+        return
+
+    if as_json:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        if result.ok:
+            sha_display = result.git_sha[:7] if result.git_sha else "unknown"
+            click.echo(
+                f"CI Verify: PASS ({result.receipts_loaded} receipts, "
+                f"kinds: {', '.join(result.kinds_found)}, sha: {sha_display})"
+            )
+        else:
+            click.echo("CI Verify: BLOCK")
+            for err in result.errors:
+                click.echo(f"  - {err}")
+
+    ctx.exit(0 if result.ok else 1)
 
 
 # ---------------------------------------------------------------------------

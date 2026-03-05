@@ -44,7 +44,16 @@ governor wrap -- <cmd>           # Wrap agent command with enforcement
 governor wrap --auto-approve -- <cmd>  # Auto-approve in exploratory mode
 governor wrap --check-continuity -- <cmd>  # Check file changes for violations
 governor wrap -c -i -- <cmd>     # Interactive mode: offer fix/revise/proceed
+governor wrap --receipt-out <path> --ci-kind <kind> -- <cmd>  # CI receipt mode
+    # ci-kind: unit_tests, lint, typecheck, build, security_scan,
+    #          integration_tests, e2e_tests, coverage
 governor changes                 # Show file approval status
+
+# CI Lane (receipt policy verification)
+governor ci verify <receipt_path>          # Verify receipts against default policy
+governor ci verify <receipt_path> --policy <file>  # Custom JSON policy
+governor ci verify <receipt_path> --receipt-out <path>  # Write meta-receipt
+governor ci verify <receipt_path> --json   # JSON output
 
 # MCP Server
 governor mcp serve               # Run MCP server for Claude integration

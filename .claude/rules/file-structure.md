@@ -44,6 +44,7 @@ src/governor/
 ├── strict.py         # StrictModeGate, ClaimCategory, CommitLevel, fail-closed governance
 ├── drift.py          # DriftDetector, PremiseQuarantine, temporal asymmetry defense
 ├── claim_diff.py     # ClaimDiffer, ClaimSnapshot, LedgerSnapshot, confidence drift, provenance laundering
+├── ci.py             # CI lane: ci_wrap, ci_verify, CiReceiptBundle, CiPolicy, GitState
 ├── claim_signals.py  # SignalExtractor, SignalMatch, ExtractionResult, implicit claim detection
 ├── profiles.py       # ProfileManager, ProfileSettings, named governance presets
 ├── dissent.py        # DissentLedger, Objection, commit gating, confidence trajectories

@@ -225,4 +225,5 @@ libs/receipt_kernel/
 # Extracted repos (separate GitHub repositories):
 # vscode-governor → github.com/unpingable/vscode-governor
 # gov-webui       → github.com/unpingable/governor_webui
+# clerk           → github.com/unpingable/clerk (Electron desktop app, depends on agent_gov)
 ```

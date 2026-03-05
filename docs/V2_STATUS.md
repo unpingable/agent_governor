@@ -322,10 +322,13 @@ Four gap specs are explicitly 3.x:
 | [vscode-governor](https://github.com/unpingable/vscode-governor) | 2.2.0 | hard (mirrors major.minor) |
 | [guvnah](https://github.com/unpingable/guvnah) | 2.3.2 | hard (mirrors major.minor) |
 | [gov-webui (Phosphor)](https://github.com/unpingable/governor_webui) | 0.4.0 | loose (targets contract v1) |
+| [clerk](https://github.com/unpingable/clerk) | 0.1.0 | dependent (uses agent_gov as backend) |
 
 Note: maude/guvnah are still on 2.3.2. CI lane and context manifest add new CLI
 commands and daemon capabilities but don't change existing contracts. Clients don't
-need to bump unless they want CI verification or manifest inspection.
+need to bump unless they want CI verification or manifest inspection. Clerk is a
+desktop assistant ("keeps receipts") targeting normie-friendly onboarding; push-button
+install is a roadmap item.
 
 **Sanity check** (run these to verify you're not in version hell):
 

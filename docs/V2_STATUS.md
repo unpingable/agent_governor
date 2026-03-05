@@ -1,6 +1,6 @@
 # V2 Status
 
-As of 2.5.0. This document is the boundary between "shipped" and "next."
+As of 2.6.0. This document is the boundary between "shipped" and "next."
 
 ---
 
@@ -250,6 +250,38 @@ config section documented.
 
 ~14,560 tests, all green.
 
+### 2.6.0 — CI Lane + Context Manifest
+
+**CI Lane** — Receipt-producing CI wrapper and policy verifier. `ci_wrap()` runs commands
+via temp-file capture, emits self-contained `CiReceiptBundle` (evidence inlined).
+`ci_verify()` checks policy: required kinds, all-pass, SHA consistency, clean state,
+conflicting-ID detection. Closed `ci_kind` vocabulary (8 kinds). Fail-open wrap, fail-closed
+verify. CLI: `governor wrap --receipt-out --ci-kind`, `governor ci verify`. GitHub Actions
+workflow wired. 43 tests.
+
+**Context Manifest (Phase 1)** — Prompt assembly as governed artifact. Instruments system
+prompt builds with three identity kinds: `prompt_hash` (content), `manifest_hash` (structure,
+excludes volatile fields), `build_id` (event UUID). Region metadata from lookup table (kind,
+source_class, sensitivity, mutability, capabilities). JSONL persistence with fcntl.flock.
+Gate receipts: `context_build` (verdict=observe) + `context_build_failed` (verdict=warn,
+failure-path artifacting). Golden determinism tests (pinned hashes). Hash-only storage by
+default — no bodies in Phase 1. Wired into GovernorHooks._build_system_prompt(). CLI:
+`governor context manifest [--json] [--limit N] [--id ID]`. 49 tests.
+
+**Scar Fingerprints** — Action-level novelty gate. `failure_kind` and `action_type` added to
+scar fingerprint. Different failure modes in the same region create separate scars with
+independent stiffness and evidence lifecycles. Broader scars apply to narrower queries, not
+vice versa. Most restrictive scar wins. Full backward compatibility (empty fields = legacy
+region-only matching). 161 tests (up from 89).
+
+**Gap specs** — Context manifest phases 2-3 (GOV_GAP_CONTEXT_MANIFEST_001: enforcement,
+attestation, body store). Disclosure/standing model (GOV_GAP_DISCLOSURE_STANDING_001:
+gradients with cliffs, field classification, contestation protocol, retention classes,
+SaaS hardening — 17 invariants + 6 tripwires). CI lane gaps (GOV_GAP_CI_LANE_001). SLSA
+alignment (GOV_GAP_SLSA_001).
+
+~14,559 tests (main) + 83 sim tests, all green.
+
 ---
 
 ## Explicit 3.x
@@ -281,24 +313,24 @@ Four gap specs are explicitly 3.x:
 
 ---
 
-## Known-Good Bundle (2.5.0)
+## Known-Good Bundle (2.6.0)
 
 | Repo | Version | Coupling |
 |------|---------|----------|
-| [agent_gov](https://github.com/unpingable/agent_governor) | 2.5.0 | — |
+| [agent_gov](https://github.com/unpingable/agent_governor) | 2.6.0 | — |
 | [maude](https://github.com/unpingable/maude) | 2.3.2 | hard (mirrors major.minor) |
 | [vscode-governor](https://github.com/unpingable/vscode-governor) | 2.2.0 | hard (mirrors major.minor) |
 | [guvnah](https://github.com/unpingable/guvnah) | 2.3.2 | hard (mirrors major.minor) |
 | [gov-webui (Phosphor)](https://github.com/unpingable/governor_webui) | 0.4.0 | loose (targets contract v1) |
 
-Note: maude/guvnah are still on 2.3.2. Signal Plane v1 adds new daemon RPCs
-(`signals.*`) but doesn't change existing contracts. Clients don't need to bump
-for this release unless they want to query signals.
+Note: maude/guvnah are still on 2.3.2. CI lane and context manifest add new CLI
+commands and daemon capabilities but don't change existing contracts. Clients don't
+need to bump unless they want CI verification or manifest inspection.
 
 **Sanity check** (run these to verify you're not in version hell):
 
 ```bash
-governor --version                      # should say 2.5.0
+governor --version                      # should say 2.6.0
 governor status --json | python3 -c "import sys,json; print(json.load(sys.stdin)['schema_version'])"  # should say 1
 governor doctor                         # walk 9 subsystems, flag non-nominal
 make test                               # in each repo

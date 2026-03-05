@@ -15,7 +15,7 @@
 **Fiction Governor** — Plot threads, scene proposals, prompt generation, narrative constraints, manuscript scanning, similarity matching, context drift detection, fiction guardrails (consent tracking, DSI, AII).
 **Non-Fiction Governor** — Corpus management, DOI fetching, citation verification, CFI v0 (contextual frame intrusion detection, 12-frame taxonomy, perspective tracking, normative creep, scope violations).
 **Multi-Agent Routing** — Task complexity estimation, model tiers, adaptive routing.
-**Failure Provenance** — Scars (constraint hysteresis), shields (input gating), surprise ratio classification.
+**Failure Provenance** — Scars (constraint hysteresis), shields (input gating), surprise ratio classification. Scar fingerprints: `failure_kind` + `action_type` for action-level novelty gating, separate evidence lifecycles per failure mode.
 **Grounding Audit** — Closed-loop hallucination detection, failure mode taxonomy, adaptive policy thresholds.
 **Ultrastability** — Ashby-style S₁ adaptation, bounded parameters, pathology detection, freeze/unfreeze.
 **Homeostat** — Exploration budgets, adaptive gain scheduling, domain-specific setpoints, 7 exploration contexts.
@@ -135,7 +135,7 @@
 | Security/Watch/Hooks | 76 |
 | Direction Tracking | 57 |
 | Multi-Agent Routing | 91 |
-| Failure Provenance & Scars | 89 |
+| Failure Provenance & Scars | 161 |
 | Grounding Audit | 164 |
 | Ultrastability | 113 |
 | Homeostat | 114 |
@@ -212,4 +212,4 @@
 | Egress Gate (outbound data-flow policy gate) | 66 |
 | CI Lane (ci_wrap + ci_verify + CLI) | 43 |
 
-**Total: ~14,523 tests** (14,446 unit + 77 sim + 36 skipped + 24 integration)
+**Total: ~14,559 tests** (14,559 unit + 83 sim + 36 skipped + 24 integration)

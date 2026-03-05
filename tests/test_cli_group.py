@@ -252,7 +252,7 @@ FROZEN_CURATED_COMMANDS: set[str] = {
     # Operator
     "status", "doctor", "trace", "explain", "operator", "receipts", "check",
     # Workflow
-    "init", "propose", "verify", "apply", "wrap", "serve",
+    "init", "propose", "verify", "apply", "wrap", "serve", "ci",
     # Config
     "envelope", "profile", "intent", "session", "config",
     # Debug

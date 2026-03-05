@@ -66,6 +66,7 @@ src/governor/
 ├── executor.py       # AutonomousExecutor, StepResult, ExecutorConfig, ExecutionEvent, step-function loop
 ├── adapters.py       # Governor adapter invariants, thin wrappers (security, CFI, fiction, nonfiction, custom)
 ├── invariant_store.py # InvariantSpec, InvariantStore, VALID_KINDS, persistent invariant management
+├── context_manifest.py # ContextRegion, ContextManifest, ManifestStore, build_manifest, prompt-as-governed-artifact
 ├── context_manager.py # GovernorContext, GovernorContextManager, isolated per-user/project contexts
 ├── chat_bridge.py     # ChatBridge, OllamaBackend, AnthropicBackend, GovernorHooks, backend abstraction
 ├── telemetry.py       # TelemetryCollector, StructuredLogger, TelemetryEvent, cost/performance analysis, JSONL export

@@ -1042,6 +1042,10 @@ class GovernorHooks:
 
     def __init__(self, context: GovernorContext) -> None:
         self.context = context
+        # Context manifest chain state
+        self._prev_manifest_hash: str | None = None
+        self._prev_build_id: str | None = None
+        self._last_manifest: Any | None = None
 
     def set_fiction_type(self, fiction_type: str) -> None:
         """Set the explicit fiction type for fiction mode.
@@ -1457,6 +1461,8 @@ class GovernorHooks:
         if not base:
             return None
 
+        regions: list[tuple[str, str, str]] = [("mode_base", "mode_base", base)]
+
         anchors = self._load_mode_anchors()
         if anchors:
             from .continuity import AnchorRegistry
@@ -1467,8 +1473,65 @@ class GovernorHooks:
             ctx = reg.to_prompt_context()
             if ctx:
                 base += "\n\n" + ctx
+                regions.append(("mode_anchors", "mode_anchors", ctx))
+
+        # Manifest — fail-open but NOT silent
+        try:
+            from .context_manifest import build_manifest, ManifestStore, emit_build_receipt
+            from .session import get_session_id
+
+            manifest = build_manifest(
+                mode=self.context.mode,
+                regions=regions,
+                session_id=get_session_id(),
+                prev_manifest_hash=self._prev_manifest_hash,
+                prev_build_id=self._prev_build_id,
+            )
+            self._prev_manifest_hash = manifest.manifest_hash
+            self._prev_build_id = manifest.build_id
+            self._last_manifest = manifest
+            self._store_manifest(manifest)
+        except Exception as exc:
+            import sys
+            print(f"WARNING: context manifest build failed: {exc}", file=sys.stderr)
+            try:
+                from .context_manifest import emit_build_failure_receipt
+                from .gate_receipt import ReceiptStore
+                from pathlib import Path
+                gov_dir = Path(".governor")
+                if gov_dir.exists():
+                    failure_receipt = emit_build_failure_receipt(
+                        build_id=uuid.uuid4().hex[:16],
+                        mode=self.context.mode,
+                        exc_type=type(exc).__name__,
+                        exc_message=str(exc)[:200],
+                    )
+                    ReceiptStore(gov_dir).append(failure_receipt)
+            except Exception:
+                pass  # Last resort — don't fail the prompt build
 
         return base
+
+    def _store_manifest(self, manifest: Any) -> None:
+        """Persist manifest and emit gate receipt. Warn on error."""
+        try:
+            from pathlib import Path
+            from .context_manifest import ManifestStore, emit_build_receipt
+            from .gate_receipt import ReceiptStore, EvidenceStore
+
+            gov_dir = Path(".governor")
+            if not gov_dir.exists():
+                return
+
+            store = ManifestStore(gov_dir)
+            store.append(manifest)
+
+            receipt = emit_build_receipt(manifest)
+            receipt_store = ReceiptStore(gov_dir)
+            receipt_store.append(receipt)
+        except Exception as exc:
+            import sys
+            print(f"WARNING: context manifest store failed: {exc}", file=sys.stderr)
 
     def _build_mode_prompt(self) -> str | None:
         """Build base mode-specific system prompt (without anchor context)."""

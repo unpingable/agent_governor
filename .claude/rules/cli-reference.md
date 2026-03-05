@@ -443,6 +443,10 @@ governor context config               # Show/update compaction settings (--thres
 governor context receipts             # List compaction receipts (--json, --last, --id)
 governor context recover <rid> <hash> # Recover dropped content by hash
 governor context cleanup              # Clean up old recovery stores (--max-age, --dry-run)
+governor context manifest             # Show context manifest (what went into system prompt)
+governor context manifest --json      # JSON output
+governor context manifest --limit N   # Show N most recent manifests
+governor context manifest --id <id>   # Lookup by build_id or manifest_hash prefix
 
 # Git Governance (integrity invariants at commit boundaries)
 governor git-gov status               # Show config and severity by check type (--json)

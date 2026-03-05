@@ -13849,6 +13849,63 @@ def context_cleanup(ctx: click.Context, max_age: int, dry_run: bool) -> None:
     click.echo(f"Cleaned up {removed} old recovery store(s).")
 
 
+@context_cmd.command("manifest")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--limit", default=1, help="Number of manifests to show")
+@click.option("--id", "lookup_id", help="Lookup by build_id or manifest_hash prefix")
+@click.pass_context
+def context_manifest_cmd(ctx: click.Context, as_json: bool, limit: int, lookup_id: str | None) -> None:
+    """Show context manifest — what went into the system prompt."""
+    from .context_manifest import ManifestStore
+    from pathlib import Path
+
+    gov_dir = Path(".governor")
+    if not gov_dir.exists():
+        click.echo("No .governor directory found.")
+        return
+
+    store = ManifestStore(gov_dir)
+
+    if lookup_id:
+        # Try build_id first, then manifest_hash prefix
+        results = store.query(limit=limit, build_id=lookup_id)
+        if not results:
+            results = store.query(limit=limit, manifest_hash_prefix=lookup_id)
+    else:
+        results = store.query(limit=limit)
+
+    if not results:
+        click.echo("No manifests found.")
+        return
+
+    if as_json:
+        click.echo(json.dumps([m.to_dict() for m in results], indent=2))
+        return
+
+    for m in results:
+        click.echo(f"Context Manifest (mode: {m.mode}, {len(m.regions)} regions)")
+        click.echo(f"  Source: .governor/manifests/context_manifests.jsonl (build_id: {m.build_id})")
+        click.echo(f"  manifest_hash: {m.manifest_hash}")
+        click.echo(f"  prompt_hash:   {m.prompt_hash}")
+        if m.session_id:
+            click.echo(f"  session:       {m.session_id}")
+        if m.prev_manifest_hash:
+            click.echo(f"  prev_manifest: {m.prev_manifest_hash[:16]}...")
+        click.echo()
+
+        if m.regions:
+            header = f"  {'REGION':<16} {'KIND':<16} {'BYTES':>6}  {'HASH[:12]':<14} {'SENS':<10} {'MUT':<10} PREVIEW"
+            click.echo(header)
+            for r in m.regions:
+                preview = (r.content_preview or "")[:40]
+                click.echo(
+                    f"  {r.region_id:<16} {r.kind:<16} {r.content_len:>6}  "
+                    f"{r.content_hash[:12]:<14} {r.sensitivity:<10} {r.mutability:<10} "
+                    f"{preview}"
+                )
+        click.echo()
+
+
 # =============================================================================
 # Perforce Governance CLI
 # =============================================================================

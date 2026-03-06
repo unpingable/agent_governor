@@ -1602,6 +1602,193 @@ def hook_bypass(ctx: click.Context) -> None:
     click.echo("(Bypass is automatically removed after use)")
 
 
+@hook.command("post-tool")
+@click.pass_context
+def hook_post_tool(ctx: click.Context) -> None:
+    """
+    Claude Code PostToolUse hook handler.
+
+    Reads hook JSON from stdin, emits a gate receipt for the tool action.
+    Designed to be called from a Claude Code plugin hooks.json.
+    Fails open (exit 0) on any error.
+
+    Example hooks.json entry:
+        {"type": "command", "command": "governor hook post-tool"}
+    """
+    import hashlib
+    import sys
+    from datetime import datetime, timezone
+
+    try:
+        payload = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        return
+
+    tool_name = payload.get("tool_name", "")
+    tool_input = payload.get("tool_input", {})
+    session_id = payload.get("session_id", "unknown")
+
+    evidence = {
+        "hook": "PostToolUse",
+        "tool_name": tool_name,
+        "session_id": session_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if tool_name == "Bash":
+        command = tool_input.get("command", "")
+        evidence["command_hash"] = hashlib.sha256(command.encode()).hexdigest()[:16]
+        subject_kind = f"bash_command"
+        subject_bytes = command.encode()
+    elif tool_name in ("Write", "Edit"):
+        file_path = tool_input.get("file_path", "")
+        evidence["file_path"] = file_path
+        if tool_name == "Write":
+            content = tool_input.get("content", "")
+            evidence["content_hash"] = hashlib.sha256(content.encode()).hexdigest()[:16]
+            subject_bytes = content.encode()
+        else:
+            old = tool_input.get("old_string", "")
+            new = tool_input.get("new_string", "")
+            subject_bytes = f"{old}→{new}".encode()
+            evidence["edit_hash"] = hashlib.sha256(subject_bytes).hexdigest()[:16]
+        subject_kind = f"file_{tool_name.lower()}"
+    else:
+        subject_kind = f"tool_{tool_name.lower()}"
+        subject_bytes = json.dumps(tool_input, sort_keys=True).encode()
+
+    # Emit receipt
+    try:
+        from .gate_receipt import create_receipt, ReceiptStore
+
+        root = Path(ctx.obj["root"])
+        gov_dir = root / ".governor"
+        if gov_dir.exists():
+            receipt = create_receipt(
+                gate="plugin_post_tool",
+                verdict="observe",
+                subject_kind=subject_kind,
+                subject_bytes=subject_bytes,
+                evidence_bundle=evidence,
+                gate_config={"hook": "PostToolUse", "tool": tool_name},
+            )
+            store = ReceiptStore(gov_dir)
+            store.append(receipt)
+    except Exception:
+        pass  # Fail open
+
+
+@hook.command("pre-tool")
+@click.pass_context
+def hook_pre_tool(ctx: click.Context) -> None:
+    """
+    Claude Code PreToolUse hook handler.
+
+    Reads hook JSON from stdin, evaluates against governor policy.
+    Returns JSON with permissionDecision on stdout.
+    Fails open (exit 0, no output) on any error.
+
+    Example hooks.json entry:
+        {"type": "command", "command": "governor hook pre-tool"}
+    """
+    import sys
+
+    try:
+        payload = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        return  # Fail open
+
+    tool_name = payload.get("tool_name", "")
+    tool_input = payload.get("tool_input", {})
+
+    # Evaluate against governor gate
+    try:
+        from .evidence_gate import EvidenceGate
+
+        root = Path(ctx.obj["root"])
+        gov_dir = root / ".governor"
+        if not gov_dir.exists():
+            return  # No governor — allow
+
+        gate = EvidenceGate(gov_dir)
+
+        # Build a text representation for the gate
+        if tool_name == "Bash":
+            text = f"[shell command] {tool_input.get('command', '')}"
+        elif tool_name in ("Write", "Edit"):
+            text = f"[file {tool_name.lower()}] {tool_input.get('file_path', '')}"
+        else:
+            text = f"[{tool_name}] {json.dumps(tool_input)}"
+
+        result = gate.check(text)
+
+        if result.get("verdict") == "block":
+            reason = result.get("reason", "Blocked by governor policy")
+            violations = result.get("violations", [])
+            if violations:
+                descs = "; ".join(
+                    v.get("description", v.get("anchor_id", ""))
+                    for v in violations[:3]
+                    if isinstance(v, dict)
+                )
+                if descs:
+                    reason += ": " + descs
+
+            output = {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": reason,
+                }
+            }
+            json.dump(output, sys.stdout)
+    except Exception:
+        pass  # Fail open
+
+
+@hook.command("task-complete")
+@click.pass_context
+def hook_task_complete(ctx: click.Context) -> None:
+    """
+    Claude Code TaskCompleted hook handler.
+
+    Reads hook JSON from stdin, checks for unresolved violations.
+    Exit 0 = allow completion. Exit 2 = reject (stderr feedback).
+    Fails open on any error.
+
+    Example hooks.json entry:
+        {"type": "command", "command": "governor hook task-complete"}
+    """
+    import sys
+
+    try:
+        payload = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        return  # Allow
+
+    try:
+        from .violation_resolver import ViolationResolver
+
+        root = Path(ctx.obj["root"])
+        gov_dir = root / ".governor"
+        if not gov_dir.exists():
+            return  # No governor — allow
+
+        resolver = ViolationResolver(gov_dir)
+        pending = resolver.get_pending()
+
+        if pending:
+            count = len(pending)
+            msg = (
+                f"Governor: {count} unresolved violation(s) must be addressed "
+                f"before completing this task. Use /governor:check for details."
+            )
+            print(msg, file=sys.stderr)
+            ctx.exit(2)
+    except Exception:
+        pass  # Fail open
+
+
 @cli.command("wrap")
 @click.argument("command", nargs=-1, required=True)
 @click.option("--auto-approve", "-a", is_flag=True, help="Auto-approve in exploratory mode")

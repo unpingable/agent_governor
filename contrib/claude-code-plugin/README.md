@@ -48,7 +48,7 @@ To enable enforcement, add `PreToolUse` and `TaskCompleted` entries to
       "hooks": [
         {
           "type": "command",
-          "command": "python3 scripts/pretool_gate.py"
+          "command": "governor hook pre-tool 2>/dev/null || true"
         }
       ]
     }
@@ -59,7 +59,7 @@ To enable enforcement, add `PreToolUse` and `TaskCompleted` entries to
       "hooks": [
         {
           "type": "command",
-          "command": "python3 scripts/task_completed_gate.py"
+          "command": "governor hook task-complete"
         }
       ]
     }

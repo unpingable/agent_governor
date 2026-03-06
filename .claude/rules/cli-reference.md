@@ -40,6 +40,9 @@ governor hook status             # Check hook status
 governor hook pre-commit         # Run pre-commit check (called by git hook)
 governor hook pre-commit --check-continuity  # Also check staged files for violations
 governor hook pre-commit -c -i   # Interactive mode: offer fix/revise/proceed
+governor hook post-tool          # Claude Code PostToolUse handler (stdin JSON, emits receipt)
+governor hook pre-tool           # Claude Code PreToolUse handler (stdin JSON, stdout deny/allow)
+governor hook task-complete      # Claude Code TaskCompleted handler (exit 0=allow, 2=reject)
 governor wrap -- <cmd>           # Wrap agent command with enforcement
 governor wrap --auto-approve -- <cmd>  # Auto-approve in exploratory mode
 governor wrap --check-continuity -- <cmd>  # Check file changes for violations

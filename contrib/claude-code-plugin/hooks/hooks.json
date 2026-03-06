@@ -2,20 +2,11 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|Write|Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(dirname \"$0\")/../scripts/posttool_receipt.py\""
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$(dirname \"$0\")/../scripts/posttool_receipt.py\""
+            "command": "governor hook post-tool 2>/dev/null || true"
           }
         ]
       }

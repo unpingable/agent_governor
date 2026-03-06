@@ -42,21 +42,15 @@ def main() -> None:
         sys.exit(0)  # Unparseable — allow
 
     # Check for open violations
-    violations = status.get("violations", [])
-    open_violations = [v for v in violations if v.get("resolved") is not True]
+    violations = status.get("violations", {})
+    pending = violations.get("pending", 0) if isinstance(violations, dict) else 0
+    ok = violations.get("ok", True) if isinstance(violations, dict) else True
 
-    if open_violations:
-        count = len(open_violations)
-        descriptions = "; ".join(
-            v.get("description", v.get("anchor_id", "unknown"))
-            for v in open_violations[:3]
-        )
+    if not ok or pending > 0:
         msg = (
-            f"Governor: {count} unresolved violation(s) must be addressed "
-            f"before completing this task: {descriptions}"
+            f"Governor: {pending} unresolved violation(s) must be addressed "
+            f"before completing this task. Run /governor:check for details."
         )
-        if count > 3:
-            msg += f" (and {count - 3} more)"
         print(msg, file=sys.stderr)
         sys.exit(2)  # Reject — Claude gets feedback, continues working
 

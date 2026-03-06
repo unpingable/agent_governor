@@ -10,7 +10,7 @@ Receipt:   rct_a7f3c91e (hash-chained, tamper-evident)
 Next:      provide test results, downgrade to hypothesis, or request override
 ```
 
-14,200+ tests. Zero trust. Agents propose — only the governor commits.
+14,500+ tests. Zero trust. Agents propose — only the governor commits.
 
 This project governs actions, not beliefs.
 
@@ -105,12 +105,14 @@ Teams can stop at any level and still get value.
 
 | I want to... | Start with |
 |---|---|
+| **Govern Claude Code in 5 minutes** | [Plugin Quickstart](docs/QUICKSTART_PLUGIN.md) — install, init, go |
 | **See what the governor catches** | [Quick Start](#quick-start) — one command, immediate feedback |
 | **Get auditability first** | `governor init` + `governor gate check` — receipts with zero enforcement |
 | **Preflight and record tool chains** | [Composition governance](#what-this-catches) — chain.preflight/record |
 | **Inspect an incident** | `governor trace` + `governor receipts` — unified timeline and receipt query |
 | **Enforce scope and policy** | [Modes](#modes) + `governor intent set --profile production` |
 | **Use a desktop UI** | [Guvnah](https://github.com/unpingable/guvnah) — governor status and inspection console |
+| **Just want an easy app** | [Clerk](https://github.com/unpingable/clerk) — desktop app, no CLI required |
 | **Deploy a governed agent UI** | [Phosphor](https://github.com/unpingable/gov-webui) — governed chat interface (fiction / research / code modes) |
 | **Understand the architecture** | [Architecture](#architecture) + [PCAR specs](#pcar-proof-carrying-agent-runtime) |
 

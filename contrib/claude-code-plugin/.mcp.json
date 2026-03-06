@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "governor": {
+      "command": "governor",
+      "args": ["mcp", "serve"],
+      "env": {}
+    }
+  }
+}

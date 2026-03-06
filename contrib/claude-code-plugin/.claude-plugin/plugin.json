@@ -1,0 +1,8 @@
+{
+  "name": "governor",
+  "description": "Policy enforcement and receipt-producing governance for agentic coding workflows",
+  "version": "0.1.0",
+  "author": {
+    "name": "James Beck"
+  }
+}

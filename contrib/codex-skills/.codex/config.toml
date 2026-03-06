@@ -1,0 +1,16 @@
+# Governor-governed Codex project configuration
+# Copy to your project root as .codex/config.toml
+
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = false
+
+[mcp_servers.governor]
+enabled = true
+required = true
+command = "governor"
+args = ["mcp", "serve", "--stdio"]
+startup_timeout_sec = 10.0
+tool_timeout_sec = 60.0

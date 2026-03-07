@@ -10,8 +10,10 @@ A standalone, zero-dependency Python library that implements the irreducible
 NLAI mechanism: claims require evidence, decisions produce receipts, anchors
 enforce continuity, violations resolve deterministically.
 
+**Package name:** `nlai` (PyPI: `nlai`, import: `nlai`)
+
 ```python
-from nlai_gate import gate, Anchor
+from nlai import gate, Anchor
 
 result = gate("All tests pass and the code is thread-safe.")
 # result.verdict = "block"
@@ -37,7 +39,7 @@ Same law, smaller jurisdiction.
 Two problems solved at once:
 
 1. **Adoption**: "200K lines? I could use a regex." They're wrong, but the
-   perception is real. `pip install nlai-gate` with 1,000 lines and a 10-second
+   perception is real. `pip install nlai` with 1,000 lines and a 10-second
    demo kills the objection.
 
 2. **Architecture**: 3.x needs a real kernel boundary anyway. Extracting now
@@ -77,7 +79,7 @@ These are non-negotiable. The kernel must not be a reinterpretation.
 2. **Same verdict semantics** — "block" means block, "pass" means pass,
    "observe" means observe. No "lite mode" weaker verdicts.
 
-3. **Same anchor/violation meaning** — an anchor violation in nlai_gate
+3. **Same anchor/violation meaning** — an anchor violation in nlai
    means the same thing as in governor. Same severity levels, same
    constraint classes (invariant vs preference).
 
@@ -89,7 +91,7 @@ These are non-negotiable. The kernel must not be a reinterpretation.
 
 ## Source Files to Extract From
 
-| nlai_gate module | Governor source | What to extract |
+| nlai module | Governor source | What to extract |
 |-----------------|----------------|-----------------|
 | `canonical.py` | `gate_receipt.py` | `canonical_json`, content hashing |
 | `receipt.py` | `gate_receipt.py` | `GateReceipt` (simplified), `create_receipt` |
@@ -116,7 +118,7 @@ These are non-negotiable. The kernel must not be a reinterpretation.
 ## Test Strategy
 
 - Golden fixtures shared with governor (same inputs → same receipts/verdicts)
-- Extraction is correct iff `nlai_gate.gate(text)` produces the same verdict
+- Extraction is correct iff `nlai.gate(text)` produces the same verdict
   and compatible receipt as `governor gate check text`
 - Standalone test suite (no governor dependency in tests)
 - Property: `canonical_json` determinism (same as governor's existing tests)
@@ -124,10 +126,10 @@ These are non-negotiable. The kernel must not be a reinterpretation.
 ## File Layout
 
 ```
-libs/nlai_gate/
+libs/nlai/
 ├── pyproject.toml              # stdlib-only, zero deps
 ├── README.md                   # The 10-second demo
-├── src/nlai_gate/
+├── src/nlai/
 │   ├── __init__.py             # gate, Anchor, Receipt, Claim, Violation
 │   ├── canonical.py            # canonical_json, content_hash
 │   ├── receipt.py              # Receipt, create_receipt, verify_receipt
@@ -146,27 +148,26 @@ libs/nlai_gate/
 
 ## Relationship to Governor
 
-Governor depends on nlai_gate (or re-exports from it). Not the reverse.
+Governor depends on nlai (or re-exports from it). Not the reverse.
 
 ```
-nlai_gate (kernel)
+nlai (kernel)
     ↑
 governor (runtime + policy + orchestration)
     ↑
 plugins / clerk / phosphor (distribution surfaces)
 ```
 
-Phase 1: extract into `libs/nlai_gate/` (same repo, like receipt_kernel).
-Phase 2: if boundary is stable, publish to PyPI as `nlai-gate`.
-Phase 3: governor imports from nlai_gate instead of inline.
+Phase 1: extract into `libs/nlai/` (same repo, like receipt_kernel).
+Phase 2: if boundary is stable, publish to PyPI as `nlai`.
+Phase 3: governor imports from nlai instead of inline.
 
 ## Naming
 
-`nlai-gate` on PyPI. `nlai_gate` as Python package.
+`nlai` on PyPI. `nlai` as Python package. Four letters, thesis on the tin.
 
 Not "mini-governor", not "governor-lite", not "governor-core."
-The name should convey: this is a gate. Claims go in, verdicts come out,
-receipts are always produced.
+The name IS the principle: language is a proposal, not an authority.
 
 ## Anti-Goals
 

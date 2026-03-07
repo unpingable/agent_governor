@@ -1,4 +1,4 @@
-# GOV_GAP_NLAI_GATE_001: NLAI Gate Kernel Extraction
+# GOV_GAP_NLAI_GATE_001: NLAI Kernel Extraction
 
 **Status**: Scoped, ready to extract
 **Category**: Architecture / distribution
@@ -33,6 +33,7 @@ Same law, smaller jurisdiction.
 - No UI, CLI beyond maybe a one-command entry point
 - No adaptive policy, no orchestration
 - No external dependencies (stdlib only, like receipt_kernel)
+- No `config` parameter on `gate()` in v0 (see design note below)
 
 ## Why
 
@@ -51,11 +52,11 @@ The entire surface:
 
 ```python
 # The gate function — text in, verdict + receipt out
-gate(text, *, anchors=None, config=None) -> GateResult
+gate(text, *, anchors=None) -> GateResult
 
 # Data types
 GateResult(verdict, receipt, claims, violations)
-Receipt(receipt_id, gate, verdict, subject_hash, evidence_hash, timestamp)
+Receipt(receipt_id, schema_version, gate, verdict, subject_hash, evidence_hash, timestamp)
 Anchor(id, description, severity, constraint_class, required, forbidden)
 Claim(text, status, evidence_kind)
 Violation(anchor_id, description, severity)
@@ -67,6 +68,13 @@ verify_receipt(receipt) -> bool
 ```
 
 If the API needs more than this to feel whole, the boundary is too fuzzy.
+
+### Design note: no `config` parameter in v0
+
+The original draft had `gate(text, *, anchors=None, config=None)`. The `config`
+slot is where half the runtime sneaks back in via import side-effect wearing
+sunglasses. Removed for v0. If configuration becomes necessary, it must be a
+small frozen dataclass with an explicit, short field list — not an open dict.
 
 ## Semantic Invariants
 
@@ -83,22 +91,49 @@ These are non-negotiable. The kernel must not be a reinterpretation.
    means the same thing as in governor. Same severity levels, same
    constraint classes (invariant vs preference).
 
-4. **Same claim extraction** — uses the same signal extraction logic
-   (or a simplified subset that is strictly compatible).
+4. **Same claim extraction** — see Claim Extraction Boundary below.
 
 5. **Receipt identity** — `receipt_id = H(canonical_json(hashable fields))`.
    Content-addressed, timestamp excluded. Same as governor.
 
+6. **Receipt schema version** — `Receipt` includes `schema_version: int`
+   from the first release. `to_dict()` emits it, `from_dict()` rejects
+   future versions. This is non-negotiable before PyPI publication.
+
+## Claim Extraction Boundary
+
+Governor's `claim_signals.py` extracts 4 signal types: assertive statements,
+dates/temporal, entities/quantities, and hedged/qualified claims. The kernel
+extracts **assertive statements only** (the core "is this a claim?" check).
+
+v0 claim classes:
+
+| Class | Included | Example |
+|-------|----------|---------|
+| `ASSERTIVE` | Yes | "Tests pass", "The code is thread-safe" |
+| `HEDGED` | Yes (detected, classified as weak) | "I think tests pass" |
+| `DATE_TEMPORAL` | No (governor-only) | "Updated yesterday" |
+| `ENTITY_QUANTITY` | No (governor-only) | "Handles 10k requests" |
+
+Compatibility contract: any text that nlai classifies as `ASSERTIVE` must
+also be classified as assertive by governor's `SignalExtractor`. The reverse
+is not required (governor may extract more). nlai is a **strict subset**,
+not a reinterpretation.
+
+If nlai says "this is a claim," governor must agree. If nlai says "no claim
+found," governor may still find one (via entity/quantity/temporal extraction).
+This is a one-way compatibility requirement.
+
 ## Source Files to Extract From
 
 | nlai module | Governor source | What to extract |
-|-----------------|----------------|-----------------|
+|-------------|----------------|-----------------|
 | `canonical.py` | `gate_receipt.py` | `canonical_json`, content hashing |
-| `receipt.py` | `gate_receipt.py` | `GateReceipt` (simplified), `create_receipt` |
+| `receipt.py` | `gate_receipt.py` | `Receipt` (with schema_version), `create_receipt` |
 | `gate.py` | `evidence_gate.py` | `check()` core logic, claim extraction |
 | `anchors.py` | `continuity.py` | `Anchor` dataclass, `check_text()` |
 | `resolver.py` | `violation_resolver.py` | `Violation`, resolution actions |
-| `claims.py` | `claim_signals.py` | `SignalExtractor` (simplified) |
+| `claims.py` | `claim_signals.py` | Assertive statement detection only |
 
 ## What Gets Simplified
 
@@ -107,21 +142,42 @@ These are non-negotiable. The kernel must not be a reinterpretation.
   No oracles in v0 (oracles are governor-runtime concerns).
 
 - `continuity.py` has CorrectionLadder, ConvergenceExecutor, mode-specific
-  bridges. The kernel gets: Anchor dataclass + simple text matching.
+  bridges. The kernel gets: Anchor dataclass + **lexical anchor matching**
+  (required/forbidden substring and pattern checks against text).
 
 - `violation_resolver.py` has persistent state, exception records, interactive
   resolution. The kernel gets: Violation dataclass + verdict determination.
 
 - `claim_signals.py` has date/entity/quantity extraction. The kernel gets:
-  assertive statement detection (the core "is this a claim?" check).
+  assertive statement detection only (see Claim Extraction Boundary above).
 
 ## Test Strategy
 
-- Golden fixtures shared with governor (same inputs → same receipts/verdicts)
-- Extraction is correct iff `nlai.gate(text)` produces the same verdict
-  and compatible receipt as `governor gate check text`
-- Standalone test suite (no governor dependency in tests)
-- Property: `canonical_json` determinism (same as governor's existing tests)
+### Golden fixture sharing
+
+Governor's golden fixtures for receipt hashing and canonical JSON are
+**vendored into nlai's test suite as snapshot copies**. This means:
+
+- `libs/nlai/tests/fixtures/` contains copies of the relevant governor goldens
+- A CI job in governor verifies nlai goldens match governor goldens (parity check)
+- nlai's own test suite is fully standalone (no governor import)
+- When governor updates a golden, the CI parity check fails, forcing an
+  explicit update in nlai (not silent drift)
+
+### Test categories
+
+- `test_canonical.py` — determinism, hash stability, golden bytes
+- `test_receipt.py` — create, verify, content-addressing, schema_version
+- `test_gate.py` — verdict correctness, claim detection, anchor violations
+- `test_anchors.py` — lexical matching, severity, constraint_class
+- `test_golden.py` — vendored fixture parity with governor
+- `test_roundtrip.py` — serialize/deserialize, future version rejection
+
+### Compatibility property
+
+`nlai.gate(text)` must produce the same verdict as `governor gate check text`
+when both have the same anchors and the text contains only assertive claims.
+Texts with entity/quantity/temporal claims may differ (governor extracts more).
 
 ## File Layout
 
@@ -134,15 +190,16 @@ libs/nlai/
 │   ├── canonical.py            # canonical_json, content_hash
 │   ├── receipt.py              # Receipt, create_receipt, verify_receipt
 │   ├── gate.py                 # gate() — the one function
-│   ├── anchors.py              # Anchor, check_text
-│   ├── claims.py               # claim extraction (simplified)
+│   ├── anchors.py              # Anchor, check_text (lexical matching)
+│   ├── claims.py               # assertive statement detection
 │   └── resolver.py             # Violation, verdict from violations
 └── tests/
+    ├── fixtures/               # Vendored golden snapshots from governor
     ├── test_canonical.py       # Determinism, hash stability
     ├── test_receipt.py         # Create, verify, content-addressing
     ├── test_gate.py            # Verdict correctness, claim detection
-    ├── test_anchors.py         # Anchor matching, severity
-    ├── test_golden.py          # Shared fixtures with governor
+    ├── test_anchors.py         # Lexical matching, severity
+    ├── test_golden.py          # Fixture parity with governor
     └── test_roundtrip.py       # Serialize/deserialize
 ```
 
@@ -169,6 +226,10 @@ Phase 3: governor imports from nlai instead of inline.
 Not "mini-governor", not "governor-lite", not "governor-core."
 The name IS the principle: language is a proposal, not an authority.
 
+The README subtitle does the explanatory work the name doesn't:
+**"NLAI: evidence-gated claims, continuity anchors, and receipts for agent
+workflows."**
+
 ## Anti-Goals
 
 - **No behavior drift** — the kernel is not a reinterpretation of governor
@@ -178,6 +239,8 @@ The name IS the principle: language is a proposal, not an authority.
 - **No "lite mode"** — verdicts are verdicts. No weaker enforcement because
   the package is smaller.
 - **No clever demo syntax** over semantic clarity. Auditability > ergonomics.
+- **No config smuggling** — no open dict/kwargs that let the runtime sneak
+  back in. Frozen dataclass or nothing.
 
 ## Estimated Scope
 

@@ -40,13 +40,67 @@ def get_governor_dir(ctx: click.Context) -> Path:
     return Path(ctx.obj.get("root", ".")) / GOVERNOR_DIR
 
 
-def ensure_initialized(ctx: click.Context) -> Path:
-    """Ensure governor is initialized, return governor dir."""
+def ensure_initialized(ctx: click.Context, *, auto_init: bool = False) -> Path:
+    """Ensure governor is initialized, return governor dir.
+
+    If auto_init=True and the directory is conclusively absent (no .governor/
+    at all), perform a minimal bootstrap and continue. If the directory exists
+    but looks partial/corrupt, refuse — don't auto-heal over ambiguous state.
+
+    Respects GOVERNOR_AUTO_INIT=0 env var to disable auto-init (for CI).
+    """
+    import os
+
     gov_dir = get_governor_dir(ctx)
-    if not gov_dir.exists():
+    if gov_dir.exists():
+        return gov_dir
+
+    # Check if auto-init is allowed
+    if not auto_init:
         click.echo("Error: Governor not initialized. Run 'governor init' first.", err=True)
         ctx.exit(1)
+
+    if os.environ.get("GOVERNOR_AUTO_INIT", "1") == "0":
+        click.echo("Error: Governor not initialized. Run 'governor init' first.", err=True)
+        click.echo("(Auto-init disabled via GOVERNOR_AUTO_INIT=0)", err=True)
+        ctx.exit(1)
+
+    # Conclusively absent — auto-init
+    _auto_init_governor(gov_dir)
     return gov_dir
+
+
+def _auto_init_governor(gov_dir: Path) -> None:
+    """Minimal bootstrap for first-use auto-init.
+
+    Creates the same structure as `governor init` but prints a notice
+    so the user knows what happened. Idempotent.
+    """
+    import sys
+
+    if gov_dir.exists():
+        return
+
+    gov_dir.mkdir()
+    (gov_dir / "facts").mkdir()
+    (gov_dir / "facts" / "receipts").mkdir()
+    (gov_dir / "decisions").mkdir()
+    (gov_dir / "facts" / "index.json").write_text("[]")
+    (gov_dir / "decisions" / "index.json").write_text("[]")
+    (gov_dir / PROPOSALS_FILE).write_text("{}")
+    create_default_config(gov_dir)
+
+    gitignore = """\
+# Local debugging only
+rejections.log
+# SQLite database (local state)
+governor.db
+governor.db-wal
+governor.db-shm
+"""
+    (gov_dir / ".gitignore").write_text(gitignore)
+
+    print(f"Initialized governor at {gov_dir}", file=sys.stderr)
 
 
 def _emit_reset_receipt(
@@ -1657,23 +1711,24 @@ def hook_post_tool(ctx: click.Context) -> None:
         subject_kind = f"tool_{tool_name.lower()}"
         subject_bytes = json.dumps(tool_input, sort_keys=True).encode()
 
-    # Emit receipt
+    # Emit receipt (auto-init if no .governor/ exists)
     try:
         from .gate_receipt import create_receipt, ReceiptStore
 
         root = Path(ctx.obj["root"])
         gov_dir = root / ".governor"
-        if gov_dir.exists():
-            receipt = create_receipt(
-                gate="plugin_post_tool",
-                verdict="observe",
-                subject_kind=subject_kind,
-                subject_bytes=subject_bytes,
-                evidence_bundle=evidence,
-                gate_config={"hook": "PostToolUse", "tool": tool_name},
-            )
-            store = ReceiptStore(gov_dir)
-            store.append(receipt)
+        if not gov_dir.exists():
+            _auto_init_governor(gov_dir)
+        receipt = create_receipt(
+            gate="plugin_post_tool",
+            verdict="observe",
+            subject_kind=subject_kind,
+            subject_bytes=subject_bytes,
+            evidence_bundle=evidence,
+            gate_config={"hook": "PostToolUse", "tool": tool_name},
+        )
+        store = ReceiptStore(gov_dir)
+        store.append(receipt)
     except Exception:
         pass  # Fail open
 
@@ -1701,14 +1756,14 @@ def hook_pre_tool(ctx: click.Context) -> None:
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {})
 
-    # Evaluate against governor gate
+    # Evaluate against governor gate (auto-init if needed)
     try:
         from .evidence_gate import EvidenceGate
 
         root = Path(ctx.obj["root"])
         gov_dir = root / ".governor"
         if not gov_dir.exists():
-            return  # No governor — allow
+            _auto_init_governor(gov_dir)
 
         gate = EvidenceGate(gov_dir)
 
@@ -1772,7 +1827,7 @@ def hook_task_complete(ctx: click.Context) -> None:
         root = Path(ctx.obj["root"])
         gov_dir = root / ".governor"
         if not gov_dir.exists():
-            return  # No governor — allow
+            _auto_init_governor(gov_dir)
 
         resolver = ViolationResolver(gov_dir)
         pending = resolver.get_pending()

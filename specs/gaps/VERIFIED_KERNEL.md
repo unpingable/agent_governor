@@ -2,7 +2,7 @@
 
 A pure, deterministic, mechanically verifiable core for receipt math.
 
-status: partially shipped (2.x hygiene: HashRef shipped 25 tests, NaN hardening shipped 5 tests; 3.x architecture: open)
+status: v2 work shipped (HashRef 25 tests, NaN hardening 5 tests); remaining architecture is v3
 
 ---
 

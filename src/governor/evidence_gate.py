@@ -204,6 +204,9 @@ class EvidenceGateOutput:
     # Release taint (computed after kernel run, dict form of RunTaint)
     release_taint: dict[str, Any] | None = None
 
+    # Gate receipt ID (content-addressed, from receipt system)
+    gate_receipt_id: str | None = None
+
     # Provenance labels (annotation, not gate logic)
     provenance_labels: list[Any] = field(default_factory=list)
 
@@ -219,6 +222,8 @@ class EvidenceGateOutput:
             "warnings": self.warnings,
             "claim_ids": self.claim_ids,
         }
+        if self.gate_receipt_id is not None:
+            d["gate_receipt_id"] = self.gate_receipt_id
         if self.kernel_run_id is not None:
             d["kernel_run_id"] = self.kernel_run_id
             d["kernel_ok"] = self.kernel_ok
@@ -825,6 +830,8 @@ class EvidenceGate:
 
         # Emit gate receipt (if receipt system is configured)
         gate_receipt = self._emit_receipt(output, result, policy_fragment=policy_fragment)
+        if gate_receipt is not None:
+            result.gate_receipt_id = gate_receipt.receipt_id
 
         # Emit receipt v1 (dual-emit alongside gate_receipt)
         self._emit_receipt_v1(output, result, gate_receipt)
@@ -1397,6 +1404,10 @@ class EvidenceGate:
                         lines.append("  - clarify ownership and assumptions")
                     elif "failure" in reason:
                         lines.append("  - document failure modes explicitly")
+
+        # Show receipt ID if available
+        if result.gate_receipt_id:
+            lines.append(f"\nReceipt: {result.gate_receipt_id}")
 
         return "\n".join(lines)
 

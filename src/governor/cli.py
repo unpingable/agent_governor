@@ -297,7 +297,15 @@ governor.db-shm
         storage = get_storage(gov_dir)
         click.echo(f"Initialized SQLite database at {gov_dir / 'governor.db'}")
 
-    click.echo(f"Initialized governor at {gov_dir}")
+    click.echo(f"""Initialized governor at {gov_dir}
+
+  facts/       — tracked claims about your project state
+  decisions/   — saved policy choices and judgments
+  receipts/    — verification records from governor runs
+
+Next:
+  governor gate check "The tests pass and the code is safe."
+""")
 
 
 @cli.command()

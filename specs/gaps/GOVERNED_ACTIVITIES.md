@@ -1,5 +1,7 @@
 # Governed Activities
 
+Status: `shipped` (v2.x — 110 tests, drift-gated retry, FactObservation, PreconditionBundle, AttemptRecord)
+
 Receipted side-effect capsules for workflow orchestration. Deterministic
 orchestration calls non-deterministic actions through a governed gate.
 

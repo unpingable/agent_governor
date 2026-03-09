@@ -86,6 +86,18 @@ class TestCLIHappyPath:
         assert (gov_dir / "decisions").is_dir()
         assert (gov_dir / "proposals.json").exists()
 
+    def test_governor_init_shows_epilogue(self, tmp_path):
+        """governor init prints what was created and suggests next command."""
+        git_init(tmp_path)
+        result = run_gov(["init"], cwd=tmp_path)
+        assert result.returncode == 0
+        # Epilogue shows directory descriptions
+        assert "facts/" in result.stdout
+        assert "decisions/" in result.stdout
+        assert "receipts/" in result.stdout
+        # Epilogue suggests next command
+        assert "governor gate check" in result.stdout
+
     def test_governor_init_idempotent(self, tmp_path):
         """Running init twice does not error or corrupt state."""
         git_init(tmp_path)
@@ -195,7 +207,48 @@ class TestCLIHappyPath:
         assert "No events recorded" in result.stdout
 
 
-# ── Group 2: Daemon smoke ────────────────────────────────────────────────
+# ── Group 2: Golden path (stranger test) ─────────────────────────────────
+
+
+class TestGoldenPath:
+    """The stranger test: install → init → gate check in under 2 minutes."""
+
+    def test_init_then_gate_check(self, tmp_path):
+        """governor init → governor gate check produces readable output."""
+        git_init(tmp_path)
+
+        # Step 1: init
+        result = run_gov(["init"], cwd=tmp_path)
+        assert result.returncode == 0
+        assert "governor gate check" in result.stdout  # epilogue points to next step
+
+        # Step 2: gate check
+        result = run_gov(
+            ["gate", "check", "The tests pass and the code is safe."],
+            cwd=tmp_path,
+        )
+        assert result.returncode == 0, f"gate check failed: {result.stderr}"
+
+        # Output is human-readable
+        out = result.stdout
+        assert "OK" in out or "WARN" in out or "BLOCKED" in out
+        # Claims were extracted
+        assert "claim" in out.lower()
+        # Receipt was produced
+        assert "Receipt:" in out or "sha256:" in out
+
+    def test_gate_check_without_init(self, tmp_path):
+        """gate check works even without governor init (no receipt, but no crash)."""
+        git_init(tmp_path)
+        result = run_gov(
+            ["gate", "check", "This is definitely correct."],
+            cwd=tmp_path,
+        )
+        assert result.returncode == 0
+        assert "OK" in result.stdout or "WARN" in result.stdout or "BLOCKED" in result.stdout
+
+
+# ── Group 3: Daemon smoke ────────────────────────────────────────────────
 
 
 class TestDaemonSmoke:

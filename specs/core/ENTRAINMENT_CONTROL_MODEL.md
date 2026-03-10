@@ -19,19 +19,16 @@ The governance problem is not merely whether an input changes behavior.
 It is whether an input is permitted to change the machinery that interprets future inputs.
 
 ## Scope
-This spec applies to any governed system with:
+This spec applies to any governed adaptive system — one that accepts inputs at multiple timescales, accumulates state, and forms durable policy from transient experience.
+
+Structural requirements:
 - transient runtime inputs
 - session/context accumulation
 - durable memory or preference state
 - policy or constitutional invariants
 - an observer/audit function
 
-This includes:
-- LLM agents
-- human-in-the-loop agent systems
-- moderation/ranking systems
-- institutional decision pipelines
-- long-lived adaptive workflows
+Concrete substrates are mapped in the Human/Institutional and LLM/Agent sections below.
 
 ## Non-Goals
 This spec does not:
@@ -55,6 +52,13 @@ The policy-forming layer that determines how inputs are interpreted and how acti
 
 ### Observer
 The subsystem responsible for detecting error, contradiction, drift, or capture.
+
+Operationally, the observer tracks three capacities:
+- **contradiction sensitivity** — can the system still notice when new inputs conflict with prior state?
+- **source discrimination** — can the system still distinguish authorized from unauthorized update paths?
+- **update-path auditability** — can the system still reconstruct how its current state was reached?
+
+Degradation of any capacity is itself a governance event (see T4, M5).
 
 ### Entrainment
 Persistent synchronization of some system variable to an external forcing signal.
@@ -222,6 +226,7 @@ Every higher-layer update SHOULD emit a receipt with at least:
 - `repetition_count`
 - `sanction_or_reward_coupling`
 - `observer_impact_assessment`
+- `durability_class` (transient | session | durable | constitutional)
 - `rollback_plan`
 - `attestation` or signature where applicable
 
@@ -245,6 +250,7 @@ Every higher-layer update SHOULD emit a receipt with at least:
   "authority_basis": "explicit_user_consent",
   "promotion_path": ["session_context", "promotion_request"],
   "repetition_count": 4,
+  "durability_class": "durable",
   "observer_impact_assessment": "none",
   "rollback_plan": "not_applicable",
   "attestation": null
@@ -334,6 +340,7 @@ It names the enforcement principle that explains why these subsystems exist.
 3. How should observer degradation be measured in practice?
 4. What rollback guarantees are realistic for deep-layer updates?
 5. Can hysteresis be bounded by design?
+6. The threat taxonomy mixes capture targets (T1-T3), audit impairment (T4), structural violations (T5), and temporal dynamics (T6). Should these be separated into distinct axes?
 
 ## Candidate Derived Specs
 

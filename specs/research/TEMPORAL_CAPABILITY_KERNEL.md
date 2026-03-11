@@ -57,6 +57,43 @@ RTOSes add the temporal dimension that makes this genuinely novel:
 - Late is wrong. Stale is dangerous.
 - Missing the window changes the truth value of the action.
 
+## The Core Thesis
+
+**Authority is temporal, not merely spatial.**
+
+Or more operationally: **freshness is part of authorization.**
+
+"Mandatory access control for time" is the hook. But the deeper claim is
+a triangle:
+
+1. Authority transitions should be **justified**
+2. The justification should be **time-bounded**
+3. The decision should be **provably attributable to policy + evidence
+   in force at that moment**
+
+That's what makes this more than "receipt-y SELinux" or "hash-chained logs."
+Better paperwork is useful but not novel. The novel claim is that stale
+inputs are **authority defects**, not merely performance defects.
+
+## The Strategic Frame
+
+> Agent governor is the userspace exemplar.
+> Kernel/RTOS governor is the deeper generalization.
+> The bridge between them is temporal authority.
+
+Prototype on Linux, think in microkernel/RTOS. Linux/eBPF/LSM is the
+practical substrate because it exists. Microkernel/RTOS is the better
+conceptual model because it makes the load-bearing parts explicit:
+- boundary crossings are messages, not vibes
+- time is a resource, not background scenery
+- stale inputs are authority defects, not mere performance defects
+
+Don't let Linux semantics colonize the theory. Syscalls are a good
+prototype surface, but the deeper object is: **consequence-bearing boundary
+crossings under freshness constraints.** Sometimes that's `execve`;
+sometimes it's IPC; sometimes it's an actuator command that arrived too
+late to still be safe.
+
 ## The Novel Contribution (vs Existing Security Models)
 
 Existing kernel security (SELinux, AppArmor, Capsicum, LSMs) asks:
@@ -90,7 +127,18 @@ Authority is not just spatial or hierarchical — it is temporal and causal.
 
 "Stale" becomes a kind of **authority failure**, not just a performance issue.
 
-**Mandatory access control for time.**
+## Three Layers (Keep Distinct)
+
+These blur in most systems. Governor's shape requires all three:
+
+1. **Observation**: what happened
+2. **Decision**: allow / deny / degrade / quarantine
+3. **Attestation**: prove later why that decision was legitimate
+
+Existing systems usually do one or two badly. The receipt kernel's
+substrate-agnosticism is the tell — if the same event/evidence/verdict
+machinery can eat tool calls now and syscall-transition events later,
+it's probably a real abstraction rather than a one-off framework.
 
 ## The Minimum Shape
 

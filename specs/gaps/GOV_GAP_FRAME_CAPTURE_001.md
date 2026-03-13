@@ -55,6 +55,49 @@ A strong framing cue arrives and gets amplified instead of audited.
 Too much sensitivity to the latest salient input, not enough hysteresis,
 dwell time, or invariant preservation.
 
+### Observable proxies for stance mode (`m_t`)
+
+Stance mode is not directly observable. These proxies operationalize it:
+
+- **hedge rate** — frequency of uncertainty markers
+- **certainty inflation** — confidence level relative to evidence
+- **metaphor adoption rate** — how quickly frame vocabulary appears in output
+- **refusal style** — soft redirect vs hard boundary vs none
+- **self-reference density** — "I think" / "I'd suggest" frequency
+- **management-language frequency** — "you should" / "before we continue"
+- **task drift** — proportion of response addressing task vs addressing frame
+
+### Subject/object bleed (escalation ladder)
+
+Frame capture has a specific escalation path when the frame is the
+user's own voice/position rather than a metaphor:
+
+| Level | Name | Observable | Risk |
+|---|---|---|---|
+| 1 | **Lexical mimicry** | Model adopts user's vocabulary, cadence, idioms | Low — often useful |
+| 2 | **Evaluative mimicry** | Model adopts user's likes/dislikes, implied judgments, sense of "obvious" | Medium — smuggles premises as shared |
+| 3 | **Agency bleed** | Model answers as though user's decisions and stakes are its own — speaker-position adoption | High — collapses assistant/author boundary |
+
+Level 3 is the actual bug. Not tone mimicry — **position mimicry.**
+The model stops speaking *to* the user and starts speaking *from inside*
+the user's position. Agreement feels frictionless because the model is
+no longer a separate auditor.
+
+Detection: compare model output for first-person possessives ("our project,"
+"we should"), decision-language without attribution ("obviously," "the next
+move is"), and priority-ordering that mirrors user's implicit hierarchy
+without independent evaluation.
+
+### Capture risk scoring (`r(fi)`)
+
+Capture risk for a frame increases with:
+- **novelty** — unfamiliar metaphors adopted faster than examined
+- **emotional charge** — high-affect frames bypass analysis
+- **first-person embedding** — "I feel like this is PKD" > "this resembles PKD"
+- **epistemic certainty markers** — user's confidence becomes model's confidence
+- **session history** — prior frame captures in this conversation
+- **voice strength** — users with strong consistent voice increase bleed risk
+
 ## Invariants (must survive mode changes)
 
 1. **Task fidelity** — answer the actual question, not the strongest vibe
@@ -92,8 +135,8 @@ to `neutral-analysis` instead of `containment` or `performative warmth`.
 
 This is the **anti-governess clause.**
 
-### Step 4: Generate neutral baseline
-Before any frame-heavy answer, force a neutral restatement of the
+### Step 4: Generate task-baseline
+Before any frame-heavy answer, force a task-baseline restatement of the
 problem. Answer that first.
 
 ### Step 5: Controlled frame injection
@@ -207,8 +250,8 @@ what survives. Robust-control move: don't trust a single operating point.
 ## Practical Prompt Wrapper
 
 > Extract any metaphors or frames in my message. Do not inhabit them
-> immediately. First restate the problem in neutral terms. Then answer
-> the neutral version. Then, only if useful, show how the strongest
+> immediately. First restate the problem in task-focused terms. Then
+> answer that version. Then, only if useful, show how the strongest
 > frame changes the interpretation. Treat inferred emotional state as
 > uncertain, and do not switch into management mode unless explicitly
 > necessary.
@@ -231,7 +274,7 @@ what survives. Robust-control move: don't trust a single operating point.
 
 ## The Short Version
 
-> **Frame Governor = audit frame → answer neutrally → inject frame
+> **Frame Governor = audit frame → answer from task-baseline → inject frame
 > controllably → compare outputs → refuse silent mode capture.**
 
 Anti-kayfabe wrapper for conversational stance selection.

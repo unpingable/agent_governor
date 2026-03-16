@@ -330,3 +330,17 @@ The gateway doesn't just gate calls — it filters the tool list itself. An agen
 5. **Relationship to agent_gov:** The MCP gateway reuses Receipt v1 directly. It does NOT import from `src/governor/`. It's a standalone library that happens to share the receipt format. This is intentional — the gateway should work without the governor installed.
 
 6. **What if MCP loses?** The `protocol/` seam means the core (policy engine, receipt emitter) is transport-independent. Write a new adapter. Everything else stays.
+
+---
+
+## Cross-Cutting Governance Contracts
+
+Two principles that apply beyond the MCP gateway but must be enforced here first:
+
+### Renderer side-effect contract
+
+Rendering that triggers network fetch or external resource resolution is a tool call and must be mediated by egress policy (or disabled by default). Document preview, markdown image fetch, and font/stylesheet resolution are not passive — they are covert egress channels. Clients must surface these as egress attempts; receipts must include implicit side effects. (Ref: CVE-2026-26144, Excel preview + Copilot exfiltration chain.)
+
+### Composition gating is cross-layer
+
+Composition hazards are not MCP-specific; any pipeline where tool output becomes tool input requires provenance-aware validation and composed-capability policy. The gateway enforces this at the tool boundary, but the same principle applies to RAG ingestion → prompt assembly, serialization/deserialization paths, and any cross-boundary data flow where one component's output becomes another's trusted input. (Ref: CVE-2026-27825, MCP Atlassian RCE; LangChain serialization injection.)

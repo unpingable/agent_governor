@@ -391,6 +391,7 @@ class DaemonState:
         self._chain_action_logs = None
         self._chain_mode: str | None = None
         self._signal_store = None
+        self._runtime_supervisor = None
 
     @property
     def chain_mode(self) -> str:
@@ -662,6 +663,15 @@ class DaemonState:
             if jsonl_path.exists():
                 self._signal_store.ingest_from_jsonl(jsonl_path)
         return self._signal_store
+
+    @property
+    def runtime_supervisor(self):
+        if self._runtime_supervisor is None:
+            from .runtime.supervisor import SessionSupervisor
+            runtime_dir = self.governor_dir / "runtime"
+            runtime_dir.mkdir(exist_ok=True)
+            self._runtime_supervisor = SessionSupervisor(state_dir=runtime_dir)
+        return self._runtime_supervisor
 
     @property
     def stability_store(self):
@@ -2932,6 +2942,159 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("signals.tail", signals_tail)
     dispatcher.register("signals.stats", signals_stats)
     dispatcher.register("signals.preflight", signals_preflight)
+
+    # --- Runtime Supervisor ---
+
+    async def runtime_session_create(params: dict) -> dict:
+        """Create a supervised session (does not launch yet)."""
+        backend_kind = params.get("backend_kind", "claude_code")
+        cwd = params.get("cwd", str(state.root))
+        task = params.get("task")
+        operator_mode = params.get("operator_mode", "interactive")
+
+        if backend_kind == "claude_code":
+            from .runtime.adapters.claude_code import ClaudeCodeAdapter
+            adapter = ClaudeCodeAdapter()
+        else:
+            raise ValueError(f"Unknown backend_kind: {backend_kind}")
+
+        sup = state.runtime_supervisor
+        record = sup.create_session(
+            adapter=adapter,
+            backend_kind=backend_kind,
+            cwd=cwd,
+            task=task,
+            operator_mode=operator_mode,
+        )
+        return {
+            "session_id": record.session_id,
+            "backend_kind": record.backend_kind,
+            "cwd": record.cwd,
+            "status": record.status.value,
+            "task": record.task,
+        }
+
+    async def runtime_session_launch(params: dict) -> dict:
+        """Launch the backend for a created session."""
+        session_id = params["session_id"]
+        sup = state.runtime_supervisor
+        record = await asyncio.to_thread(sup.launch_session, session_id)
+        return {
+            "session_id": record.session_id,
+            "status": record.status.value,
+            "pid": record.pid,
+        }
+
+    async def runtime_session_get(params: dict) -> dict | None:
+        """Get session details."""
+        session_id = params["session_id"]
+        sup = state.runtime_supervisor
+        record = sup.get_session(session_id)
+        if not record:
+            return None
+        return {
+            "session_id": record.session_id,
+            "backend_kind": record.backend_kind,
+            "cwd": record.cwd,
+            "status": record.status.value,
+            "pid": record.pid,
+            "task": record.task,
+            "started_at": record.started_at,
+            "updated_at": record.updated_at,
+            "exit_code": record.exit_code,
+            "pending_interventions": len(sup.get_pending_interventions(session_id)),
+        }
+
+    async def runtime_session_list(params: dict) -> list:
+        """List all sessions."""
+        sup = state.runtime_supervisor
+        sessions = sup.list_sessions()
+        return [
+            {
+                "session_id": s.session_id,
+                "backend_kind": s.backend_kind,
+                "status": s.status.value,
+                "task": s.task,
+                "pid": s.pid,
+                "pending_interventions": len(sup.get_pending_interventions(s.session_id)),
+            }
+            for s in sessions
+        ]
+
+    async def runtime_session_events(params: dict) -> list:
+        """Get canonical events for a session."""
+        session_id = params["session_id"]
+        since_seq = int(params.get("since_seq", 0))
+        limit = min(int(params.get("limit", 100)), 1000)
+        sup = state.runtime_supervisor
+        events = sup.get_events(session_id, since_seq=since_seq, limit=limit)
+        return [e.to_dict() for e in events]
+
+    async def runtime_session_pause(params: dict) -> dict:
+        """Soft pause a session."""
+        session_id = params["session_id"]
+        sup = state.runtime_supervisor
+        record = sup.pause_session(session_id)
+        return {"session_id": record.session_id, "status": record.status.value}
+
+    async def runtime_session_resume(params: dict) -> dict:
+        """Resume a paused session."""
+        session_id = params["session_id"]
+        sup = state.runtime_supervisor
+        record = sup.resume_session(session_id)
+        return {"session_id": record.session_id, "status": record.status.value}
+
+    async def runtime_session_kill(params: dict) -> dict:
+        """Kill a session."""
+        session_id = params["session_id"]
+        sup = state.runtime_supervisor
+        record = sup.kill_session(session_id)
+        return {"session_id": record.session_id, "status": record.status.value}
+
+    async def runtime_intervention_list(params: dict) -> list:
+        """List pending interventions for a session."""
+        session_id = params["session_id"]
+        sup = state.runtime_supervisor
+        interventions = sup.get_pending_interventions(session_id)
+        return [
+            {
+                "intervention_id": i.intervention_id,
+                "tool_call_id": i.tool_call_id,
+                "tool_name": i.tool_name,
+                "tool_input": i.tool_input,
+                "elapsed_seconds": round(i.elapsed, 1),
+                "remaining_seconds": round(i.remaining, 1),
+                "timed_out": i.timed_out,
+            }
+            for i in interventions
+        ]
+
+    async def runtime_intervention_resolve(params: dict) -> dict:
+        """Resolve a pending intervention (approve/deny)."""
+        session_id = params["session_id"]
+        tool_call_id = params["tool_call_id"]
+        decision = params["decision"]  # "approve" or "deny"
+        reason = params.get("reason")
+        sup = state.runtime_supervisor
+        result = sup.resolve_intervention(session_id, tool_call_id, decision, reason=reason)
+        if not result:
+            return {"resolved": False, "error": "No pending intervention for tool_call_id"}
+        return {
+            "resolved": True,
+            "intervention_id": result.intervention_id,
+            "decision": result.decision,
+        }
+
+    dispatcher.register("runtime.session.create", runtime_session_create, mutating=True)
+    dispatcher.register("runtime.session.launch", runtime_session_launch, mutating=True)
+    dispatcher.register("runtime.session.get", runtime_session_get)
+    dispatcher.register("runtime.session.list", runtime_session_list)
+    dispatcher.register("runtime.session.events", runtime_session_events)
+    dispatcher.register("runtime.session.pause", runtime_session_pause, mutating=True)
+    dispatcher.register("runtime.session.resume", runtime_session_resume, mutating=True)
+    dispatcher.register("runtime.session.kill", runtime_session_kill, mutating=True)
+    dispatcher.register("runtime.intervention.list", runtime_intervention_list)
+    dispatcher.register("runtime.intervention.resolve", runtime_intervention_resolve, mutating=True)
 
 
 # =============================================================================

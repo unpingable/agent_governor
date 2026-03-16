@@ -40,13 +40,19 @@ These modules are substrate, not redundant:
 
 ### Core Objects
 
-**Supervised Session** — One governed attachment to one backend runtime. Extends `session_continuity.py` capsules with runtime lifecycle (pid, adapter, event stream, intervention queue).
+**Supervised Session** — One governed attachment to one backend runtime. Two-part structure:
+- **Capsule** (durable): extends `session_continuity.py`. Intent, constraints, authority, ledger, workspace state. Survives restart.
+- **Runtime facet** (volatile): pid, adapter handle, attach state, live event sequence, intervention/promotion counts. Dies with the process.
+
+Linked by `session_id`. Capsule is the continuity object. Runtime facet is the supervision state. Do not contaminate capsules with process-management sludge.
 
 **Runtime Adapter** — Backend-specific shim. Thin. Declares capabilities honestly. First adapter: Claude Code (builds on `claude_hooks.py`).
 
 **Canonical Event** — Normalized event from any backend. Sequenced per session, correlated to receipts.
 
-**Promotion** — Proposed side-effect requiring operator acknowledgment. Created by policy or supervisor observation.
+**Intervention** — "Can this action proceed right now?" Blocking decision on a tool call or dangerous operation. Time-bounded. Lives in the intervention queue.
+
+**Promotion** — "Do we accept this produced work?" Proposed side-effect or artifact requiring operator acknowledgment before it becomes adopted output. Lives in the promotion queue. Different queue, different semantics, different operator mood.
 
 ### Session Lifecycle
 
@@ -96,6 +102,16 @@ States:
 #### Faults
 - `adapter_error`, `runtime_protocol_error`
 
+### Event Semantics
+
+**Idempotency**: Events are identified by `(session_id, seq)`. If a hook fires twice for the same tool call (e.g., Claude retries), the adapter deduplicates by `tool_call_id` before assigning a new seq. Same native event → same canonical event, not a duplicate.
+
+**Pairing**: `tool_call_proposed` and `tool_call_completed`/`tool_call_failed`/`tool_call_denied` are paired by `tool_call_id` in the payload, not by sequence adjacency. Multiple tool calls may be in flight (Claude Code can propose tools while previous ones complete).
+
+**Restart**: On supervisor restart, the runtime facet is reconstructed from the adapter (is the child still alive?) and the persisted event index (last known seq). Events are NOT re-emitted. The event stream has a gap, which is recorded as a `supervisor_restart` event with the gap range.
+
+**Maude reconnection**: Maude requests events from a `since_seq` cursor. The event store serves from persisted JSONL. No re-emission, no replay magic. If events were lost in the gap, the gap is visible.
+
 #### Event envelope
 
 ```python
@@ -141,7 +157,15 @@ Adapter capabilities are **declared truth, not aspirational**. If a backend does
 
 ### Claude Code Adapter (Phase 0)
 
-Builds on existing `claude_hooks.py`:
+Builds on existing `claude_hooks.py`. Two operating modes:
+
+**Supervised mode** (Phase 0 target): Governor launches Claude Code as a managed child process. Governor owns the process lifecycle. This is the primary mode for Maude.
+
+**Observer mode** (backward compat): Claude Code launches governor hooks as subprocesses (current behavior). Governor observes and intercepts but doesn't own the process. Useful for existing `governor hook` workflows.
+
+Phase 0 implements supervised mode only. Observer mode continues to work via existing `claude_hooks.py` — no changes needed. Same adapter family, but different operational paths. Do not try to make one code path gracefully handle both modes.
+
+Supervised mode details:
 
 - **Launch**: spawn `claude` CLI with `--hooks-config` pointing to governor hook scripts (already implemented in `claude_hooks.py`)
 - **Tool interception**: PreToolUse hook (already implemented) → `tool_call_proposed` event → policy decision → hook response (allow/deny)
@@ -151,7 +175,7 @@ Builds on existing `claude_hooks.py`:
 - **Capabilities**: `supports_native_tool_hooks=True`, `supports_structured_events=True`, `supports_pause=False` (soft pause only), `supports_graceful_shutdown=True`
 
 The adapter is thin because the hook machinery already exists. The new work is:
-1. Spawning Claude Code as a managed child process (vs current model where Claude Code spawns governor hooks)
+1. Spawning Claude Code as a managed child process
 2. Wrapping hook I/O into the canonical event bus
 3. Managing the session lifecycle around the child process
 
@@ -173,12 +197,34 @@ The adapter is thin because the hook machinery already exists. The new work is:
 
 Control actions produce events. Nothing happens invisibly.
 
+### Workspace Change Detection
+
+Change detection source of truth: **`git diff` against a known-clean baseline**, not filesystem watchers or write interception.
+
+Rationale: filesystem watchers are racy and miss changes made by subprocesses of subprocesses. Write interception (wrapper.py) only catches governor-mediated writes. `git diff` is the single source of truth for "what actually changed in the worktree."
+
+Detection trigger: **post-tool scan**. After each `tool_call_completed` that has write-capable tool class (bash, write, edit), the supervisor runs `git diff --name-only` against the session's baseline commit. New/changed files become workspace change events.
+
+Baseline: set at session launch (current HEAD). Updated when promotions are approved (new baseline = post-promotion state).
+
+### Timeout and Default Policy
+
+Intervention timeouts are explicit and visible:
+
+- **Default intervention timeout**: 300s (configurable per policy profile)
+- **Default on timeout**: `deny` for write/execute/network tools, `allow` for read-only tools
+- **Pause freezes timers**: if the operator pauses the session, intervention timers stop
+- **UI shows countdown**: Maude displays time remaining on pending interventions
+- **Timeout produces event**: `intervention_timeout` with the default action taken
+
+Promotion timeouts: none by default. Promotions can sit pending indefinitely. Optional `promotion_expiry` per policy profile causes promotions to expire to `expired` status after N minutes of inactivity.
+
 ### Promotion Queue
 
 A promotion is created when:
-- File changes cross threshold
-- Write action blocked for approval
-- Patch/diff produced
+- Post-tool workspace scan detects file changes beyond the baseline
+- Write action blocked for approval and operator needs to review the result
+- Patch/diff produced by the agent
 - Policy requires operator acceptance
 
 ```python
@@ -196,7 +242,17 @@ class Promotion:
     receipt_ids: list[str]
 ```
 
-Promotions are the bridge from "agent chatter" to "real work product." The operator approves promotions, not tool calls (though tool calls may also need approval for dangerous operations).
+Promotions are the bridge from "agent chatter" to "real work product."
+
+### Intervention vs Promotion
+
+These are distinct queues with distinct semantics:
+
+- **Intervention queue**: "Can this proceed?" Real-time gating of tool calls or dangerous operations. Time-bounded — if the operator doesn't respond within the timeout, the default policy applies (deny for dangerous ops, allow for safe ones). Interventions are about the *present action*.
+
+- **Promotion queue**: "Do we accept this output?" Post-hoc review of produced work. Not time-bounded in the same way — promotions can sit pending until the operator reviews them. Promotions are about *accumulated results*.
+
+An operator in intervention mode is a traffic cop. An operator in promotion mode is a code reviewer. Different cognitive state, different UI treatment.
 
 ### Daemon RPC Extensions
 
@@ -220,13 +276,25 @@ runtime.promotion.diff      # get diff for promotion
 
 ### Persistence
 
-Extends existing session_continuity capsules:
-- Session metadata + runtime state
-- Canonical event index (enough to reconstruct recent state)
-- Pending interventions/promotions
-- Receipt linkage
+Two-part, matching the capsule/facet split:
 
-Full transcript is NOT required for MVP. Events + receipts are the audit trail.
+**Capsule (durable, in session_continuity):**
+- Session metadata (id, backend_kind, cwd, policy context)
+- Intent, constraints, authority
+- Promotion history (approved/rejected)
+- Receipt linkage root
+
+**Event store (append-only JSONL, per session):**
+- Canonical events, rotated like signal store
+- Enough to serve `since_seq` queries for Maude reconnection
+- NOT the full agent transcript — events + receipts are the audit trail
+
+**Runtime facet (volatile, in-memory):**
+- pid, adapter handle, attach state
+- Pending intervention queue
+- Pending promotion queue
+- Live event sequence counter
+- Reconstructed from adapter + event store on restart
 
 ## Phase Plan
 
@@ -274,19 +342,19 @@ New:
 
 Extended:
 - `daemon.py` — add `runtime.*` RPC methods
-- `session_continuity.py` — extend capsules with runtime lifecycle fields
+- `session_continuity.py` — capsule gains supervisor-related metadata fields (backend_kind, policy_context, promotion_history). Runtime facet is separate, NOT added to capsule.
 
 ## Open Questions
 
-1. **Inversion of control**: Currently Claude Code launches governor hooks as subprocesses. The supervisor inverts this — governor launches Claude Code. Both models should work. The adapter needs to handle "I spawned you" and potentially "you spawned me" (for backward compat with existing hook-only setup).
+1. **Soft vs hard pause**: Start with soft pause (block tool approvals, hold input). Hard pause (SIGSTOP) is adapter-capability-dependent and probably not worth the complexity in Phase 0.
 
-2. **Soft vs hard pause**: Start with soft pause (block tool approvals, hold input). Hard pause (SIGSTOP) is adapter-capability-dependent and probably not worth the complexity in Phase 0.
+2. **Promotion granularity**: Per-file? Per-changeset? Per-task? Start with per-changeset (all files changed since last promotion checkpoint). Refine based on actual usage.
 
-3. **Promotion granularity**: Per-file? Per-changeset? Per-task? Start with per-changeset (all files changed since last promotion checkpoint). Refine based on actual usage.
+3. **Event retention**: How long do canonical events persist? They're lightweight but accumulate. Probably: keep recent N events in memory, persist to JSONL with rotation (like existing signal store pattern).
 
-4. **Event retention**: How long do canonical events persist? They're lightweight but accumulate. Probably: keep recent N events in memory, persist to JSONL with rotation (like existing signal store pattern).
+4. **Multi-session**: Phase 0 is one session. Multi-session (multiple agents working in different worktrees on the same repo) is Phase 2+ and maps to existing multi-agent dispatcher protocol.
 
-5. **Multi-session**: Phase 0 is one session. Multi-session (multiple agents working in different worktrees on the same repo) is Phase 2+ and maps to existing multi-agent dispatcher protocol.
+5. **Git availability**: Workspace change detection assumes git. For non-git workspaces, fall back to file modification time scanning (less reliable, explicitly degraded). Declare this in adapter capabilities.
 
 ## Invariants
 

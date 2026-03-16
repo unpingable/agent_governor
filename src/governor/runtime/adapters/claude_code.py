@@ -84,11 +84,17 @@ def main():
         decision = result.get("decision", "allow")
         if decision == "deny":
             reason = result.get("reason", "Blocked by governor")
-            print(json.dumps({"decision": "block", "reason": reason}))
-            sys.exit(0)
-        # allow — print nothing, exit 0
+            # Claude Code PreToolUse hook output format
+            print(json.dumps({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": reason,
+                }
+            }))
+        # allow — output nothing, exit 0
     except Exception:
-        pass  # Socket error = allow (fail-open for hooks, fail-closed for policy)
+        pass  # Socket error = allow (fail-open for hooks)
 
 if __name__ == "__main__":
     main()
@@ -198,32 +204,45 @@ class ClaudeCodeAdapter:
             except (json.JSONDecodeError, OSError):
                 pass
 
-        # Merge our hooks (prepend to existing hook lists)
+        # Merge our hooks into existing settings.
+        # Claude Code hook format: hooks.PreToolUse = [{"matcher": "...", "hooks": [...]}]
         hooks = existing_settings.get("hooks", {})
-        pre_hooks = hooks.get("preToolUse", [])
-        post_hooks = hooks.get("postToolUse", [])
+        if isinstance(hooks, list):
+            # Legacy flat format — convert to dict
+            hooks = {}
 
-        # Add governor hooks at the front
-        gov_pre = {
-            "type": "command",
-            "command": f"python3 {pre_hook}",
-            "timeout": 30000,
+        pre_matchers = hooks.get("PreToolUse", [])
+        post_matchers = hooks.get("PostToolUse", [])
+
+        # Add governor hook matchers (match all tools)
+        gov_pre_matcher = {
+            "matcher": "",  # empty = match all
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": f"python3 {pre_hook}",
+                    "timeout": 30,
+                }
+            ],
+            "_governor_supervised": True,
         }
-        gov_post = {
-            "type": "command",
-            "command": f"python3 {post_hook}",
-            "timeout": 5000,
+        gov_post_matcher = {
+            "matcher": "",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": f"python3 {post_hook}",
+                    "timeout": 5,
+                }
+            ],
+            "_governor_supervised": True,
         }
 
-        # Tag our hooks so we can remove them later
-        gov_pre["_governor_supervised"] = True
-        gov_post["_governor_supervised"] = True
+        pre_matchers.insert(0, gov_pre_matcher)
+        post_matchers.insert(0, gov_post_matcher)
 
-        pre_hooks.insert(0, gov_pre)
-        post_hooks.insert(0, gov_post)
-
-        hooks["preToolUse"] = pre_hooks
-        hooks["postToolUse"] = post_hooks
+        hooks["PreToolUse"] = pre_matchers
+        hooks["PostToolUse"] = post_matchers
         existing_settings["hooks"] = hooks
 
         settings_file.write_text(json.dumps(existing_settings, indent=2))
@@ -479,14 +498,15 @@ class ClaudeCodeAdapter:
                     try:
                         data = json.loads(settings.read_text())
                         hooks = data.get("hooks", {})
-                        for key in ("preToolUse", "postToolUse"):
-                            if key in hooks:
-                                hooks[key] = [
-                                    h for h in hooks[key]
-                                    if not h.get("_governor_supervised")
-                                ]
-                        data["hooks"] = hooks
-                        settings.write_text(json.dumps(data, indent=2))
+                        if isinstance(hooks, dict):
+                            for key in ("PreToolUse", "PostToolUse"):
+                                if key in hooks:
+                                    hooks[key] = [
+                                        h for h in hooks[key]
+                                        if not h.get("_governor_supervised")
+                                    ]
+                            data["hooks"] = hooks
+                            settings.write_text(json.dumps(data, indent=2))
                     except (json.JSONDecodeError, OSError):
                         pass
             except OSError:

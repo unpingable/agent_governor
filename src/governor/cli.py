@@ -19351,6 +19351,205 @@ def _populate_advanced() -> None:
 _populate_advanced()
 
 
+# =============================================================================
+# Runtime Supervisor CLI
+# =============================================================================
+
+
+@cli.group("runtime")
+def runtime_group():
+    """Supervised agent runtime sessions."""
+    pass
+
+
+@runtime_group.command("launch")
+@click.option("--backend", default="claude_code", help="Backend kind (claude_code)")
+@click.option("--cwd", default=None, help="Working directory for the session")
+@click.option("--task", default=None, help="Task description for the agent")
+@click.option("--mode", "operator_mode", default="interactive", help="Operator mode (interactive/autonomous)")
+@click.pass_context
+def runtime_launch(ctx: click.Context, backend: str, cwd: str | None, task: str | None, operator_mode: str):
+    """Launch a supervised agent session."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    runtime_dir = gov_dir / "runtime"
+    runtime_dir.mkdir(exist_ok=True)
+    work_dir = cwd or str(gov_dir.parent)
+
+    if backend == "claude_code":
+        from .runtime.adapters.claude_code import ClaudeCodeAdapter
+        adapter = ClaudeCodeAdapter()
+    else:
+        click.echo(f"Unknown backend: {backend}", err=True)
+        raise SystemExit(1)
+
+    supervisor = SessionSupervisor(state_dir=runtime_dir)
+    record = supervisor.create_session(
+        adapter=adapter,
+        backend_kind=backend,
+        cwd=work_dir,
+        task=task,
+        operator_mode=operator_mode,
+    )
+    click.echo(f"Session created: {record.session_id}")
+    click.echo(f"Backend: {record.backend_kind}")
+    click.echo(f"CWD: {record.cwd}")
+    click.echo(f"Task: {record.task or '(none)'}")
+
+    record = supervisor.launch_session(record.session_id)
+    click.echo(f"Status: {record.status.value}")
+    click.echo(f"PID: {record.pid}")
+
+    # Print the session_id for scripting
+    click.echo(f"\nSession ID: {record.session_id}")
+
+
+@runtime_group.command("list")
+@click.pass_context
+def runtime_list(ctx: click.Context):
+    """List supervised sessions."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    runtime_dir = gov_dir / "runtime"
+    if not runtime_dir.exists():
+        click.echo("No runtime sessions.")
+        return
+
+    supervisor = SessionSupervisor(state_dir=runtime_dir)
+    sessions = supervisor.list_sessions()
+    if not sessions:
+        click.echo("No sessions.")
+        return
+
+    for s in sessions:
+        pending = len(supervisor.get_pending_interventions(s.session_id))
+        task_str = f" - {s.task}" if s.task else ""
+        pending_str = f" [{pending} pending]" if pending else ""
+        click.echo(f"  {s.session_id}  {s.status.value:20s}  {s.backend_kind}{task_str}{pending_str}")
+
+
+@runtime_group.command("events")
+@click.argument("session_id")
+@click.option("--since", "since_seq", default=0, type=int, help="Show events since this sequence number")
+@click.option("--limit", default=50, type=int, help="Max events to show")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def runtime_events(ctx: click.Context, session_id: str, since_seq: int, limit: int, as_json: bool):
+    """Show canonical events for a session."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    supervisor = SessionSupervisor(state_dir=gov_dir / "runtime")
+    events = supervisor.get_events(session_id, since_seq=since_seq, limit=limit)
+
+    if as_json:
+        click.echo(json.dumps([e.to_dict() for e in events], indent=2))
+        return
+
+    if not events:
+        click.echo("No events.")
+        return
+
+    for e in events:
+        tool_info = ""
+        if "tool_name" in e.payload:
+            tool_info = f" [{e.payload['tool_name']}]"
+        click.echo(f"  {e.seq:4d}  {e.at}  {e.kind:30s}  {e.source_layer}{tool_info}")
+
+
+@runtime_group.command("interventions")
+@click.argument("session_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def runtime_interventions(ctx: click.Context, session_id: str, as_json: bool):
+    """Show pending interventions for a session."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    supervisor = SessionSupervisor(state_dir=gov_dir / "runtime")
+    interventions = supervisor.get_pending_interventions(session_id)
+
+    if as_json:
+        click.echo(json.dumps([
+            {
+                "intervention_id": i.intervention_id,
+                "tool_call_id": i.tool_call_id,
+                "tool_name": i.tool_name,
+                "elapsed_seconds": round(i.elapsed, 1),
+                "remaining_seconds": round(i.remaining, 1),
+            }
+            for i in interventions
+        ], indent=2))
+        return
+
+    if not interventions:
+        click.echo("No pending interventions.")
+        return
+
+    for i in interventions:
+        click.echo(f"  {i.intervention_id}  {i.tool_name:15s}  "
+                    f"tool_call_id={i.tool_call_id}  "
+                    f"remaining={i.remaining:.0f}s")
+        if i.tool_input:
+            # Show truncated input
+            inp_str = json.dumps(i.tool_input)
+            if len(inp_str) > 120:
+                inp_str = inp_str[:117] + "..."
+            click.echo(f"    input: {inp_str}")
+
+
+@runtime_group.command("approve")
+@click.argument("session_id")
+@click.argument("tool_call_id")
+@click.pass_context
+def runtime_approve(ctx: click.Context, session_id: str, tool_call_id: str):
+    """Approve a pending intervention."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    supervisor = SessionSupervisor(state_dir=gov_dir / "runtime")
+    result = supervisor.resolve_intervention(session_id, tool_call_id, "approve")
+    if result:
+        click.echo(f"Approved: {result.tool_name} ({tool_call_id})")
+    else:
+        click.echo(f"No pending intervention for {tool_call_id}", err=True)
+        raise SystemExit(1)
+
+
+@runtime_group.command("deny")
+@click.argument("session_id")
+@click.argument("tool_call_id")
+@click.option("--reason", default=None, help="Reason for denial")
+@click.pass_context
+def runtime_deny(ctx: click.Context, session_id: str, tool_call_id: str, reason: str | None):
+    """Deny a pending intervention."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    supervisor = SessionSupervisor(state_dir=gov_dir / "runtime")
+    result = supervisor.resolve_intervention(session_id, tool_call_id, "deny", reason=reason)
+    if result:
+        click.echo(f"Denied: {result.tool_name} ({tool_call_id})")
+    else:
+        click.echo(f"No pending intervention for {tool_call_id}", err=True)
+        raise SystemExit(1)
+
+
+@runtime_group.command("kill")
+@click.argument("session_id")
+@click.pass_context
+def runtime_kill(ctx: click.Context, session_id: str):
+    """Kill a supervised session."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    supervisor = SessionSupervisor(state_dir=gov_dir / "runtime")
+    record = supervisor.kill_session(session_id)
+    click.echo(f"Session {session_id}: {record.status.value}")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

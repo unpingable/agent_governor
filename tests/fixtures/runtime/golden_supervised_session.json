@@ -1,0 +1,13 @@
+[
+  {"seq": 0, "kind": "session_created", "source_layer": "supervisor"},
+  {"seq": 1, "kind": "session_launching", "source_layer": "supervisor"},
+  {"seq": 2, "kind": "session_attached", "source_layer": "supervisor"},
+  {"seq": 3, "kind": "session_running", "source_layer": "supervisor"},
+  {"seq": 4, "kind": "tool_call_proposed", "source_layer": "adapter", "payload": {"tool_name": "Bash"}},
+  {"seq": 5, "kind": "operator_prompted", "source_layer": "supervisor", "payload": {"tool_name": "Bash"}},
+  {"seq": 6, "kind": "tool_call_allowed", "source_layer": "operator", "payload": {"tool_name": "Bash"}},
+  {"seq": 7, "kind": "operator_decision", "source_layer": "operator"},
+  {"seq": 8, "kind": "tool_call_completed", "source_layer": "adapter", "payload": {"tool_name": "Bash"}},
+  {"seq": 9, "kind": "agent_output", "source_layer": "adapter"},
+  {"seq": 10, "kind": "session_exited", "source_layer": "adapter"}
+]

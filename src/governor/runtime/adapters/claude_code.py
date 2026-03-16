@@ -140,6 +140,7 @@ class ClaudeCodeHandle(BackendHandle):
     process: subprocess.Popen | None = None
     socket_path: str | None = None
     hooks_dir: str | None = None
+    listener_socket: socket.socket | None = None
 
 
 class ClaudeCodeAdapter:
@@ -160,7 +161,14 @@ class ClaudeCodeAdapter:
         )
 
     def launch(self, config: LaunchConfig) -> ClaudeCodeHandle:
-        """Launch Claude Code as a managed child process."""
+        """Launch Claude Code as a managed child process.
+
+        Injects governor hooks into the project's .claude/settings.local.json
+        (merging with existing content). Hooks communicate with the supervisor
+        via Unix domain socket for real-time tool interception.
+        """
+        cwd = Path(config.cwd)
+
         # Create temp dir for hook scripts and socket
         hooks_dir = Path(tempfile.mkdtemp(prefix="gov_hooks_"))
         socket_path = str(hooks_dir / "supervisor.sock")
@@ -174,29 +182,58 @@ class ClaudeCodeAdapter:
         post_hook.write_text(_SUPERVISED_POST_TOOL_SCRIPT)
         post_hook.chmod(post_hook.stat().st_mode | stat.S_IXUSR)
 
-        # Generate Claude settings with hooks pointing to our scripts
-        settings = {
-            "hooks": {
-                "preToolUse": [
-                    {
-                        "type": "command",
-                        "command": f"python3 {pre_hook}",
-                        "timeout": 30000,
-                    }
-                ],
-                "postToolUse": [
-                    {
-                        "type": "command",
-                        "command": f"python3 {post_hook}",
-                        "timeout": 5000,
-                    }
-                ],
-            }
+        # Inject hooks into project .claude/settings.local.json
+        # Back up existing and merge our hooks in
+        settings_dir = cwd / ".claude"
+        settings_dir.mkdir(exist_ok=True)
+        settings_file = settings_dir / "settings.local.json"
+        backup_file = hooks_dir / "settings.local.json.bak"
+
+        existing_settings: dict[str, Any] = {}
+        if settings_file.exists():
+            try:
+                existing_settings = json.loads(settings_file.read_text())
+                # Back up original
+                backup_file.write_text(settings_file.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        # Merge our hooks (prepend to existing hook lists)
+        hooks = existing_settings.get("hooks", {})
+        pre_hooks = hooks.get("preToolUse", [])
+        post_hooks = hooks.get("postToolUse", [])
+
+        # Add governor hooks at the front
+        gov_pre = {
+            "type": "command",
+            "command": f"python3 {pre_hook}",
+            "timeout": 30000,
+        }
+        gov_post = {
+            "type": "command",
+            "command": f"python3 {post_hook}",
+            "timeout": 5000,
         }
 
-        # Write settings to a temp location
-        settings_file = hooks_dir / "settings.json"
-        settings_file.write_text(json.dumps(settings, indent=2))
+        # Tag our hooks so we can remove them later
+        gov_pre["_governor_supervised"] = True
+        gov_post["_governor_supervised"] = True
+
+        pre_hooks.insert(0, gov_pre)
+        post_hooks.insert(0, gov_post)
+
+        hooks["preToolUse"] = pre_hooks
+        hooks["postToolUse"] = post_hooks
+        existing_settings["hooks"] = hooks
+
+        settings_file.write_text(json.dumps(existing_settings, indent=2))
+
+        # Create and bind listener socket BEFORE starting Claude
+        # This prevents a race where Claude's hooks try to connect before we listen
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener.settimeout(1.0)
+        listener.bind(socket_path)
+        listener.listen(5)
 
         # Build env for child process
         env = {**os.environ, **config.env}
@@ -221,12 +258,19 @@ class ClaudeCodeAdapter:
             stderr=subprocess.PIPE,
         )
 
+        # Close stdin so Claude knows there's no interactive input
+        # (--print mode reads prompt from args, not stdin)
+        if config.task and process.stdin:
+            process.stdin.close()
+
         return ClaudeCodeHandle(
             pid=process.pid,
             native_session_ref=config.session_id,
             process=process,
             socket_path=socket_path,
             hooks_dir=str(hooks_dir),
+            listener_socket=listener,
+            extra={"settings_backup": str(backup_file), "settings_file": str(settings_file)},
         )
 
     def iter_events(self, handle: ClaudeCodeHandle) -> Iterable[NativeEvent]:
@@ -238,18 +282,12 @@ class ClaudeCodeAdapter:
         if not handle.socket_path:
             return
 
-        # Create and bind the Unix socket
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(1.0)  # Non-blocking-ish for polling
-        try:
-            sock.bind(handle.socket_path)
-        except OSError:
-            # Socket already exists (shouldn't happen with tempdir)
-            os.unlink(handle.socket_path)
-            sock.bind(handle.socket_path)
-        sock.listen(5)
+        # Use the pre-bound listener socket from launch()
+        sock = handle.listener_socket
+        if not sock:
+            return
 
-        # Also monitor process stdout in a thread
+        # Monitor process stdout/stderr in threads
         stdout_events: list[NativeEvent] = []
         stderr_lines: list[str] = []
         stdout_lock = threading.Lock()
@@ -283,8 +321,12 @@ class ClaudeCodeAdapter:
         self._pending_hooks: dict[str, socket.socket] = {}
 
         try:
-            while self.is_alive(handle):
-                # Check for hook messages
+            # Main event loop — check socket, stdout, and process status
+            process_alive = True
+            while process_alive or stdout_events:
+                process_alive = self.is_alive(handle)
+
+                # Check for hook messages via socket
                 try:
                     conn, _ = sock.accept()
                     data = b""
@@ -302,7 +344,6 @@ class ClaudeCodeAdapter:
                         tool_call_id = msg.get("tool_call_id", str(uuid.uuid4().hex[:8]))
 
                         if msg_type == "pre_tool_use":
-                            # Store connection for response
                             self._pending_hooks[tool_call_id] = conn
                             yield NativeEvent(
                                 kind="pre_tool_use",
@@ -336,6 +377,16 @@ class ClaudeCodeAdapter:
                         yield evt
                     stdout_events.clear()
 
+            # Process exited — wait for IO threads to finish draining
+            t_out.join(timeout=3)
+            t_err.join(timeout=3)
+
+            # Final stdout drain
+            with stdout_lock:
+                for evt in stdout_events:
+                    yield evt
+                stdout_events.clear()
+
         finally:
             # Clean up pending hooks
             for conn in self._pending_hooks.values():
@@ -346,16 +397,17 @@ class ClaudeCodeAdapter:
             self._pending_hooks.clear()
             sock.close()
 
-            # Yield exit event
-            if handle.process:
-                returncode = handle.process.poll()
-                yield NativeEvent(
-                    kind="process_exit",
-                    payload={
-                        "returncode": returncode,
-                        "stderr_tail": stderr_lines[-10:] if stderr_lines else [],
-                    },
-                )
+        # Yield exit event AFTER finally (so it's always the last event)
+        if handle.process:
+            handle.process.wait(timeout=5)
+            returncode = handle.process.returncode
+            yield NativeEvent(
+                kind="process_exit",
+                payload={
+                    "returncode": returncode,
+                    "stderr_tail": stderr_lines[-10:] if stderr_lines else [],
+                },
+            )
 
     def send_control(self, handle: ClaudeCodeHandle, action: ControlAction) -> None:
         """Send a control action to Claude Code."""
@@ -411,6 +463,33 @@ class ClaudeCodeAdapter:
             try:
                 handle.process.wait(timeout=5)
             except subprocess.TimeoutExpired:
+                pass
+
+        # Restore original settings.local.json
+        backup_path = handle.extra.get("settings_backup", "")
+        settings_path = handle.extra.get("settings_file", "")
+        if backup_path and settings_path:
+            try:
+                backup = Path(backup_path)
+                settings = Path(settings_path)
+                if backup.exists():
+                    settings.write_text(backup.read_text())
+                elif settings.exists():
+                    # Remove governor hooks from settings
+                    try:
+                        data = json.loads(settings.read_text())
+                        hooks = data.get("hooks", {})
+                        for key in ("preToolUse", "postToolUse"):
+                            if key in hooks:
+                                hooks[key] = [
+                                    h for h in hooks[key]
+                                    if not h.get("_governor_supervised")
+                                ]
+                        data["hooks"] = hooks
+                        settings.write_text(json.dumps(data, indent=2))
+                    except (json.JSONDecodeError, OSError):
+                        pass
+            except OSError:
                 pass
 
         # Clean up socket and hooks dir

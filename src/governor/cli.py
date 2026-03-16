@@ -1700,7 +1700,7 @@ def hook_post_tool(ctx: click.Context) -> None:
     if tool_name == "Bash":
         command = tool_input.get("command", "")
         evidence["command_hash"] = hashlib.sha256(command.encode()).hexdigest()[:16]
-        subject_kind = f"bash_command"
+        subject_kind = "bash_command"
         subject_bytes = command.encode()
     elif tool_name in ("Write", "Edit"):
         file_path = tool_input.get("file_path", "")

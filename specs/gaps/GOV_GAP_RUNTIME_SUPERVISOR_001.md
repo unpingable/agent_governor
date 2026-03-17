@@ -254,6 +254,27 @@ These are distinct queues with distinct semantics:
 
 An operator in intervention mode is a traffic cop. An operator in promotion mode is a code reviewer. Different cognitive state, different UI treatment.
 
+### Intervention Outcomes: Approve / Deny / Edit-Resubmit
+
+Phase 0 supports approve and deny. Phase 1 adds **edit-resubmit**: the operator modifies the proposed action before approving.
+
+Edit-resubmit semantics:
+
+- **Original proposal is immutable.** The `tool_call_proposed` event and its payload are never modified.
+- **Operator edit produces a derived proposal.** New event `tool_call_edited` with `parent_event_id` pointing to the original proposal. The edited payload (e.g., modified bash command, changed file path) is the new subject.
+- **Policy/invariant checks rerun on the edited artifact.** The derived proposal goes through the same gate as the original — no free pass for edits.
+- **Execution resumes from the validated derived proposal.** The adapter receives the edited action, not the original.
+- **Audit trail preserves lineage.** Receipt chain: original proposal → edit diff → derived proposal → policy re-evaluation → execution. The operator's modification is a first-class artifact with its own receipt.
+
+New event kinds (Phase 1):
+- `tool_call_edited` — operator modified the proposed action
+- `tool_call_resubmitted` — edited action submitted for re-evaluation
+
+New RPC (Phase 1):
+- `runtime.intervention.edit` — modify and resubmit a pending intervention
+
+This matters because binary approve/deny forces the operator into "accept the risk or kill the action." Edit-resubmit lets the operator say "almost, but change the path / drop the --force / add --dry-run." That's how real supervision works.
+
 ### Daemon RPC Extensions
 
 New methods on existing `governor serve` daemon:
@@ -356,6 +377,24 @@ Extended:
 
 5. **Git availability**: Workspace change detection assumes git. For non-git workspaces, fall back to file modification time scanning (less reliable, explicitly degraded). Declare this in adapter capabilities.
 
+## Canonical Operator Surfaces (non-normative)
+
+These are the default information architecture for Maude, not backend protocol. Runtime concepts should map cleanly to these zones.
+
+| Pane | What it shows | Primary data source |
+|------|--------------|-------------------|
+| **Run Summary** | Current session state, lane/regime, risk level, next action, blocked/waiting status | Session record + runtime facet |
+| **Timeline** | Checkpoints, state transitions, interrupts, commits. Diff between checkpoints. Which receipt justified each change. Fork/replay from any point. | Canonical event stream + session_continuity capsules |
+| **Review Queue** | Pending interventions (with countdown) and promotions. Approve / deny / edit-resubmit. Clear "why you're being asked" context. | Intervention queue + promotion queue |
+| **Receipts** | Evidence, policy matches, side-effect intents, receipt chains. What was checked, what passed, what failed. | Gate receipts + evidence store |
+| **Topology** | Optional advanced view: subflows, nested agent runs, dependency graph. For debugging and postmortem, not daily driving. | Multi-agent dispatcher + execution graph |
+
+Design principles:
+- **Queue-first, not scroll-first.** The review queue is the primary interaction surface, not a raw event log.
+- **Structured streaming, not token drizzle.** Progress updates are semantic ("evidence collection", "awaiting approval", "receipt committed"), not performative reasoning slurry.
+- **Collapsible nesting.** Subflows and nested runs fold into the parent timeline. Expandable on demand.
+- **Don't force the graph.** Topology pane is opt-in for power users. Default view is task/timeline/queue.
+
 ## Invariants
 
 1. **Backend is not trusted.** The agent runtime is a supervised process. Its claims are proposals, not authority. (NLAI)
@@ -364,3 +403,4 @@ Extended:
 4. **Adapter capabilities are declared truth.** If a capability isn't supported, the UI degrades honestly.
 5. **Receipts link through.** Every policy decision during a supervised session produces a receipt traceable to the session and event that triggered it.
 6. **Promotion is explicit.** Agent output becomes accepted work product only through the promotion queue, never by silent accumulation.
+7. **Edits preserve lineage.** An operator edit produces a derived proposal with parent linkage, not a mutation of the original. Policy re-evaluates the edit.

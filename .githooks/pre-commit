@@ -1,0 +1,20 @@
+#!/bin/bash
+# Pre-commit hook: run ruff on staged Python files.
+# Install: git config core.hooksPath .githooks
+
+set -euo pipefail
+
+# Get staged .py files (added/modified only)
+STAGED=$(git diff --cached --name-only --diff-filter=AM | grep '\.py$' || true)
+
+if [[ -z "$STAGED" ]]; then
+    exit 0
+fi
+
+# Run ruff on staged files
+if ! python3 -m ruff check $STAGED; then
+    echo ""
+    echo "ruff check failed. Fix lint errors before committing."
+    echo "Run: python3 -m ruff check --fix $STAGED"
+    exit 1
+fi

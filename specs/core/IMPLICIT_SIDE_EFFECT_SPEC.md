@@ -1,5 +1,7 @@
 # Implicit Side-Effect Governance
 
+status: draft
+
 ## Core Invariant
 
 **Any operation that produces observable effects outside the agent's reasoning

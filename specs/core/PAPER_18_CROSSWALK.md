@@ -1,5 +1,7 @@
 # Paper 18 Crosswalk: Unauthorized Durability → Governor
 
+status: living document
+
 ## Status
 Living document. Updated as v3 work lands.
 

@@ -19332,6 +19332,17 @@ def ci_verify_cmd(ctx: click.Context, receipt_path: str, policy_file: str | None
     ctx.exit(0 if result.ok else 1)
 
 
+# =============================================================================
+# Runtime Supervisor CLI
+# =============================================================================
+
+
+@cli.group("runtime")
+def runtime_group():
+    """Supervised agent runtime sessions."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Populate advanced group — dual-register all attic commands
 # ---------------------------------------------------------------------------
@@ -19349,17 +19360,6 @@ def _populate_advanced() -> None:
             advanced.add_command(cmd, name)
 
 _populate_advanced()
-
-
-# =============================================================================
-# Runtime Supervisor CLI
-# =============================================================================
-
-
-@cli.group("runtime")
-def runtime_group():
-    """Supervised agent runtime sessions."""
-    pass
 
 
 @runtime_group.command("launch")

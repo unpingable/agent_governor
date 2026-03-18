@@ -1,5 +1,7 @@
 # ENTRAINMENT_CONTROL_MODEL
 
+status: draft
+
 ## Status
 Draft
 

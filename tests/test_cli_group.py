@@ -204,7 +204,7 @@ ALLOWED_UNCATEGORIZED: set[str] = {
     "metrics", "mode", "must-exist", "must-pass", "ops",
     "override", "p4", "phase", "precedent", "preflight",
     "prometheus", "puppet", "quorum", "quorum-ext", "regime", "replay",
-    "rejections", "resolve", "revise", "risk", "routing", "rule",
+    "rejections", "resolve", "revise", "risk", "routing", "rule", "runtime",
     "scar", "scope", "security", "selfcheck", "semvar", "signals",
     "slim", "spine", "stability", "state", "strict", "taint",
     "task", "telemetry", "temporal", "transport", "tune", "unlock",

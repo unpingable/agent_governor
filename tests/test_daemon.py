@@ -1139,7 +1139,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 75
+        assert total == 78
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1184,6 +1184,7 @@ class TestMethodClassification:
         "runtime.session.resume",
         "runtime.session.kill",
         "runtime.intervention.resolve",
+        "runtime.promotion.resolve",
     }
 
     def test_all_methods_have_flags(self, dispatcher_and_state):

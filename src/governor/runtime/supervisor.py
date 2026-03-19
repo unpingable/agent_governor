@@ -115,6 +115,7 @@ class RuntimeFacet:
     handle: BackendHandle | None = None
     capabilities: AdapterCapabilities = field(default_factory=AdapterCapabilities)
     pending_interventions: dict[str, Intervention] = field(default_factory=dict)
+    pending_promotion: Any = None  # Promotion | None (avoid circular import)
     event_thread: threading.Thread | None = None
     running: bool = False
 
@@ -300,6 +301,9 @@ class SessionSupervisor:
                         else:
                             self._transition(record, SessionStatus.FAILED)
 
+                        # Detect workspace changes → create promotion
+                        self._detect_promotion(session_id)
+
                     # Deliver to callback (e.g., Maude)
                     if self._on_event:
                         try:
@@ -469,6 +473,98 @@ class SessionSupervisor:
             self._transition(record, SessionStatus.RUNNING)
 
         return intervention
+
+    def _detect_promotion(self, session_id: str) -> None:
+        """Detect workspace changes at session end, create pending promotion."""
+        from governor.runtime.promotion import detect_workspace_changes
+
+        record = self._get_record(session_id)
+        facet = self._get_facet(session_id)
+        bus = self._get_bus(session_id)
+
+        promotion = detect_workspace_changes(record.cwd)
+        if not promotion:
+            return
+
+        promotion.session_id = session_id
+        facet.pending_promotion = promotion
+
+        bus.emit(
+            EventKind.PROMOTION_REQUIRED,
+            SourceLayer.SUPERVISOR,
+            record.backend_kind,
+            payload={
+                "promotion_id": promotion.promotion_id,
+                "changed_files": promotion.changed_files,
+                "diff_stat": promotion.diff_stat,
+            },
+        )
+
+        if self._on_event:
+            # Also deliver via callback so Maude sees it
+            pass  # Already delivered by the main emit path
+
+    def resolve_promotion(
+        self,
+        session_id: str,
+        decision: str,
+        reason: str | None = None,
+    ) -> "Promotion | None":
+        """Resolve a pending promotion (approve/reject)."""
+        from governor.runtime.promotion import (
+            approve_promotion,
+            reject_promotion,
+            revert_workspace,
+        )
+
+        facet = self._get_facet(session_id)
+        record = self._get_record(session_id)
+        bus = self._get_bus(session_id)
+
+        promotion = facet.pending_promotion
+        if not promotion or promotion.status != "pending":
+            return None
+
+        if decision == "approve":
+            approve_promotion(promotion, reason)
+            bus.emit(
+                EventKind.PROMOTION_RESOLVED,
+                SourceLayer.OPERATOR,
+                record.backend_kind,
+                payload={
+                    "promotion_id": promotion.promotion_id,
+                    "decision": "approved",
+                    "changed_files": promotion.changed_files,
+                    "reason": reason,
+                },
+            )
+        else:
+            reject_promotion(promotion, reason)
+            reverted = revert_workspace(record.cwd)
+            bus.emit(
+                EventKind.PROMOTION_RESOLVED,
+                SourceLayer.OPERATOR,
+                record.backend_kind,
+                payload={
+                    "promotion_id": promotion.promotion_id,
+                    "decision": "rejected",
+                    "changed_files": promotion.changed_files,
+                    "reason": reason,
+                    "reverted": reverted,
+                },
+            )
+
+        return promotion
+
+    def get_pending_promotion(self, session_id: str) -> "Promotion | None":
+        """Get the pending promotion for a session, if any."""
+        facet = self._facets.get(session_id)
+        if not facet:
+            return None
+        p = facet.pending_promotion
+        if p and p.status == "pending":
+            return p
+        return None
 
     def pause_session(self, session_id: str) -> SessionRecord:
         """Soft pause: block tool approvals, freeze intervention timers."""

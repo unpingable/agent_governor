@@ -3096,6 +3096,39 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("runtime.intervention.list", runtime_intervention_list)
     dispatcher.register("runtime.intervention.resolve", runtime_intervention_resolve, mutating=True)
 
+    async def runtime_promotion_get(params: dict) -> dict | None:
+        """Get pending promotion for a session."""
+        session_id = params["session_id"]
+        sup = state.runtime_supervisor
+        p = sup.get_pending_promotion(session_id)
+        if not p:
+            return None
+        return p.to_dict()
+
+    async def runtime_promotion_diff(params: dict) -> dict:
+        """Get the diff text for a session's pending promotion."""
+        session_id = params["session_id"]
+        sup = state.runtime_supervisor
+        p = sup.get_pending_promotion(session_id)
+        if not p:
+            return {"error": "No pending promotion"}
+        return {"promotion_id": p.promotion_id, "diff": p.diff_text}
+
+    async def runtime_promotion_resolve(params: dict) -> dict:
+        """Approve or reject a pending promotion."""
+        session_id = params["session_id"]
+        decision = params["decision"]  # "approve" or "reject"
+        reason = params.get("reason")
+        sup = state.runtime_supervisor
+        p = sup.resolve_promotion(session_id, decision, reason=reason)
+        if not p:
+            return {"resolved": False, "error": "No pending promotion"}
+        return {"resolved": True, "promotion_id": p.promotion_id, "status": p.status}
+
+    dispatcher.register("runtime.promotion.get", runtime_promotion_get)
+    dispatcher.register("runtime.promotion.diff", runtime_promotion_diff)
+    dispatcher.register("runtime.promotion.resolve", runtime_promotion_resolve, mutating=True)
+
 
 # =============================================================================
 # Server entry points

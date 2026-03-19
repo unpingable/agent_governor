@@ -19610,6 +19610,91 @@ def runtime_cleanup(ctx: click.Context, cwd: str | None):
         click.echo(f"Cleaned {len(stale_dirs)} stale hook temp dir(s)")
 
 
+@runtime_group.command("promotion")
+@click.argument("session_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def runtime_promotion(ctx: click.Context, session_id: str, as_json: bool):
+    """Show pending promotion (workspace changes) for a session."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    supervisor = SessionSupervisor(state_dir=gov_dir / "runtime")
+    p = supervisor.get_pending_promotion(session_id)
+
+    if not p:
+        click.echo("No pending promotion.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(p.to_dict(), indent=2))
+        return
+
+    click.echo(f"Promotion: {p.promotion_id}")
+    click.echo(f"Session:   {p.session_id}")
+    click.echo(f"Status:    {p.status}")
+    click.echo(f"Files:     {len(p.changed_files)}")
+    click.echo()
+    click.echo(p.diff_stat)
+
+
+@runtime_group.command("diff")
+@click.argument("session_id")
+@click.pass_context
+def runtime_diff(ctx: click.Context, session_id: str):
+    """Show unified diff for a session's pending promotion."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    supervisor = SessionSupervisor(state_dir=gov_dir / "runtime")
+    p = supervisor.get_pending_promotion(session_id)
+
+    if not p:
+        click.echo("No pending promotion.")
+        return
+
+    if p.diff_text:
+        click.echo(p.diff_text)
+    else:
+        click.echo("(no diff available)")
+
+
+@runtime_group.command("promote")
+@click.argument("session_id")
+@click.option("--reason", default=None, help="Reason for approval")
+@click.pass_context
+def runtime_promote(ctx: click.Context, session_id: str, reason: str | None):
+    """Approve a pending promotion (accept workspace changes)."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    supervisor = SessionSupervisor(state_dir=gov_dir / "runtime")
+    p = supervisor.resolve_promotion(session_id, "approve", reason=reason)
+    if p:
+        click.echo(f"Promoted: {len(p.changed_files)} file(s) accepted")
+    else:
+        click.echo("No pending promotion to approve.", err=True)
+        raise SystemExit(1)
+
+
+@runtime_group.command("reject")
+@click.argument("session_id")
+@click.option("--reason", default=None, help="Reason for rejection")
+@click.pass_context
+def runtime_reject(ctx: click.Context, session_id: str, reason: str | None):
+    """Reject a pending promotion (revert workspace changes)."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    supervisor = SessionSupervisor(state_dir=gov_dir / "runtime")
+    p = supervisor.resolve_promotion(session_id, "reject", reason=reason)
+    if p:
+        click.echo(f"Rejected: {len(p.changed_files)} file(s) reverted")
+    else:
+        click.echo("No pending promotion to reject.", err=True)
+        raise SystemExit(1)
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

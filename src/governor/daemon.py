@@ -3092,7 +3092,30 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("runtime.session.events", runtime_session_events)
     dispatcher.register("runtime.session.pause", runtime_session_pause, mutating=True)
     dispatcher.register("runtime.session.resume", runtime_session_resume, mutating=True)
+    async def runtime_session_fork(params: dict) -> dict:
+        """Fork a new session from a promoted prior session."""
+        parent_id = params["parent_session_id"]
+        task = params.get("task")
+        backend_kind = params.get("backend_kind", "claude_code")
+
+        if backend_kind == "claude_code":
+            from .runtime.adapters.claude_code import ClaudeCodeAdapter
+            adapter = ClaudeCodeAdapter()
+        else:
+            raise ValueError(f"Unknown backend_kind: {backend_kind}")
+
+        sup = state.runtime_supervisor
+        record = sup.fork_session(parent_id, adapter, task=task)
+        return {
+            "session_id": record.session_id,
+            "parent_session_id": record.parent_session_id,
+            "status": record.status.value,
+            "cwd": record.cwd,
+            "task": record.task,
+        }
+
     dispatcher.register("runtime.session.kill", runtime_session_kill, mutating=True)
+    dispatcher.register("runtime.session.fork", runtime_session_fork, mutating=True)
     dispatcher.register("runtime.intervention.list", runtime_intervention_list)
     dispatcher.register("runtime.intervention.resolve", runtime_intervention_resolve, mutating=True)
 

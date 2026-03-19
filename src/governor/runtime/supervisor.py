@@ -135,6 +135,7 @@ class SessionRecord:
     task: str | None = None
     pid: int | None = None
     exit_code: int | None = None
+    parent_session_id: str | None = None
 
 
 def _new_session_id() -> str:
@@ -210,6 +211,56 @@ class SessionSupervisor:
             SourceLayer.SUPERVISOR,
             backend_kind,
             payload={"cwd": cwd, "task": task, "operator_mode": operator_mode},
+        )
+
+        return record
+
+    def fork_session(
+        self,
+        parent_session_id: str,
+        adapter: RuntimeAdapter,
+        task: str | None = None,
+    ) -> SessionRecord:
+        """Fork a new session from a promoted prior session.
+
+        The new session inherits the parent's workspace (cwd), backend kind,
+        operator mode, and policy context. The workspace is in whatever state
+        the parent left it (post-promotion). Parent linkage is explicit.
+
+        The parent session must be exited with an approved promotion.
+        """
+        parent = self._get_record(parent_session_id)
+        if parent.status != SessionStatus.EXITED:
+            raise ValueError(f"Cannot fork from session in state {parent.status.value}")
+
+        # Verify parent had an approved promotion
+        parent_facet = self._facets.get(parent_session_id)
+        if parent_facet and parent_facet.pending_promotion:
+            p = parent_facet.pending_promotion
+            if p.status != "approved":
+                raise ValueError(f"Cannot fork from session with {p.status} promotion")
+
+        record = self.create_session(
+            adapter=adapter,
+            backend_kind=parent.backend_kind,
+            cwd=parent.cwd,
+            task=task,
+            operator_mode=parent.operator_mode,
+            policy_context=parent.policy_context,
+        )
+        record.parent_session_id = parent_session_id
+
+        # Emit fork event with parent linkage
+        bus = self._get_bus(record.session_id)
+        bus.emit(
+            EventKind.SESSION_CREATED,  # Re-emit with parent info
+            SourceLayer.SUPERVISOR,
+            record.backend_kind,
+            payload={
+                "forked_from": parent_session_id,
+                "parent_task": parent.task,
+                "task": task,
+            },
         )
 
         return record

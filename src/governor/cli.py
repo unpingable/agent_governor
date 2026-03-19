@@ -19405,6 +19405,46 @@ def runtime_launch(ctx: click.Context, backend: str, cwd: str | None, task: str 
     click.echo(f"\nSession ID: {record.session_id}")
 
 
+@runtime_group.command("fork")
+@click.argument("parent_session_id")
+@click.option("--task", default=None, help="Task for the new session")
+@click.option("--backend", default="claude_code", help="Backend kind")
+@click.pass_context
+def runtime_fork(ctx: click.Context, parent_session_id: str, task: str | None, backend: str):
+    """Fork a new session from a promoted prior session.
+
+    Inherits workspace, backend, operator mode, and policy from the parent.
+    Parent must have exited with an approved promotion.
+    """
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    runtime_dir = gov_dir / "runtime"
+
+    if backend == "claude_code":
+        from .runtime.adapters.claude_code import ClaudeCodeAdapter
+        adapter = ClaudeCodeAdapter()
+    else:
+        click.echo(f"Unknown backend: {backend}", err=True)
+        raise SystemExit(1)
+
+    supervisor = SessionSupervisor(state_dir=runtime_dir)
+    try:
+        record = supervisor.fork_session(parent_session_id, adapter, task=task)
+    except ValueError as e:
+        click.echo(f"Cannot fork: {e}", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Forked from: {parent_session_id}")
+    click.echo(f"New session: {record.session_id}")
+    click.echo(f"CWD: {record.cwd}")
+    click.echo(f"Task: {record.task or '(none)'}")
+
+    record = supervisor.launch_session(record.session_id)
+    click.echo(f"Status: {record.status.value}")
+    click.echo(f"PID: {record.pid}")
+
+
 @runtime_group.command("list")
 @click.pass_context
 def runtime_list(ctx: click.Context):

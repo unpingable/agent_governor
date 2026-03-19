@@ -66,7 +66,7 @@ def detect_workspace_changes(repo_path: str | Path) -> Promotion | None:
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return None
 
-    # Get untracked files
+    # Get untracked files (respects .gitignore via --exclude-standard)
     try:
         untracked = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard"],
@@ -77,6 +77,14 @@ def detect_workspace_changes(repo_path: str | Path) -> Promotion | None:
 
     changed = [f for f in diff_names.stdout.strip().split("\n") if f]
     new = [f for f in untracked.stdout.strip().split("\n") if f]
+
+    # Filter out junk files that shouldn't appear in promotions
+    _JUNK_PATTERNS = {"__pycache__", ".pyc", ".pyo", ".egg-info", ".DS_Store", ".pytest_cache"}
+    def _is_junk(path: str) -> bool:
+        return any(pat in path for pat in _JUNK_PATTERNS)
+
+    changed = [f for f in changed if not _is_junk(f)]
+    new = [f for f in new if not _is_junk(f)]
     all_files = changed + new
 
     if not all_files:

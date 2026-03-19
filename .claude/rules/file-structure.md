@@ -95,6 +95,17 @@ src/governor/
 ├── verifier_gate.py      # Verifier gate: composition boundary, VerifierSuite, VERIFY_SUMMARY signal emission
 ├── governed_activity.py  # Governed activities: drift-gated retry, FactObservation, PreconditionBundle, AttemptRecord
 │
+# Runtime Supervisor (supervised agent sessions):
+├── runtime/
+│   ├── __init__.py                  # Public API exports
+│   ├── events.py                    # CanonicalEvent, EventBus, EventKind, JSONL persistence
+│   ├── adapter.py                   # RuntimeAdapter protocol, AdapterCapabilities, LaunchConfig
+│   ├── supervisor.py                # SessionSupervisor, SessionRecord, Intervention, RuntimeFacet
+│   ├── promotion.py                 # Promotion, detect_workspace_changes, approve/reject/revert
+│   └── adapters/
+│       ├── __init__.py
+│       └── claude_code.py           # ClaudeCodeAdapter: supervised mode, Unix socket hooks
+│
 # v2.4 Instrumentation Spine (Phase A + B + C):
 ├── signals/
 │   ├── __init__.py                  # Public API: SignalEnvelope, derivation functions

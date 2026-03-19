@@ -10,7 +10,9 @@ Receipt:   rct_a7f3c91e (hash-chained, tamper-evident)
 Next:      provide test results, downgrade to hypothesis, or request override
 ```
 
-14,500+ tests. Zero trust. Agents propose — only the governor commits.
+14,600+ tests. Zero trust. Agents propose — only the governor commits.
+
+**Supervised agent sessions:** Launch Claude Code (or other agent CLIs) as a governed process. Every tool call is intercepted. The operator approves, denies, or edits. When the session ends, workspace changes go through a promotion gate — review the diff, then accept or revert. Sessions fork from promoted parents for continuous governed workflow. See `docs/SUPERVISED_MODE.md`.
 
 This project governs actions, not beliefs.
 

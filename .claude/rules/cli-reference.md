@@ -128,6 +128,22 @@ governor security diff                # Scan staged git changes
 governor watch start                  # Start watching current directory
 governor watch check                  # Check for changes once
 
+# Runtime Supervisor (supervised agent sessions)
+governor runtime launch               # Launch supervised Claude session
+    [--backend claude_code] [--cwd DIR] [--task "..."] [--mode interactive|autonomous]
+governor runtime fork <parent_id>     # Fork from promoted session [--task "..."]
+governor runtime list                 # List supervised sessions
+governor runtime events <session_id>  # Show canonical event stream [--since N] [--json]
+governor runtime interventions <id>   # Show pending tool approvals [--json]
+governor runtime approve <id> <tcid>  # Approve a tool call
+governor runtime deny <id> <tcid>     # Deny a tool call [--reason "..."]
+governor runtime promotion <id>       # Show pending workspace changes [--json]
+governor runtime diff <id>            # Show unified diff of changes
+governor runtime promote <id>         # Accept workspace changes [--reason "..."]
+governor runtime reject <id>          # Revert workspace changes [--reason "..."]
+governor runtime kill <id>            # Terminate session
+governor runtime cleanup              # Remove stale governor hooks [--cwd DIR]
+
 # Claude Code Hooks (Claude CLI integration)
 governor claude-hooks install         # Install hook scripts
 governor claude-hooks uninstall       # Remove hook scripts

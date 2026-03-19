@@ -19550,6 +19550,66 @@ def runtime_kill(ctx: click.Context, session_id: str):
     click.echo(f"Session {session_id}: {record.status.value}")
 
 
+@runtime_group.command("cleanup")
+@click.option("--cwd", default=None, help="Project directory to clean (default: governor root)")
+@click.pass_context
+def runtime_cleanup(ctx: click.Context, cwd: str | None):
+    """Remove stale governor hooks from .claude/settings.local.json.
+
+    Use this if a supervised session crashed without proper shutdown,
+    leaving orphaned hook entries in the settings file.
+    """
+    gov_dir = get_governor_dir(ctx)
+    project_dir = Path(cwd) if cwd else gov_dir.parent
+    settings_file = project_dir / ".claude" / "settings.local.json"
+
+    if not settings_file.exists():
+        click.echo("No settings file found.")
+        return
+
+    try:
+        data = json.loads(settings_file.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        click.echo(f"Error reading settings: {e}", err=True)
+        raise SystemExit(1)
+
+    hooks = data.get("hooks", {})
+    if not isinstance(hooks, dict):
+        click.echo("No hook entries to clean.")
+        return
+
+    removed = 0
+    for key in ("PreToolUse", "PostToolUse"):
+        if key not in hooks:
+            continue
+        before = len(hooks[key])
+        hooks[key] = [h for h in hooks[key] if not h.get("_governor_supervised")]
+        removed += before - len(hooks[key])
+
+    # Also clean stale camelCase keys (legacy)
+    for key in ("preToolUse", "postToolUse"):
+        if key in hooks:
+            removed += len(hooks[key])
+            del hooks[key]
+
+    if removed == 0:
+        click.echo("No stale governor hooks found.")
+        return
+
+    data["hooks"] = hooks
+    settings_file.write_text(json.dumps(data, indent=2))
+    click.echo(f"Removed {removed} stale governor hook(s) from {settings_file}")
+
+    # Also clean up orphaned temp dirs
+    import glob
+    stale_dirs = glob.glob("/tmp/gov_hooks_*")
+    if stale_dirs:
+        import shutil
+        for d in stale_dirs:
+            shutil.rmtree(d, ignore_errors=True)
+        click.echo(f"Cleaned {len(stale_dirs)} stale hook temp dir(s)")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

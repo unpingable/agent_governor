@@ -282,7 +282,7 @@ class ClaudeCodeAdapter:
         if config.task and process.stdin:
             process.stdin.close()
 
-        return ClaudeCodeHandle(
+        handle = ClaudeCodeHandle(
             pid=process.pid,
             native_session_ref=config.session_id,
             process=process,
@@ -291,6 +291,16 @@ class ClaudeCodeAdapter:
             listener_socket=listener,
             extra={"settings_backup": str(backup_file), "settings_file": str(settings_file)},
         )
+
+        # Register atexit cleanup so stale hooks don't persist if process dies
+        import atexit
+        def _cleanup_on_exit():
+            self._restore_settings(handle)
+            self._cleanup_hooks_dir(handle)
+        atexit.register(_cleanup_on_exit)
+        handle.extra["_atexit_cleanup"] = _cleanup_on_exit
+
+        return handle
 
     def iter_events(self, handle: ClaudeCodeHandle) -> Iterable[NativeEvent]:
         """Yield native events from the Claude Code process.
@@ -465,8 +475,48 @@ class ClaudeCodeAdapter:
                 except OSError:
                     pass
 
+    def _restore_settings(self, handle: ClaudeCodeHandle) -> None:
+        """Restore original settings.local.json, removing governor hooks."""
+        backup_path = handle.extra.get("settings_backup", "")
+        settings_path = handle.extra.get("settings_file", "")
+        if not (backup_path and settings_path):
+            return
+        try:
+            backup = Path(backup_path)
+            settings = Path(settings_path)
+            if backup.exists():
+                settings.write_text(backup.read_text())
+            elif settings.exists():
+                try:
+                    data = json.loads(settings.read_text())
+                    hooks = data.get("hooks", {})
+                    if isinstance(hooks, dict):
+                        for key in ("PreToolUse", "PostToolUse"):
+                            if key in hooks:
+                                hooks[key] = [
+                                    h for h in hooks[key]
+                                    if not h.get("_governor_supervised")
+                                ]
+                        data["hooks"] = hooks
+                        settings.write_text(json.dumps(data, indent=2))
+                except (json.JSONDecodeError, OSError):
+                    pass
+        except OSError:
+            pass
+
+    def _cleanup_hooks_dir(self, handle: ClaudeCodeHandle) -> None:
+        """Remove socket and temp hooks directory."""
+        if handle.socket_path and os.path.exists(handle.socket_path):
+            try:
+                os.unlink(handle.socket_path)
+            except OSError:
+                pass
+        if handle.hooks_dir:
+            import shutil
+            shutil.rmtree(handle.hooks_dir, ignore_errors=True)
+
     def shutdown(self, handle: ClaudeCodeHandle, graceful: bool = True) -> None:
-        """Terminate Claude Code."""
+        """Terminate Claude Code and clean up."""
         if not handle.process:
             return
 
@@ -484,41 +534,14 @@ class ClaudeCodeAdapter:
             except subprocess.TimeoutExpired:
                 pass
 
-        # Restore original settings.local.json
-        backup_path = handle.extra.get("settings_backup", "")
-        settings_path = handle.extra.get("settings_file", "")
-        if backup_path and settings_path:
-            try:
-                backup = Path(backup_path)
-                settings = Path(settings_path)
-                if backup.exists():
-                    settings.write_text(backup.read_text())
-                elif settings.exists():
-                    # Remove governor hooks from settings
-                    try:
-                        data = json.loads(settings.read_text())
-                        hooks = data.get("hooks", {})
-                        if isinstance(hooks, dict):
-                            for key in ("PreToolUse", "PostToolUse"):
-                                if key in hooks:
-                                    hooks[key] = [
-                                        h for h in hooks[key]
-                                        if not h.get("_governor_supervised")
-                                    ]
-                            data["hooks"] = hooks
-                            settings.write_text(json.dumps(data, indent=2))
-                    except (json.JSONDecodeError, OSError):
-                        pass
-            except OSError:
-                pass
+        self._restore_settings(handle)
+        self._cleanup_hooks_dir(handle)
 
-        # Clean up socket and hooks dir
-        if handle.socket_path and os.path.exists(handle.socket_path):
-            os.unlink(handle.socket_path)
-        if handle.hooks_dir:
-            import shutil
-
-            shutil.rmtree(handle.hooks_dir, ignore_errors=True)
+        # Unregister atexit since we cleaned up explicitly
+        cleanup_fn = handle.extra.get("_atexit_cleanup")
+        if cleanup_fn:
+            import atexit
+            atexit.unregister(cleanup_fn)
 
     def map_event(self, event: NativeEvent) -> list[dict[str, Any]]:
         """Map Claude Code native events to canonical event dicts."""

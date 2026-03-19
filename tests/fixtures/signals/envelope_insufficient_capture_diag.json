@@ -44,7 +44,7 @@
     "SIGMA_RATE"
   ],
   "source_versions": {
-    "governor": "2.7.0",
+    "governor": "2.8.0",
     "envelope_schema": "0.4.0"
   },
   "derivation": "derived",

@@ -1,6 +1,55 @@
 # Agent Governor
 
-A governance and provenance layer for agentic systems. It records what an agent did, under what scope and policy, and produces receipt-grade evidence you can inspect after the fact. Sits between the model and its tools — agents propose actions, the governor decides whether they're admissible, and every decision produces a tamper-evident receipt.
+**Supervise AI agents. Approve every tool call. Review every change. Receipts for everything.**
+
+```
+Claude wants to run: bash — git apply /tmp/patch.diff
+  [INTERVENTION] Approve? (remaining: 294s)
+  > approved
+
+Claude wants to write: src/auth/login.py
+  [INTERVENTION] Approve? (remaining: 298s)
+  > approved
+
+Session exited (exit=0), 5 tools approved
+
+PROMOTION: 3 files changed
+  src/auth/login.py  | 12 ++++++---
+  tests/test_auth.py | 28 +++++++++++++++++++
+  README.md          |  4 ++-
+  > promote — changes accepted
+```
+
+Launch Claude Code (or other agent CLIs) as a governed process. Every tool call is intercepted — reads auto-approve, writes require operator approval. When the session ends, review the diff, then accept or revert. Fork from a promoted session to continue the work. Every decision produces a tamper-evident receipt.
+
+```bash
+pip install -e .
+governor init
+governor runtime launch --task "Add error handling to users.py and write tests"
+```
+
+14,600+ tests. Zero trust. Agents propose — only the governor commits.
+
+> *Language is a proposal, not an authority.*
+
+> **Status:** Alpha. Under active solo development. The core kernel is stable and tested. Not packaged for distribution — install from source.
+
+---
+
+## Why This Exists
+
+Agent sandboxes isolate. Agent Governor **governs**.
+
+Sandboxing tells you "the agent can't escape." It doesn't tell you what the agent did, why it did it, whether it was allowed to, or what evidence backed the decision. After an incident, you're left reconstructing from chat logs and vibes.
+
+Governor answers the boring questions that matter after things go wrong:
+
+- What exactly ran, and in what order?
+- Under what permissions and scope?
+- What was *claimed* vs what *actually executed*?
+- Who approved it, and is that recorded?
+
+Every enforcement decision produces a hash-chained, content-addressed receipt. Tamper with the chain and the hash breaks.
 
 ```text
 Agent:     edit_file("src/auth/login.py", ...)
@@ -10,49 +59,19 @@ Receipt:   rct_a7f3c91e (hash-chained, tamper-evident)
 Next:      provide test results, downgrade to hypothesis, or request override
 ```
 
-14,600+ tests. Zero trust. Agents propose — only the governor commits.
-
-**Supervised agent sessions:** Launch Claude Code (or other agent CLIs) as a governed process. Every tool call is intercepted. The operator approves, denies, or edits. When the session ends, workspace changes go through a promotion gate — review the diff, then accept or revert. Sessions fork from promoted parents for continuous governed workflow. See `docs/SUPERVISED_MODE.md`.
-
-This project governs actions, not beliefs.
-
-> **Status:** Alpha. Under active solo development. The core kernel (evidence gate, receipt chain, claim extraction) is stable and tested. Client integrations (VS Code, TUI, Guvnah, Phosphor) are functional but evolving. Not packaged for distribution — install from source.
->
-> **Support:** No SLA. No DMs. File structured issues (templates provided) or post in Discussions. Paper-cut reports are gold; vague feature requests may be closed.
-
-> *Language is a proposal, not an authority.*
-
----
-
-## Why This Exists
-
-Agent demos are easy. Agent forensics are weak.
-
-When an agent runs in a demo, failures are cheap — you shrug, tweak the prompt, try again. When the same agent runs against real systems (your codebase, your infrastructure, your users), failures get expensive fast: silent overwrites, contradicted decisions, retry spirals burning budget, hallucinated claims of completion.
-
-After an incident, teams usually can't answer the basic questions:
-
-- What exactly ran, and in what order?
-- Under what permissions and scope?
-- Why was that route/policy decision made?
-- What was *claimed* vs what *actually executed*?
-- Who approved the override, and was it recorded?
-
-Without receipts, failure collapses into blame and vibes. The operator gets held responsible for outcomes they couldn't inspect. Agent Governor exists to make that inspection possible — before, during, and after incidents.
-
-> The design center is not "make the model morally correct" but "make consequential actions require proof, freshness, and receipts." This is complementary to training-time alignment, operating at a different layer: runtime authority control. See [docs/BACKGROUND.md](docs/BACKGROUND.md) for design lineage and prior art.
+> See [docs/BACKGROUND.md](docs/BACKGROUND.md) for design lineage and prior art.
 
 ---
 
 ## What It Does
 
-- **Receipts and provenance** — every enforcement decision produces a content-addressed, hash-chained receipt. Tamper with the chain and the hash breaks.
-- **Scope controls** — define where an agent can act and what tools it can use. Missing permission = denied, not defaulted.
-- **Policy evaluation and enforcement** — check decisions before they become actions. Advisory mode or hard enforcement — your call.
-- **Routing and lanes** — make execution paths legible and controllable. Task complexity → model tier → capability contract.
-- **Claims and integrity** — agents make claims ("tests pass," "file exists"); the governor checks whether evidence supports them.
-- **Composition governance** — detect and enforce constraints on *sequences* of tool calls, not just individual ones. Secret read → network egress? Blocked.
-- **Traceability** — postmortem-friendly evidence trail instead of reconstructing what happened from chat logs.
+- **Supervised sessions** — launch an agent CLI as a governed process. See every tool call. Approve or deny. Review the diff when it's done.
+- **Promotions** — workspace changes go through a gate. Accept or revert. Fork from promoted sessions for continuous workflow.
+- **Receipts** — every decision produces a hash-chained, content-addressed receipt. Tamper-evident audit trail.
+- **Scope and policy** — define where an agent can act and what tools it can use. Missing permission = denied.
+- **Claims and evidence** — agents claim "tests pass"; the governor checks. No evidence? Blocked.
+- **Composition governance** — constraints on *sequences* of tool calls. Secret read → network egress? Blocked.
+- **Failure detection** — loops, drift, hallucinated completion, retry spirals. Measured signals, not vibes.
 
 Works as a layer around existing agent systems. Does not replace your runtime, framework, or model.
 
@@ -107,15 +126,13 @@ Teams can stop at any level and still get value.
 
 | I want to... | Start with |
 |---|---|
+| **Supervise an agent session** | `governor runtime launch --task "..."` — see [Supervised Mode](docs/SUPERVISED_MODE.md) |
+| **Use a TUI** | [Maude](https://github.com/unpingable/maude) — governed REPL with supervised sessions |
 | **Govern Claude Code in 5 minutes** | [Plugin Quickstart](docs/QUICKSTART_PLUGIN.md) — install, init, go |
 | **See what the governor catches** | [Quick Start](#quick-start) — one command, immediate feedback |
 | **Get auditability first** | `governor init` + `governor gate check` — receipts with zero enforcement |
-| **Preflight and record tool chains** | [Composition governance](#what-this-catches) — chain.preflight/record |
 | **Inspect an incident** | `governor trace` + `governor receipts` — unified timeline and receipt query |
-| **Enforce scope and policy** | [Modes](#modes) + `governor intent set --profile production` |
 | **Use a desktop UI** | [Guvnah](https://github.com/unpingable/guvnah) — governor status and inspection console |
-| **Just want an easy app** | [Clerk](https://github.com/unpingable/clerk) — desktop app, no CLI required |
-| **Deploy a governed agent UI** | [Phosphor](https://github.com/unpingable/gov-webui) — governed chat interface (fiction / research / code modes) |
 | **Understand the architecture** | [Architecture](#architecture) + [PCAR specs](#pcar-proof-carrying-agent-runtime) |
 
 ---
@@ -353,13 +370,16 @@ Multi-model claim comparison (interferometry — parallel + serial modes), code-
 
 **Non-Fiction Governor (~280 tests)** — Corpus management, DOI fetching, citation verification, contextual frame intrusion detection (12-frame taxonomy).
 
+### Runtime Supervisor (~64 tests)
+Supervised agent sessions, canonical event bus, Claude Code adapter, tool interception, interventions (approve/deny/timeout), promotions (workspace diff/approve/reject/revert), session forking, settings cleanup.
+
 ### Integrations (~560 tests)
-[VS Code extension](https://github.com/unpingable/vscode-governor), [Phosphor](https://github.com/unpingable/gov-webui) (governed chat UI — fiction/research/code modes), SDK middleware, MCP safety controls, session continuity, git/Perforce governance, external constraint attachment (Wikidata/Wikipedia/Scholar).
+[VS Code extension](https://github.com/unpingable/vscode-governor), [Maude](https://github.com/unpingable/maude) (governed REPL/TUI), [Phosphor](https://github.com/unpingable/gov-webui) (governed chat UI), SDK middleware, MCP safety controls, session continuity, git/Perforce governance, external constraint attachment.
 
 ### Infrastructure (~960 tests)
 Structured telemetry, Prometheus metrics, config profiles, continuity enforcement, convergence auto-tuning, QA harness, golden-file/property-based/contract tests.
 
-**Total: ~14,200 tests across 60+ modules.**
+**Total: ~14,600 tests across 60+ modules.**
 
 ---
 

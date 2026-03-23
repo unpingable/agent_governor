@@ -116,6 +116,8 @@ class RuntimeFacet:
     capabilities: AdapterCapabilities = field(default_factory=AdapterCapabilities)
     pending_interventions: dict[str, Intervention] = field(default_factory=dict)
     pending_promotion: Any = None  # Promotion | None (avoid circular import)
+    budget_ledger: Any = None  # RunBudgetLedger | None (avoid circular import)
+    budget_policy: Any = None  # BudgetPolicy | None
     event_thread: threading.Thread | None = None
     running: bool = False
 
@@ -200,9 +202,20 @@ class SessionSupervisor:
         events_path = self._state_dir / f"{session_id}_events.jsonl"
         bus = EventBus(session_id, events_path)
 
+        from governor.runtime.budget import RunBudgetLedger, default_budget_policy
+
+        facet = RuntimeFacet()
+        facet.budget_policy = policy_context.get("budget_policy") if policy_context else None
+        if facet.budget_policy is None:
+            facet.budget_policy = default_budget_policy()
+        facet.budget_ledger = RunBudgetLedger(
+            session_id=session_id,
+            policy_id=facet.budget_policy.policy_id if facet.budget_policy else "",
+        )
+
         with self._lock:
             self._sessions[session_id] = record
-            self._facets[session_id] = RuntimeFacet()
+            self._facets[session_id] = facet
             self._buses[session_id] = bus
             self._adapters[session_id] = adapter
 
@@ -344,6 +357,10 @@ class SessionSupervisor:
                     if kind == EventKind.TOOL_CALL_PROPOSED:
                         self._handle_tool_proposed(session_id, evt, adapter)
 
+                    # Record spend on tool completion
+                    elif kind == EventKind.TOOL_CALL_COMPLETED:
+                        self._record_step_spend(session_id, evt)
+
                     # Handle session exit
                     elif kind in (EventKind.SESSION_EXITED, EventKind.SESSION_FAILED):
                         if kind == EventKind.SESSION_EXITED:
@@ -354,6 +371,15 @@ class SessionSupervisor:
 
                         # Detect workspace changes → create promotion
                         self._detect_promotion(session_id)
+
+                        # Emit budget ledger
+                        if facet.budget_ledger:
+                            bus.emit(
+                                "budget_ledger",
+                                SourceLayer.SUPERVISOR,
+                                record.backend_kind,
+                                payload=facet.budget_ledger.to_dict(),
+                            )
 
                     # Deliver to callback (e.g., Maude)
                     if self._on_event:
@@ -384,6 +410,32 @@ class SessionSupervisor:
 
         tool_name = event.payload.get("tool_name", "unknown")
         tool_call_id = event.payload.get("tool_call_id", "")
+
+        # Check budget before allowing any tool call
+        if facet.budget_policy and facet.budget_ledger:
+            violation = facet.budget_policy.would_breach_hard(
+                facet.budget_ledger.total_spend,
+                facet.budget_ledger.total_steps,
+            )
+            if violation:
+                bus.emit(
+                    EventKind.TOOL_CALL_DENIED,
+                    SourceLayer.POLICY,
+                    record.backend_kind,
+                    payload={
+                        "tool_call_id": tool_call_id,
+                        "tool_name": tool_name,
+                        "reason": f"Budget exhausted: {violation.dimension} "
+                                  f"({violation.actual}/{violation.limit})",
+                    },
+                    tool_call_id=tool_call_id,
+                )
+                if facet.handle:
+                    adapter.send_control(facet.handle, ControlAction(
+                        kind="deny", target_id=tool_call_id,
+                        payload={"reason": f"Budget exhausted: {violation.dimension}"},
+                    ))
+                return
 
         # In interactive mode, block write-capable tools
         if record.operator_mode == "interactive" and tool_name.lower() in {t.lower() for t in _WRITE_TOOLS}:
@@ -525,6 +577,46 @@ class SessionSupervisor:
 
         return intervention
 
+    def _record_step_spend(self, session_id: str, evt: CanonicalEvent) -> None:
+        """Record spend for a completed tool call."""
+        from governor.runtime.budget import StepSpend, Spend
+
+        facet = self._get_facet(session_id)
+        record = self._get_record(session_id)
+        bus = self._get_bus(session_id)
+
+        if not facet.budget_ledger:
+            return
+
+        tool_name = evt.payload.get("tool_name", "unknown")
+        step = StepSpend(
+            step_index=facet.budget_ledger.total_steps,
+            step_kind="tool",
+            tool_name=tool_name,
+            provider_kind="local",  # Claude Code tools are local
+            spend=Spend(tool_calls=1),
+        )
+        facet.budget_ledger.record_step(step)
+
+        # Check for budget violations after recording
+        if facet.budget_policy:
+            violation = facet.budget_policy.would_breach_hard(
+                facet.budget_ledger.total_spend,
+                facet.budget_ledger.total_steps,
+            )
+            if violation:
+                facet.budget_ledger.violations.append(violation)
+                bus.emit(
+                    "budget_exhausted",
+                    SourceLayer.SUPERVISOR,
+                    record.backend_kind,
+                    payload={
+                        "dimension": violation.dimension,
+                        "limit": violation.limit,
+                        "actual": violation.actual,
+                    },
+                )
+
     def _detect_promotion(self, session_id: str) -> None:
         """Detect workspace changes at session end, create pending promotion."""
         from governor.runtime.promotion import detect_workspace_changes
@@ -606,6 +698,22 @@ class SessionSupervisor:
             )
 
         return promotion
+
+    def get_budget(self, session_id: str) -> dict[str, Any] | None:
+        """Get budget status for a session."""
+        facet = self._facets.get(session_id)
+        if not facet or not facet.budget_ledger:
+            return None
+        result = facet.budget_ledger.to_dict()
+        if facet.budget_policy:
+            result["policy"] = facet.budget_policy.to_dict()
+            result["violations_current"] = [
+                v.to_dict() for v in facet.budget_policy.check(
+                    facet.budget_ledger.total_spend,
+                    facet.budget_ledger.total_steps,
+                )
+            ]
+        return result
 
     def get_pending_promotion(self, session_id: str) -> "Promotion | None":
         """Get the pending promotion for a session, if any."""

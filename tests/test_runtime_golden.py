@@ -221,7 +221,8 @@ class TestGoldenTrace:
 
         events = supervisor.get_events(record.session_id)
         assert events[0].kind == EventKind.SESSION_CREATED
-        assert events[-1].kind in (EventKind.SESSION_EXITED, EventKind.SESSION_FAILED)
+        # Last event is either session exit/fail or budget_ledger (emitted after exit)
+        assert events[-1].kind in (EventKind.SESSION_EXITED, EventKind.SESSION_FAILED, "budget_ledger")
 
     def test_tool_call_paired(self, tmp_path):
         """Every tool_call_proposed has a matching allowed/denied and completed/failed."""

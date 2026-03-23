@@ -19590,6 +19590,46 @@ def runtime_kill(ctx: click.Context, session_id: str):
     click.echo(f"Session {session_id}: {record.status.value}")
 
 
+@runtime_group.command("budget")
+@click.argument("session_id")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def runtime_budget(ctx: click.Context, session_id: str, as_json: bool):
+    """Show budget status for a session."""
+    from .runtime.supervisor import SessionSupervisor
+
+    gov_dir = get_governor_dir(ctx)
+    supervisor = SessionSupervisor(state_dir=gov_dir / "runtime")
+    budget = supervisor.get_budget(session_id)
+
+    if not budget:
+        click.echo("No budget data.")
+        return
+
+    if as_json:
+        click.echo(json.dumps(budget, indent=2))
+        return
+
+    spend = budget.get("total_spend", {})
+    click.echo(f"Session:  {budget['session_id']}")
+    click.echo(f"Policy:   {budget.get('policy_id', 'none')}")
+    click.echo(f"Steps:    {budget['total_steps']}")
+    click.echo(f"Remote:   {budget['total_remote_hops']} hops")
+    click.echo(f"Tokens:   {spend.get('total_tokens', 0)}")
+    click.echo(f"Tools:    {spend.get('tool_calls', 0)}")
+    click.echo(f"Cost:     ${spend.get('usd_micros', 0) / 1_000_000:.4f}")
+    click.echo(f"Latency:  {spend.get('latency_ms', 0)}ms")
+
+    violations = budget.get("violations_current", [])
+    if violations:
+        click.echo(f"\nViolations ({len(violations)}):")
+        for v in violations:
+            severity = "HARD" if v.get("hard") else "soft"
+            click.echo(f"  [{severity}] {v['dimension']}: {v['actual']}/{v['limit']}")
+    else:
+        click.echo("\nNo violations.")
+
+
 @runtime_group.command("cleanup")
 @click.option("--cwd", default=None, help="Project directory to clean (default: governor root)")
 @click.pass_context

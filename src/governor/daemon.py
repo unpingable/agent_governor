@@ -3152,6 +3152,14 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("runtime.promotion.diff", runtime_promotion_diff)
     dispatcher.register("runtime.promotion.resolve", runtime_promotion_resolve, mutating=True)
 
+    async def runtime_budget_get(params: dict) -> dict | None:
+        """Get budget status for a session."""
+        session_id = params["session_id"]
+        sup = state.runtime_supervisor
+        return sup.get_budget(session_id)
+
+    dispatcher.register("runtime.budget.get", runtime_budget_get)
+
 
 # =============================================================================
 # Server entry points

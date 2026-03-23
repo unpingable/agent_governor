@@ -412,10 +412,13 @@ class SessionSupervisor:
         tool_call_id = event.payload.get("tool_call_id", "")
 
         # Check budget before allowing any tool call
+        # Use spend + 1 tool call to catch the boundary correctly
         if facet.budget_policy and facet.budget_ledger:
+            from governor.runtime.budget import Spend
+            projected = facet.budget_ledger.total_spend + Spend(tool_calls=1)
             violation = facet.budget_policy.would_breach_hard(
-                facet.budget_ledger.total_spend,
-                facet.budget_ledger.total_steps,
+                projected,
+                facet.budget_ledger.total_steps + 1,
             )
             if violation:
                 bus.emit(

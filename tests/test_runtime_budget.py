@@ -35,10 +35,12 @@ class TestSpend:
         assert s2.latency_ms == 42
         assert s2.usd_micros == 100
 
-    def test_zero_default(self):
+    def test_none_default(self):
         s = Spend()
-        assert s.total_tokens == 0
-        assert s.usd_micros == 0
+        assert s.total_tokens is None  # unknown, not zero
+        assert s.usd_micros is None
+        assert s.tool_calls == 0  # countable dimensions default to 0
+        assert s.remote_calls == 0
 
 
 class TestBudgetPolicy:

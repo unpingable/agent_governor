@@ -15,28 +15,38 @@ from typing import Any
 
 @dataclass
 class Spend:
-    """Multidimensional spend for one step or an entire run."""
+    """Multidimensional spend for one step or an entire run.
 
-    latency_ms: int = 0
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-    usd_micros: int = 0  # 0 = unknown or free (local)
+    Fields use None for "adapter cannot report this" and 0 for "measured zero."
+    The distinction matters: 0 tokens means no tokens were used,
+    None tokens means the adapter doesn't expose token counts.
+    """
+
+    latency_ms: int | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+    usd_micros: int | None = None
     remote_calls: int = 0
     tool_calls: int = 0
 
     def __add__(self, other: Spend) -> Spend:
+        def _add(a: int | None, b: int | None) -> int | None:
+            if a is None and b is None:
+                return None
+            return (a or 0) + (b or 0)
+
         return Spend(
-            latency_ms=self.latency_ms + other.latency_ms,
-            prompt_tokens=self.prompt_tokens + other.prompt_tokens,
-            completion_tokens=self.completion_tokens + other.completion_tokens,
-            total_tokens=self.total_tokens + other.total_tokens,
-            usd_micros=self.usd_micros + other.usd_micros,
+            latency_ms=_add(self.latency_ms, other.latency_ms),
+            prompt_tokens=_add(self.prompt_tokens, other.prompt_tokens),
+            completion_tokens=_add(self.completion_tokens, other.completion_tokens),
+            total_tokens=_add(self.total_tokens, other.total_tokens),
+            usd_micros=_add(self.usd_micros, other.usd_micros),
             remote_calls=self.remote_calls + other.remote_calls,
             tool_calls=self.tool_calls + other.tool_calls,
         )
 
-    def to_dict(self) -> dict[str, int]:
+    def to_dict(self) -> dict[str, int | None]:
         return {
             "latency_ms": self.latency_ms,
             "prompt_tokens": self.prompt_tokens,
@@ -49,7 +59,7 @@ class Spend:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Spend:
-        return cls(**{k: d.get(k, 0) for k in cls.__dataclass_fields__})
+        return cls(**{k: d.get(k) for k in cls.__dataclass_fields__})
 
 
 @dataclass
@@ -91,7 +101,9 @@ class BudgetPolicy:
         """Check spend against limits. Returns violations."""
         violations = []
         for limit in self.limits:
-            actual = getattr(total, limit.dimension, 0)
+            actual = getattr(total, limit.dimension, None)
+            if actual is None:
+                continue  # Can't enforce what we can't measure
             if actual > limit.limit:
                 violations.append(BudgetViolation(
                     dimension=limit.dimension,

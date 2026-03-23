@@ -19611,14 +19611,21 @@ def runtime_budget(ctx: click.Context, session_id: str, as_json: bool):
         return
 
     spend = budget.get("total_spend", {})
+
+    def _fmt(val: int | None, unit: str = "") -> str:
+        if val is None:
+            return "n/a"
+        return f"{val}{unit}"
+
     click.echo(f"Session:  {budget['session_id']}")
     click.echo(f"Policy:   {budget.get('policy_id', 'none')}")
     click.echo(f"Steps:    {budget['total_steps']}")
     click.echo(f"Remote:   {budget['total_remote_hops']} hops")
-    click.echo(f"Tokens:   {spend.get('total_tokens', 0)}")
+    click.echo(f"Tokens:   {_fmt(spend.get('total_tokens'))}")
     click.echo(f"Tools:    {spend.get('tool_calls', 0)}")
-    click.echo(f"Cost:     ${spend.get('usd_micros', 0) / 1_000_000:.4f}")
-    click.echo(f"Latency:  {spend.get('latency_ms', 0)}ms")
+    usd = spend.get("usd_micros")
+    click.echo(f"Cost:     {f'${usd / 1_000_000:.4f}' if usd is not None else 'n/a'}")
+    click.echo(f"Latency:  {_fmt(spend.get('latency_ms'), 'ms')}")
 
     violations = budget.get("violations_current", [])
     if violations:

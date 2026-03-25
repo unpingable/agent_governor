@@ -260,7 +260,15 @@ class ClaudeCodeAdapter:
         env["GOVERNOR_SESSION_ID"] = config.session_id
 
         # Build claude command
-        cmd = ["claude"]
+        # --permission-mode dontAsk: Claude doesn't prompt the user for permissions.
+        #   Governor hooks handle approval instead.
+        # --tools: hard capability boundary. Claude can only use these tools.
+        #   Use --allowedTools for "no prompt needed" list, --tools for "available at all".
+        cmd = [
+            "claude",
+            "--permission-mode", "dontAsk",
+            "--tools", "Read,Write,Edit,Bash,Glob,Grep,NotebookEdit",
+        ]
         if config.args:
             cmd.extend(config.args)
 

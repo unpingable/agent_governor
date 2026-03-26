@@ -204,6 +204,26 @@ class ClaudeCodeAdapter:
             except (json.JSONDecodeError, OSError):
                 pass
 
+        # Inject permissions so Claude Code allows tools in --print mode.
+        # Governor hooks are the real permission layer; these entries just prevent
+        # Claude's built-in permission system from blocking before our hooks fire.
+        permissions = existing_settings.get("permissions", {})
+        allow_list = permissions.get("allow", [])
+        gov_permissions = [
+            "Read(*)",
+            "Write(*)",
+            "Edit(*)",
+            "Bash(*)",
+            "Glob(*)",
+            "Grep(*)",
+            "NotebookEdit(*)",
+        ]
+        for perm in gov_permissions:
+            if perm not in allow_list:
+                allow_list.append(perm)
+        permissions["allow"] = allow_list
+        existing_settings["permissions"] = permissions
+
         # Merge our hooks into existing settings.
         # Claude Code hook format: hooks.PreToolUse = [{"matcher": "...", "hooks": [...]}]
         hooks = existing_settings.get("hooks", {})
@@ -266,7 +286,7 @@ class ClaudeCodeAdapter:
         #   Use --allowedTools for "no prompt needed" list, --tools for "available at all".
         cmd = [
             "claude",
-            "--permission-mode", "dontAsk",
+            "--permission-mode", "auto",
             "--tools", "Read,Write,Edit,Bash,Glob,Grep,NotebookEdit",
         ]
         if config.args:
@@ -497,6 +517,7 @@ class ClaudeCodeAdapter:
             elif settings.exists():
                 try:
                     data = json.loads(settings.read_text())
+                    # Remove governor hooks
                     hooks = data.get("hooks", {})
                     if isinstance(hooks, dict):
                         for key in ("PreToolUse", "PostToolUse"):
@@ -506,7 +527,14 @@ class ClaudeCodeAdapter:
                                     if not h.get("_governor_supervised")
                                 ]
                         data["hooks"] = hooks
-                        settings.write_text(json.dumps(data, indent=2))
+                    # Remove injected permissions
+                    gov_perms = {"Read(*)", "Write(*)", "Edit(*)", "Bash(*)",
+                                 "Glob(*)", "Grep(*)", "NotebookEdit(*)"}
+                    perms = data.get("permissions", {})
+                    if "allow" in perms:
+                        perms["allow"] = [p for p in perms["allow"] if p not in gov_perms]
+                        data["permissions"] = perms
+                    settings.write_text(json.dumps(data, indent=2))
                 except (json.JSONDecodeError, OSError):
                     pass
         except OSError:

@@ -4,7 +4,7 @@
 
 AI agents act on your code, your infrastructure, your data. Governor puts you in the loop — not the model provider, not the framework, *you*. You define what the agent can do. Governor enforces it. Every decision is receipted.
 
-![Supervised session demo](docs/demo/supervised.gif)
+![Governor guardrail demo — agent blocked, adapts, work gets done](docs/demo/guardrail.gif)
 
 Launch Claude Code (or other agent CLIs) as a governed process. Every tool call is intercepted — reads auto-approve, writes need your approval. When the session ends, you review the diff. Accept or revert. Fork from there to keep going. No changes land without your say-so.
 

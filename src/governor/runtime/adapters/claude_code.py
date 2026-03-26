@@ -320,13 +320,12 @@ class ClaudeCodeAdapter:
             extra={"settings_backup": str(backup_file), "settings_file": str(settings_file)},
         )
 
-        # Register atexit cleanup so stale hooks don't persist if process dies
-        import atexit
-        def _cleanup_on_exit():
-            self._restore_settings(handle)
-            self._cleanup_hooks_dir(handle)
-        atexit.register(_cleanup_on_exit)
-        handle.extra["_atexit_cleanup"] = _cleanup_on_exit
+        # NOTE: No atexit cleanup. Previous approach caused race conditions:
+        # atexit handlers from earlier sessions delete temp dirs while the
+        # current session's hooks still reference them, causing PostToolUse
+        # hook failures that make Claude roll back edits.
+        # Cleanup happens in explicit shutdown() only.
+        # Use `governor runtime cleanup` for manual stale hook removal.
 
         return handle
 
@@ -572,12 +571,6 @@ class ClaudeCodeAdapter:
 
         self._restore_settings(handle)
         self._cleanup_hooks_dir(handle)
-
-        # Unregister atexit since we cleaned up explicitly
-        cleanup_fn = handle.extra.get("_atexit_cleanup")
-        if cleanup_fn:
-            import atexit
-            atexit.unregister(cleanup_fn)
 
     def map_event(self, event: NativeEvent) -> list[dict[str, Any]]:
         """Map Claude Code native events to canonical event dicts."""

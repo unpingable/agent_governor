@@ -124,10 +124,31 @@ session_created → launching → attached → running
 | Runtime tests | 49 |
 | Workspace mutations from denied ops | 0 |
 
-## Next Steps
+## Dogfood Round 2 (2026-03-26)
 
-1. **Harden settings cleanup** — atexit handler or `governor runtime cleanup` command
-2. **Permission model** — explore `--permission-mode` options for supervised print mode
-3. **Dogfood longer sessions** — multi-file refactoring, 5+ minute tasks
-4. **Phase 1: Promotions** — git diff workspace detection, diff view, operator approve/reject of accumulated changes
-5. **Maude integration testing** — run supervised commands through Maude → daemon → supervisor → Claude
+All prior next steps completed. Additional dogfood sessions run with proper permission model (no `--dangerously-skip-permissions`).
+
+### Permission Model Fix
+
+`--permission-mode auto` alone is insufficient. Claude Code's built-in permission system blocks tools that aren't in the project's `permissions.allow` list, even when PreToolUse hooks say "allow." Fix: adapter injects `permissions.allow` entries for the governed tool set at launch, removes them on shutdown.
+
+### Ugly Scenarios
+
+| # | Scenario | Tools | Result |
+|---|----------|-------|--------|
+| 7 | Multi-file refactor (rename across 4 files) | 4 approved | PASS — all tests pass |
+| 8 | Bug repair (diagnose failing test, fix) | 3 approved | PASS — correct one-line fix, test passes |
+| 9 | Mixed deny/approve (deny Bash, approve Edit/Write) | 3 approved, 1 denied | PASS — Claude adapted, explained constraint |
+
+### Bug Found
+
+**Permissions injection required.** `--permission-mode auto` + `--tools` doesn't grant tool permissions. The adapter must inject `permissions.allow` entries into `.claude/settings.local.json` for the governed tool set. Without this, edits are approved by governor hooks but silently blocked by Claude's built-in permission layer. Fixed.
+
+### Completed Items
+
+1. ~~Settings cleanup~~ — atexit handler + `governor runtime cleanup` CLI
+2. ~~Permission model~~ — `--permission-mode auto` + permissions injection + `--tools` boundary
+3. ~~Dogfood longer sessions~~ — multi-file refactor, bug repair, mixed policy
+4. ~~Phase 1: Promotions~~ — workspace diff, approve/reject/revert, fork
+5. ~~Maude E2E~~ — full chain verified: Maude → daemon → supervisor → Claude
+6. ~~Budget receipts~~ — per-step spend, run ledger, hard limits, violations

@@ -1,26 +1,12 @@
 # Agent Governor
 
-**Supervise AI agents. Approve every tool call. Review every change. Receipts for everything.**
+**Your agent. Your rules. Your receipts.**
 
-```
-Claude wants to run: bash — git apply /tmp/patch.diff
-  [INTERVENTION] Approve? (remaining: 294s)
-  > approved
+AI agents act on your code, your infrastructure, your data. Governor puts you in the loop — not the model provider, not the framework, *you*. You define what the agent can do. Governor enforces it. Every decision is receipted.
 
-Claude wants to write: src/auth/login.py
-  [INTERVENTION] Approve? (remaining: 298s)
-  > approved
+![Supervised session demo](docs/demo/supervised.gif)
 
-Session exited (exit=0), 5 tools approved
-
-PROMOTION: 3 files changed
-  src/auth/login.py  | 12 ++++++---
-  tests/test_auth.py | 28 +++++++++++++++++++
-  README.md          |  4 ++-
-  > promote — changes accepted
-```
-
-Launch Claude Code (or other agent CLIs) as a governed process. Every tool call is intercepted — reads auto-approve, writes require operator approval. When the session ends, review the diff, then accept or revert. Fork from a promoted session to continue the work. Every decision produces a tamper-evident receipt.
+Launch Claude Code (or other agent CLIs) as a governed process. Every tool call is intercepted — reads auto-approve, writes need your approval. When the session ends, you review the diff. Accept or revert. Fork from there to keep going. No changes land without your say-so.
 
 ```bash
 pip install -e .
@@ -28,7 +14,9 @@ governor init
 governor runtime launch --task "Add error handling to users.py and write tests"
 ```
 
-14,600+ tests. Zero trust. Agents propose — only the governor commits.
+This is not the model provider deciding what's safe for you. This is you deciding what's allowed in your environment, with a tamper-evident audit trail proving it happened the way you said.
+
+14,600+ tests. Agents propose — only the governor commits.
 
 > *Language is a proposal, not an authority.*
 
@@ -38,9 +26,9 @@ governor runtime launch --task "Add error handling to users.py and write tests"
 
 ## Why This Exists
 
-Agent sandboxes isolate. Agent Governor **governs**.
+Your agent's built-in guardrails are the provider's opinion about what's safe. Governor is *your* opinion about what's allowed — in your repo, on your infrastructure, with your data.
 
-Sandboxing tells you "the agent can't escape." It doesn't tell you what the agent did, why it did it, whether it was allowed to, or what evidence backed the decision. After an incident, you're left reconstructing from chat logs and vibes.
+Sandboxing tells you "the agent can't escape." It doesn't tell you what the agent did, why it did it, whether you approved it, or what evidence backed the decision. After an incident, you're left reconstructing from chat logs and vibes.
 
 Governor answers the boring questions that matter after things go wrong:
 

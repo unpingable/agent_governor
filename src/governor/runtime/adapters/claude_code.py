@@ -169,13 +169,13 @@ class ClaudeCodeAdapter:
     def launch(self, config: LaunchConfig) -> ClaudeCodeHandle:
         """Launch Claude Code as a managed child process.
 
-        Injects governor hooks into the project's .claude/settings.local.json
-        (merging with existing content). Hooks communicate with the supervisor
-        via Unix domain socket for real-time tool interception.
+        Uses --settings to pass an ISOLATED settings file with governor hooks
+        and permissions. Does NOT modify the project's .claude/settings.local.json.
+        This prevents stale hooks from poisoning the parent Claude session.
         """
         cwd = Path(config.cwd)
 
-        # Create temp dir for hook scripts and socket
+        # Create temp dir for hook scripts, socket, and isolated settings
         hooks_dir = Path(tempfile.mkdtemp(prefix="gov_hooks_"))
         socket_path = str(hooks_dir / "supervisor.sock")
 
@@ -188,84 +188,52 @@ class ClaudeCodeAdapter:
         post_hook.write_text(_SUPERVISED_POST_TOOL_SCRIPT)
         post_hook.chmod(post_hook.stat().st_mode | stat.S_IXUSR)
 
-        # Inject hooks into project .claude/settings.local.json
-        # Back up existing and merge our hooks in
-        settings_dir = cwd / ".claude"
-        settings_dir.mkdir(exist_ok=True)
-        settings_file = settings_dir / "settings.local.json"
-        backup_file = hooks_dir / "settings.local.json.bak"
-
-        existing_settings: dict[str, Any] = {}
-        if settings_file.exists():
-            try:
-                existing_settings = json.loads(settings_file.read_text())
-                # Back up original
-                backup_file.write_text(settings_file.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
-
-        # Inject permissions so Claude Code allows tools in --print mode.
-        # Governor hooks are the real permission layer; these entries just prevent
-        # Claude's built-in permission system from blocking before our hooks fire.
-        permissions = existing_settings.get("permissions", {})
-        allow_list = permissions.get("allow", [])
-        gov_permissions = [
-            "Read(*)",
-            "Write(*)",
-            "Edit(*)",
-            "Bash(*)",
-            "Glob(*)",
-            "Grep(*)",
-            "NotebookEdit(*)",
-        ]
-        for perm in gov_permissions:
-            if perm not in allow_list:
-                allow_list.append(perm)
-        permissions["allow"] = allow_list
-        existing_settings["permissions"] = permissions
-
-        # Merge our hooks into existing settings.
-        # Claude Code hook format: hooks.PreToolUse = [{"matcher": "...", "hooks": [...]}]
-        hooks = existing_settings.get("hooks", {})
-        if isinstance(hooks, list):
-            # Legacy flat format — convert to dict
-            hooks = {}
-
-        pre_matchers = hooks.get("PreToolUse", [])
-        post_matchers = hooks.get("PostToolUse", [])
-
-        # Add governor hook matchers (match all tools)
-        gov_pre_matcher = {
-            "matcher": "",  # empty = match all
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": f"python3 {pre_hook}",
-                    "timeout": 30,
-                }
-            ],
-            "_governor_supervised": True,
-        }
-        gov_post_matcher = {
-            "matcher": "",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": f"python3 {post_hook}",
-                    "timeout": 5,
-                }
-            ],
-            "_governor_supervised": True,
+        # Build isolated settings file for the child Claude session.
+        # This is passed via --settings and does NOT touch the project's settings.
+        isolated_settings: dict[str, Any] = {
+            # Permissions: allow all governed tools
+            "permissions": {
+                "allow": [
+                    "Read(*)",
+                    "Write(*)",
+                    "Edit(*)",
+                    "Bash(*)",
+                    "Glob(*)",
+                    "Grep(*)",
+                    "NotebookEdit(*)",
+                ],
+            },
+            # Hooks: governor pre/post tool interception
+            "hooks": {
+                "PreToolUse": [
+                    {
+                        "matcher": "",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": f"python3 {pre_hook}",
+                                "timeout": 30,
+                            }
+                        ],
+                    }
+                ],
+                "PostToolUse": [
+                    {
+                        "matcher": "",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": f"python3 {post_hook}",
+                                "timeout": 5,
+                            }
+                        ],
+                    }
+                ],
+            },
         }
 
-        pre_matchers.insert(0, gov_pre_matcher)
-        post_matchers.insert(0, gov_post_matcher)
-
-        hooks["PreToolUse"] = pre_matchers
-        hooks["PostToolUse"] = post_matchers
-        existing_settings["hooks"] = hooks
-
-        settings_file.write_text(json.dumps(existing_settings, indent=2))
+        settings_file = hooks_dir / "governor_settings.json"
+        settings_file.write_text(json.dumps(isolated_settings, indent=2))
 
         # Create and bind listener socket BEFORE starting Claude
         # This prevents a race where Claude's hooks try to connect before we listen
@@ -280,12 +248,12 @@ class ClaudeCodeAdapter:
         env["GOVERNOR_SESSION_ID"] = config.session_id
 
         # Build claude command
-        # --permission-mode dontAsk: Claude doesn't prompt the user for permissions.
-        #   Governor hooks handle approval instead.
-        # --tools: hard capability boundary. Claude can only use these tools.
-        #   Use --allowedTools for "no prompt needed" list, --tools for "available at all".
+        # --settings: isolated settings file with hooks + permissions (no shared state pollution)
+        # --permission-mode auto: Claude auto-approves within the settings permissions
+        # --tools: hard capability boundary
         cmd = [
             "claude",
+            "--settings", str(settings_file),
             "--permission-mode", "auto",
             "--tools", "Read,Write,Edit,Bash,Glob,Grep,NotebookEdit",
         ]
@@ -317,7 +285,7 @@ class ClaudeCodeAdapter:
             socket_path=socket_path,
             hooks_dir=str(hooks_dir),
             listener_socket=listener,
-            extra={"settings_backup": str(backup_file), "settings_file": str(settings_file)},
+            extra={"isolated_settings": str(settings_file)},
         )
 
         # NOTE: No atexit cleanup. Previous approach caused race conditions:
@@ -502,42 +470,8 @@ class ClaudeCodeAdapter:
                 except OSError:
                     pass
 
-    def _restore_settings(self, handle: ClaudeCodeHandle) -> None:
-        """Restore original settings.local.json, removing governor hooks."""
-        backup_path = handle.extra.get("settings_backup", "")
-        settings_path = handle.extra.get("settings_file", "")
-        if not (backup_path and settings_path):
-            return
-        try:
-            backup = Path(backup_path)
-            settings = Path(settings_path)
-            if backup.exists():
-                settings.write_text(backup.read_text())
-            elif settings.exists():
-                try:
-                    data = json.loads(settings.read_text())
-                    # Remove governor hooks
-                    hooks = data.get("hooks", {})
-                    if isinstance(hooks, dict):
-                        for key in ("PreToolUse", "PostToolUse"):
-                            if key in hooks:
-                                hooks[key] = [
-                                    h for h in hooks[key]
-                                    if not h.get("_governor_supervised")
-                                ]
-                        data["hooks"] = hooks
-                    # Remove injected permissions
-                    gov_perms = {"Read(*)", "Write(*)", "Edit(*)", "Bash(*)",
-                                 "Glob(*)", "Grep(*)", "NotebookEdit(*)"}
-                    perms = data.get("permissions", {})
-                    if "allow" in perms:
-                        perms["allow"] = [p for p in perms["allow"] if p not in gov_perms]
-                        data["permissions"] = perms
-                    settings.write_text(json.dumps(data, indent=2))
-                except (json.JSONDecodeError, OSError):
-                    pass
-        except OSError:
-            pass
+    # No _restore_settings needed — hooks live in an isolated settings file
+    # passed via --settings, not in the project's .claude/settings.local.json.
 
     def _cleanup_hooks_dir(self, handle: ClaudeCodeHandle) -> None:
         """Remove socket and temp hooks directory."""
@@ -569,7 +503,6 @@ class ClaudeCodeAdapter:
             except subprocess.TimeoutExpired:
                 pass
 
-        self._restore_settings(handle)
         self._cleanup_hooks_dir(handle)
 
     def map_event(self, event: NativeEvent) -> list[dict[str, Any]]:

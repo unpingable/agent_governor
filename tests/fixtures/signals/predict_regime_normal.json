@@ -45,7 +45,7 @@
   "source_receipt_ids": [],
   "source_streams": [],
   "source_versions": {
-    "governor": "2.8.0",
+    "governor": "2.8.1",
     "envelope_schema": "0.4.0"
   },
   "derivation": "derived",

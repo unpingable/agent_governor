@@ -19380,6 +19380,9 @@ def runtime_launch(ctx: click.Context, backend: str, cwd: str | None, task: str 
     if backend == "claude_code":
         from .runtime.adapters.claude_code import ClaudeCodeAdapter
         adapter = ClaudeCodeAdapter()
+    elif backend == "gemini_cli":
+        from .runtime.adapters.gemini_cli import GeminiCliAdapter
+        adapter = GeminiCliAdapter()
     else:
         click.echo(f"Unknown backend: {backend}", err=True)
         raise SystemExit(1)
@@ -19424,6 +19427,9 @@ def runtime_fork(ctx: click.Context, parent_session_id: str, task: str | None, b
     if backend == "claude_code":
         from .runtime.adapters.claude_code import ClaudeCodeAdapter
         adapter = ClaudeCodeAdapter()
+    elif backend == "gemini_cli":
+        from .runtime.adapters.gemini_cli import GeminiCliAdapter
+        adapter = GeminiCliAdapter()
     else:
         click.echo(f"Unknown backend: {backend}", err=True)
         raise SystemExit(1)

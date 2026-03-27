@@ -2955,6 +2955,9 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         if backend_kind == "claude_code":
             from .runtime.adapters.claude_code import ClaudeCodeAdapter
             adapter = ClaudeCodeAdapter()
+        elif backend_kind == "gemini_cli":
+            from .runtime.adapters.gemini_cli import GeminiCliAdapter
+            adapter = GeminiCliAdapter()
         else:
             raise ValueError(f"Unknown backend_kind: {backend_kind}")
 
@@ -3101,6 +3104,9 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         if backend_kind == "claude_code":
             from .runtime.adapters.claude_code import ClaudeCodeAdapter
             adapter = ClaudeCodeAdapter()
+        elif backend_kind == "gemini_cli":
+            from .runtime.adapters.gemini_cli import GeminiCliAdapter
+            adapter = GeminiCliAdapter()
         else:
             raise ValueError(f"Unknown backend_kind: {backend_kind}")
 

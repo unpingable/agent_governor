@@ -6,7 +6,7 @@ AI agents act on your code, your infrastructure, your data. Governor puts you in
 
 ![Governor guardrail demo — agent blocked, adapts, work gets done](docs/demo/guardrail.gif)
 
-Launch Claude Code (or other agent CLIs) as a governed process. Every tool call is intercepted — reads auto-approve, writes need your approval. When the session ends, you review the diff. Accept or revert. Fork from there to keep going. No changes land without your say-so.
+Launch Claude Code or Gemini CLI as a governed process. Every tool call is intercepted — reads auto-approve, writes need your approval. When the session ends, you review the diff. Accept or revert. Fork from there to keep going. No changes land without your say-so.
 
 ```bash
 pip install -e .

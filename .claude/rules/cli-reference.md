@@ -129,8 +129,8 @@ governor watch start                  # Start watching current directory
 governor watch check                  # Check for changes once
 
 # Runtime Supervisor (supervised agent sessions)
-governor runtime launch               # Launch supervised Claude session
-    [--backend claude_code] [--cwd DIR] [--task "..."] [--mode interactive|autonomous]
+governor runtime launch               # Launch supervised agent session
+    [--backend claude_code|gemini_cli] [--cwd DIR] [--task "..."] [--mode interactive|autonomous]
 governor runtime fork <parent_id>     # Fork from promoted session [--task "..."]
 governor runtime list                 # List supervised sessions
 governor runtime events <session_id>  # Show canonical event stream [--since N] [--json]

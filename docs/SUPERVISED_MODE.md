@@ -1,16 +1,19 @@
 # Supervised Mode
 
-Governor can launch and supervise external agent runtimes (currently Claude Code) with tool-level interception and operator approval.
+Governor can launch and supervise external agent runtimes (Claude Code, Gemini CLI) with tool-level interception and operator approval.
 
 ## What it is
 
-A supervised session is one agent runtime (e.g., Claude Code) launched as a child process, with governor hooks intercepting tool calls in real time. The operator sees a canonical event stream and can approve, deny, pause, or kill the session.
+A supervised session is one agent runtime (Claude Code or Gemini CLI) launched as a child process, with governor hooks intercepting tool calls in real time. The operator sees a canonical event stream and can approve, deny, pause, or kill the session.
 
 ## Quick start
 
 ```bash
-# Via CLI
+# Via CLI (Claude Code — default)
 governor runtime launch --task "Fix the failing test in test_claims.py"
+
+# Via CLI (Gemini CLI)
+governor runtime launch --backend gemini_cli --task "Fix the failing test in test_claims.py"
 governor runtime list
 governor runtime events <session_id>
 governor runtime interventions <session_id>
@@ -83,5 +86,17 @@ Events are persisted to JSONL, queryable by sequence cursor.
 - Hook format: `{"matcher": "", "hooks": [{"type": "command", "command": "...", "timeout": N}]}`
 - Deny output: `{"hookSpecificOutput": {"permissionDecision": "deny", ...}}`
 - `--print` mode requires stdin closed after launch
-- Settings injected into `.claude/settings.local.json` (merged, not clobbered)
-- Settings restored on shutdown; tagged with `_governor_supervised` for cleanup
+- Isolated settings via `--settings <file>` (no project settings pollution)
+- Write tools: `Edit`, `Write`, `Bash`, `NotebookEdit`
+
+## Gemini CLI adapter notes
+
+- Hooks use `BeforeTool`, `AfterTool` (not PascalCase PreToolUse/PostToolUse)
+- Same hook format as Claude: `{"matcher": ".*", "hooks": [{"type": "command", ...}]}`
+- Deny via **exit code 2** + stderr reason (not JSON output)
+- `--prompt` for headless mode (not `--print`)
+- `--approval-mode yolo` for auto-approve (governor hooks are the authority)
+- Isolated settings via `GEMINI_CLI_SYSTEM_SETTINGS_PATH` env var
+- Write tools: `replace`, `write_file`, `run_shell_command`
+- Read tools (auto-approved): `read_file`, `glob`, `grep_search`
+- Free tier is slow (~30-60s per task); works but needs patience

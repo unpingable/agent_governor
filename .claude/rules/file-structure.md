@@ -104,7 +104,8 @@ src/governor/
 │   ├── promotion.py                 # Promotion, detect_workspace_changes, approve/reject/revert
 │   └── adapters/
 │       ├── __init__.py
-│       └── claude_code.py           # ClaudeCodeAdapter: supervised mode, Unix socket hooks
+│       ├── claude_code.py           # ClaudeCodeAdapter: supervised mode, Unix socket hooks
+│       └── gemini_cli.py            # GeminiCliAdapter: supervised mode, BeforeTool/AfterTool hooks
 │
 # v2.4 Instrumentation Spine (Phase A + B + C):
 ├── signals/

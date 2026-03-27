@@ -219,8 +219,11 @@ class GeminiCliAdapter:
         env["GOVERNOR_SESSION_ID"] = config.session_id
 
         # Build gemini command
-        # --approval-mode yolo: auto-approve (governor hooks handle gating)
-        # --output-format text: plain text output
+        # Approval mode depends on operator mode:
+        # - interactive: yolo (let hooks handle gating, governor is the authority)
+        # - autonomous: yolo (auto-approve everything)
+        # Note: Gemini's "default" mode prompts interactively, which blocks in headless.
+        # We use yolo and let our BeforeTool hooks handle the gating.
         cmd = ["gemini", "--approval-mode", "yolo"]
         if config.args:
             cmd.extend(config.args)

@@ -149,7 +149,14 @@ def _now_iso() -> str:
 
 
 # Default timeout policy: deny writes, allow reads
-_WRITE_TOOLS = {"bash", "write", "edit", "notebookedit", "Bash", "Write", "Edit", "NotebookEdit"}
+# Includes tool names from Claude Code AND Gemini CLI
+_WRITE_TOOLS = {
+    # Claude Code
+    "bash", "write", "edit", "notebookedit",
+    "Bash", "Write", "Edit", "NotebookEdit",
+    # Gemini CLI
+    "replace", "write_file", "run_shell_command",
+}
 
 
 class SessionSupervisor:

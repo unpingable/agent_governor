@@ -18,7 +18,7 @@ import click
 # behind --help-all.
 CATEGORIES: OrderedDict[str, list[str]] = OrderedDict([
     ("Operator",  ["status", "doctor", "trace", "explain", "operator", "receipts", "check"]),
-    ("Workflow",  ["init", "propose", "verify", "apply", "wrap", "serve", "ci"]),
+    ("Workflow",  ["quickstart", "init", "propose", "verify", "apply", "wrap", "serve", "ci"]),
     ("Config",    ["envelope", "profile", "intent", "session", "config"]),
     ("Debug",     ["rpc"]),
     ("Advanced",  ["advanced"]),

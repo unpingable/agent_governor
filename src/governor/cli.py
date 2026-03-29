@@ -309,6 +309,98 @@ Next:
 
 
 @cli.command()
+@click.pass_context
+def quickstart(ctx: click.Context) -> None:
+    """Guided demo: init, add a rule, see it enforced.
+
+    \b
+    Walks through the core governor workflow in 30 seconds:
+      1. Initialize .governor/ (if needed)
+      2. Run the evidence gate on a sample claim
+      3. Add a prohibition anchor
+      4. Show the anchor blocking a violation
+      5. Print next steps
+    """
+    import subprocess
+    import sys
+    import shutil
+
+    root = Path(ctx.obj["root"])
+    gov_dir = root / GOVERNOR_DIR
+    governor_bin = shutil.which("governor") or sys.argv[0]
+
+    def _run(args: list[str], label: str, *, quiet: bool = False) -> str:
+        """Run a governor subcommand, print its output, return it."""
+        cmd = [governor_bin, "--root", str(root)] + args
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Use stdout only — stderr has internal warnings that clutter the demo
+        output = result.stdout.strip()
+        if output and not quiet:
+            for line in output.splitlines():
+                click.echo(f"  {line}")
+        return output
+
+    click.echo()
+
+    # Step 1: Init
+    if not gov_dir.exists():
+        click.echo("Step 1/4 — Initializing governor...")
+        _run(["init"], "init", quiet=True)
+        click.echo(f"  Initialized at {gov_dir}")
+    else:
+        click.echo("Step 1/4 — Governor already initialized.")
+    click.echo()
+
+    # Step 2: Gate check (passes — no rules yet)
+    click.echo('Step 2/4 — Running the evidence gate on a sample claim...')
+    click.echo()
+    click.echo('  $ governor gate check "All tests pass and the code is safe."')
+    _run(["gate", "check", "All tests pass and the code is safe."], "gate check")
+    click.echo()
+    click.echo("  The gate checked the text and issued a receipt.")
+    click.echo("  No rules yet, so everything passes.")
+    click.echo()
+
+    # Step 3: Add a prohibition anchor
+    click.echo("Step 3/4 — Adding a rule: no eval() in production code...")
+    click.echo()
+    _run([
+        "continuity", "anchor", "add",
+        "--id", "no-eval",
+        "--type", "prohibition",
+        "--description", "Never use eval() in production code",
+        "--forbidden", "eval(",
+        "--severity", "reject",
+        "--class", "invariant",
+    ], "anchor add")
+    click.echo()
+
+    # Step 4: Show violation
+    click.echo("Step 4/4 — Now watch it block a violation...")
+    click.echo()
+    claim = "I refactored the query builder to use eval(user_input) for dynamic filters."
+    click.echo(f'  $ governor continuity check "{claim}"')
+    _run(["continuity", "check", claim], "continuity check")
+    click.echo()
+    click.echo("  Blocked. The agent would have to find another approach.")
+    click.echo()
+
+    # Cleanup: remove the demo anchor so quickstart is re-runnable
+    try:
+        _run(["continuity", "anchor", "remove", "no-eval"], "anchor remove", quiet=True)
+    except Exception:
+        pass
+
+    # Next steps
+    click.echo("What next:")
+    click.echo("  governor gate check \"your text here\"     Check any agent output")
+    click.echo("  governor runtime launch --task \"...\"      Supervise an agent session")
+    click.echo("  governor status --full                    See the full dashboard")
+    click.echo("  See docs/GETTING_STARTED.md for the full walkthrough.")
+    click.echo()
+
+
+@cli.command()
 @click.option("--patch", "-p", type=click.Path(exists=True), help="Path to patch file")
 @click.option("--claim", "-c", multiple=True, help="Claim in format: type=value,key=value,...")
 @click.pass_context

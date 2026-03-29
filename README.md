@@ -112,15 +112,28 @@ Teams can stop at any level and still get value.
 
 ## Start Here
 
+Three commands. See it work.
+
+```bash
+pip install -e .
+governor init
+governor gate check "All tests pass. The auth module is thread-safe."
+```
+
+That's the gate. It checks claims, issues receipts, and blocks what you tell it to block. **[Full walkthrough (5 min) >>](docs/GETTING_STARTED.md)**
+
+Or run `governor quickstart` to see a guided demo with anchors, violations, and receipts.
+
+### Find Your Path
+
 | I want to... | Start with |
 |---|---|
+| **Kick the tires** | [Getting Started](docs/GETTING_STARTED.md) — install, try the gate, add a rule, see it block |
 | **Supervise an agent session** | `governor runtime launch --task "..."` — see [Supervised Mode](docs/SUPERVISED_MODE.md) |
 | **Use a TUI** | [Maude](https://github.com/unpingable/maude) — governed REPL with supervised sessions |
 | **Govern Claude Code in 5 minutes** | [Plugin Quickstart](docs/QUICKSTART_PLUGIN.md) — install, init, go |
-| **See what the governor catches** | [Quick Start](#quick-start) — one command, immediate feedback |
 | **Get auditability first** | `governor init` + `governor gate check` — receipts with zero enforcement |
 | **Inspect an incident** | `governor trace` + `governor receipts` — unified timeline and receipt query |
-| **Use a desktop UI** | [Guvnah](https://github.com/unpingable/guvnah) — governor status and inspection console |
 | **Understand the architecture** | [Architecture](#architecture) + [PCAR specs](#pcar-proof-carrying-agent-runtime) |
 
 ---

@@ -1555,6 +1555,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
                 # Stream through routed model, buffer for post-hoc validation
                 accumulated: list[str] = []
+                lanes_stream_usage: dict[str, int] = {}
                 is_cancelled = False
                 validation_scope = "full"
                 validators_failed: list[str] = []
@@ -1564,6 +1565,8 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                             accumulated.append(chunk.content)
                             await notify("chat.delta", {"content": chunk.content})
                         if chunk.finish_reason is not None:
+                            if chunk.usage:
+                                lanes_stream_usage = chunk.usage
                             break
                 except Exception:
                     is_cancelled = True
@@ -1625,7 +1628,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 return {
                     "content": full_content,
                     "model": routed_model,
-                    "usage": {},
+                    "usage": lanes_stream_usage,
                     "violations": [],
                     "footer": None,
                     "pending": None,
@@ -1663,11 +1666,14 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
         # Stream generation, sending deltas as notifications
         accumulated: list[str] = []
+        stream_usage: dict[str, int] = {}
         async for chunk in bridge.backend.stream(augmented, model):
             if chunk.content:
                 accumulated.append(chunk.content)
                 await notify("chat.delta", {"content": chunk.content})
             if chunk.finish_reason is not None:
+                if chunk.usage:
+                    stream_usage = chunk.usage
                 break
 
         full_content = "".join(accumulated)
@@ -1691,7 +1697,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             return {
                 "content": full_content,
                 "model": model,
-                "usage": {},
+                "usage": stream_usage,
                 "violations": check_result.violations,
                 "footer": None,
                 "pending": check_result.to_dict(),
@@ -1706,7 +1712,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         result = {
             "content": full_content,
             "model": model,
-            "usage": {},
+            "usage": stream_usage,
             "violations": check_result.violations,
             "footer": footer,
             "pending": None,

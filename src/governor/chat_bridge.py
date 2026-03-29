@@ -117,6 +117,7 @@ class ChatChunk:
 
     content: str
     finish_reason: str | None = None
+    usage: dict[str, int] | None = None
 
 
 @dataclass
@@ -263,9 +264,19 @@ class OllamaBackend:
 
                     content = data.get("message", {}).get("content", "")
                     done = data.get("done", False)
+                    usage = None
+                    if done:
+                        prompt_tokens = data.get("prompt_eval_count", 0)
+                        completion_tokens = data.get("eval_count", 0)
+                        if prompt_tokens or completion_tokens:
+                            usage = {
+                                "input_tokens": prompt_tokens,
+                                "output_tokens": completion_tokens,
+                            }
                     yield ChatChunk(
                         content=content,
                         finish_reason="stop" if done else None,
+                        usage=usage,
                     )
 
     async def list_models(self) -> list[dict[str, str]]:
@@ -403,6 +414,8 @@ class AnthropicBackend:
                 json=payload,
                 headers=headers,
             ) as response:
+                # Accumulate usage from message_start + message_delta events
+                _usage: dict[str, int] = {}
                 async for line in response.aiter_lines():
                     if not line or not line.startswith("data: "):
                         continue
@@ -419,8 +432,21 @@ class AnthropicBackend:
                         delta = event.get("delta", {})
                         if delta.get("type") == "text_delta":
                             yield ChatChunk(content=delta.get("text", ""))
+                    elif event_type == "message_start":
+                        u = event.get("message", {}).get("usage", {})
+                        if u.get("input_tokens"):
+                            _usage["input_tokens"] = u["input_tokens"]
+                            _usage["cache_creation_input_tokens"] = u.get("cache_creation_input_tokens", 0)
+                            _usage["cache_read_input_tokens"] = u.get("cache_read_input_tokens", 0)
+                    elif event_type == "message_delta":
+                        u = event.get("usage", {})
+                        if u.get("output_tokens"):
+                            _usage["output_tokens"] = u["output_tokens"]
                     elif event_type == "message_stop":
-                        yield ChatChunk(content="", finish_reason="stop")
+                        yield ChatChunk(
+                            content="", finish_reason="stop",
+                            usage=_usage or None,
+                        )
 
     async def list_models(self) -> list[dict[str, str]]:
         """Return hardcoded list of Claude models."""
@@ -657,8 +683,14 @@ class ClaudeCodeBackend:
                         yield ChatChunk(content=content)
 
                 elif msg_type == "result":
-                    # Final result
-                    yield ChatChunk(content="", finish_reason="stop")
+                    # Final result — extract usage if present
+                    u = data.get("usage", {})
+                    usage = None
+                    if u:
+                        usage = {
+                            k: v for k, v in u.items() if isinstance(v, int)
+                        }
+                    yield ChatChunk(content="", finish_reason="stop", usage=usage or None)
                     sent_stop = True
 
         # Process any remaining data in buffer after EOF
@@ -676,7 +708,13 @@ class ClaudeCodeBackend:
                     elif isinstance(content, str):
                         yield ChatChunk(content=content)
                 elif msg_type == "result":
-                    yield ChatChunk(content="", finish_reason="stop")
+                    u = data.get("usage", {})
+                    usage = None
+                    if u:
+                        usage = {
+                            k: v for k, v in u.items() if isinstance(v, int)
+                        }
+                    yield ChatChunk(content="", finish_reason="stop", usage=usage or None)
                     sent_stop = True
             except json.JSONDecodeError:
                 pass
@@ -936,7 +974,13 @@ class CodexBackend:
                         yield ChatChunk(content=item.get("text", ""))
 
                 elif event_type == "turn.completed":
-                    yield ChatChunk(content="", finish_reason="stop")
+                    u = data.get("usage", {})
+                    usage = None
+                    if u:
+                        usage = {
+                            k: v for k, v in u.items() if isinstance(v, int)
+                        }
+                    yield ChatChunk(content="", finish_reason="stop", usage=usage or None)
                     sent_stop = True
 
                 elif event_type in ("error", "turn.failed"):
@@ -956,7 +1000,13 @@ class CodexBackend:
                     if item.get("type") == "agent_message":
                         yield ChatChunk(content=item.get("text", ""))
                 elif event_type == "turn.completed":
-                    yield ChatChunk(content="", finish_reason="stop")
+                    u = data.get("usage", {})
+                    usage = None
+                    if u:
+                        usage = {
+                            k: v for k, v in u.items() if isinstance(v, int)
+                        }
+                    yield ChatChunk(content="", finish_reason="stop", usage=usage or None)
                     sent_stop = True
             except json.JSONDecodeError:
                 pass

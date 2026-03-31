@@ -235,6 +235,11 @@ EVIDENCE_REQUIRED = ControlSlot(
     "EVIDENCE_REQUIRED", "epistemic",
     "Cite evidence for claims; don't fabricate",
 )
+OUTPUT_DISCIPLINE = ControlSlot(
+    "OUTPUT_DISCIPLINE", "output",
+    "Be direct and concise; prefer patches over essays; match response "
+    "scale to request scale",
+)
 
 # Fiction
 CANON_AUTHORITY_BOUNDARY = ControlSlot(
@@ -318,7 +323,7 @@ CORE_VOCAB = build_vocab(
     "0.1.0",
     (
         # Global
-        GOVERNANCE_INVISIBLE, EXIT_CLEAN, EVIDENCE_REQUIRED,
+        GOVERNANCE_INVISIBLE, EXIT_CLEAN, EVIDENCE_REQUIRED, OUTPUT_DISCIPLINE,
         # Fiction
         CANON_AUTHORITY_BOUNDARY, AFFECT_REGIME_AWARE, CHARACTER_CONSISTENCY,
         NO_COMMITTEE_VOICE,
@@ -342,6 +347,7 @@ _GLOBAL_BASELINE = (
     "GOVERNANCE_INVISIBLE",
     "EXIT_CLEAN",
     "EVIDENCE_REQUIRED",
+    "OUTPUT_DISCIPLINE",
 )
 
 _MODE_SLOTS: dict[str, tuple[str, ...]] = {

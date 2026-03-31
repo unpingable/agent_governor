@@ -73,8 +73,8 @@ class TestControlVocabulary:
         with pytest.raises(AttributeError):
             CORE_VOCAB.version = "999"  # type: ignore[misc]
 
-    def test_core_vocab_has_20_slots(self):
-        assert len(CORE_VOCAB.slots) == 20
+    def test_core_vocab_has_21_slots(self):
+        assert len(CORE_VOCAB.slots) == 21
 
 
 # ---------------------------------------------------------------------------

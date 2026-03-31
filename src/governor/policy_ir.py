@@ -261,6 +261,10 @@ NO_COMMITTEE_VOICE = ControlSlot(
 )
 
 # Code
+PATCH_OVER_ESSAY = ControlSlot(
+    "PATCH_OVER_ESSAY", "output",
+    "Prefer code patches, diffs, and targeted changes over prose explanations",
+)
 ARCHITECTURAL_COHERENCE = ControlSlot(
     "ARCHITECTURAL_COHERENCE", "structural",
     "Reference existing decisions before proposing changes",
@@ -328,7 +332,8 @@ CORE_VOCAB = build_vocab(
         CANON_AUTHORITY_BOUNDARY, AFFECT_REGIME_AWARE, CHARACTER_CONSISTENCY,
         NO_COMMITTEE_VOICE,
         # Code
-        ARCHITECTURAL_COHERENCE, PATTERN_CONFLICT_DETECTION, EPISTEMIC_CARE,
+        PATCH_OVER_ESSAY, ARCHITECTURAL_COHERENCE, PATTERN_CONFLICT_DETECTION,
+        EPISTEMIC_CARE,
         # Nonfiction
         CLAIM_TAXONOMY, CLAIM_VELOCITY, HEDGE_CALIBRATION, FALSIFIER_EXPOSURE,
         STRUCTURAL_INTEGRITY,
@@ -358,6 +363,7 @@ _MODE_SLOTS: dict[str, tuple[str, ...]] = {
         "CHARACTER_CONSISTENCY",
     ),
     "code": (
+        "PATCH_OVER_ESSAY",
         "ARCHITECTURAL_COHERENCE",
         "PATTERN_CONFLICT_DETECTION",
         "EPISTEMIC_CARE",
@@ -543,7 +549,7 @@ class ProseRenderer:
 class MinimalRenderer:
     """Renders slot sets as semicolon-delimited compact syntax.
 
-    Grammar:
+    Grammar (control line):
       output     = slot_token (";" slot_token)*
       slot_token = SLOT_ID | SLOT_ID "(" params ")"
       params     = param ("," param)*
@@ -552,19 +558,32 @@ class MinimalRenderer:
       KEY        = [a-z_]+
       VALUE      = [a-z0-9_]+
 
+    Output-category slots get a brief expansion line after the control
+    line, because bare tokens like ``output_discipline`` don't carry
+    enough semantic weight for the model to act on. The expansions are
+    short, explicit, and behavioral — not prose.
+
     Rules:
-      - lowercase only
-      - semicolon delimiter, no spaces
+      - lowercase only for control line
+      - semicolon delimiter, no spaces in control line
       - params sorted by key
       - values constrained to [a-z0-9_]
     """
 
     renderer_id: str = "minimal_v1"
-    renderer_version: str = "0.1.0"
+    renderer_version: str = "0.2.0"
+
+    # Brief expansions for output-category slots.
+    # These are behavioral priors the model needs to hear explicitly.
+    _OUTPUT_EXPANSIONS: dict[str, str] = {
+        "OUTPUT_DISCIPLINE": "Be direct and concise. Match response length to request complexity.",
+        "PATCH_OVER_ESSAY": "Respond with code, diffs, and targeted changes. Not prose explanations.",
+    }
 
     def render(self, slot_set: SlotSet, vocab: ControlVocabulary) -> RenderResult:
         params = dict(slot_set.parameters)
         tokens: list[str] = []
+        expansions: list[str] = []
         resolved: list[tuple[str, str]] = []
 
         for slot_id in slot_set.active:
@@ -589,7 +608,13 @@ class MinimalRenderer:
 
             tokens.append(token)
 
+            # Collect expansions for output-category slots
+            if slot.category == "output" and slot_id in self._OUTPUT_EXPANSIONS:
+                expansions.append(self._OUTPUT_EXPANSIONS[slot_id])
+
         text = ";".join(tokens)
+        if expansions:
+            text += "\n" + " ".join(expansions)
 
         return _build_render_result(
             text=text,

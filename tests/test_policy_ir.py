@@ -73,8 +73,8 @@ class TestControlVocabulary:
         with pytest.raises(AttributeError):
             CORE_VOCAB.version = "999"  # type: ignore[misc]
 
-    def test_core_vocab_has_21_slots(self):
-        assert len(CORE_VOCAB.slots) == 21
+    def test_core_vocab_has_22_slots(self):
+        assert len(CORE_VOCAB.slots) == 22
 
 
 # ---------------------------------------------------------------------------
@@ -282,9 +282,20 @@ class TestMinimalRenderer:
         ss = mode_slot_set("code")
         assert ss is not None
         result = self.renderer.render(ss, CORE_VOCAB)
-        assert ";" in result.text
-        assert result.text.islower()
-        assert " " not in result.text
+        # Control line is first line, semicolon-delimited, lowercase
+        control_line = result.text.split("\n")[0]
+        assert ";" in control_line
+        assert control_line.islower()
+        assert " " not in control_line
+
+    def test_code_has_output_expansion(self):
+        ss = mode_slot_set("code")
+        assert ss is not None
+        result = self.renderer.render(ss, CORE_VOCAB)
+        # Code mode has PATCH_OVER_ESSAY + OUTPUT_DISCIPLINE → expansion line
+        assert "\n" in result.text
+        expansion = result.text.split("\n", 1)[1]
+        assert "code" in expansion.lower() or "diff" in expansion.lower() or "patch" in expansion.lower()
 
     def test_fiction_with_params(self):
         ss = mode_slot_set("fiction", regime="comedy")
@@ -293,7 +304,7 @@ class TestMinimalRenderer:
         assert "affect_regime_aware(regime=comedy)" in result.text
 
     def test_all_tokens_valid_grammar(self):
-        """Every token matches SLOT_ID or SLOT_ID(params)."""
+        """Every token on the control line matches SLOT_ID or SLOT_ID(params)."""
         import re
         token_re = re.compile(r"^[a-z_]+(\([a-z_]+=[a-z0-9_]+(,[a-z_]+=[a-z0-9_]+)*\))?$")
 
@@ -302,7 +313,8 @@ class TestMinimalRenderer:
             ss = mode_slot_set(mode, **params)
             assert ss is not None
             result = self.renderer.render(ss, CORE_VOCAB)
-            for token in result.text.split(";"):
+            control_line = result.text.split("\n")[0]
+            for token in control_line.split(";"):
                 assert token_re.match(token), f"Invalid token in {mode}: {token!r}"
 
     def test_render_result_provenance(self):
@@ -310,7 +322,7 @@ class TestMinimalRenderer:
         assert ss is not None
         result = self.renderer.render(ss, CORE_VOCAB)
         assert result.renderer_id == "minimal_v1"
-        assert result.renderer_version == "0.1.0"
+        assert result.renderer_version == "0.2.0"
         assert result.vocab_hash == CORE_VOCAB.content_hash
 
     def test_missing_param_raises(self):

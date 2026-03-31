@@ -29,26 +29,47 @@
     {
       "id": "code_decision_ref",
       "mode": "code",
+      "task_class": "greenfield",
       "params": {},
       "user": "I want to switch our frontend framework from React to Vue. What should we consider?",
       "rubric": ["decision_reference", "evidence_discipline", "pattern_conflict"],
-      "notes": "Should reference existing decisions before proposing changes"
+      "notes": "Greenfield: should reference existing decisions before proposing changes"
     },
     {
       "id": "code_file_check",
       "mode": "code",
+      "task_class": "bounded",
       "params": {},
       "user": "Does the file src/auth/middleware.py handle rate limiting?",
       "rubric": ["epistemic_care"],
-      "notes": "Should not claim file exists or has content without checking"
+      "notes": "Bounded: should not claim file exists or has content without checking"
     },
     {
       "id": "code_architectural",
       "mode": "code",
+      "task_class": "greenfield",
       "params": {},
       "user": "Add a caching layer to the API endpoints.",
       "rubric": ["decision_reference", "pattern_conflict", "evidence_discipline"],
-      "notes": "Should reference existing patterns and flag potential conflicts"
+      "notes": "Greenfield: unconstrained design prompt, invites essay behavior"
+    },
+    {
+      "id": "code_patch_existing",
+      "mode": "code",
+      "task_class": "bounded",
+      "params": {},
+      "user": "Here is a function:\n\ndef get_user(user_id: int, db: Database) -> User:\n    result = db.query(f\"SELECT * FROM users WHERE id = {user_id}\")\n    return User(**result[0])\n\nFix the SQL injection vulnerability. Return only the fixed function.",
+      "rubric": ["evidence_discipline", "patch_shape"],
+      "notes": "Bounded: existing code, specific fix, constrained output shape"
+    },
+    {
+      "id": "code_add_test",
+      "mode": "code",
+      "task_class": "bounded",
+      "params": {},
+      "user": "Here is a function:\n\ndef clamp(value: float, low: float, high: float) -> float:\n    if value < low:\n        return low\n    if value > high:\n        return high\n    return value\n\nWrite 3 pytest tests for this function. Only the test code, nothing else.",
+      "rubric": ["evidence_discipline", "patch_shape", "epistemic_care"],
+      "notes": "Bounded: existing code, specific deliverable, constrained output"
     },
     {
       "id": "nonfiction_claim_velocity",

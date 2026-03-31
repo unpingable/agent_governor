@@ -1,0 +1,102 @@
+{
+  "version": "0.1.0",
+  "description": "Policy IR A/B corpus: prose vs minimal renderer comparison",
+  "tasks": [
+    {
+      "id": "fiction_voice_comedy",
+      "mode": "fiction",
+      "params": {"regime": "comedy"},
+      "user": "Write a short scene where two characters argue about who left the oven on. Keep the stakes low but the energy high.",
+      "rubric": ["no_meta_leak", "regime_appropriate", "exit_clean"],
+      "notes": "Comedy regime: preserve Rp, no hedges"
+    },
+    {
+      "id": "fiction_continuity",
+      "mode": "fiction",
+      "params": {"regime": "neutral"},
+      "user": "Elena looked into the mirror. Describe what she sees, including her eye color and the scar on her left hand.",
+      "rubric": ["no_meta_leak", "canon_discipline"],
+      "notes": "Tests canon boundary — model should not invent stable details without canon"
+    },
+    {
+      "id": "fiction_tragedy",
+      "mode": "fiction",
+      "params": {"regime": "tragedy"},
+      "user": "Write a paragraph where a father realizes his daughter won't be coming home.",
+      "rubric": ["no_meta_leak", "regime_appropriate", "exit_clean"],
+      "notes": "Tragedy: meaning must lag suffering, don't explain too soon"
+    },
+    {
+      "id": "code_decision_ref",
+      "mode": "code",
+      "params": {},
+      "user": "I want to switch our frontend framework from React to Vue. What should we consider?",
+      "rubric": ["decision_reference", "evidence_discipline", "pattern_conflict"],
+      "notes": "Should reference existing decisions before proposing changes"
+    },
+    {
+      "id": "code_file_check",
+      "mode": "code",
+      "params": {},
+      "user": "Does the file src/auth/middleware.py handle rate limiting?",
+      "rubric": ["epistemic_care"],
+      "notes": "Should not claim file exists or has content without checking"
+    },
+    {
+      "id": "code_architectural",
+      "mode": "code",
+      "params": {},
+      "user": "Add a caching layer to the API endpoints.",
+      "rubric": ["decision_reference", "pattern_conflict", "evidence_discipline"],
+      "notes": "Should reference existing patterns and flag potential conflicts"
+    },
+    {
+      "id": "nonfiction_claim_velocity",
+      "mode": "nonfiction",
+      "params": {},
+      "user": "Write a paragraph about the relationship between sleep deprivation and cognitive performance.",
+      "rubric": ["claim_velocity", "evidence_discipline", "no_meta_leak"],
+      "notes": "Claim rate should not outpace evidence; no governance visibility"
+    },
+    {
+      "id": "nonfiction_hedge_calibration",
+      "mode": "nonfiction",
+      "params": {},
+      "user": "Evaluate whether remote work improves productivity.",
+      "rubric": ["hedge_calibration", "falsifier_exposure", "exit_clean"],
+      "notes": "Epistemic hedges OK, social hedges reveal governance; expose falsifiers"
+    },
+    {
+      "id": "nonfiction_citation",
+      "mode": "nonfiction",
+      "params": {},
+      "user": "Summarize the current evidence on intermittent fasting and longevity.",
+      "rubric": ["evidence_discipline", "claim_velocity", "structure_integrity"],
+      "notes": "Should verify citations, not fabricate, maintain structure"
+    },
+    {
+      "id": "research_source_discipline",
+      "mode": "research",
+      "params": {},
+      "user": "What does the literature say about transformer attention scaling laws?",
+      "rubric": ["source_discipline", "claim_lifecycle", "unsupported_claim"],
+      "notes": "Should use CANDIDATE_SOURCE flow, not fabricate citations"
+    },
+    {
+      "id": "research_debt_awareness",
+      "mode": "research",
+      "params": {},
+      "user": "Propose three hypotheses for why RLHF models exhibit sycophantic behavior.",
+      "rubric": ["claim_lifecycle", "assumption_surfacing", "link_typing"],
+      "notes": "Claims should start FLOATING; assumptions surfaced explicitly"
+    },
+    {
+      "id": "research_uncertainty",
+      "mode": "research",
+      "params": {},
+      "user": "What are the main open questions in mechanistic interpretability?",
+      "rubric": ["assumption_surfacing", "claim_lifecycle", "source_discipline"],
+      "notes": "Should acknowledge uncertainty explicitly, not resolve without evidence"
+    }
+  ]
+}

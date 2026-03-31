@@ -163,7 +163,16 @@ def live_run(
     (gov / "facts" / "index.json").write_text("[]")
     (gov / "decisions" / "index.json").write_text("[]")
 
-    backend = create_backend(backend_type)
+    import os
+    backend_kwargs: dict[str, str] = {}
+    if backend_type == "anthropic":
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            print("ERROR: ANTHROPIC_API_KEY not set", file=sys.stderr)
+            sys.exit(1)
+        backend_kwargs["api_key"] = api_key
+
+    backend = create_backend(backend_type, **backend_kwargs)
     if backend is None:
         print(f"ERROR: Could not create backend {backend_type!r}", file=sys.stderr)
         sys.exit(1)

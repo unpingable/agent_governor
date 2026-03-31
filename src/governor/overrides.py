@@ -329,6 +329,10 @@ class OverrideManager:
                 return override
         return None
 
+    def pressure(self, **kwargs) -> list[PressureRecord]:
+        """Compute exception pressure across all overrides."""
+        return compute_pressure(list(self._overrides.values()), **kwargs)
+
     def cleanup_expired(self) -> int:
         """
         Remove expired override files from disk.
@@ -342,6 +346,98 @@ class OverrideManager:
                 del self._overrides[override_id]
                 count += 1
         return count
+
+
+# =============================================================================
+# Exception Pressure (Δr→Δw detection)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class PressureRecord:
+    """Override accumulation pressure for a (scope_key, anchor_id) pair."""
+
+    scope_key: str      # normalized scope (sorted, joined)
+    anchor_id: str
+    override_count: int
+    unique_sessions: int
+    unique_operators: int
+    renewal_rate: float  # fraction of overrides that were renewed (0.0-1.0)
+    pressure: str        # "low", "medium", "high"
+    window_days: int
+
+
+def _normalize_scope(scope: list[str]) -> str:
+    """Canonical scope key for grouping."""
+    return "|".join(sorted(scope))
+
+
+def compute_pressure(
+    overrides: list[OverrideReceipt],
+    window_days: int = 7,
+    medium_count: int = 3,
+    medium_sessions: int = 3,
+    high_count: int = 6,
+    high_renewal_rate: float = 0.5,
+) -> list[PressureRecord]:
+    """Compute exception pressure per (scope, anchor) from override history.
+
+    Thresholds:
+    - low: count <= medium_count - 1 and sessions < medium_sessions
+    - medium: count >= medium_count, or sessions >= medium_sessions
+    - high: count >= high_count, or renewal_rate > high_renewal_rate
+    """
+    from collections import defaultdict
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=window_days)
+
+    # Filter to window (include expired/revoked — they still count as override events)
+    in_window: list[OverrideReceipt] = []
+    for o in overrides:
+        try:
+            created = datetime.fromisoformat(o.created_at.replace("Z", "+00:00"))
+            if created >= cutoff:
+                in_window.append(o)
+        except (ValueError, TypeError):
+            continue
+
+    # Group by (scope_key, anchor_id)
+    groups: dict[tuple[str, str], list[OverrideReceipt]] = defaultdict(list)
+    for o in in_window:
+        key = (_normalize_scope(o.scope), o.anchor_id)
+        groups[key].append(o)
+
+    records: list[PressureRecord] = []
+    for (scope_key, anchor_id), group in sorted(groups.items()):
+        count = len(group)
+        sessions = len({getattr(o, "session_id", None) or o.created_at for o in group})
+        operators = len({o.operator for o in group})
+
+        # Renewal rate: fraction that expired and were followed by another override
+        # for the same scope+anchor (approximation: count > 1 and most are expired)
+        expired_count = sum(1 for o in group if o.is_expired)
+        renewal_rate = expired_count / count if count > 1 else 0.0
+
+        if count >= high_count or (count > 1 and renewal_rate > high_renewal_rate):
+            pressure = "high"
+        elif count >= medium_count or sessions >= medium_sessions:
+            pressure = "medium"
+        else:
+            pressure = "low"
+
+        records.append(PressureRecord(
+            scope_key=scope_key,
+            anchor_id=anchor_id,
+            override_count=count,
+            unique_sessions=sessions,
+            unique_operators=operators,
+            renewal_rate=round(renewal_rate, 2),
+            pressure=pressure,
+            window_days=window_days,
+        ))
+
+    return records
 
 
 # =============================================================================

@@ -1090,8 +1090,18 @@ class GovernorHooks:
         "dramedy", "tragicomedy", "sincere_drama", "neutral",
     }
 
-    def __init__(self, context: GovernorContext) -> None:
+    def __init__(
+        self,
+        context: GovernorContext,
+        renderer: Any | None = None,
+    ) -> None:
         self.context = context
+        # Policy IR renderer — explicit, inspectable, no hidden global
+        if renderer is None:
+            from .policy_ir import get_default_renderer
+            renderer = get_default_renderer()
+        self._renderer = renderer
+        self._last_render_result: Any | None = None
         # Context manifest chain state
         self._prev_manifest_hash: str | None = None
         self._prev_build_id: str | None = None
@@ -1584,101 +1594,41 @@ class GovernorHooks:
             print(f"WARNING: context manifest store failed: {exc}", file=sys.stderr)
 
     def _build_mode_prompt(self) -> str | None:
-        """Build base mode-specific system prompt (without anchor context)."""
-        if self.context.mode == "fiction":
-            return self._build_fiction_prompt()
-        elif self.context.mode == "code":
-            return self._build_code_prompt()
-        elif self.context.mode == "nonfiction":
-            return self._build_nonfiction_prompt()
-        elif self.context.mode == "research":
-            return self._build_research_prompt()
-        return None
+        """Build base mode-specific system prompt via Policy IR renderer.
 
-    def _build_fiction_prompt(self) -> str:
-        """System prompt for fiction writing mode.
-
-        Incorporates affect regime awareness, governance invisibility rules,
-        and tone envelope guidance from fic.md and tone.md specs.
+        Policy IR (control slots) handles static control instructions.
+        Dynamic runtime state (ED scores, accepted sources) is state IR
+        and gets appended separately — not mixed into the compiled artifact.
         """
+        from .policy_ir import CORE_VOCAB, mode_slot_set, validate_slot_set
+
         regime = self._detect_active_regime()
-        return (
-            "You are a fiction writing assistant with governor integration.\n\n"
-            "## Core Invariant\n"
-            "Governance must never surface in-band. The reader should never detect "
-            "that an author is managing outcomes. No apologies, no meta-commentary, "
-            "no committee voice, no hedging that reveals authorial anxiety.\n\n"
-            "## Canon Authority\n"
-            "Canonical truth lives only in the Characters and World Rules stores.\n"
-            "Facts mentioned in chat are provisional draft notes until saved to canon.\n"
-            "Do not imply a chat-stated fact is \"remembered\" or established canon "
-            "unless it exists in canon.\n"
-            "When the user states a new character or world fact that is not in canon, "
-            "acknowledge it as a draft detail and include a single short nudge: "
-            "\"If you want that to stick, add it under Characters/World Rules.\"\n"
-            "If the user asks for consistency or recall and the fact is not in canon, "
-            "say so plainly and point to the canon UI.\n\n"
-            "## Affect Regime\n"
-            f"Current regime: {regime}. Maintain regime-appropriate tone and pacing.\n"
-            "- Comedy: preserve perceived risk (Rp). Hedges kill comedy.\n"
-            "- Tragedy: meaning must lag suffering. Don't explain too soon.\n"
-            "- Horror: maintain unresolved threat. Premature closure kills tension.\n"
-            "- Romance: authentic vulnerability. Fake confidence kills credibility.\n\n"
-            "## Consistency\n"
-            "- Track character motivations and beliefs\n"
-            "- Note when actions might contradict established facts\n"
-            "- Respect the narrative tone and style\n"
-            "- Exit cleanly without moral bows or unearned CTAs"
-        )
+        params: dict[str, str] = {}
+        if self.context.mode == "fiction":
+            params["regime"] = regime
 
-    def _build_code_prompt(self) -> str:
-        """System prompt for code development mode."""
-        return (
-            "You are a code development assistant with governor integration. "
-            "Help maintain architectural coherence:\n"
-            "- Reference existing decisions before proposing changes\n"
-            "- Cite evidence for claims about the codebase\n"
-            "- Flag potential conflicts with established patterns\n"
-            "- Don't claim files exist without checking"
-        )
+        slot_set = mode_slot_set(self.context.mode, **params)
+        if slot_set is None:
+            return None
 
-    def _build_nonfiction_prompt(self) -> str:
-        """System prompt for non-fiction writing mode.
+        validate_slot_set(slot_set, CORE_VOCAB)
+        result = self._renderer.render(slot_set, CORE_VOCAB)
+        self._last_render_result = result
 
-        Incorporates epistemic control guidance from nonfic.md spec:
-        claim levels, velocity discipline, Ep/Re expectations, governance
-        visibility suppression.
+        base = result.text
+
+        # Research dynamic context (state IR, not policy IR)
+        if self.context.mode == "research":
+            base += self._build_research_dynamic_context()
+
+        return base
+
+    def _build_research_dynamic_context(self) -> str:
+        """Build research-mode dynamic context: ED score + accepted sources.
+
+        This is state IR (runtime data injection), not policy IR (compiled
+        control instructions). Kept separate from the renderer.
         """
-        return (
-            "You are a non-fiction writing assistant with governor integration.\n\n"
-            "## Core Invariant\n"
-            "Governance must never surface in-band. No preemptive defense, no virtue "
-            "signaling, no balance theater, no empty rigor markers.\n\n"
-            "## Epistemic Control\n"
-            "- Claims have levels: SOFT (maybe), HARD (supported), NORM (value-laden)\n"
-            "- Don't promote claims without explicit evidence support\n"
-            "- Maintain velocity discipline: claim rate should not outpace evidence\n"
-            "- Normative claims require sufficient evidence foundation first\n\n"
-            "## Epistemic Honesty (Ep)\n"
-            "- Calibrate hedges: epistemic hedges (uncertainty) are appropriate, "
-            "social hedges (anxiety) reveal governance\n"
-            "- Expose falsifiers and boundary conditions\n"
-            "- Engage alternatives honestly, not as strawmen\n\n"
-            "## Structural Integrity\n"
-            "- Verify citations and references\n"
-            "- Maintain consistent terminology\n"
-            "- Track the argument structure\n"
-            "- Exit cleanly without moral inflation or unearned conclusions"
-        )
-
-    def _build_research_prompt(self) -> str:
-        """System prompt for research writing mode.
-
-        Integrates epistemic debt tracking: claims, assumptions, uncertainties,
-        typed links, and the ED score. Injects accepted sources and claims
-        so the capture loop pays rent on the next turn.
-        """
-        # Load ED summary and accepted context if store exists
         ed_context = ""
         accepted_context = ""
         store = self._load_research_store()
@@ -1695,31 +1645,7 @@ class GovernorHooks:
                 f"Support claims with evidence links to reduce it."
             )
             accepted_context = self._build_accepted_context(store)
-
-        return (
-            "You are a research writing assistant with epistemic debt tracking.\n\n"
-            "## Core Principle\n"
-            "Epistemic debt is like technical debt: visible, survivable, impossible "
-            "to gaslight away. Every claim starts FLOATING until supported by evidence. "
-            "Unsupported claims are liabilities, not lies — but they accumulate.\n\n"
-            "## Claim Registration\n"
-            "- Register claims explicitly. A claim without a scope is a liability.\n"
-            "- Support claims with typed links (SUPPORTS, CONTESTS, ASSUMES, "
-            "SUPERSEDES, NARROWS).\n"
-            "- FLOATING claims need evidence. CONTESTED claims need resolution.\n\n"
-            "## Assumptions & Uncertainties\n"
-            "- Surface assumptions early. Hidden assumptions are the worst debt.\n"
-            "- Log uncertainties when you find them. An acknowledged uncertainty is "
-            "better than a hidden one.\n"
-            "- Resolving uncertainty without new support is a collapse — it inflates ED.\n\n"
-            "## ED Score\n"
-            "- ED rises with floating claims, missing scopes, open uncertainties, "
-            "collapse events, and unresolved contests.\n"
-            "- Reduce ED by adding support links, filling in scopes, and resolving "
-            "uncertainties with evidence."
-            + ed_context
-            + accepted_context
-        )
+        return ed_context + accepted_context
 
     def _build_accepted_context(self, store: Any) -> str:
         """Build ACCEPTED SOURCES and ACCEPTED CLAIMS blocks for prompt injection.

@@ -2349,7 +2349,7 @@ class TestResearchMode:
         store.add_claim("Test claim")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert "ED Score:" in prompt
 
     def test_load_research_store(self, tmp_path: Path) -> None:
@@ -2426,7 +2426,7 @@ class TestAcceptedContext:
         cm = GovernorContextManager(base_dir=tmp_path / "contexts")
         ctx = cm.create("test-ctx", mode="research")
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert "Source Discipline" in prompt
         assert "No sources accepted yet" in prompt
         assert "CANDIDATE_SOURCE" in prompt
@@ -2441,7 +2441,7 @@ class TestAcceptedContext:
         store.add_claim("Neural scaling laws", source_ref="doi:10.1234/foo")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert "## Accepted Sources" in prompt
         assert "- doi:10.1234/foo" in prompt
 
@@ -2455,7 +2455,7 @@ class TestAcceptedContext:
         claim = store.add_claim("Neural scaling follows power law")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert "## Accepted Claims" in prompt
         assert f"[{claim.id}]" in prompt
         assert "Neural scaling follows power law" in prompt
@@ -2470,7 +2470,7 @@ class TestAcceptedContext:
         claim = store.add_claim("Tested on CIFAR-10", source_ref="doi:10.5678/bar")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert "source_ref=doi:10.5678/bar" in prompt
 
     def test_claim_status_shown_when_not_floating(self, tmp_path: Path) -> None:
@@ -2484,7 +2484,7 @@ class TestAcceptedContext:
         store.update_claim_status(c.id, ClaimStatus.CONTESTED)
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert "(contested)" in prompt
 
     def test_retracted_claims_excluded(self, tmp_path: Path) -> None:
@@ -2501,7 +2501,7 @@ class TestAcceptedContext:
         store.update_claim_status(c3.id, ClaimStatus.SUPERSEDED)
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert f"[{c1.id}]" in prompt
         assert f"[{c2.id}]" not in prompt
         assert f"[{c3.id}]" not in prompt
@@ -2517,7 +2517,7 @@ class TestAcceptedContext:
         store.add_claim("Claim B", source_ref="doi:10.1234/foo")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert prompt.count("- doi:10.1234/foo") == 1
 
     def test_claims_capped_at_20(self, tmp_path: Path) -> None:
@@ -2531,7 +2531,7 @@ class TestAcceptedContext:
             store.add_claim(f"Claim number {i}")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         # Count claim lines (lines starting with [C-)
         claim_lines = [l for l in prompt.split("\n") if l.startswith("[C-")]
         assert len(claim_lines) == 20
@@ -2547,7 +2547,7 @@ class TestAcceptedContext:
             store.add_claim(f"Claim {i}", source_ref=f"doi:10.{i:04d}/test")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         source_lines = [l for l in prompt.split("\n") if l.startswith("- doi:")]
         assert len(source_lines) <= 25
 
@@ -2561,7 +2561,7 @@ class TestAcceptedContext:
         store.add_claim("Claim", source_ref="doi:10.1234/foo")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert "Cite only accepted source_refs" in prompt
 
     def test_enforcement_without_sources(self, tmp_path: Path) -> None:
@@ -2574,7 +2574,7 @@ class TestAcceptedContext:
         store.add_claim("Claim without source")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert "No source_refs accepted yet" in prompt
         assert "Do not fabricate" in prompt
 
@@ -2588,7 +2588,7 @@ class TestAcceptedContext:
         store.add_claim("Any claim", source_ref="pypi:numpy")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert "CANDIDATE_SOURCE: <ref_type>:<identifier>" in prompt
 
     def test_ed_and_accepted_both_present(self, tmp_path: Path) -> None:
@@ -2601,7 +2601,7 @@ class TestAcceptedContext:
         store.add_claim("Test claim", source_ref="doi:10.1234/x")
 
         hooks = GovernorHooks(ctx)
-        prompt = hooks._build_research_prompt()
+        prompt = hooks._build_mode_prompt()
         assert "ED Score:" in prompt
         assert "## Accepted Sources" in prompt
         assert "## Source Discipline" in prompt

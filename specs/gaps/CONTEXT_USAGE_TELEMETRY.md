@@ -1,6 +1,6 @@
 # Gap Spec: Context Usage Telemetry
 
-**Status:** proposed
+**Status:** daemon side shipped (ChatChunk.usage on all 4 backends). Client-side UI (Maude/Clerk) pending.
 **Affects:** daemon RPC, Maude, Clerk
 **Date:** 2026-03-27
 

@@ -4,7 +4,7 @@
 Tempo-Aware Governance: Ratio-Normalized Temporal Failure Model
 
 ## Status
-Gap spec (no code yet)
+Gap spec — 3.x (new governing dimension, not a 2.x feature)
 
 ## Origin
 Paper 22 (Δt Framework): "No Universal Plant Clock: Temporal Failure Geometry in Distributed Control Systems"

@@ -4,7 +4,9 @@
 Agent Runtime Supervisor: Governed Session Abstraction for External Agent CLIs
 
 ## Status
-Gap spec (no code yet)
+Shipped in 2.8.0. Claude Code + Gemini CLI adapters, tool interception,
+interventions, promotions, session forking, settings cleanup. Dogfood verified.
+See `src/governor/runtime/` and `docs/SUPERVISED_MODE.md`.
 
 ## Problem Statement
 

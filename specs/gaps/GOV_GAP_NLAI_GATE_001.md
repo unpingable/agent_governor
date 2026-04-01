@@ -1,6 +1,6 @@
 # GOV_GAP_NLAI_GATE_001: NLAI Kernel Extraction
 
-**Status**: Scoped, ready to extract
+**Status**: Shipped. nlai 0.3.0 on PyPI (`pip install nlai`). Repo: `~/git/nlai`.
 **Category**: Architecture / distribution
 **Priority**: High — adoption vector + 3.x kernel boundary
 

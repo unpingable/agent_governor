@@ -1,6 +1,6 @@
 # Gap Spec: Override Accumulation Signal (Δr→Δw Detection)
 
-**Status:** proposed (build candidate — smallest bounded slice)
+**Status:** core shipped (compute_pressure in overrides.py, 17 tests). CLI + doctor wiring pending.
 **Affects:** scars, overrides, regime detection
 **Date:** 2026-03-31
 **Origin:** cybernetic failure taxonomy — Δr→Δw pipeline (recursion captures authority)

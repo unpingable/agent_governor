@@ -4,7 +4,9 @@
 Budgeted Execution & Hybrid Routing Receipts
 
 ## Status
-Gap spec (no code yet)
+Partially shipped. Per-step spend tracking, run ledger, hard budget limits,
+and CLI (`governor runtime launch --budget`) landed in 2.8.0.
+Remaining: hybrid routing receipts (lane-aware spend attribution).
 
 ## Problem Statement
 

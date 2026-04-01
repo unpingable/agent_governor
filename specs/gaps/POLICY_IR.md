@@ -1,6 +1,6 @@
 # Gap Spec: Policy Intermediate Representation
 
-**Status:** proposed
+**Status:** Phase 1 shipped (vocab, renderers, GovernorHooks wiring, A/B harness). Phases 2-4 open.
 **Affects:** GovernorHooks, continuity anchors, intent compiler, chat_bridge renderers
 **Date:** 2026-03-29
 **Origin:** polyglot benchmark — empirical evidence that semantic slots, not English prose, are the real control surface

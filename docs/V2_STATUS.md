@@ -284,6 +284,33 @@ alignment (GOV_GAP_SLSA_001).
 
 ---
 
+### Post-2.8.1 (untagged)
+
+**Policy IR** — Control slots as canonical policy, rendered prompts as compiled artifacts.
+`ControlSlot`, `ControlVocabulary` (content-addressed, description excluded from hash),
+`SlotSet` (ordered, canonical params), `RenderResult` (full provenance). 22 slots across
+4 modes. `ProseRenderer` (byte-identical to incumbent, verified against frozen fixtures)
+and `MinimalRenderer` (defined grammar, semicolon-delimited compact syntax with inline
+expansions for output-category slots). `GovernorHooks._build_mode_prompt()` now delegates
+to renderer. A/B benchmark harness with 14-task corpus. Haiku results: minimal is net
+positive on 11/14 tasks. See `specs/gaps/POLICY_IR.md` and `bench/FINDINGS.md`. 45 tests.
+
+**Override Accumulation Signal** (Δr→Δw detection) — Tracks override frequency per
+(scope, anchor_id) over a rolling window. `PressureRecord` with low/medium/high
+classification based on count, unique sessions, renewal rate. Expired and revoked
+overrides still count. See `specs/gaps/GOV_GAP_OVERRIDE_ACCUMULATION_001.md`. 17 tests.
+
+**Context Usage Telemetry (daemon side)** — `ChatChunk.usage` field on final streaming
+chunk. All 4 backends extract usage from their streaming APIs (Anthropic: message_start +
+message_delta, Ollama: done line, Claude Code CLI: result event, Codex: turn.completed).
+Daemon `chat.stream` passes usage through to RPC result. 12 tests.
+
+**Onboarding** — `docs/GETTING_STARTED.md` (one-path walkthrough), `governor quickstart`
+CLI command (guided demo: init, gate check, add anchor, show violation), README "Start
+Here" restructured with 3-command lead-in. 9 tests.
+
+---
+
 ## Explicit 3.x
 
 The [self-governance spec](../specs/core/SELF_GOVERNANCE_SPEC.md) defines the 3.x
@@ -302,7 +329,7 @@ security architecture:
 **Prerequisite:** The instrumentation spine (v2.4) shipped. 3.x now has calibrated
 signals, replay, and prediction available as measurement substrate.
 
-Four gap specs are explicitly 3.x:
+### Infrastructure (original 3.x)
 
 | Spec | What |
 |------|------|
@@ -311,9 +338,50 @@ Four gap specs are explicitly 3.x:
 | KAPPA_DIAL_GAP | κ as a measurable policy knob (requires calibration) |
 | REGIME_CAPTURE_2D_GAP | Regime + capture on same calibrated scale |
 
+### Receipt & Provenance
+
+| Spec | What |
+|------|------|
+| GOV_GAP_DECISION_CONTEXT_001 | Decision-time context closure — receipts capture world state at evaluation time |
+| GOV_GAP_SESSION_001 | Cryptographic session binding (placeholder fields in v2) |
+| GOV_GAP_SLSA_001 | Supply-chain provenance ingestion |
+
+### Taxonomy-Derived (from cybernetic failure crosswalk)
+
+| Spec | Δ-domain | What |
+|------|----------|------|
+| GOV_GAP_VOCABULARY_EROSION_001 | Δh↔Δn | Detect anchor vocabulary drift without explicit revision |
+| GOV_GAP_SCOPE_AWARE_SIGNALS_001 | Δb→Δo | Signal emission carries scope context |
+| GOV_GAP_UPSTREAM_REGIME_001 | Δm reclassification | Regime detection looks upstream at signal health |
+
+### Adapters & Orchestration
+
+| Spec | What |
+|------|------|
+| GOV_GAP_CODEX_ADAPTER_001 | Codex CLI adapter (requires private fork) |
+| GOV_GAP_OPENCODE_ADAPTER_001 | OpenCode adapter (degraded enforcement, blocked by upstream) |
+| GOV_GAP_COPILOT_ADAPTER_001 | Copilot adapter family |
+| GOV_GAP_SWARM_ORCHESTRATION_001 | Governed speculative branch orchestration |
+| GOV_GAP_SCHEDULED_TASKS_001 | Cron for governed agents |
+
+### Governance
+
+| Spec | What |
+|------|------|
+| GOV_GAP_GOAL_PROMOTION_001 | Unauthorized goal promotion detection |
+| GOV_GAP_FRAME_CAPTURE_001 | Frame capture detection and mitigation |
+| GOV_GAP_PROMOTION_SURFACE_001 | Promotion surface sharpening |
+
+### Policy IR (landed in 2.x, evolves in 3.x)
+
+| Spec | What |
+|------|------|
+| POLICY_IR | Benchmark promotion gates for renderer candidates |
+| POLYGLOT_FINDINGS | Empirical evidence: compact syntax beats prose on quality-per-token |
+
 ---
 
-## Known-Good Bundle (2.8.1)
+## Known-Good Bundle (2.8.1+)
 
 | Repo | Version | Coupling |
 |------|---------|----------|
@@ -345,9 +413,11 @@ See `docs/VERSIONING.md` for the coupling rules and contract version table.
 
 ## What To Do Next
 
+If you're brand new: `governor quickstart` or read `docs/GETTING_STARTED.md`.
+
 If you're returning to this codebase:
 
-1. **Run the tests.** `python3 -m pytest tests/ -v` — ~14,500 tests, all should pass.
+1. **Run the tests.** `python3 -m pytest tests/ -v` — ~14,600 tests, all should pass.
 2. **Read the gate.** `src/governor/evidence_gate.py` is the enforcement surface.
    Everything else feeds into it or reads from it.
 3. **Read the daemon.** `src/governor/daemon.py` is the control plane. 60 RPC methods,
@@ -367,5 +437,7 @@ If you're extending the instrumentation spine:
 
 If you're starting 3.x:
 - v2.4 shipped — calibrated signals, replay, and prediction are available
-- Read `specs/core/SELF_GOVERNANCE_SPEC.md`
+- Policy IR shipped — control slots, two renderers, benchmark harness
+- Read `specs/core/SELF_GOVERNANCE_SPEC.md` for security architecture
 - Review the 8 hardening items with a human before writing code
+- See the 3.x gap spec index above — 16 specs across 5 categories

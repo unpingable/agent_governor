@@ -52,6 +52,12 @@ jobs:
           governor wrap --receipt-out "$RECEIPT_DIR" --ci-kind unit_tests -- \
             pytest tests/ -v --tb=short -q
 
+      - name: Show test failures (diagnostic, macOS only)
+        if: always() && runner.os == 'macOS'
+        continue-on-error: true
+        run: |
+          pytest tests/ --tb=short -q 2>&1 | tail -50
+
       - name: Verify CI receipts
         run: |
           governor ci verify "$RECEIPT_DIR"

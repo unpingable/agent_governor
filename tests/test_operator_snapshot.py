@@ -58,6 +58,8 @@ def _make_ok_rollup() -> StatusRollup:
         recent_receipts={"ok": True, "items": []},
         lanes={"ok": True, "autopilot_level": 0, "policy_version": 1,
                "budget_total_usd": 0.0, "artifact_count": 0},
+        override_pressure={"ok": True, "total": 0, "high": 0, "medium": 0,
+                           "records": []},
     )
 
 
@@ -80,6 +82,12 @@ def _make_error_rollup() -> StatusRollup:
         ]},
         lanes={"ok": True, "autopilot_level": 1, "policy_version": 2,
                "budget_total_usd": 10.0, "artifact_count": 5},
+        override_pressure={"ok": True, "total": 2, "high": 1, "medium": 1,
+                           "records": [
+                               {"scope_key": "src/**", "anchor_id": "no-eval",
+                                "override_count": 7, "pressure": "high",
+                                "renewal_rate": 0.6},
+                           ]},
     )
 
 
@@ -136,7 +144,7 @@ class TestClassifyRollup:
         """Error rollup produces error/warn checks."""
         rollup = _make_error_rollup()
         checks = classify_rollup(rollup)
-        assert len(checks) == 9
+        assert len(checks) == 10  # 9 base + 1 override pressure
         statuses = {c.name: c.status for c in checks}
         assert statuses["envelope"] == "error"
         assert statuses["regime"] == "error"  # UNSTABLE

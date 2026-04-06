@@ -367,6 +367,30 @@ def classify_rollup(rollup: "StatusRollup") -> list[CheckItem]:  # noqa: F821
         else:
             checks.append(CheckItem("receipts", "ok", "no recent blocks"))
 
+    # 10. Override pressure (Δr→Δw detection)
+    ovp = getattr(rollup, "override_pressure", None)
+    if ovp is not None:
+        if not ovp.get("ok", True):
+            checks.append(CheckItem("overrides", "error", ovp["error"],
+                                    ["governor override pressure"]))
+        else:
+            high = ovp.get("high", 0)
+            medium = ovp.get("medium", 0)
+            total = ovp.get("total", 0)
+            if high > 0:
+                checks.append(CheckItem("overrides", "error",
+                                        f"{high} high pressure ({total} scoped)",
+                                        ["governor override pressure",
+                                         "governor override list"]))
+            elif medium > 0:
+                checks.append(CheckItem("overrides", "warn",
+                                        f"{medium} medium pressure ({total} scoped)",
+                                        ["governor override pressure"]))
+            elif total > 0:
+                checks.append(CheckItem("overrides", "ok",
+                                        f"{total} scoped, all low"))
+            # Omit entirely if no overrides exist (clean state, no noise)
+
     return checks
 
 

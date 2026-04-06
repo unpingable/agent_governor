@@ -13089,6 +13089,76 @@ def override_cleanup(ctx: click.Context) -> None:
     click.echo(f"Cleaned up {count} expired override(s).")
 
 
+@override_group.command("pressure")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option("--window", default=7, help="Rolling window in days (default: 7)")
+@click.pass_context
+def override_pressure_cmd(ctx: click.Context, as_json: bool, window: int) -> None:
+    """Show override accumulation pressure by scope and anchor.
+
+    \b
+    Tracks how often the same scope/anchor gets overridden in a rolling
+    window. High pressure means the exception is becoming policy — either
+    the anchor needs revision or authority is drifting.
+    """
+    from .overrides import OverrideManager
+
+    gov_dir = ensure_initialized(ctx)
+    manager = OverrideManager(gov_dir=gov_dir)
+    records = manager.pressure(window_days=window)
+
+    if as_json:
+        import json
+        click.echo(json.dumps(
+            [
+                {
+                    "scope_key": r.scope_key,
+                    "anchor_id": r.anchor_id,
+                    "override_count": r.override_count,
+                    "unique_sessions": r.unique_sessions,
+                    "unique_operators": r.unique_operators,
+                    "renewal_rate": r.renewal_rate,
+                    "pressure": r.pressure,
+                    "window_days": r.window_days,
+                }
+                for r in records
+            ],
+            indent=2,
+        ))
+        return
+
+    if not records:
+        click.echo(f"No overrides in the last {window} days.")
+        return
+
+    click.echo(f"Override pressure ({window}-day window):\n")
+    for r in sorted(records, key=lambda x: ("high", "medium", "low").index(x.pressure)):
+        if r.pressure == "high":
+            color = "red"
+            marker = "!"
+        elif r.pressure == "medium":
+            color = "yellow"
+            marker = "~"
+        else:
+            color = "green"
+            marker = " "
+        click.echo(
+            f"  {marker} [{r.pressure:6s}]  {r.anchor_id:<24s}  "
+            f"{r.override_count} overrides  "
+            f"({r.unique_sessions} sessions, {r.unique_operators} operators)  "
+            f"renewal={r.renewal_rate:.0%}"
+        )
+        if r.scope_key:
+            click.echo(f"             scope: {r.scope_key}")
+
+    high = sum(1 for r in records if r.pressure == "high")
+    if high:
+        click.echo(
+            f"\n  {high} scope(s) at high pressure. "
+            f"Consider revising the anchor or making the override permanent."
+        )
+
+
 # =============================================================================
 # Interferometry (multi-model claim comparison)
 # =============================================================================

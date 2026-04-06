@@ -40,6 +40,7 @@ class StatusRollup:
     violations: dict[str, Any]
     recent_receipts: dict[str, Any]
     lanes: dict[str, Any]
+    override_pressure: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -54,6 +55,7 @@ class StatusRollup:
             "violations": self.violations,
             "recent_receipts": self.recent_receipts,
             "lanes": self.lanes,
+            "override_pressure": self.override_pressure,
         }
 
 
@@ -79,6 +81,35 @@ def _load_lanes(gov_dir: Path) -> dict[str, Any]:
             "policy_version": lr.policy_version,
             "budget_total_usd": lr.budget_total_usd,
             "artifact_count": artifact_stats.get("total", 0),
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _load_override_pressure(gov_dir: Path) -> dict[str, Any]:
+    """Load override pressure summary. Never raises."""
+    try:
+        from .overrides import OverrideManager
+        mgr = OverrideManager(gov_dir=gov_dir)
+        records = mgr.pressure()
+        high = [r for r in records if r.pressure == "high"]
+        medium = [r for r in records if r.pressure == "medium"]
+        return {
+            "ok": True,
+            "total": len(records),
+            "high": len(high),
+            "medium": len(medium),
+            "records": [
+                {
+                    "scope_key": r.scope_key,
+                    "anchor_id": r.anchor_id,
+                    "override_count": r.override_count,
+                    "pressure": r.pressure,
+                    "renewal_rate": r.renewal_rate,
+                }
+                for r in records
+                if r.pressure in ("high", "medium")
+            ],
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -114,6 +145,7 @@ def build_status_rollup(gov_dir: Path) -> StatusRollup:
         violations=_load_violations(gov_dir),
         recent_receipts=_load_recent_receipts(gov_dir),
         lanes=_load_lanes(gov_dir),
+        override_pressure=_load_override_pressure(gov_dir),
     )
 
 

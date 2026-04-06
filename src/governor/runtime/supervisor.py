@@ -148,15 +148,82 @@ def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + "Z"
 
 
-# Default timeout policy: deny writes, allow reads
-# Includes tool names from Claude Code AND Gemini CLI
+# ---------------------------------------------------------------------------
+# Action classification: READ < WRITE < COMMUNICATE
+# ---------------------------------------------------------------------------
+
+
+class ActionClass(Enum):
+    """Action class for tool calls. Higher = more scrutiny."""
+
+    READ = "read"
+    WRITE = "write"
+    COMMUNICATE = "communicate"
+
+
+# Static tool-name classification (case-insensitive lookup)
+_TOOL_ACTION_CLASS: dict[str, ActionClass] = {
+    # Claude Code — read
+    "read": ActionClass.READ,
+    "glob": ActionClass.READ,
+    "grep": ActionClass.READ,
+    # Claude Code — write
+    "bash": ActionClass.WRITE,
+    "write": ActionClass.WRITE,
+    "edit": ActionClass.WRITE,
+    "notebookedit": ActionClass.WRITE,
+    # Gemini CLI — read
+    "read_file": ActionClass.READ,
+    "grep_search": ActionClass.READ,
+    # Gemini CLI — write
+    "replace": ActionClass.WRITE,
+    "write_file": ActionClass.WRITE,
+    "run_shell_command": ActionClass.WRITE,
+}
+
+# Patterns in Bash/shell commands that indicate communication
+_COMMUNICATE_PATTERNS = (
+    "curl ",
+    "wget ",
+    "gh pr ",
+    "gh issue ",
+    "git push",
+    "git send-email",
+    "slack ",
+    "sendmail",
+    "mail ",
+    "smtp",
+    "twilio",
+    "notify-send",
+    "osascript.*display notification",
+)
+
+# Legacy set for backward compat
 _WRITE_TOOLS = {
-    # Claude Code
     "bash", "write", "edit", "notebookedit",
     "Bash", "Write", "Edit", "NotebookEdit",
-    # Gemini CLI
     "replace", "write_file", "run_shell_command",
 }
+
+
+def classify_action(tool_name: str, tool_input: dict[str, Any] | None = None) -> ActionClass:
+    """Classify a tool call's action class.
+
+    Static classification by tool name, with dynamic upgrade to COMMUNICATE
+    for shell commands that target external communication endpoints.
+    """
+    base = _TOOL_ACTION_CLASS.get(tool_name.lower(), ActionClass.WRITE)
+
+    # Dynamic upgrade: check shell command content for communication patterns
+    if base == ActionClass.WRITE and tool_input:
+        command = tool_input.get("command", "") or tool_input.get("cmd", "")
+        if isinstance(command, str):
+            cmd_lower = command.lower()
+            for pattern in _COMMUNICATE_PATTERNS:
+                if pattern in cmd_lower:
+                    return ActionClass.COMMUNICATE
+
+    return base
 
 
 class SessionSupervisor:
@@ -447,14 +514,23 @@ class SessionSupervisor:
                     ))
                 return
 
-        # In interactive mode, block write-capable tools
-        if record.operator_mode == "interactive" and tool_name.lower() in {t.lower() for t in _WRITE_TOOLS}:
+        # Classify action: READ < WRITE < COMMUNICATE
+        tool_input = event.payload.get("tool_input", {})
+        action_class = classify_action(tool_name, tool_input)
+
+        # In interactive mode, block write and communicate tools
+        needs_approval = (
+            record.operator_mode == "interactive"
+            and action_class in (ActionClass.WRITE, ActionClass.COMMUNICATE)
+        )
+
+        if needs_approval:
             # Create intervention
             intervention = Intervention(
                 intervention_id=f"int_{uuid.uuid4().hex[:8]}",
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
-                tool_input=event.payload.get("tool_input", {}),
+                tool_input=tool_input,
                 event_id=event.event_id,
                 created_at=time.monotonic(),
                 timeout_seconds=self._default_timeout,
@@ -462,16 +538,22 @@ class SessionSupervisor:
             facet.pending_interventions[tool_call_id] = intervention
             self._transition(record, SessionStatus.WAITING_TOOL_DECISION)
 
+            payload: dict[str, Any] = {
+                "intervention_id": intervention.intervention_id,
+                "tool_call_id": tool_call_id,
+                "tool_name": tool_name,
+                "action_class": action_class.value,
+                "timeout_seconds": intervention.timeout_seconds,
+            }
+            # Communication gets extra visibility
+            if action_class == ActionClass.COMMUNICATE:
+                payload["communication_warning"] = True
+
             bus.emit(
                 EventKind.OPERATOR_PROMPTED,
                 SourceLayer.SUPERVISOR,
                 record.backend_kind,
-                payload={
-                    "intervention_id": intervention.intervention_id,
-                    "tool_call_id": tool_call_id,
-                    "tool_name": tool_name,
-                    "timeout_seconds": intervention.timeout_seconds,
-                },
+                payload=payload,
                 tool_call_id=tool_call_id,
             )
 
@@ -488,7 +570,12 @@ class SessionSupervisor:
                 EventKind.TOOL_CALL_ALLOWED,
                 SourceLayer.POLICY,
                 record.backend_kind,
-                payload={"tool_call_id": tool_call_id, "tool_name": tool_name, "auto": True},
+                payload={
+                    "tool_call_id": tool_call_id,
+                    "tool_name": tool_name,
+                    "action_class": action_class.value,
+                    "auto": True,
+                },
                 tool_call_id=tool_call_id,
             )
             if facet.handle:

@@ -11,14 +11,17 @@ from governor.runtime.adapter import (
 )
 from governor.runtime.events import CanonicalEvent, EventBus, EventKind, SourceLayer
 from governor.runtime.supervisor import (
+    ActionClass,
     Intervention,
     RuntimeFacet,
     SessionRecord,
     SessionStatus,
     SessionSupervisor,
+    classify_action,
 )
 
 __all__ = [
+    "ActionClass",
     "AdapterCapabilities",
     "BackendHandle",
     "CanonicalEvent",
@@ -34,4 +37,5 @@ __all__ = [
     "SessionStatus",
     "SessionSupervisor",
     "SourceLayer",
+    "classify_action",
 ]

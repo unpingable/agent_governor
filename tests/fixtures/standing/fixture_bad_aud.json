@@ -1,0 +1,9 @@
+{
+  "jti": "bbaa873a-29b7-40dd-83c9-4dc464693a3f",
+  "name": "test-bot",
+  "location": "host-1",
+  "audience": "wrong-aud",
+  "issued_at": "2026-04-07T21:08:17.687570866Z",
+  "expires_at": "2026-04-07T22:08:17.687570866Z",
+  "signature": "72bd8db23b8d76300542ce084c65471a810cd44ad3b75a6b3de465f10200d745"
+}

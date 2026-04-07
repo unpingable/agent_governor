@@ -1,0 +1,9 @@
+{
+  "jti": "e0724e02-313c-44b9-aca5-7144c13d60da",
+  "name": "test-bot",
+  "location": "host-1",
+  "audience": "standing",
+  "issued_at": "2026-04-07T21:08:17.571216215Z",
+  "expires_at": "2026-04-07T22:08:17.571216215Z",
+  "signature": "46430d84976a639baf5f8475fe179f2d167a9da17368eb5b059df67af7699a86"
+}

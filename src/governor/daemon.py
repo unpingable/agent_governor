@@ -3025,6 +3025,9 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 "status": s.status.value,
                 "task": s.task,
                 "pid": s.pid,
+                "started_at": s.started_at,
+                "updated_at": s.updated_at,
+                "parent_session_id": s.parent_session_id,
                 "pending_interventions": len(sup.get_pending_interventions(s.session_id)),
             }
             for s in sessions

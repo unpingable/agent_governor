@@ -42,6 +42,16 @@ AUTH_ERROR = -32001
 PROTOCOL_VERSION = "1.0"
 
 
+class StandingRequiredError(Exception):
+    """Raised when standing identity is required but no token was provided."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Standing identity required but no standing_token provided. "
+            "Set REQUIRE_STANDING=0 or provide a valid standing token."
+        )
+
+
 # =============================================================================
 # Content-Length framing (same pattern as mcp_server.py)
 # =============================================================================
@@ -199,6 +209,11 @@ class Dispatcher:
             except Exception as e:
                 if is_notification:
                     return None
+                # Surface auth errors with AUTH_ERROR code (same as non-streaming path)
+                from .chat_bridge import BackendAuthError
+                from .standing import StandingVerificationError
+                if isinstance(e, (BackendAuthError, StandingRequiredError, StandingVerificationError)):
+                    return _error_response(request_id, AUTH_ERROR, str(e))
                 return _error_response(request_id, GOVERNOR_ERROR, str(e))
 
         handler = self._handlers.get(method)
@@ -225,7 +240,8 @@ class Dispatcher:
                 return None
             # Surface auth errors with a specific code so clients can detect them
             from .chat_bridge import BackendAuthError
-            if isinstance(e, BackendAuthError):
+            from .standing import StandingVerificationError
+            if isinstance(e, (BackendAuthError, StandingRequiredError, StandingVerificationError)):
                 return _error_response(request_id, AUTH_ERROR, str(e))
             return _error_response(request_id, GOVERNOR_ERROR, str(e))
 
@@ -746,6 +762,24 @@ class DaemonState:
             "daemon.trust_principal_from_client", ""
         ).lower() in ("1", "true", "yes")
 
+    @property
+    def require_standing(self) -> bool:
+        """Whether standing identity is required for all requests.
+
+        When True, requests without a valid standing token are rejected.
+        When False (default), unauthenticated requests are allowed as
+        principal_id="local", auth_method="none" (backward compatible).
+
+        Set via REQUIRE_STANDING=1 env var or
+        standing.require=true in daemon.conf.
+        """
+        env_val = os.environ.get("REQUIRE_STANDING", "").strip()
+        if env_val:
+            return env_val in ("1", "true", "yes")
+        return self.daemon_config.get(
+            "standing.require", ""
+        ).lower() in ("1", "true", "yes")
+
     def resolve_principal(
         self,
         client_principal: str | None,
@@ -757,8 +791,9 @@ class DaemonState:
 
         Priority:
         1. Standing token (if provided, MUST verify or fail closed)
-        2. Trusted client principal (if trust enabled)
-        3. Default "local"
+        2. Trusted client principal (if trust enabled AND standing not required)
+        3. Default "local" (only if standing not required)
+        4. Reject (if standing required but no token provided)
         """
         # Standing token path — fail closed
         if standing_token:
@@ -795,7 +830,11 @@ class DaemonState:
                 logger.warning("standing verification failed: %s", exc)
                 raise
 
-        # Legacy paths
+        # Standing required but no token → reject
+        if self.require_standing:
+            raise StandingRequiredError()
+
+        # Legacy paths (only reachable when standing is not required)
         if client_principal and self.trust_principal_from_client:
             return (client_principal, "trusted_client", None)
         if client_principal and not self.trust_principal_from_client:
@@ -837,6 +876,8 @@ def _emit_chat_receipt(
     run_id: str,
     model: str = "",
     principal_id: str = "local",
+    auth_method: str = "none",
+    principal_ref: str | None = None,
 ) -> "GateReceipt | None":
     """Emit a gate receipt for a chat generation check. Returns the receipt or None."""
     try:
@@ -853,6 +894,8 @@ def _emit_chat_receipt(
             },
             gate_config={"mode": state.mode},
             principal_id=principal_id,
+            auth_method=auth_method,
+            principal_ref=principal_ref,
         )
         return receipt
     except Exception:
@@ -872,6 +915,8 @@ async def _resolve_violation(
     bridge: Any,
     model: str,
     principal_id: str = "local",
+    auth_method: str = "none",
+    principal_ref: str | None = None,
 ) -> dict:
     """Handle a resolution action for a pending violation.
 
@@ -905,6 +950,8 @@ async def _resolve_violation(
                 },
                 gate_config={"mode": state.mode},
                 principal_id=principal_id,
+                auth_method=auth_method,
+                principal_ref=principal_ref,
             )
         except Exception:
             logger.error(
@@ -976,6 +1023,11 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 "principal_ref": None,       # v3: H(principal) — matches receipt field
                 "auth_method": "local",      # v3: "mtls" | "token" | "local"
                 "session_token": None,       # v3: cryptographic session token
+            },
+            "standing": {
+                "required": state.require_standing,
+                "secret_configured": state._standing_secret is not None,
+                "audience": state._standing_audience,
             },
         }
 
@@ -1365,7 +1417,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         messages_raw = params.get("messages", [])
         model = params.get("model", "") or state.default_model
         context_id = params.get("context_id", "default")
-        principal_id, _auth_method, _principal_ref = state.resolve_principal(
+        principal_id, auth_method, principal_ref = state.resolve_principal(
             params.get("principal_id"),
             standing_token=params.get("standing_token"),
         )
@@ -1382,6 +1434,8 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 result = await _resolve_violation(
                     state, pending, action, bridge, model,
                     principal_id=principal_id,
+                    auth_method=auth_method,
+                    principal_ref=principal_ref,
                 )
                 return result
             else:
@@ -1452,6 +1506,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 _emit_chat_receipt(
                     state, "pass", cascade_result.output, run_id,
                     model=cascade_result.model_used, principal_id=principal_id,
+                    auth_method=auth_method, principal_ref=principal_ref,
                 )
                 return {
                     "content": cascade_result.output,
@@ -1504,6 +1559,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             receipt = _emit_chat_receipt(
                 state, "block", response.content, run_id,
                 model=model, principal_id=principal_id,
+                auth_method=auth_method, principal_ref=principal_ref,
             )
             if receipt is not None:
                 # Update the pending violation with the receipt_id
@@ -1525,6 +1581,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         _emit_chat_receipt(
             state, "pass", response.content, run_id,
             model=model, principal_id=principal_id,
+            auth_method=auth_method, principal_ref=principal_ref,
         )
 
         result = {
@@ -1551,7 +1608,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         messages_raw = params.get("messages", [])
         model = params.get("model", "") or state.default_model
         context_id = params.get("context_id", "default")
-        principal_id, _auth_method, _principal_ref = state.resolve_principal(
+        principal_id, auth_method, principal_ref = state.resolve_principal(
             params.get("principal_id"),
             standing_token=params.get("standing_token"),
         )
@@ -1568,6 +1625,8 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 result = await _resolve_violation(
                     state, pending, action, bridge, model,
                     principal_id=principal_id,
+                    auth_method=auth_method,
+                    principal_ref=principal_ref,
                 )
                 return result
             else:
@@ -1692,6 +1751,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 _emit_chat_receipt(
                     state, "pass", full_content, run_id,
                     model=routed_model, principal_id=principal_id,
+                    auth_method=auth_method, principal_ref=principal_ref,
                 )
 
                 return {
@@ -1757,6 +1817,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             receipt = _emit_chat_receipt(
                 state, "block", full_content, run_id,
                 model=model, principal_id=principal_id,
+                auth_method=auth_method, principal_ref=principal_ref,
             )
             if receipt is not None:
                 pending = state.violation_resolver.get_pending()
@@ -1776,6 +1837,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         _emit_chat_receipt(
             state, "pass", full_content, run_id,
             model=model, principal_id=principal_id,
+            auth_method=auth_method, principal_ref=principal_ref,
         )
 
         result = {
@@ -3256,6 +3318,18 @@ def _allow_mutating_from_config(state: DaemonState) -> bool:
     return val in ("1", "true", "yes")
 
 
+def _log_standing_mode(state: DaemonState) -> None:
+    """Log whether standing identity is required or optional."""
+    if state.require_standing:
+        logger.info(
+            "Standing mode: REQUIRED — requests without valid standing token will be rejected"
+        )
+    else:
+        logger.info(
+            "Standing mode: compatible — unauthenticated requests allowed as local/none"
+        )
+
+
 async def serve_stdio(state: DaemonState) -> None:
     """Serve JSON-RPC over stdin/stdout. Electron child process mode."""
     dispatcher = Dispatcher(allow_mutating=_allow_mutating_from_config(state))
@@ -3274,6 +3348,7 @@ async def serve_stdio(state: DaemonState) -> None:
         write_transport, write_protocol, reader, loop
     )
 
+    _log_standing_mode(state)
     logger.info("Daemon serving on stdio")
 
     try:
@@ -3322,6 +3397,7 @@ async def serve_unix(socket_path: Path, state: DaemonState) -> None:
     socket_path.parent.mkdir(parents=True, exist_ok=True)
 
     server = await asyncio.start_unix_server(handle_client, path=str(socket_path))
+    _log_standing_mode(state)
     logger.info("Daemon serving on %s", socket_path)
 
     # Handle graceful shutdown

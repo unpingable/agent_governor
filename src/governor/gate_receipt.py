@@ -280,6 +280,7 @@ def create_receipt(
     auth_method: str = "none",
     receipt_role: str = ROLE_MEASUREMENT,
     timing: dict[str, Any] | None = None,
+    principal_ref: str | None = None,
 ) -> GateReceipt:
     """Create a GateReceipt with proper content-addressed identity."""
     if receipt_role not in VALID_RECEIPT_ROLES:
@@ -313,6 +314,7 @@ def create_receipt(
         auth_method=auth_method,
         receipt_role=receipt_role,
         timing=timing,
+        principal_ref=principal_ref,
     )
 
 
@@ -458,6 +460,7 @@ class GateReceiptSystem:
         auth_method: str = "none",
         receipt_role: str = ROLE_MEASUREMENT,
         timing: dict[str, Any] | None = None,
+        principal_ref: str | None = None,
     ) -> GateReceipt:
         """Create receipt, store evidence, append receipt to log."""
         # Store evidence blob (deduped by content)
@@ -476,6 +479,7 @@ class GateReceiptSystem:
             auth_method=auth_method,
             receipt_role=receipt_role,
             timing=timing,
+            principal_ref=principal_ref,
         )
         # Append to log
         self.receipt_store.append(receipt)

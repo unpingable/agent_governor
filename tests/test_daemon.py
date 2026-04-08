@@ -21,6 +21,7 @@ from governor.daemon import (
     PROTOCOL_VERSION,
     DaemonState,
     Dispatcher,
+    StandingRequiredError,
     _emit_chat_receipt,
     default_socket_path,
     detect_backend,
@@ -4247,3 +4248,379 @@ class TestSignalsPreflight:
         result = resp["result"]
         assert result["inputs"] == 0
         assert result["envelope"]["values"]["predicted_regime"] == "insufficient_history"
+
+
+# =============================================================================
+# Standing token → receipt provenance threading
+# =============================================================================
+
+
+class TestStandingTokenReceipts:
+    """Tests that standing token verification threads auth_method and
+    principal_ref all the way into emitted GateReceipts."""
+
+    STANDING_SECRET = b"daemon-test-secret"
+
+    def _make_standing_token(self, **overrides) -> dict:
+        """Build a valid standing token dict (synthetic, not from fixture)."""
+        from datetime import datetime, timedelta, timezone
+        from governor.standing import WorkloadId, _compute_signature
+
+        now = datetime.now(timezone.utc)
+        defaults = {
+            "jti": "daemon-test-jti",
+            "name": "ci-bot",
+            "location": "host-1",
+            "audience": "standing",
+            "issued_at": now.isoformat(),
+            "expires_at": (now + timedelta(hours=1)).isoformat(),
+        }
+        defaults.update(overrides)
+        sig = _compute_signature(
+            defaults["jti"], defaults["name"], defaults["location"],
+            defaults["audience"], defaults["issued_at"], defaults["expires_at"],
+            self.STANDING_SECRET,
+        )
+        defaults["signature"] = sig
+        return defaults
+
+    @pytest.mark.asyncio
+    async def test_standing_token_populates_receipt_fields(self, state_with_mock_backend):
+        """Valid standing token → receipt has auth_method='standing:hmac' and principal_ref."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        with patch.dict(os.environ, {"STANDING_SECRET": self.STANDING_SECRET.decode()}):
+            state._config = None
+            d = Dispatcher()
+            register_handlers(d, state)
+
+            token = self._make_standing_token()
+            await roundtrip(d, "chat.send", {
+                "messages": [{"role": "user", "content": "Hi"}],
+                "standing_token": token,
+            })
+
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) >= 1
+        r = receipts[0]
+        assert r.principal_id == "wl:ci-bot:host-1"
+        assert r.auth_method == "standing:hmac"
+        assert r.principal_ref is not None
+        assert r.principal_ref.startswith("sha256:")
+
+    @pytest.mark.asyncio
+    async def test_standing_token_invalid_fails_closed(self, state_with_mock_backend):
+        """Invalid standing token → RPC error, no receipt emitted."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        with patch.dict(os.environ, {"STANDING_SECRET": "wrong-secret"}):
+            state._config = None
+            d = Dispatcher()
+            register_handlers(d, state)
+
+            token = self._make_standing_token()
+            resp = await roundtrip(d, "chat.send", {
+                "messages": [{"role": "user", "content": "Hi"}],
+                "standing_token": token,
+            })
+
+        # Should be an error response
+        assert "error" in resp
+        # No receipts should have been emitted
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) == 0
+
+    @pytest.mark.asyncio
+    async def test_no_standing_secret_configured_fails_closed(self, state_with_mock_backend):
+        """Standing token provided but no secret configured → error."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        # Ensure no STANDING_SECRET in env
+        env = {k: v for k, v in os.environ.items() if k != "STANDING_SECRET"}
+        with patch.dict(os.environ, env, clear=True):
+            state._config = None
+            d = Dispatcher()
+            register_handlers(d, state)
+
+            token = self._make_standing_token()
+            resp = await roundtrip(d, "chat.send", {
+                "messages": [{"role": "user", "content": "Hi"}],
+                "standing_token": token,
+            })
+
+        assert "error" in resp
+
+    @pytest.mark.asyncio
+    async def test_no_standing_token_defaults_to_local(self, state_with_mock_backend):
+        """Without standing token, receipt uses auth_method='none', principal_ref=None."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        d = Dispatcher()
+        register_handlers(d, state)
+
+        await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hi"}],
+        })
+
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) >= 1
+        r = receipts[0]
+        assert r.principal_id == "local"
+        assert r.auth_method == "none"
+        assert r.principal_ref is None
+
+    @pytest.mark.asyncio
+    async def test_standing_token_stream_populates_receipt(self, state_with_mock_backend):
+        """Valid standing token via chat.stream → receipt has full provenance."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        with patch.dict(os.environ, {"STANDING_SECRET": self.STANDING_SECRET.decode()}):
+            state._config = None
+            d = Dispatcher()
+            register_handlers(d, state)
+
+            token = self._make_standing_token()
+            resp = await roundtrip(d, "chat.stream", {
+                "messages": [{"role": "user", "content": "Hi"}],
+                "standing_token": token,
+            })
+
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) >= 1
+        r = receipts[0]
+        assert r.principal_id == "wl:ci-bot:host-1"
+        assert r.auth_method == "standing:hmac"
+        assert r.principal_ref is not None
+
+
+# =============================================================================
+# Standing enforcement (Slice 2C) — require_standing policy gate
+# =============================================================================
+
+
+class TestStandingEnforcement:
+    """Tests for require_standing policy: when enabled, no token = denied."""
+
+    STANDING_SECRET = b"enforce-test-secret"
+
+    def _make_standing_token(self, **overrides) -> dict:
+        from datetime import datetime, timedelta, timezone
+        from governor.standing import _compute_signature
+
+        now = datetime.now(timezone.utc)
+        defaults = {
+            "jti": "enforce-test-jti",
+            "name": "ci-bot",
+            "location": "host-1",
+            "audience": "standing",
+            "issued_at": now.isoformat(),
+            "expires_at": (now + timedelta(hours=1)).isoformat(),
+        }
+        defaults.update(overrides)
+        sig = _compute_signature(
+            defaults["jti"], defaults["name"], defaults["location"],
+            defaults["audience"], defaults["issued_at"], defaults["expires_at"],
+            self.STANDING_SECRET,
+        )
+        defaults["signature"] = sig
+        return defaults
+
+    # --- Config property ---
+
+    def test_require_standing_default_false(self, state):
+        assert state.require_standing is False
+
+    def test_require_standing_from_env(self, state):
+        with patch.dict(os.environ, {"REQUIRE_STANDING": "1"}):
+            state._config = None
+            assert state.require_standing is True
+
+    def test_require_standing_from_config(self, tmp_gov_dir):
+        conf = tmp_gov_dir / "daemon.conf"
+        conf.write_text("[standing]\nrequire = true\n")
+        s = DaemonState(tmp_gov_dir)
+        assert s.require_standing is True
+
+    def test_env_overrides_config_for_require(self, tmp_gov_dir):
+        conf = tmp_gov_dir / "daemon.conf"
+        conf.write_text("[standing]\nrequire = true\n")
+        with patch.dict(os.environ, {"REQUIRE_STANDING": "0"}):
+            s = DaemonState(tmp_gov_dir)
+            assert s.require_standing is False
+
+    # --- resolve_principal enforcement ---
+
+    def test_resolve_principal_rejects_without_token_when_required(self, state):
+        with patch.dict(os.environ, {"REQUIRE_STANDING": "1"}):
+            state._config = None
+            with pytest.raises(StandingRequiredError):
+                state.resolve_principal(None)
+
+    def test_resolve_principal_rejects_trusted_client_when_required(self, state):
+        """Even trusted client principal is rejected when standing is required."""
+        with patch.dict(os.environ, {
+            "REQUIRE_STANDING": "1",
+            "TRUST_PRINCIPAL_FROM_CLIENT": "1",
+        }):
+            state._config = None
+            with pytest.raises(StandingRequiredError):
+                state.resolve_principal("erin")
+
+    def test_resolve_principal_allows_valid_token_when_required(self, state):
+        with patch.dict(os.environ, {
+            "REQUIRE_STANDING": "1",
+            "STANDING_SECRET": self.STANDING_SECRET.decode(),
+        }):
+            state._config = None
+            token = self._make_standing_token()
+            pid, auth, ref = state.resolve_principal(None, standing_token=token)
+            assert pid == "wl:ci-bot:host-1"
+            assert auth == "standing:hmac"
+            assert ref is not None
+
+    # --- RPC-level enforcement ---
+
+    @pytest.mark.asyncio
+    async def test_send_denied_without_token_when_required(self, state_with_mock_backend):
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        with patch.dict(os.environ, {"REQUIRE_STANDING": "1"}):
+            state._config = None
+            d = Dispatcher()
+            register_handlers(d, state)
+
+            resp = await roundtrip(d, "chat.send", {
+                "messages": [{"role": "user", "content": "Hi"}],
+            })
+
+        assert "error" in resp
+        assert resp["error"]["code"] == AUTH_ERROR
+        # No receipt emitted
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) == 0
+
+    @pytest.mark.asyncio
+    async def test_send_denied_with_bad_token_when_required(self, state_with_mock_backend):
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        with patch.dict(os.environ, {
+            "REQUIRE_STANDING": "1",
+            "STANDING_SECRET": "wrong-secret",
+        }):
+            state._config = None
+            d = Dispatcher()
+            register_handlers(d, state)
+
+            token = self._make_standing_token()
+            resp = await roundtrip(d, "chat.send", {
+                "messages": [{"role": "user", "content": "Hi"}],
+                "standing_token": token,
+            })
+
+        assert "error" in resp
+        assert resp["error"]["code"] == AUTH_ERROR
+
+    @pytest.mark.asyncio
+    async def test_send_allowed_with_valid_token_when_required(self, state_with_mock_backend):
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        with patch.dict(os.environ, {
+            "REQUIRE_STANDING": "1",
+            "STANDING_SECRET": self.STANDING_SECRET.decode(),
+        }):
+            state._config = None
+            d = Dispatcher()
+            register_handlers(d, state)
+
+            token = self._make_standing_token()
+            resp = await roundtrip(d, "chat.send", {
+                "messages": [{"role": "user", "content": "Hi"}],
+                "standing_token": token,
+            })
+
+        assert "result" in resp
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) >= 1
+        r = receipts[0]
+        assert r.auth_method == "standing:hmac"
+
+    @pytest.mark.asyncio
+    async def test_stream_denied_without_token_when_required(self, state_with_mock_backend):
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        with patch.dict(os.environ, {"REQUIRE_STANDING": "1"}):
+            state._config = None
+            d = Dispatcher()
+            register_handlers(d, state)
+
+            resp = await roundtrip(d, "chat.stream", {
+                "messages": [{"role": "user", "content": "Hi"}],
+            })
+
+        assert "error" in resp
+        assert resp["error"]["code"] == AUTH_ERROR
+
+    @pytest.mark.asyncio
+    async def test_compat_mode_allows_no_token(self, state_with_mock_backend):
+        """Default (require_standing=false) still allows unauthenticated requests."""
+        state = state_with_mock_backend
+        (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
+        (state.governor_dir / "evidence").mkdir(exist_ok=True)
+
+        d = Dispatcher()
+        register_handlers(d, state)
+
+        resp = await roundtrip(d, "chat.send", {
+            "messages": [{"role": "user", "content": "Hi"}],
+        })
+
+        assert "result" in resp
+        receipts = state.receipt_system.query(gate="chat_bridge")
+        assert len(receipts) >= 1
+        r = receipts[0]
+        assert r.principal_id == "local"
+        assert r.auth_method == "none"
+        assert r.principal_ref is None
+
+    # --- governor.hello exposes standing config ---
+
+    @pytest.mark.asyncio
+    async def test_hello_shows_standing_status(self, dispatcher_with_chat):
+        d, state = dispatcher_with_chat
+        resp = await roundtrip(d, "governor.hello")
+        result = resp["result"]
+        assert "standing" in result
+        assert result["standing"]["required"] is False
+        assert "secret_configured" in result["standing"]
+        assert "audience" in result["standing"]
+
+    @pytest.mark.asyncio
+    async def test_hello_shows_standing_required(self, dispatcher_with_chat):
+        d, state = dispatcher_with_chat
+        with patch.dict(os.environ, {
+            "REQUIRE_STANDING": "1",
+            "STANDING_SECRET": "some-secret",
+        }):
+            state._config = None
+            resp = await roundtrip(d, "governor.hello")
+        result = resp["result"]
+        assert result["standing"]["required"] is True
+        assert result["standing"]["secret_configured"] is True

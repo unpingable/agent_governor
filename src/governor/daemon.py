@@ -746,20 +746,83 @@ class DaemonState:
             "daemon.trust_principal_from_client", ""
         ).lower() in ("1", "true", "yes")
 
-    def resolve_principal(self, client_principal: str | None) -> str:
-        """Resolve the effective principal_id for a request.
+    def resolve_principal(
+        self,
+        client_principal: str | None,
+        standing_token: dict | None = None,
+    ) -> tuple[str, str, str | None]:
+        """Resolve the effective principal for a request.
 
-        If trust is enabled and client provides a value, use it.
-        Otherwise default to "local".
+        Returns (principal_id, auth_method, principal_ref).
+
+        Priority:
+        1. Standing token (if provided, MUST verify or fail closed)
+        2. Trusted client principal (if trust enabled)
+        3. Default "local"
         """
+        # Standing token path — fail closed
+        if standing_token:
+            try:
+                from .standing import (
+                    WorkloadId,
+                    verify_and_resolve,
+                    StandingVerificationError,
+                )
+                import hashlib
+
+                token = WorkloadId.from_dict(standing_token)
+                secret = self._standing_secret
+                if secret is None:
+                    logger.warning("standing token provided but no secret configured")
+                    raise StandingVerificationError(
+                        __import__("governor.standing", fromlist=["AssessmentResult"]).AssessmentResult.ASSESSMENT_COMPROMISED,
+                        token,
+                    )
+                vi = verify_and_resolve(
+                    token, secret,
+                    expected_audience=self._standing_audience,
+                )
+                # Hash the canonical signing input for principal_ref
+                from .standing import _signing_input
+                canonical = _signing_input(
+                    token.jti, token.name, token.location,
+                    token.audience, token.issued_at, token.expires_at,
+                )
+                ref = "sha256:" + hashlib.sha256(canonical).hexdigest()
+                return (vi.principal_id, "standing:hmac", ref)
+            except Exception as exc:
+                # Fail closed: standing token present but invalid → reject
+                logger.warning("standing verification failed: %s", exc)
+                raise
+
+        # Legacy paths
         if client_principal and self.trust_principal_from_client:
-            return client_principal
+            return (client_principal, "trusted_client", None)
         if client_principal and not self.trust_principal_from_client:
             logger.debug(
                 "principal_id=%r from client ignored (trust not enabled)",
                 client_principal,
             )
-        return "local"
+        return ("local", "none", None)
+
+    @property
+    def _standing_secret(self) -> bytes | None:
+        """Standing HMAC secret. From env or config."""
+        val = os.environ.get("STANDING_SECRET", "").strip()
+        if val:
+            return val.encode("utf-8")
+        conf_val = self.daemon_config.get("standing.secret", "").strip()
+        if conf_val:
+            return conf_val.encode("utf-8")
+        return None
+
+    @property
+    def _standing_audience(self) -> str:
+        """Expected standing audience. Default: 'standing'."""
+        val = os.environ.get("STANDING_AUDIENCE", "").strip()
+        if val:
+            return val
+        return self.daemon_config.get("standing.audience", "standing").strip()
 
 
 # =============================================================================
@@ -1302,7 +1365,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         messages_raw = params.get("messages", [])
         model = params.get("model", "") or state.default_model
         context_id = params.get("context_id", "default")
-        principal_id = state.resolve_principal(params.get("principal_id"))
+        principal_id, _auth_method, _principal_ref = state.resolve_principal(
+            params.get("principal_id"),
+            standing_token=params.get("standing_token"),
+        )
 
         if not messages_raw:
             raise ValueError("Missing required param: messages")
@@ -1485,7 +1551,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         messages_raw = params.get("messages", [])
         model = params.get("model", "") or state.default_model
         context_id = params.get("context_id", "default")
-        principal_id = state.resolve_principal(params.get("principal_id"))
+        principal_id, _auth_method, _principal_ref = state.resolve_principal(
+            params.get("principal_id"),
+            standing_token=params.get("standing_token"),
+        )
 
         if not messages_raw:
             raise ValueError("Missing required param: messages")

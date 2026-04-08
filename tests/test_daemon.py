@@ -2571,16 +2571,16 @@ class TestDaemonStateTrustPrincipal:
         assert state.trust_principal_from_client is False
 
     def test_resolve_defaults_to_local(self, state):
-        assert state.resolve_principal(None) == "local"
-        assert state.resolve_principal("") == "local"
+        assert state.resolve_principal(None) == ("local", "none", None)
+        assert state.resolve_principal("") == ("local", "none", None)
 
     def test_resolve_ignores_client_without_trust(self, state):
-        assert state.resolve_principal("erin") == "local"
+        assert state.resolve_principal("erin") == ("local", "none", None)
 
     def test_resolve_uses_client_with_trust(self, state):
         with patch.dict(os.environ, {"TRUST_PRINCIPAL_FROM_CLIENT": "1"}):
             state._config = None
-            assert state.resolve_principal("erin") == "erin"
+            assert state.resolve_principal("erin") == ("erin", "trusted_client", None)
 
     def test_trust_from_config_file(self, tmp_gov_dir):
         conf = tmp_gov_dir / "daemon.conf"

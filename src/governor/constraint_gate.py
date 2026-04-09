@@ -127,6 +127,7 @@ class ConstraintGateResult:
 
     verdict: str  # "pass" | "warn" | "block" | "observe"
     status: str  # verifier status: "allowed" | "denied" | "invalid_input" | "unavailable" | "error"
+    schema_version: str | None = None  # verifier schema version, preserved for drift detection
     failed_rules: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[dict[str, Any]] = field(default_factory=list)
     missing_facts: list[dict[str, Any]] = field(default_factory=list)
@@ -139,6 +140,8 @@ class ConstraintGateResult:
             "verdict": self.verdict,
             "status": self.status,
         }
+        if self.schema_version is not None:
+            d["verifier_schema_version"] = self.schema_version
         if self.failed_rules:
             d["failed_rules"] = self.failed_rules
         if self.warnings:
@@ -248,7 +251,7 @@ class ConstraintGate:
             for grant in (standing_grants or []):
                 try:
                     facts.extend(standing_grant_to_facts(grant))
-                except (KeyError, TypeError) as exc:
+                except (KeyError, TypeError, ValueError) as exc:
                     logger.warning(
                         "constraint_gate: bad standing grant, skipping: %s", exc
                     )
@@ -256,7 +259,7 @@ class ConstraintGate:
             for memory in (continuity_memories or []):
                 try:
                     facts.extend(memory_to_facts(memory))
-                except (KeyError, TypeError) as exc:
+                except (KeyError, TypeError, ValueError) as exc:
                     logger.warning(
                         "constraint_gate: bad continuity memory, skipping: %s", exc
                     )
@@ -282,6 +285,7 @@ class ConstraintGate:
             result = ConstraintGateResult(
                 verdict=gate_verdict,
                 status=verdict_obj.status,
+                schema_version=getattr(verdict_obj, "schema_version", None),
                 failed_rules=[r.model_dump() for r in verdict_obj.failed_rules],
                 warnings=[r.model_dump() for r in verdict_obj.warnings],
                 missing_facts=[m.model_dump() for m in verdict_obj.missing_facts],
@@ -325,6 +329,8 @@ class ConstraintGate:
                 "verifier_status": result.status,
                 "gate_verdict": result.verdict,
             }
+            if result.schema_version is not None:
+                evidence["verifier_schema_version"] = result.schema_version
             if result.failed_rules:
                 evidence["failed_rules"] = result.failed_rules
             if result.warnings:

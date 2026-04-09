@@ -114,6 +114,18 @@ class TestResultSerialization:
         assert len(d["failed_rules"]) == 1
         assert d["timing_ms"] == 12.34
 
+    def test_schema_version_in_to_dict(self):
+        r = ConstraintGateResult(
+            verdict="pass", status="allowed", schema_version="0.1.0"
+        )
+        d = r.to_dict()
+        assert d["verifier_schema_version"] == "0.1.0"
+
+    def test_schema_version_omitted_when_none(self):
+        r = ConstraintGateResult(verdict="observe", status="unavailable")
+        d = r.to_dict()
+        assert "verifier_schema_version" not in d
+
     def test_used_facts_excluded_from_default_serialization(self):
         r = ConstraintGateResult(
             verdict="pass",
@@ -261,6 +273,7 @@ class TestVerifierIntegration:
         assert result.status == "allowed"
         assert result.failed_rules == []
         assert result.timing_ms is not None
+        assert result.schema_version is not None  # verifier schema preserved
 
     def test_denied_on_scope_mismatch(self):
         gate = ConstraintGate(rules=[self._scope_rule()])
@@ -435,6 +448,23 @@ class TestVerifierIntegration:
         evidence = receipts.receipts[0]["evidence_bundle"]
         assert "failed_rules" in evidence
         assert evidence["verifier_status"] == "denied"
+
+    def test_receipt_evidence_has_schema_version(self):
+        receipts = FakeReceiptSystem()
+        gate = ConstraintGate(
+            receipt_system=receipts,
+            rules=[self._scope_rule()],
+        )
+        gate.check(
+            action="deploy",
+            actor="wl:deploy-bot:host-abc",
+            target="prod/web-api",
+            scope="deploy",
+            standing_grants=[_make_standing_grant()],
+        )
+
+        evidence = receipts.receipts[0]["evidence_bundle"]
+        assert "verifier_schema_version" in evidence
 
     def test_receipt_policy_includes_rule_ids(self):
         receipts = FakeReceiptSystem()

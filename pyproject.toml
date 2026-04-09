@@ -48,6 +48,9 @@ webui = [
     "httpx>=0.24.0",
     "pyyaml>=6.0",
 ]
+verifier = [
+    "z3-solver>=4.12",
+]
 
 [project.scripts]
 governor = "governor.cli:main"

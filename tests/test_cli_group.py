@@ -197,7 +197,7 @@ ALLOWED_UNCATEGORIZED: set[str] = {
     "context", "continuity", "correlator", "dashboard",
     "dashboard-ux", "decay", "decide", "decisions", "demo",
     "deploy", "detector", "doc", "docket", "drift", "epistemic",
-    "evasion", "explore", "external", "facts", "fiction", "gate",
+    "constraint", "evasion", "explore", "external", "facts", "fiction", "gate",
     "git-gov", "graph", "hook", "hysteresis", "independence",
     "instrument", "interferometry", "invariant", "issue",
     "jurisdiction", "kernel", "lanes", "lock", "mcp", "measure",

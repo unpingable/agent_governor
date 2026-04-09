@@ -3080,6 +3080,61 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("signals.stats", signals_stats)
     dispatcher.register("signals.preflight", signals_preflight)
 
+    # --- Constraint Gate (formal Z3 verifier) ---
+
+    async def constraint_status(params: dict) -> dict:
+        """Show constraint gate availability."""
+        from .constraint_gate import VERIFIER_AVAILABLE, ConstraintGateStatus
+        s = ConstraintGateStatus(
+            available=VERIFIER_AVAILABLE,
+            reason="ok" if VERIFIER_AVAILABLE else "verifier_not_installed",
+        )
+        return s.to_dict()
+
+    async def constraint_check(params: dict) -> dict:
+        """Check admissibility via Z3 verifier.
+
+        Params:
+            action: str
+            actor: str
+            target: str
+            scope: str
+            standing_grants: list[dict] (optional)
+            continuity_memories: list[dict] (optional)
+            rules: list[dict] (optional, ConstraintRule dicts)
+        """
+        from .constraint_gate import VERIFIER_AVAILABLE, ConstraintGate
+
+        if not VERIFIER_AVAILABLE:
+            return {
+                "verdict": "observe",
+                "status": "unavailable",
+                "reason": "verifier_not_installed",
+            }
+
+        from .constraint_gate import ConstraintRule
+
+        rules = []
+        for r in params.get("rules", []):
+            rules.append(ConstraintRule(**r))
+
+        receipt_system = state.receipt_system
+        gate = ConstraintGate(receipt_system=receipt_system, rules=rules)
+
+        result = gate.check(
+            action=params["action"],
+            actor=params["actor"],
+            target=params["target"],
+            scope=params["scope"],
+            standing_grants=params.get("standing_grants"),
+            continuity_memories=params.get("continuity_memories"),
+        )
+
+        return result.to_dict()
+
+    dispatcher.register("constraint.status", constraint_status)
+    dispatcher.register("constraint.check", constraint_check)
+
     # --- Runtime Supervisor ---
 
     async def runtime_session_create(params: dict) -> dict:

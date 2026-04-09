@@ -199,7 +199,6 @@ class OverrideManager:
     _overrides: dict[str, OverrideReceipt] = field(default_factory=dict)
 
     def __post_init__(self):
-        self._overrides_dir.mkdir(parents=True, exist_ok=True)
         self._load_overrides()
 
     @property
@@ -222,6 +221,7 @@ class OverrideManager:
 
     def _save_override(self, override: OverrideReceipt) -> None:
         """Save a single override to disk."""
+        self._overrides_dir.mkdir(parents=True, exist_ok=True)
         path = self._overrides_dir / f"{override.id}.json"
         path.write_text(json.dumps(override.to_dict(), indent=2))
 

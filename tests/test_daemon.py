@@ -1124,6 +1124,8 @@ class TestAllMethodsRegistered:
         "signals.tail",
         "signals.stats",
         "signals.preflight",
+        "constraint.status",
+        "constraint.check",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -1140,7 +1142,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 80
+        assert total == 82
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):

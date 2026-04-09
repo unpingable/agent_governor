@@ -19505,6 +19505,147 @@ def runtime_group():
     pass
 
 
+# =============================================================================
+# Constraint Gate (formal admissibility via Z3 verifier)
+# =============================================================================
+
+@cli.group("constraint")
+def constraint_group():
+    """Formal constraint checking via Z3 verifier sidecar."""
+    pass
+
+
+@constraint_group.command("status")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def constraint_status(as_json: bool) -> None:
+    """Show constraint gate availability and configuration."""
+    from .constraint_gate import VERIFIER_AVAILABLE, ConstraintGateStatus
+
+    status = ConstraintGateStatus(
+        available=VERIFIER_AVAILABLE,
+        reason="ok" if VERIFIER_AVAILABLE else "verifier_not_installed",
+    )
+
+    if as_json:
+        import json
+        click.echo(json.dumps(status.to_dict(), indent=2))
+    else:
+        click.echo(f"Verifier available: {status.available}")
+        click.echo(f"Status: {status.reason}")
+        click.echo(f"Verdict ceiling: {status.verdict_ceiling}")
+        if not status.available:
+            click.echo("\nInstall with: pip install z3-solver")
+            click.echo("Then add verifier to PYTHONPATH or pip install -e ~/git/verifier")
+
+
+@constraint_group.command("check")
+@click.option("--action", required=True, help="Proposed action")
+@click.option("--actor", required=True, help="Actor principal ID")
+@click.option("--target", required=True, help="Target resource")
+@click.option("--scope", required=True, help="Action scope")
+@click.option("--standing-grant", "standing_grants", multiple=True, help="Standing grant JSON file(s)")
+@click.option("--continuity-memory", "continuity_memories", multiple=True, help="Continuity memory JSON file(s)")
+@click.option("--rules", "rules_file", type=click.Path(exists=True), help="Constraint rules JSON file")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def constraint_check(
+    ctx: click.Context,
+    action: str,
+    actor: str,
+    target: str,
+    scope: str,
+    standing_grants: tuple[str, ...],
+    continuity_memories: tuple[str, ...],
+    rules_file: str | None,
+    as_json: bool,
+) -> None:
+    """Check admissibility of a proposed action against constraint rules."""
+    import json as json_mod
+
+    from .constraint_gate import VERIFIER_AVAILABLE, ConstraintGate
+
+    if not VERIFIER_AVAILABLE:
+        click.echo("Error: z3-verifier not installed.", err=True)
+        click.echo("Install with: pip install z3-solver", err=True)
+        click.echo("Then add verifier to PYTHONPATH or pip install -e ~/git/verifier", err=True)
+        raise SystemExit(1)
+
+    from .constraint_gate import ConstraintRule
+
+    # Load standing grants from JSON files
+    grants = []
+    for path in standing_grants:
+        with open(path) as f:
+            grants.append(json_mod.load(f))
+
+    # Load continuity memories from JSON files
+    memories = []
+    for path in continuity_memories:
+        with open(path) as f:
+            memories.append(json_mod.load(f))
+
+    # Load rules
+    rules = []
+    if rules_file:
+        with open(rules_file) as f:
+            rules_data = json_mod.load(f)
+        rules = [ConstraintRule(**r) for r in rules_data]
+
+    # Set up receipt system if governor is initialized
+    receipt_system = None
+    try:
+        gov_dir = get_governor_dir(ctx)
+        if gov_dir.exists():
+            from .gate_receipt import GateReceiptSystem
+            receipt_system = GateReceiptSystem(gov_dir)
+    except Exception:
+        pass
+
+    gate = ConstraintGate(receipt_system=receipt_system, rules=rules)
+    result = gate.check(
+        action=action,
+        actor=actor,
+        target=target,
+        scope=scope,
+        standing_grants=grants,
+        continuity_memories=memories,
+    )
+
+    if as_json:
+        click.echo(json_mod.dumps(result.to_dict(), indent=2))
+    else:
+        verdict_colors = {"pass": "green", "warn": "yellow", "block": "red", "observe": "cyan"}
+        color = verdict_colors.get(result.verdict, "white")
+        click.echo(click.style(f"Verdict: {result.verdict}", fg=color))
+        click.echo(f"Status: {result.status}")
+
+        if result.timing_ms is not None:
+            click.echo(f"Time: {result.timing_ms}ms")
+
+        if result.failed_rules:
+            click.echo("\nFailed rules:")
+            for r in result.failed_rules:
+                click.echo(f"  - {r['rule_id']}: {r['description']}")
+
+        if result.warnings:
+            click.echo("\nWarnings:")
+            for r in result.warnings:
+                click.echo(f"  - {r['rule_id']}: {r['description']}")
+
+        if result.missing_facts:
+            click.echo("\nMissing facts:")
+            for m in result.missing_facts:
+                click.echo(f"  - {m['subject']}.{m['field']} (rule: {m['rule_id']})")
+
+        if result.contradictions:
+            click.echo("\nContradictions:")
+            for c in result.contradictions:
+                click.echo(f"  - {c['subject']}.{c['field']}: {len(c['facts'])} conflicting facts")
+
+        if result.verdict == "block":
+            raise SystemExit(1)
+
+
 # ---------------------------------------------------------------------------
 # Populate advanced group — dual-register all attic commands
 # ---------------------------------------------------------------------------

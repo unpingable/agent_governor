@@ -120,6 +120,21 @@ bash start-codex.sh        # WebUI with Codex backend (auto-detects Node, arch, 
            commit(claim)
    ```
 
+## Debugging Discipline
+
+**When a claim is about to become load-bearing** — when an action, write, or downstream claim is about to depend on it:
+
+- **Default to reduction.** Escalate to integration only after reduction has failed to discriminate.
+- **Belief must be earned by the cheapest available falsification, not constructed by accretion.**
+
+> Context is a solvent. It dissolves the edge that would otherwise let you reject a theory.
+
+The trigger matters. This rule does not fire on every minor claim — that would be ceremonial fake rigor. It fires when reality is about to be staked on something. At that moment: name the cheapest test that could actually force abandonment of the claim, and run it.
+
+**The failure mode this exists to prevent:** integration accumulates context (no commitment, nothing has to die). Reduction resets (commit to a falsifiable shape, let reality kill it). Models and humans both prefer accumulation because it feels like progress. This rule exists because that preference is wrong when stakes are real.
+
+The gap spec format (`specs/gaps/`) is the same primitive applied to design: "what exists / what needs building / acceptance criteria / non-goals / open questions" forces the falsifiable shape *before* context can dissolve the edge. That is why writing them feels load-bearing instead of like documentation overhead.
+
 ## Claim Types
 
 ```python

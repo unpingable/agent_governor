@@ -42,9 +42,11 @@ This document provides a high-level view of the Agent Governor system. For detai
 
 | Component | Path | Description |
 |-----------|------|-------------|
-| CLI | `src/governor/cli.py` | Main command-line interface (50+ commands) |
-| WebUI Adapter | `src/webui/adapter.py` | FastAPI server, OpenAI-compatible API |
+| CLI | `src/governor/cli.py` | Main command-line interface (100+ commands) |
+| Daemon | `src/governor/daemon.py` | JSON-RPC 2.0 over stdio/Unix socket (75 methods). Primary surface for Maude/Clerk/Phosphor. |
 | MCP Server | `src/governor/mcp_server.py` | Model Context Protocol for Claude Desktop |
+| MCP Gateway | `libs/mcp_governor/` | Policy-enforcing proxy between any MCP client and any tool server |
+| Runtime Supervisor | `src/governor/runtime/` | Supervised sessions over external agent CLIs (Claude Code, Gemini CLI) |
 
 ### Core Kernel
 
@@ -137,6 +139,43 @@ This document provides a high-level view of the Agent Governor system. For detai
 | Telemetry | `src/governor/telemetry.py` | Structured logging, JSONL export |
 | Prometheus | `src/governor/cli.py` | Optional metrics at /metrics |
 | Dashboard | `src/governor/cli.py` | Rich TUI for regime visualization |
+| Signal Plane | `src/governor/signal_store.py` | SQLite projection cache over instrumentation JSONL |
+| Instrumentation Spine | `src/governor/signals/` | v2.4 signals (Phase A/B/C/D): exposure, suppression, sigma rate, capture diagnostic, decision lag, posterior shift, replay harness, calibration, regime preflight |
+| Correlator Telemetry | `src/governor/correlator_telemetry.py` | Capture detection, K-vector, regime classification |
+| Semantic Stability | `src/governor/semantic_stability.py` | Perturbation-based conditioning audit |
+
+### Runtime Supervision
+
+Governor is no longer just a kernel — it is a supervision layer for external agent CLIs. The runtime subsystem wraps Claude Code and Gemini CLI sessions, intercepts tool calls via hook integration, mediates approvals, and tracks workspace promotion.
+
+| Component | Path | Description |
+|-----------|------|-------------|
+| Event Bus | `src/governor/runtime/events.py` | Canonical event stream, JSONL persistence, monotonic seq |
+| Supervisor | `src/governor/runtime/supervisor.py` | Session lifecycle FSM, intervention queue, auto-approve policy |
+| Promotion | `src/governor/runtime/promotion.py` | Workspace diff detection, approve/reject/revert |
+| Claude Code Adapter | `src/governor/runtime/adapters/claude_code.py` | Supervised mode via Unix socket hooks |
+| Gemini CLI Adapter | `src/governor/runtime/adapters/gemini_cli.py` | BeforeTool/AfterTool hooks, isolated settings |
+
+### Receipts & Authority Plane
+
+| Component | Path | Description |
+|-----------|------|-------------|
+| Gate Receipts | `src/governor/gate_receipt.py` | Content-addressed decision receipts (receipt_v1) |
+| Receipt Kernel | `libs/receipt_kernel/` | Standalone library: append-only hash-chained ledger, 6 constitutional invariants. Also published as `receipt-kernel` on PyPI. |
+| Lane Routing | `src/governor/lanes.py` | Capability-based cascade (Lane 0/1/2/3), artifact reuse |
+| Verifier Gate | `src/governor/verifier_gate.py` | Composition boundary for mechanical verification |
+| Scope Governor | `src/governor/scope.py` | Locality-first policy, escalation receipts |
+| Egress Gate | `src/governor/egress_gate.py` | Outbound data-flow policy (R1-R6 rule precedence) |
+| Provenance Labels | `src/governor/provenance_labels.py` | Lightweight taint tracking for tool outputs |
+| Intent Compiler | `src/governor/intent_compiler.py` | Structured hypothesis-collapse via templates |
+| Context Manifest | `src/governor/context_manifest.py` | Prompt assembly as governed artifact |
+| Context Compact | `src/governor/context_compact.py` | Loss-aware compaction with recovery store |
+| Session Continuity | `src/governor/session_continuity.py` | Capsule-based session management, fork/promote |
+| CI Lane | `src/governor/ci.py` | Receipt-producing CI wrapper and policy verifier |
+| Git Governance | `src/governor/git_governance.py` | Integrity invariants at commit boundaries |
+| Perforce | `src/governor/perforce.py` | Integrity invariants on explicit authority substrate |
+| Interferometry | `src/governor/interferometry.py` | Multi-model claim comparison, parallel + serial deliberation |
+| External Constraints | (planned) | Bind claims to Wikidata/Wikipedia/Scholar snapshots |
 
 ---
 
@@ -286,6 +325,63 @@ These rules cannot be broken:
 2. Create factory function returning `Invariant`
 3. Implement check logic
 4. Add CLI support
+
+---
+
+## The Constellation
+
+Governor is not a monolith. It is the traffic cop in a constellation of independent tools that can each be used standalone. The constitutional rule:
+
+> **Governor may coordinate independent tools, but it must not be the reason they are usable.**
+
+Each repo below works on its own. Governor enters when an action needs mediation, when authority crosses a boundary, or when receipts are required.
+
+### In-tree libraries (`libs/`)
+
+| Repo | Role | Standalone? |
+|------|------|-------------|
+| `libs/receipt_kernel/` | Append-only hash-chained event ledger, 6 constitutional invariants, blob store with redaction + retention. | Yes (PyPI: `receipt-kernel`) |
+| `libs/mcp_governor/` | Policy-enforcing MCP gateway: client ↔ gateway ↔ tool server, with receipts. | Yes (depends only on `receipt_v1`) |
+
+### Sibling repos (`~/git/`)
+
+| Repo | Role | Relationship to Governor |
+|------|------|--------------------------|
+| `nlai` | Standalone epistemic kernel (PyPI: `nlai`). Zero deps, stdlib only. | Independent. Not "Governor Lite," not a required submodule. |
+| `continuity` | Per-project governed memory: observe → commit → rely_on. SQLite-backed, MCP-served. | Memory substrate. Governor mediates cross-project rely-on, not memory itself. |
+| `custody` | Secret metadata + governed operations (catalog, classes, allowed ops, leases). | Authority plane for secret use. Governor decides whether an operation may execute. |
+| `standing` | Workload identity + authorization (Rust). HMAC-SHA256 WorkloadId tokens. | Identity substrate. Answers "who is asking from where" before Governor decides. |
+| `dossier` | PR review provenance, Δt-aware review grants, stale approval detection. | Review-time governance. Independent of runtime governance. |
+| `audit` | Code audit tool ("IAM for pull requests"). | Independent. |
+| `wlp` | Witness Ledger Protocol — wire format for federable receipts. | Cross-project receipt fabric. Governor emits, WLP federates. |
+| `maude` | Textual TUI operator console. Talks to daemon via JSON-RPC. | Client of Governor daemon. |
+| `clerk` | Electron desktop app. | Client of Governor daemon. |
+| `gov-webui` (Phosphor) | FastAPI + SPA web UI. | Client of Governor daemon. |
+| `vscode-governor` | VS Code extension. CLI-based, not daemon-dependent. | Client of `governor` CLI. |
+
+### How they compose
+
+```
+   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+   │  continuity  │    │   custody    │    │   standing   │
+   │ (memory)     │    │ (secrets)    │    │ (identity)   │
+   └──────┬───────┘    └──────┬───────┘    └──────┬───────┘
+          │                   │                    │
+          │  query / observe  │  catalog lookup    │  attest
+          ▼                   ▼                    ▼
+        ╔══════════════════════════════════════════════╗
+        ║           Governor (traffic cop)             ║
+        ║  Mediates ACTION across these substrates     ║
+        ║  Emits receipts; never owns their state      ║
+        ╚══════════════════════════════════════════════╝
+                            │
+                            ▼
+                   ┌─────────────────┐
+                   │  WLP receipts   │  (federation layer)
+                   └─────────────────┘
+```
+
+The boundary is sharp: **read/query/observe** does not need Governor. **Action that crosses authority** does.
 
 ---
 

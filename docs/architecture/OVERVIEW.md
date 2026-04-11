@@ -330,9 +330,11 @@ These rules cannot be broken:
 
 ## The Constellation
 
-Governor is not a monolith. It is the traffic cop in a constellation of independent tools that can each be used standalone. The constitutional rule:
+Governor is one star, not a monolith. It sits in a constellation of independent tools that can each be used standalone. The constitutional rule:
 
 > **Governor may coordinate independent tools, but it must not be the reason they are usable.**
+
+The pieces are **loosely coupled, semantically aligned** — peers under a shared constitutional vocabulary, not stages in a pipeline. They are coupled by *meaning* more than by *mechanism*. Governor does not call NQ to govern. NQ does not call Governor to witness. They share a grammar (Δt, regimes, claims, receipts, admissibility) and selective interfaces, and that is all the coupling that should exist.
 
 Each repo below works on its own. Governor enters when an action needs mediation, when authority crosses a boundary, or when receipts are required.
 
@@ -382,6 +384,19 @@ Each repo below works on its own. Governor enters when an action needs mediation
 ```
 
 The boundary is sharp: **read/query/observe** does not need Governor. **Action that crosses authority** does.
+
+### The four-piece map
+
+Beyond the operator-facing tools above, the constellation has a deeper four-piece structure for *how the work gets thought about*:
+
+| Piece | Role |
+|---|---|
+| **Lean / papers** | Semantic hardening, theorem pressure, model discipline. Sharpens the categories. Not a runtime. |
+| **Z3 / verifier sidecar** (`src/governor/verifier_gate.py`) | Bounded admissibility — local constraint discharge at decision time. An *instrument* Governor may consult, not its logical core. |
+| **Governor** | Authority, enforcement, receipts. Decides what may happen and records what did. |
+| **NQ** (sibling repo, monitoring) | Witness, regime detection, finding. Observes substrate and classifies failure modes. Does not authorize. |
+
+These are peers, not stages. None of them is the upstream compiler for the others. Sometimes Governor calls the verifier. Sometimes the verifier runs offline. Sometimes the formal work clarifies a term both projects use. Sometimes none of them touch and they still stand on their own. That is what loose coupling actually looks like.
 
 ---
 

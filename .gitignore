@@ -35,3 +35,4 @@ old/
 
 # Claude Code local session data
 .claude/projects/
+.mcp.json

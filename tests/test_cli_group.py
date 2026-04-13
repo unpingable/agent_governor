@@ -196,7 +196,7 @@ ALLOWED_UNCATEGORIZED: set[str] = {
     "codex-hooks", "collapse", "conditioning", "constraints",
     "context", "continuity", "correlator", "dashboard",
     "dashboard-ux", "decay", "decide", "decisions", "demo",
-    "deploy", "detector", "doc", "docket", "drift", "epistemic",
+    "deploy", "detector", "doc", "docket", "doctrine", "drift", "epistemic",
     "constraint", "evasion", "explore", "external", "facts", "fiction", "gate",
     "git-gov", "graph", "hook", "hysteresis", "independence",
     "instrument", "interferometry", "invariant", "issue",

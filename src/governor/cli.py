@@ -19647,6 +19647,102 @@ def constraint_check(
 
 
 # ---------------------------------------------------------------------------
+# Doctrine consultation (read-only Governor → Continuity edge)
+# ---------------------------------------------------------------------------
+
+
+@cli.group("doctrine")
+def doctrine_group() -> None:
+    """Consult declared doctrine from a continuity store (read-only, advisory)."""
+
+
+@doctrine_group.command("consult")
+@click.option("--scope", required=True, help="Doctrine scope to query (e.g. doctrine:debugging-discipline)")
+@click.option(
+    "--kind",
+    "kinds",
+    multiple=True,
+    default=("constraint", "decision"),
+    help="Memory kinds to consider doctrine. Repeatable. Default: constraint,decision",
+)
+@click.option("--db", "explicit_db", default=None, help="Override continuity DB path")
+@click.option("--workspace", default=None, help="Continuity workspace selection")
+@click.option("--no-receipt", is_flag=True, default=False, help="Skip receipt emission")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON")
+@click.pass_context
+def doctrine_consult(
+    ctx: click.Context,
+    scope: str,
+    kinds: tuple[str, ...],
+    explicit_db: str | None,
+    workspace: str | None,
+    no_receipt: bool,
+    as_json: bool,
+) -> None:
+    """Consult declared doctrine and emit an observational receipt.
+
+    This command never blocks, never enforces, never modifies state in
+    continuity. It reads the latest committed memory at (scope, kind),
+    captures rely_ok at consultation time, and emits a gate receipt
+    naming what was considered.
+
+    Verdict is always 'observe'. This is the smallest Governor↔Continuity
+    integration slice — proof that doctrine can be consulted at the action
+    boundary without inventing a new subsystem.
+    """
+    from .doctrine import consult, emit_consult_receipt
+
+    result = consult(
+        scope=scope,
+        kinds=tuple(kinds),
+        explicit_db=Path(explicit_db) if explicit_db else None,
+        workspace=workspace,
+    )
+
+    receipt_id: str | None = None
+    if not no_receipt:
+        gov_dir = ensure_initialized(ctx, auto_init=True)
+        receipt = emit_consult_receipt(result, gov_dir)
+        receipt_id = receipt.receipt_id
+
+    if as_json:
+        out = {
+            "result": result.to_evidence_bundle(),
+            "receipt_id": receipt_id,
+        }
+        click.echo(json.dumps(out, indent=2, default=str))
+        return
+
+    click.echo(f"scope:    {result.scope}")
+    click.echo(f"kinds:    {','.join(result.kinds)}")
+    click.echo(f"quality:  {result.quality}")
+    if result.continuity_version:
+        click.echo(f"continuity: {result.continuity_version}")
+    if result.db_path:
+        click.echo(f"db:       {result.db_path}  (source={result.resolver_source}, scope_kind={result.scope_kind})")
+    if result.store_metadata:
+        sid = result.store_metadata.get("store_id", "?")
+        click.echo(f"store:    {sid}")
+    if result.error:
+        click.echo(f"error:    {result.error}", err=True)
+
+    if not result.entries:
+        click.echo("(no doctrine memories found at this scope)")
+    else:
+        click.echo(f"\n{len(result.entries)} memory(ies) consulted:")
+        for e in result.entries:
+            marker = "✓" if e.rely_ok else "✗"
+            click.echo(f"  {marker} {e.memory_id} [{e.kind}/{e.reliance_class}]")
+            click.echo(f"      rely_ok={e.rely_ok} reason={e.rely_reason}")
+            if e.content:
+                summary = next(iter(e.content.values())) if len(e.content) == 1 else e.content
+                click.echo(f"      content: {summary}")
+
+    if receipt_id:
+        click.echo(f"\nreceipt:  {receipt_id[:16]}...")
+
+
+# ---------------------------------------------------------------------------
 # Populate advanced group — dual-register all attic commands
 # ---------------------------------------------------------------------------
 
@@ -20079,97 +20175,6 @@ def runtime_reject(ctx: click.Context, session_id: str, reason: str | None):
     else:
         click.echo("No pending promotion to reject.", err=True)
         raise SystemExit(1)
-
-
-@cli.group("doctrine")
-def doctrine_group() -> None:
-    """Consult declared doctrine from a continuity store (read-only, advisory)."""
-
-
-@doctrine_group.command("consult")
-@click.option("--scope", required=True, help="Doctrine scope to query (e.g. doctrine:debugging-discipline)")
-@click.option(
-    "--kind",
-    "kinds",
-    multiple=True,
-    default=("constraint", "decision"),
-    help="Memory kinds to consider doctrine. Repeatable. Default: constraint,decision",
-)
-@click.option("--db", "explicit_db", default=None, help="Override continuity DB path")
-@click.option("--workspace", default=None, help="Continuity workspace selection")
-@click.option("--no-receipt", is_flag=True, default=False, help="Skip receipt emission")
-@click.option("--json", "as_json", is_flag=True, default=False, help="Emit JSON")
-@click.pass_context
-def doctrine_consult(
-    ctx: click.Context,
-    scope: str,
-    kinds: tuple[str, ...],
-    explicit_db: str | None,
-    workspace: str | None,
-    no_receipt: bool,
-    as_json: bool,
-) -> None:
-    """Consult declared doctrine and emit an observational receipt.
-
-    This command never blocks, never enforces, never modifies state in
-    continuity. It reads the latest committed memory at (scope, kind),
-    captures rely_ok at consultation time, and emits a gate receipt
-    naming what was considered.
-
-    Verdict is always 'observe'. This is the smallest Governor↔Continuity
-    integration slice — proof that doctrine can be consulted at the action
-    boundary without inventing a new subsystem.
-    """
-    from .doctrine import consult, emit_consult_receipt
-
-    result = consult(
-        scope=scope,
-        kinds=tuple(kinds),
-        explicit_db=Path(explicit_db) if explicit_db else None,
-        workspace=workspace,
-    )
-
-    receipt_id: str | None = None
-    if not no_receipt:
-        gov_dir = ensure_initialized(ctx, auto_init=True)
-        receipt = emit_consult_receipt(result, gov_dir)
-        receipt_id = receipt.receipt_id
-
-    if as_json:
-        out = {
-            "result": result.to_evidence_bundle(),
-            "receipt_id": receipt_id,
-        }
-        click.echo(json.dumps(out, indent=2, default=str))
-        return
-
-    click.echo(f"scope:    {result.scope}")
-    click.echo(f"kinds:    {','.join(result.kinds)}")
-    click.echo(f"quality:  {result.quality}")
-    if result.continuity_version:
-        click.echo(f"continuity: {result.continuity_version}")
-    if result.db_path:
-        click.echo(f"db:       {result.db_path}  (source={result.resolver_source}, scope_kind={result.scope_kind})")
-    if result.store_metadata:
-        sid = result.store_metadata.get("store_id", "?")
-        click.echo(f"store:    {sid}")
-    if result.error:
-        click.echo(f"error:    {result.error}", err=True)
-
-    if not result.entries:
-        click.echo("(no doctrine memories found at this scope)")
-    else:
-        click.echo(f"\n{len(result.entries)} memory(ies) consulted:")
-        for e in result.entries:
-            marker = "✓" if e.rely_ok else "✗"
-            click.echo(f"  {marker} {e.memory_id} [{e.kind}/{e.reliance_class}]")
-            click.echo(f"      rely_ok={e.rely_ok} reason={e.rely_reason}")
-            if e.content:
-                summary = next(iter(e.content.values())) if len(e.content) == 1 else e.content
-                click.echo(f"      content: {summary}")
-
-    if receipt_id:
-        click.echo(f"\nreceipt:  {receipt_id[:16]}...")
 
 
 def main() -> None:

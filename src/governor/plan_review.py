@@ -10,26 +10,39 @@ never executable.  A human review assigns per-section decisions, and the
 compile step produces an Agenda: an immutable, content-addressed authority
 object that the executor may act on.
 
-This module is the *kernel only*:
-  - dataclasses (Proposal, ProposalSection, SectionDecision, Agenda,
-    AgendaStep, DroppedSection, NarrowedSection, Event, CompileResult)
-  - canonical JSON + content-addressed hashing
-  - compile_agenda(): deterministic, returns events as data
+Layers (added in slices):
+  - Slice 1 — kernel: dataclasses, canonical hashing, compile_agenda()
+  - Slice 2A — serialization: Agenda/AgendaStep to_dict/from_dict
+  - Slice 2B — receipts & events: gate receipts + JSONL event sink
 
-No CLI, no state machine, no receipt I/O.  Those live in later slices.
-The compile function is a pure, total function on (Proposal, decisions):
-same inputs → same agenda_hash, always.
+The kernel remains a pure function of (Proposal, decisions).  Receipt
+emission and event persistence are thin I/O adapters layered on top.
+
+Receipt shape (v0.1):
+  - plan_review.compile: subject = proposal_hash, verdict = observe,
+    role = proposal.  Compile observes narrowing; it does not confer force.
+  - plan_review.authorize: subject = agenda_hash, verdict = pass,
+    role = authority.  Authorize confers force.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from pathlib import Path
+from typing import Any, Sequence
 
-from .gate_receipt import canonical_json, content_hash
+from .gate_receipt import (
+    ROLE_AUTHORITY,
+    ROLE_PROPOSAL,
+    VERDICT_OBSERVE,
+    VERDICT_PASS,
+    GateReceipt,
+    GateReceiptSystem,
+    canonical_json,
+    content_hash,
+)
 
 # =============================================================================
 # Schema
@@ -400,6 +413,27 @@ class Event:
                 f"must be one of {sorted(KERNEL_EVENT_TYPES)}"
             )
 
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "event_id": self.event_id,
+            "event_type": self.event_type,
+            "timestamp": self.timestamp,
+            "payload": self.payload,
+        }
+        if self.parent_event_id is not None:
+            d["parent_event_id"] = self.parent_event_id
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Event:
+        return cls(
+            event_id=data["event_id"],
+            event_type=data["event_type"],
+            timestamp=data["timestamp"],
+            payload=data["payload"],
+            parent_event_id=data.get("parent_event_id"),
+        )
+
 
 def _make_event(
     event_type: str,
@@ -477,9 +511,10 @@ def compile_agenda(
       - decisions reference unknown section_ids
       - two decisions reference the same section_id
 
-    Returns a CompileResult with events as data — this kernel does not
-    emit events to a receipt store.  The caller (slice 2) wires events
-    through gate_receipt.
+    Returns a CompileResult with events as data.  The kernel does not
+    emit receipts or persist events; see emit_compile_receipt(),
+    authorize_agenda(), and write_plan_review_events() for the thin
+    I/O layer (slice 2B).
     """
     ts = timestamp or datetime.now(timezone.utc).isoformat()
     agenda_id = agenda_id or f"agenda_{proposal.proposal_id}_r{proposal.revision}"
@@ -628,3 +663,143 @@ def compile_agenda(
         events=parented_section_events + (compiled_event,),
         compile_notes=tuple(notes),
     )
+
+
+# =============================================================================
+# Receipts & event sink (slice 2B — the I/O boundary)
+# =============================================================================
+
+PLAN_REVIEW_COMPILE_GATE = "plan_review.compile"
+PLAN_REVIEW_AUTHORIZE_GATE = "plan_review.authorize"
+
+SUBJECT_KIND_PROPOSAL = "plan_review.proposal_hash"
+SUBJECT_KIND_AGENDA = "plan_review.agenda_hash"
+
+
+def _plan_review_policy() -> dict[str, Any]:
+    """Minimal policy fingerprint for plan review gates.
+
+    Stable across runs so receipt_id is stable across runs.  Bumps
+    when PLAN_REVIEW_SCHEMA_VERSION bumps.
+    """
+    return {"plan_review_schema_version": PLAN_REVIEW_SCHEMA_VERSION}
+
+
+def _dropped_to_evidence(dropped: Sequence[DroppedSection]) -> list[dict[str, Any]]:
+    return [
+        {"section_id": d.section_id, "kind": d.decision_kind, "reason": d.reason}
+        for d in dropped
+    ]
+
+
+def _narrowed_to_evidence(narrowed: Sequence[NarrowedSection]) -> list[dict[str, Any]]:
+    return [
+        {
+            "section_id": n.section_id,
+            "original_goal": n.original_goal,
+            "original_scope": n.original_scope,
+            "narrowed_goal": n.narrowed_goal,
+            "narrowed_scope": n.narrowed_scope,
+            "reason": n.reason,
+        }
+        for n in narrowed
+    ]
+
+
+def emit_compile_receipt(
+    result: CompileResult,
+    system: GateReceiptSystem,
+    *,
+    timestamp: str | None = None,
+    principal_id: str = "local",
+) -> GateReceipt:
+    """Emit an observational receipt for the compile transformation.
+
+        proposal_hash -> agenda_hash
+
+    Compile observes narrowing.  It does not confer force.  The subject
+    is the proposal_hash (what was transformed); the agenda_hash, dropped
+    list, and narrowed list are evidence of the transformation.
+    """
+    evidence = {
+        "agenda_hash": result.agenda_hash,
+        "step_count": len(result.agenda.steps),
+        "dropped": _dropped_to_evidence(result.dropped),
+        "narrowed": _narrowed_to_evidence(result.narrowed),
+    }
+    return system.emit(
+        gate=PLAN_REVIEW_COMPILE_GATE,
+        verdict=VERDICT_OBSERVE,
+        subject_kind=SUBJECT_KIND_PROPOSAL,
+        subject_bytes=result.proposal_hash.encode("utf-8"),
+        evidence_bundle=evidence,
+        gate_config=_plan_review_policy(),
+        timestamp=timestamp,
+        principal_id=principal_id,
+        receipt_role=ROLE_PROPOSAL,
+    )
+
+
+def authorize_agenda(
+    agenda: Agenda,
+    system: GateReceiptSystem,
+    *,
+    authorized_by: str,
+    timestamp: str | None = None,
+    principal_id: str = "local",
+) -> GateReceipt:
+    """Authorize an agenda: confer executable force.
+
+    Authorize confers force.  The subject is the agenda_hash (what is
+    being authorized); the source_proposal_hash and authorized_by are
+    evidence of the authority grant.  The serialized agenda itself is
+    captured in the evidence bundle so the authority grant is
+    reconstructable from the receipt alone.
+    """
+    evidence = {
+        "source_proposal_hash": agenda.source_proposal_hash,
+        "authorized_by": authorized_by,
+        "agenda": agenda.to_dict(),
+    }
+    return system.emit(
+        gate=PLAN_REVIEW_AUTHORIZE_GATE,
+        verdict=VERDICT_PASS,
+        subject_kind=SUBJECT_KIND_AGENDA,
+        subject_bytes=agenda.agenda_hash().encode("utf-8"),
+        evidence_bundle=evidence,
+        gate_config=_plan_review_policy(),
+        timestamp=timestamp,
+        principal_id=principal_id,
+        receipt_role=ROLE_AUTHORITY,
+    )
+
+
+def default_events_path(root: Path) -> Path:
+    """Canonical location for the plan review event log."""
+    return root / "events" / "plan_review.jsonl"
+
+
+def write_plan_review_events(events: Sequence[Event], path: Path) -> None:
+    """Append events as JSONL to path.
+
+    Dumb append-only: one event per line, no rotation, no index, no
+    dispatcher.  Caller owns the path.  Order is preserved — events are
+    written in the order given, and compile_agenda() returns them with
+    the section events first and the agenda.compiled event last.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as f:
+        for ev in events:
+            f.write(json.dumps(ev.to_dict()) + "\n")
+
+
+def read_plan_review_events(path: Path) -> list[Event]:
+    """Read all events from a JSONL log.  For tests and inspection."""
+    if not path.exists():
+        return []
+    events: list[Event] = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line:
+            events.append(Event.from_dict(json.loads(line)))
+    return events

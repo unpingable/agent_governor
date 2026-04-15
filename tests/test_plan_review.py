@@ -17,6 +17,13 @@ from pathlib import Path
 
 import pytest
 
+from governor.gate_receipt import (
+    ROLE_AUTHORITY,
+    ROLE_PROPOSAL,
+    VERDICT_OBSERVE,
+    VERDICT_PASS,
+    GateReceiptSystem,
+)
 from governor.plan_review import (
     DECISION_APPROVE,
     DECISION_MARK_INERT,
@@ -29,6 +36,10 @@ from governor.plan_review import (
     MODE_AUTONOMOUS,
     MODE_DRY_RUN,
     MODE_INTERACTIVE,
+    PLAN_REVIEW_AUTHORIZE_GATE,
+    PLAN_REVIEW_COMPILE_GATE,
+    SUBJECT_KIND_AGENDA,
+    SUBJECT_KIND_PROPOSAL,
     Agenda,
     AgendaStep,
     CompileResult,
@@ -38,8 +49,14 @@ from governor.plan_review import (
     Proposal,
     ProposalSection,
     SectionDecision,
+    authorize_agenda,
     compile_agenda,
+    default_events_path,
+    emit_compile_receipt,
+    read_plan_review_events,
+    write_plan_review_events,
 )
+from governor.gate_receipt import subject_hash as _subject_hash
 
 
 FIXED_TS = "2026-04-15T00:00:00+00:00"
@@ -626,6 +643,264 @@ class TestAgendaStepSerialization:
         assert restored.allowed_tools is None
         assert restored.blocked_tools is None
         assert restored.budget_ceiling is None
+
+
+# =============================================================================
+# Receipts & event sink (slice 2B)
+# =============================================================================
+
+
+@pytest.fixture
+def gov_root(tmp_path: Path) -> Path:
+    return tmp_path
+
+
+@pytest.fixture
+def receipt_system(gov_root: Path) -> GateReceiptSystem:
+    return GateReceiptSystem(gov_root)
+
+
+class TestCompileReceipt:
+    def test_gate_verdict_role(self, receipt_system: GateReceiptSystem) -> None:
+        """Compile observes narrowing — observe verdict, proposal role."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        receipt = emit_compile_receipt(result, receipt_system, timestamp=FIXED_TS)
+        assert receipt.gate == PLAN_REVIEW_COMPILE_GATE
+        assert receipt.gate == "plan_review.compile"
+        assert receipt.verdict == VERDICT_OBSERVE
+        assert receipt.receipt_role == ROLE_PROPOSAL
+
+    def test_subject_is_proposal_hash(self, receipt_system: GateReceiptSystem) -> None:
+        """Subject must be the proposal_hash, NOT the agenda_hash.
+
+        Compile is the transformation proposal_hash → agenda_hash.  The
+        subject of observation is what was transformed, not what resulted.
+        """
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        receipt = emit_compile_receipt(result, receipt_system, timestamp=FIXED_TS)
+        expected = _subject_hash(SUBJECT_KIND_PROPOSAL, result.proposal_hash.encode("utf-8"))
+        assert receipt.subject_hash == expected
+        # Negative: it is NOT the agenda hash.
+        agenda_subject = _subject_hash(SUBJECT_KIND_AGENDA, result.agenda_hash.encode("utf-8"))
+        assert receipt.subject_hash != agenda_subject
+
+    def test_evidence_contains_transformation_details(
+        self, receipt_system: GateReceiptSystem
+    ) -> None:
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        receipt = emit_compile_receipt(result, receipt_system, timestamp=FIXED_TS)
+        evidence = receipt_system.evidence_for(receipt)
+        assert evidence is not None
+        assert evidence["agenda_hash"] == result.agenda_hash
+        assert evidence["step_count"] == len(result.agenda.steps)
+        assert len(evidence["dropped"]) == len(result.dropped)
+        assert len(evidence["narrowed"]) == len(result.narrowed)
+        # Dropped preserves decision kind for downstream filtering.
+        assert evidence["dropped"][0]["kind"] == DECISION_REJECT
+        # Narrowed preserves both original and narrowed prose.
+        narr = evidence["narrowed"][0]
+        assert narr["original_goal"] == "Add rate limiting"
+        assert narr["narrowed_goal"] == "Add rate limiting to POST /login only"
+
+    def test_receipt_id_stable_across_runs(
+        self, receipt_system: GateReceiptSystem, tmp_path: Path,
+    ) -> None:
+        """Same compile → same receipt_id.  Receipts are content-addressed."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        r1 = emit_compile_receipt(result, receipt_system, timestamp=FIXED_TS)
+        # Different receipt_system (different root) + different timestamp.
+        other = GateReceiptSystem(tmp_path / "other")
+        r2 = emit_compile_receipt(result, other, timestamp=ALT_TS)
+        assert r1.receipt_id == r2.receipt_id
+
+
+class TestAuthorizeReceipt:
+    def test_gate_verdict_role(self, receipt_system: GateReceiptSystem) -> None:
+        """Authorize confers force — pass verdict, authority role."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        receipt = authorize_agenda(
+            result.agenda,
+            receipt_system,
+            authorized_by="alice@corp",
+            timestamp=FIXED_TS,
+        )
+        assert receipt.gate == PLAN_REVIEW_AUTHORIZE_GATE
+        assert receipt.gate == "plan_review.authorize"
+        assert receipt.verdict == VERDICT_PASS
+        assert receipt.receipt_role == ROLE_AUTHORITY
+
+    def test_subject_is_agenda_hash(self, receipt_system: GateReceiptSystem) -> None:
+        """Subject must be the agenda_hash — the thing gaining force."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        receipt = authorize_agenda(
+            result.agenda,
+            receipt_system,
+            authorized_by="alice@corp",
+            timestamp=FIXED_TS,
+        )
+        expected = _subject_hash(SUBJECT_KIND_AGENDA, result.agenda_hash.encode("utf-8"))
+        assert receipt.subject_hash == expected
+
+    def test_evidence_contains_authority_grant(
+        self, receipt_system: GateReceiptSystem
+    ) -> None:
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        receipt = authorize_agenda(
+            result.agenda,
+            receipt_system,
+            authorized_by="alice@corp",
+            timestamp=FIXED_TS,
+        )
+        evidence = receipt_system.evidence_for(receipt)
+        assert evidence is not None
+        assert evidence["source_proposal_hash"] == result.proposal_hash
+        assert evidence["authorized_by"] == "alice@corp"
+        # The full agenda is captured — authority is reconstructable.
+        assert evidence["agenda"]["agenda_id"] == result.agenda.agenda_id
+        restored = Agenda.from_dict(evidence["agenda"])
+        assert restored.agenda_hash() == result.agenda_hash
+
+    def test_different_authorizers_different_receipts(
+        self, receipt_system: GateReceiptSystem
+    ) -> None:
+        """authorized_by is evidence, so different authorizers → different receipts."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        r_alice = authorize_agenda(
+            result.agenda, receipt_system, authorized_by="alice", timestamp=FIXED_TS,
+        )
+        r_bob = authorize_agenda(
+            result.agenda, receipt_system, authorized_by="bob", timestamp=FIXED_TS,
+        )
+        assert r_alice.receipt_id != r_bob.receipt_id
+        # But the subject (agenda_hash) is identical.
+        assert r_alice.subject_hash == r_bob.subject_hash
+
+
+class TestReceiptLinkage:
+    def test_transform_linkage(self, receipt_system: GateReceiptSystem) -> None:
+        """Compile receipt evidence.agenda_hash == agenda.agenda_hash().
+
+        Follows the transformation chain: compile receipt attests that
+        proposal_hash produced agenda_hash, and the agenda itself can be
+        fetched (later authorized) by that hash.
+        """
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        compile_receipt = emit_compile_receipt(result, receipt_system, timestamp=FIXED_TS)
+        evidence = receipt_system.evidence_for(compile_receipt)
+        assert evidence is not None
+        assert evidence["agenda_hash"] == result.agenda.agenda_hash()
+
+    def test_authority_linkage(self, receipt_system: GateReceiptSystem) -> None:
+        """Authorize receipt evidence.source_proposal_hash matches the compile
+        receipt's subject (proposal_hash).  This is the chain of custody from
+        speech → authority."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        emit_compile_receipt(result, receipt_system, timestamp=FIXED_TS)
+        auth_receipt = authorize_agenda(
+            result.agenda,
+            receipt_system,
+            authorized_by="alice",
+            timestamp=FIXED_TS,
+        )
+        auth_evidence = receipt_system.evidence_for(auth_receipt)
+        assert auth_evidence is not None
+        # The authority's cited proposal == the compile's subject.
+        assert auth_evidence["source_proposal_hash"] == result.proposal_hash
+
+    def test_receipts_queryable_by_gate(
+        self, receipt_system: GateReceiptSystem
+    ) -> None:
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        emit_compile_receipt(result, receipt_system, timestamp=FIXED_TS)
+        authorize_agenda(
+            result.agenda, receipt_system, authorized_by="alice", timestamp=FIXED_TS,
+        )
+        compile_hits = receipt_system.query(gate=PLAN_REVIEW_COMPILE_GATE)
+        auth_hits = receipt_system.query(gate=PLAN_REVIEW_AUTHORIZE_GATE)
+        assert len(compile_hits) == 1
+        assert len(auth_hits) == 1
+        assert compile_hits[0].receipt_role == ROLE_PROPOSAL
+        assert auth_hits[0].receipt_role == ROLE_AUTHORITY
+
+
+class TestEventSink:
+    def test_default_events_path(self, gov_root: Path) -> None:
+        path = default_events_path(gov_root)
+        assert path == gov_root / "events" / "plan_review.jsonl"
+
+    def test_events_written_as_jsonl(self, gov_root: Path) -> None:
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        path = default_events_path(gov_root)
+        write_plan_review_events(result.events, path)
+        assert path.exists()
+        lines = path.read_text().splitlines()
+        assert len(lines) == len(result.events)
+        for line in lines:
+            assert line.strip()
+            json.loads(line)  # each line is valid JSON
+
+    def test_event_order_preserved_agenda_compiled_last(
+        self, gov_root: Path
+    ) -> None:
+        """compile_agenda returns section events first, agenda.compiled last.
+        The sink must preserve that order."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        path = default_events_path(gov_root)
+        write_plan_review_events(result.events, path)
+        restored = read_plan_review_events(path)
+        assert [e.event_type for e in restored] == [
+            e.event_type for e in result.events
+        ]
+        assert restored[-1].event_type == EVENT_AGENDA_COMPILED
+
+    def test_events_round_trip_through_jsonl(self, gov_root: Path) -> None:
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        path = default_events_path(gov_root)
+        write_plan_review_events(result.events, path)
+        restored = read_plan_review_events(path)
+        assert len(restored) == len(result.events)
+        for original, got in zip(result.events, restored, strict=True):
+            assert got == original
+
+    def test_event_lineage_preserved(self, gov_root: Path) -> None:
+        """Section events' parent_event_id must still reference the
+        compile event after round-tripping."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        path = default_events_path(gov_root)
+        write_plan_review_events(result.events, path)
+        restored = read_plan_review_events(path)
+        compile_event = restored[-1]
+        for ev in restored[:-1]:
+            assert ev.parent_event_id == compile_event.event_id
+
+    def test_append_only_accumulates(self, gov_root: Path) -> None:
+        """Two writes append, not overwrite.  Dumb append-only — caller owns truncation."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        path = default_events_path(gov_root)
+        write_plan_review_events(result.events, path)
+        write_plan_review_events(result.events, path)
+        restored = read_plan_review_events(path)
+        assert len(restored) == 2 * len(result.events)
+
+    def test_read_missing_returns_empty(self, gov_root: Path) -> None:
+        path = default_events_path(gov_root)
+        assert read_plan_review_events(path) == []
 
 
 # =============================================================================

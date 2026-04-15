@@ -88,10 +88,11 @@ SCHEMA_VERSIONED_TYPES = [
         "module": "governor.plan_review",
         "class_name": "Agenda",
         "constant": "PLAN_REVIEW_SCHEMA_VERSION",
-        # Slice 1 kernel is in-memory only — to_dict/from_dict land in slice 2
-        # along with gate_receipt wiring. schema_version is embedded in
-        # to_canonical_dict() output (used for content-addressed hashing).
-        "factory": None,
+        "factory": lambda mod: mod.Agenda(
+            agenda_id="agenda_test",
+            source_proposal_hash="sha256:" + "0" * 64,
+            steps=(),
+        ),
     },
 ]
 

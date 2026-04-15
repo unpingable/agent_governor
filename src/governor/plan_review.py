@@ -254,6 +254,26 @@ class AgendaStep:
             d["budget_ceiling"] = self.budget_ceiling
         return d
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialized form.  Identical to canonical form — steps have no
+        fields that are identity-only labels."""
+        return self.to_canonical_dict()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AgendaStep:
+        allowed = data.get("allowed_tools")
+        blocked = data.get("blocked_tools")
+        return cls(
+            step_id=data["step_id"],
+            source_section_id=data["source_section_id"],
+            goal=data["goal"],
+            scope=data["scope"],
+            allowed_tools=tuple(allowed) if allowed is not None else None,
+            blocked_tools=tuple(blocked) if blocked is not None else None,
+            execution_mode=data["execution_mode"],
+            budget_ceiling=data.get("budget_ceiling"),
+        )
+
 
 @dataclass(frozen=True)
 class Agenda:
@@ -290,6 +310,31 @@ class Agenda:
 
     def agenda_hash(self) -> str:
         return "sha256:" + content_hash(canonical_json(self.to_canonical_dict()))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialized form.  Includes agenda_id (the human-facing label)
+        in addition to the hash-contributing fields.  Round-trip via
+        from_dict() preserves agenda_hash()."""
+        return {
+            "schema_version": PLAN_REVIEW_SCHEMA_VERSION,
+            "agenda_id": self.agenda_id,
+            "source_proposal_hash": self.source_proposal_hash,
+            "steps": [s.to_dict() for s in self.steps],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Agenda:
+        v = data.get("schema_version", 1)
+        if v > PLAN_REVIEW_SCHEMA_VERSION:
+            raise ValueError(
+                f"Agenda schema version {v} is newer than supported "
+                f"({PLAN_REVIEW_SCHEMA_VERSION}). Upgrade governor."
+            )
+        return cls(
+            agenda_id=data["agenda_id"],
+            source_proposal_hash=data["source_proposal_hash"],
+            steps=tuple(AgendaStep.from_dict(s) for s in data["steps"]),
+        )
 
 
 # =============================================================================

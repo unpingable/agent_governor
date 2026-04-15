@@ -497,6 +497,138 @@ class TestSpineInvariants:
 
 
 # =============================================================================
+# Serialization round-trip (slice 2A)
+# =============================================================================
+
+
+class TestAgendaSerialization:
+    def test_to_dict_includes_schema_version(self) -> None:
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        d = result.agenda.to_dict()
+        assert d["schema_version"] == 1
+        assert d["agenda_id"] == result.agenda.agenda_id
+        assert d["source_proposal_hash"] == result.agenda.source_proposal_hash
+
+    def test_to_dict_contains_all_steps(self) -> None:
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        d = result.agenda.to_dict()
+        assert len(d["steps"]) == len(result.agenda.steps)
+        for s, step_dict in zip(result.agenda.steps, d["steps"], strict=True):
+            assert step_dict["step_id"] == s.step_id
+            assert step_dict["source_section_id"] == s.source_section_id
+
+    def test_from_dict_rejects_future_version(self) -> None:
+        with pytest.raises(ValueError, match="newer than supported"):
+            Agenda.from_dict({
+                "schema_version": 99,
+                "agenda_id": "x",
+                "source_proposal_hash": "sha256:" + "0" * 64,
+                "steps": [],
+            })
+
+    def test_round_trip_preserves_agenda_hash(self) -> None:
+        """The critical property: serialize + deserialize must not change identity."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        original = result.agenda
+        restored = Agenda.from_dict(original.to_dict())
+        assert restored.agenda_hash() == original.agenda_hash()
+
+    def test_round_trip_preserves_all_fields(self) -> None:
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        original = result.agenda
+        restored = Agenda.from_dict(original.to_dict())
+        assert restored == original
+
+    def test_round_trip_through_json_text(self) -> None:
+        """JSON text → dict → Agenda preserves identity (true serialization path)."""
+        p = _make_proposal()
+        result = compile_agenda(p, _default_decisions(), timestamp=FIXED_TS)
+        original = result.agenda
+        text = json.dumps(original.to_dict())
+        restored = Agenda.from_dict(json.loads(text))
+        assert restored == original
+        assert restored.agenda_hash() == original.agenda_hash()
+
+    def test_round_trip_empty_agenda(self) -> None:
+        p = _make_proposal()
+        decisions = [
+            SectionDecision(section_id=s.section_id, kind=DECISION_REJECT)
+            for s in p.sections
+        ]
+        result = compile_agenda(p, decisions, timestamp=FIXED_TS)
+        restored = Agenda.from_dict(result.agenda.to_dict())
+        assert restored == result.agenda
+        assert restored.steps == ()
+        assert restored.agenda_hash() == result.agenda.agenda_hash()
+
+    def test_from_dict_accepts_missing_schema_version_as_v1(self) -> None:
+        """Forward-compat mirror of gate_receipt: missing = legacy v1."""
+        data = {
+            "agenda_id": "x",
+            "source_proposal_hash": "sha256:" + "0" * 64,
+            "steps": [],
+        }
+        restored = Agenda.from_dict(data)
+        assert restored.agenda_id == "x"
+
+
+class TestAgendaStepSerialization:
+    def _step(self, **overrides: Any) -> AgendaStep:
+        defaults = dict(
+            step_id="step_x",
+            source_section_id="x",
+            goal="g",
+            scope="sc",
+            allowed_tools=None,
+            blocked_tools=None,
+            execution_mode=MODE_INTERACTIVE,
+            budget_ceiling=None,
+        )
+        defaults.update(overrides)
+        return AgendaStep(**defaults)
+
+    def test_round_trip_minimal(self) -> None:
+        step = self._step()
+        restored = AgendaStep.from_dict(step.to_dict())
+        assert restored == step
+
+    def test_round_trip_full(self) -> None:
+        step = self._step(
+            allowed_tools=("Read", "Edit"),
+            blocked_tools=("Bash",),
+            execution_mode=MODE_AUTONOMOUS,
+            budget_ceiling={"max_files": 5},
+        )
+        restored = AgendaStep.from_dict(step.to_dict())
+        assert restored == step
+        assert isinstance(restored.allowed_tools, tuple)
+        assert isinstance(restored.blocked_tools, tuple)
+
+    def test_tool_tuples_preserved_across_json(self) -> None:
+        """JSON turns tuples into lists; from_dict must restore tuples."""
+        step = self._step(allowed_tools=("A", "B"), blocked_tools=("C",))
+        restored = AgendaStep.from_dict(json.loads(json.dumps(step.to_dict())))
+        assert restored.allowed_tools == ("A", "B")
+        assert restored.blocked_tools == ("C",)
+        assert restored == step
+
+    def test_optional_fields_remain_none(self) -> None:
+        step = self._step()
+        d = step.to_dict()
+        assert "allowed_tools" not in d
+        assert "blocked_tools" not in d
+        assert "budget_ceiling" not in d
+        restored = AgendaStep.from_dict(d)
+        assert restored.allowed_tools is None
+        assert restored.blocked_tools is None
+        assert restored.budget_ceiling is None
+
+
+# =============================================================================
 # Golden fixtures — catch "harmless refactor changed semantics" immediately
 # =============================================================================
 

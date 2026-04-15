@@ -120,6 +120,7 @@ These rules are mechanically enforced by `tests/test_standards.py`:
 | `clud` | `CLUD_SCHEMA_VERSION` | `CludResult` |
 | `status_rollup` | `ROLLUP_SCHEMA_VERSION` | `StatusRollup` |
 | `context_manifest` | `MANIFEST_SCHEMA_VERSION` | `ContextManifest` |
+| `plan_review` | `PLAN_REVIEW_SCHEMA_VERSION` | `Agenda` |
 
 ### Known Gaps
 

@@ -1,0 +1,63 @@
+{
+  "agenda": {
+    "source_proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+    "steps": [
+      {
+        "allowed_tools": [
+          "Read",
+          "Edit"
+        ],
+        "execution_mode": "interactive",
+        "goal": "Refactor auth middleware",
+        "scope": "src/auth/*.py",
+        "source_section_id": "s1",
+        "step_id": "step_s1"
+      },
+      {
+        "allowed_tools": [
+          "Read"
+        ],
+        "blocked_tools": [
+          "Bash"
+        ],
+        "budget_ceiling": {
+          "max_duration_s": 120,
+          "max_files": 5
+        },
+        "execution_mode": "autonomous",
+        "goal": "Add rate limiting",
+        "scope": "src/api/rate.py",
+        "source_section_id": "s2",
+        "step_id": "step_s2"
+      },
+      {
+        "execution_mode": "dry_run",
+        "goal": "Write blog post",
+        "scope": "docs/blog/",
+        "source_section_id": "s3",
+        "step_id": "step_s3"
+      }
+    ]
+  },
+  "agenda_hash": "sha256:6027ffc4f657dedefbb31471279bdab65548f32a493ba1c67a9cced43707d864",
+  "dropped": [],
+  "events": [
+    {
+      "event_id": "sha256:becfefcc31bc924f5a17be4ea8e699f72299e7a58741c3877a9f223c1a78b0e6",
+      "event_type": "agenda.compiled",
+      "parent_event_id": null,
+      "payload": {
+        "agenda_hash": "sha256:6027ffc4f657dedefbb31471279bdab65548f32a493ba1c67a9cced43707d864",
+        "agenda_id": "agenda_plan-001_r1",
+        "dropped_count": 0,
+        "narrowed_count": 0,
+        "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+        "proposal_id": "plan-001",
+        "proposal_revision": 1,
+        "step_count": 3
+      }
+    }
+  ],
+  "narrowed": [],
+  "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39"
+}

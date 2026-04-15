@@ -1,0 +1,76 @@
+{
+  "agenda": {
+    "source_proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+    "steps": []
+  },
+  "agenda_hash": "sha256:f9a206850c185be06aba4ea198862bb7fa59095a65062a2563927d434713f107",
+  "dropped": [
+    {
+      "kind": "reject",
+      "reason": "no to s1",
+      "section_id": "s1"
+    },
+    {
+      "kind": "reject",
+      "reason": "no to s2",
+      "section_id": "s2"
+    },
+    {
+      "kind": "reject",
+      "reason": "no to s3",
+      "section_id": "s3"
+    }
+  ],
+  "events": [
+    {
+      "event_id": "sha256:bcfb493eedff56541a543a7c3a2f18c1b3a723bb39d5cac249236de6fe3370dc",
+      "event_type": "agenda.section_dropped",
+      "parent_event_id": "sha256:22a51c22b52896572914071b9e366e471fd714a7ef3c11c2037e72c100760a58",
+      "payload": {
+        "decision_kind": "reject",
+        "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+        "reason": "no to s1",
+        "section_id": "s1"
+      }
+    },
+    {
+      "event_id": "sha256:22fb4185b57b3e1677bc490a2211a48a50b0e05986bd6617ae951937d1d83f3f",
+      "event_type": "agenda.section_dropped",
+      "parent_event_id": "sha256:22a51c22b52896572914071b9e366e471fd714a7ef3c11c2037e72c100760a58",
+      "payload": {
+        "decision_kind": "reject",
+        "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+        "reason": "no to s2",
+        "section_id": "s2"
+      }
+    },
+    {
+      "event_id": "sha256:c2d7f1a6faec172436b5cdcb15e59ec8e53fa63cf647f0e9a0f8857af8fd4f7e",
+      "event_type": "agenda.section_dropped",
+      "parent_event_id": "sha256:22a51c22b52896572914071b9e366e471fd714a7ef3c11c2037e72c100760a58",
+      "payload": {
+        "decision_kind": "reject",
+        "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+        "reason": "no to s3",
+        "section_id": "s3"
+      }
+    },
+    {
+      "event_id": "sha256:22a51c22b52896572914071b9e366e471fd714a7ef3c11c2037e72c100760a58",
+      "event_type": "agenda.compiled",
+      "parent_event_id": null,
+      "payload": {
+        "agenda_hash": "sha256:f9a206850c185be06aba4ea198862bb7fa59095a65062a2563927d434713f107",
+        "agenda_id": "agenda_plan-001_r1",
+        "dropped_count": 3,
+        "narrowed_count": 0,
+        "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+        "proposal_id": "plan-001",
+        "proposal_revision": 1,
+        "step_count": 0
+      }
+    }
+  ],
+  "narrowed": [],
+  "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39"
+}

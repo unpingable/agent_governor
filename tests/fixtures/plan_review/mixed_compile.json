@@ -1,0 +1,82 @@
+{
+  "agenda": {
+    "source_proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+    "steps": [
+      {
+        "execution_mode": "interactive",
+        "goal": "Refactor auth middleware",
+        "scope": "src/auth/*.py",
+        "source_section_id": "s1",
+        "step_id": "step_s1"
+      },
+      {
+        "execution_mode": "interactive",
+        "goal": "Add rate limiting to POST /login only",
+        "scope": "src/api/rate.py (login endpoint only)",
+        "source_section_id": "s2",
+        "step_id": "step_s2"
+      }
+    ]
+  },
+  "agenda_hash": "sha256:aea3f239219d4d18d7129236cb20961e9349569d8762f6f2be4ae83c6dd967f2",
+  "dropped": [
+    {
+      "kind": "reject",
+      "reason": "out of scope",
+      "section_id": "s3"
+    }
+  ],
+  "events": [
+    {
+      "event_id": "sha256:75f7a71c81de6abd1dd2c678f1bf8d9b92af8017364e11f8670d9055cb62427e",
+      "event_type": "agenda.section_narrowed",
+      "parent_event_id": "sha256:64cdbc568bb548f8ac01db55f1d3dbb5aa57d1314e6f17af5b07745e77305a80",
+      "payload": {
+        "narrowed_goal": "Add rate limiting to POST /login only",
+        "narrowed_scope": "src/api/rate.py (login endpoint only)",
+        "original_goal": "Add rate limiting",
+        "original_scope": "src/api/rate.py",
+        "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+        "reason": "tighten scope",
+        "section_id": "s2"
+      }
+    },
+    {
+      "event_id": "sha256:b681a0c9b2cb197ba4f0bbd00291bf7c30861cf4d69757b46f2ec95f01450fa1",
+      "event_type": "agenda.section_dropped",
+      "parent_event_id": "sha256:64cdbc568bb548f8ac01db55f1d3dbb5aa57d1314e6f17af5b07745e77305a80",
+      "payload": {
+        "decision_kind": "reject",
+        "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+        "reason": "out of scope",
+        "section_id": "s3"
+      }
+    },
+    {
+      "event_id": "sha256:64cdbc568bb548f8ac01db55f1d3dbb5aa57d1314e6f17af5b07745e77305a80",
+      "event_type": "agenda.compiled",
+      "parent_event_id": null,
+      "payload": {
+        "agenda_hash": "sha256:aea3f239219d4d18d7129236cb20961e9349569d8762f6f2be4ae83c6dd967f2",
+        "agenda_id": "agenda_plan-001_r1",
+        "dropped_count": 1,
+        "narrowed_count": 1,
+        "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39",
+        "proposal_id": "plan-001",
+        "proposal_revision": 1,
+        "step_count": 2
+      }
+    }
+  ],
+  "narrowed": [
+    {
+      "narrowed_goal": "Add rate limiting to POST /login only",
+      "narrowed_scope": "src/api/rate.py (login endpoint only)",
+      "original_goal": "Add rate limiting",
+      "original_scope": "src/api/rate.py",
+      "reason": "tighten scope",
+      "section_id": "s2"
+    }
+  ],
+  "proposal_hash": "sha256:31bd5baf02c52f03d678de490315db7723156df3cf19a855f9884678e8788c39"
+}

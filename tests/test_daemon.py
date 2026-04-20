@@ -1074,6 +1074,11 @@ class TestAllMethodsRegistered:
         "sessions.create",
         "sessions.delete",
         "sessions.get",
+        "task.claim",
+        "task.heartbeat",
+        "task.complete",
+        "task.list",
+        "task.cancel",
         "intent.templates",
         "intent.schema",
         "intent.validate",
@@ -1142,7 +1147,7 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 82
+        assert total == 87
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1168,6 +1173,10 @@ class TestMethodClassification:
     EXPECTED_MUTATING = {
         "sessions.create",
         "sessions.delete",
+        "task.claim",
+        "task.heartbeat",
+        "task.complete",
+        "task.cancel",
         "intent.compile",
         "commit.fix",
         "commit.revise",

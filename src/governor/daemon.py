@@ -408,6 +408,24 @@ class DaemonState:
         self._chain_mode: str | None = None
         self._signal_store = None
         self._runtime_supervisor = None
+        self._storage = None
+        self._permission_manager = None
+
+    @property
+    def storage(self):
+        """Lazy-loaded SQLite storage backend (multi-agent v2)."""
+        if self._storage is None:
+            from .storage import get_storage
+            self._storage = get_storage(self.governor_dir)
+        return self._storage
+
+    @property
+    def permission_manager(self):
+        """Lazy-loaded permission manager (reads config.toml)."""
+        if self._permission_manager is None:
+            from .permissions import PermissionManager
+            self._permission_manager = PermissionManager(self.governor_dir)
+        return self._permission_manager
 
     @property
     def chain_mode(self) -> str:
@@ -1108,6 +1126,91 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         if capsule is None:
             return None
         return capsule.to_dict()
+
+    # --- Tasks (work reservations) ---
+
+    async def task_claim(params: dict) -> dict:
+        from . import reservations
+        agent_id = params.get("agent_id")
+        task = params.get("task")
+        scope = params.get("scope")
+        if not agent_id:
+            raise ValueError("Missing required param: agent_id")
+        if not task:
+            raise ValueError("Missing required param: task")
+        if scope is None:
+            raise ValueError("Missing required param: scope")
+        if isinstance(scope, str):
+            scope_paths = [p.strip() for p in scope.split(",") if p.strip()]
+        elif isinstance(scope, list):
+            scope_paths = [str(p).strip() for p in scope if str(p).strip()]
+        else:
+            raise TypeError("scope must be a list or comma-separated string")
+        eta_minutes = int(params.get("eta_minutes", 30))
+        return reservations.claim_reservation(
+            state.storage,
+            state.permission_manager,
+            agent_id=agent_id,
+            task=task,
+            scope_paths=scope_paths,
+            eta_minutes=eta_minutes,
+        )
+
+    async def task_heartbeat(params: dict) -> dict:
+        from . import reservations
+        agent_id = params.get("agent_id")
+        task_id = params.get("task_id")
+        if not agent_id:
+            raise ValueError("Missing required param: agent_id")
+        if not task_id:
+            raise ValueError("Missing required param: task_id")
+        extend_minutes = int(params.get("extend_minutes", 30))
+        return reservations.heartbeat_reservation(
+            state.storage,
+            agent_id=agent_id,
+            task_id=task_id,
+            extend_minutes=extend_minutes,
+        )
+
+    async def task_complete(params: dict) -> dict:
+        from . import reservations
+        agent_id = params.get("agent_id")
+        task_id = params.get("task_id")
+        if not agent_id:
+            raise ValueError("Missing required param: agent_id")
+        if not task_id:
+            raise ValueError("Missing required param: task_id")
+        proposal_id = params.get("proposal_id")
+        return reservations.complete_reservation(
+            state.storage,
+            agent_id=agent_id,
+            task_id=task_id,
+            proposal_id=proposal_id,
+        )
+
+    async def task_list(params: dict) -> list:
+        from . import reservations
+        agent_id = params.get("agent_id")
+        active_only = bool(params.get("active_only", False))
+        return reservations.list_reservations(
+            state.storage,
+            agent_id=agent_id,
+            active_only=active_only,
+        )
+
+    async def task_cancel(params: dict) -> dict:
+        from . import reservations
+        agent_id = params.get("agent_id")
+        task_id = params.get("task_id")
+        if not agent_id:
+            raise ValueError("Missing required param: agent_id")
+        if not task_id:
+            raise ValueError("Missing required param: task_id")
+        return reservations.cancel_reservation(
+            state.storage,
+            agent_id=agent_id,
+            task_id=task_id,
+        )
 
     # --- Intent ---
 
@@ -1899,6 +2002,12 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("sessions.create", sessions_create, mutating=True)
     dispatcher.register("sessions.delete", sessions_delete, mutating=True)
     dispatcher.register("sessions.get", sessions_get)
+
+    dispatcher.register("task.claim", task_claim, mutating=True)
+    dispatcher.register("task.heartbeat", task_heartbeat, mutating=True)
+    dispatcher.register("task.complete", task_complete, mutating=True)
+    dispatcher.register("task.list", task_list)
+    dispatcher.register("task.cancel", task_cancel, mutating=True)
 
     dispatcher.register("intent.templates", intent_templates)
     dispatcher.register("intent.schema", intent_schema)

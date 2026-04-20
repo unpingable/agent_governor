@@ -111,9 +111,34 @@ authority_plane:
 `degraded` is deliberately one state covering multiple shapes
 (stale policy, unavailable approval, unresolvable `policy_id`).
 Each shape names its *reason* in the receipt so "degraded" does
-not quietly overload into "absent." Future sub-states may graduate
-out of `degraded` when their handling diverges enough to justify
-separate enum values.
+not quietly overload into "absent."
+
+**Degraded-state split criterion:** `authority_plane=degraded`
+remains a single state unless a subclass introduces materially
+different execution handling, operator meaning, or policy
+consequence. Candidate divergence axes include evidence, authority,
+lineage, and enforcement. Subdivision is justified only by stable
+behavioral divergence, not by descriptive nuance alone. The *reason*
+field on receipts carries the distinctions in the meantime.
+
+**Tracking substrate:** accumulate divergence observations in
+Continuity (scope: `agent_gov`) rather than inline in code or prose.
+Minimum incident vocabulary:
+
+- `axis`: `evidence | authority | lineage | enforcement`
+- `observed_symptom`: what went wrong in this instance
+- `handling_difference`: what the system did differently (vs. other
+  degraded cases)
+- `operator_consequence`: what changed for the human
+- `policy_consequence`: what changed in authorization / standing /
+  routing
+- `receipt_lineage`: parent receipt IDs covering the incident
+- `split_signal`: `no | maybe | yes`
+
+This spec defines *when* to split; Continuity records *whether the
+condition has been met*. Continuity is the evidence journal for the
+rule, not a replacement ontology — it does not itself justify
+subdivision.
 
 ## Claims This Gap Makes Explicit
 

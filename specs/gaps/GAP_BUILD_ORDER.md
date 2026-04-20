@@ -378,6 +378,30 @@ All specs honor the invariants in `GAP_INVARIANTS.md`:
 5. **No temporary adapters** — v2 signals emit via SignalEnvelope or are marked `local_only` (deleted in v3)
 6. **Receipt integrity** — content-addressed IDs, per-run hash chains, epoch roots at compaction boundaries
 
+## Constitutional Substrate — Standing-Class Validator (Apr 2026)
+
+Doctrine in `docs/doctrine/{advisory_vs_constitutional_power, standing_and_receipts, validator_contract}.md` and ADR 0006 establish the standing-class lattice (OBSERVE → INTERPRET → RECOMMEND → AUTHORIZE → EXECUTE → POLICY_DECLARE) and the validator contract that enforces it.
+
+**Hard rule: implementation is blocked until Q1–Q4 in `GOV_GAP_VALIDATOR_INTEGRATION_001` are ratified.** A question deferred to implementation becomes policy declared by whoever writes the code.
+
+| Order | Spec | What | Depends On | Status |
+|-------|------|------|------------|--------|
+| C1 | `GOV_GAP_VALIDATOR_INTEGRATION_001` | Five integration questions (kernel composition, subject_derivation enum, exception-class registry, validator provenance, fallback behavior) | doctrine + ADR 0006 | **Q1–Q4 ratified 2026-04-19; Q5 fallbacks collapse with C2** |
+| C1.Q1 | `docs/doctrine/decisions/Q1-kernel-composition.md` | Standing-class receipts emit through `receipt_kernel` (Option A); StageGraph unchanged; Q1.A/Q1.B deferred as implementation choices | Q1 falsification pass | **ratified 2026-04-19** |
+| C1.Q2 | `docs/doctrine/decisions/Q2-subject-derivation.md` | Four-value closed enum (`same_subject`, `instance_of`, `aggregation_of`, `scope_narrowing`) with `policy_declaration`-gated extension (Option B); `basis` prose is non-operative; Q2.A/Q2.B deferred | doctrine + ADR 0006 | **ratified 2026-04-19** |
+| C1.Q3 | `docs/doctrine/decisions/Q3-exception-class-registry.md` | Closed governed exception-class registry (Option A); initial registry empty; `OBSERVE → AUTHORIZE` only allowed compression direction; per-class telemetry; mandatory expiry; Q3.A/Q3.B/Q3.C deferred | doctrine + ADR 0006 | **ratified 2026-04-19** |
+| C1.Q4 | `docs/doctrine/decisions/Q4-validator-provenance.md` | Validator versions are governed as `policy_declaration`s (Option A); mandatory `validation` receipt fields frozen; ruleset_hash change without version bump fails closed | doctrine + ADR 0006 | **ratified 2026-04-19** |
+| C2 | (validator implementation) | Standing-class chain validator | Q1–Q4 ratified | **unblocked (Q5 pre-ratification fallbacks must be removed in same change, not retrofitted)** |
+| C3 | (receipt envelope schema) | Canonical envelope for standing-class receipts | Validator landed | **blocked on C2** |
+
+### Downstream subsystems depending on the constitutional substrate
+
+| Spec | What | Depends On | Status |
+|------|------|------------|--------|
+| `GOV_GAP_GOVERNED_LESSONS_SCOPE_001` | Scope-only gap for governed-lessons subsystem (continuity vs lessons vs bindings); reduces a Chatty subsystem proposal to its boundary; full ratification deferred to follow-on `GOV_GAP_GOVERNED_LESSONS_001` | Q1, Q2, Q4 ratified; structured evidence/promotion gap; continuity-bearing systems gap | **draft (scope only; full subsystem questions deferred)** |
+
+C2 and C3 must not begin before their dependencies. Schema work in particular is the sneakiest queue-jumper — it feels like neutral plumbing while baking half the policy into the shape layer. See gap spec §"Schema discipline."
+
 ## v2.x — Threat Intelligence Hardening (Feb 2026)
 
 From threat intelligence review mapping real-world LLM attack patterns to

@@ -491,6 +491,7 @@ class RegimeDetector:
         self.current_regime = OperationalRegime.ELASTIC
         self.transition_history: list[RegimeTransition] = []
         self.last_signals: RegimeSignals | None = None
+        self.last_signals_at: datetime | None = None
 
         # Metrics collection
         self.metrics = RegimeMetrics() if collect_metrics else None
@@ -502,6 +503,7 @@ class RegimeDetector:
         Returns (regime, list_of_trigger_reasons).
         """
         self.last_signals = signals
+        self.last_signals_at = datetime.now(timezone.utc)
         t = self.thresholds
 
         # Check UNSTABLE first (highest priority)
@@ -606,6 +608,7 @@ class RegimeDetector:
             "recommended_action": self.get_recommended_action(),
             "transitions": len(self.transition_history),
             "last_signals": self.last_signals.to_dict() if self.last_signals else None,
+            "last_signals_at": self.last_signals_at.isoformat() if self.last_signals_at else None,
             "metrics": self.metrics.get_summary() if self.metrics else None,
         }
 
@@ -619,6 +622,8 @@ class RegimeDetector:
             "current_regime": self.current_regime.value,
             "thresholds": self.thresholds.to_dict(),
             "transition_history": [t.to_dict() for t in self.transition_history],
+            "last_signals": self.last_signals.to_dict() if self.last_signals else None,
+            "last_signals_at": self.last_signals_at.isoformat() if self.last_signals_at else None,
             "metrics": self.metrics.to_dict() if self.metrics else None,
         }
 
@@ -631,6 +636,13 @@ class RegimeDetector:
         detector.transition_history = [
             RegimeTransition.from_dict(t) for t in data.get("transition_history", [])
         ]
+        # Restore last observation (backward-compat: keys absent on older state files)
+        last_signals_data = data.get("last_signals")
+        if last_signals_data is not None:
+            detector.last_signals = RegimeSignals(**last_signals_data)
+        last_signals_at_str = data.get("last_signals_at")
+        if last_signals_at_str is not None:
+            detector.last_signals_at = datetime.fromisoformat(last_signals_at_str)
         # Restore partial metrics if present
         if data.get("metrics") and detector.metrics:
             detector.metrics.turn_counter = data["metrics"].get("turn_counter", 0)

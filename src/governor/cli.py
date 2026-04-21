@@ -5124,6 +5124,30 @@ def regime(ctx: click.Context) -> None:
     pass
 
 
+def _format_observation_age(iso_ts: str | None) -> str:
+    """Render an ISO-8601 observation timestamp as a human relative age."""
+    if iso_ts is None:
+        return "age unknown"
+    from datetime import datetime, timezone
+    try:
+        observed = datetime.fromisoformat(iso_ts)
+    except ValueError:
+        return "age unknown"
+    delta = datetime.now(timezone.utc) - observed
+    secs = int(delta.total_seconds())
+    if secs < 0:
+        return "just now"
+    if secs < 5:
+        return "just now"
+    if secs < 60:
+        return f"{secs}s ago"
+    if secs < 3600:
+        return f"{secs // 60}m ago"
+    if secs < 86400:
+        return f"{secs // 3600}h ago"
+    return f"{secs // 86400}d ago"
+
+
 @regime.command("status")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
@@ -5141,7 +5165,8 @@ def regime_status(ctx: click.Context, as_json: bool) -> None:
         return
 
     regime_val = state["current_regime"]
-    signals = state["current_signals"]
+    signals = state["last_signals"]
+    observed_at = state.get("last_signals_at")
 
     # Color-code the regime
     regime_colors = {
@@ -5154,12 +5179,11 @@ def regime_status(ctx: click.Context, as_json: bool) -> None:
     color = regime_colors.get(regime_val, "white")
     click.echo(f"Regime: {click.style(regime_val.upper(), fg=color, bold=True)}")
 
-    if state["warnings"]:
-        click.echo("\nWarnings:")
-        for warning in state["warnings"]:
-            click.echo(f"  - {warning}")
+    if signals is None:
+        click.echo("\nSignals: none recorded yet")
+        return
 
-    click.echo("\nSignals:")
+    click.echo(f"\nSignals (observed {_format_observation_age(observed_at)}):")
     click.echo(f"  hysteresis:             {signals['hysteresis']:.3f}")
     click.echo(f"  relaxation_time:        {signals['relaxation_time']:.3f}")
     click.echo(f"  tool_gain:              {signals['tool_gain']:.3f}")
@@ -5218,12 +5242,22 @@ def regime_signals(ctx: click.Context, as_json: bool) -> None:
     gov_dir = ensure_initialized(ctx)
     detector = get_regime_detector(gov_dir)
 
-    signals = detector.current_signals.to_dict()
+    if detector.last_signals is None:
+        if as_json:
+            click.echo(json.dumps({"signals": None, "observed_at": None}))
+        else:
+            click.echo("No signals recorded yet.")
+        return
+
+    signals = detector.last_signals.to_dict()
+    observed_at_iso = (
+        detector.last_signals_at.isoformat() if detector.last_signals_at else None
+    )
 
     if as_json:
-        click.echo(json.dumps(signals, indent=2))
+        click.echo(json.dumps({"signals": signals, "observed_at": observed_at_iso}, indent=2))
     else:
-        click.echo("Current Signals:\n")
+        click.echo(f"Current Signals (observed {_format_observation_age(observed_at_iso)}):\n")
         for key, value in sorted(signals.items()):
             click.echo(f"  {key}: {value}")
 
@@ -5251,8 +5285,8 @@ def regime_update(
     gov_dir = ensure_initialized(ctx)
     detector = get_regime_detector(gov_dir)
 
-    # Build updated signals
-    current = detector.current_signals
+    # Build updated signals (fall back to defaults if no prior signals recorded)
+    current = detector.last_signals or RegimeSignals()
     new_signals = RegimeSignals(
         hysteresis=hysteresis if hysteresis is not None else current.hysteresis,
         relaxation_time=relaxation if relaxation is not None else current.relaxation_time,
@@ -5267,18 +5301,18 @@ def regime_update(
     )
 
     old_regime = detector.current_regime
-    new_regime, warnings = detector.update(new_signals)
+    transition = detector.update(new_signals)
 
     save_regime_detector(gov_dir, detector)
 
-    if new_regime != old_regime:
-        click.echo(f"Regime transition: {old_regime.value} -> {new_regime.value}")
-        if warnings:
-            click.echo("Warnings:")
-            for w in warnings:
-                click.echo(f"  - {w}")
+    if transition is not None:
+        click.echo(f"Regime transition: {old_regime.value} -> {transition.to_regime.value}")
+        if transition.trigger_reasons:
+            click.echo("Trigger reasons:")
+            for reason in transition.trigger_reasons:
+                click.echo(f"  - {reason}")
     else:
-        click.echo(f"Regime unchanged: {new_regime.value}")
+        click.echo(f"Regime unchanged: {detector.current_regime.value}")
 
 
 @regime.command("thresholds")

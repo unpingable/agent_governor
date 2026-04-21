@@ -797,3 +797,154 @@ class TestClassifyAction:
 
     def test_default_is_read(self):
         assert classify_action("unknown operation") == ActionClass.READ
+
+
+# =============================================================================
+# CLI Smoke Tests
+# =============================================================================
+# Regression coverage for stale-key contract drift between cli.py and
+# RegimeDetector.get_state(). See docs/RECEIPT_SNAPSHOT_001.md side finding.
+
+class TestRegimeCliSmoke:
+    """Smoke tests for `governor regime {status,signals,update}` commands."""
+
+    @pytest.fixture
+    def runner(self):
+        from click.testing import CliRunner
+        return CliRunner()
+
+    @pytest.fixture
+    def gov_project(self, tmp_path, runner):
+        from governor.cli import cli
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["init"])
+            assert result.exit_code == 0
+            yield
+
+    def test_status_with_no_signals_recorded(self, runner, gov_project):
+        """`regime status` must not crash when no signals have been observed."""
+        from governor.cli import cli
+        result = runner.invoke(cli, ["regime", "status"])
+        assert result.exit_code == 0, result.output
+        assert "ELASTIC" in result.output
+        assert "none recorded" in result.output
+
+    def test_status_json_with_no_signals(self, runner, gov_project):
+        """`regime status --json` must produce valid JSON with last_signals=null."""
+        import json
+        from governor.cli import cli
+        result = runner.invoke(cli, ["regime", "status", "--json"])
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["current_regime"] == "elastic"
+        assert data["last_signals"] is None
+
+    def test_signals_with_no_signals_recorded(self, runner, gov_project):
+        """`regime signals` must not crash when no signals have been observed."""
+        from governor.cli import cli
+        result = runner.invoke(cli, ["regime", "signals"])
+        assert result.exit_code == 0, result.output
+        assert "No signals recorded" in result.output
+
+    def test_signals_json_with_no_signals(self, runner, gov_project):
+        """`regime signals --json` must emit null fields when no signals observed."""
+        import json
+        from governor.cli import cli
+        result = runner.invoke(cli, ["regime", "signals", "--json"])
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data == {"signals": None, "observed_at": None}
+
+    def test_update_from_empty_state(self, runner, gov_project):
+        """`regime update` must not crash when no prior signals exist."""
+        from governor.cli import cli
+        result = runner.invoke(cli, ["regime", "update", "--tool-gain", "0.6"])
+        assert result.exit_code == 0, result.output
+        assert "elastic" in result.output.lower()
+
+    def test_signals_persist_across_invocations(self, runner, gov_project):
+        """Signals set by `regime update` must survive a fresh CLI invocation."""
+        from governor.cli import cli
+
+        update_result = runner.invoke(cli, ["regime", "update", "--tool-gain", "0.7"])
+        assert update_result.exit_code == 0, update_result.output
+
+        # Fresh process: just status, no prior in-memory state.
+        status_result = runner.invoke(cli, ["regime", "status"])
+        assert status_result.exit_code == 0, status_result.output
+        assert "tool_gain:              0.700" in status_result.output
+        assert "observed" in status_result.output  # age annotation present
+
+    def test_status_json_includes_observation_timestamp(self, runner, gov_project):
+        """JSON status must expose `last_signals_at` as ISO-8601 once observed."""
+        import json
+        from datetime import datetime
+        from governor.cli import cli
+
+        runner.invoke(cli, ["regime", "update", "--tool-gain", "0.5"])
+        result = runner.invoke(cli, ["regime", "status", "--json"])
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["last_signals"] is not None
+        assert data["last_signals_at"] is not None
+        # Must parse as a real timestamp, not a placeholder.
+        datetime.fromisoformat(data["last_signals_at"])
+
+
+# =============================================================================
+# Persistence Roundtrip Tests
+# =============================================================================
+# Save→load roundtrip must not silently discard observation state.
+# See docs/RECEIPT_SNAPSHOT_001.md.
+
+class TestRegimeDetectorPersistenceRoundtrip:
+    """Roundtrip integrity for `RegimeDetector.to_dict` / `from_dict`."""
+
+    def test_roundtrip_preserves_last_signals(self):
+        """Signals observed before save must survive load."""
+        d1 = RegimeDetector()
+        observed = RegimeSignals(tool_gain=0.85, hysteresis=0.4)
+        d1.classify(observed)
+
+        d2 = RegimeDetector.from_dict(d1.to_dict())
+        assert d2.last_signals is not None
+        assert d2.last_signals.tool_gain == 0.85
+        assert d2.last_signals.hysteresis == 0.4
+
+    def test_roundtrip_preserves_observation_timestamp(self):
+        """Observation timestamp must survive serialization."""
+        d1 = RegimeDetector()
+        d1.classify(RegimeSignals(tool_gain=0.5))
+        original_ts = d1.last_signals_at
+
+        d2 = RegimeDetector.from_dict(d1.to_dict())
+        assert d2.last_signals_at == original_ts
+
+    def test_roundtrip_with_no_signals_yields_none(self):
+        """A detector that never observed signals must roundtrip to no signals."""
+        d1 = RegimeDetector()
+        d2 = RegimeDetector.from_dict(d1.to_dict())
+        assert d2.last_signals is None
+        assert d2.last_signals_at is None
+
+    def test_classify_stamps_observation_time(self):
+        """`classify()` must record an observation timestamp."""
+        d = RegimeDetector()
+        assert d.last_signals_at is None
+        d.classify(RegimeSignals(tool_gain=0.5))
+        assert d.last_signals_at is not None
+        assert d.last_signals_at.tzinfo is not None  # timezone-aware
+
+    def test_backward_compat_load_without_signal_keys(self):
+        """Older state files without last_signals/last_signals_at must load cleanly."""
+        # Simulate a pre-persistence state file.
+        legacy_dict = {
+            "current_regime": "warm",
+            "thresholds": RegimeThresholds().to_dict(),
+            "transition_history": [],
+            "metrics": None,
+        }
+        d = RegimeDetector.from_dict(legacy_dict)
+        assert d.current_regime == OperationalRegime.WARM
+        assert d.last_signals is None
+        assert d.last_signals_at is None

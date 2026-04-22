@@ -55,5 +55,11 @@ This note is not itself a ratification. It is an open future-work flag.
 | `decision.validator_integration.q2` | [Q2-subject-derivation.md](Q2-subject-derivation.md) | 2026-04-19 |
 | `decision.validator_integration.q3` | [Q3-exception-class-registry.md](Q3-exception-class-registry.md) | 2026-04-19 |
 | `decision.validator_integration.q4` | [Q4-validator-provenance.md](Q4-validator-provenance.md) | 2026-04-19 |
+| `decision.validator.v0_1_0` | [validator-v0_1_0.md](validator-v0_1_0.md) | 2026-04-22 |
 
-All four Q1–Q4 constitutional blockers are ratified. Validator implementation (gap spec C2) is unblocked. Q5's pre-ratification fallbacks are removed (not retrofitted) in the same change that introduces C2.
+All four Q1–Q4 constitutional blockers are ratified. Validator implementation
+(gap spec C2) shipped against them; the validator's own bootstrap
+policy_declaration is `decision.validator.v0_1_0` (the first sanctioned
+bootstrap hole, bounded by `expected_ruleset_hash` and Q4 supersession
+rules). Q5 pre-ratification fallbacks were never introduced — the
+validator landed with the ratified rules as final.

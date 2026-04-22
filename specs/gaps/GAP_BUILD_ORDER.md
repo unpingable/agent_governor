@@ -391,8 +391,9 @@ Doctrine in `docs/doctrine/{advisory_vs_constitutional_power, standing_and_recei
 | C1.Q2 | `docs/doctrine/decisions/Q2-subject-derivation.md` | Four-value closed enum (`same_subject`, `instance_of`, `aggregation_of`, `scope_narrowing`) with `policy_declaration`-gated extension (Option B); `basis` prose is non-operative; Q2.A/Q2.B deferred | doctrine + ADR 0006 | **ratified 2026-04-19** |
 | C1.Q3 | `docs/doctrine/decisions/Q3-exception-class-registry.md` | Closed governed exception-class registry (Option A); initial registry empty; `OBSERVE → AUTHORIZE` only allowed compression direction; per-class telemetry; mandatory expiry; Q3.A/Q3.B/Q3.C deferred | doctrine + ADR 0006 | **ratified 2026-04-19** |
 | C1.Q4 | `docs/doctrine/decisions/Q4-validator-provenance.md` | Validator versions are governed as `policy_declaration`s (Option A); mandatory `validation` receipt fields frozen; ruleset_hash change without version bump fails closed | doctrine + ADR 0006 | **ratified 2026-04-19** |
-| C2 | (validator implementation) | Standing-class chain validator | Q1–Q4 ratified | **unblocked (Q5 pre-ratification fallbacks must be removed in same change, not retrofitted)** |
-| C3 | (receipt envelope schema) | Canonical envelope for standing-class receipts | Validator landed | **blocked on C2** |
+| C2 | `src/governor/standing/` + `tests/test_standing_validator.py` | Standing-class chain validator (parentage/transition, policy registry, chain integrity, subject_derivation enum, exception-class admissibility, validation receipt provenance). No Q5 fallbacks introduced. | Q1–Q4 ratified | **shipped 2026-04-22 (32 tests)** |
+| C2.bootstrap | `docs/doctrine/decisions/validator-v0_1_0.md` | Bootstrap policy_declaration for validator v0.1.0; closes Q4 chicken-and-egg with one bounded sanctioned hole | C2 | **ratified 2026-04-22** |
+| C3 | (receipt envelope schema) | Canonical envelope for standing-class receipts | Validator landed | **unblocked** |
 
 ### Downstream subsystems depending on the constitutional substrate
 

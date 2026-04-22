@@ -396,6 +396,16 @@ Doctrine in `docs/doctrine/{advisory_vs_constitutional_power, standing_and_recei
 | C3 | `src/governor/standing/{schema,types}.py` + `tests/test_standing_schema.py` | Envelope schema discipline: closed key set, hostile-input `from_dict`, structured AUTHORIZE checks (validator_contract §9), strict `sha256:[64-hex]` content-hash format. Schema pre-pass in validator. Validator bumped to v0.2.0. | C2 | **shipped 2026-04-22 (36 tests)** |
 | C3.successor | `docs/doctrine/decisions/validator-v0_2_0.md` + `_validations/decision.validator.v0_2_0.json` | Bootstrap policy_declaration for validator v0.2.0 with `supersedes: decision.validator.v0_1_0`; attested by v0.1.0 validation receipt. First exercise of the Q4 supersession discipline; the bootstrap exemption is non-transitive. | C3 | **ratified 2026-04-22** |
 
+> **Constitutional substrate boundary (C2 + C3 complete, 2026-04-22).** Standing
+> validator exists, schema discipline exists, supersession is mechanized.
+> Canonical-form ownership is single-source (`receipt_kernel.envelope`).
+> Operator-facing supersession ceremony documented at
+> `docs/doctrine/decisions/_validations/README.md`. Compatibility posture
+> documented at `docs/doctrine/validator_temporal_model.md`. Hostile-input
+> regression corpus at `tests/fixtures/standing_envelopes/`. Future change
+> detection should anchor here; new doctrine seams (gap survival, per-role
+> payload schemas, continuity basis fields) start *after* this line.
+
 ### Downstream subsystems depending on the constitutional substrate
 
 | Spec | What | Depends On | Status |

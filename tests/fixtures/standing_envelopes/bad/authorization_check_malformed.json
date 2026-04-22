@@ -1,0 +1,13 @@
+{
+  "receipt_id": "rcpt_auth_bad_check",
+  "receipt_role": "authorization",
+  "standing_class": "AUTHORIZE",
+  "subject": "host:bad",
+  "ontology_version": "gov-doctrine-v1",
+  "producer": "governor",
+  "created_at": "2026-04-22T00:00:00Z",
+  "verdict": "permit",
+  "checks": {
+    "standing_check": {"result": "yes", "basis": "ok"}
+  }
+}

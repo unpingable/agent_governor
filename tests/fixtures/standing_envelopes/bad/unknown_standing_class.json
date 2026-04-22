@@ -1,0 +1,9 @@
+{
+  "receipt_id": "rcpt_bad_standing",
+  "receipt_role": "observation",
+  "standing_class": "OMNIPOTENT",
+  "subject": "host:bad",
+  "ontology_version": "gov-doctrine-v1",
+  "producer": "hostile",
+  "created_at": "2026-04-22T00:00:00Z"
+}

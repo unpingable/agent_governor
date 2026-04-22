@@ -9,11 +9,11 @@ Every violation a check can raise has a code in :class:`ViolationCode`.
 from __future__ import annotations
 
 import enum
-import hashlib
-import json
 import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
+
+from receipt_kernel.envelope import canonical_json, compute_hash
 
 
 # Canonical content-hash format. Same prefix + length as receipt_kernel.
@@ -912,20 +912,14 @@ class ValidationReceipt:
 # Canonical JSON + content hash
 # =============================================================================
 #
-# Same canonicalization parameters as receipt_kernel.envelope.canonical_json
-# so a future Q1.A ratification picking "new event types" can carry these
-# bodies forward without rehashing.
-
-
-def canonical_json(obj: Any) -> bytes:
-    return json.dumps(
-        obj,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-        allow_nan=False,
-    ).encode("utf-8")
+# Single canonical owner: ``receipt_kernel.envelope``. Standing receipts and
+# kernel events use byte-identical canonicalization so a future Q1.A
+# ratification picking "new event types" can carry these bodies forward
+# without rehashing. ``canonical_json`` is re-exported (not duplicated)
+# so any future change to canonical-form parameters lands in one place.
 
 
 def content_hash(obj: Any) -> str:
-    return f"sha256:{hashlib.sha256(canonical_json(obj)).hexdigest()}"
+    """Return ``sha256:<hex>`` content hash for an object's canonical JSON."""
+
+    return compute_hash(canonical_json(obj))

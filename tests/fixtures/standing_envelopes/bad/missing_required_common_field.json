@@ -1,0 +1,8 @@
+{
+  "receipt_id": "rcpt_obs_bad_missing",
+  "receipt_role": "observation",
+  "standing_class": "OBSERVE",
+  "ontology_version": "gov-doctrine-v1",
+  "producer": "hostile",
+  "created_at": "2026-04-22T00:00:00Z"
+}

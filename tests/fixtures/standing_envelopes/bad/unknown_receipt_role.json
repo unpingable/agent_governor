@@ -1,0 +1,9 @@
+{
+  "receipt_id": "rcpt_bad_role",
+  "receipt_role": "wishful_thinking",
+  "standing_class": "OBSERVE",
+  "subject": "host:bad",
+  "ontology_version": "gov-doctrine-v1",
+  "producer": "hostile",
+  "created_at": "2026-04-22T00:00:00Z"
+}

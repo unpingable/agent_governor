@@ -1,0 +1,13 @@
+{
+  "receipt_id": "rcpt_int_bad_kind",
+  "receipt_role": "interpretation",
+  "standing_class": "INTERPRET",
+  "subject": "host:bad",
+  "ontology_version": "gov-doctrine-v1",
+  "producer": "hostile",
+  "created_at": "2026-04-22T00:00:00Z",
+  "subject_derivation": {
+    "kind": "fancy_new_kind",
+    "parent_id": "rcpt_obs_001"
+  }
+}

@@ -217,5 +217,6 @@
 | Runtime Supervisor (events + supervisor + golden + promotion) | 64 |
 | Standing-Class Chain Validator (Constitutional C2) | 32 |
 | Standing Schema Discipline (Constitutional C3) | 36 |
+| Standing Envelope Hostile-Input Corpus (C3 locking) | 12 |
 
-**Total: ~14,691 tests** (14,691 unit + 83 sim + 37 skipped + 24 integration)
+**Total: ~14,703 tests** (14,703 unit + 83 sim + 37 skipped + 24 integration)

@@ -25,6 +25,8 @@ from governor.standing import (
     BOOTSTRAP_POLICY_ARTIFACT_IDS,
     AuthorizationVerdict,
     BootstrapError,
+    Check,
+    CheckResultStatus,
     ParentRef,
     PolicyRegistry,
     ReceiptRole,
@@ -117,11 +119,31 @@ def _recommendation(parent: StandingReceipt) -> StandingReceipt:
     )
 
 
+def _structured_checks() -> dict[str, Check]:
+    """The four required AUTHORIZE checks per validator_contract §9."""
+
+    return {
+        "standing_check": Check(
+            result=CheckResultStatus.PASS, basis="parent has recommendatory standing"
+        ),
+        "admissibility_check": Check(
+            result=CheckResultStatus.PASS, basis="evidence chain complete"
+        ),
+        "scope_check": Check(
+            result=CheckResultStatus.PASS, basis="within declared scope"
+        ),
+        "budget_check": Check(
+            result=CheckResultStatus.PASS, basis="under per-session budget"
+        ),
+    }
+
+
 def _authorization(
     parent: StandingReceipt,
     *,
     policy_artifact_id: str,
     policy_artifact_hash: str,
+    checks: dict[str, Check] | None = None,
 ) -> StandingReceipt:
     return StandingReceipt(
         receipt_id="rcpt_auth_001",
@@ -137,6 +159,7 @@ def _authorization(
         policy_artifact_id=policy_artifact_id,
         policy_artifact_hash=policy_artifact_hash,
         verdict=AuthorizationVerdict.PERMIT,
+        checks=checks if checks is not None else _structured_checks(),
     )
 
 
@@ -511,6 +534,7 @@ class TestQ3ExceptionClassRegistry:
             exception_class="operator_emergency",
             exception_reason="disk failing now",
             compression_acknowledged=True,
+            checks=_structured_checks(),
         )
         result = validator.validate(
             compressed,
@@ -555,6 +579,7 @@ class TestQ3ExceptionClassRegistry:
             exception_class="operator_emergency",
             exception_reason="forgot to attach approval",
             compression_acknowledged=True,
+            checks=_structured_checks(),
         )
         result = validator.validate(compressed, {obs.receipt_id: obs})
         assert result.outcome == ValidationOutcome.INVALID_SEMANTIC

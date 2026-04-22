@@ -12,22 +12,36 @@ decisions:
 4. subject_derivation closed enum (Q2)
 5. exception-class admissibility (Q3 — empty registry, fail-closed)
 6. validation receipt provenance (Q4)
+7. envelope schema discipline (C3) — closed key set, structured
+   AUTHORIZE checks (validator_contract §9), strict content-hash
+   format
 
-Gap survival/resolution (§7) and receipt envelope schema hardening are
+Gap survival/resolution (§7) and per-role payload field schemas are
 follow-on commits.
 
 There are no Q5 pre-ratification fallbacks anywhere in this file. Every
 rule below is the ratified rule.
+
+Version history (each bump = ``policy_declaration`` with
+``supersedes`` populated, per Q4):
+
+- ``0.1.0`` — initial validator (C2)
+- ``0.2.0`` — schema discipline (C3): structured AUTHORIZE checks,
+  strict hash format, closed envelope, ``from_dict`` deserialization
+  hostile-input rejection
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Iterable
 
-from governor.standing.policy_registry import PolicyRegistry
+from governor.standing.policy_registry import PolicyArtifact, PolicyRegistry
+from governor.standing.schema import SCHEMA_SNAPSHOT, validate_schema
 from governor.standing.types import (
     ALLOWED_PARENT_STANDING,
     BOOTSTRAP_POLICY_ARTIFACT_IDS,
@@ -48,15 +62,14 @@ from governor.standing.types import (
 
 
 VALIDATOR_ID = "agent_gov.standing_chain_validator"
-VALIDATOR_VERSION = "0.1.0"
+VALIDATOR_VERSION = "0.2.0"
 
-# The validator's own constitutional anchor. Its ratified
-# policy_declaration lives at
-# ``docs/doctrine/decisions/validator-v0_1_0.md``. The artifact carries
+# The validator's own constitutional anchor. The artifact carries
 # ``expected_ruleset_hash`` in its frontmatter; startup compares that
 # value against :func:`compute_ruleset_hash` and refuses to run on
-# mismatch (Q4 acceptance #2 + #4).
-VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID = "decision.validator.v0_1_0"
+# mismatch (Q4 acceptance #2 + #4). Each version bump moves this
+# pointer to a new ratified declaration with ``supersedes`` populated.
+VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID = "decision.validator.v0_2_0"
 
 
 class BootstrapError(RuntimeError):
@@ -80,6 +93,10 @@ def _ruleset_snapshot() -> dict[str, object]:
     Anything that can change a verdict belongs here. Loaded policy
     registry contents do **not** belong here — those are hashed
     separately as ``policy_registry_hash``.
+
+    A change to this snapshot bumps ``ruleset_hash``, which forces a
+    Q4 supersession (new ``policy_declaration`` with ``supersedes``
+    populated). That is the entire point of the snapshot existing.
     """
 
     return {
@@ -105,6 +122,10 @@ def _ruleset_snapshot() -> dict[str, object]:
             k.value for k in SubjectDerivationKind
         ),
         "validation_outcomes": sorted(o.value for o in ValidationOutcome),
+        # C3: closed violation vocabulary + schema discipline.
+        # Adding/removing codes here is a ruleset change.
+        "violation_codes": sorted(c.value for c in ViolationCode),
+        "schema": SCHEMA_SNAPSHOT,
         # Q3: initial exception-class registry is empty by ratification.
         # Adding a class is a registry mutation; that registry is hashed
         # separately as policy_registry_hash, not folded into ruleset.
@@ -173,6 +194,91 @@ class StandingChainValidator:
                 "validator_version mismatch: bootstrap declaration "
                 f"names {declared_version!r}, code is {VALIDATOR_VERSION!r}"
             )
+        # If this declaration supersedes a prior version, verify the
+        # supersession ceremony succeeded (Q4 + bootstrap doc:
+        # "the new declaration must itself be admitted via a validation
+        # receipt produced by the prior validator. The bootstrap
+        # exemption is not transitive.").
+        supersedes = bootstrap.frontmatter.get("supersedes")
+        if supersedes:
+            self._verify_supersession(bootstrap, supersedes)
+
+    def _verify_supersession(
+        self, bootstrap: PolicyArtifact, supersedes_id: str
+    ) -> None:
+        """Verify the prior-version validation receipt for a superseding
+        bootstrap declaration. Fails loud — no interpretive dance."""
+
+        prior = self.policy_registry.get(supersedes_id)
+        if prior is None:
+            raise BootstrapError(
+                f"superseding bootstrap declares supersedes={supersedes_id!r}, "
+                "but the prior declaration is missing from the registry"
+            )
+        receipt_path_raw = bootstrap.frontmatter.get("prior_validation_receipt_path")
+        if not receipt_path_raw:
+            raise BootstrapError(
+                "superseding bootstrap missing prior_validation_receipt_path; "
+                "the bootstrap exemption is not transitive — successors must "
+                "carry an attested validation receipt produced by the prior "
+                "validator"
+            )
+        # Path is relative to the bootstrap declaration's own directory
+        # so the artifact pair (declaration + receipt) moves as a unit.
+        # Tamper-evidence comes from the receipt's own target_receipts
+        # entry binding to the declaration's content_hash; no separate
+        # receipt_hash field is needed (and would create a hash-cycle).
+        bootstrap_dir = Path(bootstrap.source_path).parent
+        receipt_path = bootstrap_dir / receipt_path_raw
+        if not receipt_path.is_file():
+            raise BootstrapError(
+                f"prior validation receipt not found at {receipt_path}"
+            )
+        receipt_bytes = receipt_path.read_bytes()
+        try:
+            receipt = json.loads(receipt_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise BootstrapError(
+                f"prior validation receipt is not valid JSON: {exc}"
+            ) from None
+        # Receipt must claim the right validator + version + outcome.
+        if receipt.get("validator_id") != VALIDATOR_ID:
+            raise BootstrapError(
+                "prior validation receipt validator_id mismatch: expected "
+                f"{VALIDATOR_ID!r}, got {receipt.get('validator_id')!r}"
+            )
+        prior_declared_version = prior.frontmatter.get("validator_version")
+        if receipt.get("validator_version") != prior_declared_version:
+            raise BootstrapError(
+                "prior validation receipt validator_version mismatch: prior "
+                f"declaration names {prior_declared_version!r}, receipt has "
+                f"{receipt.get('validator_version')!r}"
+            )
+        prior_expected_ruleset = prior.frontmatter.get("expected_ruleset_hash")
+        if receipt.get("ruleset_hash") != prior_expected_ruleset:
+            raise BootstrapError(
+                "prior validation receipt ruleset_hash mismatch: prior "
+                f"declaration declares {prior_expected_ruleset!r}, receipt "
+                f"has {receipt.get('ruleset_hash')!r}"
+            )
+        if receipt.get("outcome") != ValidationOutcome.VALID.value:
+            raise BootstrapError(
+                "prior validation receipt outcome must be VALID, got "
+                f"{receipt.get('outcome')!r}"
+            )
+        # The receipt must target this exact bootstrap declaration.
+        targets = receipt.get("target_receipts") or []
+        if not any(
+            isinstance(t, dict)
+            and t.get("id") == bootstrap.policy_artifact_id
+            and t.get("content_hash") == bootstrap.content_hash
+            for t in targets
+        ):
+            raise BootstrapError(
+                "prior validation receipt does not target this bootstrap "
+                f"declaration (id={bootstrap.policy_artifact_id}, "
+                f"content_hash={bootstrap.content_hash})"
+            )
 
     # ------------------------------------------------------------------
     # Public surface
@@ -191,9 +297,11 @@ class StandingChainValidator:
 
         violations: list[Violation] = []
 
-        # Run checks in the priority order from validator_contract §15.
-        # Each check appends to ``violations``; we run them all so
-        # operators see the full picture, not just the first failure.
+        # Schema pre-pass (C3) runs first. A malformed envelope can't be
+        # parentage-checked sensibly, but we don't early-return — every
+        # check still runs so operators see the full picture, not just
+        # the first failure (validator_contract §15 framing).
+        violations.extend(validate_schema(target))
         violations.extend(self._check_role_standing_mapping(target))
         violations.extend(self._check_chain_integrity(target, chain))
         violations.extend(self._check_parentage(target, chain))

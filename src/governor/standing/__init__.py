@@ -27,13 +27,21 @@ from governor.standing.policy_registry import (
     PolicyRegistry,
     load_decisions_directory,
 )
+from governor.standing.schema import SCHEMA_SNAPSHOT, validate_schema
 from governor.standing.types import (
     ALLOWED_PARENT_STANDING,
+    AUTHORIZE_REQUIRED_CHECKS,
     AuthorizationVerdict,
     BOOTSTRAP_POLICY_ARTIFACT_IDS,
+    Check,
+    CheckResultStatus,
+    EnvelopeParseError,
+    HASH_PATTERN,
     ParentRef,
+    REQUIRED_COMMON_FIELDS,
     ReceiptRole,
     ROLE_TO_STANDING,
+    STANDING_RECEIPT_ENVELOPE_KEYS,
     StandingClass,
     StandingReceipt,
     SubjectDerivation,
@@ -45,6 +53,7 @@ from governor.standing.types import (
     ViolationCode,
     canonical_json,
     content_hash,
+    is_valid_content_hash,
 )
 from governor.standing.validator import (
     BootstrapError,
@@ -55,14 +64,22 @@ from governor.standing.validator import (
 
 __all__ = [
     "ALLOWED_PARENT_STANDING",
+    "AUTHORIZE_REQUIRED_CHECKS",
     "AuthorizationVerdict",
     "BOOTSTRAP_POLICY_ARTIFACT_IDS",
     "BootstrapError",
+    "Check",
+    "CheckResultStatus",
+    "EnvelopeParseError",
+    "HASH_PATTERN",
     "ParentRef",
     "PolicyArtifact",
     "PolicyRegistry",
+    "REQUIRED_COMMON_FIELDS",
     "ReceiptRole",
     "ROLE_TO_STANDING",
+    "SCHEMA_SNAPSHOT",
+    "STANDING_RECEIPT_ENVELOPE_KEYS",
     "StandingChainValidator",
     "StandingClass",
     "StandingReceipt",
@@ -77,5 +94,7 @@ __all__ = [
     "ViolationCode",
     "canonical_json",
     "content_hash",
+    "is_valid_content_hash",
     "load_decisions_directory",
+    "validate_schema",
 ]

@@ -393,7 +393,8 @@ Doctrine in `docs/doctrine/{advisory_vs_constitutional_power, standing_and_recei
 | C1.Q4 | `docs/doctrine/decisions/Q4-validator-provenance.md` | Validator versions are governed as `policy_declaration`s (Option A); mandatory `validation` receipt fields frozen; ruleset_hash change without version bump fails closed | doctrine + ADR 0006 | **ratified 2026-04-19** |
 | C2 | `src/governor/standing/` + `tests/test_standing_validator.py` | Standing-class chain validator (parentage/transition, policy registry, chain integrity, subject_derivation enum, exception-class admissibility, validation receipt provenance). No Q5 fallbacks introduced. | Q1–Q4 ratified | **shipped 2026-04-22 (32 tests)** |
 | C2.bootstrap | `docs/doctrine/decisions/validator-v0_1_0.md` | Bootstrap policy_declaration for validator v0.1.0; closes Q4 chicken-and-egg with one bounded sanctioned hole | C2 | **ratified 2026-04-22** |
-| C3 | (receipt envelope schema) | Canonical envelope for standing-class receipts | Validator landed | **unblocked** |
+| C3 | `src/governor/standing/{schema,types}.py` + `tests/test_standing_schema.py` | Envelope schema discipline: closed key set, hostile-input `from_dict`, structured AUTHORIZE checks (validator_contract §9), strict `sha256:[64-hex]` content-hash format. Schema pre-pass in validator. Validator bumped to v0.2.0. | C2 | **shipped 2026-04-22 (36 tests)** |
+| C3.successor | `docs/doctrine/decisions/validator-v0_2_0.md` + `_validations/decision.validator.v0_2_0.json` | Bootstrap policy_declaration for validator v0.2.0 with `supersedes: decision.validator.v0_1_0`; attested by v0.1.0 validation receipt. First exercise of the Q4 supersession discipline; the bootstrap exemption is non-transitive. | C3 | **ratified 2026-04-22** |
 
 ### Downstream subsystems depending on the constitutional substrate
 

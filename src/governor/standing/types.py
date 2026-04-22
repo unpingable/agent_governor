@@ -11,8 +11,19 @@ from __future__ import annotations
 import enum
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Mapping
+
+
+# Canonical content-hash format. Same prefix + length as receipt_kernel.
+HASH_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def is_valid_content_hash(value: object) -> bool:
+    """Strict content-hash format check. No best-effort normalization."""
+
+    return isinstance(value, str) and bool(HASH_PATTERN.fullmatch(value))
 
 
 # =============================================================================
@@ -120,6 +131,27 @@ class AuthorizationVerdict(enum.Enum):
     REQUIRE_HUMAN = "require_human"
 
 
+class CheckResultStatus(enum.Enum):
+    """Closed status enum for structured check results (validator_contract §9)."""
+
+    PASS = "pass"
+    FAIL = "fail"
+    ESCALATE = "escalate"
+
+
+# AUTHORIZE receipts must carry these four structured checks
+# (standing_and_receipts §7.4 + validator_contract §9). ID-only or
+# boolean-only check fields are insufficient.
+AUTHORIZE_REQUIRED_CHECKS: frozenset[str] = frozenset(
+    {
+        "standing_check",
+        "admissibility_check",
+        "scope_check",
+        "budget_check",
+    }
+)
+
+
 # =============================================================================
 # Violation vocabulary
 # =============================================================================
@@ -166,6 +198,14 @@ class ViolationCode(enum.Enum):
     PARENT_NOT_FOUND = "parent_not_found"
     PARENT_CONTENT_HASH_MISMATCH = "parent_content_hash_mismatch"
     PARENT_GRAPH_CYCLE = "parent_graph_cycle"
+    HASH_FORMAT_INVALID = "hash_format_invalid"
+
+    # Schema — closed envelope, structured checks (C3)
+    UNKNOWN_FIELD_IN_ENVELOPE = "unknown_field_in_envelope"
+    MISSING_REQUIRED_COMMON_FIELD = "missing_required_common_field"
+    INVALID_FIELD_TYPE = "invalid_field_type"
+    AUTHORIZATION_CHECK_MISSING = "authorization_check_missing"
+    AUTHORIZATION_CHECK_MALFORMED = "authorization_check_malformed"
 
 
 VIOLATION_CLASS_FOR_CODE: dict[ViolationCode, ViolationClass] = {
@@ -192,6 +232,13 @@ VIOLATION_CLASS_FOR_CODE: dict[ViolationCode, ViolationClass] = {
     ViolationCode.PARENT_NOT_FOUND: ViolationClass.CHAIN,
     ViolationCode.PARENT_CONTENT_HASH_MISMATCH: ViolationClass.CHAIN,
     ViolationCode.PARENT_GRAPH_CYCLE: ViolationClass.CHAIN,
+    ViolationCode.HASH_FORMAT_INVALID: ViolationClass.CHAIN,
+    # Schema (C3) — structural; a malformed envelope can't be parentage-checked.
+    ViolationCode.UNKNOWN_FIELD_IN_ENVELOPE: ViolationClass.STRUCTURAL,
+    ViolationCode.MISSING_REQUIRED_COMMON_FIELD: ViolationClass.STRUCTURAL,
+    ViolationCode.INVALID_FIELD_TYPE: ViolationClass.STRUCTURAL,
+    ViolationCode.AUTHORIZATION_CHECK_MISSING: ViolationClass.STRUCTURAL,
+    ViolationCode.AUTHORIZATION_CHECK_MALFORMED: ViolationClass.STRUCTURAL,
 }
 
 
@@ -216,6 +263,97 @@ class Violation:
             "receipt_id": self.receipt_id,
             "pointers": list(self.pointers),
         }
+
+
+class EnvelopeParseError(ValueError):
+    """Raised by ``StandingReceipt.from_dict`` on hostile/malformed input.
+
+    Carries the typed ``violations`` so callers can surface them in the
+    same vocabulary as the runtime validator.
+    """
+
+    def __init__(self, violations: list["Violation"]) -> None:
+        codes = ",".join(v.code.value for v in violations)
+        super().__init__(f"envelope parse failed: {codes}")
+        self.violations: list[Violation] = list(violations)
+
+
+# =============================================================================
+# Structured check results (validator_contract §9, standing_and_receipts §7.4)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class Check:
+    """A single structured check result on an authorization receipt.
+
+    Both fields are required. Boolean-only or ID-only check values are
+    insufficient (validator_contract §9). ``basis`` is a brief reason —
+    schema enforces presence and shape, not content depth.
+    """
+
+    result: CheckResultStatus
+    basis: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"result": self.result.value, "basis": self.basis}
+
+    @classmethod
+    def from_dict(cls, data: object) -> "Check":
+        if not isinstance(data, Mapping):
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message=f"check entry must be a mapping, got {type(data).__name__}",
+                    )
+                ]
+            )
+        unknown = set(data.keys()) - {"result", "basis"}
+        if unknown:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message=f"unknown check field(s): {sorted(unknown)}",
+                    )
+                ]
+            )
+        result_raw = data.get("result")
+        basis = data.get("basis")
+        if not isinstance(result_raw, str):
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message="check.result must be a string",
+                    )
+                ]
+            )
+        try:
+            result = CheckResultStatus(result_raw)
+        except ValueError:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message=(
+                            f"check.result {result_raw!r} not in "
+                            f"{[s.value for s in CheckResultStatus]}"
+                        ),
+                    )
+                ]
+            ) from None
+        if not isinstance(basis, str) or not basis:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message="check.basis must be a non-empty string",
+                    )
+                ]
+            )
+        return cls(result=result, basis=basis)
 
 
 # =============================================================================
@@ -265,6 +403,53 @@ class SubjectDerivation:
         }
 
 
+# Closed envelope key set — anything else in a deserialized dict is
+# UNKNOWN_FIELD_IN_ENVELOPE. This is the C3 schema-discipline anchor:
+# adding a field is a ruleset change requiring a validator version bump
+# (Q4 supersession discipline).
+STANDING_RECEIPT_ENVELOPE_KEYS: frozenset[str] = frozenset(
+    {
+        "receipt_id",
+        "receipt_role",
+        "standing_class",
+        "subject",
+        "ontology_version",
+        "producer",
+        "created_at",
+        "parent_receipts",
+        "subject_derivation",
+        "exception_class",
+        "exception_reason",
+        "operator_approval_ref",
+        "compression_acknowledged",
+        "policy_artifact_id",
+        "policy_artifact_hash",
+        "verdict",
+        "checks",
+        "payload",
+        "display_metadata",
+        "gaps",
+        "gaps_resolved",
+        "content_hash",
+    }
+)
+
+
+# Always-required common fields per standing_and_receipts §6. Missing
+# any of these on a deserialized envelope is MISSING_REQUIRED_COMMON_FIELD.
+REQUIRED_COMMON_FIELDS: frozenset[str] = frozenset(
+    {
+        "receipt_id",
+        "receipt_role",
+        "standing_class",
+        "subject",
+        "ontology_version",
+        "producer",
+        "created_at",
+    }
+)
+
+
 @dataclass(frozen=True)
 class StandingReceipt:
     """A standing-class receipt envelope.
@@ -273,6 +458,11 @@ class StandingReceipt:
     and the optional ``display_metadata`` field. ``display_metadata`` is
     operator-facing UI only and per Q1 acceptance #4 must not change the
     receipt hash when edited.
+
+    Deserialization (``from_dict``) treats hostile input as a real
+    threat surface: unknown fields are rejected, missing required
+    fields are rejected, type mismatches are rejected. There is no
+    best-effort normalization.
     """
 
     receipt_id: str
@@ -293,8 +483,12 @@ class StandingReceipt:
     policy_artifact_id: str | None = None
     policy_artifact_hash: str | None = None
     verdict: AuthorizationVerdict | None = None
+    # Structured check results (validator_contract §9). AUTHORIZE
+    # receipts must carry the four AUTHORIZE_REQUIRED_CHECKS; the
+    # schema validator enforces presence + shape.
+    checks: dict[str, Check] = field(default_factory=dict)
     # Free-form payload (role-specific extras kept here so envelope shape
-    # stays stable; schema hardening is downstream of this commit).
+    # stays stable; per-role payload schema is follow-on work).
     payload: dict[str, Any] = field(default_factory=dict)
     # Operator-facing only; not part of canonical body.
     display_metadata: dict[str, Any] = field(default_factory=dict)
@@ -310,22 +504,371 @@ class StandingReceipt:
 
         Excludes ``content_hash`` itself and ``display_metadata``
         (Q1 acceptance #4: display metadata cannot change the hash).
+        Enum values are normalized to their string forms so
+        canonical_json output is stable across runs and processes.
         """
 
         body = asdict(self)
         body.pop("content_hash", None)
         body.pop("display_metadata", None)
-        # Normalize enum values so canonical_json sees strings.
         body["receipt_role"] = self.receipt_role.value
         body["standing_class"] = self.standing_class.value
         if self.subject_derivation is not None:
             body["subject_derivation"]["kind"] = self.subject_derivation.kind.value
         if self.verdict is not None:
             body["verdict"] = self.verdict.value
+        # checks: normalize CheckResultStatus enums.
+        body["checks"] = {name: chk.to_dict() for name, chk in self.checks.items()}
+        return body
+
+    def to_dict(self) -> dict[str, Any]:
+        """Full, roundtrippable dict including content_hash + display_metadata.
+
+        Round-trip property: ``from_dict(to_dict(r)).canonical_body()``
+        equals ``r.canonical_body()`` byte-identically.
+        """
+
+        body = self.canonical_body()
+        if self.content_hash is not None:
+            body["content_hash"] = self.content_hash
+        if self.display_metadata:
+            body["display_metadata"] = dict(self.display_metadata)
         return body
 
     def compute_content_hash(self) -> str:
         return content_hash(self.canonical_body())
+
+    @classmethod
+    def from_dict(cls, data: object) -> "StandingReceipt":
+        """Parse a receipt from a dict with hostile-input discipline.
+
+        Raises :class:`EnvelopeParseError` carrying typed
+        :class:`Violation` instances for any of:
+
+        - non-mapping input
+        - unknown keys (closed envelope)
+        - missing required common fields
+        - wrong types on structured fields (parent_receipts,
+          subject_derivation, checks)
+        - bad ``sha256:[64-hex]`` content hashes
+        - unknown enum values (receipt_role, standing_class, verdict,
+          subject_derivation.kind)
+
+        There is no best-effort normalization. Quietly accepting
+        nonsense is exactly the failure mode this method exists to
+        prevent.
+        """
+
+        if not isinstance(data, Mapping):
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.INVALID_FIELD_TYPE,
+                        message=f"envelope must be a mapping, got {type(data).__name__}",
+                    )
+                ]
+            )
+        violations: list[Violation] = []
+        unknown = set(data.keys()) - STANDING_RECEIPT_ENVELOPE_KEYS
+        for key in sorted(unknown):
+            violations.append(
+                Violation(
+                    code=ViolationCode.UNKNOWN_FIELD_IN_ENVELOPE,
+                    message=f"unknown envelope key {key!r}",
+                )
+            )
+        missing = REQUIRED_COMMON_FIELDS - set(data.keys())
+        for key in sorted(missing):
+            violations.append(
+                Violation(
+                    code=ViolationCode.MISSING_REQUIRED_COMMON_FIELD,
+                    message=f"required common field {key!r} missing",
+                )
+            )
+        if violations:
+            raise EnvelopeParseError(violations)
+
+        # Required fields are all string-valued at this layer.
+        for key in REQUIRED_COMMON_FIELDS:
+            if not isinstance(data[key], str):
+                violations.append(
+                    Violation(
+                        code=ViolationCode.INVALID_FIELD_TYPE,
+                        message=f"common field {key!r} must be a string",
+                    )
+                )
+        if violations:
+            raise EnvelopeParseError(violations)
+
+        # Closed enums.
+        try:
+            receipt_role = ReceiptRole(data["receipt_role"])
+        except ValueError:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.UNKNOWN_RECEIPT_ROLE,
+                        message=f"receipt_role {data['receipt_role']!r} not in closed set",
+                    )
+                ]
+            ) from None
+        try:
+            standing_class = StandingClass(data["standing_class"])
+        except ValueError:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.UNKNOWN_STANDING_CLASS,
+                        message=f"standing_class {data['standing_class']!r} not in closed set",
+                    )
+                ]
+            ) from None
+
+        # parent_receipts: list of {id, content_hash}.
+        parent_receipts = _parse_parent_refs(data.get("parent_receipts", []))
+
+        # subject_derivation: optional structured.
+        sd_raw = data.get("subject_derivation")
+        subject_derivation = (
+            _parse_subject_derivation(sd_raw) if sd_raw is not None else None
+        )
+
+        # operator_approval_ref: optional ParentRef.
+        oar_raw = data.get("operator_approval_ref")
+        operator_approval_ref = (
+            _parse_one_parent_ref(oar_raw) if oar_raw is not None else None
+        )
+
+        # verdict: optional enum.
+        verdict_raw = data.get("verdict")
+        verdict: AuthorizationVerdict | None = None
+        if verdict_raw is not None:
+            try:
+                verdict = AuthorizationVerdict(verdict_raw)
+            except ValueError:
+                raise EnvelopeParseError(
+                    [
+                        Violation(
+                            code=ViolationCode.INVALID_FIELD_TYPE,
+                            message=f"verdict {verdict_raw!r} not in closed set",
+                        )
+                    ]
+                ) from None
+
+        # checks: dict[str, Check].
+        checks_raw = data.get("checks", {})
+        if not isinstance(checks_raw, Mapping):
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.INVALID_FIELD_TYPE,
+                        message="checks must be a mapping",
+                    )
+                ]
+            )
+        checks: dict[str, Check] = {}
+        for name, chk_raw in checks_raw.items():
+            if not isinstance(name, str):
+                raise EnvelopeParseError(
+                    [
+                        Violation(
+                            code=ViolationCode.INVALID_FIELD_TYPE,
+                            message="check names must be strings",
+                        )
+                    ]
+                )
+            checks[name] = Check.from_dict(chk_raw)
+
+        # Hash format checks (chain class).
+        cont_hash = data.get("content_hash")
+        if cont_hash is not None and not is_valid_content_hash(cont_hash):
+            violations.append(
+                Violation(
+                    code=ViolationCode.HASH_FORMAT_INVALID,
+                    message=f"content_hash {cont_hash!r} is not sha256:<64-hex>",
+                )
+            )
+        pa_hash = data.get("policy_artifact_hash")
+        if pa_hash is not None and not is_valid_content_hash(pa_hash):
+            violations.append(
+                Violation(
+                    code=ViolationCode.HASH_FORMAT_INVALID,
+                    message=f"policy_artifact_hash {pa_hash!r} is not sha256:<64-hex>",
+                )
+            )
+        if violations:
+            raise EnvelopeParseError(violations)
+
+        return cls(
+            receipt_id=data["receipt_id"],
+            receipt_role=receipt_role,
+            standing_class=standing_class,
+            subject=data["subject"],
+            ontology_version=data["ontology_version"],
+            producer=data["producer"],
+            created_at=data["created_at"],
+            parent_receipts=parent_receipts,
+            subject_derivation=subject_derivation,
+            exception_class=data.get("exception_class"),
+            exception_reason=data.get("exception_reason"),
+            operator_approval_ref=operator_approval_ref,
+            compression_acknowledged=bool(data.get("compression_acknowledged", False)),
+            policy_artifact_id=data.get("policy_artifact_id"),
+            policy_artifact_hash=pa_hash,
+            verdict=verdict,
+            checks=checks,
+            payload=dict(data.get("payload", {})),
+            display_metadata=dict(data.get("display_metadata", {})),
+            gaps=tuple(data.get("gaps", ())),
+            gaps_resolved=tuple(data.get("gaps_resolved", ())),
+            content_hash=cont_hash,
+        )
+
+
+def _parse_parent_refs(value: object) -> tuple[ParentRef, ...]:
+    if not isinstance(value, (list, tuple)):
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.INVALID_FIELD_TYPE,
+                    message="parent_receipts must be a list",
+                )
+            ]
+        )
+    refs: list[ParentRef] = []
+    violations: list[Violation] = []
+    for entry in value:
+        try:
+            refs.append(_parse_one_parent_ref(entry))
+        except EnvelopeParseError as exc:
+            violations.extend(exc.violations)
+    if violations:
+        raise EnvelopeParseError(violations)
+    return tuple(refs)
+
+
+def _parse_one_parent_ref(value: object) -> ParentRef:
+    if not isinstance(value, Mapping):
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.INVALID_FIELD_TYPE,
+                    message="parent reference must be a mapping with id + content_hash",
+                )
+            ]
+        )
+    unknown = set(value.keys()) - {"id", "content_hash"}
+    if unknown:
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.UNKNOWN_FIELD_IN_ENVELOPE,
+                    message=f"unknown parent_ref keys: {sorted(unknown)}",
+                )
+            ]
+        )
+    pid = value.get("id")
+    phash = value.get("content_hash")
+    if not isinstance(pid, str) or not pid:
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.PARENT_REFERENCE_ID_ONLY,
+                    message="parent_ref.id must be a non-empty string",
+                )
+            ]
+        )
+    if not is_valid_content_hash(phash):
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.HASH_FORMAT_INVALID,
+                    message=f"parent_ref.content_hash {phash!r} is not sha256:<64-hex>",
+                )
+            ]
+        )
+    return ParentRef(id=pid, content_hash=phash)
+
+
+def _parse_subject_derivation(value: object) -> SubjectDerivation:
+    if not isinstance(value, Mapping):
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.INVALID_FIELD_TYPE,
+                    message="subject_derivation must be a mapping",
+                )
+            ]
+        )
+    allowed_keys = {"kind", "parent_id", "aggregate_parent_ids", "containment_basis", "basis"}
+    unknown = set(value.keys()) - allowed_keys
+    if unknown:
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.UNKNOWN_FIELD_IN_ENVELOPE,
+                    message=f"unknown subject_derivation keys: {sorted(unknown)}",
+                )
+            ]
+        )
+    kind_raw = value.get("kind")
+    if not isinstance(kind_raw, str):
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.INVALID_FIELD_TYPE,
+                    message="subject_derivation.kind must be a string",
+                )
+            ]
+        )
+    try:
+        kind = SubjectDerivationKind(kind_raw)
+    except ValueError:
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.SUBJECT_DERIVATION_KIND_UNKNOWN,
+                    message=f"subject_derivation.kind {kind_raw!r} not in closed set",
+                )
+            ]
+        ) from None
+    parent_id = value.get("parent_id")
+    if not isinstance(parent_id, str) or not parent_id:
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.INVALID_FIELD_TYPE,
+                    message="subject_derivation.parent_id must be a non-empty string",
+                )
+            ]
+        )
+    agg = value.get("aggregate_parent_ids", ())
+    if not isinstance(agg, (list, tuple)):
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=ViolationCode.INVALID_FIELD_TYPE,
+                    message="subject_derivation.aggregate_parent_ids must be a list",
+                )
+            ]
+        )
+    for item in agg:
+        if not isinstance(item, str):
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.INVALID_FIELD_TYPE,
+                        message="aggregate_parent_ids entries must be strings",
+                    )
+                ]
+            )
+    return SubjectDerivation(
+        kind=kind,
+        parent_id=parent_id,
+        aggregate_parent_ids=tuple(agg),
+        containment_basis=value.get("containment_basis"),
+        basis=value.get("basis"),
+    )
 
 
 # =============================================================================

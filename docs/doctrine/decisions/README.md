@@ -56,10 +56,19 @@ This note is not itself a ratification. It is an open future-work flag.
 | `decision.validator_integration.q3` | [Q3-exception-class-registry.md](Q3-exception-class-registry.md) | 2026-04-19 |
 | `decision.validator_integration.q4` | [Q4-validator-provenance.md](Q4-validator-provenance.md) | 2026-04-19 |
 | `decision.validator.v0_1_0` | [validator-v0_1_0.md](validator-v0_1_0.md) | 2026-04-22 |
+| `decision.validator.v0_2_0` | [validator-v0_2_0.md](validator-v0_2_0.md) | 2026-04-22 |
 
 All four Q1–Q4 constitutional blockers are ratified. Validator implementation
-(gap spec C2) shipped against them; the validator's own bootstrap
-policy_declaration is `decision.validator.v0_1_0` (the first sanctioned
-bootstrap hole, bounded by `expected_ruleset_hash` and Q4 supersession
-rules). Q5 pre-ratification fallbacks were never introduced — the
-validator landed with the ratified rules as final.
+(gap spec C2) shipped against them. The validator's bootstrap declaration
+chain so far:
+
+- `decision.validator.v0_1_0` — first validator (bootstrap exemption).
+- `decision.validator.v0_2_0` — schema-discipline successor (C3),
+  attested by a v0.1.0 validation receipt at
+  [`_validations/decision.validator.v0_2_0.json`](_validations/decision.validator.v0_2_0.json).
+  The bootstrap exemption is **not transitive** — v0.2.0 onwards
+  requires an attested validation receipt produced by the prior
+  validator.
+
+Q5 pre-ratification fallbacks were never introduced — the validator
+landed with the ratified rules as final.

@@ -26,6 +26,7 @@ from governor.standing import (
     AuthorizationVerdict,
     BootstrapError,
     Check,
+    CheckBasis,
     CheckResultStatus,
     ParentRef,
     PolicyRegistry,
@@ -119,21 +120,49 @@ def _recommendation(parent: StandingReceipt) -> StandingReceipt:
     )
 
 
+def _basis(summary: str, rule_id: str, ref: str) -> CheckBasis:
+    return CheckBasis(
+        summary=summary,
+        rule_id=rule_id,
+        inspectable_refs=(ref,),
+    )
+
+
 def _structured_checks() -> dict[str, Check]:
-    """The four required AUTHORIZE checks per validator_contract §9."""
+    """The four required AUTHORIZE checks per validator_contract §9 + C4."""
 
     return {
         "standing_check": Check(
-            result=CheckResultStatus.PASS, basis="parent has recommendatory standing"
+            result=CheckResultStatus.PASS,
+            basis=_basis(
+                "parent has recommendatory standing",
+                "validator_contract.5.1.authorization",
+                "rcpt_rec_001",
+            ),
         ),
         "admissibility_check": Check(
-            result=CheckResultStatus.PASS, basis="evidence chain complete"
+            result=CheckResultStatus.PASS,
+            basis=_basis(
+                "evidence chain complete",
+                "validator_contract.5.2",
+                "rcpt_rec_001",
+            ),
         ),
         "scope_check": Check(
-            result=CheckResultStatus.PASS, basis="within declared scope"
+            result=CheckResultStatus.PASS,
+            basis=_basis(
+                "within declared scope",
+                "validator_contract.9.scope",
+                "scope_axis:host",
+            ),
         ),
         "budget_check": Check(
-            result=CheckResultStatus.PASS, basis="under per-session budget"
+            result=CheckResultStatus.PASS,
+            basis=_basis(
+                "under per-session budget",
+                "validator_contract.9.budget",
+                "budget_pool:session",
+            ),
         ),
     }
 

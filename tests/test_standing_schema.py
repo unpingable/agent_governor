@@ -26,6 +26,7 @@ from governor.standing import (
     AuthorizationVerdict,
     BootstrapError,
     Check,
+    CheckBasis,
     CheckResultStatus,
     EnvelopeParseError,
     ParentRef,
@@ -62,9 +63,17 @@ DECISIONS_DIR = REPO_ROOT / "docs" / "doctrine" / "decisions"
 # =============================================================================
 
 
+def _basis(name: str) -> CheckBasis:
+    return CheckBasis(
+        summary=f"basis for {name}",
+        rule_id=f"validator_contract.9.{name}",
+        inspectable_refs=(f"ref:{name}",),
+    )
+
+
 def _structured_checks() -> dict[str, Check]:
     return {
-        name: Check(result=CheckResultStatus.PASS, basis=f"basis for {name}")
+        name: Check(result=CheckResultStatus.PASS, basis=_basis(name))
         for name in AUTHORIZE_REQUIRED_CHECKS
     }
 
@@ -119,7 +128,7 @@ class TestSchemaAcceptance:
     def test_authorize_with_partial_checks_fails(self) -> None:
         obs = _observation()
         partial = {
-            name: Check(result=CheckResultStatus.PASS, basis="ok")
+            name: Check(result=CheckResultStatus.PASS, basis=_basis(name))
             for name in ("standing_check", "scope_check")
         }
         auth = _authorization(obs, checks=partial)
@@ -194,7 +203,12 @@ class TestSchemaRejection:
         validator = StandingChainValidator(policy_registry=registry)
         obs = _observation()
         auth = _authorization(
-            obs, checks={"standing_check": Check(CheckResultStatus.PASS, "ok")}
+            obs,
+            checks={
+                "standing_check": Check(
+                    result=CheckResultStatus.PASS, basis=_basis("standing_check")
+                )
+            },
         )
         result = validator.validate(auth, {obs.receipt_id: obs})
         assert result.outcome == ValidationOutcome.INVALID_STRUCTURAL
@@ -390,33 +404,74 @@ def isolated_decisions(tmp_path: Path) -> Path:
     return dest
 
 
+def _active_bootstrap_filename() -> str:
+    """Filename of the .md for the validator's *current* bootstrap.
+
+    Computed from VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID so the test
+    suite tracks the active version automatically when the validator
+    bumps. (e.g. ``decision.validator.v0_3_0`` → ``validator-v0_3_0.md``)
+    """
+
+    suffix = VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID.split(".")[-1]
+    return f"validator-{suffix}.md"
+
+
+def _active_receipt_filename() -> str:
+    return f"{VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID}.json"
+
+
 class TestSupersessionCeremony:
-    def test_v0_2_0_validator_constructs_against_real_chain(
+    """Tests assert the *active bootstrap* (whatever VALIDATOR_VERSION
+    currently is) succeeds against a real on-disk supersession chain
+    and fails closed against forged/missing receipts. Tests are
+    version-agnostic so v0.4.0+ pick them up automatically."""
+
+    def test_validator_constructs_against_real_chain(
         self, loaded_registry: PolicyRegistry
     ) -> None:
-        # The on-disk receipt chain is real; if the ceremony works at
-        # all it works here.
         StandingChainValidator(policy_registry=loaded_registry)
 
-    def test_ruleset_hash_matches_v0_2_0_declaration(
+    def test_ruleset_hash_matches_active_bootstrap_declaration(
         self, loaded_registry: PolicyRegistry
     ) -> None:
         bootstrap = loaded_registry.get(VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID)
         assert bootstrap is not None
         assert bootstrap.frontmatter["expected_ruleset_hash"] == compute_ruleset_hash()
 
-    def test_v0_2_0_supersedes_v0_1_0(
+    def test_active_bootstrap_supersedes_immediate_predecessor(
         self, loaded_registry: PolicyRegistry
     ) -> None:
-        v020 = loaded_registry.get(VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID)
-        assert v020 is not None
-        assert v020.supersedes == "decision.validator.v0_1_0"
+        # Active bootstrap must declare a non-null `supersedes` (v0.1.0
+        # is the only declaration permitted to lack one).
+        active = loaded_registry.get(VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID)
+        assert active is not None
+        assert active.supersedes is not None, (
+            "active bootstrap must supersede its predecessor; only v0.1.0 "
+            "may lack a supersedes pointer"
+        )
+        # The named predecessor must itself be in the registry.
+        assert loaded_registry.get(active.supersedes) is not None
+
+    def test_full_supersession_chain_is_walkable_to_v0_1_0(
+        self, loaded_registry: PolicyRegistry
+    ) -> None:
+        # Walk supersedes pointers from the active bootstrap. Must
+        # terminate at v0.1.0 (the only one with supersedes=None) and
+        # contain no cycles.
+        seen: set[str] = set()
+        current = loaded_registry.get(VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID)
+        assert current is not None
+        while current.supersedes is not None:
+            assert current.policy_artifact_id not in seen, "supersession cycle"
+            seen.add(current.policy_artifact_id)
+            current = loaded_registry.get(current.supersedes)
+            assert current is not None
+        assert current.policy_artifact_id == "decision.validator.v0_1_0"
 
     def test_missing_prior_validation_receipt_raises_bootstrap_error(
         self, isolated_decisions: Path
     ) -> None:
-        # Delete the prior validation receipt; v0.2.0 bootstrap fails closed.
-        (isolated_decisions / "_validations" / "decision.validator.v0_2_0.json").unlink()
+        (isolated_decisions / "_validations" / _active_receipt_filename()).unlink()
         registry = load_decisions_directory(isolated_decisions)
         with pytest.raises(BootstrapError, match="prior validation receipt not found"):
             StandingChainValidator(policy_registry=registry)
@@ -424,31 +479,27 @@ class TestSupersessionCeremony:
     def test_missing_prior_validation_receipt_path_field_raises(
         self, isolated_decisions: Path
     ) -> None:
-        # Strip prior_validation_receipt_path from the v0.2.0 frontmatter.
-        v020_path = isolated_decisions / "validator-v0_2_0.md"
-        text = v020_path.read_text(encoding="utf-8")
+        bootstrap_path = isolated_decisions / _active_bootstrap_filename()
+        text = bootstrap_path.read_text(encoding="utf-8")
         text = text.replace(
-            "prior_validation_receipt_path: _validations/decision.validator.v0_2_0.json\n",
+            f"prior_validation_receipt_path: _validations/{_active_receipt_filename()}\n",
             "",
         )
-        v020_path.write_text(text, encoding="utf-8")
+        bootstrap_path.write_text(text, encoding="utf-8")
         registry = load_decisions_directory(isolated_decisions)
-        with pytest.raises(
-            BootstrapError, match="prior_validation_receipt_path"
-        ):
+        with pytest.raises(BootstrapError, match="prior_validation_receipt_path"):
             StandingChainValidator(policy_registry=registry)
 
     def test_forged_prior_receipt_with_wrong_target_hash_raises(
         self, isolated_decisions: Path
     ) -> None:
-        # Forge: receipt that targets a *different* content_hash.
         receipt_path = (
-            isolated_decisions / "_validations" / "decision.validator.v0_2_0.json"
+            isolated_decisions / "_validations" / _active_receipt_filename()
         )
         receipt = json.loads(receipt_path.read_bytes().decode("utf-8"))
         receipt["target_receipts"] = [
             {
-                "id": "decision.validator.v0_2_0",
+                "id": VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID,
                 "content_hash": "sha256:" + "0" * 64,
             }
         ]
@@ -461,7 +512,7 @@ class TestSupersessionCeremony:
         self, isolated_decisions: Path
     ) -> None:
         receipt_path = (
-            isolated_decisions / "_validations" / "decision.validator.v0_2_0.json"
+            isolated_decisions / "_validations" / _active_receipt_filename()
         )
         receipt = json.loads(receipt_path.read_bytes().decode("utf-8"))
         receipt["validator_id"] = "rogue.validator.v9.9.9"
@@ -474,7 +525,7 @@ class TestSupersessionCeremony:
         self, isolated_decisions: Path
     ) -> None:
         receipt_path = (
-            isolated_decisions / "_validations" / "decision.validator.v0_2_0.json"
+            isolated_decisions / "_validations" / _active_receipt_filename()
         )
         receipt = json.loads(receipt_path.read_bytes().decode("utf-8"))
         receipt["outcome"] = "INVALID_STRUCTURAL"
@@ -487,22 +538,120 @@ class TestSupersessionCeremony:
         self, isolated_decisions: Path
     ) -> None:
         receipt_path = (
-            isolated_decisions / "_validations" / "decision.validator.v0_2_0.json"
+            isolated_decisions / "_validations" / _active_receipt_filename()
         )
         receipt_path.write_bytes(b"this is not valid JSON {{{")
         registry = load_decisions_directory(isolated_decisions)
         with pytest.raises(BootstrapError, match="not valid JSON"):
             StandingChainValidator(policy_registry=registry)
 
-    def test_v0_2_0_validator_can_validate_real_receipt_chain(
+    def test_validator_can_validate_real_receipt_chain(
         self, loaded_registry: PolicyRegistry
     ) -> None:
-        # End-to-end: the ceremony succeeded → validator runs → produces
-        # the expected new ruleset_hash on emitted ValidationReceipts.
         validator = StandingChainValidator(policy_registry=loaded_registry)
         obs = _observation()
         result = validator.validate(obs, {})
         assert result.validator_version == VALIDATOR_VERSION
-        assert result.validator_version == "0.2.0"
         assert result.ruleset_hash == compute_ruleset_hash()
         assert result.outcome == ValidationOutcome.VALID
+
+
+# =============================================================================
+# Check.basis discipline (C4)
+# =============================================================================
+
+
+class TestCheckBasisDiscipline:
+    """Falsification target for C4: ``{"result":"pass","basis":"seemed fine"}``
+    no longer slides through. Basis must be structured + inspectable."""
+
+    def test_string_basis_seemed_fine_is_rejected(self) -> None:
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            Check.from_dict({"result": "pass", "basis": "seemed fine"})
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.AUTHORIZATION_CHECK_MALFORMED in codes
+        # Message must point at the C4 rule, not just say "wrong type".
+        messages = " ".join(v.message for v in exc_info.value.violations)
+        assert "structured" in messages or "C4" in messages
+
+    def test_basis_missing_summary_is_rejected(self) -> None:
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            CheckBasis.from_dict(
+                {"rule_id": "x.y.z", "inspectable_refs": ["ref"]}
+            )
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.AUTHORIZATION_CHECK_MALFORMED in codes
+
+    def test_basis_missing_rule_id_is_rejected(self) -> None:
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            CheckBasis.from_dict(
+                {"summary": "ok", "inspectable_refs": ["ref"]}
+            )
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.AUTHORIZATION_CHECK_MALFORMED in codes
+
+    def test_basis_empty_inspectable_refs_is_rejected(self) -> None:
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            CheckBasis.from_dict(
+                {"summary": "ok", "rule_id": "x.y.z", "inspectable_refs": []}
+            )
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.AUTHORIZATION_CHECK_MALFORMED in codes
+
+    def test_basis_inspectable_ref_must_be_non_empty_string(self) -> None:
+        with pytest.raises(EnvelopeParseError):
+            CheckBasis.from_dict(
+                {"summary": "ok", "rule_id": "x.y.z", "inspectable_refs": [""]}
+            )
+        with pytest.raises(EnvelopeParseError):
+            CheckBasis.from_dict(
+                {"summary": "ok", "rule_id": "x.y.z", "inspectable_refs": [123]}
+            )
+
+    def test_basis_unknown_field_rejected(self) -> None:
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            CheckBasis.from_dict(
+                {
+                    "summary": "ok",
+                    "rule_id": "x.y.z",
+                    "inspectable_refs": ["r"],
+                    "smuggled_authority": "no",
+                }
+            )
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.AUTHORIZATION_CHECK_MALFORMED in codes
+
+    def test_basis_round_trips(self) -> None:
+        original = CheckBasis(
+            summary="parent has recommendatory standing",
+            rule_id="validator_contract.5.1.authorization",
+            inspectable_refs=("rcpt_rec_001", "rcpt_rec_002"),
+        )
+        assert CheckBasis.from_dict(original.to_dict()) == original
+
+    def test_in_code_check_with_string_basis_caught_by_schema_pre_pass(
+        self) -> None:
+        # Belt-and-suspenders: even if somebody constructs Check with a
+        # non-CheckBasis basis in code (Python doesn't enforce dataclass
+        # type annotations at runtime), the schema pre-pass catches it.
+        # Test the schema function directly — going through full
+        # validate() also hashes the target which can't canonicalize a
+        # malformed receipt.
+        bad_check = Check(result=CheckResultStatus.PASS, basis="seemed fine")  # type: ignore[arg-type]
+        obs = _observation()
+        bad_auth = StandingReceipt(
+            receipt_id="rcpt_auth_bad",
+            receipt_role=ReceiptRole.AUTHORIZATION,
+            standing_class=StandingClass.AUTHORIZE,
+            subject=obs.subject,
+            ontology_version="gov-doctrine-v1",
+            producer="governor",
+            created_at="2026-04-22T00:00:00Z",
+            checks={"standing_check": bad_check},
+        )
+        violations = validate_schema(bad_auth)
+        codes = [v.code for v in violations]
+        assert ViolationCode.AUTHORIZATION_CHECK_MALFORMED in codes
+        # Message should point at C4, not just say "wrong type".
+        messages = " ".join(v.message for v in violations)
+        assert "CheckBasis" in messages or "C4" in messages

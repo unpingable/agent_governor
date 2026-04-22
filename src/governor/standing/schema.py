@@ -27,6 +27,7 @@ from __future__ import annotations
 from governor.standing.types import (
     AUTHORIZE_REQUIRED_CHECKS,
     Check,
+    CheckBasis,
     StandingClass,
     StandingReceipt,
     Violation,
@@ -38,9 +39,10 @@ from governor.standing.types import (
 # Hashed snapshot of what this module enforces. Folded into the
 # validator's ruleset_hash so any change here forces a Q4 supersession.
 SCHEMA_SNAPSHOT: dict[str, object] = {
-    "schema_version": "0.2.0",
+    "schema_version": "0.3.0",
     "authorize_required_checks": sorted(AUTHORIZE_REQUIRED_CHECKS),
     "check_field_set": ["result", "basis"],
+    "check_basis_field_set": ["summary", "rule_id", "inspectable_refs"],
     "hash_pattern": "^sha256:[0-9a-f]{64}$",
 }
 
@@ -118,8 +120,9 @@ def _check_authorize_checks(receipt: StandingReceipt) -> list[Violation]:
                 pointers=(name,),
             )
         )
-    # In-code construction can stash a non-Check value into the dict;
-    # belt-and-suspenders against that.
+    # In-code construction can stash a non-Check value into the dict,
+    # or a Check whose basis is the wrong type (the dataclass doesn't
+    # type-check). Belt-and-suspenders against both.
     for name, value in receipt.checks.items():
         if not isinstance(value, Check):
             violations.append(
@@ -128,6 +131,20 @@ def _check_authorize_checks(receipt: StandingReceipt) -> list[Violation]:
                     message=(
                         f"check {name!r} must be a Check instance, "
                         f"got {type(value).__name__}"
+                    ),
+                    receipt_id=receipt.receipt_id,
+                    pointers=(name,),
+                )
+            )
+            continue
+        if not isinstance(value.basis, CheckBasis):
+            violations.append(
+                Violation(
+                    code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                    message=(
+                        f"check {name!r} basis must be a CheckBasis instance, "
+                        f"got {type(value.basis).__name__} — freeform string "
+                        "basis is not admissible (C4)"
                     ),
                     receipt_id=receipt.receipt_id,
                     pointers=(name,),

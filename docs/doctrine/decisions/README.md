@@ -57,6 +57,7 @@ This note is not itself a ratification. It is an open future-work flag.
 | `decision.validator_integration.q4` | [Q4-validator-provenance.md](Q4-validator-provenance.md) | 2026-04-19 |
 | `decision.validator.v0_1_0` | [validator-v0_1_0.md](validator-v0_1_0.md) | 2026-04-22 |
 | `decision.validator.v0_2_0` | [validator-v0_2_0.md](validator-v0_2_0.md) | 2026-04-22 |
+| `decision.validator.v0_3_0` | [validator-v0_3_0.md](validator-v0_3_0.md) | 2026-04-22 |
 
 All four Q1–Q4 constitutional blockers are ratified. Validator implementation
 (gap spec C2) shipped against them. The validator's bootstrap declaration
@@ -66,9 +67,19 @@ chain so far:
 - `decision.validator.v0_2_0` — schema-discipline successor (C3),
   attested by a v0.1.0 validation receipt at
   [`_validations/decision.validator.v0_2_0.json`](_validations/decision.validator.v0_2_0.json).
-  The bootstrap exemption is **not transitive** — v0.2.0 onwards
-  requires an attested validation receipt produced by the prior
-  validator.
+- `decision.validator.v0_3_0` — Check.basis structure successor (C4),
+  attested by a v0.2.0 validation receipt at
+  [`_validations/decision.validator.v0_3_0.json`](_validations/decision.validator.v0_3_0.json).
+  Second iteration of the ceremony — confirms the bootstrap exemption
+  holds at v0.1.0 *only* and the supersession discipline is a
+  repeatable pattern.
+
+The bootstrap exemption is **not transitive** — every successor
+requires an attested validation receipt produced by the prior
+validator. Receipts are minted via
+[`scripts/standing/regenerate_supersession_receipt.py`](../../../scripts/standing/regenerate_supersession_receipt.py)
+and documented at
+[`_validations/README.md`](_validations/README.md).
 
 Q5 pre-ratification fallbacks were never introduced — the validator
 landed with the ratified rules as final.

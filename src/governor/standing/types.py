@@ -284,19 +284,135 @@ class EnvelopeParseError(ValueError):
 
 
 @dataclass(frozen=True)
+class CheckBasis:
+    """Structured provenance for a check's verdict (C4).
+
+    Replaces the freeform ``basis: str`` field on :class:`Check`. The
+    validator does not adjudicate whether the basis is *wise* — that
+    would be policy depth. It does enforce that the basis is
+    inspectable: there is a rule, a brief, and at least one
+    reference to something an auditor can interrogate.
+
+    The hidden failure mode this prevents:
+    ``{"result":"pass","basis":"seemed fine"}`` — a verdict that
+    points at nothing.
+    """
+
+    summary: str  # non-empty brief reason
+    rule_id: str  # which rule produced the verdict (e.g. "validator_contract.5.1")
+    inspectable_refs: tuple[str, ...]  # non-empty; ids/keys/handles to inspectable state
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "summary": self.summary,
+            "rule_id": self.rule_id,
+            "inspectable_refs": list(self.inspectable_refs),
+        }
+
+    @classmethod
+    def from_dict(cls, data: object) -> "CheckBasis":
+        if not isinstance(data, Mapping):
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message=(
+                            "check.basis must be a structured mapping "
+                            "({summary, rule_id, inspectable_refs}); freeform "
+                            "string basis is not admissible (C4)"
+                        ),
+                    )
+                ]
+            )
+        allowed = {"summary", "rule_id", "inspectable_refs"}
+        unknown = set(data.keys()) - allowed
+        if unknown:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message=f"unknown check.basis field(s): {sorted(unknown)}",
+                    )
+                ]
+            )
+        missing = allowed - set(data.keys())
+        if missing:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message=f"check.basis missing required field(s): {sorted(missing)}",
+                    )
+                ]
+            )
+        summary = data["summary"]
+        rule_id = data["rule_id"]
+        refs = data["inspectable_refs"]
+        if not isinstance(summary, str) or not summary:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message="check.basis.summary must be a non-empty string",
+                    )
+                ]
+            )
+        if not isinstance(rule_id, str) or not rule_id:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message="check.basis.rule_id must be a non-empty string",
+                    )
+                ]
+            )
+        if not isinstance(refs, (list, tuple)) or not refs:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        message=(
+                            "check.basis.inspectable_refs must be a non-empty list "
+                            "of references to inspectable state"
+                        ),
+                    )
+                ]
+            )
+        for r in refs:
+            if not isinstance(r, str) or not r:
+                raise EnvelopeParseError(
+                    [
+                        Violation(
+                            code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                            message=(
+                                "check.basis.inspectable_refs entries must be "
+                                "non-empty strings"
+                            ),
+                        )
+                    ]
+                )
+        return cls(
+            summary=summary,
+            rule_id=rule_id,
+            inspectable_refs=tuple(refs),
+        )
+
+
+@dataclass(frozen=True)
 class Check:
     """A single structured check result on an authorization receipt.
 
     Both fields are required. Boolean-only or ID-only check values are
-    insufficient (validator_contract §9). ``basis`` is a brief reason —
-    schema enforces presence and shape, not content depth.
+    insufficient (validator_contract §9). The ``basis`` is itself a
+    structured :class:`CheckBasis` — schema enforces presence, shape,
+    and inspectability, but does not adjudicate semantic content depth.
     """
 
     result: CheckResultStatus
-    basis: str
+    basis: CheckBasis
 
     def to_dict(self) -> dict[str, Any]:
-        return {"result": self.result.value, "basis": self.basis}
+        return {"result": self.result.value, "basis": self.basis.to_dict()}
 
     @classmethod
     def from_dict(cls, data: object) -> "Check":
@@ -320,7 +436,7 @@ class Check:
                 ]
             )
         result_raw = data.get("result")
-        basis = data.get("basis")
+        basis_raw = data.get("basis")
         if not isinstance(result_raw, str):
             raise EnvelopeParseError(
                 [
@@ -344,15 +460,9 @@ class Check:
                     )
                 ]
             ) from None
-        if not isinstance(basis, str) or not basis:
-            raise EnvelopeParseError(
-                [
-                    Violation(
-                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
-                        message="check.basis must be a non-empty string",
-                    )
-                ]
-            )
+        # Delegates to CheckBasis — raises EnvelopeParseError on the
+        # "seemed fine" string-basis case.
+        basis = CheckBasis.from_dict(basis_raw)
         return cls(result=result, basis=basis)
 
 

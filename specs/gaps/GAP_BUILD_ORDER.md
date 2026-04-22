@@ -395,16 +395,19 @@ Doctrine in `docs/doctrine/{advisory_vs_constitutional_power, standing_and_recei
 | C2.bootstrap | `docs/doctrine/decisions/validator-v0_1_0.md` | Bootstrap policy_declaration for validator v0.1.0; closes Q4 chicken-and-egg with one bounded sanctioned hole | C2 | **ratified 2026-04-22** |
 | C3 | `src/governor/standing/{schema,types}.py` + `tests/test_standing_schema.py` | Envelope schema discipline: closed key set, hostile-input `from_dict`, structured AUTHORIZE checks (validator_contract §9), strict `sha256:[64-hex]` content-hash format. Schema pre-pass in validator. Validator bumped to v0.2.0. | C2 | **shipped 2026-04-22 (36 tests)** |
 | C3.successor | `docs/doctrine/decisions/validator-v0_2_0.md` + `_validations/decision.validator.v0_2_0.json` | Bootstrap policy_declaration for validator v0.2.0 with `supersedes: decision.validator.v0_1_0`; attested by v0.1.0 validation receipt. First exercise of the Q4 supersession discipline; the bootstrap exemption is non-transitive. | C3 | **ratified 2026-04-22** |
+| C4 | `src/governor/standing/types.py` + `tests/test_standing_schema.py` `TestCheckBasisDiscipline` | `Check.basis` becomes structured `CheckBasis` (summary + rule_id + non-empty `inspectable_refs`). Reuses `AUTHORIZATION_CHECK_MALFORMED`; no new ViolationCode. Falsification: `{"result":"pass","basis":"seemed fine"}` no longer parses. Validator bumped to v0.3.0. | C3 | **shipped 2026-04-22** |
+| C4.successor | `docs/doctrine/decisions/validator-v0_3_0.md` + `_validations/decision.validator.v0_3_0.json` | Bootstrap policy_declaration for validator v0.3.0 with `supersedes: decision.validator.v0_2_0`; attested by v0.2.0 validation receipt minted via the canonical regen script. **Second iteration** of the supersession ceremony — confirms it is a repeatable pattern, not a one-shot move. | C4 | **ratified 2026-04-22** |
 
-> **Constitutional substrate boundary (C2 + C3 complete, 2026-04-22).** Standing
-> validator exists, schema discipline exists, supersession is mechanized.
+> **Constitutional substrate boundary (C2 + C3 + C4 complete, 2026-04-22).** Standing
+> validator exists, schema discipline exists, supersession is a repeatable pattern
+> (now exercised twice: v0.1.0→v0.2.0 and v0.2.0→v0.3.0).
 > Canonical-form ownership is single-source (`receipt_kernel.envelope`).
 > Operator-facing supersession ceremony documented at
 > `docs/doctrine/decisions/_validations/README.md`. Compatibility posture
 > documented at `docs/doctrine/validator_temporal_model.md`. Hostile-input
 > regression corpus at `tests/fixtures/standing_envelopes/`. Future change
 > detection should anchor here; new doctrine seams (gap survival, per-role
-> payload schemas, continuity basis fields) start *after* this line.
+> payload schemas, continuity §10 basis fields) start *after* this line.
 
 ### Downstream subsystems depending on the constitutional substrate
 

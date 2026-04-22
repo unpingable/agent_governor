@@ -29,6 +29,10 @@ Version history (each bump = ``policy_declaration`` with
 - ``0.2.0`` — schema discipline (C3): structured AUTHORIZE checks,
   strict hash format, closed envelope, ``from_dict`` deserialization
   hostile-input rejection
+- ``0.3.0`` — Check.basis structure (C4): ``basis`` becomes a
+  :class:`CheckBasis` (summary + rule_id + inspectable_refs);
+  freeform string basis is no longer admissible. First repeat
+  exercise of the supersession ceremony.
 """
 
 from __future__ import annotations
@@ -62,14 +66,14 @@ from governor.standing.types import (
 
 
 VALIDATOR_ID = "agent_gov.standing_chain_validator"
-VALIDATOR_VERSION = "0.2.0"
+VALIDATOR_VERSION = "0.3.0"
 
 # The validator's own constitutional anchor. The artifact carries
 # ``expected_ruleset_hash`` in its frontmatter; startup compares that
 # value against :func:`compute_ruleset_hash` and refuses to run on
 # mismatch (Q4 acceptance #2 + #4). Each version bump moves this
 # pointer to a new ratified declaration with ``supersedes`` populated.
-VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID = "decision.validator.v0_2_0"
+VALIDATOR_BOOTSTRAP_POLICY_ARTIFACT_ID = "decision.validator.v0_3_0"
 
 
 class BootstrapError(RuntimeError):

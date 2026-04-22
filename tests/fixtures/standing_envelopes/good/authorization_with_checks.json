@@ -13,9 +13,37 @@
   "policy_artifact_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000002",
   "verdict": "permit",
   "checks": {
-    "standing_check": {"result": "pass", "basis": "parent has recommendatory standing"},
-    "admissibility_check": {"result": "pass", "basis": "evidence chain complete"},
-    "scope_check": {"result": "pass", "basis": "within declared scope"},
-    "budget_check": {"result": "pass", "basis": "under per-session budget"}
+    "standing_check": {
+      "result": "pass",
+      "basis": {
+        "summary": "parent has recommendatory standing",
+        "rule_id": "validator_contract.5.1.authorization",
+        "inspectable_refs": ["rcpt_rec_corpus_001"]
+      }
+    },
+    "admissibility_check": {
+      "result": "pass",
+      "basis": {
+        "summary": "evidence chain complete, no unresolved gaps",
+        "rule_id": "validator_contract.5.2",
+        "inspectable_refs": ["rcpt_rec_corpus_001"]
+      }
+    },
+    "scope_check": {
+      "result": "pass",
+      "basis": {
+        "summary": "within declared scope",
+        "rule_id": "validator_contract.9.scope",
+        "inspectable_refs": ["scope_axis:host"]
+      }
+    },
+    "budget_check": {
+      "result": "pass",
+      "basis": {
+        "summary": "under per-session budget",
+        "rule_id": "validator_contract.9.budget",
+        "inspectable_refs": ["budget_pool:session"]
+      }
+    }
   }
 }

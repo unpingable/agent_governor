@@ -52,13 +52,21 @@ def test_good_fixture_round_trips(fixture_path: Path) -> None:
     assert body_a == body_b
 
 
+def _code_for_fixture(fixture_path: Path) -> ViolationCode:
+    """Filenames use ``<violation_code>[__<note>].json`` so multiple
+    fixtures can target the same code without colliding."""
+
+    stem = fixture_path.stem.split("__", 1)[0]
+    return ViolationCode(stem)
+
+
 @pytest.mark.parametrize(
     "fixture_path",
     sorted(BAD_DIR.glob("*.json")),
     ids=lambda p: p.stem,
 )
 def test_bad_fixture_rejected_with_named_code(fixture_path: Path) -> None:
-    expected_code = ViolationCode(fixture_path.stem)
+    expected_code = _code_for_fixture(fixture_path)
     data = _load(fixture_path)
     with pytest.raises(EnvelopeParseError) as exc_info:
         StandingReceipt.from_dict(data)
@@ -77,10 +85,13 @@ def test_corpus_is_non_empty() -> None:
 
 def test_every_bad_fixture_filename_is_a_known_violation_code() -> None:
     # Adding a fixture under a typo'd code name would be silently
-    # ignored. Catch that early.
+    # ignored. Catch that early. Filenames use
+    # ``<violation_code>[__<note>].json`` to support multiple fixtures
+    # per code (e.g. distinct AUTHORIZATION_CHECK_MALFORMED variants).
     valid_codes = {c.value for c in ViolationCode}
     for fixture in sorted(BAD_DIR.glob("*.json")):
-        assert fixture.stem in valid_codes, (
-            f"fixture {fixture.name} stem {fixture.stem!r} is not a valid "
-            "ViolationCode value"
+        code_part = fixture.stem.split("__", 1)[0]
+        assert code_part in valid_codes, (
+            f"fixture {fixture.name} stem prefix {code_part!r} is not a "
+            "valid ViolationCode value"
         )

@@ -58,6 +58,7 @@ This note is not itself a ratification. It is an open future-work flag.
 | `decision.validator.v0_1_0` | [validator-v0_1_0.md](validator-v0_1_0.md) | 2026-04-22 |
 | `decision.validator.v0_2_0` | [validator-v0_2_0.md](validator-v0_2_0.md) | 2026-04-22 |
 | `decision.validator.v0_3_0` | [validator-v0_3_0.md](validator-v0_3_0.md) | 2026-04-22 |
+| `decision.validator.v0_4_0` | [validator-v0_4_0.md](validator-v0_4_0.md) | 2026-04-22 |
 
 All four Q1–Q4 constitutional blockers are ratified. Validator implementation
 (gap spec C2) shipped against them. The validator's bootstrap declaration
@@ -73,6 +74,12 @@ chain so far:
   Second iteration of the ceremony — confirms the bootstrap exemption
   holds at v0.1.0 *only* and the supersession discipline is a
   repeatable pattern.
+- `decision.validator.v0_4_0` — Continuity basis successor (C5),
+  attested by a v0.3.0 validation receipt at
+  [`_validations/decision.validator.v0_4_0.json`](_validations/decision.validator.v0_4_0.json).
+  Third iteration — the ceremony is now routine infrastructure, not
+  novelty. First commit crossing into the *continuity-facing phase*
+  (the validator-core phase ended at C4).
 
 The bootstrap exemption is **not transitive** — every successor
 requires an attested validation receipt produced by the prior

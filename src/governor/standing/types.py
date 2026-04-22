@@ -152,6 +152,22 @@ AUTHORIZE_REQUIRED_CHECKS: frozenset[str] = frozenset(
 )
 
 
+# Roles permitted to carry a ``continuity_basis`` block (C5).
+# Per validator_contract §10 + standing_and_receipts §7.3:
+# continuity preservation is claimed by recommendation (proposing
+# continuity-affecting work), authorization (binding it), and action
+# (executing it). Other roles (observation, interpretation,
+# policy_declaration, validation) cannot claim continuity preservation
+# at this layer.
+CONTINUITY_CLAIMABLE_ROLES: frozenset[ReceiptRole] = frozenset(
+    {
+        ReceiptRole.RECOMMENDATION,
+        ReceiptRole.AUTHORIZATION,
+        ReceiptRole.ACTION,
+    }
+)
+
+
 # =============================================================================
 # Violation vocabulary
 # =============================================================================
@@ -207,6 +223,10 @@ class ViolationCode(enum.Enum):
     AUTHORIZATION_CHECK_MISSING = "authorization_check_missing"
     AUTHORIZATION_CHECK_MALFORMED = "authorization_check_malformed"
 
+    # Continuity basis (C5) — validator_contract §10
+    CONTINUITY_BASIS_ROLE_NOT_ELIGIBLE = "continuity_basis_role_not_eligible"
+    CONTINUITY_BASIS_MALFORMED = "continuity_basis_malformed"
+
 
 VIOLATION_CLASS_FOR_CODE: dict[ViolationCode, ViolationClass] = {
     # Structural
@@ -239,6 +259,9 @@ VIOLATION_CLASS_FOR_CODE: dict[ViolationCode, ViolationClass] = {
     ViolationCode.INVALID_FIELD_TYPE: ViolationClass.STRUCTURAL,
     ViolationCode.AUTHORIZATION_CHECK_MISSING: ViolationClass.STRUCTURAL,
     ViolationCode.AUTHORIZATION_CHECK_MALFORMED: ViolationClass.STRUCTURAL,
+    # Continuity basis (C5)
+    ViolationCode.CONTINUITY_BASIS_ROLE_NOT_ELIGIBLE: ViolationClass.STRUCTURAL,
+    ViolationCode.CONTINUITY_BASIS_MALFORMED: ViolationClass.STRUCTURAL,
 }
 
 
@@ -283,6 +306,109 @@ class EnvelopeParseError(ValueError):
 # =============================================================================
 
 
+def _validate_basis_block(
+    data: object,
+    *,
+    field_label: str,
+    violation_code: "ViolationCode",
+) -> tuple[str, str, tuple[str, ...]]:
+    """Shared parser for the ``{summary, rule_id, inspectable_refs}`` shape.
+
+    Used by :class:`CheckBasis` (Check.basis, C4) and
+    :class:`BasisRecord` (continuity sub-bases, C5). Returns the
+    validated triple. Raises :class:`EnvelopeParseError` carrying the
+    caller-supplied violation code so different basis surfaces can
+    surface their own typed rejection (CheckBasis →
+    ``AUTHORIZATION_CHECK_MALFORMED``; BasisRecord →
+    ``CONTINUITY_BASIS_MALFORMED``).
+
+    Same shape, different species — no shared dataclass (per chatty
+    rule: reuse helpers, not object identity).
+    """
+
+    if not isinstance(data, Mapping):
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=violation_code,
+                    message=(
+                        f"{field_label} must be a structured mapping "
+                        "({summary, rule_id, inspectable_refs}); freeform "
+                        "string is not admissible"
+                    ),
+                )
+            ]
+        )
+    allowed = {"summary", "rule_id", "inspectable_refs"}
+    unknown = set(data.keys()) - allowed
+    if unknown:
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=violation_code,
+                    message=f"unknown {field_label} field(s): {sorted(unknown)}",
+                )
+            ]
+        )
+    missing = allowed - set(data.keys())
+    if missing:
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=violation_code,
+                    message=f"{field_label} missing required field(s): {sorted(missing)}",
+                )
+            ]
+        )
+    summary = data["summary"]
+    rule_id = data["rule_id"]
+    refs = data["inspectable_refs"]
+    if not isinstance(summary, str) or not summary:
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=violation_code,
+                    message=f"{field_label}.summary must be a non-empty string",
+                )
+            ]
+        )
+    if not isinstance(rule_id, str) or not rule_id:
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=violation_code,
+                    message=f"{field_label}.rule_id must be a non-empty string",
+                )
+            ]
+        )
+    if not isinstance(refs, (list, tuple)) or not refs:
+        raise EnvelopeParseError(
+            [
+                Violation(
+                    code=violation_code,
+                    message=(
+                        f"{field_label}.inspectable_refs must be a non-empty list "
+                        "of references to inspectable state"
+                    ),
+                )
+            ]
+        )
+    for r in refs:
+        if not isinstance(r, str) or not r:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=violation_code,
+                        message=(
+                            f"{field_label}.inspectable_refs entries must be "
+                            "non-empty strings"
+                        ),
+                    )
+                ]
+            )
+    return summary, rule_id, tuple(refs)
+
+
 @dataclass(frozen=True)
 class CheckBasis:
     """Structured provenance for a check's verdict (C4).
@@ -311,90 +437,165 @@ class CheckBasis:
 
     @classmethod
     def from_dict(cls, data: object) -> "CheckBasis":
+        summary, rule_id, refs = _validate_basis_block(
+            data,
+            field_label="check.basis",
+            violation_code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+        )
+        return cls(summary=summary, rule_id=rule_id, inspectable_refs=refs)
+
+
+# =============================================================================
+# Continuity basis (C5, validator_contract §10)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class BasisRecord:
+    """Generic structured basis record: summary + rule_id + non-empty refs.
+
+    Same *shape* as :class:`CheckBasis` (chatty rule: reuse the helper,
+    not the object identity). Distinct *type* because the semantic
+    surface is different — a basis record inside
+    :class:`ContinuityBasis` is one of four sub-bases for a continuity
+    preservation claim, not a check verdict.
+
+    If a future ratification ever discovers the semantics are actually
+    identical, this and :class:`CheckBasis` can be merged via a
+    Q4-style supersession; until then they stay distinct so each
+    surface can drift independently.
+    """
+
+    summary: str
+    rule_id: str
+    inspectable_refs: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "summary": self.summary,
+            "rule_id": self.rule_id,
+            "inspectable_refs": list(self.inspectable_refs),
+        }
+
+    @classmethod
+    def from_dict(cls, data: object, *, field_label: str) -> "BasisRecord":
+        summary, rule_id, refs = _validate_basis_block(
+            data,
+            field_label=field_label,
+            violation_code=ViolationCode.CONTINUITY_BASIS_MALFORMED,
+        )
+        return cls(summary=summary, rule_id=rule_id, inspectable_refs=refs)
+
+
+# The four required sub-basis fields per validator_contract §10.
+# Order matters only for canonical serialization (sort_keys handles it).
+CONTINUITY_BASIS_FIELDS: tuple[str, ...] = (
+    "identity_basis",
+    "provenance_basis",
+    "evidence_basis",
+    "operator_confidence_basis",
+)
+
+
+@dataclass(frozen=True)
+class ContinuityBasis:
+    """A continuity preservation claim block (C5, validator_contract §10).
+
+    Presence on a receipt = an explicit claim that this receipt
+    preserves continuity. The block is governed all-or-nothing:
+    partial bases are rejected. ``operator_confidence_basis`` is
+    descriptive only at this layer — the validator enforces presence
+    and shape, but does not read its value as a weighting signal.
+    Promoting it to adjudicative would be a separate Q4-style
+    supersession.
+    """
+
+    identity_basis: BasisRecord
+    provenance_basis: BasisRecord
+    evidence_basis: BasisRecord
+    operator_confidence_basis: BasisRecord
+
+    def to_dict(self) -> dict[str, Any]:
+        return {name: getattr(self, name).to_dict() for name in CONTINUITY_BASIS_FIELDS}
+
+    @classmethod
+    def from_dict(cls, data: object) -> "ContinuityBasis":
+        if data is None:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.CONTINUITY_BASIS_MALFORMED,
+                        message=(
+                            "continuity_basis is presence-as-claim; "
+                            "explicit null is not admissible (omit the field "
+                            "to make no continuity claim)"
+                        ),
+                    )
+                ]
+            )
         if not isinstance(data, Mapping):
             raise EnvelopeParseError(
                 [
                     Violation(
-                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        code=ViolationCode.CONTINUITY_BASIS_MALFORMED,
                         message=(
-                            "check.basis must be a structured mapping "
-                            "({summary, rule_id, inspectable_refs}); freeform "
-                            "string basis is not admissible (C4)"
+                            "continuity_basis must be a structured mapping "
+                            "with all four required sub-bases"
                         ),
                     )
                 ]
             )
-        allowed = {"summary", "rule_id", "inspectable_refs"}
-        unknown = set(data.keys()) - allowed
+        if not data:
+            raise EnvelopeParseError(
+                [
+                    Violation(
+                        code=ViolationCode.CONTINUITY_BASIS_MALFORMED,
+                        message=(
+                            "continuity_basis is presence-as-claim; empty "
+                            "block is not admissible (omit the field to make "
+                            "no continuity claim)"
+                        ),
+                    )
+                ]
+            )
+        required = set(CONTINUITY_BASIS_FIELDS)
+        unknown = set(data.keys()) - required
         if unknown:
             raise EnvelopeParseError(
                 [
                     Violation(
-                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
-                        message=f"unknown check.basis field(s): {sorted(unknown)}",
+                        code=ViolationCode.CONTINUITY_BASIS_MALFORMED,
+                        message=f"unknown continuity_basis field(s): {sorted(unknown)}",
                     )
                 ]
             )
-        missing = allowed - set(data.keys())
+        missing = required - set(data.keys())
         if missing:
             raise EnvelopeParseError(
                 [
                     Violation(
-                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
-                        message=f"check.basis missing required field(s): {sorted(missing)}",
-                    )
-                ]
-            )
-        summary = data["summary"]
-        rule_id = data["rule_id"]
-        refs = data["inspectable_refs"]
-        if not isinstance(summary, str) or not summary:
-            raise EnvelopeParseError(
-                [
-                    Violation(
-                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
-                        message="check.basis.summary must be a non-empty string",
-                    )
-                ]
-            )
-        if not isinstance(rule_id, str) or not rule_id:
-            raise EnvelopeParseError(
-                [
-                    Violation(
-                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
-                        message="check.basis.rule_id must be a non-empty string",
-                    )
-                ]
-            )
-        if not isinstance(refs, (list, tuple)) or not refs:
-            raise EnvelopeParseError(
-                [
-                    Violation(
-                        code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
+                        code=ViolationCode.CONTINUITY_BASIS_MALFORMED,
                         message=(
-                            "check.basis.inspectable_refs must be a non-empty list "
-                            "of references to inspectable state"
+                            f"continuity_basis missing required sub-basis: {sorted(missing)} "
+                            "(all-or-nothing — partial blocks are not admissible)"
                         ),
                     )
                 ]
             )
-        for r in refs:
-            if not isinstance(r, str) or not r:
-                raise EnvelopeParseError(
-                    [
-                        Violation(
-                            code=ViolationCode.AUTHORIZATION_CHECK_MALFORMED,
-                            message=(
-                                "check.basis.inspectable_refs entries must be "
-                                "non-empty strings"
-                            ),
-                        )
-                    ]
-                )
         return cls(
-            summary=summary,
-            rule_id=rule_id,
-            inspectable_refs=tuple(refs),
+            identity_basis=BasisRecord.from_dict(
+                data["identity_basis"], field_label="continuity_basis.identity_basis"
+            ),
+            provenance_basis=BasisRecord.from_dict(
+                data["provenance_basis"], field_label="continuity_basis.provenance_basis"
+            ),
+            evidence_basis=BasisRecord.from_dict(
+                data["evidence_basis"], field_label="continuity_basis.evidence_basis"
+            ),
+            operator_confidence_basis=BasisRecord.from_dict(
+                data["operator_confidence_basis"],
+                field_label="continuity_basis.operator_confidence_basis",
+            ),
         )
 
 
@@ -536,6 +737,7 @@ STANDING_RECEIPT_ENVELOPE_KEYS: frozenset[str] = frozenset(
         "policy_artifact_hash",
         "verdict",
         "checks",
+        "continuity_basis",
         "payload",
         "display_metadata",
         "gaps",
@@ -597,6 +799,11 @@ class StandingReceipt:
     # receipts must carry the four AUTHORIZE_REQUIRED_CHECKS; the
     # schema validator enforces presence + shape.
     checks: dict[str, Check] = field(default_factory=dict)
+    # Continuity preservation claim (C5, validator_contract §10).
+    # Presence = explicit claim. Only roles in
+    # CONTINUITY_CLAIMABLE_ROLES may carry this field; the schema
+    # validator enforces the role gate.
+    continuity_basis: ContinuityBasis | None = None
     # Free-form payload (role-specific extras kept here so envelope shape
     # stays stable; per-role payload schema is follow-on work).
     payload: dict[str, Any] = field(default_factory=dict)
@@ -629,6 +836,14 @@ class StandingReceipt:
             body["verdict"] = self.verdict.value
         # checks: normalize CheckResultStatus enums.
         body["checks"] = {name: chk.to_dict() for name, chk in self.checks.items()}
+        # continuity_basis is presence-as-claim — absence = no claim.
+        # asdict gives us ``None`` when the field is unset; drop it so
+        # the canonical body distinguishes absence from explicit null
+        # (explicit null is rejected by from_dict as a loophole).
+        if self.continuity_basis is None:
+            body.pop("continuity_basis", None)
+        else:
+            body["continuity_basis"] = self.continuity_basis.to_dict()
         return body
 
     def to_dict(self) -> dict[str, Any]:
@@ -789,6 +1004,17 @@ class StandingReceipt:
                 )
             checks[name] = Check.from_dict(chk_raw)
 
+        # continuity_basis (C5): role gate enforced by schema pre-pass;
+        # here we only parse the structure if the key is present.
+        # Note: from_dict treats explicit ``continuity_basis: null`` and
+        # ``continuity_basis: {}`` as malformed (presence-as-claim
+        # cannot be loophole'd). Omit the field to make no claim.
+        continuity_basis: ContinuityBasis | None = None
+        if "continuity_basis" in data:
+            continuity_basis = ContinuityBasis.from_dict(
+                data["continuity_basis"]
+            )
+
         # Hash format checks (chain class).
         cont_hash = data.get("content_hash")
         if cont_hash is not None and not is_valid_content_hash(cont_hash):
@@ -827,6 +1053,7 @@ class StandingReceipt:
             policy_artifact_hash=pa_hash,
             verdict=verdict,
             checks=checks,
+            continuity_basis=continuity_basis,
             payload=dict(data.get("payload", {})),
             display_metadata=dict(data.get("display_metadata", {})),
             gaps=tuple(data.get("gaps", ())),

@@ -24,10 +24,13 @@ import pytest
 from governor.standing import (
     AUTHORIZE_REQUIRED_CHECKS,
     AuthorizationVerdict,
+    BasisRecord,
     BootstrapError,
+    CONTINUITY_CLAIMABLE_ROLES,
     Check,
     CheckBasis,
     CheckResultStatus,
+    ContinuityBasis,
     EnvelopeParseError,
     ParentRef,
     PolicyRegistry,
@@ -628,6 +631,210 @@ class TestCheckBasisDiscipline:
             inspectable_refs=("rcpt_rec_001", "rcpt_rec_002"),
         )
         assert CheckBasis.from_dict(original.to_dict()) == original
+
+# =============================================================================
+# Continuity basis discipline (C5, validator_contract §10)
+# =============================================================================
+
+
+def _continuity_basis() -> ContinuityBasis:
+    """A well-formed continuity_basis block — all four sub-bases populated."""
+
+    return ContinuityBasis(
+        identity_basis=BasisRecord(
+            summary="device id stable across reboots",
+            rule_id="continuity.identity.host_uuid",
+            inspectable_refs=("host:abc:uuid",),
+        ),
+        provenance_basis=BasisRecord(
+            summary="lineage traced to bootstrap snapshot",
+            rule_id="continuity.provenance.snapshot_chain",
+            inspectable_refs=("snapshot:t0", "snapshot:t1"),
+        ),
+        evidence_basis=BasisRecord(
+            summary="metric continuity confirmed across window",
+            rule_id="continuity.evidence.metric_window",
+            inspectable_refs=("rcpt_obs_metric_window",),
+        ),
+        operator_confidence_basis=BasisRecord(
+            summary="operator approval recorded",
+            rule_id="continuity.operator.approval",
+            inspectable_refs=("rcpt_obs_approval",),
+        ),
+    )
+
+
+class TestContinuityBasisDiscipline:
+    """C5 falsification targets — chatty's "brutal and boring" set:
+
+    - summary-only basis rejected
+    - empty inspectable_refs rejected
+    - continuity-preserving claim missing one required basis field rejected
+    - continuity-preserving claim with basis prose but no provenance
+      structure rejected
+    - role gate enforced (presence-as-claim is not unrestricted)
+    - presence-as-claim cannot be loophole'd via null/empty
+    """
+
+    def test_well_formed_block_round_trips(self) -> None:
+        cb = _continuity_basis()
+        assert ContinuityBasis.from_dict(cb.to_dict()) == cb
+
+    def test_action_receipt_with_continuity_basis_passes_schema(
+        self,
+    ) -> None:
+        obs = _observation()
+        action = StandingReceipt(
+            receipt_id="rcpt_act_001",
+            receipt_role=ReceiptRole.ACTION,
+            standing_class=StandingClass.EXECUTE,
+            subject=obs.subject,
+            ontology_version="gov-doctrine-v1",
+            producer="runtime",
+            created_at="2026-04-22T00:00:00Z",
+            continuity_basis=_continuity_basis(),
+        )
+        assert validate_schema(action) == []
+
+    @pytest.mark.parametrize(
+        "ineligible_role,ineligible_standing",
+        [
+            (ReceiptRole.OBSERVATION, StandingClass.OBSERVE),
+            (ReceiptRole.INTERPRETATION, StandingClass.INTERPRET),
+            (ReceiptRole.POLICY_DECLARATION, StandingClass.POLICY_DECLARE),
+            (ReceiptRole.VALIDATION, StandingClass.OBSERVE),
+        ],
+    )
+    def test_role_gate_rejects_ineligible_roles(
+        self, ineligible_role: ReceiptRole, ineligible_standing: StandingClass
+    ) -> None:
+        receipt = StandingReceipt(
+            receipt_id="rcpt_role_gate",
+            receipt_role=ineligible_role,
+            standing_class=ineligible_standing,
+            subject="host:x",
+            ontology_version="gov-doctrine-v1",
+            producer="x",
+            created_at="2026-04-22T00:00:00Z",
+            continuity_basis=_continuity_basis(),
+        )
+        violations = validate_schema(receipt)
+        codes = [v.code for v in violations]
+        assert ViolationCode.CONTINUITY_BASIS_ROLE_NOT_ELIGIBLE in codes
+
+    def test_eligible_roles_match_doctrine(self) -> None:
+        # Sanity-pin the role set so a future "while we're here" tweak
+        # gets caught by a test, not by an incident.
+        assert CONTINUITY_CLAIMABLE_ROLES == frozenset(
+            {
+                ReceiptRole.RECOMMENDATION,
+                ReceiptRole.AUTHORIZATION,
+                ReceiptRole.ACTION,
+            }
+        )
+
+    def test_explicit_null_block_rejected(self) -> None:
+        good = _observation().to_dict()
+        good["continuity_basis"] = None
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            StandingReceipt.from_dict(good)
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.CONTINUITY_BASIS_MALFORMED in codes
+        msg = " ".join(v.message for v in exc_info.value.violations)
+        assert "presence-as-claim" in msg or "explicit null" in msg
+
+    def test_empty_block_rejected(self) -> None:
+        good = _observation().to_dict()
+        good["continuity_basis"] = {}
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            StandingReceipt.from_dict(good)
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.CONTINUITY_BASIS_MALFORMED in codes
+
+    @pytest.mark.parametrize(
+        "missing_field",
+        [
+            "identity_basis",
+            "provenance_basis",
+            "evidence_basis",
+            "operator_confidence_basis",
+        ],
+    )
+    def test_partial_block_rejected(self, missing_field: str) -> None:
+        block = _continuity_basis().to_dict()
+        del block[missing_field]
+        good = _observation().to_dict()
+        good["continuity_basis"] = block
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            StandingReceipt.from_dict(good)
+        violations = exc_info.value.violations
+        codes = [v.code for v in violations]
+        assert ViolationCode.CONTINUITY_BASIS_MALFORMED in codes
+        # Message names the missing field — operators can fix without grep.
+        msg = " ".join(v.message for v in violations)
+        assert missing_field in msg
+
+    def test_string_sub_basis_rejected(self) -> None:
+        # The "basis prose but no provenance structure" target.
+        block = _continuity_basis().to_dict()
+        block["evidence_basis"] = "evidence chain looks fine"
+        good = _observation().to_dict()
+        good["continuity_basis"] = block
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            StandingReceipt.from_dict(good)
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.CONTINUITY_BASIS_MALFORMED in codes
+
+    def test_sub_basis_empty_inspectable_refs_rejected(self) -> None:
+        block = _continuity_basis().to_dict()
+        block["evidence_basis"]["inspectable_refs"] = []
+        good = _observation().to_dict()
+        good["continuity_basis"] = block
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            StandingReceipt.from_dict(good)
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.CONTINUITY_BASIS_MALFORMED in codes
+
+    def test_sub_basis_missing_summary_rejected(self) -> None:
+        block = _continuity_basis().to_dict()
+        del block["evidence_basis"]["summary"]
+        good = _observation().to_dict()
+        good["continuity_basis"] = block
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            StandingReceipt.from_dict(good)
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.CONTINUITY_BASIS_MALFORMED in codes
+
+    def test_sub_basis_unknown_field_rejected(self) -> None:
+        block = _continuity_basis().to_dict()
+        block["identity_basis"]["smuggled_authority"] = "no"
+        good = _observation().to_dict()
+        good["continuity_basis"] = block
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            StandingReceipt.from_dict(good)
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.CONTINUITY_BASIS_MALFORMED in codes
+
+    def test_unknown_top_level_field_in_block_rejected(self) -> None:
+        block = _continuity_basis().to_dict()
+        block["chronicle_basis"] = block["identity_basis"]  # cousin field
+        good = _observation().to_dict()
+        good["continuity_basis"] = block
+        with pytest.raises(EnvelopeParseError) as exc_info:
+            StandingReceipt.from_dict(good)
+        codes = [v.code for v in exc_info.value.violations]
+        assert ViolationCode.CONTINUITY_BASIS_MALFORMED in codes
+
+    def test_no_continuity_claim_round_trips(self) -> None:
+        # Absence is no-claim. Roundtrip must preserve the absence —
+        # ``continuity_basis`` does not appear in canonical body.
+        receipt = _observation()
+        body = receipt.canonical_body()
+        assert "continuity_basis" not in body
+        # And from_dict accepts the absence.
+        roundtripped = StandingReceipt.from_dict(receipt.to_dict())
+        assert roundtripped.continuity_basis is None
+
 
     def test_in_code_check_with_string_basis_caught_by_schema_pre_pass(
         self) -> None:

@@ -398,16 +398,16 @@ Doctrine in `docs/doctrine/{advisory_vs_constitutional_power, standing_and_recei
 | C4 | `src/governor/standing/types.py` + `tests/test_standing_schema.py` `TestCheckBasisDiscipline` | `Check.basis` becomes structured `CheckBasis` (summary + rule_id + non-empty `inspectable_refs`). Reuses `AUTHORIZATION_CHECK_MALFORMED`; no new ViolationCode. Falsification: `{"result":"pass","basis":"seemed fine"}` no longer parses. Validator bumped to v0.3.0. | C3 | **shipped 2026-04-22** |
 | C4.successor | `docs/doctrine/decisions/validator-v0_3_0.md` + `_validations/decision.validator.v0_3_0.json` | Bootstrap policy_declaration for validator v0.3.0 with `supersedes: decision.validator.v0_2_0`; attested by v0.2.0 validation receipt minted via the canonical regen script. **Second iteration** of the supersession ceremony — confirms it is a repeatable pattern, not a one-shot move. | C4 | **ratified 2026-04-22** |
 
-> **Constitutional substrate boundary (C2 + C3 + C4 complete, 2026-04-22).** Standing
-> validator exists, schema discipline exists, supersession is a repeatable pattern
-> (now exercised twice: v0.1.0→v0.2.0 and v0.2.0→v0.3.0).
-> Canonical-form ownership is single-source (`receipt_kernel.envelope`).
-> Operator-facing supersession ceremony documented at
-> `docs/doctrine/decisions/_validations/README.md`. Compatibility posture
-> documented at `docs/doctrine/validator_temporal_model.md`. Hostile-input
-> regression corpus at `tests/fixtures/standing_envelopes/`. Future change
-> detection should anchor here; new doctrine seams (gap survival, per-role
-> payload schemas, continuity §10 basis fields) start *after* this line.
+> **Validator-core phase complete (C2 + C3 + C4, 2026-04-22).** Standing
+> validator exists, schema discipline exists, supersession is a repeatable
+> pattern (exercised twice: v0.1.0→v0.2.0 and v0.2.0→v0.3.0). Future change
+> detection should anchor here. The validator-core surface is now
+> infrastructure; it stops getting "first-time" attention. **Continuity-facing
+> phase begins at C5** — the validator now extends to govern substantive
+> admissibility surfaces beyond its own bootstrap.
+
+| C5 | `src/governor/standing/types.py` (`ContinuityBasis`, `BasisRecord`) + `tests/test_standing_schema.py` `TestContinuityBasisDiscipline` | Continuity preservation claim (validator_contract §10) becomes a structured `continuity_basis` block on receipts. Presence-as-claim, role-gated to recommendation/authorization/action only, all-or-nothing (four required sub-bases via `BasisRecord`). Two new ViolationCodes: `CONTINUITY_BASIS_ROLE_NOT_ELIGIBLE`, `CONTINUITY_BASIS_MALFORMED`. `operator_confidence_basis` is descriptive only — validator enforces structure, not value semantics. Validator bumped to v0.4.0. | C4 | **shipped 2026-04-22** |
+| C5.successor | `docs/doctrine/decisions/validator-v0_4_0.md` + `_validations/decision.validator.v0_4_0.json` | Bootstrap policy_declaration for validator v0.4.0 with `supersedes: decision.validator.v0_3_0`; attested by v0.3.0 validation receipt. **Third iteration** of the supersession ceremony — pattern is now routine infrastructure. First commit crossing into the continuity-facing phase. | C5 | **ratified 2026-04-22** |
 
 ### Downstream subsystems depending on the constitutional substrate
 

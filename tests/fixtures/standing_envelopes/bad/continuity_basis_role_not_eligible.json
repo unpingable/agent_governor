@@ -1,0 +1,31 @@
+{
+  "receipt_id": "rcpt_obs_smuggled_continuity",
+  "receipt_role": "observation",
+  "standing_class": "OBSERVE",
+  "subject": "host:bad",
+  "ontology_version": "gov-doctrine-v1",
+  "producer": "hostile",
+  "created_at": "2026-04-22T00:00:00Z",
+  "continuity_basis": {
+    "identity_basis": {
+      "summary": "device id stable",
+      "rule_id": "continuity.identity.host_uuid",
+      "inspectable_refs": ["host:bad:uuid"]
+    },
+    "provenance_basis": {
+      "summary": "lineage chain intact",
+      "rule_id": "continuity.provenance.snapshot_chain",
+      "inspectable_refs": ["snapshot:t0"]
+    },
+    "evidence_basis": {
+      "summary": "metric continuity ok",
+      "rule_id": "continuity.evidence.metric_window",
+      "inspectable_refs": ["rcpt_obs_window"]
+    },
+    "operator_confidence_basis": {
+      "summary": "operator approved",
+      "rule_id": "continuity.operator.approval",
+      "inspectable_refs": ["rcpt_approval"]
+    }
+  }
+}

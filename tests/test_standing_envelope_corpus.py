@@ -26,6 +26,7 @@ from governor.standing import (
     StandingReceipt,
     ViolationCode,
     canonical_json,
+    validate_schema,
 )
 
 
@@ -66,14 +67,28 @@ def _code_for_fixture(fixture_path: Path) -> ViolationCode:
     ids=lambda p: p.stem,
 )
 def test_bad_fixture_rejected_with_named_code(fixture_path: Path) -> None:
+    """A bad fixture must produce its named ViolationCode either at
+    parse time (from_dict raises EnvelopeParseError) or at runtime
+    (validate_schema returns a violations list). Both are typed
+    rejections and both belong in the corpus."""
+
     expected_code = _code_for_fixture(fixture_path)
     data = _load(fixture_path)
-    with pytest.raises(EnvelopeParseError) as exc_info:
-        StandingReceipt.from_dict(data)
-    codes = [v.code for v in exc_info.value.violations]
-    assert expected_code in codes, (
-        f"fixture {fixture_path.name} should produce {expected_code.value}, "
-        f"got {[c.value for c in codes]}"
+    try:
+        receipt = StandingReceipt.from_dict(data)
+    except EnvelopeParseError as exc:
+        codes = [v.code for v in exc.violations]
+        assert expected_code in codes, (
+            f"fixture {fixture_path.name} should produce {expected_code.value} "
+            f"at parse time, got {[c.value for c in codes]}"
+        )
+        return
+    # Parsed cleanly — runtime schema validation must catch it.
+    runtime_violations = validate_schema(receipt)
+    runtime_codes = [v.code for v in runtime_violations]
+    assert expected_code in runtime_codes, (
+        f"fixture {fixture_path.name} parsed cleanly but did not produce "
+        f"{expected_code.value} at runtime; got {[c.value for c in runtime_codes]}"
     )
 
 

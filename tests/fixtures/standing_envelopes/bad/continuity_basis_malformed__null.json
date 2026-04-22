@@ -1,0 +1,10 @@
+{
+  "receipt_id": "rcpt_obs_null_basis",
+  "receipt_role": "action",
+  "standing_class": "EXECUTE",
+  "subject": "host:bad",
+  "ontology_version": "gov-doctrine-v1",
+  "producer": "hostile",
+  "created_at": "2026-04-22T00:00:00Z",
+  "continuity_basis": null
+}

@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from governor.standing.types import (
     AUTHORIZE_REQUIRED_CHECKS,
+    CONTINUITY_BASIS_FIELDS,
+    CONTINUITY_CLAIMABLE_ROLES,
     Check,
     CheckBasis,
     StandingClass,
@@ -39,10 +41,12 @@ from governor.standing.types import (
 # Hashed snapshot of what this module enforces. Folded into the
 # validator's ruleset_hash so any change here forces a Q4 supersession.
 SCHEMA_SNAPSHOT: dict[str, object] = {
-    "schema_version": "0.3.0",
+    "schema_version": "0.4.0",
     "authorize_required_checks": sorted(AUTHORIZE_REQUIRED_CHECKS),
     "check_field_set": ["result", "basis"],
     "check_basis_field_set": ["summary", "rule_id", "inspectable_refs"],
+    "continuity_basis_field_set": list(CONTINUITY_BASIS_FIELDS),
+    "continuity_claimable_roles": sorted(r.value for r in CONTINUITY_CLAIMABLE_ROLES),
     "hash_pattern": "^sha256:[0-9a-f]{64}$",
 }
 
@@ -101,6 +105,25 @@ def validate_schema(receipt: StandingReceipt) -> list[Violation]:
     # AUTHORIZE structured-check enforcement (validator_contract §9).
     if receipt.standing_class == StandingClass.AUTHORIZE:
         violations.extend(_check_authorize_checks(receipt))
+
+    # Continuity basis role gate (C5, validator_contract §10).
+    # Presence-as-claim: if the field is set, the role must be in
+    # CONTINUITY_CLAIMABLE_ROLES. The structural validity of the block
+    # itself is enforced at parse time by ContinuityBasis.from_dict.
+    if receipt.continuity_basis is not None:
+        if receipt.receipt_role not in CONTINUITY_CLAIMABLE_ROLES:
+            violations.append(
+                Violation(
+                    code=ViolationCode.CONTINUITY_BASIS_ROLE_NOT_ELIGIBLE,
+                    message=(
+                        f"role {receipt.receipt_role.value!r} cannot claim "
+                        "continuity preservation; only "
+                        f"{sorted(r.value for r in CONTINUITY_CLAIMABLE_ROLES)} "
+                        "may carry continuity_basis"
+                    ),
+                    receipt_id=receipt.receipt_id,
+                )
+            )
 
     return violations
 

@@ -4529,6 +4529,45 @@ class TestSignalsPreflight:
 # =============================================================================
 
 
+class TestStandingNamespaceCollisionTripwire:
+    """Guards against the regression where ``governor.standing`` (package)
+    shadowed ``governor.standing`` (module), breaking the workload-identity
+    auth path silently.
+
+    If this ever fails again, the workload-identity submodule has moved,
+    been re-exported ambiguously at the package root, or been shadowed
+    a second time. Don't 'fix' by weakening the test — fix the collision.
+    """
+
+    def test_workload_identity_submodule_importable(self):
+        # The production path at daemon.resolve_principal uses these.
+        from governor.standing.workload_identity import (  # noqa: F401
+            AssessmentResult,
+            StandingVerificationError,
+            VerifiedIdentity,
+            WorkloadId,
+            verify_and_resolve,
+            verify_identity,
+            _signing_input,
+            _compute_signature,
+        )
+
+    def test_validator_surface_at_package_root_still_distinct(self):
+        # Validator symbols live at the package root; workload-identity
+        # symbols do NOT. Re-exporting would conflate two unrelated
+        # substrates — see standing/__init__.py coexistence note.
+        import governor.standing as s
+        assert hasattr(s, "StandingReceipt")       # validator symbol
+        assert hasattr(s, "StandingChainValidator")  # validator symbol
+        assert not hasattr(s, "WorkloadId"), (
+            "Workload-identity symbol leaked into package root; revert "
+            "the leak — see standing/__init__.py coexistence note."
+        )
+        assert not hasattr(s, "verify_and_resolve"), (
+            "Workload-identity symbol leaked into package root; revert."
+        )
+
+
 class TestStandingTokenReceipts:
     """Tests that standing token verification threads auth_method and
     principal_ref all the way into emitted GateReceipts."""
@@ -4538,7 +4577,7 @@ class TestStandingTokenReceipts:
     def _make_standing_token(self, **overrides) -> dict:
         """Build a valid standing token dict (synthetic, not from fixture)."""
         from datetime import datetime, timedelta, timezone
-        from governor.standing import WorkloadId, _compute_signature
+        from governor.standing.workload_identity import WorkloadId, _compute_signature
 
         now = datetime.now(timezone.utc)
         defaults = {
@@ -4689,7 +4728,7 @@ class TestStandingEnforcement:
 
     def _make_standing_token(self, **overrides) -> dict:
         from datetime import datetime, timedelta, timezone
-        from governor.standing import _compute_signature
+        from governor.standing.workload_identity import _compute_signature
 
         now = datetime.now(timezone.utc)
         defaults = {

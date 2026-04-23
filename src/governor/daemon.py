@@ -211,7 +211,7 @@ class Dispatcher:
                     return None
                 # Surface auth errors with AUTH_ERROR code (same as non-streaming path)
                 from .chat_bridge import BackendAuthError
-                from .standing import StandingVerificationError
+                from .standing.workload_identity import StandingVerificationError
                 if isinstance(e, (BackendAuthError, StandingRequiredError, StandingVerificationError)):
                     return _error_response(request_id, AUTH_ERROR, str(e))
                 return _error_response(request_id, GOVERNOR_ERROR, str(e))
@@ -240,7 +240,7 @@ class Dispatcher:
                 return None
             # Surface auth errors with a specific code so clients can detect them
             from .chat_bridge import BackendAuthError
-            from .standing import StandingVerificationError
+            from .standing.workload_identity import StandingVerificationError
             if isinstance(e, (BackendAuthError, StandingRequiredError, StandingVerificationError)):
                 return _error_response(request_id, AUTH_ERROR, str(e))
             return _error_response(request_id, GOVERNOR_ERROR, str(e))
@@ -816,10 +816,12 @@ class DaemonState:
         # Standing token path — fail closed
         if standing_token:
             try:
-                from .standing import (
-                    WorkloadId,
-                    verify_and_resolve,
+                from .standing.workload_identity import (
+                    AssessmentResult,
                     StandingVerificationError,
+                    WorkloadId,
+                    _signing_input,
+                    verify_and_resolve,
                 )
                 import hashlib
 
@@ -828,7 +830,7 @@ class DaemonState:
                 if secret is None:
                     logger.warning("standing token provided but no secret configured")
                     raise StandingVerificationError(
-                        __import__("governor.standing", fromlist=["AssessmentResult"]).AssessmentResult.ASSESSMENT_COMPROMISED,
+                        AssessmentResult.ASSESSMENT_COMPROMISED,
                         token,
                     )
                 vi = verify_and_resolve(
@@ -836,7 +838,6 @@ class DaemonState:
                     expected_audience=self._standing_audience,
                 )
                 # Hash the canonical signing input for principal_ref
-                from .standing import _signing_input
                 canonical = _signing_input(
                     token.jti, token.name, token.location,
                     token.audience, token.issued_at, token.expires_at,

@@ -20,6 +20,21 @@ decisions:
 
 See ``specs/gaps/GOV_GAP_VALIDATOR_INTEGRATION_001.md`` for the gap spec
 that pins these resolutions.
+
+Coexistence note: this package currently houses two unrelated substrates
+by design-for-now, not by accident:
+
+- Constitutional validator (this ``__init__.py`` re-exports): standing
+  lattice, receipts, validator contract.
+- Workload-identity verification (``workload_identity`` submodule):
+  HMAC-signed auth tokens.
+
+Both were once named ``governor.standing``. The top-level ``__init__``
+exports only validator symbols to avoid name collision at the package
+root. Callers that need workload-identity primitives must import via
+``governor.standing.workload_identity`` explicitly. If the split ever
+feels stupid enough to fix, rename the submodule to
+``governor.workload_identity`` rather than merging the root surfaces.
 """
 
 from governor.standing.policy_registry import (

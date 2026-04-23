@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from governor.standing import (
+from governor.standing.workload_identity import (
     AssessmentResult,
     StandingVerificationError,
     VerifiedIdentity,

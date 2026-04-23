@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Standing identity verification for Governor.
+"""Workload-identity verification for Governor (runtime auth substrate).
 
 Verifies HMAC-signed WorkloadId tokens issued by the standing system.
 Cross-language compatible: same signing format as standing-identity (Rust).
@@ -9,6 +9,17 @@ Signing input (pipe-delimited, HMAC-SHA256, hex-encoded):
 
 This module is the Python side of the cross-language verification contract.
 Both implementations must produce identical results for the same inputs.
+
+Naming note: this module lives at ``governor.standing.workload_identity``.
+It was historically named ``governor.standing`` (a top-level module).
+When the constitutional receipt validator (C2-C5) introduced the
+``governor.standing`` *package*, the module was shadowed and its imports
+silently broke — a production auth-path bug. The module was moved into
+the package as a submodule to resolve the namespace collision without
+merging the two meanings at the root level. Callers must import via
+the explicit submodule path; do not re-export from the package
+``__init__`` to avoid conflating workload-auth symbols with validator
+symbols.
 """
 
 from __future__ import annotations

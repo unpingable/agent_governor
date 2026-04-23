@@ -979,11 +979,17 @@ class EvidenceGate:
             return None
 
     def _emit_receipt(self, output: str, result: EvidenceGateOutput,
-                      policy_fragment: dict | None = None) -> Any:
+                      policy_fragment: dict | None = None,
+                      horizon: Any = None) -> Any:
         """Emit a gate receipt for this check.
 
         If no receipt_system is configured, logs a 'receipt_suppressed' event
         so the absence is auditable.
+
+        horizon is optional (HorizonBlock | None). The evidence gate itself
+        does not compute horizon; callers with policy context that declares
+        tolerability may pre-populate it. Default None means "producer did
+        not declare" — consumer fail-closed policy applies.
 
         Returns the GateReceipt (for correlation with receipt_v1) or None.
         """
@@ -1018,6 +1024,7 @@ class EvidenceGate:
             subject_bytes=output.encode("utf-8"),
             evidence_bundle=evidence_bundle,
             gate_config=self.config.to_dict(),
+            horizon=horizon,
         )
 
     def _emit_receipt_v1(

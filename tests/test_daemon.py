@@ -692,6 +692,137 @@ class TestReceipts:
 
 
 # =============================================================================
+# Handler: receipts.horizon_expiring_soon (GOV_GAP_TOLERABILITY_HORIZON_001)
+# =============================================================================
+
+
+class TestReceiptsHorizonExpiringSoon:
+
+    @pytest.mark.asyncio
+    async def test_detail_carries_horizon_block(self, dispatcher_and_state):
+        """receipts.detail passes through horizon automatically via to_dict()."""
+        from datetime import datetime, timedelta, timezone
+
+        from governor.gate_receipt import HORIZON_HOURS, HorizonBlock
+
+        d, state = dispatcher_and_state
+        future = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+        horizon = HorizonBlock(
+            kind=HORIZON_HOURS,
+            basis_id="policy:defer.v1",
+            basis_hash="sha256:" + "a" * 64,
+            expiry=future,
+        )
+        receipt = state.receipt_system.emit(
+            gate="advisory", verdict="warn", subject_kind="t",
+            subject_bytes=b"x", evidence_bundle={}, gate_config={},
+            horizon=horizon,
+        )
+        resp = await roundtrip(
+            d, "receipts.detail", {"receipt_id": receipt.receipt_id}
+        )
+        h_out = resp["result"]["receipt"]["horizon"]
+        assert h_out["kind"] == "hours"
+        assert h_out["basis_id"] == "policy:defer.v1"
+        assert h_out["expiry"] == future
+
+    @pytest.mark.asyncio
+    async def test_expiring_soon_finds_receipts_within_window(
+        self, dispatcher_and_state
+    ):
+        from datetime import datetime, timedelta, timezone
+
+        from governor.gate_receipt import HORIZON_HOURS, HorizonBlock
+
+        d, state = dispatcher_and_state
+        now = datetime.now(timezone.utc)
+        # Expires in 1 hour — inside a 2-hour window.
+        near = HorizonBlock(
+            kind=HORIZON_HOURS, basis_id="p1",
+            basis_hash="sha256:" + "a" * 64,
+            expiry=(now + timedelta(hours=1)).isoformat(),
+        )
+        # Expires in 5 hours — outside a 2-hour window.
+        far = HorizonBlock(
+            kind=HORIZON_HOURS, basis_id="p2",
+            basis_hash="sha256:" + "b" * 64,
+            expiry=(now + timedelta(hours=5)).isoformat(),
+        )
+        near_r = state.receipt_system.emit(
+            gate="a", verdict="warn", subject_kind="t",
+            subject_bytes=b"1", evidence_bundle={}, gate_config={},
+            horizon=near,
+        )
+        state.receipt_system.emit(
+            gate="a", verdict="warn", subject_kind="t",
+            subject_bytes=b"2", evidence_bundle={}, gate_config={},
+            horizon=far,
+        )
+
+        resp = await roundtrip(
+            d, "receipts.horizon_expiring_soon",
+            {"window_seconds": 2 * 3600},
+        )
+        result = resp["result"]
+        assert len(result) == 1
+        assert result[0]["receipt_id"] == near_r.receipt_id
+
+    @pytest.mark.asyncio
+    async def test_expiring_soon_excludes_clockless_kinds(
+        self, dispatcher_and_state
+    ):
+        """observe_only and indefinite have no expiry; never returned."""
+        from governor.gate_receipt import (
+            HORIZON_INDEFINITE,
+            HORIZON_OBSERVE_ONLY,
+            HorizonBlock,
+        )
+
+        d, state = dispatcher_and_state
+        state.receipt_system.emit(
+            gate="a", verdict="observe", subject_kind="t",
+            subject_bytes=b"1", evidence_bundle={}, gate_config={},
+            horizon=HorizonBlock(
+                kind=HORIZON_OBSERVE_ONLY, basis_id="p1",
+                basis_hash="sha256:" + "a" * 64,
+            ),
+        )
+        state.receipt_system.emit(
+            gate="a", verdict="observe", subject_kind="t",
+            subject_bytes=b"2", evidence_bundle={}, gate_config={},
+            horizon=HorizonBlock(
+                kind=HORIZON_INDEFINITE, basis_id="p2",
+                basis_hash="sha256:" + "b" * 64,
+            ),
+        )
+        resp = await roundtrip(
+            d, "receipts.horizon_expiring_soon",
+            {"window_seconds": 10 * 365 * 24 * 3600},  # 10 years
+        )
+        assert resp["result"] == []
+
+    @pytest.mark.asyncio
+    async def test_expiring_soon_excludes_no_horizon(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        state.receipt_system.emit(
+            gate="a", verdict="pass", subject_kind="t",
+            subject_bytes=b"1", evidence_bundle={}, gate_config={},
+        )
+        resp = await roundtrip(
+            d, "receipts.horizon_expiring_soon", {"window_seconds": 3600},
+        )
+        assert resp["result"] == []
+
+    # NOTE: negative-path tests for missing/negative window_seconds are
+    # covered by direct validation in test_horizon.py; the RPC error
+    # conversion path in daemon.py currently trips a pre-existing import
+    # bug (StandingVerificationError orphaned at line 243 after the
+    # standing package superseded the old standing.py module). That bug
+    # also fails existing tests test_detail_not_found /
+    # test_detail_missing_id on main and is out of scope for this commit.
+
+
+# =============================================================================
 # Handler: receipts_v1.* (new Receipt v1 format, separate from legacy)
 # =============================================================================
 
@@ -1086,6 +1217,7 @@ class TestAllMethodsRegistered:
         "intent.policy",
         "receipts.list",
         "receipts.detail",
+        "receipts.horizon_expiring_soon",
         "scars.list",
         "scars.history",
         "commit.pending",
@@ -1147,7 +1279,8 @@ class TestAllMethodsRegistered:
     def test_rpc_method_count(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
-        assert total == 87
+        # +1 for receipts.horizon_expiring_soon (GOV_GAP_TOLERABILITY_HORIZON_001)
+        assert total == 88
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):

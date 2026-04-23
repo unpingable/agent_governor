@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -64,6 +65,149 @@ VALID_VERDICTS = frozenset({
     VERDICT_PASS, VERDICT_WARN, VERDICT_BLOCK,
     VERDICT_OBSERVE, VERDICT_PROCEED,
 })
+
+
+# =============================================================================
+# Tolerability Horizon (GOV_GAP_TOLERABILITY_HORIZON_001)
+# =============================================================================
+#
+# Horizon answers "how long is this adverse condition acceptable?" —
+# orthogonal to verdict, which answers "what should happen right now?"
+# The enum is frozen v1; widening requires a gap-spec supersession.
+
+HORIZON_NONE = "none"
+HORIZON_NOW = "now"
+HORIZON_HOURS = "hours"
+HORIZON_BUSINESS_HOURS = "business_hours"
+HORIZON_SCHEDULED = "scheduled"
+HORIZON_OBSERVE_ONLY = "observe_only"
+HORIZON_INDEFINITE = "indefinite"
+
+VALID_HORIZON_KINDS = frozenset({
+    HORIZON_NONE, HORIZON_NOW, HORIZON_HOURS,
+    HORIZON_BUSINESS_HOURS, HORIZON_SCHEDULED,
+    HORIZON_OBSERVE_ONLY, HORIZON_INDEFINITE,
+})
+
+# Horizons that require a wall-clock expiry. Past expiry, consumers
+# must re-escalate to HORIZON_NOW until the receipt is re-emitted.
+HORIZON_EXPIRY_REQUIRED = frozenset({
+    HORIZON_HOURS, HORIZON_BUSINESS_HOURS, HORIZON_SCHEDULED,
+})
+
+# Horizons that create a consumer persistence obligation for stateful
+# multi-run consumers (A5 per spec). Same set as EXPIRY_REQUIRED —
+# deferred tolerance with a clock needs lineage across runs.
+HORIZON_DEFERRAL_PERSISTENCE_OBLIGED = HORIZON_EXPIRY_REQUIRED
+
+
+@dataclass(frozen=True)
+class HorizonBlock:
+    """Tolerability horizon on a gate receipt.
+
+    The four fields encode a declaration that carries across runs:
+
+        kind         — one of VALID_HORIZON_KINDS
+        basis_id     — policy / declaration / override id that authorizes
+                       the tolerance. Required for non-'none'.
+        basis_hash   — content hash of the basis artifact, format
+                       'sha256:<64 hex chars>'. Required for non-'none'.
+                       Same discipline as standing receipt parent refs
+                       (see governor.standing.types.is_valid_content_hash).
+        expiry       — ISO 8601 UTC timestamp. Required for 'hours',
+                       'business_hours', 'scheduled'. Optional for
+                       'observe_only' and 'indefinite' (no clock).
+
+    Invariants:
+    - Horizon is declared, never inferred from verdict or severity.
+    - Missing field != zero. Absent HorizonBlock means "producer did
+      not declare"; consumer policy decides fail-open vs fail-closed.
+    - Horizon is content-bound to its basis: if the basis artifact
+      changes, the basis_hash diverges on re-read and the receipt is
+      treated as basis_invalidated.
+    """
+
+    kind: str
+    basis_id: str | None = None
+    basis_hash: str | None = None
+    expiry: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in VALID_HORIZON_KINDS:
+            raise ValueError(
+                f"Invalid horizon kind {self.kind!r}; "
+                f"must be one of {sorted(VALID_HORIZON_KINDS)}"
+            )
+        if self.kind != HORIZON_NONE:
+            if not self.basis_id:
+                raise ValueError(
+                    f"Horizon {self.kind!r} requires basis_id "
+                    "(non-'none' horizon without basis is a schema violation)"
+                )
+            if not self.basis_hash:
+                raise ValueError(
+                    f"Horizon {self.kind!r} requires basis_hash "
+                    "(non-'none' horizon without basis is a schema violation)"
+                )
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", self.basis_hash):
+                raise ValueError(
+                    "basis_hash must match 'sha256:<64 hex chars>', "
+                    f"got {self.basis_hash!r}"
+                )
+        else:
+            # 'none' horizon must not carry basis or expiry — presence
+            # would misrepresent a non-declaration as a declaration.
+            if self.basis_id is not None or self.basis_hash is not None:
+                raise ValueError(
+                    "Horizon 'none' must not carry basis_id/basis_hash; "
+                    "missing != declared-none."
+                )
+            if self.expiry is not None:
+                raise ValueError(
+                    "Horizon 'none' must not carry expiry."
+                )
+        if self.kind in HORIZON_EXPIRY_REQUIRED:
+            if not self.expiry:
+                raise ValueError(
+                    f"Horizon {self.kind!r} requires expiry "
+                    "(clock-bounded horizon without expiry is a schema violation)"
+                )
+        if self.expiry is not None:
+            try:
+                # Accept 'Z' suffix and explicit offset both.
+                datetime.fromisoformat(self.expiry.replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise ValueError(
+                    f"expiry must be ISO 8601, got {self.expiry!r}"
+                ) from exc
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"kind": self.kind}
+        if self.basis_id is not None:
+            d["basis_id"] = self.basis_id
+        if self.basis_hash is not None:
+            d["basis_hash"] = self.basis_hash
+        if self.expiry is not None:
+            d["expiry"] = self.expiry
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> HorizonBlock:
+        return cls(
+            kind=data["kind"],
+            basis_id=data.get("basis_id"),
+            basis_hash=data.get("basis_hash"),
+            expiry=data.get("expiry"),
+        )
+
+    def content_hash(self) -> str:
+        """Hash the horizon block for receipt_id binding.
+
+        Included in receipt_id only when horizon is present. Absent
+        horizon leaves receipt_id computation unchanged (backward
+        compatibility).
+        """
+        return content_hash(canonical_json(self.to_dict()))
 
 
 # =============================================================================
@@ -139,6 +283,7 @@ def _compute_receipt_id(
     e_hash: str,
     p_hash: str,
     receipt_role: str = ROLE_MEASUREMENT,
+    horizon_hash: str | None = None,
 ) -> str:
     """Content-addressed receipt identity.
 
@@ -146,8 +291,16 @@ def _compute_receipt_id(
     Timestamp is deliberately excluded — it's metadata, not identity.
     receipt_role is included because role changes semantics — two receipts with
     the same payload but different roles are not the same thing.
+
+    horizon_hash binds the horizon block into identity when present. A receipt
+    with horizon=hours/expiry=T1 and a receipt with horizon=hours/expiry=T2
+    make different semantic claims and must not collide. Absent horizon_hash
+    preserves pre-horizon receipt_id computation (backward compatibility) —
+    the ":horizon:" fragment is omitted entirely, not appended as empty.
     """
     payload = f"{schema_version}:{gate}:{s_hash}:{e_hash}:{p_hash}:{receipt_role}"
+    if horizon_hash is not None:
+        payload += f":horizon:{horizon_hash}"
     return content_hash(payload.encode("utf-8"))
 
 
@@ -199,6 +352,7 @@ class GateReceipt:
     receipt_role: str = ROLE_MEASUREMENT
     timing: dict[str, Any] | None = None
     principal_ref: str | None = None
+    horizon: HorizonBlock | None = None
 
     def __post_init__(self) -> None:
         if self.verdict not in VALID_VERDICTS:
@@ -207,7 +361,6 @@ class GateReceipt:
                 f"must be one of {sorted(VALID_VERDICTS)}"
             )
         if self.principal_ref is not None:
-            import re
             if not re.fullmatch(r"sha256:[0-9a-f]{64}", self.principal_ref):
                 raise ValueError(
                     f"principal_ref must match 'sha256:<64 hex chars>', "
@@ -233,6 +386,11 @@ class GateReceipt:
             d["timing"] = self.timing
         if self.principal_ref is not None:
             d["principal_ref"] = self.principal_ref
+        # horizon omitted when None — preserves pre-horizon receipt shape
+        # and leaves canonical_json stable for receipts without a horizon
+        # declaration. Missing != declared-none.
+        if self.horizon is not None:
+            d["horizon"] = self.horizon.to_dict()
         return d
 
     def to_json(self) -> str:
@@ -249,6 +407,8 @@ class GateReceipt:
                 f"Receipt schema version {v} is newer than supported "
                 f"({RECEIPT_SCHEMA_VERSION}). Upgrade governor."
             )
+        horizon_data = data.get("horizon")
+        horizon = HorizonBlock.from_dict(horizon_data) if horizon_data else None
         return cls(
             receipt_id=data["receipt_id"],
             schema_version=v,
@@ -264,6 +424,7 @@ class GateReceipt:
             receipt_role=data.get("receipt_role", ROLE_MEASUREMENT),
             timing=data.get("timing"),
             principal_ref=data.get("principal_ref"),
+            horizon=horizon,
         )
 
 
@@ -281,8 +442,14 @@ def create_receipt(
     receipt_role: str = ROLE_MEASUREMENT,
     timing: dict[str, Any] | None = None,
     principal_ref: str | None = None,
+    horizon: HorizonBlock | None = None,
 ) -> GateReceipt:
-    """Create a GateReceipt with proper content-addressed identity."""
+    """Create a GateReceipt with proper content-addressed identity.
+
+    horizon is optional. When present, it binds into receipt_id so two
+    receipts with identical subject/evidence/policy/role but different
+    tolerability horizons are distinct claims.
+    """
     if receipt_role not in VALID_RECEIPT_ROLES:
         raise ValueError(
             f"Invalid receipt_role {receipt_role!r}; "
@@ -299,6 +466,7 @@ def create_receipt(
     p_hash = policy_hash(gate_config)
     rid = _compute_receipt_id(
         RECEIPT_SCHEMA_VERSION, gate, s_hash, e_hash, p_hash, receipt_role,
+        horizon_hash=horizon.content_hash() if horizon is not None else None,
     )
     return GateReceipt(
         receipt_id=rid,
@@ -315,6 +483,7 @@ def create_receipt(
         receipt_role=receipt_role,
         timing=timing,
         principal_ref=principal_ref,
+        horizon=horizon,
     )
 
 
@@ -461,6 +630,7 @@ class GateReceiptSystem:
         receipt_role: str = ROLE_MEASUREMENT,
         timing: dict[str, Any] | None = None,
         principal_ref: str | None = None,
+        horizon: HorizonBlock | None = None,
     ) -> GateReceipt:
         """Create receipt, store evidence, append receipt to log."""
         # Store evidence blob (deduped by content)
@@ -480,6 +650,7 @@ class GateReceiptSystem:
             receipt_role=receipt_role,
             timing=timing,
             principal_ref=principal_ref,
+            horizon=horizon,
         )
         # Append to log
         self.receipt_store.append(receipt)

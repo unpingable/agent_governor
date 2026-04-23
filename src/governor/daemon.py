@@ -1307,6 +1307,48 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "evidence": evidence,
         }
 
+    async def receipts_horizon_expiring_soon(params: dict) -> list:
+        """Receipts whose horizon.expiry falls within `window_seconds` from now.
+
+        Night Shift and other stateful multi-run consumers use this to
+        surface deferred-tolerance records that need re-evaluation before
+        their declared horizon expires.
+
+        Only horizon kinds in HORIZON_EXPIRY_REQUIRED (hours, business_hours,
+        scheduled) carry expiry. observe_only and indefinite receipts have
+        no clock and are not returned from this query.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        from .gate_receipt import HORIZON_EXPIRY_REQUIRED
+
+        window_seconds = params.get("window_seconds")
+        if window_seconds is None:
+            raise ValueError("Missing required param: window_seconds")
+        window_seconds = int(window_seconds)
+        if window_seconds < 0:
+            raise ValueError("window_seconds must be non-negative")
+
+        now = datetime.now(timezone.utc)
+        horizon_cutoff = now + timedelta(seconds=window_seconds)
+
+        results = []
+        for receipt in state.receipt_system.receipt_store.all():
+            h = receipt.horizon
+            if h is None or h.kind not in HORIZON_EXPIRY_REQUIRED:
+                continue
+            if h.expiry is None:
+                continue
+            try:
+                expiry_dt = datetime.fromisoformat(h.expiry.replace("Z", "+00:00"))
+            except ValueError:
+                # Malformed expiry stored on disk — surface as skipped;
+                # we don't raise because a bad receipt shouldn't break the query.
+                continue
+            if expiry_dt <= horizon_cutoff:
+                results.append(receipt.to_dict())
+        return results
+
     # --- Receipt v1 (new format — separate from legacy gate receipts) ---
 
     async def receipts_v1_list(params: dict) -> list:
@@ -2017,6 +2059,9 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
     dispatcher.register("receipts.list", receipts_list)
     dispatcher.register("receipts.detail", receipts_detail)
+    dispatcher.register(
+        "receipts.horizon_expiring_soon", receipts_horizon_expiring_soon
+    )
 
     dispatcher.register("receipts_v1.list", receipts_v1_list)
     dispatcher.register("receipts_v1.detail", receipts_v1_detail)

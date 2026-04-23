@@ -1307,6 +1307,74 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "evidence": evidence,
         }
 
+    # --- Night Shift adapter (GOV_GAP_NIGHTSHIFT_ADAPTER_001) ---
+
+    async def nightshift_check_policy(params: dict) -> dict:
+        """Night Shift asks Governor whether a proposed action is allowed.
+
+        Params: CheckPolicyRequest as dict (agenda_id, run_id, actor,
+        requested_action, authority_level, bundle_ref?).
+
+        Returns CheckPolicyResponse (verdict, reason, obligations,
+        receipt_id, downgrade_to?) and emits a measurement receipt.
+        """
+        from .nightshift_adapter import CheckPolicyRequest, check_policy
+
+        raw = params.get("request")
+        if raw is None:
+            # Accept top-level params too — NS daemon may send either shape.
+            raw = params
+        request = CheckPolicyRequest.from_dict(raw)
+        response = check_policy(
+            request,
+            state.policy_rule_set,
+            state.receipt_system,
+        )
+        return response.to_dict()
+
+    async def nightshift_record_receipt(params: dict) -> dict:
+        """Night Shift asks Governor to emit an authority receipt.
+
+        Params: RecordReceiptRequest as dict (event_kind, run_id,
+        agenda_id, subject_hash, evidence_hash, policy_hash,
+        from_level?, to_level?, horizon?).
+
+        Returns RecordReceiptResponse (receipt_id, receipt_hash).
+        """
+        from .nightshift_adapter import RecordReceiptRequest, record_receipt
+
+        raw = params.get("event")
+        if raw is None:
+            raw = params
+        event = RecordReceiptRequest.from_dict(raw)
+        response = record_receipt(event, state.receipt_system)
+        return response.to_dict()
+
+    async def nightshift_authorize_transition(params: dict) -> dict:
+        """Night Shift asks Governor whether a run may promote.
+
+        Params: AuthorizeTransitionRequest as dict (run_id, agenda_id,
+        from_level, to_level, evidence_summary?).
+
+        Returns AuthorizeTransitionResponse (verdict, reason,
+        required_approvals, receipt_id) and emits an authority receipt.
+        """
+        from .nightshift_adapter import (
+            AuthorizeTransitionRequest,
+            authorize_transition,
+        )
+
+        raw = params.get("request")
+        if raw is None:
+            raw = params
+        request = AuthorizeTransitionRequest.from_dict(raw)
+        response = authorize_transition(
+            request,
+            state.policy_rule_set,
+            state.receipt_system,
+        )
+        return response.to_dict()
+
     async def receipts_horizon_expiring_soon(params: dict) -> list:
         """Receipts whose horizon.expiry falls within `window_seconds` from now.
 
@@ -2061,6 +2129,15 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("receipts.detail", receipts_detail)
     dispatcher.register(
         "receipts.horizon_expiring_soon", receipts_horizon_expiring_soon
+    )
+    dispatcher.register("nightshift.check_policy", nightshift_check_policy)
+    dispatcher.register(
+        "nightshift.record_receipt", nightshift_record_receipt, mutating=True
+    )
+    dispatcher.register(
+        "nightshift.authorize_transition",
+        nightshift_authorize_transition,
+        mutating=True,
     )
 
     dispatcher.register("receipts_v1.list", receipts_v1_list)

@@ -120,7 +120,9 @@ def _make_policy(
 
 class TestEnumsAndConstants:
     def test_capability_count(self):
-        assert len(Capability) == 21
+        # +3 for NS adapter caps (MCP_CALL, NIGHTSHIFT_PROMOTE, PAGE_HUMAN)
+        # per GOV_GAP_NIGHTSHIFT_ADAPTER_001
+        assert len(Capability) == 24
 
     def test_capability_values_are_strings(self):
         for cap in Capability:

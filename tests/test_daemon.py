@@ -823,6 +823,129 @@ class TestReceiptsHorizonExpiringSoon:
 
 
 # =============================================================================
+# Handler: nightshift.* (GOV_GAP_NIGHTSHIFT_ADAPTER_001)
+# =============================================================================
+
+
+class TestNightShiftAdapter:
+
+    @pytest.mark.asyncio
+    async def test_check_policy_roundtrip(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        params = {
+            "agenda_id": "wal-bloat-review",
+            "run_id": "run_abc",
+            "actor": "nightshift",
+            "requested_action": {
+                "kind": "mcp_call",
+                "tool_class": "read",
+                "tool_id": "foo.bar",
+                "arguments_hash": "sha256:" + "a" * 64,
+                "blast_radius": "single_host",
+                "reversible": True,
+            },
+            "authority_level": "advise",
+        }
+        resp = await roundtrip(d, "nightshift.check_policy", params)
+        result = resp["result"]
+        # Default policy denies; NS verdict vocabulary is allow/deny/...
+        assert result["verdict"] in ("allow", "deny", "require_approval", "downgrade")
+        assert "reason" in result
+        assert isinstance(result["obligations"], list)
+        assert "receipt_id" in result
+
+    @pytest.mark.asyncio
+    async def test_check_policy_accepts_wrapped_request(
+        self, dispatcher_and_state
+    ):
+        """Both top-level params and {"request": {...}} shapes accepted."""
+        d, _ = dispatcher_and_state
+        params = {
+            "request": {
+                "agenda_id": "a",
+                "run_id": "r",
+                "actor": "ns",
+                "requested_action": {
+                    "kind": "mcp_call",
+                    "tool_class": "read",
+                    "tool_id": "x",
+                    "arguments_hash": "sha256:" + "a" * 64,
+                    "blast_radius": "single_host",
+                    "reversible": True,
+                },
+                "authority_level": "advise",
+            },
+        }
+        resp = await roundtrip(d, "nightshift.check_policy", params)
+        assert "receipt_id" in resp["result"]
+
+    @pytest.mark.asyncio
+    async def test_record_receipt_roundtrip(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        params = {
+            "event_kind": "agenda.promoted",
+            "run_id": "run_abc",
+            "agenda_id": "wal-bloat-review",
+            "subject_hash": "sha256:" + "a" * 64,
+            "evidence_hash": "sha256:" + "b" * 64,
+            "policy_hash": "sha256:" + "c" * 64,
+            "from_level": "observe",
+            "to_level": "advise",
+        }
+        resp = await roundtrip(d, "nightshift.record_receipt", params)
+        assert "receipt_id" in resp["result"]
+        assert "receipt_hash" in resp["result"]
+
+    @pytest.mark.asyncio
+    async def test_record_receipt_with_horizon(self, dispatcher_and_state):
+        """Horizon supplied by NS is forwarded through to the receipt."""
+        from governor.gate_receipt import HORIZON_HOURS
+
+        d, state = dispatcher_and_state
+        params = {
+            "event_kind": "action.authorized",
+            "run_id": "r",
+            "agenda_id": "a",
+            "subject_hash": "sha256:" + "a" * 64,
+            "evidence_hash": "sha256:" + "b" * 64,
+            "policy_hash": "sha256:" + "c" * 64,
+            "horizon": {
+                "kind": "hours",
+                "basis_id": "policy:defer",
+                "basis_hash": "sha256:" + "a" * 64,
+                "expiry": "2026-04-24T03:00:00Z",
+            },
+        }
+        resp = await roundtrip(d, "nightshift.record_receipt", params)
+        receipt_id = resp["result"]["receipt_id"]
+        # Fetch directly to verify the horizon rode along.
+        fetched = state.receipt_system.receipt_store.get_by_id(receipt_id)
+        assert fetched.horizon is not None
+        assert fetched.horizon.kind == HORIZON_HOURS
+
+    @pytest.mark.asyncio
+    async def test_authorize_transition_roundtrip(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        params = {
+            "run_id": "run_abc",
+            "agenda_id": "wal-bloat-review",
+            "from_level": "advise",
+            "to_level": "stage",
+            "evidence_summary": {
+                "bundle_ref": "bundle://abc",
+                "admissible_inputs": ["signal_a"],
+                "blocked_assumptions": [],
+            },
+        }
+        resp = await roundtrip(d, "nightshift.authorize_transition", params)
+        result = resp["result"]
+        assert "verdict" in result
+        assert "reason" in result
+        assert isinstance(result["required_approvals"], list)
+        assert "receipt_id" in result
+
+
+# =============================================================================
 # Handler: receipts_v1.* (new Receipt v1 format, separate from legacy)
 # =============================================================================
 
@@ -1218,6 +1341,9 @@ class TestAllMethodsRegistered:
         "receipts.list",
         "receipts.detail",
         "receipts.horizon_expiring_soon",
+        "nightshift.check_policy",
+        "nightshift.record_receipt",
+        "nightshift.authorize_transition",
         "scars.list",
         "scars.history",
         "commit.pending",
@@ -1280,7 +1406,9 @@ class TestAllMethodsRegistered:
         d, _ = dispatcher_and_state
         total = len(d._handlers) + len(d._streaming_handlers)
         # +1 for receipts.horizon_expiring_soon (GOV_GAP_TOLERABILITY_HORIZON_001)
-        assert total == 88
+        # +3 for nightshift.{check_policy,record_receipt,authorize_transition}
+        #    (GOV_GAP_NIGHTSHIFT_ADAPTER_001)
+        assert total == 91
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1331,6 +1459,8 @@ class TestMethodClassification:
         "runtime.intervention.resolve",
         "runtime.promotion.resolve",
         "runtime.session.fork",
+        "nightshift.record_receipt",
+        "nightshift.authorize_transition",
     }
 
     def test_all_methods_have_flags(self, dispatcher_and_state):

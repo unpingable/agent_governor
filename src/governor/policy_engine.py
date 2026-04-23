@@ -109,6 +109,11 @@ class Capability(str, Enum):
     POLICY_OVERRIDE = "policy_override"
     APPROVAL_CONSUME = "approval_consume"
     HANDOFF_REMOTE = "handoff_remote"
+    # Night Shift adapter (GOV_GAP_NIGHTSHIFT_ADAPTER_001) — declared here
+    # so strict_taxonomy accepts them; scoped semantics live adapter-side.
+    MCP_CALL = "mcp_call"
+    NIGHTSHIFT_PROMOTE = "nightshift_promote"
+    PAGE_HUMAN = "page_human"
     # Fallback
     UNKNOWN = "unknown"
 

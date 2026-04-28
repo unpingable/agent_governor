@@ -386,15 +386,15 @@ Structured telemetry, Prometheus metrics, config profiles, continuity enforcemen
 
 ## PCAR: Proof-Carrying Agent Runtime
 
-Agent Governor is a reference implementation of the **PCAR** protocol family — a runtime constitution for LLM-based systems where language has no direct execution authority. PCAR separates proposal (model output), verification (proof objects), control (constraint decisions), provenance (receipts), and actuation (proof-carrying execution). The specs live in [`docs/spec/`](docs/spec/):
+Agent Governor is a reference implementation of the **PCAR** protocol family — a runtime constitution for LLM-based systems where language has no direct execution authority. PCAR separates proposal (model output), verification (proof objects), control (constraint decisions), provenance (receipts), and actuation (proof-carrying execution). The specs live in [`specs/core/`](specs/core/):
 
-- [**PCAR-000**](docs/spec/PCAR-000.md) — Root protocol: architecture model, cross-tier invariants, state machine
-- [**PCAR-A**](docs/spec/PCAR-A.md) — Typed Claim Envelope: speech-act discipline, downgrade rules, error model
-- [**PCAR-B**](docs/spec/PCAR-B.md) — Proof Objects + Verifier Contract: evidence substrate, freshness, state binding
-- [**PCAR-C**](docs/spec/PCAR-C.md) — Constraint Decisions + Regime: control law, policy packs, signal-derived regimes
-- [**PCAR-D**](docs/spec/PCAR-D.md) — Receipt Canonicalization: hash-chained provenance, canonical JSON, evidence store
-- [**PCAR-E**](docs/spec/PCAR-E.md) — Actuator Contract: proof-carrying execution, scope enforcement, no free-text paths
-- [**PCAR-R**](docs/spec/PCAR-R.md) — Replay Artifacts: differential replay, counterfactual analysis, redaction-compatible
+- [**PCAR-000**](specs/core/PCAR-000.md) — Root protocol: architecture model, cross-tier invariants, state machine
+- [**PCAR-A**](specs/core/PCAR-A.md) — Typed Claim Envelope: speech-act discipline, downgrade rules, error model
+- [**PCAR-B**](specs/core/PCAR-B.md) — Proof Objects + Verifier Contract: evidence substrate, freshness, state binding
+- [**PCAR-C**](specs/core/PCAR-C.md) — Constraint Decisions + Regime: control law, policy packs, signal-derived regimes
+- [**PCAR-D**](specs/core/PCAR-D.md) — Receipt Canonicalization: hash-chained provenance, canonical JSON, evidence store
+- [**PCAR-E**](specs/core/PCAR-E.md) — Actuator Contract: proof-carrying execution, scope enforcement, no free-text paths
+- [**PCAR-R**](specs/core/PCAR-R.md) — Replay Artifacts: differential replay, counterfactual analysis, redaction-compatible
 
 > Constitutional AI (Anthropic) governs model behavior at training time. PCAR governs executable authority at runtime. They are complementary.
 
@@ -520,13 +520,13 @@ For client UIs, see: [Guvnah](https://github.com/unpingable/guvnah) (governor co
 | `docs/COMPLIANCE.md` | Fiduciary law mapping (ERISA, SEC, process-based prudence) |
 | `docs/CLIENT_ECOSYSTEM.md` | Client roles, transport posture, fleet primitives |
 | `specs/gaps/ETHICAL_HARDENING.md` | Ethical failure modes + enforceable invariants |
-| `docs/spec/PCAR-000.md` | PCAR root protocol: runtime constitution for evidence-bound actuation |
-| `docs/spec/PCAR-A.md` | Typed Claim Envelope: speech-act discipline, downgrade rules |
-| `docs/spec/PCAR-B.md` | Proof Objects + Verifier Contract: evidence substrate |
-| `docs/spec/PCAR-C.md` | Constraint Decisions + Regime Derivation: control law |
-| `docs/spec/PCAR-D.md` | Receipt Canonicalization + Provenance: hash-chained audit |
-| `docs/spec/PCAR-E.md` | Actuator Contract: proof-carrying execution boundary |
-| `docs/spec/PCAR-R.md` | Replay Artifacts: differential and counterfactual replay |
+| `specs/core/PCAR-000.md` | PCAR root protocol: runtime constitution for evidence-bound actuation |
+| `specs/core/PCAR-A.md` | Typed Claim Envelope: speech-act discipline, downgrade rules |
+| `specs/core/PCAR-B.md` | Proof Objects + Verifier Contract: evidence substrate |
+| `specs/core/PCAR-C.md` | Constraint Decisions + Regime Derivation: control law |
+| `specs/core/PCAR-D.md` | Receipt Canonicalization + Provenance: hash-chained audit |
+| `specs/core/PCAR-E.md` | Actuator Contract: proof-carrying execution boundary |
+| `specs/core/PCAR-R.md` | Replay Artifacts: differential and counterfactual replay |
 | `specs/` | 25+ design specs |
 
 ---

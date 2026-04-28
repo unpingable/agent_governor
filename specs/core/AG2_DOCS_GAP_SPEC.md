@@ -87,7 +87,7 @@ The following subsystem docs were referenced in `docs/architecture/OVERVIEW.md` 
 | Adapters | WebUI, backend abstraction | `specs/ux/WEBUI_UX_SPEC.md`, `.claude/rules/webui.md` |
 | Continuity | Anchors, violations, resolution | `specs/core/KERNEL_CONSTRAINTS_SPEC.md` |
 | Ledgers | Facts vs decisions | `BUILD_SPEC.md`, `CLAUDE.md` |
-| Modes | Fiction/code/nonfiction | `docs/modes/`, `specs/user/` |
+| Modes | Fiction/code/nonfiction | `docs/modes/`, `docs/guides/` |
 | CLI | Command structure | `.claude/rules/cli-reference.md` |
 | Epistemic | Provenance, confidence | `specs/core/EPISTEMIC_STACK_SPEC.md` |
 

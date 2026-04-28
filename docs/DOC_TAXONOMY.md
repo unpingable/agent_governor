@@ -38,9 +38,9 @@ docs/
 
 | Current Location | Problem | Target |
 |---|---|---|
-| `docs/spec/PCAR-*` | Real specs hiding in docs | `specs/core/` |
-| `specs/user/` | User guides hiding in specs | `docs/guides/` |
 | `specs/ux/` | Review: normative UI contracts stay, explanatory material moves | Split |
+
+Resolved: `docs/spec/PCAR-*` → `specs/core/` and `specs/user/` → `docs/guides/` (2026-04-28).
 
 ## What Lives Where (decision guide)
 

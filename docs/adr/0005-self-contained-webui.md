@@ -53,4 +53,4 @@ Key patterns:
 
 ## Source
 
-- `specs/ux/WEBUI_UX_SPEC.md` ("Serves a self-contained chat + governor panel at a single URL — no external frontend needed.")
+- `docs/reference/WEBUI_UX_SPEC.md` ("Serves a self-contained chat + governor panel at a single URL — no external frontend needed.")

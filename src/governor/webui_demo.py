@@ -5,7 +5,7 @@ WebUI Demo — Scripted, Reproducible WebUI Screenshots.
 Defines demo scenarios as data, manages screenshot generation, checks
 demo freshness. Demos are build artifacts, not manual labor.
 
-Spec: AG2_WEBUI_DEMO_GAP_SPEC.md (Layer 4, Item #12 of AG2 build order)
+Spec: specs/core/AG2_WEBUI_DEMO_SPEC.md (Layer 4, Item #12 of AG2 build order)
 
 Principle: If the UI changes, the demos regenerate — they can't lie.
 Same as VHS for CLI: alive docs.

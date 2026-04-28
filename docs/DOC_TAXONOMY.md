@@ -36,11 +36,11 @@ docs/
 
 ## Known Violations (cleanup backlog)
 
-| Current Location | Problem | Target |
-|---|---|---|
-| `specs/ux/` | Review: normative UI contracts stay, explanatory material moves | Split |
+None outstanding. Resolved 2026-04-28:
 
-Resolved: `docs/spec/PCAR-*` → `specs/core/` and `specs/user/` → `docs/guides/` (2026-04-28).
+- `docs/spec/PCAR-*` → `specs/core/`
+- `specs/user/` → `docs/guides/`
+- `specs/ux/` split: binding contracts (`AG2_DASHBOARD_UX_SPEC`, `AG2_WEBUI_DEMO_SPEC`) → `specs/core/`; design vision docs (`CLI_UX_SPEC`, `WEBUI_UX_SPEC`) → `docs/reference/`; `VSCODE_UX_SPEC` deleted (extension extracted to separate repo).
 
 ## What Lives Where (decision guide)
 
@@ -52,5 +52,5 @@ Resolved: `docs/spec/PCAR-*` → `specs/core/` and `specs/user/` → `docs/guide
 | Architecture decision record | `docs/adr/` | `0001-proposal-commit-split.md` |
 | User guide | `docs/guides/` | Code mode walkthrough |
 | Architecture overview | `docs/architecture/` | Import diagrams |
-| UX spec (binding contract) | `specs/core/` or `specs/ux/` | Only if implementation can be wrong against it |
+| UX spec (binding contract) | `specs/core/` | Only if implementation can be wrong against it |
 | UX guide (suggested layout) | `docs/reference/` | If it's guidance, not contract |

@@ -494,7 +494,7 @@ If you use VS Code, install the Governor extension:
 - Status bar shows decision/violation count
 - Quick Fix menu includes Governor options
 
-See `specs/ux/VSCODE_UX_SPEC.md` for details.
+See the [vscode-governor repo](https://github.com/unpingable/vscode-governor) for details.
 
 ---
 
@@ -507,7 +507,7 @@ If you use the WebUI:
 - Violations block in-chat with resolution options
 - Recent panel shows verification history
 
-See `specs/ux/WEBUI_UX_SPEC.md` for details.
+See `docs/reference/WEBUI_UX_SPEC.md` for details.
 
 ---
 

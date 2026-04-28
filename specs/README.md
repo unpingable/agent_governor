@@ -197,13 +197,12 @@ Multi-model divergence as instrumentation.
 
 How surfaces behave. These reference core and interferometry specs for policy — they render, they don't decide.
 
-| Spec | What It Covers |
-|------|----------------|
-| **WEBUI_UX_SPEC.md** | v1 chat-centric UI. Fiction and code mode panels. Violation modal. Corrections log. Empty states. |
-| **AG2_DASHBOARD_UX_SPEC.md** | v2 governance dashboard. Controls-left/output-right. Run-centric. Streaming. Cancel contract. Templates. `status: implemented` |
-| **CLI_UX_SPEC.md** | Layered command structure. `governor fiction` / `governor code` / `governor advanced`. Bare command experience. |
-| **VSCODE_UX_SPEC.md** | Gutter indicators, inline resolution, status bar, governor panel, Quick Fix integration. |
-| **AG2_WEBUI_DEMO_GAP_SPEC.md** | Playwright-based WebUI demo automation. Scripted screenshots, reproducible on release. `status: implemented` |
+| Spec | Location | What It Covers |
+|------|----------|----------------|
+| **AG2_DASHBOARD_UX_SPEC.md** | `specs/core/` | v2 governance dashboard. Controls-left/output-right. Run-centric. Streaming. Cancel contract. Templates. `status: implemented` |
+| **AG2_WEBUI_DEMO_SPEC.md** | `specs/core/` | Playwright-based WebUI demo automation. Scripted screenshots, reproducible on release. `status: implemented` |
+| **WEBUI_UX_SPEC.md** | `docs/reference/` | v1 chat-centric UI design vision. Fiction and code mode panels. Violation modal. Corrections log. Empty states. |
+| **CLI_UX_SPEC.md** | `docs/reference/` | Layered command structure design vision. `governor fiction` / `governor code` / `governor advanced`. Bare command experience. |
 
 ### Design Principles (All Surfaces)
 

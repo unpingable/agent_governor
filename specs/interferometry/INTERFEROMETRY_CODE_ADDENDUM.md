@@ -3,7 +3,7 @@
 ## Version 0.1 — Instrumentation, Not Selection
 
 ### Addendum to: INTERFEROMETRY_SPEC.md
-### Referenced by: WEBUI_UX_SPEC.md, VSCODE_UX_SPEC.md
+### Referenced by: docs/reference/WEBUI_UX_SPEC.md
 
 ---
 

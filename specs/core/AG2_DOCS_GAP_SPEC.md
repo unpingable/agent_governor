@@ -63,7 +63,7 @@ These decisions already exist in the codebase history and specs. They need to be
 | 0002 | Gate, not memory (polarity flip) | `CLAUDE.md`, `specs/core/AUTHORIAL_CONTROL_SYSTEM_SPEC.md` |
 | 0003 | Fiction/code/nonfiction modes | `specs/core/CODE_SRE_CONTROLLER_SPEC.md` |
 | 0004 | SQLite over Postgres | `MULTI_AGENT.md` |
-| 0005 | Self-contained WebUI | `specs/ux/WEBUI_UX_SPEC.md` |
+| 0005 | Self-contained WebUI | `docs/reference/WEBUI_UX_SPEC.md` |
 
 ### 1.5 Scope
 
@@ -84,7 +84,7 @@ The following subsystem docs were referenced in `docs/architecture/OVERVIEW.md` 
 | Document | Subsystem | Existing coverage |
 |----------|-----------|-------------------|
 | Governor kernel | Verification, receipts, claims | `BUILD_SPEC.md`, `CLAUDE.md` |
-| Adapters | WebUI, backend abstraction | `specs/ux/WEBUI_UX_SPEC.md`, `.claude/rules/webui.md` |
+| Adapters | WebUI, backend abstraction | `docs/reference/WEBUI_UX_SPEC.md`, `.claude/rules/webui.md` |
 | Continuity | Anchors, violations, resolution | `specs/core/KERNEL_CONSTRAINTS_SPEC.md` |
 | Ledgers | Facts vs decisions | `BUILD_SPEC.md`, `CLAUDE.md` |
 | Modes | Fiction/code/nonfiction | `docs/modes/`, `docs/guides/` |

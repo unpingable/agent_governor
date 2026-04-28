@@ -35,7 +35,7 @@ Layer 3 (Interfaces)                        │
 Layer 4 (Docs + Polish)                     │
   DOC_GOVERNANCE_SPEC ──────────────────────┤ (needs commitment transport + instrument)
   AG2_DASHBOARD_UX_SPEC ────────────────────┤ (needs instrument for run-centric UI)
-  AG2_WEBUI_DEMO_GAP_SPEC ─────────────────┘ (needs dashboard + working demos)
+  AG2_WEBUI_DEMO_SPEC ─────────────────────┘ (needs dashboard + working demos)
 
 Parallel Track (Security)
   AG2_TEMPORAL_ATTACK_SURFACE_SPEC ──── incremental, starts after Layer 0
@@ -214,7 +214,7 @@ Run-centric dashboard UI.
 - Needs instrument spec for event streams and run model
 - Streaming events, cancellation contracts, run templates
 
-### 12. AG2_WEBUI_DEMO_GAP_SPEC (Medium)
+### 12. AG2_WEBUI_DEMO_SPEC (Medium)
 
 Automated screenshot generation for demos.
 

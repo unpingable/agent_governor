@@ -188,7 +188,8 @@ Detailed reference material is in `.claude/rules/`:
 |------|----------|---------|
 | `cli-reference.md` | All CLI commands | No (always loaded) |
 | `file-structure.md` | Full file tree | No (always loaded) |
-| `implementation-summary.md` | Feature status, test counts | No (always loaded) |
+| `implementation-summary.md` | Terse feature index + test counts | No (always loaded) |
+| `feature-history.md` | Verbose per-feature design notes | Load on demand (grep when needed) |
 | `fiction-governor.md` | Fiction governor details | `src/fiction_governor/**` |
 | `nonfiction-governor.md` | Non-fiction governor details | `src/nonfiction_governor/**` |
 | `ops-governor.md` | Ops governor details | `src/ops_governor/**` |

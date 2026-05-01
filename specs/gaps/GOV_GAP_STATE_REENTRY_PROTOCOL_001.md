@@ -128,6 +128,7 @@ This gap is closed when:
 ## Relationship to Other Gaps / Specs
 
 - **GOV_GAP_BASIS_FOR_BINDING_SEMANTICS_001** — Adjacent layer. That gap is at the validation layer (is the basis check semantically meaningful?). This gap is at the consequence layer (when a basis turns out to be invalid, what authority transitions are admissible?). Same NLAI principle, different chokepoint in the receipt lifecycle.
+  - **Receipt-schema implication.** The Lean-side `RecoveryEnv` split has an AG receipt analogue: any receipt that claims corrective recovery, authority preservation, or post-failure re-entry should carry an inspectable `corrective_check`, parallel to `admissibility_check`. The check should reference the pre/post authority comparison or equivalent witness that the corrective path did not widen authority for the same basis. Without such a field, corrective monotonicity remains audit narrative rather than receipt content.
 - **GOV_GAP_INBOUND_CONTEXT_AUTHORITY_001** — Inbound classification of context surfaces. Orthogonal: that gap is intake; this gap is post-failure transition.
 - **GOV_GAP_LLM_PROVIDER_EGRESS_001** — Outbound classification. Orthogonal.
 - **C2 / C3 / C4 / C5 (Standing kernel)** — C5 (`ContinuityBasis`) is the closest neighbor: it constrains *which roles may carry* continuity claims. This gap is about *what transitions* may be made when continuity (or evidence, or basis) is invalidated.
@@ -143,6 +144,7 @@ This gap is closed when:
 4. How does this interact with operator override (CLAUDE.md "Operator override")? Operator reaffirmation may be a legitimate higher-order authorization path, but it must be declared as such, not inferred from the operator's presence in the loop.
 5. Does the seven-effect closed enum (`Reduce | Freeze | Fork | Expire | Invalidate | Quarantine | RequireReentry`) cover the actual surface, or are there shipped corrective effects that don't fit? (Audit task: enumerate corrective-shaped state transitions across the codebase and check coverage.)
 6. Receipt Kernel's `REMEDIATE` stage permits re-entry. Should the stage graph itself carry the invariant, or should it remain at the receipt-content layer? (Stage graph is structural; receipt content is semantic. Likely both, with the stage graph providing the surface and the receipt content providing the inspectable proof.)
+7. Should receipts that claim corrective recovery require a first-class `corrective_check` with `inspectable_refs` to the relevant pre/post authority basis, or is this only required if/when the gap promotes from candidate doctrine to enforced invariant? (See Relationship-section receipt-schema implication. Adding the field eagerly risks ceremonial scaffolding before any receipt actually claims corrective recovery; deferring risks the analog of the BASIS_FOR_BINDING_SEMANTICS form-vs-content split appearing here too.)
 
 ## Provenance
 

@@ -6,6 +6,12 @@ When a governance corrective fires, what authority transitions are forbidden? Ex
 ## Status
 Gap spec — containment vessel. **No invariant, validator, or runtime check is ratified by this filing.** Names a candidate cross-cut consequence-layer rule and the laundering paths it would foreclose. Earns its keep only if at least one current path is found to violate the invariant; otherwise remains doctrine candidate.
 
+## Boundary law
+
+Corrective objects are inspection surfaces, not workflow state machines. They exist to expose what kind of judgment is being requested after failure, interruption or re-entry; they do not themselves authorize consequence.
+
+See [`docs/doctrine/state_space_atlas_not_machine.md`](../../docs/doctrine/state_space_atlas_not_machine.md).
+
 ## Origin
 
 Filed 2026-05-01 after a session in which a seven-corrective sketch (Invalidate Basis / Demote Authority / Re-enter Through Gate / Freeze Derived Permissions / Split State Lineage / Expire Continuity / Declare Policy Gap) was reviewed against the existing module map. Six of the seven correspond to shipped primitives. The non-obvious load-bearing piece is not a new corrective — it is the **cross-cut invariant family** that should hold *across* correctives:

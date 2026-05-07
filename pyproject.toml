@@ -8,13 +8,12 @@ version = "2.8.1"
 description = "Agent Governor - constraint system that makes AI coding agents production-safe"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "James Beck"}
 ]
 dependencies = [
     "click>=8.0",
-    "tomli>=2.0; python_version < '3.11'",
     "rich>=13.0",
 ]
 keywords = [
@@ -29,7 +28,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -84,7 +82,7 @@ markers = [
 ]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
 

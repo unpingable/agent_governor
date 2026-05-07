@@ -175,7 +175,7 @@ pytest -m scale tests/ -v          # Performance/scale tests (generous bounds)
 
 ## Code Conventions
 
-- Python 3.10+ (use `|` for union types)
+- Python 3.11+ (use `|` for union types)
 - Dataclasses for all data objects
 - Type hints everywhere
 - Tests in `tests/test_<module>.py`

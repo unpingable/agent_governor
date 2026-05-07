@@ -7,7 +7,7 @@ name = "receipt-v1"
 version = "0.1.0"
 description = "Receipt v1 Schema: runtime-agnostic audit trail for tool governance"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "James Beck" }
 ]

@@ -95,6 +95,36 @@ The guardrail (load-bearing — do not lose):
 
 > **The fix is not to seal `StandingReceipt`.** Sealing the receipt would conflate evidence with decision. Receipts must remain constructible as claimed evidence. The missing primitive is the mint that emits `AuthorizationVerdict` — the function with type roughly `(basis, standing_chain, scope, effect) → AuthorizationVerdict` whose body refuses to return a verdict unless basis is admissible, standing is sufficient, scope is honored, and (per the Lean kernel) precedence is resolved.
 
+## Substrate Caveat (Refinement, 2026-05-07)
+
+> **Frozen ≠ sealed. Validity ≠ construction discipline. The observable-not-constructible doctrine is anti-laundering, not perfect same-process unforgeability.**
+
+The doctrine's structural shape — that `AuthorizationVerdict` values are emitted only by a mint path — relies on the substrate's enforcement of construction discipline. The strength of that enforcement varies sharply by substrate:
+
+| Substrate | Construction discipline |
+|-----------|------------------------|
+| Ada (private types) | **Structural.** Consumers cannot syntactically construct an `Outcome` value. |
+| Rust (private constructors) | **Structural.** Consumers cannot construct private-fielded structs without a mint function. |
+| Lean (opaque types) | **Structural.** Opaque definitions hide constructors at the type-system level. |
+| Python | **Conventional.** `frozen=True` dataclasses, factory functions, leading-underscore conventions, and `__init__` discipline are all bypassable by direct attribute access, `object.__setattr__`, monkey-patching, and arbitrary instantiation. |
+| Common Lisp | **Conventional and protocol-mimicable.** Even lexical-closure / capability-mint patterns can be spoofed by a stateful fake that imitates the expected protocol shape — the fake does not need the mint, it only needs to mimic the conversation. (Independent finding from a parallel CL probe, 2026-05-07.) |
+
+The AG implementation language is Python. The mint cannot, in Python, be made structurally unforgeable. What it can be made is **visibly violable**: unauthorized construction must require an explicit, grep-able boundary crossing — not accidental construction in normal use.
+
+The implementation bar in dynamic substrates:
+
+- **Anti-laundering** (the achievable bar). Authority-shaped values do not enter normal circulation as if they were earned. Code paths that produce or consume `AuthorizationVerdict` are grep-visible, deliberately structured so that a forgery requires a noticeable abuse — private-attribute access, monkey-patching, deliberate test-fixture leakage into production paths. The forgery is *recognizable*, not *impossible*.
+- **Same-process unforgeability** (not the bar). A sufficiently determined Python module can construct anything the type system permits, and Python's type system is not strong enough to prevent it. Pretending otherwise is a category error.
+
+**Audit warning.** Do not call a Python primitive "sealed" merely because it is `frozen=True`, has a leading-underscore factory, uses a callback or closure pattern, or routes through a `validate()` method. Those are conventional construction discipline, not structural sealing. When describing the mint's properties, name the substrate guarantee precisely:
+
+- "Mint-only construction (Python, by convention)" — anti-laundering, not unforgeability.
+- "Mint-only construction (Rust / Ada / Lean)" — structural, type-system-enforced.
+
+Calling the first by the second's name will eventually mislead a future audit. The Common Lisp probe specifically shows that even closure/capability-mint patterns — which feel sealed because the closure is unreachable — fall to a stateful fake that mimics the protocol. That class of "sealed" is not the Ada/Rust/Lean sense.
+
+This refinement does not change the doctrine or the acceptance criteria below. It refines what closing the gap means in the AG substrate: a Python mint with grep-visible construction sites is the achievable bar; a Rust or Ada port (e.g., across the `~/git/standing` boundary, or any process/substrate boundary the value chain crosses) could go further when stronger guarantees are warranted.
+
 ## Acceptance Criteria
 
 This gap is closed when a doctrine record exists that:
@@ -149,3 +179,5 @@ Filed 2026-05-06 during a session in which a parallel Ada probe (`standing_spark
 The Ada probe is independent-derivation evidence, not an implementation seam. `standing_spark` does not become the AG mint; it is a small spec object for what shape the mint should take. The keeper from chatty's framing (independent of the Ada code itself):
 
 > **Authority observable, not constructible.**
+
+**Refinement, 2026-05-07.** A parallel Common Lisp probe surfaced the substrate caveat above: even lexical-closure / capability-mint patterns can be spoofed by a stateful fake mimicking the expected protocol shape, so closure-mint tricks are not "sealed" in the Ada/Rust/Lean sense. This refinement does not alter the doctrine; it pins the implementation bar in dynamic substrates (Python, Lisp) at *anti-laundering* (grep-visible construction sites, recognizable forgery) rather than *unforgeability*. Three-substrate convergence: Lean (formal-theorem side), Ada (structural-sealing demonstration), Common Lisp (negative result that named the substrate-guarantee distinction). The doctrine is substrate-independent; the achievable enforcement is substrate-specific.

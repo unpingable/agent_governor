@@ -37,7 +37,7 @@ from governor.coherence_budget import (
     classify_cbi,
     compute_cbi,
     compute_uncertainty,
-    check_closure_gate,
+    check_uncertainty_invariant,
     check_passivity,
     confidence_cap,
     make_cbi_event,
@@ -433,18 +433,18 @@ class TestUncertainty:
 class TestClosureGate:
     def test_allow(self):
         claims = [CBIClaim("c1", "S1", CBIClaimStatus.VERIFIED)]
-        r = check_closure_gate(claims, [])
+        r = check_uncertainty_invariant(claims, [])
         assert r.decision == ClosureDecision.ALLOW
 
     def test_deny(self):
         claims = [CBIClaim("c1", "S3", CBIClaimStatus.UNKNOWN)]
-        r = check_closure_gate(claims, [], threshold=3.0)
+        r = check_uncertainty_invariant(claims, [], threshold=3.0)
         assert r.decision == ClosureDecision.DENY
         assert r.uncertainty == 10.0
 
     def test_waiver(self):
         claims = [CBIClaim("c1", "S3", CBIClaimStatus.UNKNOWN)]
-        r = check_closure_gate(claims, [], threshold=3.0, has_human_waiver=True)
+        r = check_uncertainty_invariant(claims, [], threshold=3.0, has_human_waiver=True)
         assert r.decision == ClosureDecision.ALLOW_WITH_WAIVER
 
     def test_counts(self):
@@ -453,12 +453,12 @@ class TestClosureGate:
             CBIClaim("c2", "S1", CBIClaimStatus.VERIFIED),
         ]
         unknowns = [CBIUnknown("u1", CBIUnknownStatus.OPEN)]
-        r = check_closure_gate(claims, unknowns, threshold=100)
+        r = check_uncertainty_invariant(claims, unknowns, threshold=100)
         assert r.unverified_claims == 1
         assert r.open_unknowns == 1
 
     def test_roundtrip(self):
-        r = check_closure_gate([], [])
+        r = check_uncertainty_invariant([], [])
         d = r.to_dict()
         r2 = ClosureGateResult.from_dict(d)
         assert r2.decision == r.decision
@@ -563,7 +563,7 @@ class TestCoherenceBudgetStore:
 
     def test_closure_save_load(self, tmp_path):
         store = CoherenceBudgetStore(governor_dir=tmp_path)
-        r = check_closure_gate([], [])
+        r = check_uncertainty_invariant([], [])
         store.save_closure("run1", r)
         loaded = store.load_closure("run1")
         assert loaded is not None
@@ -604,7 +604,7 @@ class TestGoldenSchemas:
         assert required <= set(d.keys())
 
     def test_closure_schema(self):
-        r = check_closure_gate([], [])
+        r = check_uncertainty_invariant([], [])
         d = r.to_dict()
         required = {"decision", "uncertainty", "threshold",
                      "unverified_claims", "open_unknowns", "ts"}
@@ -641,7 +641,7 @@ class TestIntegration:
             CBIClaim("c2", "S2", CBIClaimStatus.UNKNOWN),
         ]
         unknowns = [CBIUnknown("u1", CBIUnknownStatus.RESOLVED)]
-        gate = check_closure_gate(claims, unknowns)
+        gate = check_uncertainty_invariant(claims, unknowns)
         assert gate.decision == ClosureDecision.ALLOW
         store.save_closure("run1", gate)
 

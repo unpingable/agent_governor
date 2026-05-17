@@ -131,7 +131,7 @@ def compute_uncertainty(claims: List[Claim], unknowns: List[Unknown]) -> float:
     )
     return claim_uncertainty + unknown_uncertainty
 
-def check_closure_gate(
+def check_uncertainty_invariant(
     claims: List[Claim],
     unknowns: List[Unknown],
     threshold: float,

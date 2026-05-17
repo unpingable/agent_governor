@@ -508,13 +508,18 @@ def compute_uncertainty(
     return claim_u + unknown_u
 
 
-def check_closure_gate(
+def check_uncertainty_invariant(
     claims: list[CBIClaim],
     unknowns: list[CBIUnknown],
     threshold: float = DEFAULT_UNCERTAINTY_THRESHOLD,
     has_human_waiver: bool = False,
 ) -> ClosureGateResult:
-    """Invariant I: No COMMIT while U_t > threshold (unless waiver)."""
+    """Invariant I: No COMMIT while U_t > threshold (unless waiver).
+
+    One of seven invariants. ALLOW here means "uncertainty below threshold"
+    only; callers must compose with the other invariant checks before
+    treating as authorization to proceed.
+    """
     u_t = compute_uncertainty(claims, unknowns)
     unverified = sum(
         1 for c in claims

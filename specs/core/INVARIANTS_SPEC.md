@@ -150,7 +150,7 @@ COMMIT enabled ⟺ (U_t ≤ τ) ∨ (waiver ∈ L)
 
 Uncertainty is computed from unverified claims (severity-weighted) plus open unknowns. COMMIT is blocked until uncertainty is resolved or waived.
 
-**Implementation:** `coherence_budget.py` — `compute_uncertainty(claims, unknowns)` sums severity-weighted unverified claims plus open unknowns. `check_closure_gate(claims, unknowns, threshold, has_human_waiver)` returns `ClosureGateResult` with decision ALLOW/ALLOW_WITH_WAIVER/DENY.
+**Implementation:** `coherence_budget.py` — `compute_uncertainty(claims, unknowns)` sums severity-weighted unverified claims plus open unknowns. `check_uncertainty_invariant(claims, unknowns, threshold, has_human_waiver)` returns `ClosureGateResult` with decision ALLOW/ALLOW_WITH_WAIVER/DENY (ALLOW = uncertainty below threshold for this invariant only; not a general authorization).
 
 See: COHERENCE_BUDGET_SPEC.md
 
@@ -191,7 +191,7 @@ See: EPISTEMIC_EVASION_SPEC.md
 | F | No Hidden Assumptions | Hard — logged + severity-tagged | `admissibility.py` | `check_invariant_f()` | ADMISSIBILITY_SPEC |
 | G | Phase Budget Lock | Hard — verify budget locked | `phase_control.py` | `check_invariant_g()` | PHASE_CONTROL_SPEC |
 | H | Passivity | Hard — evidence or waiver | `coherence_budget.py` | `check_passivity()` | COHERENCE_BUDGET_SPEC |
-| I | Closure Gate | Hard — uncertainty gating | `coherence_budget.py` | `check_closure_gate()` | COHERENCE_BUDGET_SPEC |
+| I | Closure Gate | Hard — uncertainty gating | `coherence_budget.py` | `check_uncertainty_invariant()` | COHERENCE_BUDGET_SPEC |
 | J | Epistemic Evasion | Soft → Hard at threshold | `epistemic_evasion.py` | `check_invariant_j()` | EPISTEMIC_EVASION_SPEC |
 
 ---

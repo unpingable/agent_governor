@@ -1,8 +1,13 @@
 # GOV_GAP_NLAI_GATE_001: NLAI Kernel Extraction
 
-**Status**: Shipped. nlai 0.3.0 on PyPI (`pip install nlai`). Repo: `~/git/nlai`.
+**Status**: External ship only — `nlai 0.3.0` on PyPI in `~/git/nlai`. In-repo
+extraction (Phase 1 `libs/nlai/`) and governor consumption (Phase 3) did NOT
+happen. Governor still uses inline `canonical_json`, `Receipt`, claim
+extraction. The kernel-boundary motivation remains live debt; the package
+shipped, but the architectural seam it was meant to force has not been cut.
 **Category**: Architecture / distribution
-**Priority**: High — adoption vector + 3.x kernel boundary
+**Priority**: Medium — adoption vector satisfied externally; 3.x kernel
+boundary still open
 
 ## What It Is
 

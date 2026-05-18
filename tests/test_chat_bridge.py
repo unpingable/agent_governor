@@ -16,6 +16,7 @@ from governor.chat_bridge import (
     AnthropicBackend,
     ClaudeCodeBackend,
     CodexBackend,
+    EgressBlocked,
     GovernorHooks,
     GovernorCheckResult,
     ViolationPendingResponse,
@@ -27,6 +28,27 @@ from governor.chat_bridge import (
     _build_multiturn_prompt,
 )
 from governor.context_manager import GovernorContext, GovernorContextManager
+from governor.egress_gate import EgressGate, EgressGateConfig
+
+
+def _permissive_egress_gate(
+    extra_allowed_hosts: set[str] | None = None,
+) -> EgressGate:
+    """Test helper: WARN-default gate that allows localhost + named hosts.
+
+    Tests that need to exercise backend behavior without tripping egress
+    should use this. Tests that exercise the gate itself construct their
+    own EgressGate with the specific policy under test.
+    """
+    allowed: set[str] = {"api.anthropic.com"}
+    if extra_allowed_hosts:
+        allowed |= extra_allowed_hosts
+    return EgressGate(
+        config=EgressGateConfig(
+            strict=False,
+            allowed_external_hosts=frozenset(allowed),
+        ),
+    )
 
 
 def run_async(coro):
@@ -116,22 +138,22 @@ class TestOllamaBackend:
     """Tests for OllamaBackend."""
 
     def test_host_config(self) -> None:
-        backend = OllamaBackend(host="http://custom:9999")
+        backend = OllamaBackend(host="http://custom:9999", egress_gate=_permissive_egress_gate())
         assert backend.host == "http://custom:9999"
 
     def test_default_host(self) -> None:
-        backend = OllamaBackend()
+        backend = OllamaBackend(egress_gate=_permissive_egress_gate())
         assert backend.host == "http://localhost:11434"
 
     def test_trailing_slash_stripped(self) -> None:
-        backend = OllamaBackend(host="http://localhost:11434/")
+        backend = OllamaBackend(host="http://localhost:11434/", egress_gate=_permissive_egress_gate())
         assert backend.host == "http://localhost:11434"
 
     def test_chat_mocked(self) -> None:
         """Mocked chat request to Ollama."""
         import httpx
 
-        backend = OllamaBackend()
+        backend = OllamaBackend(egress_gate=_permissive_egress_gate())
         mock_response = httpx.Response(
             200,
             json={
@@ -163,7 +185,7 @@ class TestOllamaBackend:
         """Mocked list models from Ollama."""
         import httpx
 
-        backend = OllamaBackend()
+        backend = OllamaBackend(egress_gate=_permissive_egress_gate())
         mock_response = httpx.Response(
             200,
             json={"models": [{"name": "llama3"}, {"name": "codellama"}]},
@@ -189,7 +211,7 @@ class TestOllamaBackend:
         """Options (temperature, max_tokens) are passed through."""
         import httpx
 
-        backend = OllamaBackend()
+        backend = OllamaBackend(egress_gate=_permissive_egress_gate())
         captured_payload = {}
         mock_response = httpx.Response(
             200,
@@ -224,17 +246,17 @@ class TestAnthropicBackend:
 
     def test_missing_api_key(self) -> None:
         with pytest.raises(ValueError, match="API key is required"):
-            AnthropicBackend(api_key="")
+            AnthropicBackend(api_key="", egress_gate=_permissive_egress_gate())
 
     def test_creation(self) -> None:
-        backend = AnthropicBackend(api_key="sk-test-key")
+        backend = AnthropicBackend(api_key="sk-test-key", egress_gate=_permissive_egress_gate())
         assert backend.api_key == "sk-test-key"
 
     def test_chat_mocked(self) -> None:
         """Mocked chat request to Anthropic."""
         import httpx
 
-        backend = AnthropicBackend(api_key="sk-test")
+        backend = AnthropicBackend(api_key="sk-test", egress_gate=_permissive_egress_gate())
         mock_response = httpx.Response(
             200,
             json={
@@ -263,7 +285,7 @@ class TestAnthropicBackend:
             assert response.usage["completion_tokens"] == 5
 
     def test_list_models(self) -> None:
-        backend = AnthropicBackend(api_key="sk-test")
+        backend = AnthropicBackend(api_key="sk-test", egress_gate=_permissive_egress_gate())
         models = run_async(backend.list_models())
         assert len(models) > 0
         ids = [m["id"] for m in models]
@@ -273,7 +295,7 @@ class TestAnthropicBackend:
         """System messages should be separated from conversation."""
         import httpx
 
-        backend = AnthropicBackend(api_key="sk-test")
+        backend = AnthropicBackend(api_key="sk-test", egress_gate=_permissive_egress_gate())
         mock_response = httpx.Response(
             200,
             json={
@@ -306,6 +328,169 @@ class TestAnthropicBackend:
             # System should be separate field, not in messages
             assert "system" in captured_payload
             assert all(m["role"] != "system" for m in captured_payload["messages"])
+
+
+# ============================================================================
+# TestEgressGateWiring — regression coverage for GOV_GAP_LLM_PROVIDER_EGRESS_001
+# ============================================================================
+
+
+class TestEgressGateWiring:
+    """Provider calls must preflight through EgressGate.
+
+    Construction is impossible without one (kw-only required). BLOCK
+    verdicts raise EgressBlocked before any network I/O.
+    """
+
+    def test_ollama_requires_egress_gate(self) -> None:
+        """OllamaBackend cannot be constructed without an EgressGate."""
+        with pytest.raises(TypeError, match="egress_gate"):
+            OllamaBackend()  # type: ignore[call-arg]
+
+    def test_anthropic_requires_egress_gate(self) -> None:
+        """AnthropicBackend cannot be constructed without an EgressGate."""
+        with pytest.raises(TypeError, match="egress_gate"):
+            AnthropicBackend(api_key="sk-test")  # type: ignore[call-arg]
+
+    def test_ollama_localhost_passes_preflight(self) -> None:
+        """Default strict gate admits localhost (internal class)."""
+        import httpx
+
+        backend = OllamaBackend(egress_gate=EgressGate(EgressGateConfig(strict=True)))
+        mock_response = httpx.Response(
+            200,
+            json={"message": {"content": "ok"}, "prompt_eval_count": 0, "eval_count": 0},
+            request=httpx.Request("POST", "http://localhost"),
+        )
+
+        async def mock_post(*args, **kwargs):
+            return mock_response
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = mock_post
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_cls.return_value = mock_client
+
+            resp = run_async(backend.chat([ChatMessage(role="user", content="hi")], "llama3"))
+            assert resp.content == "ok"
+
+    def test_ollama_non_allowlisted_external_host_blocks(self) -> None:
+        """Strict gate against an external Ollama-like host raises EgressBlocked
+        before any HTTP call is made."""
+        post_called = {"value": False}
+
+        async def mock_post(*args, **kwargs):
+            post_called["value"] = True
+            raise AssertionError("preflight should have blocked before this fires")
+
+        backend = OllamaBackend(
+            host="http://ollama.public.example.com",
+            egress_gate=EgressGate(EgressGateConfig(strict=True)),
+        )
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = mock_post
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(EgressBlocked) as exc:
+                run_async(backend.chat([ChatMessage(role="user", content="hi")], "llama3"))
+
+            assert exc.value.backend == "chat_bridge.ollama"
+            assert "ollama.public.example.com" in exc.value.destination
+            assert post_called["value"] is False
+
+    def test_anthropic_default_gate_allows_api_anthropic_com(self) -> None:
+        """create_backend('anthropic', ...) injects a gate that allows api.anthropic.com."""
+        import httpx
+
+        backend = create_backend("anthropic", api_key="sk-test")
+        mock_response = httpx.Response(
+            200,
+            json={
+                "content": [{"type": "text", "text": "ok"}],
+                "model": "claude-sonnet-4-20250514",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+                "stop_reason": "end_turn",
+            },
+            request=httpx.Request("POST", "https://api.anthropic.com"),
+        )
+
+        async def mock_post(*args, **kwargs):
+            return mock_response
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = mock_post
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_cls.return_value = mock_client
+
+            resp = run_async(backend.chat([ChatMessage(role="user", content="hi")], "claude-sonnet-4-20250514"))
+            assert resp.content == "ok"
+
+    def test_anthropic_without_allowlist_blocks(self) -> None:
+        """A strict gate without api.anthropic.com on the allowlist blocks the call
+        before any HTTP I/O."""
+        post_called = {"value": False}
+
+        async def mock_post(*args, **kwargs):
+            post_called["value"] = True
+            raise AssertionError("preflight should have blocked before this fires")
+
+        backend = AnthropicBackend(
+            api_key="sk-test",
+            egress_gate=EgressGate(EgressGateConfig(strict=True)),
+        )
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = mock_post
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(EgressBlocked) as exc:
+                run_async(backend.chat([ChatMessage(role="user", content="hi")], "claude-sonnet-4-20250514"))
+
+            assert exc.value.backend == "chat_bridge.anthropic"
+            assert exc.value.destination.startswith("https://api.anthropic.com")
+            assert post_called["value"] is False
+
+    def test_anthropic_stream_also_gated(self) -> None:
+        """Streaming dispatch path is gated identically to non-streaming."""
+        stream_called = {"value": False}
+
+        async def mock_stream(*args, **kwargs):
+            stream_called["value"] = True
+            raise AssertionError("preflight should have blocked before this fires")
+
+        backend = AnthropicBackend(
+            api_key="sk-test",
+            egress_gate=EgressGate(EgressGateConfig(strict=True)),
+        )
+
+        async def consume_stream() -> None:
+            async for _chunk in backend.stream(
+                [ChatMessage(role="user", content="hi")], "claude-sonnet-4-20250514"
+            ):
+                pass
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.stream = mock_stream
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(EgressBlocked):
+                run_async(consume_stream())
+
+            assert stream_called["value"] is False
 
 
 # ============================================================================

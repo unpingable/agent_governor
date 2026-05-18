@@ -4,7 +4,45 @@
 Hosted LLM provider calls are unevaluated egress: wire chat_bridge.py through EgressGate before any new provider is added.
 
 ## Status
-Gap spec — 3.x (coverage extension to GOV_GAP_EGRESS_001, which is shipped).
+**Partial — bypass closed for HTTP backends 2026-05-18.** The direct
+provider-bypass path is sealed: `OllamaBackend` and `AnthropicBackend`
+require an `EgressGate` at construction time (kw-only, no default), and
+every HTTP dispatch site (chat / stream / list_models) preflights through
+`EgressGate.evaluate()` before any network I/O. `BLOCK` verdicts raise
+`EgressBlocked` and prevent the call. `create_backend()` injects sensible
+default gates (Anthropic gets `api.anthropic.com` on the allowlist; Ollama
+relies on localhost classifying as internal). 7 regression tests in
+`tests/test_chat_bridge.py::TestEgressGateWiring` cover the construction
+requirement, localhost pass-through, blocked external non-allowlisted
+destinations, and the streaming dispatch path.
+
+What is **not yet done** (acceptance criteria 1, 2, 3, 4, 6, 7 are partial;
+criterion 5 is satisfied for the HTTP backends):
+
+- `BackendDestinationProfile` registry — destination class is currently
+  derived implicitly by `EgressGate`'s URL parser, not from a typed
+  per-backend declaration. New hosted backends will need explicit
+  destination configuration.
+- Provenance-label propagation through `GovernorHooks` — payload class is
+  derived from supplied labels (currently empty list at the chat-bridge
+  boundary). System-prompt-assembled governance artifacts are not yet
+  classified.
+- Dedicated `gate="llm_egress"` receipt type — current receipts are
+  `gate="egress_policy"` (the existing EgressGate gate name). A
+  backend-aware receipt type is future work.
+- `ClaudeCodeBackend` and `CodexBackend` — subprocess backends; outbound
+  traffic happens in the spawned CLI process, not in chat_bridge's
+  process. Gating these requires a separate mechanism (per-process
+  egress boundary or subprocess egress monitoring), out of scope for
+  this wiring.
+- `lanes.py` cascade integration — cross-class escalation (Ollama → Anthropic
+  with sensitive payload) does not yet augment the existing escalation
+  receipt with a fresh egress evaluation.
+- Operator-approval flow for cross-class escalation.
+
+The doctrine sentence below applies to the wiring as shipped. The remaining
+items above are named gaps; they do not block the bypass-closure claim, but
+they keep this gap spec open for the substrate work it points at.
 
 ## Origin
 

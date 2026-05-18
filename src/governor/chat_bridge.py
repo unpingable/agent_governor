@@ -29,6 +29,76 @@ from typing import Any, Protocol, runtime_checkable
 import httpx
 
 from .context_manager import GovernorContext, GovernorContextManager
+from .egress_gate import (
+    EgressGate,
+    EgressGateConfig,
+    EgressRequest,
+    EgressResult,
+    JustificationCode,
+)
+from .policy_engine import PolicyVerdict
+from .provenance_labels import ProvenanceLabel
+
+
+class EgressBlocked(RuntimeError):
+    """Raised when EgressGate denies an outbound LLM provider call.
+
+    The provider call is aborted before any network I/O. The originating
+    backend identity and the gate's matched rule are surfaced so the caller
+    can decide whether to escalate, switch backends, or surface to operator.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        backend: str,
+        destination: str,
+        matched_rule: str | None,
+        result: EgressResult,
+    ) -> None:
+        super().__init__(message)
+        self.backend = backend
+        self.destination = destination
+        self.matched_rule = matched_rule
+        self.result = result
+
+
+def _evaluate_egress(
+    *,
+    gate: EgressGate,
+    destination: str,
+    payload_bytes: bytes,
+    backend_tool_id: str,
+    content_probe: str | bytes | None = None,
+    provenance_labels: list[ProvenanceLabel] | None = None,
+) -> EgressResult:
+    """Evaluate an outbound LLM provider call through EgressGate.
+
+    Raises EgressBlocked if the gate's verdict is BLOCK. WARN and PASS
+    return the result; the caller may inspect warnings.
+    """
+    request = EgressRequest(
+        destination_ref=destination,
+        payload_size=len(payload_bytes),
+        provenance_labels=list(provenance_labels or []),
+        justification=JustificationCode.API_CALL,
+        tool_id=backend_tool_id,
+        content_probe=content_probe,
+    )
+    result = gate.evaluate(request)
+    if result.verdict == PolicyVerdict.BLOCK:
+        raise EgressBlocked(
+            f"egress blocked by {result.matched_rule}: "
+            f"{backend_tool_id} -> {destination} "
+            f"(payload_class={result.payload_class.value}, "
+            f"dest_class={result.destination_class})",
+            backend=backend_tool_id,
+            destination=destination,
+            matched_rule=result.matched_rule,
+            result=result,
+        )
+    return result
 
 
 class BackendAuthError(RuntimeError):
@@ -184,10 +254,32 @@ class ChatBackend(Protocol):
 
 
 class OllamaBackend:
-    """Ollama LLM backend via HTTP API."""
+    """Ollama LLM backend via HTTP API.
 
-    def __init__(self, host: str = "http://localhost:11434") -> None:
+    All outbound calls preflight through the supplied EgressGate. A BLOCK
+    verdict aborts the call with EgressBlocked before any network I/O.
+    Default Ollama deployments target localhost (internal class); custom
+    hosts may require allowlist entries in the gate config.
+    """
+
+    def __init__(
+        self,
+        host: str = "http://localhost:11434",
+        *,
+        egress_gate: EgressGate,
+    ) -> None:
         self.host = host.rstrip("/")
+        self.egress_gate = egress_gate
+
+    def _preflight(
+        self, endpoint: str, payload_bytes: bytes,
+    ) -> EgressResult:
+        return _evaluate_egress(
+            gate=self.egress_gate,
+            destination=f"{self.host}{endpoint}",
+            payload_bytes=payload_bytes,
+            backend_tool_id="chat_bridge.ollama",
+        )
 
     async def chat(
         self, messages: list[ChatMessage], model: str, **kwargs: Any
@@ -209,6 +301,8 @@ class OllamaBackend:
             options["num_predict"] = kwargs["max_tokens"]
         if options:
             payload["options"] = options
+
+        self._preflight("/api/chat", json.dumps(payload).encode("utf-8"))
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(f"{self.host}/api/chat", json=payload)
@@ -250,6 +344,8 @@ class OllamaBackend:
         if options:
             payload["options"] = options
 
+        self._preflight("/api/chat", json.dumps(payload).encode("utf-8"))
+
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
                 "POST", f"{self.host}/api/chat", json=payload
@@ -281,6 +377,8 @@ class OllamaBackend:
 
     async def list_models(self) -> list[dict[str, str]]:
         """List available models from Ollama."""
+        self._preflight("/api/tags", b"")
+
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(f"{self.host}/api/tags")
             response.raise_for_status()
@@ -292,8 +390,16 @@ class OllamaBackend:
         ]
 
 
+_ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
+
+
 class AnthropicBackend:
-    """Anthropic Claude API backend."""
+    """Anthropic Claude API backend.
+
+    All outbound calls preflight through the supplied EgressGate. The
+    Anthropic endpoint is external; gates must include `api.anthropic.com`
+    in their allowlist for this backend to function.
+    """
 
     # Hardcoded model list (Anthropic doesn't have a list models endpoint)
     MODELS = [
@@ -302,10 +408,19 @@ class AnthropicBackend:
         {"id": "claude-opus-4-20250514", "owned_by": "anthropic"},
     ]
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, *, egress_gate: EgressGate) -> None:
         if not api_key:
             raise ValueError("Anthropic API key is required")
         self.api_key = api_key
+        self.egress_gate = egress_gate
+
+    def _preflight(self, payload_bytes: bytes) -> EgressResult:
+        return _evaluate_egress(
+            gate=self.egress_gate,
+            destination=_ANTHROPIC_MESSAGES_URL,
+            payload_bytes=payload_bytes,
+            backend_tool_id="chat_bridge.anthropic",
+        )
 
     async def chat(
         self, messages: list[ChatMessage], model: str, **kwargs: Any
@@ -342,9 +457,11 @@ class AnthropicBackend:
             "content-type": "application/json",
         }
 
+        self._preflight(json.dumps(payload).encode("utf-8"))
+
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
-                "https://api.anthropic.com/v1/messages",
+                _ANTHROPIC_MESSAGES_URL,
                 json=payload,
                 headers=headers,
             )
@@ -407,10 +524,12 @@ class AnthropicBackend:
             "content-type": "application/json",
         }
 
+        self._preflight(json.dumps(payload).encode("utf-8"))
+
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
                 "POST",
-                "https://api.anthropic.com/v1/messages",
+                _ANTHROPIC_MESSAGES_URL,
                 json=payload,
                 headers=headers,
             ) as response:
@@ -1825,17 +1944,50 @@ class ChatBridge:
         return self.context_manager.get(context_id)
 
 
+def _default_egress_gate_for(backend_type: str) -> EgressGate:
+    """Construct a sensible default EgressGate for a backend type.
+
+    Ollama defaults assume localhost (internal class, no allowlist needed).
+    Anthropic requires api.anthropic.com on the external allowlist for
+    outbound calls to be admitted. Callers wanting tighter or looser policy
+    should construct the backend directly with their own EgressGate.
+
+    The HTTP-subprocess backends (claude-code, codex) do not use this
+    function; they egress from a separate process and are out of scope
+    for the in-process EgressGate.
+    """
+    if backend_type == "anthropic":
+        return EgressGate(
+            config=EgressGateConfig(
+                strict=True,
+                allowed_external_hosts=frozenset({"api.anthropic.com"}),
+            ),
+        )
+    if backend_type == "ollama":
+        return EgressGate(config=EgressGateConfig(strict=True))
+    raise ValueError(f"No default egress gate for backend type: {backend_type}")
+
+
 def create_backend(backend_type: str, **kwargs: Any) -> ChatBackend:
     """Factory: create a ChatBackend by type.
 
     Args:
         backend_type: "anthropic", "ollama", "claude-code", or "codex"
-        **kwargs: Backend-specific config (api_key, host, claude_path, codex_path, etc.)
+        **kwargs: Backend-specific config (api_key, host, claude_path,
+            codex_path, etc.). `egress_gate` may be supplied to override
+            the default gate for anthropic/ollama; otherwise a backend-
+            appropriate default is constructed.
     """
     if backend_type == "anthropic":
-        return AnthropicBackend(api_key=kwargs["api_key"])
+        return AnthropicBackend(
+            api_key=kwargs["api_key"],
+            egress_gate=kwargs.get("egress_gate") or _default_egress_gate_for("anthropic"),
+        )
     elif backend_type == "ollama":
-        return OllamaBackend(host=kwargs.get("host", "http://localhost:11434"))
+        return OllamaBackend(
+            host=kwargs.get("host", "http://localhost:11434"),
+            egress_gate=kwargs.get("egress_gate") or _default_egress_gate_for("ollama"),
+        )
     elif backend_type == "claude-code":
         return ClaudeCodeBackend(claude_path=kwargs.get("claude_path", "claude"))
     elif backend_type == "codex":

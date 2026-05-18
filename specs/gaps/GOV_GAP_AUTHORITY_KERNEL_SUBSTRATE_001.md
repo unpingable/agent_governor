@@ -160,7 +160,7 @@ Recorded for orientation. None of the following are ratified by this filing.
 - **Rust sidecar binary / daemon.** Best conceptual boundary; language-independent consumers; opaque handles. Cons: install/startup/supervision; wire boundary appears immediately.
 - **Rust CLI as first artifact.** Easiest to ship, test, and call from any language. Cons: every boundary is text/JSON-shaped; awkward for token semantics.
 
-**Default-and-fallback shape (chatty's framing, recorded):**
+**Default-and-fallback shape (ChatGPT's framing, recorded):**
 
 ```text
 authority-kernel-rust    — default / production / strong construction discipline
@@ -232,7 +232,7 @@ None of these are present today. The gap exists to be cited when one appears.
 
 ## Provenance
 
-Filed 2026-05-07 after a three-substrate convergence: Lean (`Authority.lean` / `Execution.lean`, formal-theorem side, `GOV_GAP_BASIS_FOR_BINDING_SEMANTICS_001`, filed 2026-04-30), Ada (`standing_spark` probe, 2026-05-06, prompted the original construction-discipline finding and `GOV_GAP_SEALED_OUTCOME_BOUNDARY_001`), and Common Lisp (parallel CL probe, 2026-05-07, negative result that named the substrate-guarantee distinction — dynamic-substrate closure/capability mints are spoofable by stateful protocol mimicry, so they are not "sealed" in the Ada/Rust/Lean sense). The CL finding is what bumped the substrate question from "later concern" to "name-it-now strategy gap" — chatty's diagnosis: the Ada/Lisp sequence changed the risk model. Before, "Python is fine if disciplined" was plausible. After, the sharper read is that action-bearing authority wants a substrate with real construction boundaries, and the Python mint, if shipped first, becomes accidental ABI by procrastination.
+Filed 2026-05-07 after a three-substrate convergence: Lean (`Authority.lean` / `Execution.lean`, formal-theorem side, `GOV_GAP_BASIS_FOR_BINDING_SEMANTICS_001`, filed 2026-04-30), Ada (`standing_spark` probe, 2026-05-06, prompted the original construction-discipline finding and `GOV_GAP_SEALED_OUTCOME_BOUNDARY_001`), and Common Lisp (parallel CL probe, 2026-05-07, negative result that named the substrate-guarantee distinction — dynamic-substrate closure/capability mints are spoofable by stateful protocol mimicry, so they are not "sealed" in the Ada/Rust/Lean sense). The CL finding is what bumped the substrate question from "later concern" to "name-it-now strategy gap" — ChatGPT's diagnosis: the Ada/Lisp sequence changed the risk model. Before, "Python is fine if disciplined" was plausible. After, the sharper read is that action-bearing authority wants a substrate with real construction boundaries, and the Python mint, if shipped first, becomes accidental ABI by procrastination.
 
 The filing is strategy-only. No kernel construction, no interface design, no packaging choice, no AG port is ratified. The gap is named so the substrate decision can be ratified lazily, on forcing cases, before consumers foreclose it.
 

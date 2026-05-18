@@ -143,7 +143,7 @@ After probe MITIGATE/BLOCK, per-model penalty is applied in `_select_model()`. M
 
 ---
 
-## Naming Drift (Chatty's Observation)
+## Naming Drift (ChatGPT's Observation)
 
 | Current Name | Location | Issue | Fix |
 |-------------|----------|-------|-----|

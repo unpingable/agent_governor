@@ -6,7 +6,7 @@ Proposed (2026-04-17)
 ## Origin
 Surfaced during nq/labelwatch integration work — the forcing function for
 Night Shift promotion/authority design. Phoenix-pattern critique drafted
-in session against an external model ("chatty"). Captured here because
+in session against an external model ("ChatGPT"). Captured here because
 the distinction sharpens Governor's constitutional grammar, not because
 it requires immediate implementation.
 

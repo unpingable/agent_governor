@@ -72,7 +72,7 @@ basis is not admissible (C4)".
 - The four ratified Q1–Q4 anchors
 - Empty initial exception-class registry
 - ViolationCode set (no new codes — `AUTHORIZATION_CHECK_MALFORMED`
-  was reused; chatty's "no taxonomy bloom" rule held)
+  was reused; ChatGPT's "no taxonomy bloom" rule held)
 - Closed envelope key set
 - Hash format discipline
 - `from_dict` deserialization path (extended internally to delegate

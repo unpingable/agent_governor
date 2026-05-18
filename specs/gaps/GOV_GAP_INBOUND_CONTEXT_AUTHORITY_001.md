@@ -112,7 +112,7 @@ None of these are ratified. None should be built until a recurrent failure mode 
 1. Is "inbound context surface" a useful unit, or does the granularity need to drop to per-region (per-section, per-line)? The egress side classifies per-payload; the inbound side may need per-region.
 2. Does a surface's authority class derive from its identity (path, file kind), its content (declared frontmatter), or both? Mixed-mode is likely but raises precedence questions.
 3. How does this compose with `provenance_labels`? Provenance is outbound-sensitivity-shaped; authority is inbound-binding-shaped. Same primitive or distinct?
-4. Where does session memory sit? It is generated content with prior-conversation provenance; chatty's recommended default is "prior context only," but operator-issued memory entries (`feedback_*` files) may legitimately carry scoped feedback authority.
+4. Where does session memory sit? It is generated content with prior-conversation provenance; ChatGPT's recommended default is "prior context only," but operator-issued memory entries (`feedback_*` files) may legitimately carry scoped feedback authority.
 5. What is the right response to a binding attempt from unclassified prose? Hard refuse, downgrade to inference, or annotate and proceed? Likely downgrade-with-annotation, but unratified.
 
 ## Provenance

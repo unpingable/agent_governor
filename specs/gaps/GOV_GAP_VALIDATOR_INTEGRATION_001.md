@@ -198,7 +198,7 @@ A question is **ratified** only when all three are true:
 2. **Acceptance criteria are committed to tests.** The criteria listed under each question land as executable assertions in the test suite, not as prose in a doc.
 3. **The selection is committed as a hash-referenceable artifact in the repo.** A `policy_declaration`-shaped record in `docs/doctrine/decisions/` (or equivalent), with `policy_artifact_id`, `ratifier`, and `supersedes` fields populated.
 
-"It seems clear" is not ratification. "Chatty agreed" is not ratification. "I'll just write the validator and we can adjust" is the failure mode this whole spec exists to prevent.
+"It seems clear" is not ratification. "ChatGPT agreed" is not ratification. "I'll just write the validator and we can adjust" is the failure mode this whole spec exists to prevent.
 
 The validator may not begin until the corresponding ratification artifact exists. Pre-ratification commits to the validator surface are reverted, not retrofitted.
 

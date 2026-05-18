@@ -176,7 +176,7 @@ None of these are ratified. None should be built until a recurrent failure mode 
 
 Filed 2026-05-06 during a session in which a parallel Ada probe (`standing_spark`, gnat-compiled, tonight) surfaced the sealed-outcome boundary by declaring `Outcome` as a private type. Translation back to the AG Python topology revealed that `AuthorizationVerdict` is a defined enum with no production construction path — the same hole `GOV_GAP_BASIS_FOR_BINDING_SEMANTICS_001` (filed 2026-04-30 from the Lean side) names from the formal-theorem direction. Two independent derivations, one substrate each, converging on a single missing primitive: the authority mint. Filed as a containment vessel before any mint construction or `StandingReceipt` sealing — preserves correct attribution (the gap is the absence of the mint, not the constructibility of receipts) and prevents the construction-discipline finding from being conflated with whatever specific factory or function eventually closes it.
 
-The Ada probe is independent-derivation evidence, not an implementation seam. `standing_spark` does not become the AG mint; it is a small spec object for what shape the mint should take. The keeper from chatty's framing (independent of the Ada code itself):
+The Ada probe is independent-derivation evidence, not an implementation seam. `standing_spark` does not become the AG mint; it is a small spec object for what shape the mint should take. The keeper from ChatGPT's framing (independent of the Ada code itself):
 
 > **Authority observable, not constructible.**
 

@@ -413,7 +413,7 @@ Doctrine in `docs/doctrine/{advisory_vs_constitutional_power, standing_and_recei
 
 | Spec | What | Depends On | Status |
 |------|------|------------|--------|
-| `GOV_GAP_GOVERNED_LESSONS_SCOPE_001` | Scope-only gap for governed-lessons subsystem (continuity vs lessons vs bindings); reduces a Chatty subsystem proposal to its boundary; full ratification deferred to follow-on `GOV_GAP_GOVERNED_LESSONS_001` | Q1, Q2, Q4 ratified; structured evidence/promotion gap; continuity-bearing systems gap | **draft (scope only; full subsystem questions deferred)** |
+| `GOV_GAP_GOVERNED_LESSONS_SCOPE_001` | Scope-only gap for governed-lessons subsystem (continuity vs lessons vs bindings); reduces a ChatGPT subsystem proposal to its boundary; full ratification deferred to follow-on `GOV_GAP_GOVERNED_LESSONS_001` | Q1, Q2, Q4 ratified; structured evidence/promotion gap; continuity-bearing systems gap | **draft (scope only; full subsystem questions deferred)** |
 
 C2 and C3 must not begin before their dependencies. Schema work in particular is the sneakiest queue-jumper — it feels like neutral plumbing while baking half the policy into the shape layer. See gap spec §"Schema discipline."
 

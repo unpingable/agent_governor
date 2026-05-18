@@ -89,7 +89,7 @@ requires its own Q4-style supersession.
 
 ### Hostile-input discipline extends to continuity_basis
 
-Per chatty's "presence = loophole" warning, all of the following are
+Per ChatGPT's "presence = loophole" warning, all of the following are
 rejected at parse time:
 
 - `continuity_basis: null` — explicit null is not omission
@@ -106,7 +106,7 @@ All produce `CONTINUITY_BASIS_MALFORMED`.
 
 - `CONTINUITY_BASIS_ROLE_NOT_ELIGIBLE` (structural) — the role gate
 - `CONTINUITY_BASIS_MALFORMED` (structural) — bundles every
-  structural failure of the block itself; per chatty
+  structural failure of the block itself; per ChatGPT
   "no taxonomy bloom"
 
 These were forced — no existing code captures "field present on

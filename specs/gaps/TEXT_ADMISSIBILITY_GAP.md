@@ -13,7 +13,7 @@ That is the wound. Provider refusal is not governor refusal, but today
 the governor behaves as if it were: it has no standing over text
 artifacts whose identity lives *below* the Python `str` it receives.
 
-Drafted in session against an external model ("chatty"). Framing and
+Drafted in session against an external model ("ChatGPT"). Framing and
 layer distinctions owe to that exchange.
 
 ## Thesis

@@ -157,7 +157,7 @@ dashboards.
 
 ## Section 4 — Transition Classes
 
-From chatty's sketch, kept as a vocabulary for path classification.
+From ChatGPT's sketch, kept as a vocabulary for path classification.
 Not all primitives fall cleanly into one class; many transitions mix.
 
 | Class | Examples | Typical path |

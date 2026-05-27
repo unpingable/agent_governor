@@ -63,7 +63,7 @@ The spec does not propose changes to #2 (lives in another repo) or #3 (different
 
 ## Formal Witness (Target, Not Seam)
 
-The Lean four-module kernel in `~/git/lean/LeanProofs/Admissibility/` proves the desired shape:
+The Lean kernel — *Admissibility Calculus 1.0* (concept DOI [10.5281/zenodo.20369489](https://doi.org/10.5281/zenodo.20369489); eight-module public surface aggregated via `CalculusOne.lean`) in `~/git/lean/LeanProofs/Admissibility/` — proves the desired shape. The four modules below are all within the 1.0 promise:
 
 - `Authority.lean` — verdict algebra: `authorized ⇔ admissibleBasis ∧ resolved precedence ∧ standing`.
 - `StateTransition.lean` — partitioned `GovState`, `StepAllowed` mutation gating, store-isolation trapdoors (only `amendPolicy` touches `PolicyStore`).

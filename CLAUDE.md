@@ -135,6 +135,8 @@ The trigger matters. This rule does not fire on every minor claim — that would
 
 The gap spec format (`specs/gaps/`) is the same primitive applied to design: "what exists / what needs building / acceptance criteria / non-goals / open questions" forces the falsifiable shape *before* context can dissolve the edge. That is why writing them feels load-bearing instead of like documentation overhead.
 
+When a gap spec exposes ambiguity in a formal warrant, exhibit both models before promoting either to doctrine. Axiomatizing the convenient answer launders the gap into kernel commitment rather than resolving it. (See `~/git/lean/LeanProofs/Admissibility/CorrectiveBoundary.lean` for the methodological reference: the previously-admitted `corrective_then_forward_is_not_monotone` was resolved by exhibiting model-dependence — identity-store ⇒ FALSE, nondegenerate-store ⇒ TRUE — leaving the abstract kernel uncommitted to either.)
+
 ## Claim Types
 
 ```python
@@ -208,6 +210,18 @@ This file is **guidance for Claude Code**, not enforcement. The governor is enfo
 - See `AGENTS.md` for the agent-neutral version of these conventions
 
 > Instruction files shape behavior; the governor determines admissibility.
+
+## Cross-project doctrine pressure
+
+This repo may discover workflow rules that apply beyond this repo.
+
+When a local note starts carrying broader constellation weight, do not duplicate it across repos. The canonical rule lives at `~/.claude/CLAUDE.md` § "Doctrine promotion"; cross-agent coordination signal is in continuity at scope=global (`mem_deb2f0af6cab40788dec5f5b9fe0023f`).
+
+Local rule of thumb:
+
+> Promotion should reduce local burden, not duplicate authority.
+
+Keep only project-specific triggers and examples in this repo's notes (project CLAUDE.md, `.claude/rules/`, `memory/`, `specs/gaps/`); move reusable doctrine upward and breadcrumb the move. The recognition obligation is local; the doctrine is upstream.
 
 ## The Meta-Constraint
 

@@ -2,7 +2,7 @@
 
 ## Title
 
-Agent Governor has both validity-plane surfaces (validator chain, gate receipts, scope contracts, evidence gate) and spendability-plane surfaces (`ExecutionBudget`, exploration budget, leases, MCP rate limiter, scope grant usage). Several AG surfaces *mix* the two planes — represent validity decisions and spendability counters in shared state. The gap is the missing **audit** of those mixed surfaces against the invariant: validation may mint eligibility, not capacity.
+Agent Governor has both validity-plane surfaces (validator chain, gate receipts, scope contracts, evidence gate) and spendability-plane surfaces (`ExecutionBudget`, exploration budget, leases, MCP rate limiter, scope grant usage). Several AG surfaces carry both — and the audit question is whether they preserve the contractible-vs-linear distinction or allow convertibility between the planes. The gap is the missing **audit** of those surfaces against the invariant: validation may mint eligibility, not capacity.
 
 ## Status
 
@@ -24,6 +24,18 @@ A validated premise may be treated as spendable capacity, or a spendable token m
 The structural risk is not that any AG surface validates wrongly or counts wrongly on its own axis. The risk is that **surfaces mixing both planes can be talked back into regenerating capacity from validity state**.
 
 ## Core invariant
+
+Spine:
+
+> **Validity facts are contractible. Spendable resources are linear.**
+>
+> **A laundering surface appears when a system lets the former cross into the latter without an explicit allocator / lease / token boundary.**
+
+Operational form:
+
+> **The laundering surface appears where a contractible validity artifact can be interpreted as a non-contractible spendability artifact without an atomic handoff.**
+
+Two-line keeper:
 
 > **Validation may mint eligibility.**
 >
@@ -48,7 +60,9 @@ Operationally, the four steps:
 
 Step 4 is the boundary the agent dies at. If the substrate allows step 4 to be talked around — by semantic reframing, context manipulation, or validity re-observation — the invariant is broken.
 
-## Mixed AG surfaces (audit targets)
+## Audit targets (convertibility risk)
+
+Each surface below carries both validity and spendability content. Co-location is not automatically the bug — these surfaces may be sealed correctly. The audit checks whether a contractible credential can be converted into a linear token without an atomic handoff.
 
 | Surface | Validity carried | Spendability carried | Audit pressure |
 |----|----|----|----|
@@ -61,7 +75,7 @@ Step 4 is the boundary the agent dies at. If the substrate allows step 4 to be t
 | **Execution budget** (`execution.py`) | Session validity, invariant pass | Budget units, attempt count | LOW — pure spendability; validity is the gate, not the substrate |
 | **TTL machinery** (`ttl.py`) | Volatility class (validity-shaped) | Decay counter (spendability-shaped) | MEDIUM — decay drives revalidation; revalidation result feeds back into volatility classification |
 
-The HIGH-pressure surface is **override management**: the override receipt simultaneously is the eligibility grant AND carries the TTL that exhausts spendability. The MEDIUM-pressure surfaces share state across the planes in ways that may or may not be laundering — that's what the audit decides.
+The HIGH-pressure surface is **override management**: the override receipt is both the eligibility grant and the TTL-decrementing capacity record, with no separate allocator boundary between them. Whether that's safely sealed or convertible is what the audit determines. The MEDIUM-pressure surfaces co-locate the planes in less obviously convertible ways; the audit's job is to find where convertibility can occur, not to flag co-location as such.
 
 ## Audit questions (the heart of the gap)
 
@@ -122,11 +136,16 @@ Properties the accountant must have if AG adopts this split:
 
 The semantic governor may decide "this request is eligible." It may not decide "therefore budget exists." The linear accountant decides "resource token issued / denied / consumed / exhausted."
 
+Sharper companion line:
+
+> **The Semantic Governor can request capacity; it cannot certify that capacity exists.**
+
 This pattern is a candidate, not a commitment. AG may close the gap by adopting it, by tightening the existing mixed surfaces in place, or by some combination. The audit decides which surfaces need which fix.
 
 ## Non-goals
 
 - **Not ratified doctrine.** "Validity is not spendability" is candidate keeper text; the audit confirms or refines it.
+- **Not a claim that co-location is the bug.** A single datastore, service, or receipt can hold both planes safely if types, authority boundaries, and mutation paths are sealed. The bug is **convertibility**: a contractible credential being used as a linear token without an atomic handoff. The audit checks convertibility, not co-location.
 - **Not an implementation plan.** No new module, no refactor, no API change is authorized by this filing.
 - **Not a `LinCalc.lean` integration.** ContractionHinge is cited as the minimal refusal shape, not as a calculus AG must consume.
 - **Not a four-plane architecture commitment.** The sketch is candidate; AG may close the gap without adopting the full plane separation.
@@ -177,5 +196,7 @@ Per the Lean citation-tier vocabulary (`feedback_lean_citation_tiers.md`):
 Per the basis-dependency framing discipline (`feedback_basis_dependency_over_chronology.md`):
 
 - The cut is on *plane separation*, not on chronology. A receipt can carry both validity attestation and consumption testimony — what matters is whether the consumption state is regenerable from the validity state, not what order they're written.
+
+Refined later 2026-06-03 via cross-agent review (Gemini + ChatGPT): contractible/linear spine added as the explicit core invariant; convertibility-not-co-location caution added to Non-goals (corrects a real overclaim in the initial draft's "mixed surfaces" framing); "Semantic Governor can request capacity; cannot certify that capacity exists" added as candidate-pattern keeper. Paper-shaping preconditions (prior-art scrub, worked example, audit checklist as standalone artifact) deferred — per the discipline that the note is doing its job as architecture invariant with audit surface, not as theory trying to inhale the whole stack.
 
 This gap creates the audit surface. The audit decides the next move. No build, no ratification, no architecture commitment until the audit completes.

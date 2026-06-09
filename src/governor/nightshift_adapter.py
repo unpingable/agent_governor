@@ -29,6 +29,7 @@ from typing import Any
 
 from .gate_receipt import (
     HorizonBlock,
+    NonDischargeClaim,
     ROLE_AUTHORITY,
     ROLE_MEASUREMENT,
     GateReceipt,
@@ -295,6 +296,13 @@ class RecordReceiptRequest:
     from_level: str | None = None   # AuthorityLevel value (for promotion events)
     to_level: str | None = None     # AuthorityLevel value (for promotion events)
     horizon: HorizonBlock | None = None   # optional tolerability declaration
+    # Non-discharge claims this verdict explicitly does NOT settle.
+    # Empty by default; NS populates a single `freshness` claim on
+    # horizon-Defer outcomes (per
+    # `~/git/scheduler/crates/nightshiftd/src/reconcile_horizon.rs`).
+    # Other event kinds intentionally do not populate yet; initial
+    # population is scoped to the already-witnessed horizon path.
+    unsettled: tuple[NonDischargeClaim, ...] = ()
 
     def __post_init__(self) -> None:
         if self.event_kind not in {e.value for e in EventKind}:
@@ -335,6 +343,8 @@ class RecordReceiptRequest:
             d["to_level"] = self.to_level
         if self.horizon is not None:
             d["horizon"] = self.horizon.to_dict()
+        if self.unsettled:
+            d["unsettled"] = [c.to_dict() for c in self.unsettled]
         return d
 
     @classmethod
@@ -342,6 +352,10 @@ class RecordReceiptRequest:
         horizon_data = data.get("horizon")
         horizon = (
             HorizonBlock.from_dict(horizon_data) if horizon_data else None
+        )
+        unsettled_raw = data.get("unsettled", ())
+        unsettled = tuple(
+            NonDischargeClaim.from_dict(c) for c in unsettled_raw
         )
         return cls(
             event_kind=data["event_kind"],
@@ -353,6 +367,7 @@ class RecordReceiptRequest:
             from_level=data.get("from_level"),
             to_level=data.get("to_level"),
             horizon=horizon,
+            unsettled=unsettled,
         )
 
 
@@ -664,6 +679,7 @@ def record_receipt(
         },
         receipt_role=role,
         horizon=event.horizon,
+        unsettled=event.unsettled,
     )
     return RecordReceiptResponse(
         receipt_id=receipt.receipt_id,

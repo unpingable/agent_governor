@@ -1,0 +1,26 @@
+{
+  "receipt_id": "e93ca86d75aaf395b5763697aa8278255589fc62a596f0285ac0e98b659da95c",
+  "schema_version": 4,
+  "timestamp": "2026-06-09T16:20:34.120730+00:00",
+  "gate": "nightshift_adapter",
+  "verdict": "observe",
+  "subject_hash": "f9f9fa26de76c26ac676d7bcf753fed8a12a5f3f1f6e48d762642c399cb9122c",
+  "evidence_hash": "ec5af7e344f1ef550c32f9ca0266f71c5766df7266037dd4cb6d8441828d94f6",
+  "policy_hash": "a9f8e48c95d83026315b752176667683a51567ffa3697657bf3986473faf44e1",
+  "principal_id": "local",
+  "tenant_id": "default",
+  "auth_method": "none",
+  "receipt_role": "authority",
+  "horizon": {
+    "kind": "hours",
+    "basis_id": "maintenance-window-042",
+    "basis_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "expiry": "2026-04-23T16:00:00+00:00"
+  },
+  "unsettled": [
+    {
+      "kind": "freshness",
+      "reason": "defer outcome does not settle closure authority while horizon remains active"
+    }
+  ]
+}

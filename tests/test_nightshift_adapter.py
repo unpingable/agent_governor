@@ -20,8 +20,10 @@ from governor.gate_receipt import (
     HORIZON_HOURS,
     ROLE_AUTHORITY,
     ROLE_MEASUREMENT,
+    UNSETTLED_FRESHNESS,
     GateReceiptSystem,
     HorizonBlock,
+    NonDischargeClaim,
 )
 from governor.nightshift_adapter import (
     ADAPTER_VERSION,
@@ -473,6 +475,80 @@ class TestRecordReceipt:
         resp = record_receipt(event, system)
         fetched = system.receipt_store.get_by_id(resp.receipt_id)
         assert fetched.horizon == h
+
+    def test_unsettled_forwarded_to_receipt(self, tmp_path: Path):
+        """A Defer-shaped request carrying one typed `freshness`
+        non-discharge claim must surface on the emitted v4 GateReceipt's
+        `unsettled` field. Closes the seam-to-receipt witness for the
+        first semantic-population slice."""
+        system = GateReceiptSystem(tmp_path)
+        claim = NonDischargeClaim(
+            kind=UNSETTLED_FRESHNESS,
+            reason=(
+                "defer outcome does not settle closure authority "
+                "while horizon remains active"
+            ),
+        )
+        event = RecordReceiptRequest(
+            event_kind=EventKind.ACTION_AUTHORIZED.value,
+            run_id="r",
+            agenda_id="a",
+            subject_hash=VALID_HASH,
+            evidence_hash=VALID_HASH_2,
+            policy_hash=VALID_HASH_3,
+            unsettled=(claim,),
+        )
+        resp = record_receipt(event, system)
+        fetched = system.receipt_store.get_by_id(resp.receipt_id)
+        assert fetched.schema_version == 4
+        assert len(fetched.unsettled) == 1
+        assert fetched.unsettled[0].kind == UNSETTLED_FRESHNESS
+        assert fetched.unsettled[0] == claim
+
+    def test_unsettled_defaults_empty_when_not_supplied(self, tmp_path: Path):
+        """Existing callers that don't pass `unsettled` keep working;
+        the emitted v4 receipt carries an empty unsettled tuple."""
+        system = GateReceiptSystem(tmp_path)
+        event = RecordReceiptRequest(
+            event_kind=EventKind.ACTION_AUTHORIZED.value,
+            run_id="r",
+            agenda_id="a",
+            subject_hash=VALID_HASH,
+            evidence_hash=VALID_HASH_2,
+            policy_hash=VALID_HASH_3,
+        )
+        resp = record_receipt(event, system)
+        fetched = system.receipt_store.get_by_id(resp.receipt_id)
+        assert fetched.unsettled == ()
+
+    def test_unsettled_roundtrips_through_from_dict(self):
+        """Wire-side roundtrip: a request dict containing `unsettled`
+        (as Rust would send over JSON-RPC) survives from_dict +
+        to_dict cleanly without loss of kind or reason."""
+        raw = {
+            "event_kind": EventKind.ACTION_AUTHORIZED.value,
+            "run_id": "r",
+            "agenda_id": "a",
+            "subject_hash": VALID_HASH,
+            "evidence_hash": VALID_HASH_2,
+            "policy_hash": VALID_HASH_3,
+            "unsettled": [
+                {
+                    "kind": UNSETTLED_FRESHNESS,
+                    "reason": "defer does not settle closure authority",
+                }
+            ],
+        }
+        event = RecordReceiptRequest.from_dict(raw)
+        assert len(event.unsettled) == 1
+        assert event.unsettled[0].kind == UNSETTLED_FRESHNESS
+        roundtripped = event.to_dict()
+        assert roundtripped["unsettled"] == [
+            {
+                "kind": UNSETTLED_FRESHNESS,
+                "reason": "defer does not settle closure authority",
+            }
+        ]
 
     def test_response_shape_has_receipt_id_and_hash(self, tmp_path: Path):
         system = GateReceiptSystem(tmp_path)

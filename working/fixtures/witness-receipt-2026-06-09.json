@@ -1,0 +1,14 @@
+{
+    "receipt_id": "362165328617543a38590f6adf8f5e001878468205aa1624e2c64fa780e2f3fc",
+    "schema_version": 3,
+    "timestamp": "2026-05-18T19:42:29.448715+00:00",
+    "gate": "context_build",
+    "verdict": "observe",
+    "subject_hash": "d74258157b8c292dfbb2a7cd134906661a5831c190ac4c1092f3df74b96461a0",
+    "evidence_hash": "71304e1c205b56e8aad6d24686d74c08a2c410b408dbe3a694fe3d373106047a",
+    "policy_hash": "55e07aa892d732d737d4f17bc9520a0825e6430244cfdb4ba93e688d68d28fc9",
+    "principal_id": "local",
+    "tenant_id": "default",
+    "auth_method": "none",
+    "receipt_role": "measurement"
+}

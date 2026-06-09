@@ -13,10 +13,15 @@ from governor.gate_receipt import (
     RECEIPT_SCHEMA_VERSION,
     ROLE_MEASUREMENT,
     ROLE_RESET,
+    UNSETTLED_AUTHORITY,
+    UNSETTLED_EVIDENCE_SUFFICIENCY,
+    UNSETTLED_FRESHNESS,
+    VALID_NON_DISCHARGE_KINDS,
     VALID_RECEIPT_ROLES,
     EvidenceStore,
     GateReceipt,
     GateReceiptSystem,
+    NonDischargeClaim,
     ReceiptStore,
     canonical_json,
     content_hash,
@@ -318,8 +323,8 @@ class TestPrincipalTenantMetadata:
         assert parsed["tenant_id"] == "default"
         assert parsed["auth_method"] == "none"
 
-    def test_schema_version_is_3(self):
-        assert RECEIPT_SCHEMA_VERSION == 3
+    def test_schema_version_is_4(self):
+        assert RECEIPT_SCHEMA_VERSION == 4
 
     def test_emit_passes_through(self, tmp_path):
         system = GateReceiptSystem(tmp_path)
@@ -764,8 +769,8 @@ class TestReceiptRole:
         assert found.receipt_role == "reset"
 
     def test_schema_version_bumped_for_role(self):
-        """Schema v3: receipt_role added to identity hash."""
-        assert RECEIPT_SCHEMA_VERSION == 3
+        """Schema v3: receipt_role added to identity hash. v4: unsettled added."""
+        assert RECEIPT_SCHEMA_VERSION == 4
 
 
 # =============================================================================
@@ -845,3 +850,296 @@ class TestPrincipalRef:
         r2_dict["principal_ref"] = ref
         r2 = GateReceipt.from_dict(r2_dict)
         assert r1.receipt_id == r2.receipt_id
+
+
+# =============================================================================
+# Unsettled non-discharge claims (v4)
+# =============================================================================
+#
+# Motivating witness: working/witness-2026-06-09-gate-receipt-unsettled-gap.md
+# captured the v3 schema gap across 1,165 emitted receipts: zero matches for
+# unsettled / discharge / unresolved / non_* in any of them. v4 closes that
+# gap by adding a typed `unsettled` field that records what a verdict
+# explicitly does NOT settle.
+
+
+class TestNonDischargeClaim:
+    """Typed non-discharge claim — closed kind enum, freeform reason."""
+
+    def test_accepts_each_valid_kind(self):
+        for kind in VALID_NON_DISCHARGE_KINDS:
+            c = NonDischargeClaim(kind=kind, reason="for testing")
+            assert c.kind == kind
+
+    def test_rejects_unknown_kind(self):
+        with pytest.raises(ValueError, match="Invalid non-discharge kind"):
+            NonDischargeClaim(kind="misc_authority_vibes", reason="lol")
+
+    def test_rejects_empty_string_kind(self):
+        with pytest.raises(ValueError, match="Invalid non-discharge kind"):
+            NonDischargeClaim(kind="", reason="forgot")
+
+    def test_freeform_reason_does_not_participate_in_kind_validation(self):
+        """Reason is prose; kind alone gates validity. Same reason text
+        cannot rescue a bad kind, and reason content is not constrained."""
+        with pytest.raises(ValueError):
+            NonDischargeClaim(kind="not_a_kind", reason="authority")
+        # Conversely, weird freeform reasons are fine with valid kind.
+        c = NonDischargeClaim(
+            kind=UNSETTLED_AUTHORITY,
+            reason="🙃 explanation containing emoji and a citation [1]",
+        )
+        assert c.reason.startswith("🙃")
+
+    def test_required_fields_optional(self):
+        c = NonDischargeClaim(kind=UNSETTLED_FRESHNESS, reason="stale")
+        assert c.required_consumer is None
+        assert c.required_witness is None
+
+    def test_roundtrip(self):
+        original = NonDischargeClaim(
+            kind=UNSETTLED_EVIDENCE_SUFFICIENCY,
+            reason="evidence bundle missing signature",
+            required_consumer="downstream-auditor",
+            required_witness="signed-bundle-v2",
+        )
+        restored = NonDischargeClaim.from_dict(original.to_dict())
+        assert restored == original
+
+
+class TestGateReceiptUnsettled:
+    """v4 receipt-level unsettled behavior + v3 backward compat."""
+
+    def _base_kwargs(self):
+        return dict(
+            gate="evidence_gate",
+            verdict="block",
+            subject_kind="text",
+            subject_bytes=b"agent output",
+            evidence_bundle={"claims": []},
+            gate_config={"strict": True},
+        )
+
+    def test_v4_gate_receipt_emits_unsettled_default_empty(self):
+        """New v4 receipts always emit `unsettled: []` (positive claim:
+        'no unsettled claims surfaced'), not silence."""
+        r = create_receipt(**self._base_kwargs())
+        assert r.schema_version == 4
+        assert r.unsettled == ()
+        d = r.to_dict()
+        assert "unsettled" in d
+        assert d["unsettled"] == []
+
+    def test_gate_receipt_accepts_typed_non_discharge_claim(self):
+        unsettled = (
+            NonDischargeClaim(
+                kind=UNSETTLED_AUTHORITY,
+                reason="proposal cites upstream authority not validated by this gate",
+                required_consumer="authorization-reviewer",
+            ),
+        )
+        r = create_receipt(**self._base_kwargs(), unsettled=unsettled)
+        assert len(r.unsettled) == 1
+        assert r.unsettled[0].kind == UNSETTLED_AUTHORITY
+        # Round-trips through JSON.
+        d = r.to_dict()
+        assert d["unsettled"][0]["kind"] == UNSETTLED_AUTHORITY
+        restored = GateReceipt.from_dict(d)
+        assert restored.unsettled == r.unsettled
+
+    def test_gate_receipt_rejects_unknown_non_discharge_kind(self):
+        """The kind enum is closed at the NonDischargeClaim layer;
+        invalid kinds cannot reach a GateReceipt."""
+        with pytest.raises(ValueError, match="Invalid non-discharge kind"):
+            NonDischargeClaim(kind="misc_authority_vibes", reason="bad")
+
+    def test_v3_gate_receipt_loads_with_empty_unsettled(self):
+        """A v3 receipt dict (no `unsettled` field) loads cleanly and
+        defaults unsettled to (). Preserves backward compat with the
+        1,165 receipts already on disk."""
+        v3_receipt = {
+            "receipt_id": "362165328617543a38590f6adf8f5e001878468205aa1624e2c64fa780e2f3fc",
+            "schema_version": 3,
+            "timestamp": "2026-05-18T19:42:29.448715+00:00",
+            "gate": "context_build",
+            "verdict": "observe",
+            "subject_hash": "d74258157b8c292dfbb2a7cd134906661a5831c190ac4c1092f3df74b96461a0",
+            "evidence_hash": "71304e1c205b56e8aad6d24686d74c08a2c410b408dbe3a694fe3d373106047a",
+            "policy_hash": "55e07aa892d732d737d4f17bc9520a0825e6430244cfdb4ba93e688d68d28fc9",
+            "principal_id": "local",
+            "tenant_id": "default",
+            "auth_method": "none",
+            "receipt_role": "measurement",
+        }
+        r = GateReceipt.from_dict(v3_receipt)
+        assert r.schema_version == 3
+        assert r.unsettled == ()
+        # v3 receipt re-serialized stays v3 (preserves byte-level intent
+        # for legacy receipts) — unsettled is NOT emitted for v3.
+        out = r.to_dict()
+        assert "unsettled" not in out
+
+    def test_v4_receipts_with_different_unsettled_have_different_ids(self):
+        """Two v4 receipts with identical payload but different unsettled
+        sets are different decisions. The receipt_id must reflect that."""
+        base = self._base_kwargs()
+        r_empty = create_receipt(**base)
+        r_with = create_receipt(
+            **base,
+            unsettled=(
+                NonDischargeClaim(
+                    kind=UNSETTLED_FRESHNESS,
+                    reason="evidence is stale at action boundary",
+                ),
+            ),
+        )
+        assert r_empty.receipt_id != r_with.receipt_id
+
+    def test_v4_receipt_with_empty_unsettled_hash_stable_against_horizon_pattern(self):
+        """Empty unsettled does NOT bind into receipt_id (mirrors horizon).
+        Two v4 receipts created with explicit `unsettled=()` and the default
+        produce the same receipt_id when other fields match."""
+        base = self._base_kwargs()
+        r_default = create_receipt(**base)
+        r_explicit_empty = create_receipt(**base, unsettled=())
+        assert r_default.receipt_id == r_explicit_empty.receipt_id
+
+    def test_v4_receipt_emit_via_system_persists_unsettled(self, tmp_path):
+        system = GateReceiptSystem(tmp_path)
+        unsettled = (
+            NonDischargeClaim(
+                kind=UNSETTLED_AUTHORITY,
+                reason="upstream principal not authenticated by this gate",
+                required_witness="signed-principal-ref",
+            ),
+        )
+        receipt = system.emit(
+            **self._base_kwargs(),
+            unsettled=unsettled,
+        )
+        found = system.receipt_store.get_by_id(receipt.receipt_id)
+        assert found is not None
+        assert found.unsettled == unsettled
+
+
+# =============================================================================
+# Golden fixture — receipt_v4_with_unsettled.json
+# =============================================================================
+#
+# Pins the cross-language wire shape: a v4 GateReceipt emitted via the actual
+# nightshift_adapter.record_receipt path (NOT hand-crafted JSON) and frozen
+# to disk. Tests below assert load + structure + receipt_id content-address
+# stability. If the schema, the canonicalization, or the unsettled-hash
+# binding drifts on either side of the seam, these tests fail loudly before
+# production. Re-generated via: emit-once-and-freeze (see provenance below).
+
+
+_FIXTURE_PATH = (
+    Path(__file__).parent
+    / "fixtures"
+    / "golden_traces"
+    / "receipt_v4_with_unsettled.json"
+)
+
+
+class TestGoldenFixtureV4WithUnsettled:
+    """Golden GateReceipt v4 fixture — the label sewn onto the integration."""
+
+    @pytest.fixture
+    def fixture_data(self) -> dict:
+        return json.loads(_FIXTURE_PATH.read_text())
+
+    def test_fixture_file_exists(self):
+        assert _FIXTURE_PATH.exists(), (
+            f"Golden fixture missing: {_FIXTURE_PATH}. "
+            f"Re-generate via: emit-once-and-freeze (see fixture provenance)."
+        )
+
+    def test_fixture_parses_as_v4_gate_receipt(self, fixture_data):
+        receipt = GateReceipt.from_dict(fixture_data)
+        assert receipt.schema_version == 4
+
+    def test_fixture_carries_one_freshness_unsettled_claim(self, fixture_data):
+        receipt = GateReceipt.from_dict(fixture_data)
+        assert len(receipt.unsettled) == 1
+        claim = receipt.unsettled[0]
+        assert claim.kind == UNSETTLED_FRESHNESS
+        assert claim.reason, "reason is informational but must not be empty"
+
+    def test_fixture_receipt_role_is_authority(self, fixture_data):
+        """Per the nightshift_adapter EventKind→role mapping,
+        ACTION_AUTHORIZED maps to ROLE_AUTHORITY. The fixture was
+        emitted via that path; the recorded role must match."""
+        receipt = GateReceipt.from_dict(fixture_data)
+        assert receipt.receipt_role == "authority"
+
+    def test_fixture_horizon_is_present_and_hours(self, fixture_data):
+        """The fixture represents a horizon-Defer receipt. The horizon
+        block must be present with kind=hours per the emit path."""
+        receipt = GateReceipt.from_dict(fixture_data)
+        assert receipt.horizon is not None
+        assert receipt.horizon.kind == "hours"
+
+    def test_fixture_receipt_id_is_content_addressed(self, fixture_data):
+        """Recompute receipt_id from the fixture's other fields and
+        assert it matches the stored value. Proves the hash binding
+        (schema_version + gate + subject + evidence + policy + role +
+        horizon_hash + unsettled_hash) is stable and that the fixture's
+        stored id is not stale."""
+        receipt = GateReceipt.from_dict(fixture_data)
+        horizon_hash = (
+            receipt.horizon.content_hash() if receipt.horizon is not None else None
+        )
+        unsettled_hash = (
+            content_hash(canonical_json([c.to_dict() for c in receipt.unsettled]))
+            if receipt.unsettled
+            else None
+        )
+        recomputed = _compute_receipt_id(
+            receipt.schema_version,
+            receipt.gate,
+            receipt.subject_hash,
+            receipt.evidence_hash,
+            receipt.policy_hash,
+            receipt.receipt_role,
+            horizon_hash=horizon_hash,
+            unsettled_hash=unsettled_hash,
+        )
+        assert recomputed == receipt.receipt_id, (
+            f"fixture's stored receipt_id {receipt.receipt_id!r} does not match "
+            f"recomputed {recomputed!r} — schema or canonicalization drift."
+        )
+
+    def test_fixture_roundtrips_through_from_dict_to_dict(self, fixture_data):
+        """Load → to_dict → load again. The two GateReceipt objects
+        must be equal; canonical JSON of their dicts must match
+        byte-for-byte. This is the strongest no-drift assertion."""
+        first = GateReceipt.from_dict(fixture_data)
+        roundtripped = first.to_dict()
+        second = GateReceipt.from_dict(roundtripped)
+        assert first == second
+        assert canonical_json(first.to_dict()) == canonical_json(second.to_dict())
+
+    def test_fixture_unsettled_participates_in_receipt_id(self, fixture_data):
+        """If we remove the unsettled claims from the fixture and
+        recompute the receipt_id, it must differ. Proves the unsettled
+        binding is NOT vestigial — two receipts with otherwise-identical
+        fields but different unsettled sets are distinct decisions."""
+        receipt = GateReceipt.from_dict(fixture_data)
+        horizon_hash = (
+            receipt.horizon.content_hash() if receipt.horizon is not None else None
+        )
+        without_unsettled = _compute_receipt_id(
+            receipt.schema_version,
+            receipt.gate,
+            receipt.subject_hash,
+            receipt.evidence_hash,
+            receipt.policy_hash,
+            receipt.receipt_role,
+            horizon_hash=horizon_hash,
+            unsettled_hash=None,  # empty would skip the fragment
+        )
+        assert without_unsettled != receipt.receipt_id, (
+            "removing unsettled must change receipt_id; otherwise the "
+            "binding is not active and the fixture proves nothing."
+        )

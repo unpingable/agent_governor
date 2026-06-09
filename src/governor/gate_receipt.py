@@ -7,10 +7,14 @@ after checking a subject. Receipts are append-only, content-addressed,
 and queryable.
 
 Design choices (informed by ChatGPT review):
-- receipt_id = H(schema_version + gate + subject_hash + evidence_hash + policy_hash + receipt_role)
+- receipt_id = H(schema_version + gate + subject_hash + evidence_hash + policy_hash + receipt_role
+                 [+ horizon_hash if present] [+ unsettled_hash if non-empty])
   This is truly content-addressed: same policy + same subject + same evidence + same role
-  = same receipt_id.  Timestamp is metadata, not identity.  receipt_role is included because
-  role changes semantics — a measurement and a reset with the same payload are different.
+  + same unsettled set = same receipt_id.  Timestamp is metadata, not identity.  receipt_role is
+  included because role changes semantics — a measurement and a reset with the same payload are
+  different.  unsettled distinguishes what a verdict permits from what it leaves unsettled
+  (v4 onward); two receipts with the same payload but different unsettled claims are different
+  decisions.
 - Evidence blobs are stored separately by evidence_hash (content-addressed).
   Receipt rows are tiny and queryable; evidence is deduplicated.
 - Canonical JSON (sorted keys, no whitespace, stable floats) prevents hash
@@ -34,7 +38,7 @@ from typing import Any
 # Schema
 # =============================================================================
 
-RECEIPT_SCHEMA_VERSION = 3
+RECEIPT_SCHEMA_VERSION = 4
 
 
 # =============================================================================
@@ -211,11 +215,88 @@ class HorizonBlock:
 
 
 # =============================================================================
+# Non-discharge: what a verdict explicitly leaves unsettled (v4)
+# =============================================================================
+#
+# A gate receipt's verdict records what was permitted/denied. The unsettled
+# field records what the verdict explicitly did NOT settle. Without it, a
+# permit receipt is indistinguishable from a permit that also discharged
+# upstream claims it never inspected. The vocabulary is closed: adding a
+# new kind requires ratification, not an ad-hoc string. The freeform
+# `reason` field is prose-for-humans and does not participate in matching
+# or dispatch.
+
+UNSETTLED_AUTHORITY = "authority"
+UNSETTLED_EVIDENCE_SUFFICIENCY = "evidence_sufficiency"
+UNSETTLED_FRESHNESS = "freshness"
+UNSETTLED_SCOPE = "scope"
+UNSETTLED_STANDING = "standing"
+UNSETTLED_CONSUMER_RELIANCE = "consumer_reliance"
+
+VALID_NON_DISCHARGE_KINDS = frozenset({
+    UNSETTLED_AUTHORITY, UNSETTLED_EVIDENCE_SUFFICIENCY,
+    UNSETTLED_FRESHNESS, UNSETTLED_SCOPE,
+    UNSETTLED_STANDING, UNSETTLED_CONSUMER_RELIANCE,
+})
+
+
+@dataclass(frozen=True)
+class NonDischargeClaim:
+    """One thing this verdict explicitly does NOT settle.
+
+    Fields:
+        kind                 — closed enum (VALID_NON_DISCHARGE_KINDS).
+                               New kinds require ratification, not an
+                               ad-hoc string. C4 discipline.
+        reason               — freeform prose for human reviewers. Does
+                               not participate in matching or dispatch.
+        required_consumer    — optional repo-local identifier of the
+                               consumer that would need to discharge
+                               this claim downstream.
+        required_witness     — optional repo-local identifier of a
+                               witness that would discharge it.
+
+    Both optional fields are kept as freeform strings deliberately. They
+    are most likely to be repo-local identifiers at first contact; typing
+    them prematurely is cathedralization.
+    """
+
+    kind: str
+    reason: str
+    required_consumer: str | None = None
+    required_witness: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in VALID_NON_DISCHARGE_KINDS:
+            raise ValueError(
+                f"Invalid non-discharge kind {self.kind!r}; "
+                f"must be one of {sorted(VALID_NON_DISCHARGE_KINDS)}"
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"kind": self.kind, "reason": self.reason}
+        if self.required_consumer is not None:
+            d["required_consumer"] = self.required_consumer
+        if self.required_witness is not None:
+            d["required_witness"] = self.required_witness
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> NonDischargeClaim:
+        return cls(
+            kind=data["kind"],
+            reason=data["reason"],
+            required_consumer=data.get("required_consumer"),
+            required_witness=data.get("required_witness"),
+        )
+
+
+# =============================================================================
 # Canonicalization
 # =============================================================================
 
 
-def canonical_json(obj: dict[str, Any]) -> bytes:
+def canonical_json(obj: dict[str, Any] | list[Any]) -> bytes:
     """Deterministic JSON: sorted keys, compact separators, ASCII-safe.
 
     This is the canonical form used for all hashing.  Do not change
@@ -284,6 +365,7 @@ def _compute_receipt_id(
     p_hash: str,
     receipt_role: str = ROLE_MEASUREMENT,
     horizon_hash: str | None = None,
+    unsettled_hash: str | None = None,
 ) -> str:
     """Content-addressed receipt identity.
 
@@ -297,10 +379,18 @@ def _compute_receipt_id(
     make different semantic claims and must not collide. Absent horizon_hash
     preserves pre-horizon receipt_id computation (backward compatibility) —
     the ":horizon:" fragment is omitted entirely, not appended as empty.
+
+    unsettled_hash binds the unsettled non-discharge set into identity when
+    non-empty. Two v4 receipts with the same payload but different unsettled
+    claims are different decisions. Absent or empty unsettled preserves the
+    pre-unsettled receipt_id computation — the ":unsettled:" fragment is
+    omitted entirely, mirroring the horizon pattern.
     """
     payload = f"{schema_version}:{gate}:{s_hash}:{e_hash}:{p_hash}:{receipt_role}"
     if horizon_hash is not None:
         payload += f":horizon:{horizon_hash}"
+    if unsettled_hash is not None:
+        payload += f":unsettled:{unsettled_hash}"
     return content_hash(payload.encode("utf-8"))
 
 
@@ -353,6 +443,7 @@ class GateReceipt:
     timing: dict[str, Any] | None = None
     principal_ref: str | None = None
     horizon: HorizonBlock | None = None
+    unsettled: tuple[NonDischargeClaim, ...] = ()
 
     def __post_init__(self) -> None:
         if self.verdict not in VALID_VERDICTS:
@@ -391,6 +482,15 @@ class GateReceipt:
         # declaration. Missing != declared-none.
         if self.horizon is not None:
             d["horizon"] = self.horizon.to_dict()
+        # unsettled emitted only for v4+ receipts. A v3 receipt loaded from
+        # disk retains schema_version=3 and serializes without `unsettled`,
+        # preserving byte-stable roundtrip for legacy receipts. v4 receipts
+        # always emit `unsettled` (possibly empty) — the empty list is a
+        # positive claim "no unsettled claims surfaced," not silence.
+        # Legacy v1 receipts may carry schema_version as a string
+        # ("receipt_v1"); those are by definition pre-v4 and skipped.
+        if isinstance(self.schema_version, int) and self.schema_version >= 4:
+            d["unsettled"] = [c.to_dict() for c in self.unsettled]
         return d
 
     def to_json(self) -> str:
@@ -409,6 +509,12 @@ class GateReceipt:
             )
         horizon_data = data.get("horizon")
         horizon = HorizonBlock.from_dict(horizon_data) if horizon_data else None
+        # v3 receipts have no `unsettled` field — default to empty tuple.
+        # v4 receipts have `unsettled: []` or a list of claim dicts.
+        unsettled_raw = data.get("unsettled", ())
+        unsettled = tuple(
+            NonDischargeClaim.from_dict(c) for c in unsettled_raw
+        )
         return cls(
             receipt_id=data["receipt_id"],
             schema_version=v,
@@ -425,6 +531,7 @@ class GateReceipt:
             timing=data.get("timing"),
             principal_ref=data.get("principal_ref"),
             horizon=horizon,
+            unsettled=unsettled,
         )
 
 
@@ -443,12 +550,18 @@ def create_receipt(
     timing: dict[str, Any] | None = None,
     principal_ref: str | None = None,
     horizon: HorizonBlock | None = None,
+    unsettled: tuple[NonDischargeClaim, ...] = (),
 ) -> GateReceipt:
     """Create a GateReceipt with proper content-addressed identity.
 
     horizon is optional. When present, it binds into receipt_id so two
     receipts with identical subject/evidence/policy/role but different
     tolerability horizons are distinct claims.
+
+    unsettled is the list of typed non-discharge claims the verdict
+    explicitly leaves open. Empty by default. When non-empty, it binds
+    into receipt_id so two receipts with otherwise-identical fields but
+    different unsettled sets are distinct decisions.
     """
     if receipt_role not in VALID_RECEIPT_ROLES:
         raise ValueError(
@@ -464,9 +577,17 @@ def create_receipt(
     s_hash = subject_hash(subject_kind, subject_bytes)
     e_hash = content_hash(canonical_json(evidence_bundle))
     p_hash = policy_hash(gate_config)
+    # Empty unsettled does NOT bind into receipt_id (matches horizon pattern).
+    # Non-empty unsettled hashes its canonical-json item list.
+    unsettled_hash = (
+        content_hash(canonical_json([c.to_dict() for c in unsettled]))
+        if unsettled
+        else None
+    )
     rid = _compute_receipt_id(
         RECEIPT_SCHEMA_VERSION, gate, s_hash, e_hash, p_hash, receipt_role,
         horizon_hash=horizon.content_hash() if horizon is not None else None,
+        unsettled_hash=unsettled_hash,
     )
     return GateReceipt(
         receipt_id=rid,
@@ -484,6 +605,7 @@ def create_receipt(
         timing=timing,
         principal_ref=principal_ref,
         horizon=horizon,
+        unsettled=unsettled,
     )
 
 
@@ -631,6 +753,7 @@ class GateReceiptSystem:
         timing: dict[str, Any] | None = None,
         principal_ref: str | None = None,
         horizon: HorizonBlock | None = None,
+        unsettled: tuple[NonDischargeClaim, ...] = (),
     ) -> GateReceipt:
         """Create receipt, store evidence, append receipt to log."""
         # Store evidence blob (deduped by content)
@@ -651,6 +774,7 @@ class GateReceiptSystem:
             timing=timing,
             principal_ref=principal_ref,
             horizon=horizon,
+            unsettled=unsettled,
         )
         # Append to log
         self.receipt_store.append(receipt)

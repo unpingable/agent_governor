@@ -30,12 +30,37 @@ while the control plane was failing open. Cargo success, dogfood defect.
 
 The standard loop, every run:
 
+0. **Groom / rake** — a lightweight pre-tick readiness pass (below). Selects cargo and
+   surfaces dep hazards *before* execution.
 1. **Plan** the cargo with a judgment model.
 2. **Execute** the cargo through the current dogfood.
 3. **Validate the dogfood:** did control, audit, custody, and spend behave?
 4. **Validate the cargo:** did the patch/doc/procedure actually work?
 5. **Accept/reject;** choose the next tock from dogfood gaps; choose whether to
    continue.
+
+### Step 0: the pre-tick rake pass
+
+Added 2026-06-10. Tick 1 proved cargo can move, but backlog *selection* was
+under-groomed — the dependency map was implicit, so the fail-open Maude gate only
+surfaced after running cargo. The rake makes a handful of dependency hazards knowable
+*before* execution. A seven-field table, nothing more:
+
+1. **Candidate cargo list** — a *handful* of plausible items. NOT the whole backlog.
+2. **Dependency scan** — what does each item depend on / block? Any implicit deps?
+3. **Blast-radius rating** — live stakes if it goes wrong.
+4. **Revert path** — exactly how to undo.
+5. **Test command** — the mechanical cargo-verdict check.
+6. **Known blockers** — what's unconfirmed or in the way.
+7. **Why this tick, why now** — the selection rationale.
+
+Guardrails (load-bearing):
+- **10–20 minutes, a table not a novella.** If it grows appendices, hit it with a
+  shovel. If you find yourself enumerating all N backlog docs, you've already failed —
+  rate a handful of *plausible* candidates, not the pile. This is the antidote to
+  per-project backlog pain, not an instance of it.
+- **Grooming selects cargo. It does not authorize speculative infrastructure.** A
+  candidate that needs new infra to exist is a forcing-case question, not a tick.
 
 Two nested layers:
 
@@ -171,6 +196,7 @@ g. **Operator-surface friction** — Maude-specific drivability/visibility gaps.
 | Tick 1 | **tick-shipped** | `working/tick-01-nq-masthead.md` — promoted `prom_0734338a4b27`, 12 gaps (A–L), NQ tree uncommitted for James. Deliverable 6 (model-suitability) retro-filled: downgrade candidate = YES |
 | Tock 1 | **shipped, drill-verified** | `working/tock-01-fail-closed-gate.md` — pre-tool gate fails closed; forcing gap GAP-A; drill `sess_b76328acde5b` (absent operator → deny at 300s, workspace untouched). Named GAP-M (gemini adapter same class, unfixed, needs own citation) |
 | Model-tier delegation (interlude) | **shipped** | Standing objectives + deliverable 6 added (above); `docs/reference/task-packet-template.md` (PROVISIONAL); Tier-0 ollama appliance on mac mini `192.168.69.15:11435`, egress receipt `3c6b1d029d04…`, `working/tier0-appliance-mini.md`. Not a tick — infrastructure for cheaper-model ticks. |
+| Tick 2 (first downgrade experiment) | **tick-shipped** | `working/tick-02-nq-host-detail.md` — Sonnet drove (45 transcript msgs, all `claude-sonnet-4-6`). **Cargo:** shipped green (independent `cargo test -p nq-db`, new test passes, no regression). **Dogfood:** control+audit HELD (fail-closed gate held under weaker executor; GAP-H fix held), promotion custody DEGRADED — **GAP-N** (bundle = whole-tree diff, over-captured Tick 1 residue; neither promote nor reject safe on a dirty tree). **Packet:** downgrade **SUCCESS** — 9 decisions all approve, zero denies/stop-asks; the 3 added packet fields demonstrably helped. → Tock candidate: scope promotion to session-attributable changes (GAP-N). |
 
 ## Next tick candidate
 

@@ -17,7 +17,7 @@ import click
 # Commands listed here appear in the curated help; everything else is hidden
 # behind --help-all.
 CATEGORIES: OrderedDict[str, list[str]] = OrderedDict([
-    ("Operator",  ["status", "doctor", "trace", "explain", "operator", "receipts", "check"]),
+    ("Operator",  ["status", "doctor", "trace", "explain", "operator", "receipts", "why", "check"]),
     ("Workflow",  ["quickstart", "init", "propose", "verify", "apply", "wrap", "serve", "ci"]),
     ("Config",    ["envelope", "profile", "intent", "session", "config"]),
     ("Debug",     ["rpc"]),

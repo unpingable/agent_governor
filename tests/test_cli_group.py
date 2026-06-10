@@ -246,11 +246,13 @@ class TestCuratedGuardrail:
 # If any of these tests fail, you're changing the public surface.
 # That's fine — but it should be deliberate, not accidental.
 
-# The 5 help categories and 21 curated commands. Update only with intent.
+# The 5 help categories and 22 curated commands. Update only with intent.
+# `why` added 2026-06-09 as the S5 receipt-explainability surface; ratified
+# at S4-lite naming checkpoint and consumed by D0a refusal-time emissions.
 FROZEN_CATEGORIES = ["Operator", "Workflow", "Config", "Debug", "Advanced"]
 FROZEN_CURATED_COMMANDS: set[str] = {
     # Operator
-    "status", "doctor", "trace", "explain", "operator", "receipts", "check",
+    "status", "doctor", "trace", "explain", "operator", "receipts", "why", "check",
     # Workflow
     "quickstart", "init", "propose", "verify", "apply", "wrap", "serve", "ci",
     # Config

@@ -36,6 +36,7 @@ Governor answers the boring questions that matter after things go wrong:
 - Under what permissions and scope?
 - What was *claimed* vs what *actually executed*?
 - Who approved it, and is that recorded?
+- What was *spent* — and was there budget for it? (Authorization is not spendability. One valid warrant does not authorize five hundred retries.)
 
 Every enforcement decision produces a hash-chained, content-addressed receipt. Tamper with the chain and the hash breaks.
 

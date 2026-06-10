@@ -1316,6 +1316,60 @@ def receipts_verify(ctx: click.Context, fmt: str, session_id: str | None, as_jso
         ctx.exit(1)
 
 
+# ---------------------------------------------------------------------------
+# S5 — `why <receipt-id>` (the compelling query)
+#
+# Join surface over GateReceiptSystem. Walks the receipt chain back through
+# evidence_bundle.parent_receipt_ids and renders refusals, bypasses, and
+# happy paths uniformly. Absence (unknown id, missing evidence blob,
+# dangling parent ref, stale vocabulary) is RENDERED, not raised.
+# See src/governor/why.py for the join + classification + renderer.
+# ---------------------------------------------------------------------------
+
+@cli.command(name="why")
+@click.argument("receipt_id")
+@click.option("--json", "as_json", is_flag=True,
+              help="Output as JSON (mirrors `governor receipts --json` convention)")
+@click.option("--max-depth", default=64, type=int, show_default=True,
+              help="Maximum chain depth to walk")
+@click.pass_context
+def why(ctx: click.Context, receipt_id: str, as_json: bool, max_depth: int) -> None:
+    """Walk a receipt's chain back to its origin.
+
+    Joins ReceiptStore (gate_receipts.jsonl) to EvidenceStore
+    (content-addressed blobs) and renders the chain — for refusals,
+    bypasses, and happy paths — uniformly. Read-only.
+
+    \b
+    Examples:
+        governor why abc123...              # Render the chain as text
+        governor why abc123... --json       # Machine-readable output
+        governor why <bypass-id>            # Bypass receipts get the BA3 debt pointer
+        governor why <unknown-id>           # Renders "receipt id not found"; exit 1
+
+    \b
+    Absence is rendered, not erred:
+        - Unknown receipt id → "receipt id not found" (exit 1)
+        - Missing evidence blob → "evidence blob missing for hash sha256:..."
+        - Dangling parent ref → "no receipt found for cited parent ..."
+        - Stale refusal kind → "stale vocabulary: <kind>" with warning marker
+    """
+    gov_dir = ensure_initialized(ctx)
+    from .gate_receipt import GateReceiptSystem
+    from .why import render_json, render_text, walk_chain
+
+    system = GateReceiptSystem(gov_dir)
+    result = walk_chain(system, receipt_id, max_depth=max_depth)
+
+    if as_json:
+        click.echo(json.dumps(render_json(result), indent=2))
+    else:
+        click.echo(render_text(result), nl=False)
+
+    if not result.found:
+        ctx.exit(1)
+
+
 @cli.command()
 @click.argument("mode", type=click.Choice(["exploratory", "strict"]), required=False)
 @click.option("--clear", "-c", is_flag=True, help="Clear envelope override, use default")

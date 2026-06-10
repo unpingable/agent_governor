@@ -18,6 +18,39 @@ unattended runs, promotion boundaries, consequence boundaries, after-the-fact au
 - **Tock** = add **exactly one** pipeline capability, cited to a specific gap a tick
   observed. No speculative pipeline primitives. No BuildPetition design yet.
 
+## Standing objectives
+
+Added 2026-06-10 after Tick/Tock 1 (the first ratchet immediately produced a
+resource-allocation lesson: bootstrapping it on Fable nearly ate a 4-hour usage window
+on largely mechanical work).
+
+- **Routing rule of thumb:** *Tick with whatever model moves cargo. Tock with the
+  cheapest model that can satisfy the cited gap. Escalate to Fable only when the gap is
+  conceptual (doctrine/vocabulary seams, laundering review, ratification, synthesis),
+  not merely mechanical.* See [[feedback_model_tier_routing]].
+- **Downgradeability ratchet goal:** *Task packets should become increasingly executable
+  by cheaper/local models. Escalate to Fable only for conceptual seams, ratification, or
+  failed weaker-model attempts.* Downgradeability is a maturity signal — the win is
+  "better process lets weaker models do more ordinary work," not "better model does more
+  magic." Intelligence moves out of the model and into the artifact boundary
+  (`docs/reference/task-packet-template.md`).
+- **Baby-steps discipline:** packet discipline now; no scheduler, no model taxonomy, no
+  orchestration. Ladder-climbing (routing/lanes wiring) is a later ratchet leg, opened
+  only after several ticks of recorded suitability evidence.
+
+## Tick deliverables
+
+Every tick report carries deliverables 1–5 (patch outcome, test result, review/promote
+record, gap list, Tock recommendation) **plus**:
+
+6. **Model-suitability block** — feeds the downgradeability ratchet:
+   - model used (and surface: supervised backend / direct / operator);
+   - ambiguity encountered (where the packet was underspecified);
+   - operator interventions (count + whether any were judgment calls vs. mechanical);
+   - was the task packet sufficient? (yes/no/what was missing);
+   - **downgrade candidate for next similar work** — yes / no / maybe, why, and the
+     specific missing packet detail that would make a cheaper model safe.
+
 ## Tick 1 cargo
 
 NQ dashboard masthead + posture legend (`~/git/notquery`, `crates/nq-monitor`).
@@ -72,5 +105,16 @@ g. **Operator-surface friction** — Maude-specific drivability/visibility gaps.
 
 | Leg | State | Artifact |
 |-----|-------|----------|
-| Tick 1 | **tick-shipped** | `working/tick-01-nq-masthead.md` — promoted `prom_0734338a4b27`, 12 gaps (A–L), NQ tree uncommitted for James |
+| Tick 1 | **tick-shipped** | `working/tick-01-nq-masthead.md` — promoted `prom_0734338a4b27`, 12 gaps (A–L), NQ tree uncommitted for James. Deliverable 6 (model-suitability) retro-filled: downgrade candidate = YES |
 | Tock 1 | **shipped, drill-verified** | `working/tock-01-fail-closed-gate.md` — pre-tool gate fails closed; forcing gap GAP-A; drill `sess_b76328acde5b` (absent operator → deny at 300s, workspace untouched). Named GAP-M (gemini adapter same class, unfixed, needs own citation) |
+| Model-tier delegation (interlude) | **shipped** | Standing objectives + deliverable 6 added (above); `docs/reference/task-packet-template.md` (PROVISIONAL); Tier-0 ollama appliance on mac mini `192.168.69.15:11435`, egress receipt `3c6b1d029d04…`, `working/tier0-appliance-mini.md`. Not a tick — infrastructure for cheaper-model ticks. |
+
+## Next tick candidate
+
+**First downgrade experiment:** run a tick whose cargo is fenced/test-pinned/mechanical
+(Tick 1 class) but hand it to a *cheaper* model — Sonnet via the supervised backend, or
+a LOCAL-tier slice to the mini appliance — from a **template-grade packet**
+(`docs/reference/task-packet-template.md`) carrying the three fields Tick 1 was missing
+(additive-tests clause, expected-verify baseline, rollback line). The tick's
+deliverable-6 block answers whether the packet (not the model) carried the work. This is
+the first real test of the downgradeability ratchet, not yet opened.

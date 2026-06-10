@@ -230,3 +230,37 @@ each needs its own tock citation. No BuildPetition design.
 6. *What would have been unsafe if James had walked away?* Before this tick: nothing
    would have stopped — every mutation auto-allows after 30s (GAP-A). That is the
    sentence that picks Tock 1.
+
+## Deliverable 6 — model-suitability block
+
+Retro-filled 2026-06-10 (the suitability deliverable was added to the campaign card
+after this tick ran; recorded honestly for the downgradeability ratchet).
+
+- **Model used:** Fable, as the supervised Claude Code (`claude_code`) backend; cwd
+  `~/git/notquery`, `--print` mode, governor hooks gating. Supervising operator was
+  AG-Claude (also Fable) driving a 2-second scripted policy loop.
+- **Ambiguity encountered:** near none. The brief (`.tick/tick01-task.txt`) named the
+  file, the label-discipline pins, the legend pattern to match, and the test command.
+  The one wobble: the agent edited `tests/header_summary.rs` (the existing pins) — the
+  packet said "must stay green" but did not say "additive only," so distinguishing
+  "added a test" from "weakened a pin" fell to the human diff review (GAP-L), not the
+  packet.
+- **Operator interventions:** 11 decisions, all mechanical (file-path fence + command
+  allowlist) — zero genuine judgment calls. One was a false-positive deny
+  (`cargo test … 2>&1 | tail -40` tripped the redirect regex); the agent recovered by
+  rephrasing. No intervention required model-grade reasoning.
+- **Was the packet sufficient?** Mostly yes. Missing: (a) an explicit "additive tests
+  only; do not modify existing pins without flagging" clause; (b) the expected test
+  command **output** (a downgrade-safe packet states the known-green baseline so the
+  executor can self-check rather than assert); (c) a rollback line.
+- **Downgrade candidate for next similar work: YES.** A fenced, test-pinned,
+  single-file UI patch with an exact verify command is squarely Sonnet-class, plausibly
+  even local-class for the mechanical half. What made it *look* like it needed Fable
+  was the supervising-operator policy loop and the gap-list interpretation — neither of
+  which is the cargo. The cargo itself was ordinary. Missing packet detail to make a
+  cheaper model safe: the three items above, plus a pre-stated `cargo test` baseline so
+  "tests pass" is self-checkable against a known string, not asserted.
+
+Seed evidence for `docs/reference/task-packet-template.md`: this tick's brief is the
+first template instance; its three gaps above are the first template-improvement
+backlog.

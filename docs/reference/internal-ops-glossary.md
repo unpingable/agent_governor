@@ -156,3 +156,7 @@ to the operator. Do not invent an ops translation unilaterally.
 - `memory/relational_role_induction_keepers.md` — handle ≠ standing;
   reminder that ops naming can paper over standing distinctions if
   rename is sloppy. Glossary discipline guards against this.
+- `docs/reference/task-packet-template.md` — task packets are
+  procedure-shaped artifacts (bind action to condition) and use the
+  documents-vs-procedures pin above; the packet's sizing rubric maps to
+  the existing `ModelTier` names as prose, not a new typed vocabulary.

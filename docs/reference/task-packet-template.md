@@ -90,8 +90,9 @@ If **no**, the next move is to name the **missing packet field** (almost always:
 fuzzy fence, a missing expected-output baseline, an unstated forbidden move, or a
 judgment call smuggled into the cargo) — *then* decide whether the work is genuinely
 conceptual (escalate) or just under-specified (improve the packet). Record the answer
-in the tick's model-suitability block (campaign card deliverable 6); accumulated
-answers are what later license building the model ladder.
+in the tick's **packet verdict** (the model-suitability block — campaign card § "Tick
+deliverables: three verdicts"); accumulated answers are what later license building the
+model ladder.
 
 ## Not built (deliberately)
 
@@ -103,7 +104,10 @@ answers are what later license building the model ladder.
 
 ## Composes with
 
-- `working/campaign-tick-tock-builder-ratchet.md` — standing objectives + deliverable 6.
+- `working/campaign-tick-tock-builder-ratchet.md` — standing objectives + the
+  two-verdict ratchet. A packet's acceptance criteria feed the **cargo verdict**; the
+  **dogfood verdict** is operator-side and never delegated to the executor — an agent
+  grading the pipeline that gates it would be self-amendment-adjacent.
 - memory `feedback_model_tier_routing` — the routing rule of thumb this serves.
 - memory `feedback_model_temperaments` — the direction axis (this is the cost axis).
 - memory `feedback_kind_fit_is_guard_not_enum` — why the rubric stays prose.

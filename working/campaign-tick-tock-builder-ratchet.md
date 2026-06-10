@@ -18,6 +18,43 @@ unattended runs, promotion boundaries, consequence boundaries, after-the-fact au
 - **Tock** = add **exactly one** pipeline capability, cited to a specific gap a tick
   observed. No speculative pipeline primitives. No BuildPetition design yet.
 
+## The builder loop (two-verdict ratchet)
+
+Adopted 2026-06-10 after Tick/Tock 1. Simple tick/tock is good ratchet discipline but
+collapses two different validations — *did the cargo work?* and *did the dogfood
+pipeline behave?* Tick 1 proved they are distinct surfaces: the NQ patch shipped green
+while the control plane was failing open. Cargo success, dogfood defect.
+
+> We split the verdict because "the patch worked" must not launder "the process was
+> unsafe."
+
+The standard loop, every run:
+
+1. **Plan** the cargo with a judgment model.
+2. **Execute** the cargo through the current dogfood.
+3. **Validate the dogfood:** did control, audit, custody, and spend behave?
+4. **Validate the cargo:** did the patch/doc/procedure actually work?
+5. **Accept/reject;** choose the next tock from dogfood gaps; choose whether to
+   continue.
+
+Two nested layers:
+
+- **Outer loop — campaign ratchet** (`PLAN → RUN → ACCEPT → NEXT`): decides what the
+  system should become next.
+- **Inner loop — dogfood trial** (`execution → validation → gap list → tock
+  candidate`): decides whether the current toolchain actually supported the work.
+
+**Ordering invariant: step 3 before step 4.** A passing patch hides a broken process.
+Tick 1 would have read as pure success if the only question had been "did NQ tests
+pass" — the fail-open gate was only visible because the dogfood got its own verdict.
+
+> A tick is not successful merely because the cargo ships. It is successful if it also
+> teaches the dogfood what to become next.
+
+(Name breadcrumb: "Epicycles" was considered and rejected — it implies the loop
+compensates for a wrong model. This loop separates validation surfaces Tick 1 proved
+distinct. "Two-verdict ratchet" is boring enough to survive documentation.)
+
 ## Standing objectives
 
 Added 2026-06-10 after Tick/Tock 1 (the first ratchet immediately produced a
@@ -38,18 +75,44 @@ on largely mechanical work).
   orchestration. Ladder-climbing (routing/lanes wiring) is a later ratchet leg, opened
   only after several ticks of recorded suitability evidence.
 
-## Tick deliverables
+## Tick deliverables: three verdicts
 
-Every tick report carries deliverables 1–5 (patch outcome, test result, review/promote
-record, gap list, Tock recommendation) **plus**:
+Restructured 2026-06-10 under the two-verdict ratchet. (Tick 1's report used the older
+deliverables 1–6 numbering; it is not retro-edited — mapping: cargo verdict absorbs
+1–3, dogfood verdict absorbs 4–5, packet verdict is old deliverable 6 unchanged.)
 
-6. **Model-suitability block** — feeds the downgradeability ratchet:
-   - model used (and surface: supervised backend / direct / operator);
-   - ambiguity encountered (where the packet was underspecified);
-   - operator interventions (count + whether any were judgment calls vs. mechanical);
-   - was the task packet sufficient? (yes/no/what was missing);
-   - **downgrade candidate for next similar work** — yes / no / maybe, why, and the
-     specific missing packet detail that would make a cheaper model safe.
+**Cargo verdict — did the work land?** (validated SECOND, step 4)
+- shipped / rejected / partial;
+- tests — independently run by the supervising operator, not the executor's testimony
+  (NLAI);
+- diff summary;
+- review/promote/revert record.
+
+**Dogfood verdict — did the pipeline behave?** (validated FIRST, step 3)
+- one of: **held / degraded / failed-open / failed-closed / unaudited** — prose
+  vocabulary for working docs, NOT a code enum
+  ([[feedback_kind_fit_is_guard_not_enum]] fires if anyone is tempted);
+- operator interventions (count, and judgment calls vs. mechanical);
+- control gaps; audit gaps;
+- **next tock candidate, citing its forcing gap by name.**
+
+**Packet verdict — could this have been cheaper?** (the model-suitability block;
+feeds the downgradeability ratchet)
+- model used (and surface: supervised backend / direct / operator);
+- ambiguity encountered (where the packet was underspecified);
+- was the task packet sufficient? (yes/no/what was missing);
+- **downgrade candidate for next similar work** — could this packet go to Opus /
+  Sonnet / local? yes / no / maybe, why, and the specific missing packet detail that
+  would make a cheaper model safe.
+
+Worked example (Tick/Tock 1 retro-cast):
+
+| Verdict | Tick 1 |
+|---------|--------|
+| Cargo | shipped — tests green (independent run), 3-file diff promoted |
+| Dogfood | audit **held**, control **failed-open** (GAP-A: 30s hook fail-open) |
+| Packet | downgrade candidate **YES** (Sonnet-class; 3 missing packet fields named) |
+| → Tock | fail-closed supervisor gate, forcing gap GAP-A — shipped, drill-verified |
 
 ## Tick 1 cargo
 
@@ -111,10 +174,18 @@ g. **Operator-surface friction** — Maude-specific drivability/visibility gaps.
 
 ## Next tick candidate
 
-**First downgrade experiment:** run a tick whose cargo is fenced/test-pinned/mechanical
-(Tick 1 class) but hand it to a *cheaper* model — Sonnet via the supervised backend, or
-a LOCAL-tier slice to the mini appliance — from a **template-grade packet**
-(`docs/reference/task-packet-template.md`) carrying the three fields Tick 1 was missing
-(additive-tests clause, expected-verify baseline, rollback line). The tick's
-deliverable-6 block answers whether the packet (not the model) carried the work. This is
-the first real test of the downgradeability ratchet, not yet opened.
+**First downgrade experiment**, run under the five-step loop:
+
+1. *Plan:* judgment model authors a **template-grade packet**
+   (`docs/reference/task-packet-template.md`) for fenced/test-pinned/mechanical cargo
+   (Tick 1 class), carrying the three fields Tick 1 was missing (additive-tests clause,
+   expected-verify baseline, rollback line).
+2. *Execute:* hand it to a *cheaper* model — Sonnet via the supervised backend, or a
+   LOCAL-tier slice to the mini appliance — through the now-fail-closed dogfood.
+3. *Validate dogfood first:* did the fail-closed gate, ledger, and promotion behave
+   with a weaker executor pushing on them?
+4. *Validate cargo:* independent test run, diff review.
+5. *Accept/reject;* the packet verdict answers whether the packet (not the model)
+   carried the work — the first real test of the downgradeability ratchet.
+
+Not yet opened.

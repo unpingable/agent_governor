@@ -52,6 +52,13 @@ Record where each tier failed or helped.
 Composes with memory `feedback_model_tier_routing` and the Tier-0 appliance
 (`working/tier0-appliance-mini.md`, Qwen `qwen2.5:3b` live at `192.168.69.15:11435`).
 
+**Codex standing (parked):** Codex's three roles (chat / reviewer / executor) now have a
+formal standing model — `working/CODEX_RATCHET_STANDING_GAP.md`. Kernel rule: *capability
+does not imply standing; each role earns standing at its consumption boundary.* Build
+order when thawed: reviewer first (smallest ratchet-safe increment), then chat reporting,
+then executor adapter (only on a forcing case). **No generic "Codex adapter" — chat asks,
+reviewer judges, executor mutates.**
+
 ## 3. Cross-project GAP-SPEC dependency sweep (Fable-lane audit)
 
 Two scopes, both **audit only — map, not fixes. No implementation, no commits, no

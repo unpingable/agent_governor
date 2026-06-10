@@ -34,40 +34,79 @@ from governor.runtime.adapter import (
 from governor.runtime.events import EventKind, SourceLayer
 
 
+# Default supervisor decision window (seconds). Must match
+# SessionSupervisor's default_timeout; the live value is threaded through
+# the GOVERNOR_DECISION_TIMEOUT env var at launch.
+DEFAULT_DECISION_TIMEOUT = 300.0
+
+# Grace added on top of the decision window. The supervisor's own
+# timeout watcher auto-denies at the decision window and answers over
+# the socket, so under normal operation the hook never hits its own
+# deadline — the hook-side timeout is purely a backstop for a hung or
+# dead supervisor, and it too fails closed.
+HOOK_WAIT_GRACE = 30.0
+
+
 # Hook script template for supervised mode.
 # Connects to supervisor socket, sends tool info, waits for decision.
+# FAIL-CLOSED: a supervised session whose supervisor is absent, hung, or
+# unintelligible has no authority to mutate anything. Every error path
+# denies with an explicit reason; silence is never an allow.
 _SUPERVISED_PRE_TOOL_SCRIPT = '''\
 #!/usr/bin/env python3
-"""Governor supervised pre-tool hook. Talks to supervisor socket."""
+"""Governor supervised pre-tool hook. Talks to supervisor socket.
+
+Fail-closed: timeout, socket error, missing configuration, or a
+garbled response all DENY the tool call with an explicit reason.
+"""
 import json
 import os
 import socket
 import sys
 
+def _deny(reason):
+    # Claude Code PreToolUse hook output format
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }
+    }))
+
+def _env_float(name, default):
+    try:
+        return float(os.environ[name])
+    except (KeyError, ValueError):
+        return default
+
 def main():
     sock_path = os.environ.get("GOVERNOR_SUPERVISOR_SOCKET")
     if not sock_path:
-        return  # No supervisor, allow by default
+        _deny("Governor supervised session: supervisor socket not configured — failing closed.")
+        return
 
     try:
         data = json.load(sys.stdin)
     except Exception:
-        return  # Can't parse, allow
+        _deny("Governor supervised session: could not parse hook input — failing closed.")
+        return
 
-    tool_name = data.get("tool_name", "unknown")
-    tool_input = data.get("tool_input", {})
+    decision_timeout = _env_float("GOVERNOR_DECISION_TIMEOUT", 300.0)
+    grace = _env_float("GOVERNOR_HOOK_WAIT_GRACE", 30.0)
+    wait_seconds = decision_timeout + grace
 
     msg = json.dumps({
         "type": "pre_tool_use",
-        "tool_name": tool_name,
-        "tool_input": tool_input,
+        "tool_name": data.get("tool_name", "unknown"),
+        "tool_input": data.get("tool_input", {}),
         "tool_call_id": data.get("tool_use_id", ""),
         "session_id": os.environ.get("GOVERNOR_SESSION_ID", ""),
     }) + "\\n"
 
     try:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(30)
+        s.settimeout(wait_seconds)
         s.connect(sock_path)
         s.sendall(msg.encode())
         resp = b""
@@ -81,20 +120,17 @@ def main():
         s.close()
 
         result = json.loads(resp.decode().strip())
-        decision = result.get("decision", "allow")
+        decision = result.get("decision")
+        if decision == "allow":
+            return  # allow — output nothing, exit 0
         if decision == "deny":
-            reason = result.get("reason", "Blocked by governor")
-            # Claude Code PreToolUse hook output format
-            print(json.dumps({
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "deny",
-                    "permissionDecisionReason": reason,
-                }
-            }))
-        # allow — output nothing, exit 0
-    except Exception:
-        pass  # Socket error = allow (fail-open for hooks)
+            _deny(result.get("reason", "Blocked by governor"))
+            return
+        _deny("Governor supervised session: unrecognized supervisor decision %r — failing closed." % (decision,))
+    except socket.timeout:
+        _deny("Governor supervised session: no supervisor decision within %ds — failing closed." % int(wait_seconds))
+    except Exception as exc:
+        _deny("Governor supervised session: supervisor unreachable (%s) — failing closed." % exc.__class__.__name__)
 
 if __name__ == "__main__":
     main()
@@ -137,6 +173,62 @@ def main():
 if __name__ == "__main__":
     main()
 '''
+
+
+def build_isolated_settings(
+    pre_hook: Path, post_hook: Path, decision_timeout: float
+) -> dict[str, Any]:
+    """Build the isolated --settings payload for a supervised child session.
+
+    The PreToolUse hook timeout must strictly exceed the hook script's own
+    wait (decision window + HOOK_WAIT_GRACE): Claude Code treats a
+    hook it kills at timeout as a non-blocking error and PROCEEDS with the
+    tool call, which would reopen the fail-open hole from outside the
+    script. The extra grace here keeps the kill deadline behind the
+    script's deny deadline.
+    """
+    pre_tool_hook_timeout = int(decision_timeout + HOOK_WAIT_GRACE + 30)
+    return {
+        # Permissions: allow all governed tools
+        "permissions": {
+            "allow": [
+                "Read(*)",
+                "Write(*)",
+                "Edit(*)",
+                "Bash(*)",
+                "Glob(*)",
+                "Grep(*)",
+                "NotebookEdit(*)",
+            ],
+        },
+        # Hooks: governor pre/post tool interception
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": f"python3 {pre_hook}",
+                            "timeout": pre_tool_hook_timeout,
+                        }
+                    ],
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": f"python3 {post_hook}",
+                            "timeout": 5,
+                        }
+                    ],
+                }
+            ],
+        },
+    }
 
 
 @dataclass
@@ -188,49 +280,18 @@ class ClaudeCodeAdapter:
         post_hook.write_text(_SUPERVISED_POST_TOOL_SCRIPT)
         post_hook.chmod(post_hook.stat().st_mode | stat.S_IXUSR)
 
+        # Supervisor decision window, threaded in via LaunchConfig.env.
+        # The hook script waits this long (+ grace) for a decision; the
+        # settings-level hook timeout must exceed that wait so Claude Code
+        # never kills the hook before it can fail closed.
+        try:
+            decision_timeout = float(config.env.get("GOVERNOR_DECISION_TIMEOUT", ""))
+        except (TypeError, ValueError):
+            decision_timeout = DEFAULT_DECISION_TIMEOUT
+
         # Build isolated settings file for the child Claude session.
         # This is passed via --settings and does NOT touch the project's settings.
-        isolated_settings: dict[str, Any] = {
-            # Permissions: allow all governed tools
-            "permissions": {
-                "allow": [
-                    "Read(*)",
-                    "Write(*)",
-                    "Edit(*)",
-                    "Bash(*)",
-                    "Glob(*)",
-                    "Grep(*)",
-                    "NotebookEdit(*)",
-                ],
-            },
-            # Hooks: governor pre/post tool interception
-            "hooks": {
-                "PreToolUse": [
-                    {
-                        "matcher": "",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": f"python3 {pre_hook}",
-                                "timeout": 30,
-                            }
-                        ],
-                    }
-                ],
-                "PostToolUse": [
-                    {
-                        "matcher": "",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": f"python3 {post_hook}",
-                                "timeout": 5,
-                            }
-                        ],
-                    }
-                ],
-            },
-        }
+        isolated_settings = build_isolated_settings(pre_hook, post_hook, decision_timeout)
 
         settings_file = hooks_dir / "governor_settings.json"
         settings_file.write_text(json.dumps(isolated_settings, indent=2))
@@ -246,6 +307,10 @@ class ClaudeCodeAdapter:
         env = {**os.environ, **config.env}
         env["GOVERNOR_SUPERVISOR_SOCKET"] = socket_path
         env["GOVERNOR_SESSION_ID"] = config.session_id
+        # Always set explicitly so the hook script and the settings-level
+        # hook timeout agree on the decision window even when the
+        # supervisor didn't pass one.
+        env["GOVERNOR_DECISION_TIMEOUT"] = str(decision_timeout)
 
         # Build claude command
         # --settings: isolated settings file with hooks + permissions (no shared state pollution)

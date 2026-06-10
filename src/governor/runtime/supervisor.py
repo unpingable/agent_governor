@@ -369,6 +369,10 @@ class SessionSupervisor:
                 task=record.task,
                 operator_mode=record.operator_mode,
                 policy_context=record.policy_context,
+                # Thread the intervention decision window to the adapter so
+                # backend-side gates (pre-tool hooks) wait at least as long
+                # as the supervisor's timeout watcher before failing closed.
+                env={"GOVERNOR_DECISION_TIMEOUT": str(self._default_timeout)},
             )
             handle = adapter.launch(config)
             facet.handle = handle

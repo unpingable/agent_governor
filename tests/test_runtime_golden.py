@@ -258,27 +258,27 @@ class TestGoldenTrace:
 class TestHookFormat:
     """Regression tests for Claude Code hook format."""
 
-    def test_hook_keys_are_pascal_case(self):
+    def test_hook_keys_are_pascal_case(self, tmp_path):
         """Claude Code requires PascalCase: PreToolUse, PostToolUse."""
-        from governor.runtime.adapters.claude_code import ClaudeCodeAdapter
-        # The adapter writes settings with these keys
-        # This test just validates the constant exists in the right form
-        import governor.runtime.adapters.claude_code as cc
-        # Check the hook injection code uses PascalCase
-        import inspect
-        source = inspect.getsource(cc.ClaudeCodeAdapter.launch)
-        assert '"PreToolUse"' in source, "Hook injection must use PascalCase PreToolUse"
-        assert '"PostToolUse"' in source, "Hook injection must use PascalCase PostToolUse"
-        assert '"preToolUse"' not in source, "camelCase preToolUse must not appear"
-        assert '"postToolUse"' not in source, "camelCase postToolUse must not appear"
+        from governor.runtime.adapters.claude_code import build_isolated_settings
+        settings = build_isolated_settings(
+            tmp_path / "pre.py", tmp_path / "post.py", decision_timeout=300.0)
+        assert "PreToolUse" in settings["hooks"], "Hook injection must use PascalCase PreToolUse"
+        assert "PostToolUse" in settings["hooks"], "Hook injection must use PascalCase PostToolUse"
+        assert "preToolUse" not in settings["hooks"], "camelCase preToolUse must not appear"
+        assert "postToolUse" not in settings["hooks"], "camelCase postToolUse must not appear"
 
-    def test_hook_matcher_nesting(self):
+    def test_hook_matcher_nesting(self, tmp_path):
         """Hooks must use {matcher, hooks: [{type, command, timeout}]} format."""
-        import inspect
-        import governor.runtime.adapters.claude_code as cc
-        source = inspect.getsource(cc.ClaudeCodeAdapter.launch)
-        assert '"matcher"' in source, "Hook entries must have a matcher field"
-        assert '"hooks"' in source, "Hook entries must have nested hooks array"
+        from governor.runtime.adapters.claude_code import build_isolated_settings
+        settings = build_isolated_settings(
+            tmp_path / "pre.py", tmp_path / "post.py", decision_timeout=300.0)
+        for hook_event in ("PreToolUse", "PostToolUse"):
+            entry = settings["hooks"][hook_event][0]
+            assert "matcher" in entry, "Hook entries must have a matcher field"
+            assert "hooks" in entry, "Hook entries must have nested hooks array"
+            inner = entry["hooks"][0]
+            assert set(inner) == {"type", "command", "timeout"}
 
     def test_pre_tool_deny_format(self):
         """PreToolUse deny must output hookSpecificOutput.permissionDecision."""

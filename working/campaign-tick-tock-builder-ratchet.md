@@ -2,7 +2,7 @@
 
 Opened: 2026-06-10
 Operator authority: James (operator fiat is sufficient source authority for Tick 1; recorded as such — that fact itself is gap-list evidence).
-Status: OPEN — Tick 1 SHIPPED 2026-06-10; Tock 1 recommended (fail-closed pre-tool gate, forced by GAP-A), awaiting operator go.
+Status: OPEN — Tick 1 SHIPPED and Tock 1 SHIPPED 2026-06-10. Next tick may open on operator-curated cargo.
 
 ## Question
 
@@ -73,4 +73,4 @@ g. **Operator-surface friction** — Maude-specific drivability/visibility gaps.
 | Leg | State | Artifact |
 |-----|-------|----------|
 | Tick 1 | **tick-shipped** | `working/tick-01-nq-masthead.md` — promoted `prom_0734338a4b27`, 12 gaps (A–L), NQ tree uncommitted for James |
-| Tock 1 | recommended, not opened | fail-closed pre-tool gate (deny on timeout/socket error, wait aligned to intervention timeout); forcing gap GAP-A |
+| Tock 1 | **shipped, drill-verified** | `working/tock-01-fail-closed-gate.md` — pre-tool gate fails closed; forcing gap GAP-A; drill `sess_b76328acde5b` (absent operator → deny at 300s, workspace untouched). Named GAP-M (gemini adapter same class, unfixed, needs own citation) |

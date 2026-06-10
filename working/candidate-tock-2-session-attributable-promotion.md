@@ -1,6 +1,8 @@
 # Candidate — Tock 2: session-attributable promotion
 
-Status: **candidate, NOT opened.** Forcing gap: **GAP-N** (Tick 2,
+Status: **SHIPPED 2026-06-10** → `working/tock-02-session-attributable-promotion.md`
+(refuse-dirty-first + per-path revert; 16 tests, 499-test regression sweep green).
+Forcing gap: **GAP-N** (Tick 2,
 `working/tick-02-nq-host-detail.md`). Cited by the tick/tock rule (tock must cite a tick
 gap). Do not implement until opened.
 

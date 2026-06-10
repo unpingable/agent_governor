@@ -138,6 +138,9 @@ class SessionRecord:
     pid: int | None = None
     exit_code: int | None = None
     parent_session_id: str | None = None
+    # GAP-N (Tock 2): session-attributable promotion.
+    allow_dirty: bool = False
+    baseline_dirty: list[str] | None = None
 
 
 def _new_session_id() -> str:
@@ -256,8 +259,16 @@ class SessionSupervisor:
         task: str | None = None,
         operator_mode: str = "interactive",
         policy_context: dict[str, Any] | None = None,
+        allow_dirty: bool = False,
     ) -> SessionRecord:
-        """Create a new supervised session (does not launch yet)."""
+        """Create a new supervised session (does not launch yet).
+
+        ``allow_dirty=False`` (default) makes ``launch_session`` refuse a
+        dirty working tree (GAP-N): without a clean start, session-attributable
+        custody can't be established. ``allow_dirty=True`` instead records the
+        pre-existing dirty set as a baseline and fences it from this session's
+        promotion/rejection.
+        """
         session_id = _new_session_id()
         now = _now_iso()
 
@@ -271,6 +282,7 @@ class SessionSupervisor:
             started_at=now,
             updated_at=now,
             task=task,
+            allow_dirty=allow_dirty,
         )
 
         events_path = self._state_dir / f"{session_id}_events.jsonl"
@@ -358,6 +370,34 @@ class SessionSupervisor:
         facet = self._get_facet(session_id)
         bus = self._get_bus(session_id)
         adapter = self._adapters[session_id]
+
+        # GAP-N (Tock 2): snapshot the working-tree baseline BEFORE the backend
+        # can touch anything. A dirty tree is refused by default; with
+        # allow_dirty the pre-existing set is fenced from promote/reject.
+        from governor.runtime.promotion import DirtyWorktreeError, snapshot_dirty_paths
+
+        baseline = snapshot_dirty_paths(record.cwd)
+        record.baseline_dirty = baseline
+        if baseline and not record.allow_dirty:
+            bus.emit(
+                EventKind.SESSION_FAILED,
+                SourceLayer.SUPERVISOR,
+                record.backend_kind,
+                payload={
+                    "reason": "dirty_worktree_at_launch",
+                    "preexisting_dirty": baseline,
+                    "hint": "relaunch with allow_dirty=True to fence pre-existing changes",
+                },
+            )
+            self._transition(record, SessionStatus.FAILED)
+            raise DirtyWorktreeError(record.cwd, baseline)
+        if baseline:
+            bus.emit(
+                EventKind.SESSION_LAUNCHING,
+                SourceLayer.SUPERVISOR,
+                record.backend_kind,
+                payload={"baseline_dirty_fenced": baseline},
+            )
 
         self._transition(record, SessionStatus.LAUNCHING)
         bus.emit(EventKind.SESSION_LAUNCHING, SourceLayer.SUPERVISOR, record.backend_kind)
@@ -726,7 +766,9 @@ class SessionSupervisor:
         facet = self._get_facet(session_id)
         bus = self._get_bus(session_id)
 
-        promotion = detect_workspace_changes(record.cwd)
+        # GAP-N: scope the promotion to session-attributable changes by
+        # excluding the launch-time baseline dirty set.
+        promotion = detect_workspace_changes(record.cwd, baseline=record.baseline_dirty)
         if not promotion:
             return
 
@@ -740,6 +782,7 @@ class SessionSupervisor:
             payload={
                 "promotion_id": promotion.promotion_id,
                 "changed_files": promotion.changed_files,
+                "excluded_files": promotion.excluded_files,
                 "diff_stat": promotion.diff_stat,
             },
         )
@@ -758,7 +801,7 @@ class SessionSupervisor:
         from governor.runtime.promotion import (
             approve_promotion,
             reject_promotion,
-            revert_workspace,
+            revert_paths,
         )
 
         facet = self._get_facet(session_id)
@@ -779,12 +822,15 @@ class SessionSupervisor:
                     "promotion_id": promotion.promotion_id,
                     "decision": "approved",
                     "changed_files": promotion.changed_files,
+                    "excluded_files": promotion.excluded_files,
                     "reason": reason,
                 },
             )
         else:
             reject_promotion(promotion, reason)
-            reverted = revert_workspace(record.cwd)
+            # GAP-N: revert ONLY session-attributable paths. Pre-existing dirty
+            # files (promotion.excluded_files) are never touched.
+            reverted = revert_paths(record.cwd, promotion.changed_files)
             bus.emit(
                 EventKind.PROMOTION_RESOLVED,
                 SourceLayer.OPERATOR,
@@ -793,6 +839,7 @@ class SessionSupervisor:
                     "promotion_id": promotion.promotion_id,
                     "decision": "rejected",
                     "changed_files": promotion.changed_files,
+                    "excluded_files": promotion.excluded_files,
                     "reason": reason,
                     "reverted": reverted,
                 },

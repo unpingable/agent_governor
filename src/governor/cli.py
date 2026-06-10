@@ -19750,9 +19750,11 @@ _populate_advanced()
 @click.option("--cwd", default=None, help="Working directory for the session")
 @click.option("--task", default=None, help="Task description for the agent")
 @click.option("--mode", "operator_mode", default="interactive", help="Operator mode (interactive/autonomous)")
+@click.option("--allow-dirty", is_flag=True, help="Fence a dirty working tree at launch instead of refusing (GAP-N)")
 @click.pass_context
-def runtime_launch(ctx: click.Context, backend: str, cwd: str | None, task: str | None, operator_mode: str):
+def runtime_launch(ctx: click.Context, backend: str, cwd: str | None, task: str | None, operator_mode: str, allow_dirty: bool):
     """Launch a supervised agent session."""
+    from .runtime.promotion import DirtyWorktreeError
     from .runtime.supervisor import SessionSupervisor
 
     gov_dir = get_governor_dir(ctx)
@@ -19777,13 +19779,19 @@ def runtime_launch(ctx: click.Context, backend: str, cwd: str | None, task: str 
         cwd=work_dir,
         task=task,
         operator_mode=operator_mode,
+        allow_dirty=allow_dirty,
     )
     click.echo(f"Session created: {record.session_id}")
     click.echo(f"Backend: {record.backend_kind}")
     click.echo(f"CWD: {record.cwd}")
     click.echo(f"Task: {record.task or '(none)'}")
 
-    record = supervisor.launch_session(record.session_id)
+    try:
+        record = supervisor.launch_session(record.session_id)
+    except DirtyWorktreeError as e:
+        click.echo(f"Refused: {e}", err=True)
+        click.echo("Re-run with --allow-dirty to fence pre-existing changes.", err=True)
+        raise SystemExit(1)
     click.echo(f"Status: {record.status.value}")
     click.echo(f"PID: {record.pid}")
 

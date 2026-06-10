@@ -3375,6 +3375,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         cwd = params.get("cwd", str(state.root))
         task = params.get("task")
         operator_mode = params.get("operator_mode", "interactive")
+        allow_dirty = bool(params.get("allow_dirty", False))
 
         if backend_kind == "claude_code":
             from .runtime.adapters.claude_code import ClaudeCodeAdapter
@@ -3392,6 +3393,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             cwd=cwd,
             task=task,
             operator_mode=operator_mode,
+            allow_dirty=allow_dirty,
         )
         return {
             "session_id": record.session_id,

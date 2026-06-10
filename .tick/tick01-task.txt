@@ -1,0 +1,11 @@
+Add a dashboard masthead + posture legend to the NQ monitor dashboard. All changes must be confined to crates/nq-monitor/src/http/routes.rs and crates/nq-monitor/tests/.
+
+1. Masthead: tighten the header region built in render_overview() (the `<div class="header">` block) — keep the pinned label discipline: severity counts under an explicit "Severity:" axis label, action_bias counts under an explicit "Response:" axis label, no bare counts. The existing tests in crates/nq-monitor/tests/header_summary.rs must stay green.
+
+2. Posture legend: add an inline legend explaining the 5 ActionBias tiers (intervene_now, intervene_soon, investigate_now, investigate_business_hours, watch), wording consistent with the doc comments on ActionBias in crates/nq-db/src/detect.rs — posture is operator-recommended response shape, NOT severity. Match the existing Failure Domains domain-card legend pattern already in render_overview(). Earn-the-chrome: no new colors, no icons, no emoji.
+
+3. Add or extend tests in crates/nq-monitor/tests/ pinning the legend's presence and its labels.
+
+4. Run: cargo test --all --locked  (from the repo root) and make it pass.
+
+Do NOT: run git commit or git push, touch any files outside crates/nq-monitor/, fetch anything from the network, or implement the scoped proposals DASHBOARD_HEADER_SEVERITY_URGENCY_SPLIT or DASHBOARD_ORDERING_SLICE_PACKET beyond what the masthead/legend itself requires.

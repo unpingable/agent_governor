@@ -454,8 +454,9 @@ Recorded because it reframes the relay caveat correctly:
 ## Second-round excavation (2026-06-11 appendix — Notary / transport / reflex / instrument)
 
 The operator's "first pass" appendix to endgame. The recap front-matter is already
-captured above; these are the genuinely-new bones. (A second pass follows; a third
-confound may still surface.)
+captured above; these are the genuinely-new bones. (The second pass is captured in
+the next section. A "third" the operator half-remembered was thread-conflation, not
+a real item — nothing owed.)
 
 ### Throughline extension
 
@@ -599,9 +600,10 @@ product manager: verify the envelope, not the controller's wisdom.
    was started and *then* these witness-competence decisions landed — so that doctrine
    reshapes an already-built component. Operator's read: "not wasted work, changes the
    shape." NQ-side; AG records the pointer only.
-2. **This is the first pass.** A second appendix follows once this is in; a possible
-   third confound is still to be dug up. The placard and this file are open for at
-   least one more round.
+2. **Two appendices captured (first + second).** A "third confound" the operator
+   half-remembered was thread-conflation (continuation of thread one mistaken for a
+   new thread), not a real item — nothing owed. The files stay living; if a real
+   third surfaces it re-enters as fact or gets re-derived.
 
 ---
 

@@ -896,8 +896,9 @@ WLP custody.
 6. **Second pass is in (this is it).** The first appendix was Notary / transport /
    reflex / instrument; this second appendix added evidence classes (declared vs
    simulated), Phosphor aggregates, succession + redaction zoning paragraphs, and
-   the survey-done declaration. A possible third confound was flagged by the
-   operator but is the operator's to dig up; the file stays open.
+   the survey-done declaration. (A "third confound" the operator half-remembered
+   turned out to be thread-conflation, not a real third item — nothing owed. The
+   file stays a living map regardless.)
 7. **One launch-blocking build item now exists.** The **simulated evidence class +
    firewall predicate** has a forcing case (the demo mints simulated receipts) and
    must land before any public demo. It is *not* built here — capturing ≠ building —

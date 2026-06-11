@@ -72,9 +72,26 @@ don't edit other repos' gaps. memory `feedback_cross_repo_pm`.)
 > **Partly DONE 2026-06-10:** the gap-backlog VALIDATION pass ran (codex inventory's 234
 > entries verified against repo state) — `working/gap-backlog-triage-2026-06-10.md`.
 > Result: inventory ~40% mislabeled (140 CONFIRMED / 70 STALE / 20 WRONG / 4 NEEDS-HUMAN);
-> systematic error classes characterized; 4 NEEDS-HUMAN operator calls surfaced. Still
-> NOT done: inter-gap *dependency* mapping (which gap blocks which) — the triage validated
-> status, not deps.
+> systematic error classes characterized; 4 NEEDS-HUMAN operator calls surfaced. This
+> *decontaminated the instrument*; it did not groom the backlog.
+
+**Dependency skeleton (the actual next artifact — teed up, brutally narrow).** Operator
+spec 2026-06-10. Input: the ~140 CONFIRMED-open gaps from the triage (skip shipped/STALE
+and recognition-only records with no consumers). Extract **edges only**:
+```
+A blocks B  IFF  consumer B requires a concrete witness / contract / artifact / schema
+                 / receipt produced by A.
+A does NOT block B  if they merely share vocabulary, status, or docs ("Composes with"
+                 alone is NOT an edge).
+unknown edge => NEEDS-HUMAN, never inferred.
+```
+Win condition: a dependency graph **allowed to be sparse**. The trap (named by operator):
+making another fake map because every node "should" have arrows. No reprioritization, no
+cleanup, no "while I'm here." Method: per-repo workers read each open gap's declared
+deps (`depends on` / `blocked by` / `requires` / `prerequisite`), keep only
+concrete-artifact edges, flag ambiguous ones NEEDS-HUMAN; Opus synthesizes the sparse
+edge list + a "what's unblocked now" reading. Deliverable:
+`working/gap-dependency-skeleton-2026-06-XX.md`.
 
 **3b. Scoped (do first): builder-ratchet readiness audit.** Inspect the tick/tock
 campaign, Maude supervision path, NQ promoted-patch state, agent_gov artifacts, backlog

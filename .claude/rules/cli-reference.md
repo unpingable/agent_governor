@@ -500,6 +500,88 @@ governor check <path> --interactive    # Interactive mode: offer fix/revise/proc
 governor check <path> -i --mode fiction  # Interactive with fiction-mode resolution options
 ```
 
+## Additional command groups (indexed 2026-06-11)
+
+These shipped before the reference caught up (see `working/doc-sync-triage-2026-06-11.md`).
+The root CLI exposes ~125 commands. Structure: a curated front door (the commands
+documented above) + an `advanced` umbrella that re-exposes the power-user surface +
+an `operator` group + domain groups (`fiction`, `ops`) that mirror the standalone
+`fiction-gov` / `ops-gov` CLIs. Subcommands listed; run `governor <group> --help` for flags.
+
+```bash
+# Governance & gating
+governor admit         # Admissibility push-back for underspecified tasks (assess|check|list|status|unknowns)
+governor constraint    # Formal constraint checking via Z3 sidecar (check|status)
+governor constraints   # Pre-execution constraint projection (diff|resolve)
+governor cbi           # Coherence Budget Index — governor health metric (closure|compute|list|status)
+governor risk          # Risk potential function, scalar V from signals (assess|list|status)
+governor phase         # Phase control — run phases with budget locks (advance|init|list|status)
+governor quorum-ext    # Extended quorum — severity gating, two-man rule (check|list|status)
+governor hysteresis    # Anti-churn mode-transition control (check|list|status)
+governor deploy        # Deployment profiles — authority classes + capability tokens (check|list|proposals|status)
+governor doctrine      # Consult declared doctrine from a continuity store, read-only (consult)
+governor slim          # Slim mode — single-developer governance (status)
+governor preflight     # Prove governor enforcement is live before an agent session
+
+# Adjudication / docket
+governor docket        # View/manage pending violation-resolution cases (list|show)
+governor rule          # Issue rulings on docket cases (amend|dismiss|except|reverify|sustain)
+governor precedent     # View past rulings (list|search)
+governor resolve       # Resolve pending violations (allow|change|fix)
+
+# Documentation governance
+governor doc           # Docs as governed artifacts (check|demote|export|list|promote|register|stale|status|unregister|verify)
+
+# Observability / diagnostics
+governor operator      # Operator surfaces (doctor|explain|receipts|status|trace); also top-level: doctor, trace, explain
+governor instrument    # Instrumented execution — content-addressed runs/claims/reports (run|report|diff|event|extract-claims|store|verify|waiver-create|waiver-list|list|status)
+governor metrics       # Severity-weighted coverage/efficiency metrics (claims|list|status)
+governor measure       # Measurement integrity — tidepool defense for tool outputs (list|scan|status)
+governor detector      # Temporal-coherence detector integration (collapse|constraints|evaluate|failure-safe|status)
+governor collapse      # Scalar collapse detection in governance chains (analyze|history|modes|status)
+governor dashboard-ux  # Run-centric dashboard backend (report|runs|schema|summary|templates)
+governor replay        # Replay and diff run artifacts (diff|record-receipts|run)
+governor selfcheck     # Self-check on governor store integrity
+governor graph         # Audit graph operations (authority|collapse|drift|export|rejections|stats|unverified|view|weak)
+
+# Receipts / kernel
+governor kernel        # Receipt kernel — hash-chained run ledger + invariant evaluation (runs|verify)
+governor transport     # Commitment transport validation (check|extract|history|stats)
+governor why           # Walk a receipt's chain back to its origin
+
+# Backends / integration
+governor backend       # Backend management for governed chat (list|models|status|switch)
+governor chat          # Governed single-turn chat with active backend
+governor codex-exec    # Run Codex CLI with governor instrumentation
+governor codex-hooks   # Codex CLI integration hooks (install|status|uninstall)
+governor config        # Configuration management (effective)
+governor demo          # WebUI demo management — scripted screenshots (check|list|show|spec)
+
+# Domain command groups (mirror standalone CLIs)
+governor fiction       # Fiction writing (character|corrections|forbid|init|status|world)
+governor ops           # SRE/Operations constraint system (claim|incident|init|packs|policy|runbook)
+governor issue         # Issue/task management (add|done|start|block|label|link|milestone|timer|tree|...)
+
+# Top-level convenience commands / aliases
+governor quickstart    # Guided demo: init, add a rule, see it enforced
+governor anchor        # Create/remove a continuity anchor (alias into continuity)
+governor decide        # Record/retract an architectural decision
+governor revise        # Revise an existing decision
+governor lock|unlock   # Lock/unlock a directory structure via spine
+governor must-exist    # Register a file that must exist (invariant shortcut)
+governor must-pass     # Register a test command that must pass (invariant shortcut)
+governor rpc           # Raw daemon RPC escape hatch, debug only (call|list)
+governor doctor        # Operator shortcut: walk subsystems, report non-nominal (= operator doctor)
+governor trace         # Operator shortcut: unified timeline of receipts/scars/scope/violations
+governor explain       # Explain a diagnostic code (e.g. ELASTIC, CAPTURE, BLOCK)
+governor advanced      # Umbrella group re-exposing the full power-user command surface
+
+# Experimental / research (reachable but pre-stable — not platform-guaranteed):
+governor evasion       # Epistemic evasion detection — discourse pattern analysis (scan|status)
+governor temporal      # Temporal attack surface — Δt-aware security analysis (scan|status)
+governor stability     # Spectral stability gate for governance topology (check|hotspots|matrix|region)
+```
+
 ## Fiction Governor CLI
 
 ```bash

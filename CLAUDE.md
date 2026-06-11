@@ -6,7 +6,7 @@ This is the **Agent Governor** — a constraint system for agentic coding tools.
 
 The system provides write-blocking governance for AI coding agents via typed claims, receipt-producing verification, and transactional ledgers. It spans code governance, fiction writing, academic writing, SRE operations, and multi-agent coordination.
 
-~14,500 tests across 60+ modules. See `.claude/rules/implementation-summary.md` for full feature status and test counts.
+~15,400 tests across 60+ modules. See `.claude/rules/implementation-summary.md` for full feature status and test counts.
 
 ## Key Documents
 

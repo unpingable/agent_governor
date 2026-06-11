@@ -1275,7 +1275,10 @@ def run_drill(
     # ``AlreadyConsumed`` path because the orchestrator does not
     # support multi-consume).
     if scenario == SCENARIO_REPLAY_BUDGET and chain_result.consumed:
-        consumed_outcome = chain_result.outcome
+        # Reach through the operational-consequence wrapper to the LA result
+        # (demonstration read). replay-budget drill is DemonstratedConsumed;
+        # the second consume below replays against the underlying token.
+        consumed_outcome = chain_result.outcome.consumed_result
         assert isinstance(consumed_outcome, ConsumedResult)
         # The second consume reuses the same consumption_event_id (via
         # the template) and the granted token_id (via the prior outcome
@@ -1320,9 +1323,13 @@ def run_drill(
     if (
         confabulate_citation is not None
         and scenario == SCENARIO_ALL_GREEN
-        and isinstance(chain_result.outcome, ConsumedResult)
+        and chain_result.consumed
     ):
-        consumed_outcome = chain_result.outcome
+        # Reach through the operational-consequence wrapper to the LA result
+        # for transcript / chain-walk fields (a demonstration read, not a
+        # spend). All-green drill is a DemonstratedConsumed; the underlying
+        # ConsumedResult carries the receipt ids the confabulation beat cites.
+        consumed_outcome = chain_result.outcome.consumed_result
         # Pick the bogus id per role.
         #   * ``standing`` → fixed BOGUS_STANDING_RECEIPT_ID (existence-fail
         #     target — content-addressed, never minted by any seam).
@@ -1432,20 +1439,16 @@ def run_drill(
     #                                         NOT happen; the refusal
     #                                         receipt IS the closing beat).
     proposal_packet: dict[str, Any] = {}
-    if outcome_kind == "consumed" and isinstance(
-        chain_result.outcome, ConsumedResult
-    ):
+    if outcome_kind == "consumed" and chain_result.consumed:
         proposal_packet = build_proposal_packet(
             finding=finding,
-            consumed=chain_result.outcome,
+            consumed=chain_result.outcome.consumed_result,
             receipt_ids=receipt_ids,
         )
-    elif outcome_kind == "gap_accounted" and isinstance(
-        chain_result.outcome, ConsumedResult
-    ):
+    elif outcome_kind == "gap_accounted" and chain_result.consumed:
         proposal_packet = build_proposal_packet(
             finding=finding,
-            consumed=chain_result.outcome,
+            consumed=chain_result.outcome.consumed_result,
             receipt_ids=receipt_ids,
         )
         # Gap citation per §3b: the deterministic stub gains a

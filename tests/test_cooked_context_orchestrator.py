@@ -546,8 +546,12 @@ class TestHappyPath:
             now=0,
         )
 
-        # Consumed verdict; the chain delivered an allowed effect.
+        # Consumed verdict: the chain mechanically delivered a consume.
+        # origin_mode=cli_origin is NON-operational, so this is a
+        # DemonstratedConsumed — consumed (machinery ran) but NOT operational
+        # (the fence refuses cli_origin a real spend).
         assert result.consumed
+        assert not result.operational
         assert not result.refused
         assert result.seam == SEAM_LA_CONSUME
 

@@ -381,11 +381,18 @@ def test_acceptance_9_poster_byte_identical_after_normalization(tmp_path: Path):
 
 
 def test_acceptance_10_existing_slice_tests_still_pass():
-    """Run the 188 prior slice tests as a subprocess; assert green.
+    """Run the prior slice tests as a subprocess; assert no regression.
 
-    Defensive guard: this slice MUST NOT regress any of the
-    pre-existing 188 tests. We invoke pytest as a subprocess so a
-    failure here is unambiguous.
+    Defensive guard: this slice MUST NOT regress any pre-existing slice
+    test. We invoke pytest as a subprocess so a failure here is
+    unambiguous.
+
+    Intent is "zero failures", NOT a frozen pass count: some of these
+    tests skip when the ``nq-monitor`` binary is absent
+    (``test_d0_origin_genuine_nq_finding`` is NQ-binary-gated), and the
+    suite legitimately grows. So we assert a clean exit + no reported
+    failures, and tolerate environmental skips — pinning an exact integer
+    made this red on any box without NQ built.
     """
     out = subprocess.run(
         [
@@ -413,8 +420,13 @@ def test_acceptance_10_existing_slice_tests_still_pass():
         f"pre-existing slice tests failed; exit={out.returncode}\n"
         f"stdout:\n{out.stdout}\nstderr:\n{out.stderr}"
     )
-    assert "188 passed" in out.stdout, (
-        f"expected 188 passed; got:\n{out.stdout}"
+    # Clean exit already implies no failures/errors; assert it explicitly
+    # so an accidental "0 failed" string change can't mask a regression.
+    assert "failed" not in out.stdout, (
+        f"a slice test failed:\n{out.stdout}"
+    )
+    assert "passed" in out.stdout, (
+        f"expected some slice tests to pass; got:\n{out.stdout}"
     )
 
 

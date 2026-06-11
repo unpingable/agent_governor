@@ -299,8 +299,11 @@ forcing case per `~/.claude/CLAUDE.md` § YAGNI scope.
 
 ## Cross-references
 
-Companion orientation doc:
+Companion orientation docs:
 
+- `docs/constellation-wire-plan.md` — the **physical wiring** companion: which
+  transport each cross-repo seam uses today (all SPEC-harness injection as of
+  2026-06-12), the W0–W4 promotion phases, and cold-start re-entry probes.
 - `docs/constellation-zoning.md` — the **deferred-organ / one-way-door**
   companion to this file. Where this doc names the planes that *exist*, that one
   names the organs that *do not yet* (temporal authority, retraction transport,

@@ -396,25 +396,162 @@ SEAM_LA_REQUEST = "la_seam_request"
 SEAM_LA_CONSUME = "la_seam_consume"
 
 
+# ---------------------------------------------------------------------------
+# Operational-consequence type split (Wall 1 of the simulated-evidence fence,
+# ratified 2026-06-12).
+#
+# A successful chain produces ONE OF TWO DISTINCT TYPES — never one type with
+# a boolean rider. The discriminator is `origin_mode`, which the orchestrator
+# owns (the LA seam never sees it). Two claims that the house rule forbids
+# sharing a type, because there is a scenario that attests one and refuses the
+# other:
+#
+#   * ``consumed``    — the machinery ran: exactly-once consume happened,
+#                       receipts minted, chain walkable. TRUE for a drill.
+#   * ``operational`` — the consume may confer real-world consequence
+#                       (spend real capacity, suppress a real event, promote).
+#                       FALSE for a drill.
+#
+# So: ``OperationalConsumed`` (origin admitted — ``observed``) and
+# ``DemonstratedConsumed`` (origin non-operational — drill / synthetic /
+# replay / cli_origin / stub_origin) are different types. Only the former is
+# accepted by ``confer_operational_effect`` (the single spend/effect seam).
+#
+# Why a type split and not a ``.operational`` flag: a flag is a vigilance
+# discipline — "downstream MUST remember to check it" — which is the blocklist
+# pattern wearing a flag costume. One forgetful consumer confers real effect
+# from a drill. The type split makes that construction UNREPRESENTABLE: a
+# ``DemonstratedConsumed`` cannot pass the spend wall's ``isinstance`` gate, so
+# downstream does not check — it *cannot misuse*. Promises are testimony;
+# walls are walls. (Python types vanish at runtime, so the wall ships WITH a
+# runtime ``isinstance`` check and a negative pinning test, or it is theatre.)
+#
+# Both wrap the underlying LA ``ConsumedResult`` (reach it via
+# ``consumed_result`` for transcript / proposal-packet / ``governor why``
+# chain walking — those are *demonstration* reads, not spends, and are
+# legitimate on either type). ``origin_admission`` is the fence verdict.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class OperationalConsumed:
+    """Chain completed under an OPERATIONAL origin (``origin_mode=observed``).
+
+    The ONLY chain outcome that :func:`confer_operational_effect` accepts.
+    ``origin_admission.admitted`` is ``True``. Wraps the LA ``ConsumedResult``
+    so transcript / proposal-packet code can reach the token id and receipt
+    ids via ``consumed_result``.
+    """
+
+    consumed_result: ConsumedResult
+    origin_admission: OriginAdmission
+
+
+@dataclass(frozen=True)
+class DemonstratedConsumed:
+    """Chain MECHANICALLY completed under a NON-operational origin
+    (``drill`` / ``synthetic`` / ``replay`` / ``cli_origin`` / ``stub_origin``).
+
+    The machinery ran for real — exactly-once consume against *simulated*
+    capacity, receipts minted, chain walkable — so this is a genuine
+    demonstration of structure (zoning §Evidence classes: "simulated may
+    demonstrate structure / test machinery"). What it may NOT do is confer
+    operational consequence: it is a DISTINCT type from
+    :class:`OperationalConsumed`, and :func:`confer_operational_effect` refuses
+    it at the wall. ``origin_admission`` carries the typed refusal
+    (``admitted`` is ``False``; ``reason`` is ``origin_not_operational``).
+    """
+
+    consumed_result: ConsumedResult
+    origin_admission: OriginAdmission
+
+
+class NonOperationalSpendError(Exception):
+    """A non-operational chain outcome reached the spend / effect interface.
+
+    The structural fence: only an :class:`OperationalConsumed` may confer
+    operational effect. A :class:`DemonstratedConsumed` (drill / synthetic /
+    replay / cli / stub origin), a bare ``ConsumedResult`` (no origin verdict
+    attached), a refusal, or ``None`` is refused HERE — not by a flag a caller
+    must remember to check, but by the type wall. Carries the offending
+    ``origin_mode`` / ``reason`` when available so the refusal names which
+    fantasy was denied a spend.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        origin_mode: str | None = None,
+        reason: str | None = None,
+    ):
+        super().__init__(message)
+        self.origin_mode = origin_mode
+        self.reason = reason
+
+
+def confer_operational_effect(outcome: object) -> ConsumedResult:
+    """The single operational spend / effect-conferring seam (Wall 1).
+
+    Accepts ONLY :class:`OperationalConsumed` and returns the underlying
+    ``ConsumedResult`` the caller may now act on (spend the capacity, apply
+    the effect, suppress the real event). Everything else — a
+    :class:`DemonstratedConsumed`, a raw ``ConsumedResult``, a refusal,
+    ``None`` — raises :class:`NonOperationalSpendError`.
+
+    Conferring operational effect from a non-operational origin is not
+    *guarded* here, it is made *unrepresentable*: callers do not inspect
+    ``.operational``; they pass the chain outcome through this seam and either
+    receive a spendable ``ConsumedResult`` or a raised refusal. Any future
+    spend/effect path MUST route through this function — that is what makes the
+    fence arithmetic instead of vigilance.
+    """
+    if isinstance(outcome, OperationalConsumed):
+        return outcome.consumed_result
+    if isinstance(outcome, DemonstratedConsumed):
+        raise NonOperationalSpendError(
+            "refusing operational effect: chain outcome is "
+            f"DemonstratedConsumed (origin_mode="
+            f"{outcome.origin_admission.origin_mode!r}, reason="
+            f"{outcome.origin_admission.reason!r}). Only an OperationalConsumed "
+            "(origin_mode=observed) may confer operational effect.",
+            origin_mode=outcome.origin_admission.origin_mode,
+            reason=outcome.origin_admission.reason,
+        )
+    raise NonOperationalSpendError(
+        "refusing operational effect: expected OperationalConsumed, got "
+        f"{type(outcome).__name__}. A bare ConsumedResult carries no origin "
+        "verdict and is not spendable; route chain outcomes through the "
+        "orchestrator so the operational-admission fence applies."
+    )
+
+
 @dataclass(frozen=True)
 class ChainResult:
     """The result of running the cooked-context chain.
 
-    ``outcome`` is the verbatim client result:
+    ``outcome`` is the verbatim client result, or — on full success — the
+    operational-consequence type split:
 
       * ``WicketRefusal`` — wicket-seam refused (missing/dangling
         standing receipt id). LA was not invoked.
       * ``RefusalResult`` — LA seam refused (admission gate or capacity
         decision or consume failure). The ``seam`` field disambiguates
         whether the refusal happened at request-capacity or consume.
-      * ``ConsumedResult`` — full chain succeeded; effect allowed.
+      * ``OperationalConsumed`` — full chain succeeded AND the origin is
+        operational (``observed``): the effect may be conferred.
+      * ``DemonstratedConsumed`` — full chain succeeded mechanically but
+        the origin is non-operational (drill/synthetic/replay/cli/stub):
+        structure demonstrated, effect fenced.
 
     ``seam`` names the gate that produced the outcome. Stable across the
     chain; used by a future renderer (or harness assertion) to know
     which gate fired without re-classifying.
     """
 
-    outcome: WicketRefusal | RefusalResult | ConsumedResult
+    outcome: (
+        WicketRefusal | RefusalResult | OperationalConsumed | DemonstratedConsumed
+    )
     seam: str
 
     @property
@@ -423,7 +560,23 @@ class ChainResult:
 
     @property
     def consumed(self) -> bool:
-        return isinstance(self.outcome, ConsumedResult)
+        """The chain MECHANICALLY consumed (operational OR demonstrated).
+
+        Structure-completion, NOT permission to confer effect. A drill chain
+        is ``consumed`` (the machinery ran) but not ``operational``. Read
+        ``operational``, or hand the outcome to
+        :func:`confer_operational_effect`, before conferring any real effect.
+        """
+        return isinstance(
+            self.outcome, (OperationalConsumed, DemonstratedConsumed)
+        )
+
+    @property
+    def operational(self) -> bool:
+        """The chain consumed under an operational origin — the outcome may
+        confer operational effect. Distinct from ``consumed``: a drill chain
+        is ``consumed`` but not ``operational``."""
+        return isinstance(self.outcome, OperationalConsumed)
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +734,26 @@ class CookedContextOrchestrator:
             return ChainResult(outcome=consume_result, seam=SEAM_LA_CONSUME)
 
         assert isinstance(consume_result, ConsumedResult)
-        return ChainResult(outcome=consume_result, seam=SEAM_LA_CONSUME)
+
+        # Operational-consequence fence (Wall 1). The chain mechanically
+        # consumed; whether that consume may confer OPERATIONAL effect depends
+        # on this orchestrator's declared origin_mode. ``observed`` →
+        # OperationalConsumed (spendable); every other closed-set mode (drill /
+        # synthetic / replay / cli_origin / stub_origin) → DemonstratedConsumed
+        # (structure shown, effect fenced by type). origin_mode is validated
+        # in __init__ to be in CLOSED_ORIGIN_MODES, so the fence never sees
+        # MISSING / UNRECOGNIZED / malformed here — only admitted-vs-not.
+        admission = operational_admission(self._origin_mode)
+        outcome: OperationalConsumed | DemonstratedConsumed
+        if admission.admitted:
+            outcome = OperationalConsumed(
+                consumed_result=consume_result, origin_admission=admission
+            )
+        else:
+            outcome = DemonstratedConsumed(
+                consumed_result=consume_result, origin_admission=admission
+            )
+        return ChainResult(outcome=outcome, seam=SEAM_LA_CONSUME)
 
 
 # ---------------------------------------------------------------------------

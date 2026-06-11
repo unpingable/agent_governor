@@ -133,7 +133,11 @@ def test_chain_result_consumed_with_token_id(tmp_path: Path):
     """All-green reaches Consumed; token id is the stable fixture value."""
     result = run_drill(gov_dir=tmp_path, scenario=SCENARIO_ALL_GREEN)
     assert result.chain_result.consumed is True
-    consumed = result.chain_result.outcome
+    # All-green drill is origin_mode=drill → non-operational: the chain
+    # mechanically consumed (structure demonstrated) but the outcome is a
+    # DemonstratedConsumed, NOT operational. Reach the LA result for the token.
+    assert result.chain_result.operational is False
+    consumed = result.chain_result.outcome.consumed_result
     assert consumed.token_id == ALL_GREEN_CAPACITY_TOKEN_ID
 
 

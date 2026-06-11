@@ -1,0 +1,19 @@
+{
+  "kind": "execute",
+  "ts": "2026-06-11T23:23:02Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "slice": "w1-5-opa-contrast-shim",
+  "diff": [
+    "src/governor/demo_opa_contrast.py (new, ~250 lines incl. docstring/render — core shim logic ~100): REGO_POLICY (8 lines), OPA_INPUT (the corpus-08 incident as ordinary infra sees it), evaluate_with_opa (subprocess, P4Client-style graceful fallback), build_opa_verdict_receipt (content-addressed; policy_hash + input_hash + input_provenance=unwitnessed_self_report), run_contrast (custody drill + opa eval + integrity), render_surface (layering sentence verbatim)",
+    "demo/opa-contrast.sh (new, executable): stranger-facing one-command entry, exit 0 iff integrity holds",
+    "tests/test_demo_opa_contrast.py (new, 9 tests): custody refusal, integrity, receipt determinism + byte-binding, surface beats, no-fabricated-verdict degradation, live-opa skip-if-absent, scope fence (policy ≤12 lines)",
+    "docs/constellation-wire-plan.md W1 item 5 → DONE; file-structure.md entries"
+  ],
+  "tests": "60 passed, 9 skipped (opa_contrast + refused_spend + corpus + proof_seam + drill_temporal_lapse); demo/opa-contrast.sh exit 0",
+  "constraints_held": [
+    "corpus untouched (wraps case-08 input; no scenario added)",
+    "no policy-adapter zoo (single engine, single policy, demo-grade)",
+    "no verdict fabricated without binary (opa not installed on this host — degradation path is the live-exercised one; engine path covered by skip-marked test)",
+    "layering sentence verbatim"
+  ]
+}

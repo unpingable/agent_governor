@@ -215,8 +215,19 @@ sequence; this is just its wiring view). Order:
    about the class), not stored per-receipt. Wired into the demo surface as the
    Act-3 descent. `~/git/rkl` is [scratch] lab, explicitly NOT a citation source.
    Tests: `tests/test_proof_seam.py` (8, the tier discipline).
-5. **OPA contrast shim** — ~100 lines, demo-grade only, Act 2.5. Concretizes the
-   deferred verdict seam with an off-the-shelf part; NOT a product surface.
+5. **OPA contrast shim — DONE 2026-06-12.** ~100 lines, demo-grade only, Act 2.5
+   (`src/governor/demo_opa_contrast.py` + `demo/opa-contrast.sh`). Same incident
+   as Act 1 (the frozen corpus-08 impostor): an 8-line Rego policy — correct for
+   the world it is handed — allows the input document (unwitnessed self-report:
+   credential asserts "valid", nothing attests WHEN); custody refuses the same
+   incident upstream (premises failed preflight, the monotonic gap). OPA's verdict
+   itself gets a content-addressed receipt (policy_hash, input_hash,
+   `input_provenance: unwitnessed_self_report`, decision, engine) entering the
+   evidence plane. Layering sentence verbatim on the surface. Graceful no-binary
+   degradation (no verdict fabricated; live `opa eval` when installed; live tests
+   skip without it). Corpus untouched. NOT a product surface — "OPA integration
+   as supported surface" stays a post-launch forcing case. Tests:
+   `tests/test_demo_opa_contrast.py` (9).
 
 **Exit criteria:** a stranger reproduces one end-to-end refusal in <15 min;
 integrity tripwire holds (it cannot pass/refuse for the wrong reason — the BA3

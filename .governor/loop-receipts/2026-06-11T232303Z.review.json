@@ -1,0 +1,9 @@
+{
+  "kind": "review",
+  "ts": "2026-06-11T23:23:03Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "slice": "w1-5-opa-contrast-shim",
+  "cargo_verdict": "pass — acceptance met: same incident, OPA-allow vs custody-refuse contrast rendered receipt-forward; verdict receipted into the evidence plane with provenance; graceful degradation honest; tests green; one-command entry exits 0",
+  "process_verdict": "pass — slice selected by ratified order after the item-4 gate cleared (plan receipt 2026-06-11T231831Z); dispatched with constraints; constraints held",
+  "notes": "opa binary absent on this host: the live-eval test is skip-marked and the no-binary degradation is what actually ran end-to-end. When opa is installed the integrity assertion 'OPA returned allow' becomes load-bearing (contrast collapses loudly if the engine refuses). Acceptable for demo-grade; launch-day box should have opa installed so the live contrast renders."
+}

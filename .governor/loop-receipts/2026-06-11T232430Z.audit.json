@@ -1,0 +1,25 @@
+{
+  "kind": "audit",
+  "cold_start": false,
+  "ts": "2026-06-11T23:24:30Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "audited_commit": "166dc0f (slice diff staged, mid-commit)",
+  "probes_executed_live": true,
+  "state_conformance": {
+    "dirty_tree_scoped": "M docs/constellation-wire-plan.md + 3 new shim files — exactly the slice's declared diff, mid-commit (file-structure.md edit is outside the scoped probe paths but staged in the same slice commit); nothing unaccounted",
+    "tests": "corpus 31 passed, 8 skipped; full slice sweep 60 passed, 9 skipped (execute receipt)"
+  },
+  "plan_conformance": {
+    "closed_slice": "w1-5-opa-contrast-shim — was the ratified selection (last W1 slab item, gate cleared)",
+    "w1_slab_status": "items 1, 2, 2.5, 3, 4 (acceptance sense), 5 — ALL DONE. W1 EXIT CRITERIA are a separate checklist (stranger reproduces a refusal <15min; tripwire holds; Show HN gate items) — item completion does not auto-exit W1.",
+    "proposed_next": "act-two-receipt-interrogation (tier-1 spec_slice) — Act 2 of the demo belongs to launch item 2 (the three descents ARE the demo), preceding launch items 3/4/5 in ratified order",
+    "deviations": []
+  },
+  "obligation_conformance": {
+    "corpus_closed_world": "green, 9 frozen files, corpus untouched by the slice",
+    "pinning_negative_tests": "present and green; shim adds its own (no-fabricated-verdict, receipt byte-binding, scope fence)",
+    "receipts": "execute + review emitted; wire-plan item 5 marked DONE; backlog statuses updated"
+  },
+  "outcome": "pass",
+  "next": "PLAN: act-two-receipt-interrogation is the ratified-order selection; it is a spec_slice whose OUTPUT requires a one-nod ratification, and the operator is present — surfaced in the session heartbeat rather than auto-executed"
+}

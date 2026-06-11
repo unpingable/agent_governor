@@ -248,7 +248,8 @@ src/governor/
 ├── drill_runner.py        # Drill harness consuming genuine NQ FindingSnapshot (D0-Origin)
 ├── drill_poster.py        # Show-surface poster for drills (D0e): seven-invocation runs, assertion aggregation
 ├── demo_refused_spend.py  # Demo Act-1 depth surface (W1 item 3): temporal-lapse contrast (twin passes / impostor refused), receipt-forward render + integrity tripwire; `demo/refused-spend.sh` entry
-├── proof_seam.py          # Proof seam (W1 item 4): refusal class → verified Lean PUBLIC-SHIPPED class-boundary theorem (hero → Freshness.expired_not_fresh); honest class-not-instance framing; NO_KERNEL_THEOREM gaps marked, not borrowed
+├── proof_seam.py          # Proof seam (W1 item 4): refusal class → verified Lean PUBLIC-SHIPPED class-boundary theorem (hero → Freshness.expired_not_fresh, adjudicated clock-agnostic w/ monotonic instantiation recorded); honest class-not-instance framing; NO_KERNEL_THEOREM gaps marked, not borrowed
+├── demo_opa_contrast.py   # Demo Act-2.5 OPA contrast shim (W1 item 5): same incident, OPA allows the unwitnessed input / custody refuses upstream; verdict receipted into the evidence plane; `demo/opa-contrast.sh` entry
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class

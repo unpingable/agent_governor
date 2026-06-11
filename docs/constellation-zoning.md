@@ -502,6 +502,133 @@ Anti-goblin rule, taped to the monitor:
 > **Any field that implies split, merge, selection, lease, or side-channel
 > mutation is not an innocent field. It is a future subsystem.**
 
+#### LA is metabolic, not juridical (zoning glyph, 2026-06-12)
+
+The reframe that recontextualizes the whole organ. Standing / Wicket / WLP / NQ
+are **courthouse** — they adjudicate, they ask *is this licensed*, they fail by
+**refusal**. Linear Accountant alone is **metabolic** — it asks *is there fuel*,
+a question about the world rather than about permission, and it fails by
+**exhaustion**. It does not care whether the wolf has a badge; it cares whether
+there is enough blood sugar to run. One organ in the constellation answers to the
+world instead of to a sovereign — keep it that way; resist the gravitational pull
+(the courthouse-dopamine of crisp green refusals) to juridify spend itself. The
+seam you already built is correct: standing *gates* spend; standing never *is*
+spend.
+
+| Organ | Question | Fails by |
+| ----- | -------- | -------- |
+| Standing | Who may ask? | refusal |
+| Wicket | What may cross? | refusal |
+| WLP / custody | What may be believed downstream? | refusal |
+| NQ | What testimony exists? | (observation gap) |
+| **Linear Accountant** | **What can be spent before reality says no?** | **exhaustion** |
+
+> **Authorization decides whether spend may *begin*. Linear accounting decides
+> whether spend can *continue*.** LA is metabolic, not juridical: permission
+> gates admission to spend; accounting governs exhaustion, conservation, freeze,
+> thaw, and scar.
+
+**Ledger-kind is a typed field, not a convention.** Multiple ledgers are fine;
+the hazard is a ledger of one kind silently read as another (same `consume()`
+signature, same receipt shape, opposite ontology). Every ledger declares its
+kind — `juridical` (depletes a grant, fails by refusal) or `metabolic` (depletes
+worldly capacity, fails by exhaustion). The non-substitution rule is directional:
+
+```
+juridical units MAY gate a metabolic consumption (standing-before-spendability)
+juridical units may NOT satisfy metabolic capacity   (license is not fuel)
+metabolic units may NOT satisfy juridical standing   (fuel is not license)
+metabolic units may NOT imply juridical standing
+```
+
+Kinds compose only at declared bridges; they never cross-fund, cross-satisfy, or
+collapse failure meanings. (License-as-fuel = an authorized spend against an empty
+battery; fuel-as-license = "we have capacity therefore it's allowed," every bridge
+exploit waving from the swamp.)
+
+**Dual failure must stay dual (the regression magnet — put a skull on it).** The
+keeper row, because every future simplifier will want to flatten it:
+
+| Standing | Capacity | Correct result |
+| -------- | -------- | -------------- |
+| present | available | proceed |
+| present | empty | **exhausted**, NOT refused |
+| missing | available | **refused**, NOT exhausted |
+| missing | empty | **refused + exhausted**, NON-collapsed |
+
+> **At failure time, preserve ontology. A juridical defect and a metabolic defect
+> may coexist; neither explains, replaces, or repairs the other.**
+
+Flattening `missing ∧ empty` to a single `Denied` is the lie the ledger-kind field
+exists to prevent: the two defects have *different remediations* (refusal →
+establish standing; exhaustion → replenish/thaw/wait/repair the capacity witness),
+so a collapsed verdict makes the operator fix one axis and falsely believe the
+system is healthy — "the red light went away because we unplugged the dashboard."
+This is Paper 27 (obligation-unsound reconciliation) wearing a hardhat: "battery
+policy misconfigured" as a Jira title is the bureaucracy eating the organism in
+real time. The non-collapse rule is the typed-refusal-preservation discipline
+applied to the *failure channel*.
+
+**Domain instantiations** (the generalization runs *backwards* — these domains
+already run feral, unreceipted linear accountants; the upgrade path is the same
+everywhere: individuate, receipt, conserve): SRE error budgets, congestion
+windows / token buckets, energy and duty-cycle ledgers, route/latency capacity.
+**Physical variants inherit estimator uncertainty**: a battery deposit is
+*capacity testimony* from an estimator (charge per model `M`, sensor set `S`,
+error band `ε`, at `t`), not ground truth, so conservation becomes "the sum stays
+inside admitted tolerance," not "the sum is exact." (Paper bait for the autumn:
+*Everything Is a Token Bucket and Every Token Bucket Is Lying.*)
+
+**W2 conformance obligation (named, NOT built today).** The four-row table is a
+conformance obligation, not a comment — per the golden-corpus discipline it wants
+four frozen `input → verdict` entries (proceed / exhausted-not-refused /
+refused-not-exhausted / **dual-uncollapsed**), with the fourth as a **negative
+pinning test**: a dual-failure verdict that flattens to a single `Denied` MUST
+break the contract. That is the row that rots first under refactoring pressure
+(flattening is always the locally convenient move), so it most needs a standing
+test guard. Owner: `~/git/linearaccountant` (ledger-kind is LA-internal capacity
+semantics; AG records the zoning, does not ratify it). Composes with
+`working/candidate-la-unit-class-fence.md` (Wall 2) — both are LA-internal
+one-way-door constraints surfaced from AG-side derivation.
+
+**The time axis is three kinds, not one "time budget" (the glyph earning rent).**
+"Time pressure" hides three distinct failures that do NOT deplete the same way;
+reconciling them into one budget is the same type error, one ontology over:
+
+| "time budget" | kind | mechanism | failure |
+| ------------- | ---- | --------- | ------- |
+| throughput (can I keep up?) | **metabolic** | capacity ledger (LA) | exhausted / lagging |
+| freshness (is it still current?) | **temporal** | attested clock + lapse guard | stale / lapsed |
+| authority validity (is the grant still live?) | **juridical-temporal** | grant validity / standing lapse | refused / void |
+
+> **Capacity runs out. Freshness lapses. Authority expires. Do not reconcile them
+> into one "time budget."**
+
+The tell: *if running out is about **your** resources, it's metabolic and gets a
+ledger; if running out is about **the world moving on without you**, it's temporal
+and gets a witness.* Time pressure is usually the second. So **do not give
+deadlines a wallet** — a deadline is a property of the *claim*, not the spender
+(true whether the spender is idle or melting), so it is `compare(attested_clock,
+bound)`, never `consume(time_budget)`. Modeling freshness as a depletable budget
+invites license-as-fuel with a clock painted on ("I have deadline-budget left,
+therefore still fresh"). Freshness is the standing-lapse shape — which AG already
+built as the standing-spendability gate (`standing_spendability.py`: two clocks,
+mandatory `clock_basis`, lapse guard), NOT a ledger. Remediations differ and that
+is the whole point: throughput exhaustion → add capacity / throttle / shard / mark
+coverage gap; freshness lapse → reject stale / require new witness / widen policy
+only if ratified; authority lapse → renew/regrant. Owner per kind: LA (metabolic),
+the deferred temporal-authority organ (freshness), `~/git/standing` (authority).
+
+Worked case (owner: **Notary**, not AG — recorded here because it forced the
+distinction): a notary may spend a metabolic throughput budget, but freshness is
+judged by an attested clock. If throughput exhaustion prevents sealing within the
+freshness window, that is **dual failure** — `exhausted` + `stale/coverage_gap`,
+not one tidy denial. And the non-negotiable rider for any metered watcher: budget
+exhaustion emits a **coverage-gap receipt**, never a silently-degraded seal — a
+watcher that drops to sampling because it got tired is forging evidence of its own
+silence (the absence-witness coverage problem, one layer down). Notary's to file;
+AG only records the cross-fence note.
+
 ### Versioned interfaces are bridges, not folder names (cross-cutting)
 
 A version number is a *signed claim about conversion behavior*, and almost nobody

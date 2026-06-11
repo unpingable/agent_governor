@@ -192,6 +192,29 @@ ones — meet them in rehearsal:
 - *Where's it in production?* → research lab with working instruments + proofs, not a
   product seeking deployments. "Lab notebook, not an oracle." Don't imply scale.
 
+## Recognition ammo — "your current abstraction is feral"
+
+Not a new act; a one-liner for the exact audience, because it makes them
+involuntarily recognize the shape rather than sells them an abstraction. The
+discovery runs *backwards*: every engineering domain already runs **linear
+accountants** — fungible, unreceipted, silently-lapsing ones. A token bucket is an
+LA with anonymous units, no provenance, unwitnessed expiry; TCP's congestion window
+is a capacity ledger adjusted by loss testimony; a battery BMS is a ledger over
+coulombs with no custody trail. The knife for the SRE thread:
+
+> **Your error budget is a Linear Accountant with anonymous tokens, unwitnessed
+> deposits, political spending, and vibes-based blame attribution.**
+
+Deposited by fiat (the SLO — a *declared* fact), consumed by incidents, **frozen
+when exhausted** (the feature freeze is literally freeze/thaw semantics, deployed
+industry-wide with nobody writing down the conservation invariant), replenished on
+window roll (expiry-plus-new-deposit). And *whose deploys spent the budget?* is the
+fungibility/cross-subsidy problem — anonymous units, no spend names its inputs, so
+it's unanswerable by construction and settled by politics. Provenanced units answer
+it with arithmetic. The "who is this for" answer was in the back pocket the whole
+time: everyone already running these ledgers untyped, which is everyone. (Doctrine
+home: `docs/constellation-zoning.md` §LA — "LA is metabolic, not juridical.")
+
 ## Show HN gate — control the linearization point
 
 HN is **adversarial validation with a comment box** (the missing external witness

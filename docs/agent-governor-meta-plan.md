@@ -299,6 +299,15 @@ forcing case per `~/.claude/CLAUDE.md` § YAGNI scope.
 
 ## Cross-references
 
+Companion orientation doc:
+
+- `docs/constellation-zoning.md` — the **deferred-organ / one-way-door**
+  companion to this file. Where this doc names the planes that *exist*, that one
+  names the organs that *do not yet* (temporal authority, retraction transport,
+  verdict seam, evidence death rites, restore epochs, schema evolution, fleet
+  control) and the grain-of-refusal rule governing when each earns construction.
+  PROVISIONAL; carries an LLM-relay provenance caveat.
+
 Filed gap specs that obligate corollaries of the core invariant:
 
 - `working/GOV_GAP_OUT_OF_SCOPE_RUNTIME_LAUNDERING_001.md` — observation

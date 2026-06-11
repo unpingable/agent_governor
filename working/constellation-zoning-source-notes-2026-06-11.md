@@ -605,6 +605,106 @@ product manager: verify the envelope, not the controller's wisdom.
 
 ---
 
+## Third-round excavation (2026-06-11 second appendix — evidence classes, aggregates, succession, redaction)
+
+The "second drop." Mostly launch-strategy (lives in `working/launch-plan-2026-06-11.md`),
+but it precipitated real doctrine. These are the bones.
+
+### The split that caught itself: declared ≠ simulated
+
+The grain-of-refusal test firing on a label about to bundle. "Not observed from the
+world" hides two classes with **inverted promotion rules**:
+
+- **declared** (maintenance window, moratorium, operator fiat): operative, standing-
+  required, *promotes*, and — the sharp bit — can be **future-tense**. Nobody can
+  witness Tuesday's window on Monday; declaration is the *only door* future-tense
+  facts enter through. Declared is first-class, NOT a degraded witnessed.
+- **simulated** (demo/test/fixture): inert, quarantined, **never promotes**.
+
+> Same superficial shape, opposite consequence rule. One label and one of two rules
+> silently breaks — either quarantine disables your maintenance windows, or
+> "operative" lets a stranger's demo suppress your real alerts.
+
+The bias-correction note: the operator *under*-priced this ("just another class
+probably") and was wrong in the pleasant direction — NQ already has declared, so the
+work is just minting simulated + the firewall predicate. The catch came from the
+table discipline, not from foresight.
+
+### Keeper phrases (new)
+
+- *Garbage custody in, immaculate verdict out.* (OPA over a stale input document)
+- *Policy engines decide over claims; custody systems decide whether those claims may
+  become premises.*
+- *A dashboard count is a claim. A rate is a claim. A trend is a claim.* — none is raw
+  testimony; aggregation launders provenance by construction.
+- *The system should not pretend to survive its sovereign* (root-fiat succession).
+- *We never delete — until a credential lands in a sealed log line.* (redaction)
+- *The well doesn't run dry — it just stops being worth the rope.* (survey-done)
+- *When the gap analysis returns the same two dependencies in new costumes, the
+  survey is over.* (everything aliases to Standing or the clock)
+- *An event store full of self-reports is a diary, not evidence.* (vs event sourcing)
+- *A wrong witness is bad — but bad with a return address.* (attribution, not omniscience)
+- *Trust with a bill of materials* (the TCB answer — relocate trust, don't eliminate it)
+- *The README's specimen is the repo's receipt.* (specimen-at-front ratchet)
+
+### Ugly state names / fields (new)
+
+```
+evidence_class: observed | declared | derived | simulated | redacted | expired
+operational_effect: inert            # simulated
+operational_effect: operative        # declared (with standing_ref, valid_from/until)
+promotion_allowed: false             # simulated, hard
+aggregate_receipt: query_hash, input_set_bound, evidence_coverage,
+  excluded_classes:[simulated,fixture], result_hash
+tombstone receipt: removed_what, by_whom, under_authority, chain_preserved_around_hole
+```
+
+### Anti-smoothing pairs (new)
+
+```
+bad:    synthetic evidence (one mushy label)
+better: declared (operative, promotes under standing, future-tense) vs
+        simulated (inert, never promotes) — two classes, inverted rules
+
+bad:    95% of spends succeeded
+better: aggregate_receipt{query_hash, input_set_bound, coverage, excluded:[simulated]}
+        — the number is challengeable back to its constituents
+
+bad:    root key rotation handles continuity
+better: when the sovereign goes silent, grants decay to lapse horizons + wind-down
+        to refusal (documented, not discovered)
+
+bad:    append-only, we never delete (then a secret lands in a sealed segment)
+better: tombstone receipt — removed, by whom, under what authority, chain intact
+```
+
+### Rejected / tempting-wrong designs (new catches)
+
+- **One "synthetic" class for demo + maintenance windows.** Refused: opposite
+  promotion rules; bundling breaks one of them. (Caught by the table; operator had
+  bundled them, the discipline split them.)
+- **Demo receipts share the operational evidence plane.** Refused: the launch
+  artifact is a simulated-evidence *generator*; the first stranger contaminates the
+  locker. Launch-blocking firewall, not optional.
+- **Dashboard numbers as ground truth.** Refused: aggregation is provenance
+  laundering; the cockpit is the least-custodied layer and the one where humans form
+  beliefs. Aggregate receipts or mark derived/unreceipted.
+- **Solve root succession / redaction now.** Refused as over-build: each is one
+  constitution paragraph (build-nothing). Solving them fully is "enterprise theater"
+  / "GDPR Moria."
+- **Keep scouting for more organs.** Refused: survey-done. New findings alias to
+  Standing or the clock; further exploration is "the well making rope noises."
+
+### The meta that closes the survey
+
+Everything probed for three days bottoms out in the **two gravity centers** (Standing
++ bounded time). The instrument turn + the demo strategy mean the mode shifts from
+*scouting* to *pouring the slab*. The launch plan (separate working note) is now the
+to-do list; this file and the placard are the map. Map is done; map is not the
+building.
+
+---
+
 ## Pointer
 
 Placard: `docs/constellation-zoning.md` (curated map, navigable, also PROVISIONAL).

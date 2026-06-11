@@ -694,6 +694,127 @@ flatten into green.
 
 ---
 
+## Evidence classes — declared and simulated are not the same "not-observed"
+
+(added 2026-06-11, second appendix)
+
+The launch demo forced a distinction that turns out to be load-bearing well beyond
+the demo. **"Not observed from the world" is not one class** — it's at least two,
+with *opposite* promotion rules, and bundling them is the grain-of-refusal test
+firing.
+
+**Declared** — maintenance windows, moratoria, freeze periods, operator
+attestations, planned suppressions. Fiat-shaped, issued by a standing-bearing actor,
+and **operative**: it is *supposed* to participate in operational reasoning (alerts
+during the window get reclassified; suppressions cite it). The sharp part: a declared
+fact can be **future-tense** — nobody can witness Tuesday's maintenance window on
+Monday. Declaration is the *only* door through which future-tense facts enter the
+system at all, which makes declared first-class and load-bearing, not a degraded form
+of witnessed. NQ already has this class.
+
+**Simulated** — demo / test / fixture traffic. Receipt-shaped fiction that must be
+**inert**: firewalled from operational reasoning, never promoted, never consulted,
+never allowed to reclassify anything real. AG does *not* have this yet, and **the
+public demo is literally a simulated-evidence generator** — the first stranger who
+runs `./demo/refused-spend.sh` mints receipt-shaped artifacts into the same plane as
+real attestations unless the class exists. **This is launch-blocking.**
+
+The grain-of-refusal proof that these are two classes, not one label: there exists a
+scenario where you must *admit* one and *refuse* the other. A single "synthetic"
+label breaks one of the two rules — either "synthetic never promotes" silently
+disables maintenance windows, or "declared is operative" lets a stranger's demo
+suppress real alerts. Same superficial shape, inverted consequence rule.
+
+```
+evidence_class   basis                  operative?   promotes?            future-tense?
+observed         a witness saw it       yes          under standing       no
+declared         standing-bearing fiat  yes          yes, under standing  yes (the only door)
+derived          computation/aggregate  as a claim   only with an aggregate receipt   n/a
+simulated        fixture / demo / test  NO — inert   NEVER                irrelevant
+redacted         tombstoned absence     n/a          n/a                  n/a
+expired          formerly admissible    no           no                   n/a
+```
+
+Firewall predicate (the actual launch fix — small):
+
+```
+simulated may demonstrate structure / test machinery / cite simulated
+simulated may NOT satisfy operational standing
+simulated may NOT affect operational aggregates
+simulated may NOT suppress or reclassify operational events
+simulated may NOT become spendable capacity
+```
+
+Owner: **shared constellation vocabulary, not AG's to ratify alone** (NQ owns the
+witness-claim classes; AG owns the class on its own gate/evidence receipts). The
+taxonomy is recorded here as a zoning observation. The concrete launch target is
+narrow: `evidence_class: simulated; operational_effect: inert` on demo-emitted
+receipts, plus the firewall predicate. Build when the demo work starts; do not
+gold-plate a six-value enum before the two that matter (declared, simulated) are
+real.
+
+---
+
+## Phosphor aggregates are uncustodied claims
+
+The cockpit is where humans actually form beliefs about the system, and it is
+currently the *least* custodied layer. Aggregation is a conversion that launders
+provenance by construction: "95% of spends succeeded" is a derived claim nobody
+attested, from a query nobody receipted, over an input set nobody bounded. A count
+is a claim. A rate is a claim. A trend is a claim. The constellation's careful
+atomic testimony funnels into a chart that's pure vibes.
+
+The cheap fix (not launch-blocking unless Phosphor enters the demo's proof path):
+
+```
+aggregate_receipt:
+  query_hash / query_template_id
+  input_set_bound        (receipt range / cursor)
+  computed_at
+  evidence_coverage
+  excluded_classes: [simulated, fixture]   # composes with evidence classes above
+  result_hash
+```
+
+Then a dashboard number can be challenged back to its constituents. Until then,
+dashboard aggregates are marked **derived / unreceipted** and kept off the launch
+credibility path.
+
+---
+
+## Build-nothing zoning paragraphs (succession, redaction)
+
+Two more from the sweep that need a sentence in the constitution, not a component:
+
+**Root fiat succession.** In a single-operator lab, root authority is operator fiat
+(cf. §Standing — "root standing is fiat"). The honest documented behavior when the
+root goes silent: grants decay to their lapse horizons, no new standing is minted,
+the constellation winds down to refusal mode rather than silently preserving
+authority. The system should not pretend to survive its sovereign — and that should
+be the *documented* state, not the *discovered* one.
+
+**Redaction with custody (tombstones).** Append-only does not mean secrets stay
+readable forever; the day a credential lands in a sealed log line, "we never delete"
+stops being a virtue. Pattern (from transparency logs): tombstone receipts attesting
+*something was removed, by whom, under what authority*, preserving the hash chain
+around the hole. Distinct from the evidence-death-rites deferred organ (that's
+retention policy; this is surgical removal with custody intact). Composes with
+§Notary — rotation already deletes log segments ungoverned.
+
+---
+
+## Survey phase: declared done (2026-06-11)
+
+The operator's own filter, applied: *the well doesn't run dry — it just stops being
+worth the rope.* Across three days of scouting, new findings now reliably **alias to
+one of two dependencies already named** — they either need **Standing** or they need
+**the clock** (bounded time). When the gap analysis starts returning the same two
+dependencies in new costumes, the survey is over. The land is mapped. The next move
+is the **slab the demo sits on** (`working/launch-plan-2026-06-11.md`), not another
+organ.
+
+---
+
 ## The two gravity centers
 
 The loud pattern across every organ and component: each one secretly bottoms out
@@ -772,14 +893,30 @@ WLP custody.
    independence; absence needs coverage). So that section is **not purely
    deferred** — it reshapes an already-built NQ component. "Not wasted work,
    changes the shape." NQ-side concern; AG only records the pointer.
-6. **More canon pending.** This appendix (Notary / transport / reflex / instrument)
-   is the operator's *first pass*; a second pass follows once this is in, and the
-   operator flagged a possible third confound still to be dug up. Treat this file
-   as open for at least one more appendix.
+6. **Second pass is in (this is it).** The first appendix was Notary / transport /
+   reflex / instrument; this second appendix added evidence classes (declared vs
+   simulated), Phosphor aggregates, succession + redaction zoning paragraphs, and
+   the survey-done declaration. A possible third confound was flagged by the
+   operator but is the operator's to dig up; the file stays open.
+7. **One launch-blocking build item now exists.** The **simulated evidence class +
+   firewall predicate** has a forcing case (the demo mints simulated receipts) and
+   must land before any public demo. It is *not* built here — capturing ≠ building —
+   but it is the first item on `working/launch-plan-2026-06-11.md`'s sequence, and
+   it is shared vocabulary (NQ owns declared; AG owns the class on its receipts), so
+   AG cannot ratify the taxonomy unilaterally.
+8. **Survey phase declared done.** New findings now alias to Standing or the clock;
+   the scouting is over and the next move is the slab (the demo), per the launch
+   plan. This file is a map, not a to-do list — the to-do list is the launch plan.
 
 ---
 
 ## Cross-references
+
+The to-do list this map feeds:
+
+- `working/launch-plan-2026-06-11.md` — the demo + site + Show HN plan (internal,
+  unpublished). The slab the survey was scouting toward; carries the launch-blocking
+  simulated-evidence item, the Columbo demo design, and the specimen-at-front ratchet.
 
 Uncompressed companion (the bones under this placard):
 

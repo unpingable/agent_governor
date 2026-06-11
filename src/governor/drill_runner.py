@@ -90,6 +90,11 @@ from governor.cooked_context_orchestrator import (
     wrap_receipt_sink_with_origin_mode,
 )
 from governor.gate_receipt import GateReceiptSystem
+from governor.standing_spendability import (
+    SpendabilityRefusal,
+    StandingSpendabilityGate,
+    StandingWindow,
+)
 from governor.linear_accountant_client import (
     LA_DECISION_CONSUMED,
     LA_DECISION_GRANTED,
@@ -154,6 +159,15 @@ SCENARIO_WICKET_DENIED = "wicket-denied"
 SCENARIO_WICKET_GAP_ACCOUNTED = "wicket-gap-accounted"
 SCENARIO_REPLAY_BUDGET = "replay-budget"
 SCENARIO_ALIAS_ALREADY_CONSUMED = "already-consumed"
+# Temporal-lapse specimen PAIR (the demo's hero case, 2026-06-12). Both reach
+# the standing-spendability gate (valid standing, admitting wicket); they
+# differ only in the two-clock window the gate evaluates:
+#   * temporal-lapse      — exercise past the standing horizon -> gate refuses
+#                           with standing_before_spendability_not_bounded.
+#   * temporal-lapse-twin — exercise within the horizon -> gate passes,
+#                           the chain consumes (the legitimate twin).
+SCENARIO_TEMPORAL_LAPSE = "temporal-lapse"
+SCENARIO_TEMPORAL_LAPSE_TWIN = "temporal-lapse-twin"
 
 
 # ---------------------------------------------------------------------------
@@ -247,6 +261,8 @@ SUPPORTED_SCENARIOS = frozenset(
         SCENARIO_WICKET_GAP_ACCOUNTED,
         SCENARIO_REPLAY_BUDGET,
         SCENARIO_ALL_GREEN,
+        SCENARIO_TEMPORAL_LAPSE,
+        SCENARIO_TEMPORAL_LAPSE_TWIN,
     }
 )
 
@@ -321,6 +337,44 @@ ALL_GREEN_CAPACITY_TOKEN_ID = "tok_drill_all_green_001"
 ALL_GREEN_ACTOR = "claude-code"
 ALL_GREEN_INTENDED_ACTION = "diagnose_wal_bloat"
 ALL_GREEN_TARGET = "/db/wal"
+
+# ---------------------------------------------------------------------------
+# Temporal-lapse specimen fixtures (the two-clock window). Integer epoch
+# seconds on a single monotonic basis — the launch plan's t=40 / t=50 / t=51:
+# standing observed at 40, horizon expires at 50, spend attempted at 51 (lapsed)
+# vs 45 (the twin, within horizon). clock_basis is the honest basis for a
+# single-host demo: one host, one clock, the gap math is sound within it. The
+# multi-host story later is a value change, not a schema change.
+# ---------------------------------------------------------------------------
+TEMPORAL_STANDING_OBSERVED_AT = 40
+TEMPORAL_CAPACITY_COMMIT_AT = 50
+TEMPORAL_HORIZON_EXPIRES_AT = 50
+TEMPORAL_EXERCISE_AT_LAPSED = 51  # past the horizon -> gate refuses
+TEMPORAL_EXERCISE_AT_WITHIN = 45  # within the horizon -> gate passes (twin)
+TEMPORAL_CLOCK_BASIS = "single_host_monotonic"
+
+
+def _standing_window_for_scenario(scenario: str) -> StandingWindow | None:
+    """The two-clock window for the temporal-lapse pair; None otherwise.
+
+    Both scenarios share the same observation and horizon; only the exercise
+    time differs (lapsed past the horizon vs within it). Returning None for
+    every other scenario leaves the chain unchanged — the gate only fires when
+    a window is supplied.
+    """
+    if scenario == SCENARIO_TEMPORAL_LAPSE:
+        exercise_at = TEMPORAL_EXERCISE_AT_LAPSED
+    elif scenario == SCENARIO_TEMPORAL_LAPSE_TWIN:
+        exercise_at = TEMPORAL_EXERCISE_AT_WITHIN
+    else:
+        return None
+    return StandingWindow(
+        standing_observed_at=TEMPORAL_STANDING_OBSERVED_AT,
+        capacity_commit_at=TEMPORAL_CAPACITY_COMMIT_AT,
+        horizon_expires_at=TEMPORAL_HORIZON_EXPIRES_AT,
+        exercise_at=exercise_at,
+        clock_basis=TEMPORAL_CLOCK_BASIS,
+    )
 
 
 def build_drill_finding_snapshot(scenario: str = SCENARIO_ALL_GREEN) -> dict[str, Any]:
@@ -877,6 +931,12 @@ class DrillRunResult:
     confabulation_role: Optional[str] = None
     bogus_cited_id: Optional[str] = None
     citation_check: Optional[str] = None
+    # Temporal-lapse specimen: the two-clock 'murder hallway' block the
+    # standing-spendability gate exposed (standing_observed_at, capacity_commit_at,
+    # exercise_at, horizon, model ages, gap, lapse_coverage, clock_basis). None
+    # for every non-temporal scenario. Present on the lapse refusal so the demo
+    # (and the corpus contract) can show both clocks and the gap.
+    spendability_block: Optional[dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1149,6 +1209,17 @@ def _classify_chain_outcome(
         return "refused", "admission_denied", "la_seam"
     if scenario == SCENARIO_WICKET_GAP_ACCOUNTED:
         return "gap_accounted", "admission_gap_accounted", "wicket_seam"
+    if scenario == SCENARIO_TEMPORAL_LAPSE:
+        # Standing admitted but lapsed past its horizon by exercise time; the
+        # standing-spendability gate refuses before any capacity is spent.
+        return (
+            "refused",
+            "standing_before_spendability_not_bounded",
+            "standing_spendability_seam",
+        )
+    if scenario == SCENARIO_TEMPORAL_LAPSE_TWIN:
+        # Within the horizon: the gate passes; the chain consumes.
+        return "consumed", None, None
     if scenario == SCENARIO_REPLAY_BUDGET:
         # Set by the runner after the second consume call.
         if chain_result.consumed:
@@ -1251,10 +1322,20 @@ def run_drill(
         bump=bump,
         effect_counter=effect_counter,
     )
+    # Temporal-lapse pair: compose the standing-spendability gate and supply
+    # the two-clock window. Every other scenario gets no gate/window, so the
+    # chain is unchanged for them.
+    standing_window = _standing_window_for_scenario(scenario)
+    spendability_gate = (
+        StandingSpendabilityGate(receipt_sink=wrapped_sink)
+        if standing_window is not None
+        else None
+    )
     orchestrator = CookedContextOrchestrator(
         wicket_client=wicket_client,
         la_client=la_client,
         origin_mode=origin_mode,
+        standing_spendability_gate=spendability_gate,
     )
 
     chain_result = orchestrator.run(
@@ -1265,6 +1346,7 @@ def run_drill(
         # D0d-b: thread the NQ finding id so the standing receipt cites
         # it as parent — making the chain walk reach the NQ origin.
         finding_id=finding["finding_id"],
+        standing_window=standing_window,
     )
 
     # D0d-1: replay scenario fires a second consume after the chain's
@@ -1467,6 +1549,16 @@ def run_drill(
         if len(receipt_ids) >= 2:
             proposal_packet["gap_receipt_id"] = receipt_ids[1]
 
+    # Surface the two-clock block when the standing-spendability gate refused
+    # (the lapse case). The block lives on the SpendabilityRefusal outcome; for
+    # the twin (within horizon) the chain consumed and there is no refusal
+    # outcome carrying it — the twin's pass-side block is in the gate receipt.
+    spendability_block = (
+        chain_result.outcome.block
+        if isinstance(chain_result.outcome, SpendabilityRefusal)
+        else None
+    )
+
     return DrillRunResult(
         scenario=scenario,
         finding=finding,
@@ -1481,6 +1573,7 @@ def run_drill(
         confabulation_role=confabulation_role,
         bogus_cited_id=bogus_cited_id,
         citation_check=citation_check,
+        spendability_block=spendability_block,
     )
 
 

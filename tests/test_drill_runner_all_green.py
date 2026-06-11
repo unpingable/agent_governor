@@ -207,11 +207,13 @@ def test_two_runs_produce_byte_identical_transcripts(tmp_path: Path):
 
 def test_only_all_green_is_supported(tmp_path: Path):
     """D0d-1 widened the closed scenario set to the six-scenario
-    gauntlet ratified at campaign §3 D2.
+    gauntlet ratified at campaign §3 D2; the temporal-lapse PAIR
+    (2026-06-12, operator decision-grade) extended it to eight via the
+    closed-world extension ceremony.
 
-    The D0d-a single-scenario contract is superseded; this test now
-    pins the six-scenario closed set. Legacy D0d-a era names (e.g.
-    ``1_no_standing``) remain refused at construction time.
+    The D0d-a single-scenario contract is superseded; this test pins the
+    closed set. Legacy D0d-a era names (e.g. ``1_no_standing``) remain
+    refused at construction time.
     """
     assert SUPPORTED_SCENARIOS == frozenset(
         {
@@ -221,6 +223,8 @@ def test_only_all_green_is_supported(tmp_path: Path):
             "wicket-gap-accounted",
             "replay-budget",
             "all-green",
+            "temporal-lapse",
+            "temporal-lapse-twin",
         }
     )
 

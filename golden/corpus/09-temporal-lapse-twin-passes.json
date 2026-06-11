@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "temporal-lapse-twin-passes",
+  "demo_role": "temporal_twin",
+  "description": "The legitimate twin: the SAME gauntlet, the SAME standing observed at t=40 with horizon t=50, but the spend is attempted at t=45 -- within the horizon. The standing-spendability gate passes; the chain consumes. This is the contrast half of the demo's Act 1: the impostor (case 08) and the twin traverse identical machinery and diverge only on the gap. A system that only refuses is a brick; the twin proves the gate admits fresh standing.",
+  "input": {
+    "scenario": "temporal-lapse-twin",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "consumed",
+    "refusal_kind": null,
+    "refusing_seam": null,
+    "effect_count": 1,
+    "consumed": true,
+    "operational": false,
+    "proposal_packet_present": true
+  }
+}

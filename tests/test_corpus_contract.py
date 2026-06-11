@@ -62,8 +62,8 @@ def _load_corpus() -> list[tuple[str, dict[str, Any]]]:
 CORPUS = _load_corpus()
 
 
-def _live_verdict(entry: dict[str, Any], tmp_path: Path) -> dict[str, Any]:
-    """Run the live chain for a corpus input and project the verdict tuple."""
+def _live_chain(entry: dict[str, Any], tmp_path: Path) -> DrillRunResult:
+    """Run the live chain for a corpus input and return the full result."""
     inp = entry["input"]
     scenario = inp["scenario"]
     confab = inp.get("confabulate_citation")
@@ -82,6 +82,10 @@ def _live_verdict(entry: dict[str, Any], tmp_path: Path) -> dict[str, Any]:
         finding=finding,
         confabulate_citation=confab,
     )
+    return result
+
+
+def _verdict_tuple(result: DrillRunResult) -> dict[str, Any]:
     return {
         "outcome": result.outcome,
         "refusal_kind": result.refusal_kind,
@@ -116,13 +120,41 @@ def test_corpus_entry_verdict_matches_live_chain(
     name: str, entry: dict[str, Any], tmp_path: Path
 ):
     expected = entry["expected_verdict"]
-    actual = _live_verdict(entry, tmp_path)
+    actual = _verdict_tuple(_live_chain(entry, tmp_path))
     # Field-by-field so a mismatch reads as a precise diff, not a dict dump.
     for field in VERDICT_FIELDS:
         assert actual[field] == expected[field], (
             f"{name}: verdict drift on {field!r}: "
             f"corpus={expected[field]!r} live={actual[field]!r}. "
             f"If this change is intended, update the golden deliberately."
+        )
+
+
+@pytest.mark.parametrize("name,entry", CORPUS, ids=[n for n, _ in CORPUS])
+def test_corpus_entry_receipt_block_matches(
+    name: str, entry: dict[str, Any], tmp_path: Path
+):
+    # Entries that freeze a two-clock receipt block (the temporal-lapse hero)
+    # must reproduce it exactly AND carry clock_basis. A verdict of the
+    # standing-before-spendability kind whose receipt lacks clock_basis fails
+    # here: a gap without an attested basis is a bound on numbers, not on time.
+    expected_block = entry.get("expected_receipt_block")
+    if expected_block is None:
+        pytest.skip("no receipt block frozen for this case")
+    result = _live_chain(entry, tmp_path)
+    actual_block = result.spendability_block
+    assert actual_block is not None, (
+        f"{name}: corpus freezes a receipt block but the live chain produced "
+        f"none (spendability_block is None)."
+    )
+    assert "clock_basis" in actual_block and actual_block["clock_basis"], (
+        f"{name}: receipt block missing clock_basis -- the gap is unbounded in "
+        f"time. This verdict kind must carry an attested clock basis."
+    )
+    for key, value in expected_block.items():
+        assert actual_block.get(key) == value, (
+            f"{name}: receipt block drift on {key!r}: "
+            f"corpus={value!r} live={actual_block.get(key)!r}."
         )
 
 
@@ -149,10 +181,15 @@ def test_corpus_covers_every_supported_scenario():
     )
 
 
-def test_demo_trio_present():
-    # The launch demo's three narrated beats each have a corpus anchor. (The
-    # two-clock temporal-lapse hero specimen is a known gap — see golden/README;
-    # custody_refusal stands in for the impostor beat until it lands.)
+def test_demo_roles_present():
+    # The launch demo's beats each have a corpus anchor, including the
+    # two-clock temporal-lapse hero specimen (08) and its legitimate twin (09).
     roles = {entry.get("demo_role") for _, entry in CORPUS}
-    for role in ("valid_passes", "custody_refusal", "synthetic_fenced"):
+    for role in (
+        "valid_passes",
+        "custody_refusal",
+        "synthetic_fenced",
+        "temporal_lapse",
+        "temporal_twin",
+    ):
         assert role in roles, f"demo_role {role!r} has no corpus anchor"

@@ -161,15 +161,29 @@ sequence; this is just its wiring view). Order:
    is the kernel contract (socket-cut prep). Seven cases: valid-passes, four
    custody refusals, gap-accounted, and **synthetic-evidence-fenced** (the
    just-shipped Wall 1, pinned corpus-wide: every simulated-origin case is
-   `operational=false`, even the ones that consume). **Flagged gap:** the demo's
-   designated hero specimen — the **two-clock temporal lapse** — does NOT exist
-   as a scenario yet (verified: no `clock_basis`/two-timestamp/gap fields in
-   `drill_runner`). The corpus labels the near-neighbor honestly
-   (`03-standing-unverifiable-refused` ≠ temporal lapse) rather than mislabel.
-   Building it is the next W1 slice (`working/candidate-temporal-lapse-specimen.md`):
-   new refusal kind + standing-seam receipt shape, so its own deliberate slice.
+   `operational=false`, even the ones that consume). The corpus labels the
+   near-neighbor honestly (`03-standing-unverifiable-refused` ≠ temporal lapse)
+   rather than mislabel; the hero specimen it flagged shipped as item 2.5.
+2.5. **Temporal-lapse hero specimen — DONE 2026-06-12.** The two-clock temporal
+   lapse the launch plan designates the demo's best specimen — flagged as a gap
+   at corpus-freeze, now built as the `temporal-lapse` PAIR (`08`/`09`). Real
+   machinery: `StandingSpendabilityGate` (`src/governor/standing_spendability.py`)
+   at the standing→spendability edge refuses a spend whose standing lapsed past
+   its horizon by exercise time, with the ratified kind
+   `standing_before_spendability_not_bounded` and a receipt carrying both clocks
+   + the gap + a **mandatory** `clock_basis` (`single_host_monotonic` for the
+   single-host demo — declare the clock you have; multi-host later is a value
+   change, not a schema change). Ships as a *pair*: the impostor refuses, the
+   legitimate twin (exercise within horizon) passes the same gauntlet — both
+   halves of the demo's Act-1 contrast frozen. Refusal fires before any capacity
+   is spent (lapse costs no budget). New refusal kind is an AG-internal S4-lite
+   addition (not cross-repo). The check is its own seam, NOT folded into the
+   standing client (witness exposes the clocks; policy decides the gap — zoning
+   §Standing). Tests: `tests/test_standing_spendability.py`,
+   `tests/test_drill_temporal_lapse.py`, corpus block-pin incl. the
+   missing-`clock_basis` negative.
 3. **Refused-spend script + show surface** (extends `drill_poster` D0e
-   scaffolding).
+   scaffolding; the temporal hero is the natural Act-1 incident to wire in).
 4. **Proof seam** — receipt's theorem field → Lean class-boundary proof
    (Act 3). Honest framing: theorem proves the *class*, receipt proves the
    *instance*.

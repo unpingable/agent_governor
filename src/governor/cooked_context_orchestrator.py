@@ -95,6 +95,11 @@ from governor.linear_accountant_client import (
     ReceiptSink,
     RefusalResult,
 )
+from governor.standing_spendability import (
+    SpendabilityRefusal,
+    StandingSpendabilityGate,
+    StandingWindow,
+)
 from governor.wicket_client import (
     CookedContext,
     WicketClient,
@@ -392,6 +397,7 @@ def wrap_receipt_sink_with_origin_mode(
 
 # Seam tags — stable; mirror the gate names the clients emit under.
 SEAM_WICKET = "wicket_seam"
+SEAM_STANDING_SPENDABILITY = "standing_spendability_seam"
 SEAM_LA_REQUEST = "la_seam_request"
 SEAM_LA_CONSUME = "la_seam_consume"
 
@@ -538,6 +544,8 @@ class ChainResult:
       * ``RefusalResult`` — LA seam refused (admission gate or capacity
         decision or consume failure). The ``seam`` field disambiguates
         whether the refusal happened at request-capacity or consume.
+      * ``SpendabilityRefusal`` — standing-spendability seam refused: the
+        standing observation lapsed past its horizon by exercise time.
       * ``OperationalConsumed`` — full chain succeeded AND the origin is
         operational (``observed``): the effect may be conferred.
       * ``DemonstratedConsumed`` — full chain succeeded mechanically but
@@ -550,13 +558,19 @@ class ChainResult:
     """
 
     outcome: (
-        WicketRefusal | RefusalResult | OperationalConsumed | DemonstratedConsumed
+        WicketRefusal
+        | SpendabilityRefusal
+        | RefusalResult
+        | OperationalConsumed
+        | DemonstratedConsumed
     )
     seam: str
 
     @property
     def refused(self) -> bool:
-        return isinstance(self.outcome, (WicketRefusal, RefusalResult))
+        return isinstance(
+            self.outcome, (WicketRefusal, SpendabilityRefusal, RefusalResult)
+        )
 
     @property
     def consumed(self) -> bool:
@@ -617,9 +631,16 @@ class CookedContextOrchestrator:
     wrapped in a ``ChainResult`` with ``seam == SEAM_LA_CONSUME``.
 
     The orchestrator does not emit its own receipts. Every receipt on the
-    chain was minted by one of the three clients, through the wrapped
-    sink, so each one carries the ``origin_mode`` stamp in its
-    ``evidence_bundle``.
+    chain was minted by one of the seam clients/gates (standing, wicket, the
+    optional standing-spendability gate, LA), through the wrapped sink, so each
+    one carries the ``origin_mode`` stamp in its ``evidence_bundle``.
+
+    The optional ``standing_spendability_gate`` is composed at the
+    standing->spendability edge (post-admission, pre-spend). When present AND a
+    ``standing_window`` is passed to ``run()``, the gate checks whether the
+    standing observation is still within its freshness horizon at exercise
+    time; a lapse short-circuits the chain before any capacity is spent. When
+    absent (the default), the chain runs exactly as before.
     """
 
     def __init__(
@@ -627,6 +648,8 @@ class CookedContextOrchestrator:
         wicket_client: WicketClient,
         la_client: LinearAccountantClient,
         origin_mode: str,
+        *,
+        standing_spendability_gate: Optional[StandingSpendabilityGate] = None,
     ):
         if origin_mode not in CLOSED_ORIGIN_MODES:
             raise InvalidOriginModeError(
@@ -650,6 +673,7 @@ class CookedContextOrchestrator:
         self._wicket = wicket_client
         self._la = la_client
         self._origin_mode = origin_mode
+        self._spendability_gate = standing_spendability_gate
 
     @property
     def origin_mode(self) -> str:
@@ -664,8 +688,9 @@ class CookedContextOrchestrator:
         now: int,
         *,
         finding_id: Optional[str] = None,
+        standing_window: Optional[StandingWindow] = None,
     ) -> ChainResult:
-        """Drive standing → wicket → LA-request → LA-consume.
+        """Drive standing → wicket → [standing-spendability] → LA-request → LA-consume.
 
         Refusal at any seam short-circuits — the next stage is NEVER
         invoked. The returned ``ChainResult.outcome`` is the verbatim
@@ -702,6 +727,20 @@ class CookedContextOrchestrator:
         # admission_receipt_id, replacing the template's value.
         assert isinstance(wicket_result, WicketVerdict)
         admission_receipt_id = wicket_result.receipt_id
+
+        # Step 1.5 (optional): standing-before-spendability gate. The standing
+        # was admissible (wicket said yes), but is it still FRESH enough to
+        # spend on at exercise time? A standing observed at T1 with a horizon
+        # expiring before the exercise has lapsed in the gap — admitted yet
+        # void. The gate refuses BEFORE any capacity is reserved or spent
+        # (the lapse must not cost budget). Only runs when a gate is composed
+        # AND a window is supplied; otherwise the chain is unchanged.
+        if self._spendability_gate is not None and standing_window is not None:
+            spend_check = self._spendability_gate.check(standing_window)
+            if isinstance(spend_check, SpendabilityRefusal):
+                return ChainResult(
+                    outcome=spend_check, seam=SEAM_STANDING_SPENDABILITY
+                )
 
         capacity_request = _replace_admission_receipt_id(
             capacity_request_template, admission_receipt_id

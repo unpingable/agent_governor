@@ -93,6 +93,17 @@ REFUSAL_TOKEN_EXPIRED = "token_expired"
 REFUSAL_TOKEN_REVOKED = "token_revoked"
 REFUSAL_UNKNOWN_TOKEN = "unknown_token"
 REFUSAL_SCOPE_MISMATCH = "scope_mismatch"
+# Added 2026-06-12 by S4-lite ratification (operator decision-grade, the
+# two-clock temporal-lapse specimen). The standing-spendability seam refuses a
+# spend whose standing observation has lapsed past its horizon by exercise time
+# (standing was valid when observed, void by the time it is spent). Distinct
+# from standing_expired (an unverifiable digest) and token_expired (LA-side
+# token expiry): this is the standing-before-spendability bound, measured across
+# two clocks under an attested clock_basis. Emitted by StandingSpendabilityGate
+# (standing_spendability.py), NOT this module.
+REFUSAL_STANDING_BEFORE_SPENDABILITY_NOT_BOUNDED = (
+    "standing_before_spendability_not_bounded"
+)
 
 CLOSED_REFUSAL_KINDS = frozenset(
     {
@@ -107,6 +118,7 @@ CLOSED_REFUSAL_KINDS = frozenset(
         REFUSAL_TOKEN_REVOKED,
         REFUSAL_UNKNOWN_TOKEN,
         REFUSAL_SCOPE_MISMATCH,
+        REFUSAL_STANDING_BEFORE_SPENDABILITY_NOT_BOUNDED,
     }
 )
 

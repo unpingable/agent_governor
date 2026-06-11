@@ -1,7 +1,22 @@
 # Candidate: two-clock temporal-lapse specimen (the demo's hero case)
 
-**Status: candidate / NOT built. Next W1 slice after the golden-corpus freeze.**
-Filed 2026-06-12.
+**Status: SHIPPED 2026-06-12 — candidate graduated to built (same day).** Filed
+and built 2026-06-12. Retained as the design record; the build matched this
+sketch with two deliberate refinements (below). Implementation:
+`src/governor/standing_spendability.py` (`StandingSpendabilityGate`),
+`golden/corpus/08-temporal-lapse-refused.json` + `09-temporal-lapse-twin-passes.json`,
+`tests/test_standing_spendability.py`, `tests/test_drill_temporal_lapse.py`.
+
+**Refinements made during build (vs this sketch):**
+- The check is a **dedicated gate** (`StandingSpendabilityGate`) at the
+  standing→spendability edge, NOT folded into `StandingClient.verify()` — the
+  sketch was open on placement; the build chose the seam that keeps the standing
+  client's SPEC surface clean and honors "witness exposes / policy decides."
+- Shipped as a **pair** (impostor + legitimate twin) per operator ratification,
+  so the demo's Act-1 contrast has both halves. Corpus grew by two (`08`/`09`).
+- `clock_basis` is **mandatory at window construction** (`single_host_monotonic`
+  for the demo) — a window without it is unrepresentable, so no gap check ever
+  runs on numbers-not-time.
 
 ## Why this is filed
 

@@ -1,0 +1,31 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "temporal-lapse-refused",
+  "demo_role": "temporal_lapse",
+  "description": "THE HERO SPECIMEN. Standing observed valid at t=40 with a horizon expiring t=50; the spend is attempted at t=51 -- one second past the horizon. Standing was true when checked and void when spent. Naive auth says yes (the credential was valid); custody says no (it lapsed in the gap). The standing-spendability gate refuses BEFORE any capacity is spent (effect=0), and the receipt carries both clocks and the gap. Columbo: 'the observation was eleven seconds stale, sir, and the spend happened one second past the horizon.'",
+  "input": {
+    "scenario": "temporal-lapse",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "refused",
+    "refusal_kind": "standing_before_spendability_not_bounded",
+    "refusing_seam": "standing_spendability_seam",
+    "effect_count": 0,
+    "consumed": false,
+    "operational": false,
+    "proposal_packet_present": false
+  },
+  "expected_receipt_block": {
+    "standing_observed_at": 40,
+    "capacity_commit_at": 50,
+    "horizon_expires_at": 50,
+    "exercise_at": 51,
+    "standing_observed_model_age": 11,
+    "capacity_commit_model_age": 1,
+    "gap": 1,
+    "lapse_coverage": "exceeded_horizon",
+    "clock_basis": "single_host_monotonic"
+  }
+}

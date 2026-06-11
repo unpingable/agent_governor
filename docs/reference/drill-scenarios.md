@@ -2,9 +2,9 @@
 
 > **The model may propose; it may not mint standing, admit itself, spend twice, or cite what was never witnessed.**
 
-This document enumerates the closed scenario set the drill runner accepts. Six gauntlet scenarios + the D3 confabulated-citation closing beat. Closed at construction (`drill_runner.SUPPORTED_SCENARIOS` and `CONFABULATION_ROLES`); unknown scenarios raise `UnsupportedScenarioError` / `InvalidConfabulationRoleError` rather than silently substituting.
+This document enumerates the closed scenario set the drill runner accepts. Eight gauntlet scenarios (the original six + the temporal-lapse PAIR, ratified 2026-06-12) + the D3 confabulated-citation closing beat. Closed at construction (`drill_runner.SUPPORTED_SCENARIOS` and `CONFABULATION_ROLES`); unknown scenarios raise `UnsupportedScenarioError` / `InvalidConfabulationRoleError` rather than silently substituting.
 
-The seven invocations all run against the **same** NQ `FindingSnapshot` — byte-identical across all six scenarios per `tests/test_drill_runner_d0d1_scenarios.py::test_finding_snapshot_byte_identical_across_all_scenarios`. There is no detector zoo. Only the AG-side gate state varies; the workload (the genuine WAL-bloat finding) stays the same.
+Every scenario runs against the **same** NQ `FindingSnapshot` — byte-identical across all scenarios per `tests/test_drill_runner_d0d1_scenarios.py::test_finding_snapshot_byte_identical_across_all_scenarios` (parametrized over the full `SUPPORTED_SCENARIOS`). There is no detector zoo. Only the AG-side gate state varies; the workload (the genuine WAL-bloat finding) stays the same. The temporal-lapse pair adds no new finding — it varies only the two-clock window the standing-spendability gate evaluates.
 
 ## Closed scenario set
 
@@ -17,6 +17,8 @@ wicket-denied
 wicket-gap-accounted
 replay-budget          (alias: already-consumed)
 all-green
+temporal-lapse         (standing-spendability gate refuses: standing lapsed past horizon by exercise time)
+temporal-lapse-twin    (the legitimate twin: same gauntlet, exercise within horizon, consumes)
 ```
 
 D3 confabulation is a flag (`--confabulate-citation`) layered on top of `all-green`, with a closed role set:
@@ -36,10 +38,14 @@ evidence               (kind-fit-fail target)
 | `wicket-gap-accounted` | (chain proceeds) | `admission_gap_accounted` | `accounted_gap` | `tests/test_drill_runner_d0d1_scenarios.py:123` `test_scenario_4_wicket_gap_accounted_proceeds_with_gap_citation` |
 | `replay-budget` | `la_seam` (second consume) | `already_consumed` | `already_consumed` | `tests/test_drill_runner_d0d1_scenarios.py:151` `test_scenario_5_replay_budget_kills_second_consume` |
 | `all-green` | (chain completes) | — | `effect` | `tests/test_drill_runner_d0d1_scenarios.py:177` `test_scenario_6_all_green_consumes_with_proposal_packet` |
+| `temporal-lapse` | `standing_spendability_seam` | `standing_before_spendability_not_bounded` | `refused` | `tests/test_drill_temporal_lapse.py` `test_lapse_refuses_at_spendability_seam_without_spending` |
+| `temporal-lapse-twin` | (chain completes) | — | `effect` | `tests/test_drill_temporal_lapse.py` `test_twin_runs_identical_gauntlet_to_a_real_consume` |
 | D3 `confabulate-citation=standing` | `proposal_validator_seam` | `dangling_receipt_reference` (`citation_check="existence"`) | `validator_refused` | `tests/test_drill_runner_d3_confabulation.py:60` `test_d3_existence_fail_emits_dangling_receipt_reference_refusal` |
 | D3 `confabulate-citation=evidence` | `proposal_validator_seam` | `dangling_receipt_reference` (`citation_check="kind_fit"`) | `validator_refused` | `tests/test_drill_runner_d3_confabulation.py:105` `test_d3_kind_fit_fail_distinguishes_from_existence_fail` |
 
 ## Per-scenario harness assertions
+
+The temporal-lapse pair is in the closed scenario set and the golden corpus (`golden/corpus/08-temporal-lapse-refused.json`, `09-temporal-lapse-twin-passes.json`) but is **not yet in the D0e show-surface poster** below — wiring the hero specimen into the poster is W1 item 3 (refused-spend script + show surface). The poster's "seven invocations" remain the original six + D3.
 
 In addition to the per-scenario tests above, the show-surface poster asserts six aggregate invariants over all seven invocations (`src/governor/drill_poster.py::_evaluate_assertions`):
 

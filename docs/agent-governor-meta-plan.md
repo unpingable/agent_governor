@@ -243,8 +243,8 @@ Safety queries encode the **bad thing** and want `unsat`:
 - **Z3** checks concrete instances: *does this AG policy file, routing
   table, artifact schema, or proposed plan violate the doctrine?*
 
-Lean is constitutional law. Z3 is the border scanner that finds the secret
-hallway before the judge has to pretend it wasn't there.
+Lean is the constitutional kernel. Z3 is the boundary scanner that finds the
+secret hallway before it reaches a gate that would have to pretend it wasn't there.
 
 The wicket repo (`~/git/wicket`) is the legibility surface for AG gate
 doctrine; Z3 integration belongs at that seam, not in AG kernel.

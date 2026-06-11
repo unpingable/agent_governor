@@ -372,7 +372,7 @@ Each repo below works on its own. Governor enters when an action needs mediation
           │  query / observe  │  catalog lookup    │  attest
           ▼                   ▼                    ▼
         ╔══════════════════════════════════════════════╗
-        ║           Governor (traffic cop)             ║
+        ║              Governor (gate)                 ║
         ║  Mediates ACTION across these substrates     ║
         ║  Emits receipts; never owns their state      ║
         ╚══════════════════════════════════════════════╝

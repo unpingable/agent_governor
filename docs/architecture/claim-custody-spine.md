@@ -120,7 +120,7 @@ The four AG-internal BA3 surfaces (`RunBudgetLedger`, `ExecutionBudget`, `Explor
 | 4. Wicket gap accounted | **YES** (corrected from Maybe) | The point of `gap` vs `denied` is that gap proceeds. Proposal packet MUST carry the gap: *"produced under OPEN_FINDING_ACCOUNTED, gap receipt id X"*. Consequence-bearing work under acknowledged, receipted epistemic debt. Subtle showpiece — no other demo shows this. |
 | 5. Replay / budget | **No on second spend** | spendability refusal; first spend was already accounted |
 | 6. All green | **YES** | control group; happy-path proposal packet |
-| 7. D3 confabulated receipt | Optional/adversarial (see two-mode below) | tiny courtroom |
+| 7. D3 confabulated receipt | Optional/adversarial (see two-mode below) | tiny adversarial review |
 
 **Note on this MVP:** the drill runner (`src/governor/drill_runner.py`) does not invoke an LLM in any scenario, including runs 4 and 6. The proposal packet is a deterministic stub citing receipt ids (`build_proposal_packet`). The table above describes the **architectural placement** for when the LLM is wired in; the present MVP demonstrates the receipt chain that the LLM will be late and narrow against.
 
@@ -128,7 +128,7 @@ The four AG-internal BA3 surfaces (`RunBudgetLedger`, `ExecutionBudget`, `Explor
 
 1. the origin of the finding
 2. the standing decider
-3. the wicket judge
+3. the wicket checker
 4. the accountant
 5. the validator of its own output
 6. the mutator

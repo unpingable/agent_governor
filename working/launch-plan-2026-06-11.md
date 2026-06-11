@@ -214,10 +214,21 @@ systems) then state the narrow real claim.
 
 ## Sequencing
 
-1. **Simulated evidence class + firewall predicate (LAUNCH-BLOCKING** — the demo mints
-   simulated receipts; see placard §Evidence classes). NQ owns declared; AG mints
-   simulated on its own receipts. ~one afternoon.
+1. **Simulated evidence fence — predicate DONE** 2026-06-11 (`ab6d196`,
+   `operational_admission`, allowlist `{observed}`, 27 tests incl. pinning). NQ owns
+   declared; AG fences its own receipts. Remaining: wire it in (folded into D0 below).
 2. Finish **D0** as the public refusal specimen (temporal incident; integrity tripwire).
+   - **First code = the fence wiring** (custody-affecting authority-path change): in
+     `cooked_context_orchestrator`, the success path that returns `ConsumedResult`
+     (effect allowed) must first pass `operational_admission(origin_mode)` — a
+     synthetic/drill/replay chain must refuse to reach operational consequence. Its
+     own focused slice; not a tail-of-session slam.
+   - **Build the demo cases AS golden-corpus entries** (`input → verdict` pairs).
+     Per `memory/rust_kernel_port_ruling`, the corpus — not the Python source — is
+     the kernel contract; the socket-cut + corpus is the launch-serving "do now" that
+     converts the eventual Rust port from a rewrite into a frozen-contract fill.
+     "The receipt converged faster than the program." The demo trio (valid passes /
+     credentialed-impostor refused / temporal lapse) seeds it directly.
 3. Hub **dumb but structurally right** (thesis ¶ + topology map with stubs).
 4. One polished **demo page** (+ OPA contrast diagram, Limits page).
 5. **Specimen ratchet** pass over public READMEs (start: `verifier`).

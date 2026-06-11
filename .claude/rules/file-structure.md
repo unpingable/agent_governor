@@ -159,7 +159,8 @@ src/governor/
 ├── codex_hooks.py         # Codex CLI hooks: parse/classify codex events, extract response/usage/error
 ├── governed_dispatch.py   # Enforcement membrane for composition governance: PreflightRequest/Decision, DispatchContext
 ├── cooked_context_orchestrator.py # SPEC harness orchestrator: chain admission→capacity→consume receipts; origin fence (OperationalConsumed/DemonstratedConsumed/confer_operational_effect)
-├── standing_spendability.py # StandingSpendabilityGate: two-clock temporal-lapse seam (standing→spendability edge); StandingWindow (mandatory clock_basis), standing_before_spendability_not_bounded
+├── standing_spendability.py # StandingSpendabilityGate: two-clock temporal-lapse seam (standing→spendability edge); StandingWindow (gap on a typed monotonic basis), standing_before_spendability_not_bounded
+├── clock_witness.py       # MonotonicReading/WallWitness + elapsed_ns (the only licensed subtraction; refuses incompatible source/epoch/backwards). "A gap is a difference between compatible clock witnesses, not numbers."
 │
 # Governance core (extensions):
 ├── admissibility.py       # Admissibility Gate push-back: Unknown/Severity/ResolvableBy, assumption status (`admit`)

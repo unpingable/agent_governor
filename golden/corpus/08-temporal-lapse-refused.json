@@ -18,14 +18,22 @@
     "proposal_packet_present": false
   },
   "expected_receipt_block": {
-    "standing_observed_at": 40,
-    "capacity_commit_at": 50,
-    "horizon_expires_at": 50,
-    "exercise_at": 51,
-    "standing_observed_model_age": 11,
-    "capacity_commit_model_age": 1,
-    "gap": 1,
+    "gap_basis": {
+      "kind": "monotonic",
+      "source": "process_monotonic",
+      "epoch": "boot:demo-single-host",
+      "start_ns": 40000000000,
+      "end_ns": 51000000000
+    },
+    "gap_ns": 11000000000,
+    "bound_ns": 10000000000,
+    "overage_ns": 1000000000,
     "lapse_coverage": "exceeded_horizon",
-    "clock_basis": "single_host_monotonic"
+    "wall": {
+      "observed_at": "2026-06-09T00:00:40Z",
+      "uncertainty_ms": null,
+      "source": "system_clock_unsynced",
+      "role": "display_only"
+    }
   }
 }

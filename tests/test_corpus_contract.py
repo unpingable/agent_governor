@@ -135,9 +135,10 @@ def test_corpus_entry_receipt_block_matches(
     name: str, entry: dict[str, Any], tmp_path: Path
 ):
     # Entries that freeze a two-clock receipt block (the temporal-lapse hero)
-    # must reproduce it exactly AND carry clock_basis. A verdict of the
-    # standing-before-spendability kind whose receipt lacks clock_basis fails
-    # here: a gap without an attested basis is a bound on numbers, not on time.
+    # must reproduce it exactly AND carry an attested monotonic gap_basis. A
+    # verdict of the standing-before-spendability kind whose receipt lacks a
+    # gap_basis fails here: a gap without an attested basis is a difference
+    # between numbers, not between compatible clock witnesses.
     expected_block = entry.get("expected_receipt_block")
     if expected_block is None:
         pytest.skip("no receipt block frozen for this case")
@@ -147,9 +148,19 @@ def test_corpus_entry_receipt_block_matches(
         f"{name}: corpus freezes a receipt block but the live chain produced "
         f"none (spendability_block is None)."
     )
-    assert "clock_basis" in actual_block and actual_block["clock_basis"], (
-        f"{name}: receipt block missing clock_basis -- the gap is unbounded in "
-        f"time. This verdict kind must carry an attested clock basis."
+    gap_basis = actual_block.get("gap_basis")
+    assert (
+        isinstance(gap_basis, dict)
+        and gap_basis.get("kind") == "monotonic"
+        and gap_basis.get("source")
+        and gap_basis.get("epoch")
+    ), (
+        f"{name}: receipt block missing an attested monotonic gap_basis "
+        f"(source + epoch) -- the gap is a bare-int subtraction, not a "
+        f"difference between compatible clock witnesses. got {gap_basis!r}."
+    )
+    assert "gap_ns" in actual_block and "bound_ns" in actual_block, (
+        f"{name}: receipt block missing gap_ns/bound_ns."
     )
     for key, value in expected_block.items():
         assert actual_block.get(key) == value, (

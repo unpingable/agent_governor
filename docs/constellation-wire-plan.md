@@ -170,25 +170,28 @@ sequence; this is just its wiring view). Order:
    machinery: `StandingSpendabilityGate` (`src/governor/standing_spendability.py`)
    at the standing→spendability edge refuses a spend whose standing lapsed past
    its horizon by exercise time, with the ratified kind
-   `standing_before_spendability_not_bounded` and a receipt carrying both clocks
-   + the gap + a **mandatory** `clock_basis` (`single_host_monotonic` for the
-   single-host demo — declare the clock you have; multi-host later is a value
-   change, not a schema change). Ships as a *pair*: the impostor refuses, the
+   `standing_before_spendability_not_bounded` and a receipt carrying the gap
+   (`gap_ns`/`bound_ns`/`overage_ns`) over a **mandatory** attested monotonic
+   `gap_basis` (`process_monotonic` / `boot:demo-single-host` for the single-host
+   demo — a gap is a difference between compatible clock witnesses, not numbers;
+   wall time rides along display-only and is never the gap basis; multi-host later
+   is a value change, not a schema change). Ships as a *pair*: the impostor refuses, the
    legitimate twin (exercise within horizon) passes the same gauntlet — both
    halves of the demo's Act-1 contrast frozen. Refusal fires before any capacity
    is spent (lapse costs no budget). New refusal kind is an AG-internal S4-lite
    addition (not cross-repo). The check is its own seam, NOT folded into the
    standing client (witness exposes the clocks; policy decides the gap — zoning
    §Standing). Tests: `tests/test_standing_spendability.py`,
-   `tests/test_drill_temporal_lapse.py`, corpus block-pin incl. the
-   missing-`clock_basis` negative.
+   `tests/test_drill_temporal_lapse.py`, `tests/test_clock_witness.py` (the
+   incompatible-basis refusals), corpus block-pin incl. the missing-`gap_basis`
+   negative.
 3. **Refused-spend script + show surface — DONE 2026-06-12.** The demo's Act-1
    *depth* surface (one incident, the temporal contrast) — distinct from the
    codex-frozen `drill_poster` *breadth* surface (the seven-invocation gauntlet),
    left untouched. `src/governor/demo_refused_spend.py` runs the temporal pair
    (legitimate twin spends cleanly / impostor refused on the gap), renders a
-   deterministic receipt-forward contrast showing both clocks + the gap +
-   `clock_basis`, and asserts the **integrity tripwire**: the impostor refused for
+   deterministic receipt-forward contrast showing the gap over its named monotonic
+   `gap_basis`, and asserts the **integrity tripwire**: the impostor refused for
    the RIGHT reason (temporal lapse at `standing_spendability_seam`, spending no
    capacity), same gauntlet as the twin, neither run operational. Stranger-facing
    one-command entry `demo/refused-spend.sh` (the `./demo/refused-spend.sh` the

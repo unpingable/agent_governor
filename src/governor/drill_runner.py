@@ -89,6 +89,7 @@ from governor.cooked_context_orchestrator import (
     CookedContextOrchestrator,
     wrap_receipt_sink_with_origin_mode,
 )
+from governor.clock_witness import MonotonicReading, WallWitness
 from governor.gate_receipt import GateReceiptSystem
 from governor.standing_spendability import (
     SpendabilityRefusal,
@@ -339,41 +340,57 @@ ALL_GREEN_INTENDED_ACTION = "diagnose_wal_bloat"
 ALL_GREEN_TARGET = "/db/wal"
 
 # ---------------------------------------------------------------------------
-# Temporal-lapse specimen fixtures (the two-clock window). Integer epoch
-# seconds on a single monotonic basis — the launch plan's t=40 / t=50 / t=51:
-# standing observed at 40, horizon expires at 50, spend attempted at 51 (lapsed)
-# vs 45 (the twin, within horizon). clock_basis is the honest basis for a
-# single-host demo: one host, one clock, the gap math is sound within it. The
-# multi-host story later is a value change, not a schema change.
+# Temporal-lapse specimen fixtures. The gap runs on MONOTONIC readings (ns) from
+# a single source + epoch — the launch plan's t=40 / t=50 / t=51 expressed in ns
+# on a shared boot epoch: standing observed at 40s, freshness bound 10s (horizon
+# t=50), spend attempted at 51s (lapsed, gap 11s > 10s) vs 45s (twin, gap 5s).
+# Wall time rides along display_only with honestly-unknown uncertainty (the gap
+# does not consult it; one process / one epoch makes the gap sound).
 # ---------------------------------------------------------------------------
-TEMPORAL_STANDING_OBSERVED_AT = 40
-TEMPORAL_CAPACITY_COMMIT_AT = 50
-TEMPORAL_HORIZON_EXPIRES_AT = 50
-TEMPORAL_EXERCISE_AT_LAPSED = 51  # past the horizon -> gate refuses
-TEMPORAL_EXERCISE_AT_WITHIN = 45  # within the horizon -> gate passes (twin)
-TEMPORAL_CLOCK_BASIS = "single_host_monotonic"
+_S = 1_000_000_000  # ns per second
+TEMPORAL_MONO_SOURCE = "process_monotonic"
+TEMPORAL_MONO_EPOCH = "boot:demo-single-host"
+TEMPORAL_OBSERVED_NS = 40 * _S
+TEMPORAL_CAPACITY_COMMIT_NS = 50 * _S
+TEMPORAL_BOUND_NS = 10 * _S  # horizon - observed = the standing's freshness budget
+TEMPORAL_EXERCISE_NS_LAPSED = 51 * _S  # gap 11s > 10s -> refuses
+TEMPORAL_EXERCISE_NS_WITHIN = 45 * _S  # gap 5s -> passes (twin)
+TEMPORAL_WALL_OBSERVED_AT = "2026-06-09T00:00:40Z"
+
+
+def _mono(ns: int) -> MonotonicReading:
+    return MonotonicReading(
+        source=TEMPORAL_MONO_SOURCE, epoch=TEMPORAL_MONO_EPOCH, ns=ns
+    )
 
 
 def _standing_window_for_scenario(scenario: str) -> StandingWindow | None:
-    """The two-clock window for the temporal-lapse pair; None otherwise.
+    """The monotonic-gap window for the temporal-lapse pair; None otherwise.
 
-    Both scenarios share the same observation and horizon; only the exercise
-    time differs (lapsed past the horizon vs within it). Returning None for
-    every other scenario leaves the chain unchanged — the gate only fires when
-    a window is supplied.
+    Both scenarios share the same observation, bound, and clock basis; only the
+    exercise reading differs (gap > bound vs within). None for every other
+    scenario leaves the chain unchanged — the gate only fires with a window.
     """
     if scenario == SCENARIO_TEMPORAL_LAPSE:
-        exercise_at = TEMPORAL_EXERCISE_AT_LAPSED
+        exercise_ns = TEMPORAL_EXERCISE_NS_LAPSED
     elif scenario == SCENARIO_TEMPORAL_LAPSE_TWIN:
-        exercise_at = TEMPORAL_EXERCISE_AT_WITHIN
+        exercise_ns = TEMPORAL_EXERCISE_NS_WITHIN
     else:
         return None
+    # Gap is observed→exercise (the hero predicate); capacity_commit is omitted —
+    # the twin exercises (45s) before the fixture's commit (50s), so a
+    # commit→exercise model age would be a backwards subtraction the basis
+    # correctly refuses. The gap does not need it.
     return StandingWindow(
-        standing_observed_at=TEMPORAL_STANDING_OBSERVED_AT,
-        capacity_commit_at=TEMPORAL_CAPACITY_COMMIT_AT,
-        horizon_expires_at=TEMPORAL_HORIZON_EXPIRES_AT,
-        exercise_at=exercise_at,
-        clock_basis=TEMPORAL_CLOCK_BASIS,
+        standing_observed=_mono(TEMPORAL_OBSERVED_NS),
+        exercise=_mono(exercise_ns),
+        bound_ns=TEMPORAL_BOUND_NS,
+        wall=WallWitness(
+            observed_at=TEMPORAL_WALL_OBSERVED_AT,
+            uncertainty_ms=None,  # honestly unknown; the gap runs on monotonic
+            source="system_clock_unsynced",
+            role="display_only",
+        ),
     )
 
 
@@ -932,10 +949,11 @@ class DrillRunResult:
     bogus_cited_id: Optional[str] = None
     citation_check: Optional[str] = None
     # Temporal-lapse specimen: the two-clock 'murder hallway' block the
-    # standing-spendability gate exposed (standing_observed_at, capacity_commit_at,
-    # exercise_at, horizon, model ages, gap, lapse_coverage, clock_basis). None
-    # for every non-temporal scenario. Present on the lapse refusal so the demo
-    # (and the corpus contract) can show both clocks and the gap.
+    # standing-spendability gate exposed (gap_basis {kind/source/epoch/start_ns/
+    # end_ns}, gap_ns, bound_ns, overage_ns, lapse_coverage, optional display-only
+    # wall). The gap runs on a named monotonic basis, not bare-int math. None for
+    # every non-temporal scenario. Present on the lapse refusal so the demo (and
+    # the corpus contract) can show the gap and re-check its basis is sound.
     spendability_block: Optional[dict[str, Any]] = None
 
 

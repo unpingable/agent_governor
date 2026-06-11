@@ -71,10 +71,12 @@ def test_surface_is_receipt_forward(tmp_path: Path):
     surface = render_surface(agg)
     # The Columbo beat: the refusal kind, both clocks, the gap, the basis.
     assert "standing_before_spendability_not_bounded" in surface
-    assert "exercise_at=51" in surface
-    assert "horizon_expires_at=50" in surface
-    assert "gap=+1s" in surface
-    assert "clock_basis=single_host_monotonic" in surface
+    assert "exercise at t=51" in surface
+    assert "horizon t=50" in surface
+    assert "over by 1s" in surface
+    # The gap basis is named monotonic (source + epoch), not a wall subtraction.
+    assert "gap_basis: monotonic" in surface
+    assert "source=process_monotonic" in surface
     # Both halves of the contrast are present.
     assert "LEGITIMATE" in surface and "IMPOSTOR" in surface
     # Receipts are shown (the hero artifact).
@@ -105,7 +107,13 @@ def test_json_envelope_shape(tmp_path: Path):
     env = build_json_envelope(agg, render_surface(agg))
     assert env["aggregate_ok"] is True
     assert env["impostor"]["refusal_kind"] == "standing_before_spendability_not_bounded"
-    assert env["impostor"]["spendability_block"]["gap"] == 1
+    block = env["impostor"]["spendability_block"]
+    # New monotonic block: gap is observed→exercise (11s), bound is the freshness
+    # budget (10s), overage is how far past the horizon the spend fell (1s).
+    assert block["gap_ns"] == 11_000_000_000
+    assert block["bound_ns"] == 10_000_000_000
+    assert block["overage_ns"] == 1_000_000_000
+    assert block["gap_basis"]["kind"] == "monotonic"
     assert env["twin"]["outcome"] == "consumed"
     assert isinstance(env["assertions"], list) and env["assertions"]
     # The proof seam is machine-readable too, and load-bearing.

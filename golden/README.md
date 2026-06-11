@@ -83,14 +83,20 @@ The refusal is real machinery, not a labeled near-neighbor: the
 standing→spendability edge (post-admission, pre-spend) and refuses a spend whose
 standing has lapsed past its horizon by exercise time, with the typed kind
 `standing_before_spendability_not_bounded` and a receipt carrying the full
-two-clock block (both clocks, both model ages, the gap, lapse_coverage, and a
-**mandatory** `clock_basis` — for the single-host demo, `single_host_monotonic`).
-Case 03 (`standing-unverifiable`) is a *different* refusal class (the digest
-doesn't resolve) and stays honestly labeled as such; it is not the temporal case.
+two-clock block (`gap_ns`, `bound_ns`, `overage_ns`, `lapse_coverage`, an
+optional display-only `wall`, and a **mandatory** attested `gap_basis`). The gap
+is computed over compatible **monotonic** clock witnesses (`gap_basis.kind ==
+"monotonic"` with a named `source` + `epoch`) — not a bare-int subtraction wearing
+an ISO 8601 smile: *a gap is a difference between compatible clock witnesses, not
+numbers.* For the single-host demo the basis is `process_monotonic` /
+`boot:demo-single-host`. Case 03 (`standing-unverifiable`) is a *different*
+refusal class (the digest doesn't resolve) and stays honestly labeled as such; it
+is not the temporal case.
 
 The contract test pins the block (`test_corpus_entry_receipt_block_matches`),
-including the negative: a verdict of this kind whose receipt lacks `clock_basis`
-fails — a gap without an attested basis is a bound on numbers, not on time.
+including the negative: a verdict of this kind whose receipt lacks an attested
+monotonic `gap_basis` (source + epoch) fails — a gap without a compatible-witness
+basis is a difference between numbers, not between clocks.
 
 ## Cross-references
 

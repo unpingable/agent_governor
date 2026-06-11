@@ -2,7 +2,7 @@
   "schema": "agent_governor.corpus.v1",
   "case": "standing-unverifiable-refused",
   "demo_role": "custody_refusal",
-  "description": "A standing receipt id IS cited, but it does not verify (the digest resolves to no minted standing receipt). Refused at the standing seam, surfaced as standing_expired in the S4-lite layer. NOTE: this is the UNVERIFIABLE-standing refusal, NOT the two-clock temporal-lapse hero specimen (valid-when-observed, expired-in-the-gap) the launch plan designates -- that case carries standing_observed_at / spend_at / clock_basis / gap fields that no scenario produces yet. See golden/README.md.",
+  "description": "A standing receipt id IS cited, but it does not verify (the digest resolves to no minted standing receipt). Refused at the standing seam, surfaced as standing_expired in the S4-lite layer. NOTE: this is the UNVERIFIABLE-standing refusal (the credential never existed), DISTINCT from the two-clock temporal-lapse hero specimen (valid-when-observed, expired-in-the-gap) -- that case is now frozen as 08-temporal-lapse-refused with refusal_kind standing_before_spendability_not_bounded and a monotonic gap_basis block. Two different refusals: missing credential here, lapsed-freshness there. See golden/README.md.",
   "input": {
     "scenario": "standing-expired",
     "origin_mode": "drill",

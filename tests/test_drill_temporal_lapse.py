@@ -30,10 +30,15 @@ def test_lapse_refuses_at_spendability_seam_without_spending(tmp_path: Path):
     # Standing + wicket DID fire (the chain reached the gate, then refused).
     assert r.downstream_call_counts.get("standing_verify", 0) == 1
     assert r.downstream_call_counts.get("wicket_check", 0) == 1
-    # Both clocks and the gap are on the refusal block.
+    # The monotonic gap and its named basis are on the refusal block.
     assert r.spendability_block is not None
-    assert r.spendability_block["gap"] == 1
-    assert r.spendability_block["clock_basis"] == "single_host_monotonic"
+    b = r.spendability_block
+    assert b["gap_ns"] == 11_000_000_000  # observed→exercise = 11s
+    assert b["bound_ns"] == 10_000_000_000  # freshness budget = 10s
+    assert b["overage_ns"] == 1_000_000_000  # one second past the horizon
+    assert b["gap_basis"]["kind"] == "monotonic"
+    assert b["gap_basis"]["source"] == "process_monotonic"
+    assert b["gap_basis"]["epoch"] == "boot:demo-single-host"
     # No proposal packet on a refusal.
     assert r.proposal_packet == {}
 

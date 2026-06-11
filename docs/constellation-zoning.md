@@ -403,6 +403,18 @@ gap. The demo-shaped refusal: `refuse spend: standing_before_spendability_not_
 bounded` because clock_basis unbounded / chain was grant-time-only / lapse
 coverage missing / class standing exists but instance membership unproven.
 
+> **Refined at build time (2026-06-12).** The sketch above puts the gap on a
+> wall clock with an NTP bound (`ntp_bounded(±x)`, unbounded → advisory). The
+> shipped gate (`standing_spendability.py`) narrowed to the *sound* case: the gap
+> is computed over compatible **monotonic** clock witnesses (`gap_basis.kind ==
+> "monotonic"`, a named `source` + `epoch`), because wall clocks step backward
+> under NTP correction and a gap across a step is garbage with an ISO 8601 smile.
+> Wall time becomes a *different object* (`WallWitness`, display-only or a
+> freshness basis), never the gap basis. *A gap is a difference between compatible
+> clock witnesses, not numbers.* The wall-clock freshness model sketched here
+> (three-valued over ±x bounds) is the spec'd follow-on
+> (`working/clock-witness-spec.md`), not the gap predicate.
+
 Three more cuts:
 
 - **Derivative standing needs product labels.** `exercise_time_chain_walk`

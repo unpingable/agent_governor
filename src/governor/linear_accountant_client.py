@@ -98,8 +98,9 @@ REFUSAL_SCOPE_MISMATCH = "scope_mismatch"
 # spend whose standing observation has lapsed past its horizon by exercise time
 # (standing was valid when observed, void by the time it is spent). Distinct
 # from standing_expired (an unverifiable digest) and token_expired (LA-side
-# token expiry): this is the standing-before-spendability bound, measured across
-# two clocks under an attested clock_basis. Emitted by StandingSpendabilityGate
+# token expiry): this is the standing-before-spendability bound, the gap measured
+# over compatible monotonic clock witnesses (an attested gap_basis, not bare-int
+# math; wall time is display-only). Emitted by StandingSpendabilityGate
 # (standing_spendability.py), NOT this module.
 REFUSAL_STANDING_BEFORE_SPENDABILITY_NOT_BOUNDED = (
     "standing_before_spendability_not_bounded"

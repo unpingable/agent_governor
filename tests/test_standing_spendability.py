@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Standing-before-spendability gate — the two-clock temporal-lapse seam.
 
-Pins the three ratified checks (2026-06-12):
+Pins the three ratified checks (2026-06-12), now on the monotonic clock basis:
   * gap-exceeds-bound refuses with the full receipt block;
   * within-bound twin passes;
-  * the negative — a window without an attested clock_basis is unrepresentable
-    (construction refuses it), so no gap check ever runs on numbers-not-time.
+  * the negative — a window cannot be built from bare integer seconds (the clock
+    costume); the gap basis is a typed MonotonicReading, so a gap on
+    numbers-not-time is unrepresentable, and an incompatible subtraction refuses.
 
 Plus the gate's teeth: closed-vocab emission, receipt on both paths, block
 fields, purity of the evaluator.
@@ -17,6 +18,12 @@ from typing import Any
 
 import pytest
 
+from governor.clock_witness import (
+    GapBasisMismatch,
+    MonotonicEpochMismatch,
+    MonotonicReading,
+    WallWitness,
+)
 from governor.standing_spendability import (
     LAPSE_EXCEEDED_HORIZON,
     LAPSE_WITHIN_HORIZON,
@@ -30,17 +37,24 @@ from governor.standing_spendability import (
     evaluate_spendability_window,
 )
 
-BASIS = "single_host_monotonic"
+_S = 1_000_000_000  # ns per second
+SOURCE = "process_monotonic"
+EPOCH = "boot:demo-single-host"
+OBSERVED_NS = 40 * _S
+BOUND_NS = 10 * _S  # horizon - observed = the standing's freshness budget
 
 
-def _window(exercise_at: int, *, clock_basis: str = BASIS) -> StandingWindow:
-    # t=40 observed, horizon t=50; exercise time is the variable.
+def _mono(ns: int, *, source: str = SOURCE, epoch: str = EPOCH) -> MonotonicReading:
+    return MonotonicReading(source=source, epoch=epoch, ns=ns)
+
+
+def _window(exercise_s: int, *, wall: WallWitness | None = None) -> StandingWindow:
+    # t=40 observed, horizon t=50 (bound 10s); exercise time is the variable.
     return StandingWindow(
-        standing_observed_at=40,
-        capacity_commit_at=50,
-        horizon_expires_at=50,
-        exercise_at=exercise_at,
-        clock_basis=clock_basis,
+        standing_observed=_mono(OBSERVED_NS),
+        exercise=_mono(exercise_s * _S),
+        bound_ns=BOUND_NS,
+        wall=wall,
     )
 
 
@@ -63,51 +77,95 @@ class TestRatifiedPins:
     def test_gap_exceeds_bound_refuses_with_full_block(self):
         sink = _RecordingSink()
         gate = StandingSpendabilityGate(receipt_sink=sink)
-        out = gate.check(_window(exercise_at=51))  # 1s past horizon
+        out = gate.check(_window(exercise_s=51))  # 1s past horizon
         assert isinstance(out, SpendabilityRefusal)
         assert out.kind == REFUSAL_STANDING_BEFORE_SPENDABILITY_NOT_BOUNDED
-        # Full murder-hallway block, both clocks + the gap + the basis.
+        # Full murder-hallway block: the monotonic gap + bound + the named basis.
         b = out.block
-        assert b["standing_observed_at"] == 40
-        assert b["horizon_expires_at"] == 50
-        assert b["exercise_at"] == 51
-        assert b["gap"] == 1
-        assert b["standing_observed_model_age"] == 11
+        assert b["gap_ns"] == 11 * _S  # observed→exercise
+        assert b["bound_ns"] == 10 * _S
+        assert b["overage_ns"] == 1 * _S  # one second past the horizon
         assert b["lapse_coverage"] == LAPSE_EXCEEDED_HORIZON
-        assert b["clock_basis"] == BASIS
-        # A real receipt was minted, verdict=block, carrying the block.
+        gb = b["gap_basis"]
+        assert gb["kind"] == "monotonic"
+        assert gb["source"] == SOURCE
+        assert gb["epoch"] == EPOCH
+        assert gb["start_ns"] == OBSERVED_NS
+        assert gb["end_ns"] == 51 * _S
+        # A real receipt was minted, verdict=block, carrying the gap basis.
         assert len(sink.emits) == 1
         assert sink.emits[0]["verdict"] == "block"
-        assert sink.emits[0]["evidence_bundle"]["clock_basis"] == BASIS
+        assert sink.emits[0]["evidence_bundle"]["gap_basis"]["kind"] == "monotonic"
         assert out.receipt_id == "rcpt-0"
 
     def test_within_bound_twin_passes(self):
         sink = _RecordingSink()
         gate = StandingSpendabilityGate(receipt_sink=sink)
-        out = gate.check(_window(exercise_at=45))  # within horizon
+        out = gate.check(_window(exercise_s=45))  # within horizon
         assert isinstance(out, SpendabilityVerdict)
         assert out.bounded is True
         assert out.reason is None
         assert out.block["lapse_coverage"] == LAPSE_WITHIN_HORIZON
+        assert out.block["gap_ns"] == 5 * _S
         # The twin still emits a receipt (the witness exposes the hallway even
         # on the pass), verdict=pass, carrying the same block shape + basis.
         assert len(sink.emits) == 1
         assert sink.emits[0]["verdict"] == "pass"
-        assert sink.emits[0]["evidence_bundle"]["clock_basis"] == BASIS
+        assert sink.emits[0]["evidence_bundle"]["gap_basis"]["source"] == SOURCE
 
-    def test_missing_clock_basis_is_unrepresentable(self):
-        # The negative: a window without an attested clock basis cannot be
-        # constructed at all -- so no gap check ever runs on numbers-not-time.
-        with pytest.raises(MalformedStandingWindowError):
-            _window(exercise_at=51, clock_basis="")
+    def test_bare_int_clock_costume_is_unrepresentable(self):
+        # The negative: a window cannot be built from bare integer seconds. The
+        # gap basis is a typed MonotonicReading; a number where a reading is
+        # required refuses at construction, so no gap ever runs on numbers.
         with pytest.raises(MalformedStandingWindowError):
             StandingWindow(
-                standing_observed_at=40,
-                capacity_commit_at=50,
-                horizon_expires_at=50,
-                exercise_at=51,
-                clock_basis=None,  # type: ignore[arg-type]
+                standing_observed=40,  # type: ignore[arg-type]
+                exercise=_mono(51 * _S),
+                bound_ns=BOUND_NS,
             )
+        with pytest.raises(MalformedStandingWindowError):
+            StandingWindow(
+                standing_observed=_mono(OBSERVED_NS),
+                exercise=51 * _S,  # type: ignore[arg-type]
+                bound_ns=BOUND_NS,
+            )
+
+
+# --- the two ugly clock tests (operator's ask) -------------------------------
+
+
+class TestIncompatibleBasisRefusesAtSubtraction:
+    def test_same_ns_different_epoch_refuses(self):
+        # Same numeric ns, different epoch (a reboot between observation and
+        # exercise) → the cross-reset garbage gap is refused, not computed.
+        w = StandingWindow(
+            standing_observed=_mono(OBSERVED_NS, epoch="boot:A"),
+            exercise=_mono(51 * _S, epoch="boot:B"),
+            bound_ns=BOUND_NS,
+        )
+        with pytest.raises(MonotonicEpochMismatch):
+            evaluate_spendability_window(w)
+
+    def test_different_sources_refuses(self):
+        # Two unrelated clocks → a gap between them is meaningless; refuse.
+        w = StandingWindow(
+            standing_observed=_mono(OBSERVED_NS, source="clock_a"),
+            exercise=_mono(51 * _S, source="clock_b"),
+            bound_ns=BOUND_NS,
+        )
+        with pytest.raises(GapBasisMismatch):
+            evaluate_spendability_window(w)
+
+    def test_backwards_reading_refuses(self):
+        # end < start on the same basis → a backwards monotonic reading is a
+        # contradiction; refuse rather than produce a negative gap.
+        w = StandingWindow(
+            standing_observed=_mono(51 * _S),
+            exercise=_mono(OBSERVED_NS),
+            bound_ns=BOUND_NS,
+        )
+        with pytest.raises(GapBasisMismatch):
+            build_spendability_block(w)
 
 
 # --- boundary + purity -------------------------------------------------------
@@ -115,7 +173,7 @@ class TestRatifiedPins:
 
 class TestBoundaryAndPurity:
     def test_exactly_at_horizon_is_bounded(self):
-        # exercise == horizon is within bound (<=). One second later is not.
+        # gap == bound is within bound (<=). One second later is not.
         assert evaluate_spendability_window(_window(50)).bounded is True
         assert evaluate_spendability_window(_window(51)).bounded is False
 
@@ -135,12 +193,22 @@ class TestBoundaryAndPurity:
         assert isinstance(out, SpendabilityRefusal)
         assert out.receipt_id is None
 
-    def test_non_int_clock_value_refused(self):
+    def test_wall_rides_along_display_only_never_the_gap(self):
+        wall = WallWitness(
+            observed_at="2026-06-09T00:00:40Z",
+            uncertainty_ms=None,
+            source="system_clock_unsynced",
+            role="display_only",
+        )
+        b = build_spendability_block(_window(51, wall=wall))
+        # The wall is present for display, but the gap basis is monotonic.
+        assert b["wall"]["role"] == "display_only"
+        assert b["gap_basis"]["kind"] == "monotonic"
+
+    def test_negative_bound_refused(self):
         with pytest.raises(MalformedStandingWindowError):
             StandingWindow(
-                standing_observed_at=40,
-                capacity_commit_at=50,
-                horizon_expires_at=50,
-                exercise_at="51",  # type: ignore[arg-type]
-                clock_basis=BASIS,
+                standing_observed=_mono(OBSERVED_NS),
+                exercise=_mono(51 * _S),
+                bound_ns=-1,
             )

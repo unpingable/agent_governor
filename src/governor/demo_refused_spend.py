@@ -161,16 +161,21 @@ def _evaluate_integrity(agg: RefusedSpendAggregate) -> None:
         "",
     ))
 
-    # 6. The refusal receipt carries both clocks and the gap (the Columbo beat
-    #    is backed by a real block, with a mandatory clock_basis).
+    # 6. The refusal receipt carries the gap computed over a NAMED monotonic
+    #    basis (source + epoch) — so a reader can re-check the gap is sound, not
+    #    a wall-clock subtraction wearing an ISO 8601 smile.
     block = imp.spendability_block if imp else None
+    gb = block.get("gap_basis") if isinstance(block, dict) else None
     a.append((
-        "refusal receipt carries both clocks + the gap + an attested clock_basis",
+        "refusal receipt names the monotonic gap basis (source + epoch), "
+        "gap_ns and bound_ns — the gap is provably sound, not bare-int math",
         isinstance(block, dict)
-        and block.get("clock_basis")
-        and "gap" in block
-        and "standing_observed_at" in block
-        and "exercise_at" in block,
+        and "gap_ns" in block
+        and "bound_ns" in block
+        and isinstance(gb, dict)
+        and gb.get("kind") == "monotonic"
+        and bool(gb.get("source"))
+        and bool(gb.get("epoch")),
         "" if block else "no spendability block on impostor",
     ))
 
@@ -225,15 +230,22 @@ def render_surface(agg: RefusedSpendAggregate) -> str:
         out.append(f"    {'wicket':<14} admitted      ← naive auth says yes here")
         out.append(f"    {'spendability':<14} REFUSED       {imp.refusal_kind}")
         block = imp.spendability_block or {}
+        gb = block.get("gap_basis", {})
+        gap_s = block.get("gap_ns", 0) / 1e9
+        bound_s = block.get("bound_ns", 0) / 1e9
+        over_s = block.get("overage_ns", 0) / 1e9
+        wall = block.get("wall", {})
         out.append(
-            f"      standing_observed_at={block.get('standing_observed_at')}  "
-            f"exercise_at={block.get('exercise_at')}  "
-            f"horizon_expires_at={block.get('horizon_expires_at')}"
+            f"      gap={gap_s:g}s  vs bound={bound_s:g}s  → over by {over_s:g}s"
         )
         out.append(
-            f"      gap=+{block.get('gap')}s  "
-            f"standing_model_age={block.get('standing_observed_model_age')}s  "
-            f"clock_basis={block.get('clock_basis')}"
+            f"      gap_basis: monotonic, source={gb.get('source')} "
+            f"epoch={gb.get('epoch')}  (sound: one source, one epoch)"
+        )
+        out.append(
+            f"      wall {wall.get('observed_at')} "
+            f"[{wall.get('role')}, uncertainty={wall.get('uncertainty_ms')}] "
+            f"— display only, NOT the gap basis"
         )
         out.append(f"    {'leaf receipt':<14} {_leaf(imp)}")
         out.append(
@@ -241,7 +253,8 @@ def render_surface(agg: RefusedSpendAggregate) -> str:
             f"(effect_count={imp.effect_count}). The standing was checked —"
         )
         out.append(
-            "      it lapsed in the gap between observation and exercise."
+            "      it lapsed in the gap between observation and exercise, and the "
+            "gap was computed over compatible monotonic witnesses (provably sound)."
         )
     out.append("")
     out.append(

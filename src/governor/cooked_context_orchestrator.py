@@ -190,6 +190,114 @@ class InvalidOriginModeError(ValueError):
 
 
 # ---------------------------------------------------------------------------
+# Operational-admission fence (simulated-evidence fence, ratified 2026-06-11).
+#
+# The closed vocabulary above answers "what KIND of provenance is this?".
+# This fence answers the gate's one local question: "may a receipt bearing
+# this origin satisfy an OPERATIONAL check — promote, suppress a real event,
+# or become spendable?"  It is the missing enforcement: `origin_mode` was
+# stamped and rendered (`why.py`), but nothing fenced operational consequence
+# on it, so a synthetic/demo receipt could satisfy an operational check.
+#
+# Shape (ratified): closed-world ALLOWLIST, never a blocklist.  A blocklist
+# ("refuse if synthetic") admits every novel value by default — a tool
+# modified to emit `origin: test2` would sail through.  The allowlist admits
+# iff the mode is in the ratified operational set; everything else refuses
+# with a typed reason.  This mirrors the receipt-kernel (RKL) invariant:
+# malformed aborts; unmodeled is never admitted; no projection turns unknown
+# into accepted.
+#
+# Extension is a RATIFIED event, not an emergent default: widening
+# OPERATIONAL_ORIGIN_MODES is a custody change (and MUST add a pinning-test
+# case).  Gate-bearing rules never self-amend.
+# ---------------------------------------------------------------------------
+
+# The ONLY origin mode that permits operational consequence.  Strict by
+# design: ``observed`` is the sole witnessed-from-the-world provenance.
+# ``drill`` (operator-staged), ``replay`` (re-run of a past observation),
+# ``synthetic`` (no real condition), ``cli_origin`` / ``stub_origin``
+# (AG-internal, no upstream witness) are ALL non-operational.  Widening this
+# set — e.g. if a real path needs ``cli_origin`` to be operational — is a
+# one-line ratified change plus a pinning-test case, NEVER an inferred default.
+OPERATIONAL_ORIGIN_MODES = frozenset({ORIGIN_MODE_OBSERVED})
+
+# Typed admission outcomes.  A refusal is never a bare ``False`` — it carries
+# its reason so the receipt names exactly which fantasy was denied admission.
+ORIGIN_ADMITTED = "origin_admitted"
+ORIGIN_REFUSED_NOT_OPERATIONAL = "origin_not_operational"
+ORIGIN_REFUSED_UNRECOGNIZED = "origin_unrecognized"
+ORIGIN_REFUSED_MISSING = "origin_missing"
+
+
+class MalformedOriginError(TypeError):
+    """``origin_mode`` present but not a string (tampered or mis-built
+    bundle).  Malformed input ABORTS — it is never coerced into a refusal
+    with an operational default, and never admitted."""
+
+
+@dataclass(frozen=True)
+class OriginAdmission:
+    """Result of the operational-admission fence.
+
+    Never a bare bool: a refusal carries its typed ``reason`` (one of the
+    ``ORIGIN_*`` constants) and the offending ``origin_mode`` when there was
+    one.  Callers branch on ``admitted``; audit reads ``reason``.
+    """
+
+    admitted: bool
+    reason: str
+    origin_mode: str | None
+
+    @property
+    def refused(self) -> bool:
+        return not self.admitted
+
+
+def operational_admission(origin_mode: object) -> OriginAdmission:
+    """Closed-world fence: may a receipt bearing ``origin_mode`` satisfy an
+    operational check (promote / suppress a real event / become spendable)?
+
+    Decision table (allowlist, not blocklist)::
+
+        None / absent                  -> refuse  ORIGIN_REFUSED_MISSING
+        non-str                        -> raise   MalformedOriginError
+        not in CLOSED_ORIGIN_MODES     -> refuse  ORIGIN_REFUSED_UNRECOGNIZED
+        in CLOSED, not in OPERATIONAL  -> refuse  ORIGIN_REFUSED_NOT_OPERATIONAL
+        in OPERATIONAL_ORIGIN_MODES    -> admit
+
+    A novel origin string (a tool emitting an unmodeled value) lands in
+    ORIGIN_REFUSED_UNRECOGNIZED — never in admission.  Missing is treated as
+    malformed-for-operational-purposes (refused), never defaulted to
+    operational.  This is the fence's whole point.
+    """
+    if origin_mode is None:
+        return OriginAdmission(False, ORIGIN_REFUSED_MISSING, None)
+    if not isinstance(origin_mode, str):
+        raise MalformedOriginError(
+            f"origin_mode must be a string, got {type(origin_mode).__name__}"
+        )
+    if origin_mode not in CLOSED_ORIGIN_MODES:
+        return OriginAdmission(False, ORIGIN_REFUSED_UNRECOGNIZED, origin_mode)
+    if origin_mode not in OPERATIONAL_ORIGIN_MODES:
+        return OriginAdmission(False, ORIGIN_REFUSED_NOT_OPERATIONAL, origin_mode)
+    return OriginAdmission(True, ORIGIN_ADMITTED, origin_mode)
+
+
+def operational_admission_for_bundle(
+    evidence_bundle: dict[str, Any] | None,
+) -> OriginAdmission:
+    """Run the fence against a receipt's evidence bundle.
+
+    Reads ``evidence_bundle[EVIDENCE_KEY_ORIGIN_MODE]``.  A missing bundle or
+    a bundle without the key refuses with ORIGIN_REFUSED_MISSING — an
+    unstamped receipt has no attested origin and so cannot be operational.
+    """
+    if not evidence_bundle:
+        return OriginAdmission(False, ORIGIN_REFUSED_MISSING, None)
+    return operational_admission(evidence_bundle.get(EVIDENCE_KEY_ORIGIN_MODE))
+
+
+# ---------------------------------------------------------------------------
 # Receipt-sink wrapper.
 #
 # Thin adapter that injects ``origin_mode`` into every emitted

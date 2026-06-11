@@ -70,7 +70,7 @@ and refusal-driven promotion rules. A handle for review.
 
 ---
 
-## Two operating disciplines
+## Operating disciplines
 
 ### 1. Zoning, not construction
 
@@ -102,6 +102,52 @@ Corollary — over-splitting is the same sin as over-bundling, sign flipped:
 
 > Over-bundling erases refusals. Over-splitting manufactures unlicensed
 > structure. Both import error; the grain of refusal is the only honest stop.
+
+### 3. Allowlist for authority, blocklist for detection
+
+The list-polarity rule for every boundary in the constellation. One question
+decides it:
+
+> **Can the *good* set be enumerated without strangling the thing it guards?**
+
+- **Yes** (small, ratified, slowly-changing, extension-by-ceremony) → **allowlist**:
+  admit iff licensed. Admitting only known-good is checkable and complete; the
+  novel value lands in a typed refusal, not in admission.
+- **No** (the good set is open-ended/innovative; only the *bad* is partially
+  enumerable) → **blocklist**: accepted as inherently leaky, reactive, always one
+  mole behind. *Nested blocklists don't repair this — every leaf is still
+  default-allow, the holes live at the seams, and a novel value sails past all
+  levels. Blocklist depth is whack-a-mole with more lanes.*
+
+The zoning rule that falls out, one line:
+
+> **Detectors over open spaces may blocklist, because they emit testimony; gates
+> over authority must allowlist, because they emit consequences.**
+
+The asymmetry is the whole argument: a blocklist *miss* in the observation plane
+means a pattern went unflagged (recoverable, evidence-shaped); a blocklist miss in
+the authority plane means an **unlicensed exercise occurred** (consequence, not
+evidence). Different failure classes → different list polarity.
+
+So the constellation's **authority plane is allowlist wall-to-wall** — admissibility
+("admit iff licensed"), RKL's *unmodeled-is-never-admitted*, spends naming their
+input units, bridges discharging enumerated objections, ratified schema versions,
+capability grants, egress domains, the `origin_mode` operational fence (§Evidence
+classes). Witness competence fits too: the "may attest" column is the allowlist;
+"may not attest" is *documentation, not the mechanism*. **Blocklists live only in the
+observation/advisory plane** (label/drift/spam/noise heuristics over open
+ecosystems) — where the good set is unenumerable by design *and the output is
+evidence, not admission*.
+
+Review smell (trips the clipboard goblin):
+
+> **A blocklist guarding an authority transition is the alarm.** It usually means
+> the boundary is drawn wrong, not that the polarity is — someone declared the good
+> set unenumerable at a boundary where unenumerable good sets shouldn't exist.
+
+Composes with grain-of-refusal: a value earns a slot in the allowlist when there's a
+refusal it can't express without it; the allowlist stays small *because* it's
+closed-world, and widening it is a ratified event (never an emergent default).
 
 ### One-way doors vs two-way doors
 
@@ -714,10 +760,11 @@ of witnessed. NQ already has this class.
 
 **Simulated** — demo / test / fixture traffic. Receipt-shaped fiction that must be
 **inert**: firewalled from operational reasoning, never promoted, never consulted,
-never allowed to reclassify anything real. AG does *not* have this yet, and **the
-public demo is literally a simulated-evidence generator** — the first stranger who
-runs `./demo/refused-spend.sh` mints receipt-shaped artifacts into the same plane as
-real attestations unless the class exists. **This is launch-blocking.**
+never allowed to reclassify anything real. **The public demo is literally a
+simulated-evidence generator** — the first stranger who runs `./demo/refused-spend.sh`
+mints receipt-shaped artifacts into the same plane as real attestations unless the
+fence exists. This was launch-blocking; **the fence predicate is now built** (see
+*Implementation* below).
 
 The grain-of-refusal proof that these are two classes, not one label: there exists a
 scenario where you must *admit* one and *refuse* the other. A single "synthetic"
@@ -746,12 +793,27 @@ simulated may NOT become spendable capacity
 ```
 
 Owner: **shared constellation vocabulary, not AG's to ratify alone** (NQ owns the
-witness-claim classes; AG owns the class on its own gate/evidence receipts). The
-taxonomy is recorded here as a zoning observation. The concrete launch target is
-narrow: `evidence_class: simulated; operational_effect: inert` on demo-emitted
-receipts, plus the firewall predicate. Build when the demo work starts; do not
-gold-plate a six-value enum before the two that matter (declared, simulated) are
-real.
+witness-claim classes; AG owns the fence on its own gate/evidence receipts). The
+table above is the abstract zoning view; the implemented reality is below.
+
+**Implementation (2026-06-11).** Grep-before-sketch corrected the design twice:
+(1) `evidence_class` is *already taken* — it's the receipt-kernel's blob redaction/
+retention class (`PUBLIC`/`SEALED`), so the origin taxonomy must NOT reuse that name;
+(2) the constellation *already* has the origin field: `origin_mode` on each receipt's
+`evidence_bundle` (so it's already custody-bound via `evidence_hash`), with a closed
+vocabulary in `cooked_context_orchestrator.py` — `NQ_ORIGIN_MODES = {observed, drill,
+replay, synthetic}` + `AG_INTERNAL = {cli_origin, stub_origin}`. It was stamped and
+*rendered* (`why.py`) but **never fenced**. So the build was not a new field — it was
+the missing **closed-world admission predicate**: `operational_admission()` admits
+**iff `origin_mode ∈ {observed}`** (allowlist, per §3); everything else refuses by
+typed reason (`origin_not_operational` for recognized non-observed modes,
+`origin_unrecognized` for novel strings, `origin_missing` for absent; malformed type
+aborts). The offending mode rides in the result verbatim (a refused `replay` audits
+differently from a refused `drill`). Mandatory pinning test ships
+(`tests/test_origin_admission_fence.py`): novel string → refusal, no exceptions.
+Widening the operational set is a ratified event, never a default. **Remaining for
+D0:** wire `operational_admission()` into the operational-promotion call sites (the
+predicate exists and is tested; enforcement at the gates is the next slice).
 
 ---
 

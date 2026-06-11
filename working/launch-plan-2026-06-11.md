@@ -140,10 +140,21 @@ July summons NATO). A repo passes if:
 > receipts; same rule one layer up. **Ratchet:** new/touched public repo must put a
 > specimen before doctrine. (Could become a wicket-guard-shaped lint.)
 
-First target: **`verifier`** README — move a worked example to the top
-(`examples/stale-standing-denied.json` → named rule → denial naming the StaleFact +
-`golden/…verdict.json`). Verifier is NOT D0-critical and the Z3 idea, while liked,
-isn't needed for the demo — specimen + golden, no new scope.
+First target: **`verifier`** README — **DONE 2026-06-11** (`~/git/verifier` commit
+`0155f5c`): added a "30-second specimen" (the stale-standing denial) above the
+doctrine, `examples/stale-standing-denied.json` + golden, and `tests/test_examples.py`
+pinning the README's verdict to real tool output. Quickstart now produces a verdict,
+not just `pytest`. Verifier is NOT D0-critical and the Z3 idea, while liked, isn't
+needed for the demo — specimen + golden, no new scope.
+
+**TODO — sweep the rest of the public constellation READMEs for the same fix**
+(specimen-at-front before doctrine + a runnable command). One repo at a time, as I'm
+in them; same minimal shape as verifier (one worked example + golden/pin, no logic
+touched). Skip: papers, lean, atproto-nutrition (operator-fenced, no writes).
+Candidate order by launch-visibility: the repos that will be linked from the
+unpingable hub first. Lowest-glamour, but it's the ratchet that stops the operator's
+~1-severity-pessimistic self-grade from gating first contact (see
+`memory/feedback_specimen_at_front`).
 
 ## Limits page (not FAQ) + objection harness
 

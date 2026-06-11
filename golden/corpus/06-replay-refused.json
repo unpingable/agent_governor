@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "replay-refused",
+  "demo_role": "custody_refusal",
+  "description": "The chain consumes once, then a second consume with the same event id is attempted (an agent retry). LA returns AlreadyConsumed; the effect counter stays at 1. Exactly-once / linearity: spendability is spent exactly once.",
+  "input": {
+    "scenario": "replay-budget",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "refused",
+    "refusal_kind": "already_consumed",
+    "refusing_seam": "la_seam",
+    "effect_count": 1,
+    "consumed": false,
+    "operational": false,
+    "proposal_packet_present": false
+  }
+}

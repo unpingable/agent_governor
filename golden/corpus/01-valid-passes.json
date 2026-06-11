@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "valid-passes",
+  "demo_role": "valid_passes",
+  "description": "A legitimate action traverses the full gauntlet (standing -> wicket -> LA grant -> LA consume) and the chain mechanically consumes, emitting a proposal packet. Demo Act 1, half 1: a system that only says no is a brick.",
+  "input": {
+    "scenario": "all-green",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "consumed",
+    "refusal_kind": null,
+    "refusing_seam": null,
+    "effect_count": 1,
+    "consumed": true,
+    "operational": false,
+    "proposal_packet_present": true
+  }
+}

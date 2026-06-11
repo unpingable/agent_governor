@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "no-standing-refused",
+  "demo_role": "custody_refusal",
+  "description": "No standing receipt cited at all. The standing seam refuses before any downstream gate is invoked; zero effect. Observation does not mint authority.",
+  "input": {
+    "scenario": "no-standing",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "refused",
+    "refusal_kind": "standing_required",
+    "refusing_seam": "standing_seam",
+    "effect_count": 0,
+    "consumed": false,
+    "operational": false,
+    "proposal_packet_present": false
+  }
+}

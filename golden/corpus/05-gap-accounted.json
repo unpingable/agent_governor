@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "gap-accounted",
+  "demo_role": null,
+  "description": "An acknowledged admission gap. NOT a refusal: the chain proceeds and consumes, but the proposal packet carries the gap citation (produced_under_gap). The gap is accounted, not laundered into silence.",
+  "input": {
+    "scenario": "wicket-gap-accounted",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "gap_accounted",
+    "refusal_kind": "admission_gap_accounted",
+    "refusing_seam": "wicket_seam",
+    "effect_count": 1,
+    "consumed": true,
+    "operational": false,
+    "proposal_packet_present": true
+  }
+}

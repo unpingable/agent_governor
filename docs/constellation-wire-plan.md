@@ -153,11 +153,21 @@ sequence; this is just its wiring view). Order:
    unreachability*, not a flag. **Wall 2** (LA per-class unit matching →
    `unit_origin_mismatch`) is the arithmetic complement: *named, not built* —
    it is a cross-repo LA contract change (`working/candidate-la-unit-class-fence.md`).
-2. **Golden corpus** — demo trio (valid passes / credentialed-impostor refused /
-   temporal lapse) built as `input → verdict` pairs. Per
-   `memory/rust_kernel_port_ruling`: **the corpus is the kernel contract, not
-   the Python** — this is the socket-cut prep, done now because it serves
-   launch.
+2. **Golden corpus — DONE 2026-06-12 (with one flagged gap).** The decision
+   chain's `input → verdict` pairs are frozen in `golden/corpus/*.json` and
+   enforced by `tests/test_corpus_contract.py` (24 tests): the live chain must
+   reproduce each frozen verdict, drift breaks the test, updating a golden is a
+   deliberate act. Per `memory/rust_kernel_port_ruling` this — not the Python —
+   is the kernel contract (socket-cut prep). Seven cases: valid-passes, four
+   custody refusals, gap-accounted, and **synthetic-evidence-fenced** (the
+   just-shipped Wall 1, pinned corpus-wide: every simulated-origin case is
+   `operational=false`, even the ones that consume). **Flagged gap:** the demo's
+   designated hero specimen — the **two-clock temporal lapse** — does NOT exist
+   as a scenario yet (verified: no `clock_basis`/two-timestamp/gap fields in
+   `drill_runner`). The corpus labels the near-neighbor honestly
+   (`03-standing-unverifiable-refused` ≠ temporal lapse) rather than mislabel.
+   Building it is the next W1 slice (`working/candidate-temporal-lapse-specimen.md`):
+   new refusal kind + standing-seam receipt shape, so its own deliberate slice.
 3. **Refused-spend script + show surface** (extends `drill_poster` D0e
    scaffolding).
 4. **Proof seam** — receipt's theorem field → Lean class-boundary proof

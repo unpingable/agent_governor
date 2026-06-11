@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "admission-denied-refused",
+  "demo_role": "custody_refusal",
+  "description": "Standing verifies and wicket emits, but the LA seam's admission verifier rejects the cited admission receipt id (unverifiable admission basis). LA.request_capacity / LA.consume are never invoked. Standing != admissibility.",
+  "input": {
+    "scenario": "wicket-denied",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "refused",
+    "refusal_kind": "admission_denied",
+    "refusing_seam": "la_seam",
+    "effect_count": 0,
+    "consumed": false,
+    "operational": false,
+    "proposal_packet_present": false
+  }
+}

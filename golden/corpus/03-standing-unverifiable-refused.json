@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "standing-unverifiable-refused",
+  "demo_role": "custody_refusal",
+  "description": "A standing receipt id IS cited, but it does not verify (the digest resolves to no minted standing receipt). Refused at the standing seam, surfaced as standing_expired in the S4-lite layer. NOTE: this is the UNVERIFIABLE-standing refusal, NOT the two-clock temporal-lapse hero specimen (valid-when-observed, expired-in-the-gap) the launch plan designates -- that case carries standing_observed_at / spend_at / clock_basis / gap fields that no scenario produces yet. See golden/README.md.",
+  "input": {
+    "scenario": "standing-expired",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "refused",
+    "refusal_kind": "standing_expired",
+    "refusing_seam": "standing_seam",
+    "effect_count": 0,
+    "consumed": false,
+    "operational": false,
+    "proposal_packet_present": false
+  }
+}

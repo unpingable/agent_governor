@@ -1,0 +1,21 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "synthetic-evidence-fenced",
+  "demo_role": "synthetic_fenced",
+  "description": "The same all-green chain that mechanically consumes, but driven under origin_mode=synthetic instead of drill. The chain succeeds (structure demonstrated, proposal packet emitted) yet the outcome is NOT operational: a synthetic-origin consume is a DemonstratedConsumed that the spend wall (confer_operational_effect) refuses by type. The launch demo's 'synthetic evidence fenced' beat -- proof that running the public demo cannot mint spendable/operational receipts. The override-origin_mode key tells the harness to rebuild the all-green finding with this origin.",
+  "input": {
+    "scenario": "all-green",
+    "origin_mode": "drill",
+    "override_origin_mode": "synthetic",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "consumed",
+    "refusal_kind": null,
+    "refusing_seam": null,
+    "effect_count": 1,
+    "consumed": true,
+    "operational": false,
+    "proposal_packet_present": true
+  }
+}

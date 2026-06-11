@@ -130,9 +130,11 @@ archived) surfaced organs that are conspicuously absent or thin. **None is a
 build item.** Each is listed with its owner, one-way-door status, current partial
 coverage, and the forcing case that would license construction.
 
-Per grain-of-refusal: of the set, **retraction transport** and the
-**verdict/adjudication seam** are the two where a real refusal is *already*
-inexpressible today. The rest wait for their forcing cases.
+Per grain-of-refusal: **retraction transport**, the **verdict/adjudication seam**,
+and now **Notary** (the log-continuity spine) are the three where a real refusal is
+*already* inexpressible today. Notary has since **graduated** — its forcing case is
+found and it is becoming its own project (see §Notary below). The rest wait for their
+forcing cases.
 
 | Organ | Owner (candidate) | Forcing case to build | One-way risk | Partial coverage today |
 | ----- | ----------------- | --------------------- | ------------ | ---------------------- |
@@ -143,6 +145,7 @@ inexpressible today. The rest wait for their forcing cases.
 | **Restore-from-backup epochs** | continuity (cross-cutting) | a registry restore that time-travels an authority's ledger | high — silent rewind | none; no story for "the world rewound" |
 | **Schema / interface evolution** | cross-cutting (every `_v1`) | a `v1` receipt read by a `v3` consumer that silent-defaults a missing field | high — historical evidence base | `docs/VERSIONING.md`, `specs/gaps/CROSS_DOMAIN_SCHEMA_GAP.md` |
 | **Fleet control plane** | (deferred; deed-restricted) | more than one gate-bearing system needing coordinated config | high — super-authority | **already zoned** — see `endgame-synthesis` genesis-class rule |
+| **Notary / log-continuity spine** | new project (locker-adjacent, NOT NQ) | **FOUND** — "no error logged" can't distinguish sealed-silence / gap / rotation / index-fail / parser-loss / laundering | high — ingestion-as-admission | none; logs ungoverned. **Graduated → §Notary** |
 
 ### Notes per organ
 
@@ -495,6 +498,202 @@ grant records, LA unit records, and public APIs alike.
 
 ---
 
+## Notary — the log-continuity spine (forcing case found, 2026-06-11 appendix)
+
+The one organ on this page that has **graduated past the grain-of-refusal gate** —
+it has a real refusal current kinds cannot express, and the operator's verdict was
+"guess we're building notary." Owner: **a new project, not AG** (evidence-locker-
+adjacent; explicitly *not* NQ — see below). Recorded here because the constellation
+needs to know it exists and what it must never become.
+
+**The cut: alerts are item-shaped; logs are stream-shaped.** An alert is
+individually meaningful, individually signable, witnessed at emission, expects a
+consumer. A log is bulk, mostly noise, meaningful in aggregate or retrospect.
+Shoving logs into NQ as "many tiny alerts" blends two witness moments and two
+integrity primitives into one component — the exact bundling this project evicts
+everywhere else. So logs are **not an NQ witness kind; they are a new seam.**
+
+**A log line is first-person self-report** — a process narrating its own behavior is
+operator-attestation with worse grammar. Signed-is-not-witnessed applies in full.
+Logs therefore cannot enter the evidence plane as *observations*; they are *claims*.
+Treating ingestion as admission is the unifier quietly erasing the most foundational
+distinction. What's needed is a **promotion gate at the locker's edge**: self-reports
+arrive *diary-grade*, get typed, get timestamps re-based against a clock basis (log
+timestamps are host-local folklore — the temporal-authority hole wearing syslog
+clothes), and either get promoted by independent corroboration or stay diary-grade
+with that class visible in every downstream receipt. Two evidence classes, explicit
+bridges, no blending.
+
+**The integrity primitive flips.** Alerts get *item authenticity*; logs get
+*continuity* — hash-chained segments, periodic sealing checkpoints, sequence
+accounting. The payoff: **gaps become structurally visible.** A chain break or
+sequence hole is detectable absence — the coverage receipt falls out of the
+integrity primitive for free instead of being bolted on.
+
+**The load-bearing doctrine line: admission happens at sealing time, not reading
+time.** A log line read six months later is a past self-report whose custody was
+either established contemporaneously or wasn't. Custody cannot be retrofitted; later
+promotion of an unsealed line is laundering — a self-report from the past granted
+observation status by present need. So the component is **a continuity notary, not a
+log search system.** It holds custody over the *spine*, not the *corpus*.
+
+**The store is fungible; the custody lives in the skeleton.** Elastic / Loki / S3
+become untrusted bulk storage with a search engine attached — the role S3 plays in
+content-addressed systems. A query result is a *claim by the store* ("these lines
+existed, in this order, in segment S"), checkable by re-hashing against the seal.
+**The index is never the evidence; the sealed segment is.** Store-side ingest
+transformation (grok, field extraction, mapping coercion, silent truncation) makes
+the *indexed document* a derived post-seal artifact — verify against the raw segment,
+never the parsed representation. Vendor swap stops being a custody event: the spine
+doesn't move.
+
+**The automation rule is brutal and necessary:** *anything that acts on logs routes
+through promotion first, or the action receipt carries `basis: unwitnessed_self_report`
+in a font nobody can miss.* Log-triggered remediation (alert fires → files deleted)
+is the weakest evidence class in the stack directly triggering exercises — self-report
+converting straight to action, skipping the witness plane. Most ops automation in the
+wild fails this clause, which is exactly why incidents so often start with "the
+remediation made it worse."
+
+**The forcing-case refusal** (why this one graduated): *"no error logged"* currently
+cannot distinguish —
+
+```
+covered sealed silence   genuinely nothing happened, and we were watching
+missing segment          the stream had a hole
+rotated-away evidence    death rites — logs have been living them, badly
+index failure            the finding aid lied
+parser loss              the transform dropped it
+self-report laundering   a diary entry promoted by present need
+```
+
+Notary gives that refusal a body: `sealed-silent over declared stream/window`.
+
+**MVP zoning — tiny and mean.** Read append-only stream → segment by size/time →
+monotonic sequence numbers → hash each segment → chain to previous → emit seal
+receipt → detect rotation/truncation/gaps → checkpoint to the locker → optionally
+write the segment to dumb storage. **No parsing. No alerting. No search. No
+dashboard.** `promote` (line → verified claim) stays behind glass; that's where the
+gremlins live.
+
+Anti-scope-creep label (tape to monitor):
+
+> If it parses meaning, it is not Notary. If it searches, it is not Notary.
+> If it alerts, it is not Notary. If it acts, call a priest.
+
+Notary talks to NQ (NQ consumes seal receipts; witnesses host/process state around
+the sealer) but is a different organ: **NQ testifies about events; Notary notarizes
+continuity.** Two witness moments (alerts at emission, logs at *seal* time), two
+integrity primitives. Rotation means logs already ship with ungoverned deletion —
+Notary is also the first place the evidence-death-rites problem gets a body.
+
+---
+
+## Transport & state exchange — the one boring pipe
+
+The end-to-end argument (Saltzer et al., 1984) doing classical work: if WLP owns the
+custody semantics (idempotency keys, sequence accounting, receipt-of-receipt, dedupe,
+freshness), the transport is *allowed* to be garbage. Rabbit's at-least-once and
+Redis pub/sub's best-effort are different lies; WLP rides either by assuming the pipe
+lies and receipting accordingly.
+
+> **State crosses boundaries as claims, never as shared residence.**
+> **The broker may deliver bytes; it may not provide custody.**
+
+The trap hides in the word "exchange." State traveling as *claims* (snapshots with
+provenance, model age, sequence position) is WLP over any pipe. State living as a
+*shared mutable blob* both parties read and write is a free-standing bridge with a
+Redis key for a name — the implicit pool reintroduced one layer up. Cohabitation with
+no lease and a suspicious smell from the crawlspace.
+
+```
+Allowed:    WLP over Rabbit / Redis streams / files / HTTP / regrettable shell scripts
+Forbidden:  shared Redis key as truth
+            shared DB table as implicit bridge
+            broker offset treated as receipt
+            queue ack treated as exercise completion
+```
+
+This is the one component permitted to be boring *and* disposable. Finally something
+not demanding a constitution, a blood oath, and a small notarized skull.
+
+---
+
+## Reflex plane — near-real-time as composition, not a new organ
+
+The wildcard (DDoS mitigation; robotics) that the constellation answered *without
+minting an organ* — which is the load-bearing test passing, not the frontier closing.
+
+> **Fast systems don't make fast decisions; they execute slow decisions quickly.**
+
+A 200ms null-route wasn't decided in 200ms — the decision was staged earlier as a
+conditional (*if pattern P, action A, within scope S, until expiry T*). All the
+expensive custody (standing observation, verdict, capacity commit) happens at *arm
+time* on the deliberative plane with the full gauntlet. Runtime is reflex:
+pattern-match, exercise, done. The spinal-cord model — the body doesn't consult the
+brain about hot stoves, but the reflex is scoped, bounded, and the brain is told
+afterward. Adjudication moves to design-time; the runtime path carries no judgment,
+only execution of pre-rendered judgment.
+
+```
+arm slowly → act quickly → confess promptly → expire automatically → escalate on exhaustion
+```
+
+It assembles from parts that already exist:
+
+```
+Standing            who may arm the reflex, over what scope
+Verdict             which (condition, action) pair is pre-approved
+Linear Accountant   reflex budget — capacity is the leash on autonomy; exhaustion halts it
+Expiry              each fast-path effect is a lease that auto-reverts unless ratified (default-revert)
+Absence / coverage  every exercise must confess on deadline; a missing receipt IS the alarm
+Freeze              disarms the reflex plane (mode: disarmed); it does not queue
+```
+
+Linearity hands you **bounded blast radius for free** — the reflex literally cannot
+run away, because it runs out. Default-revert means the fast path's failure mode is
+"stopped doing the thing," not "kept doing it forever because nobody was watching" —
+for DDoS specifically, the difference between a hiccup and a self-inflicted outage
+(overblocking legit traffic is how mitigation *becomes* the attack). This is the
+aerospace **Simplex / runtime-assurance** architecture: an unverified performant
+controller wrapped by a small verified safety envelope — you verify the *box*, not
+the decisions, and the box was built with full custody at leisure. Toddler with
+scissors, but the scissors are foam and the room is padded.
+
+Receipt + refusal shapes (for the file, not a spec):
+
+```
+reflex_exercise_v1: reflex_rule_ref, armed_at, arm_receipt_ref, trigger_observed_at,
+  action_exercised_at, budget_unit_spent, revert_deadline, confession_deadline,
+  actual_confession_at, outcome_ref
+refusals: reflex_disarmed | reflex_budget_exhausted | reflex_rule_expired |
+  trigger_unpromoted | confession_deadline_missed | revert_deadline_missed
+```
+
+No component needed yet — but when the forcing case shows up, the constellation
+already speaks the dialect.
+
+---
+
+## The instrument turn
+
+A framing shift worth marking. Most of this page reads doctrine-shaped because the
+apparatus is still being zoned. **An instrument doesn't argue — it shows you.** Not
+"better policy," not "safer automation," not "AI governance" — but: *here, this claim
+was observed; this conversion was attempted; this refusal preserved the seam; this
+gap was unbounded; this authority was fiat; this standing was stale; this capacity
+was tainted; this version bridge dropped a field.* You stop saying "systems silently
+convert claims" and start saying "this one did, at 03:17, and the receipt says the
+consumer accepted a stale standing observation with no clock basis and a grant-time
+chain assumption mislabeled as exercise-time validation." Once instrument-grade, the
+philosophy stops sounding like philosophy and starts sounding like **incident review
+with better nouns** — a cockpit that catches a tasteful lie normal tooling would
+flatten into green.
+
+> **The apparatus exists so that refusals are expressible and conversions are visible.**
+
+---
+
 ## The two gravity centers
 
 The loud pattern across every organ and component: each one secretly bottoms out
@@ -541,6 +740,13 @@ Schema evolution already has partial homes (`docs/VERSIONING.md`,
 `specs/gaps/CROSS_DOMAIN_SCHEMA_GAP.md`); fleet control is already zoned by the
 genesis-class rule. Neither needs a new reserved name.
 
+**Notary** is *not* a reserved AG gap name — it graduated to its own project
+candidate (locker-adjacent, not AG-owned; see §Notary). The **reflex plane** and
+**transport / state-exchange** are zoning sections, not reserved names: reflex
+composes from existing parts (Standing/Verdict/LA/Expiry/Absence/Freeze) and earns a
+component only on a forcing case; transport is permitted to stay dumb plumbing under
+WLP custody.
+
 ## Disposition
 
 1. **No build.** Nothing here is authorized. Every organ gates on a forcing case.
@@ -549,14 +755,27 @@ genesis-class rule. Neither needs a new reserved name.
    construction — should first get a non-relay adversarial pass (operator review,
    or `codex-exec` framed to refute, grounded in `file:line`). The internal
    Fable-vs-ChatGPT pass does not discharge this.
-3. **Watch the two refusal-already-inexpressible organs.** Retraction transport
-   and the verdict seam are the two where current gates cannot express a refusal
-   they should. If a concrete specimen appears in this repo, those graduate from
-   reserved-name to filed-spec first.
+3. **Watch the refusal-already-inexpressible organs.** Retraction transport and the
+   verdict seam are where current gates cannot express a refusal they should;
+   **Notary** was the third and has now graduated to a project. If a concrete
+   specimen appears in this repo, the remaining two graduate from reserved-name to
+   filed-spec first.
 4. **Ownership stays put.** AG records; NQ owns witness grammar, `~/git/standing`
-   owns standing semantics, `~/git/linearaccountant` owns capacity internals. AG
-   may not unilaterally rename or ratify those surfaces (cf. constellation
-   constraint: local grammar > shared vocabulary).
+   owns standing semantics, `~/git/linearaccountant` owns capacity internals,
+   Notary is its own (not-yet-built) project. AG may not unilaterally rename or
+   ratify those surfaces (cf. constellation constraint: local grammar > shared
+   vocabulary).
+5. **Confound on record — witness competence has a live downstream consumer.** The
+   operator started `~/git/nq-root/nq-security-witness` and *then* made the
+   witness-competence decisions captured in §Witness competence (attention isn't
+   testimony; operator-attestation is claim-plane; divergence attests shape not
+   independence; absence needs coverage). So that section is **not purely
+   deferred** — it reshapes an already-built NQ component. "Not wasted work,
+   changes the shape." NQ-side concern; AG only records the pointer.
+6. **More canon pending.** This appendix (Notary / transport / reflex / instrument)
+   is the operator's *first pass*; a second pass follows once this is in, and the
+   operator flagged a possible third confound still to be dug up. Treat this file
+   as open for at least one more appendix.
 
 ---
 
@@ -597,8 +816,9 @@ Filed gaps that already obligate corollaries named above:
 - `specs/gaps/CROSS_DOMAIN_SCHEMA_GAP.md`, `docs/VERSIONING.md`,
   `docs/HISTORY_BOUNDARY.md` — partial homes for schema/retention organs.
 
-Memory pointers: `linearaccountant_repo.md`, `standing_integration.md`,
-`phase_witness_mapping.md`, `constellation_constraint.md`,
+Memory pointers: `notary_log_continuity.md` (new — the §Notary project candidate),
+`linearaccountant_repo.md`, `standing_integration.md`, `wlp_protocol.md` (transport
+custody owner), `phase_witness_mapping.md`, `constellation_constraint.md`,
 `continuity_governor_split.md`.
 
 ---

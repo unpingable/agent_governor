@@ -451,6 +451,160 @@ Recorded because it reframes the relay caveat correctly:
 
 ---
 
+## Second-round excavation (2026-06-11 appendix — Notary / transport / reflex / instrument)
+
+The operator's "first pass" appendix to endgame. The recap front-matter is already
+captured above; these are the genuinely-new bones. (A second pass follows; a third
+confound may still surface.)
+
+### Throughline extension
+
+The instrument turn is the same throughline arriving at its destination: once the
+apparatus is instrument-grade, the doctrine stops *arguing* and starts *showing*.
+
+> **The apparatus exists so that refusals are expressible and conversions are visible.**
+> Once instrument-grade, it stops sounding like philosophy and starts sounding like
+> **incident review with better nouns** — which, annoyingly, may be the whole genre.
+
+The new domains (logs, transport, real-time) each got answered by the *same* move:
+find the silent conversion, name it, make it refuse. Logs: self-report → observation.
+Transport: claim-exchange → shared residence. Real-time: don't make the apparatus
+faster, pre-position the authority. None minted a new primitive except Notary, and
+Notary only because it had a refusal nothing else could speak.
+
+### Keeper phrases (new)
+
+- *Fast systems don't make fast decisions; they execute slow decisions quickly.*
+- *Log admission happens at sealing time, not reading time.* (custody cannot be
+  retrofitted; later promotion of an unsealed line is laundering)
+- *The index is never the evidence; the sealed segment is.*
+- *State crosses boundaries as claims, never as shared residence.*
+- *The broker may deliver bytes; it may not provide custody.*
+- *NQ testifies about events; Notary notarizes continuity.*
+- *Capacity is the leash on autonomy* — the reflex can't run away because it runs out.
+- *You verify the box, not the decisions* (Simplex / runtime assurance).
+- *An instrument doesn't argue — it shows you.*
+
+Funny-but-load-bearing (new):
+
+- *Congratulations. You invented a log system by refusing to build a log system.*
+- *Toddler with scissors, but the scissors are foam and the room is padded* — the reflex envelope
+- *Gravity is a demanding product manager* — why aerospace got to runtime-assurance first
+- *Cohabitation with no lease and a suspicious smell from the crawlspace* — shared mutable Redis state
+- *Tiny little bureaucrat with a hash chain and no dreams* — Notary's scope
+- *Finally, one thing not demanding a constitution, a blood oath, and a small notarized skull* — the transport pipe
+- *If it acts, call a priest* — the last line of Notary's anti-scope-creep label
+- *Vibes with JSON* — trusting a parsed Elastic field as evidence
+
+### Ugly state names / fields (new — keep spiky)
+
+```
+basis: unwitnessed_self_report     # the action receipt for log-triggered automation that skipped promotion
+custody_class: diary_grade          # logs before promotion; the lower evidence class
+sealed-silent over stream/window    # the honest "no error logged" — bounded, not global
+promotion_status: not_promoted
+coverage_basis: declared_not_enforced ; side_paths_possible: true   # (shared with LA reconciliation)
+# reflex plane:
+reflex_disarmed | reflex_budget_exhausted | reflex_rule_expired
+trigger_unpromoted | confession_deadline_missed | revert_deadline_missed
+mode: disarmed                      # frozen reflex plane refuses; does not queue
+# notary segment skeleton (the custody object — NOT the corpus):
+segment_id, producer_id, stream_id, first_seq, last_seq, prev_segment_hash,
+segment_hash, sealed_at, clock_basis, line_count, byte_count, gap_state, storage_uri
+```
+
+### Anti-smoothing pairs (new)
+
+```
+bad:    no error logged → therefore nothing happened
+better: segment S covered stream X T1..T2, seq N..M continuous, sealed at T3,
+        no match in verified segment bytes → sealed-silent over declared window
+
+bad:    Elastic field says user_id=123, therefore evidence
+better: query index → retrieve raw segment → verify hash + chain → extract original
+        bytes → then promote the line as claim evidence (index is a finding aid)
+
+bad:    log says disk full → remediation deletes files
+better: action receipt carries basis: unwitnessed_self_report, custody_class:
+        diary_grade, promotion_status: not_promoted (or route through promotion first)
+
+bad:    two systems share a Redis key ("exchange")
+better: WLP claims over Redis-as-transport (the pipe may lie; the endpoints receipt)
+
+bad:    queue ack = the exercise completed
+better: ack is delivery, not custody; completion is its own receipt
+
+bad:    make the apparatus fast enough for real-time
+better: arm slowly (full custody), act quickly (reflex), confess on deadline,
+        expire by default, escalate on budget exhaustion
+```
+
+### Rejected / tempting-wrong designs (new catches)
+
+- **"Give logs to NQ as many tiny alerts."** Refused: blends two witness moments
+  (alert-at-emission vs log-at-seal) and two integrity primitives (item authenticity
+  vs continuity) into one component. The operator's hesitation to hand it to NQ was
+  the right call. (Operator caught it; Fable confirmed the shape.)
+- **"log-witness as a new witness kind."** Refused: it's not a witness kind, it's a
+  new *seam* — a promotion gate at the locker's edge. The atoms are all existing NQ
+  competences (temporal_order, absence_in_window, identity_binding); only the
+  boundary is new.
+- **"Trust the parsed/indexed document."** Refused: grok/field-extraction/coercion/
+  truncation make the indexed doc a derived post-seal artifact. Verify raw segment.
+- **"Redis as shared mutable state."** Refused: the implicit pool reintroduced one
+  layer up — a free-standing bridge with a Redis key for a name. Redis-as-transport
+  is fine; Redis-as-shared-memory is the custody basement.
+- **"FastWicket™ / make adjudication fast."** Refused: you don't make the apparatus
+  faster, you pre-position the authority. Adjudication moves to design-time; runtime
+  carries no judgment, only execution of pre-rendered judgment. The constellation
+  answered the real-time wildcard *compositionally* — no new organ. That's the
+  load-bearing test passing.
+- **Standing lease for the reflex** (the 2am temptation, again): a lease is still a
+  standing-shaped object with its own lapse. The reflex's leash is *capacity
+  exhaustion + default-revert expiry*, not a frozen standing token.
+
+### Per-organ excavation (new)
+
+**Notary.** The store-side transformation goblin is the place to be rudest to
+Elastic: parsed fields, indexed documents, labels, coerced/truncated values are all
+derived artifacts post-seal. Loki maps cleaner (stores the raw line with labels
+bolted on; its chunk model rhymes with segments) but the zoning reg is one line
+either way: *the index is never the evidence; the sealed segment is.* The elegant
+bonus: gaps become **detectable absence** that falls out of the chain integrity for
+free, instead of a bolted-on coverage claim. And the retrospective trap: a log sits
+inert for months then gets promoted to evidence in an incident review — if the
+segment wasn't sealed contemporaneously, that promotion is laundering. *Admission at
+sealing time, not reading time.* Custody over the spine, not the corpus; the bulk
+stays in cheap swappable storage where it belongs.
+
+**Transport.** The end-to-end argument (Saltzer 1984) is the whole justification:
+custody at the endpoints (WLP), the pipe allowed to lie. Rabbit at-least-once and
+Redis best-effort are *different lies*; WLP is indifferent to which it rides. The one
+hand to keep on the wheel: "exchange" hides two custody classes — claim-travel
+(fine) vs shared-residence (the pool again). The reward for getting it right: vendor
+swap stops being a custody event; the broker is plumbing.
+
+**Reflex.** The composition is almost smug: Standing pre-grants, LA bounds blast
+radius (capacity = leash), Expiry auto-reverts (default-revert: failure mode is
+"stopped," not "ran forever"), Absence-witnesses police the confessions (missing
+receipt = the alarm), Freeze disarms (mode: disarmed, no queue). DDoS is the perfect
+specimen because overblocking legit traffic is how mitigation *becomes* the attack —
+default-revert is the difference between a hiccup and a self-inflicted outage.
+Aerospace got here first (Simplex/runtime-assurance) because gravity is a demanding
+product manager: verify the envelope, not the controller's wisdom.
+
+### Confounds on record
+
+1. **Witness competence has a live downstream consumer.** `~/git/nq-root/nq-security-witness`
+   was started and *then* these witness-competence decisions landed — so that doctrine
+   reshapes an already-built component. Operator's read: "not wasted work, changes the
+   shape." NQ-side; AG records the pointer only.
+2. **This is the first pass.** A second appendix follows once this is in; a possible
+   third confound is still to be dug up. The placard and this file are open for at
+   least one more round.
+
+---
+
 ## Pointer
 
 Placard: `docs/constellation-zoning.md` (curated map, navigable, also PROVISIONAL).

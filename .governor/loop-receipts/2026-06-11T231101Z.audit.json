@@ -1,0 +1,67 @@
+{
+  "kind": "audit",
+  "cold_start": true,
+  "ts": "2026-06-11T23:11:01Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "audited_commit": "0ddcf82efb666fa720a884e59d73c9aaf358cace",
+  "probes_executed_live": true,
+  "state_conformance": {
+    "loop_json": "parses; phase=AUDIT, current_slice=null, candidate quarantined",
+    "head_vs_last_verified": "match (0ddcf82)",
+    "git_log_5": [
+      "0ddcf82 fix(standing): re-mint v0.3.0/v0.4.0 validator attestations after doc rename",
+      "1a0e6a5 feat(clock-witness): monotonic gap basis for the temporal-lapse seam",
+      "68e8be8 docs(zoning): clock-witness build spec + LA failure_class/exhaustion-refusal templates",
+      "6f42fee feat(proof-seam): refusal class → verified Lean class-boundary theorem (W1 item 4)",
+      "4aebf6d docs(zoning): notary-seal-v0 build chisel + nq-witness rule + the reflexivity fix"
+    ],
+    "dirty_tree_scoped": "?? docs/loop-protocol.md (this restart's own artifact, mid-commit); otherwise clean in src tests docs golden demo",
+    "tests_corpus_clock": "45 passed, 8 skipped (test_corpus_contract.py + test_clock_witness.py)"
+  },
+  "plan_conformance": {
+    "handoff_seed_adjudication": {
+      "claim": "handoff §4 seeded DISPATCH/temporal-lapse-hero-specimen",
+      "finding": "STALE — hero specimen + clock witness landed before this restart",
+      "evidence": [
+        "commits 5eb6dee (gate) 24fdb5e (corpus) 0b35c20 (demo surface) 6f42fee (proof seam) 68e8be8 (clock spec) 1a0e6a5 (monotonic migration) 0ddcf82 (attestation re-mint)",
+        "golden/corpus/08-temporal-lapse-refused.json + 09-temporal-lapse-twin-passes.json frozen"
+      ]
+    },
+    "w1_item3_existence": {
+      "suspected": "open per a pre-compaction status table",
+      "finding": "REFUTED by live probe — demo/refused-spend.sh + src/governor/demo_refused_spend.py exist; tests green",
+      "evidence": "ls OK; 17 passed (test_demo_refused_spend + test_proof_seam); commit 0b35c20"
+    },
+    "w1_item4_existence": {
+      "finding": "exists and wired — src/governor/proof_seam.py; render_proof_seam referenced 2x in demo surface",
+      "evidence": "commit 6f42fee; grep -c render_proof_seam demo_refused_spend.py = 2"
+    },
+    "w1_item4_acceptance": {
+      "finding": "OPEN — named deviation, not a pass. Acceptance is 'refusal class maps to the Lean theorem that actually licenses it', and a known doubt is on file: the hero's gap predicate runs on MONOTONIC readings while the cited Freshness.expired_not_fresh is wall-validity-shaped (now ≤ expires+skew). Cargo (8 tests) does not retire the doubt.",
+      "evidence": "working/clock-witness-spec.md open question; backlog proof-seam-citation-reconciliation",
+      "disposition": "operator-ratified at plan review: resolve ahead of the OPA shim, as the gate on declaring item 4 done"
+    },
+    "act_two_location": {
+      "question": "where does Act 2 (interrogate the receipts) live?",
+      "finding": "machinery exists in AG, runnable demo beat UNBUILT. governor why (src/governor/why.py) walks a receipt chain with refusal_kind/origin_mode handling; governor receipts --id --evidence shows receipt + evidence bundle; receipt_kernel store is SQLite (SQL-queryable). But no stranger-runnable Act-2 artifact interrogates the frozen hero incident, and launch-plan §Act-2 names the SQL beat 'NQ's party trick' (cross-repo seam). Not claimed by any W1 item.",
+      "evidence": "launch-plan-2026-06-11.md:38-41; why.py imports OK; no demo/interrogate* artifact",
+      "disposition": "admitted as tier-1 spec_slice (act-two-receipt-interrogation) — doctrine paragraph without acceptance criteria cannot enter as build_slice (§8 admission)"
+    },
+    "candidate_next_slice_adjudication": {
+      "candidate": "OPA contrast shim",
+      "finding": "NOT blessed. Selection rule branch 2 applies (item 4 open in the acceptance sense) → current_slice = proof-seam-citation-reconciliation; shim queued immediately after."
+    }
+  },
+  "obligation_conformance": {
+    "corpus_closed_world": "green (test_corpus_covers_every_supported_scenario in the 45-pass run)",
+    "pinning_negative_tests": "present and green (clock-witness incompatible-basis refusals; corpus missing-gap_basis negative)",
+    "receipts_committed": "clock-witness slice 1a0e6a5; validator attestation re-mint 0ddcf82 (custody-scoped, separate commit)"
+  },
+  "outcome": "deviations_named",
+  "deviations": [
+    "w1-item4-acceptance-open: citation reconciliation gates item-4 done; resolve before shim (ratified disposition)",
+    "act-two-unbuilt-in-AG: machinery present, demo beat unclaimed; admitted as tier-1 spec_slice"
+  ],
+  "halt": false,
+  "next": "PLAN selects proof-seam-citation-reconciliation per W1 ratified order (item-4 acceptance precedes item 5)"
+}

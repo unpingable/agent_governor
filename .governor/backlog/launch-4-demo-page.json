@@ -1,0 +1,10 @@
+{
+  "id": "launch-4-demo-page",
+  "repo": "unpingable.com (site)",
+  "kind": "spec_slice",
+  "spec_ref": "working/launch-plan-2026-06-11.md item 4 (demo page + OPA contrast diagram + Limits page)",
+  "priority_tier": 1,
+  "status": "queued",
+  "acceptance": "Output: gap spec with acceptance criteria. Depends on w1-5-opa-contrast-shim for the contrast diagram's substance.",
+  "note": null
+}

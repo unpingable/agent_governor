@@ -1,0 +1,10 @@
+{
+  "id": "doc-sweep-attestation-regen-tripwire",
+  "repo": "agent_gov",
+  "kind": "spec_slice",
+  "spec_ref": "commit 0ddcf82 message (the scar: chatty→ChatGPT sweep 86afb12 drifted validator-v0_3_0/v0_4_0 declaration hashes; attestations stale 3+ weeks, invisible to the pre-commit gate)",
+  "priority_tier": 5,
+  "status": "filed",
+  "acceptance": "Output: gap spec for a tripwire — doc edits under docs/doctrine/decisions/*.md must trigger an attestation-binding check (candidate: pre-commit hook comparing declaration content-hashes against _validations/ targets). Scar is evidence; the failure class is named.",
+  "note": "Tidiness tier — the regen script exists and the validator fails closed correctly; this only shortens detection latency."
+}

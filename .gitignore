@@ -25,7 +25,13 @@ venv/
 *.swp
 
 # Project
-.governor/
+# .governor runtime state stays ignored, but the orchestration-loop program
+# counter + its custody trail live in git (loop-protocol: "the program counter
+# is in git"). Negations require the parent not be fully excluded, hence /*.
+.governor/*
+!.governor/loop.json
+!.governor/loop-receipts/
+!.governor/backlog/
 baselines/
 *.tar.gz
 

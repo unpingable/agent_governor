@@ -1,0 +1,11 @@
+{
+  "id": "wall-2-la-unit-class-fence",
+  "repo": "linearaccountant + agent_gov (cross-repo contract change)",
+  "kind": "spec_slice",
+  "spec_ref": "working/candidate-la-unit-class-fence.md",
+  "forcing_case": "unfiled — named at Wall-1 wiring; promotes with the LA seam in W2",
+  "priority_tier": 2,
+  "status": "filed",
+  "acceptance": "LA per-class unit matching → unit_origin_mismatch refusal; the arithmetic complement to the Wall-1 type split.",
+  "note": "DO NOT START before W2. Candidate, non-binding."
+}

@@ -1,0 +1,11 @@
+{
+  "id": "la-ledger-templates",
+  "repo": "linearaccountant",
+  "kind": "spec_slice",
+  "spec_ref": "docs/constellation-zoning.md §LA ledger-kind / failure_class templates (commits ce423ce, 68e8be8)",
+  "forcing_case": "unfiled — default/template ledgers land when LA's first real consumer spend path appears",
+  "priority_tier": 2,
+  "status": "filed",
+  "acceptance": "failure_class: exhaustion | refusal public schema; metabolic/juridical internal register; dual-failure stays dual; clocks are NOT LA.",
+  "note": "DO NOT START (handoff §5 / W1 brake)."
+}

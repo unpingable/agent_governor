@@ -1,0 +1,10 @@
+{
+  "id": "launch-3-hub-structural",
+  "repo": "unpingable.com (site) + agent_gov (topology source)",
+  "kind": "spec_slice",
+  "spec_ref": "working/launch-plan-2026-06-11.md item 3 ('hub dumb but structurally right: thesis ¶ + topology map with stubs')",
+  "priority_tier": 1,
+  "status": "queued",
+  "acceptance": "Output: gap spec with acceptance criteria (a phrase is not acceptance). Launch-order item 3.",
+  "note": null
+}

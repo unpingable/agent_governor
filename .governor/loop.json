@@ -1,0 +1,25 @@
+{
+  "phase": "DISPATCH",
+  "current_slice": "proof-seam-citation-reconciliation",
+  "candidate_next_slice": "w1-5-opa-contrast-shim (adjudicated by audit 2026-06-11T231101Z: queued, not blessed)",
+  "slice_spec": [
+    ".governor/backlog/proof-seam-citation-reconciliation.json",
+    "working/clock-witness-spec.md"
+  ],
+  "acceptance": "see backlog item: adjudicate expired_not_fresh's time model vs the monotonic-gap class; metadata-only patch; honest marking or HALT — never a borrowed citation",
+  "blocked_on": "nothing",
+  "next_action": "read ~/git/lean/LeanProofs/Admissibility/Freshness.lean (theorem + time model), adjudicate, patch proof_seam.py metadata + tests, exit by receipt",
+  "last_verified_commit": "0ddcf82efb666fa720a884e59d73c9aaf358cace",
+  "last_updated": "2026-06-11T23:11:04Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "wip_limit": 1,
+  "dirty_tree_allowed": false,
+  "dirty_tree_scope": ["src", "tests", "docs", "golden", "demo"],
+  "re_entry_probes": [
+    "cat .governor/loop.json",
+    "git log --oneline -5",
+    "git status --short -- src tests docs golden demo",
+    "python3 -m pytest tests/test_proof_seam.py tests/test_corpus_contract.py -q",
+    "grep -n 'expired_not_fresh' src/governor/proof_seam.py  # slice probe: citation metadata under adjudication"
+  ]
+}

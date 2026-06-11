@@ -1,0 +1,16 @@
+{
+  "kind": "dispatch",
+  "ts": "2026-06-11T23:11:03Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "slice": "proof-seam-citation-reconciliation",
+  "worker": "master (in-session; adjudication slice, requires Lean source read + metadata-only patch)",
+  "spec_refs": [
+    "working/clock-witness-spec.md (open question: gap boundary vs freshness boundary citation)",
+    ".governor/backlog/proof-seam-citation-reconciliation.json (acceptance)"
+  ],
+  "constraints": [
+    "metadata-only patch to proof_seam.py (statement/proves/match_strength/framing); code paths unchanged",
+    "if resolution requires a different or nonexistent theorem: NO_KERNEL_THEOREM honest marking or HALT to operator — never a borrowed citation",
+    "Lean citation tiers hold: only [1.0] PUBLIC-SHIPPED ratifies"
+  ]
+}

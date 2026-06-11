@@ -1,0 +1,10 @@
+{
+  "id": "launch-5-readme-ratchet",
+  "repo": "public constellation repos (verifier DONE 2026-06-11; rest pending)",
+  "kind": "build_slice",
+  "spec_ref": "working/launch-plan-2026-06-11.md §README specimen gate v0 (explicit criteria: specimen/quickstart before first H2; one user-facing command that runs it)",
+  "priority_tier": 1,
+  "status": "queued",
+  "acceptance": "Each public repo README passes the specimen gate v0: example/quickstart/specimen/30-second-run section BEFORE the first doctrine H2; one command that runs it (user-facing, not pytest). The README's specimen is the repo's receipt. Template: ~/git/verifier README (done).",
+  "note": "Launch-order item 5."
+}

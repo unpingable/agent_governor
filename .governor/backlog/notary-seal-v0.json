@@ -1,0 +1,11 @@
+{
+  "id": "notary-seal-v0",
+  "repo": "notary (NEW constellation project — not yet created; NOT AG, NOT NQ)",
+  "kind": "spec_slice",
+  "spec_ref": "docs/constellation-zoning.md §Notary (notary-seal-v0 build chisel, commit 4aebf6d)",
+  "forcing_case": "unfiled — log-continuity spine; graduates when log-triggered automation needs basis: unwitnessed_self_report",
+  "priority_tier": 2,
+  "status": "filed",
+  "acceptance": "Per the zoning chisel: hash-chained segments, admission-at-seal-time, index-is-never-the-evidence.",
+  "note": "DO NOT START (handoff §5 / W1 brake). Filed for recognition, not authorization."
+}

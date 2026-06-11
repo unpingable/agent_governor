@@ -1,0 +1,11 @@
+{
+  "kind": "plan",
+  "ts": "2026-06-11T23:11:02Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "selected_slice": "proof-seam-citation-reconciliation",
+  "selected_from": "ratified backlog (.governor/backlog/), priority tier 1: W1 items in ratified order — item-4 acceptance gate precedes item 5",
+  "selection_rule_branch": "2 (proof seam open in the acceptance sense)",
+  "queued_next": "w1-5-opa-contrast-shim",
+  "not_selected_note": "candidate_next_slice 'OPA contrast shim' adjudicated by audit 2026-06-11T231101Z — queued, not blessed",
+  "basis_receipts": [".governor/loop-receipts/2026-06-11T231101Z.audit.json"]
+}

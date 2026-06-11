@@ -71,6 +71,24 @@ ever regenerated:
 - **CONFIRMED-open** = the genuine live backlog. Grooming/prioritizing those is a separate
   effort (NOT done here — that would be the "fix everything" overreach).
 
+## Disposition (operator-ratified 2026-06-10)
+
+This pass **decontaminated the instrument**; it did not groom the backlog. What to do
+with each bucket:
+
+- **STALE-shipped (~40) → `status-doc-sweep-candidate`. Walk away.** Janitorial gravity.
+  Do NOT sweep the status docs now — feature-history is source of truth and the code is
+  shipped. Touch one only if a stale status blocks a consumer / README / release path.
+- **WRONG (20) → regression exhibits, not chores.** They are evidence of the inventory
+  generator's failure modes (the five classes above). Keep for calibrating the next
+  generator; no repo action.
+- **NEEDS-HUMAN (4) → the only judgment surface.** `GOV_GAP_CONTEXT_MANIFEST`,
+  `GOV_GAP_FRONT_DOOR`, `GOV_GAP_NLAI_GATE`, atproto `facts-export-snapshot-001`.
+- **CONFIRMED-open (~140) → the genuine backlog.** Mostly v3-deferred / candidate /
+  containment-vessel (recognition records, not active blockers). The next artifact is the
+  **dependency skeleton** (which open gap blocks which) — sparse-allowed, real-artifact
+  edges only, unknown→NEEDS-HUMAN. NOT done here.
+
 ## Method notes / caveats
 
 - Read-only; no repo files were modified by this pass.

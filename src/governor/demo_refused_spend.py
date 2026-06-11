@@ -50,6 +50,7 @@ from governor.drill_runner import (
     DrillRunResult,
     run_drill,
 )
+from governor.proof_seam import cite, render_proof_seam
 
 # Provisional framing copy (operator-ratifiable — NOT micro-frozen).
 HEADER = "Agent Governor — A Stale Yes"
@@ -258,6 +259,17 @@ def render_surface(agg: RefusedSpendAggregate) -> str:
         if not ok and detail:
             out.append(f"      detail: {detail}")
     out.append("")
+
+    # Act 3 — necessity. The refusal is not a discretionary policy denial; it is
+    # the refusal the kernel licenses. The theorem proves the CLASS; the receipt
+    # above proves the INSTANCE; this citation is the link (derived from the
+    # receipt's refusal_kind, not stored on it).
+    out.append(DIVIDER_RULE * 70)
+    out.append("  Necessity (why this refusal is required, not chosen)")
+    out.append(DIVIDER_RULE * 70)
+    if imp is not None and imp.refusal_kind:
+        out.extend(render_proof_seam(imp.refusal_kind))
+    out.append("")
     return "\n".join(out) + "\n"
 
 
@@ -276,11 +288,29 @@ def build_json_envelope(agg: RefusedSpendAggregate, surface: str) -> dict[str, A
             "spendability_block": res.spendability_block,
         }
 
+    imp = agg.impostor
+    ref = cite(imp.refusal_kind) if imp and imp.refusal_kind else None
+    proof_seam = (
+        {
+            "refusal_kind": imp.refusal_kind,
+            "lean_module": ref.lean_module,
+            "theorem_name": ref.theorem_name,
+            "location": ref.location,
+            "custody_class": ref.custody_class,
+            "statement": ref.statement,
+            "proves": ref.proves,
+            "match_strength": ref.match_strength,
+            "is_load_bearing": ref.is_load_bearing,
+        }
+        if ref is not None
+        else None
+    )
     return {
         "surface": surface,
         "aggregate_ok": agg.aggregate_ok,
         "twin": proj(agg.twin),
         "impostor": proj(agg.impostor),
+        "proof_seam": proof_seam,
         "assertions": [
             {"label": label, "ok": ok, "detail": detail}
             for label, ok, detail in agg.assertions

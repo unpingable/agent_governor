@@ -89,6 +89,17 @@ def test_surface_is_deterministic(tmp_path: Path):
     assert a == b
 
 
+def test_surface_has_act3_proof_seam(tmp_path: Path):
+    # Act 3 — necessity: the verified theorem citation with honest framing.
+    surface = render_surface(run_contrast(root=tmp_path, now=0))
+    assert "Necessity" in surface
+    assert "expired_not_fresh" in surface
+    assert "[1.0 PUBLIC-SHIPPED]" in surface
+    assert "Post-validated ≠ pre-authorized" in surface
+    # The class-not-instance disclaimer must be on the surface.
+    assert "does NOT assert that any deployed system is safe" in surface
+
+
 def test_json_envelope_shape(tmp_path: Path):
     agg = run_contrast(root=tmp_path, now=0)
     env = build_json_envelope(agg, render_surface(agg))
@@ -97,3 +108,8 @@ def test_json_envelope_shape(tmp_path: Path):
     assert env["impostor"]["spendability_block"]["gap"] == 1
     assert env["twin"]["outcome"] == "consumed"
     assert isinstance(env["assertions"], list) and env["assertions"]
+    # The proof seam is machine-readable too, and load-bearing.
+    ps = env["proof_seam"]
+    assert ps["theorem_name"] == "expired_not_fresh"
+    assert ps["custody_class"] == "PUBLIC-SHIPPED"
+    assert ps["is_load_bearing"] is True

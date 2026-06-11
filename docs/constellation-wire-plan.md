@@ -196,9 +196,22 @@ sequence; this is just its wiring view). Order:
    passes for the wrong reason fails loudly). Framing copy is provisional /
    operator-ratifiable (NOT micro-frozen like the poster). Tests:
    `tests/test_demo_refused_spend.py` (8).
-4. **Proof seam** — receipt's theorem field → Lean class-boundary proof
-   (Act 3). Honest framing: theorem proves the *class*, receipt proves the
-   *instance*.
+4. **Proof seam — DONE 2026-06-12.** Act 3 (necessity): the refusal class →
+   the Lean class-boundary theorem that licenses it. `src/governor/proof_seam.py`
+   maps each refusal kind to a verified PUBLIC-SHIPPED [1.0] theorem — the hero
+   (`standing_before_spendability_not_bounded`) → `Freshness.expired_not_fresh`
+   (`¬(now ≤ expires+skew) → ¬Fresh`, the t=51 > horizon=50 lapse exactly);
+   observation≠standing → `Authority.no_standing_never_authorized`;
+   standing≠admissibility → `Authority.no_basis_never_authorized`. Each verified
+   2026-06-12 (exact name, complete proof / no `sorry`, custody class). Honest
+   framing baked in: the theorem proves the *class*, the receipt proves the
+   *instance*, the citation is the link — NOT "Lean proved production safe."
+   Classes the kernel does NOT prove (linearity/`already_consumed`, the operational
+   fence) are marked `NO_KERNEL_THEOREM` with a reason, never given a borrowed
+   citation. The link is DERIVED from the receipt's `refusal_kind` (the theorem is
+   about the class), not stored per-receipt. Wired into the demo surface as the
+   Act-3 descent. `~/git/rkl` is [scratch] lab, explicitly NOT a citation source.
+   Tests: `tests/test_proof_seam.py` (8, the tier discipline).
 5. **OPA contrast shim** — ~100 lines, demo-grade only, Act 2.5. Concretizes the
    deferred verdict seam with an off-the-shelf part; NOT a product surface.
 

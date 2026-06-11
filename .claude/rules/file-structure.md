@@ -246,6 +246,7 @@ src/governor/
 ├── research_why.py        # Per-turn injected-vs-referenced analysis: WhyOverlay, source-ref extraction
 ├── drill_runner.py        # Drill harness consuming genuine NQ FindingSnapshot (D0-Origin)
 ├── drill_poster.py        # Show-surface poster for drills (D0e): seven-invocation runs, assertion aggregation
+├── demo_refused_spend.py  # Demo Act-1 depth surface (W1 item 3): temporal-lapse contrast (twin passes / impostor refused), receipt-forward render + integrity tripwire; `demo/refused-spend.sh` entry
 │
 # Legacy (v0.1, kept for reference):
 ├── core.py           # Original AgentGovernor class

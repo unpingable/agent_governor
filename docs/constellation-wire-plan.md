@@ -182,8 +182,20 @@ sequence; this is just its wiring view). Order:
    §Standing). Tests: `tests/test_standing_spendability.py`,
    `tests/test_drill_temporal_lapse.py`, corpus block-pin incl. the
    missing-`clock_basis` negative.
-3. **Refused-spend script + show surface** (extends `drill_poster` D0e
-   scaffolding; the temporal hero is the natural Act-1 incident to wire in).
+3. **Refused-spend script + show surface — DONE 2026-06-12.** The demo's Act-1
+   *depth* surface (one incident, the temporal contrast) — distinct from the
+   codex-frozen `drill_poster` *breadth* surface (the seven-invocation gauntlet),
+   left untouched. `src/governor/demo_refused_spend.py` runs the temporal pair
+   (legitimate twin spends cleanly / impostor refused on the gap), renders a
+   deterministic receipt-forward contrast showing both clocks + the gap +
+   `clock_basis`, and asserts the **integrity tripwire**: the impostor refused for
+   the RIGHT reason (temporal lapse at `standing_spendability_seam`, spending no
+   capacity), same gauntlet as the twin, neither run operational. Stranger-facing
+   one-command entry `demo/refused-spend.sh` (the `./demo/refused-spend.sh` the
+   zoning forcing-case named; exits nonzero if the tripwire fails — a demo that
+   passes for the wrong reason fails loudly). Framing copy is provisional /
+   operator-ratifiable (NOT micro-frozen like the poster). Tests:
+   `tests/test_demo_refused_spend.py` (8).
 4. **Proof seam** — receipt's theorem field → Lean class-boundary proof
    (Act 3). Honest framing: theorem proves the *class*, receipt proves the
    *instance*.

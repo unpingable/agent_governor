@@ -69,6 +69,12 @@ BuildPetition schema, no speculative pipeline features.**
 **inter-gap dependencies** — which gap blocks which, across repos. Deliverable: a
 cross-project gap-dependency map. (Note: respect per-repo Claude ownership — map deps,
 don't edit other repos' gaps. memory `feedback_cross_repo_pm`.)
+> **Partly DONE 2026-06-10:** the gap-backlog VALIDATION pass ran (codex inventory's 234
+> entries verified against repo state) — `working/gap-backlog-triage-2026-06-10.md`.
+> Result: inventory ~40% mislabeled (140 CONFIRMED / 70 STALE / 20 WRONG / 4 NEEDS-HUMAN);
+> systematic error classes characterized; 4 NEEDS-HUMAN operator calls surfaced. Still
+> NOT done: inter-gap *dependency* mapping (which gap blocks which) — the triage validated
+> status, not deps.
 
 **3b. Scoped (do first): builder-ratchet readiness audit.** Inspect the tick/tock
 campaign, Maude supervision path, NQ promoted-patch state, agent_gov artifacts, backlog

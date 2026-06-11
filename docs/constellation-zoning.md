@@ -629,6 +629,58 @@ watcher that drops to sampling because it got tired is forging evidence of its o
 silence (the absence-witness coverage problem, one layer down). Notary's to file;
 AG only records the cross-fence note.
 
+#### Ledger templates: two-level typing, and `exhaustion`/`refusal` is the public name (2026-06-12)
+
+LA needs default ledger templates, but boring and typed — "budget" must not become
+a universal solvent (that way lies Jira with math). The fix is **two-level typing,
+top question first**: not "what flavor of ledger?" but *when this fails, did the
+system run **out**, or did it **refuse**?*
+
+```
+failure_class: exhaustion | refusal      # the FIRST question; the sacred discriminator
+  kind (under exhaustion): capacity · quota · escrow · retry
+  kind (under refusal):    blast_radius · egress · attention · suppression
+```
+
+> **A ledger must declare whether failure means "out of resource" or "outside
+> authority" before it declares what it counts.**
+
+The non-obvious calls the relay surfaced: **`blast_radius` is refusal, not fuel** —
+host #11 isn't starvation, it's "the requested effect exits the authorized
+envelope." **`attention` is refusal, not a battery** — "the system refuses to
+externalize more interrupt cost onto the operator under this scope" (governance, not
+physiology; do not optimize the human until morale improves). This keeps the sacred
+four-row table un-collapsed: if `blast_radius` and `capacity` were sibling `kind`
+values with no `failure_class` over them, "empty/exceeded" drifts back into one
+generic failure family and the goblins get lanyards.
+
+**Public-name discipline (operator-flagged).** The internal doctrine names are
+`metabolic`/`juridical` (this glyph). The **user-facing schema is
+`exhaustion`/`refusal`** — nobody types `failure_class: metabolic`. Biology stays in
+the doctrine file; ops terminology faces the operator. (A good ops tool should not
+wake up covered in seminar.) Same discipline that purged the legalese.
+
+**D0 = `capacity` only** (`failure_class: exhaustion, kind: capacity`), plus `escrow`
+*iff* the demo has a real reserve→commit→refund shape. No six-ledger bundle, no
+template zoo — that's how clocks become calendars become fiscal policy. The rest is
+template-library material (quota / retry / blast_radius / egress / attention /
+suppression / evidence-query), each with explicit `failure_class` + `kind` + `unit`
++ `scope` + exhaustion/refusal verdict — filed, not built.
+
+**The NOT-LA fence stays loud** (these are never ledgers): **freshness** (time
+validity vs a clock, not spendable fuel — see the clock-witness spec
+`working/clock-witness-spec.md`), **standing** (permission, not balance — keep
+separable or the four-row table dies), **confidence** (no epistemic arcade tokens —
+"confidence budget" is a future atrocity with clean YAML), **evidence quality**
+(testimony/admissibility, not currency).
+
+> **LA is bounded spendability *after* permission has survived custody — not
+> permission itself.** (Prevents ~80% of future crimes.)
+
+Full template library + minimum ledger/consume-receipt schemas: see
+`memory/linearaccountant_repo` and the LA repo (`~/git/linearaccountant`) — owner of
+the ledger internals; AG records the zoning, does not ratify it.
+
 ### Versioned interfaces are bridges, not folder names (cross-cutting)
 
 A version number is a *signed claim about conversion behavior*, and almost nobody

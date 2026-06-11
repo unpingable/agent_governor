@@ -1,0 +1,24 @@
+{
+  "kind": "audit",
+  "cold_start": false,
+  "ts": "2026-06-11T23:18:30Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "audited_commit": "0493ed4 (slice diff staged, mid-commit)",
+  "probes_executed_live": true,
+  "state_conformance": {
+    "dirty_tree_scoped": "M src/governor/proof_seam.py + M tests/test_proof_seam.py — exactly the slice's declared diff, mid-commit; nothing unaccounted",
+    "tests": "54 passed, 8 skipped (corpus + clock_witness + proof_seam)"
+  },
+  "plan_conformance": {
+    "closed_slice": "proof-seam-citation-reconciliation — was the ratified selection (W1 item-4 acceptance gate, selection-rule branch 2)",
+    "proposed_next": "w1-5-opa-contrast-shim — now FIRST in ratified order: items 1-4 done (4 now in the acceptance sense), item 5 is the last W1 slab item",
+    "deviations": []
+  },
+  "obligation_conformance": {
+    "corpus_closed_world": "green; corpus untouched by the slice (metadata-only)",
+    "pinning_negative_tests": "present and green; one ADDED (instantiation framing pin)",
+    "receipts": "execute + review receipts emitted; spec open-question marked RESOLVED (grep=1)"
+  },
+  "outcome": "pass",
+  "next": "PLAN selects w1-5-opa-contrast-shim (ratified order, no remaining gate)"
+}

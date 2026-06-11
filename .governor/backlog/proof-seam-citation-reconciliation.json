@@ -4,7 +4,7 @@
   "kind": "spec_slice",
   "spec_ref": "working/clock-witness-spec.md (open question: hero cites gap boundary, freshness boundary, or both)",
   "priority_tier": 1,
-  "status": "in_flight",
+  "status": "done (2026-06-12; outcome (a) citation stands — kernel Time is clock-agnostic; honest residue in TheoremRef.instantiation; receipts 2026-06-11T231714Z/231715Z/231830Z)",
   "acceptance": "Adjudicate whether Freshness.expired_not_fresh (wall-validity-shaped) licenses the monotonic-gap refusal class standing_before_spendability_not_bounded, by reading the theorem's actual time model in ~/git/lean. Outcome is one of: (a) theorem is clock-agnostic — citation stands, framing text updated to say why the monotonic instantiation is sound; (b) theorem is wall-specific — citation overclaims; re-mark honestly (NO_KERNEL_THEOREM or weaker match_strength) or cite the correct theorem if one exists at [1.0]; (c) ambiguous — HALT to operator. Metadata-only patch; never a borrowed citation. Gates W1 item 4 'done'.",
   "note": "Operator-ratified at plan review 2026-06-11: resolves AHEAD of the OPA shim. The doubt: a hostile Lean-literate reader checks exactly this on launch day."
 }

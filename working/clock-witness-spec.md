@@ -153,6 +153,24 @@ clock-internal guards.
    gap an AG-side policy over a clock witness with the freshness theorem as the
    nearest class?) Do NOT overclaim the citation — exhibit the distinction.
 
+   **RESOLVED 2026-06-12 (proof-seam-citation-reconciliation, audit-gated slice;
+   receipt: `.governor/loop-receipts/`).** The "wall vs monotonic" premise was a
+   misreading of the *canonical consumer* (Standing's chrono `DateTime<Utc>`) as
+   the *kernel's* semantics. Freshness.lean's `Time` is an OPAQUE axiom — abstract
+   le/add/sub, **no order axioms**, "the kernel proves invariants of the shape,
+   not of the underlying type." There are not two temporal boundaries in the
+   kernel; there is one shape, and wall/monotonic are consumer instantiations.
+   The monotonic single-epoch instantiation (Time := ns within one (source,
+   epoch); now := exercise; issued := observed; expires := observed + bound;
+   skew := 0) makes the hero's `gap_ns > bound_ns` *definitionally* the theorem's
+   hypothesis `¬(now ≤ expires + skew)` — the citation stands, match DIRECT, and
+   the monotonic basis is the stronger instantiation (the axiom-free Time is the
+   kernel demanding the consumer supply coherent time; `elapsed_ns`'s refusals
+   are that obligation discharged). Honest residue, recorded in
+   `TheoremRef.instantiation` and rendered on the Act-3 surface: the
+   compatible-witness discipline itself (source/epoch mismatch refusals) is
+   AG-side mechanics with NO kernel theorem.
+
 ## Bounded implementation order (relay's, 8 steps)
 
 1. Define `ClockWitness`.

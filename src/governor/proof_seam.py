@@ -35,6 +35,25 @@ allowlist shape). But RKL is a playground by its own banner ("not proof, not a
 source of truth, no consumer promise") — [scratch] tier. It may *inform*; it may
 not *license*. Nothing here cites it; the load-bearing citations are the Lean
 PUBLIC-SHIPPED theorems only.
+
+Citation reconciliation (adjudicated 2026-06-12, gating W1 item 4 "done"):
+the doubt was that ``expired_not_fresh`` is wall-validity-shaped while the
+hero's gap runs on MONOTONIC readings. Resolved by reading the kernel's time
+model (Freshness.lean §"Opaque metric time"): ``Time`` is an OPAQUE axiom with
+abstract le/add/sub and **no order axioms** — the kernel proves invariants of
+the *shape*, not of any clock. Wall-clock (chrono ``DateTime<Utc>``) is the
+canonical *consumer's* instantiation (Standing), not the kernel's semantics.
+The monotonic single-epoch instantiation — Time := ns within one (source,
+epoch); now := exercise; issued := observed; expires := observed + bound;
+skew := 0 — satisfies the shape, and under it the hero's refusal predicate
+``gap_ns > bound_ns`` is *definitionally* the theorem's hypothesis
+``¬ (now ≤ expires + skew)``. The citation stands, and the monotonic basis is
+the STRONGER instantiation: the kernel keeps Time axiom-free precisely so the
+consumer must supply coherent time, and ``clock_witness.elapsed_ns`` refusing
+incompatible bases is that obligation discharged. Honest residue: the
+compatible-witness discipline itself (source/epoch refusals) is AG-side
+mechanics with NO kernel theorem — only the window-violation class boundary is
+proved. Recorded per-citation in ``TheoremRef.instantiation``.
 """
 
 from __future__ import annotations
@@ -72,6 +91,10 @@ class TheoremRef:
     proves: str  # the class boundary in words
     match_strength: str  # MATCH_*
     verified_at: str = "2026-06-12"
+    # How the receipt's instance facts instantiate the theorem's variables —
+    # including, honestly, what the kernel does NOT prove about the
+    # instantiation. None when the mapping is immediate from `proves`.
+    instantiation: str | None = None
 
     @property
     def is_load_bearing(self) -> bool:
@@ -97,6 +120,17 @@ PROOF_SEAM: dict[str, TheoremRef] = {
             "license a spend after its horizon. Post-validated ≠ pre-authorized."
         ),
         match_strength=MATCH_DIRECT,
+        instantiation=(
+            "Kernel Time is opaque (no order axioms; shape, not clock). "
+            "Monotonic single-epoch instantiation: Time := ns within one "
+            "(source, epoch); now := exercise; issued := observed; expires := "
+            "observed + bound; skew := 0. The receipt's gap_ns > bound_ns is "
+            "definitionally ¬(now ≤ expires + skew) — the theorem's exact "
+            "hypothesis. NOT kernel-proven: the compatible-witness discipline "
+            "itself (elapsed_ns refusing source/epoch mismatch) is consumer-side "
+            "mechanics; the kernel leaves Time axiom-free so the consumer must "
+            "supply coherent time."
+        ),
     ),
     "standing_required": TheoremRef(
         lean_module="Admissibility.Authority",
@@ -174,11 +208,14 @@ def render_proof_seam(refusal_kind: str) -> list[str]:
         if ref.custody_class == CUSTODY_PUBLIC_SHIPPED
         else f"[{ref.custody_class}]"
     )
-    return [
+    lines = [
         f"  refusal class: {refusal_kind}",
         f"  licensed by:   {ref.lean_module}.{ref.theorem_name} {tier}",
         f"  at:            {ref.location}  (verified {ref.verified_at}, proof complete)",
         f"  theorem:       {ref.statement}",
         f"  proves:        {ref.proves}",
-        f"  honest:        {CLASS_NOT_INSTANCE}",
     ]
+    if ref.instantiation:
+        lines.append(f"  instantiates:  {ref.instantiation}")
+    lines.append(f"  honest:        {CLASS_NOT_INSTANCE}")
+    return lines

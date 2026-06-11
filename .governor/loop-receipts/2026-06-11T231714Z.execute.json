@@ -1,0 +1,24 @@
+{
+  "kind": "execute",
+  "ts": "2026-06-11T23:17:14Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "slice": "proof-seam-citation-reconciliation",
+  "adjudication": {
+    "question": "does Freshness.expired_not_fresh (suspected wall-validity-shaped) license the monotonic-gap refusal class standing_before_spendability_not_bounded?",
+    "outcome": "(a) citation STANDS — theorem is clock-agnostic",
+    "evidence": [
+      "Freshness.lean §'Opaque metric time' (lines 106-126): axiom Time : Type with abstract le/add/sub/absSub, NO order axioms; 'the kernel proves invariants of the shape, not of the underlying type'",
+      "Freshness.lean line 213-214 confirms le is deliberately axiom-free ('since Time.le is kept opaque (no order axioms)')",
+      "wall-clock (chrono DateTime<Utc>) is the canonical CONSUMER instantiation (Standing, header lines 19-23), not kernel semantics",
+      "monotonic single-epoch instantiation: Time := ns within one (source,epoch); now := exercise; issued := observed; expires := observed + bound; skew := 0 — under it gap_ns > bound_ns is definitionally ¬(now ≤ expires + skew), the theorem's exact hypothesis (Freshness.lean:179-184)"
+    ],
+    "honest_residue": "the compatible-witness discipline (elapsed_ns refusing source/epoch mismatch / backwards) is AG-side mechanics with NO kernel theorem; only the window-violation class boundary is proved. Recorded in TheoremRef.instantiation and rendered on the Act-3 surface.",
+    "match_strength": "DIRECT (unchanged); monotonic is the STRONGER instantiation — the axiom-free Time is the kernel demanding the consumer supply coherent time, and clock_witness.elapsed_ns is that obligation discharged"
+  },
+  "diff": [
+    "src/governor/proof_seam.py: TheoremRef gains optional instantiation field; hero entry populated; render adds 'instantiates:' line; module docstring records the adjudication. Code paths unchanged (metadata-only, per dispatch constraint)",
+    "tests/test_proof_seam.py: new test_hero_citation_carries_the_adjudicated_instantiation pins the framing incl. the NOT-kernel-proven residue",
+    "working/clock-witness-spec.md: open question marked RESOLVED with the adjudication"
+  ],
+  "tests": "49 passed, 8 skipped (test_proof_seam + test_demo_refused_spend + test_corpus_contract)"
+}

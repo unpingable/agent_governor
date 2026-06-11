@@ -31,6 +31,26 @@ def test_hero_maps_to_expired_not_fresh():
     assert ref.is_load_bearing is True
 
 
+def test_hero_citation_carries_the_adjudicated_instantiation():
+    # The wall-vs-monotonic reconciliation (gate on W1 item 4 "done"): the
+    # kernel's Time is opaque/clock-agnostic, the monotonic single-epoch
+    # instantiation makes gap_ns > bound_ns the theorem's exact hypothesis,
+    # and the citation must say honestly what the kernel does NOT prove
+    # (the compatible-witness discipline is consumer-side mechanics).
+    ref = cite("standing_before_spendability_not_bounded")
+    assert ref is not None and ref.instantiation is not None
+    inst = ref.instantiation
+    assert "opaque" in inst  # shape, not clock
+    assert "skew := 0" in inst
+    assert "gap_ns > bound_ns" in inst
+    assert "¬(now ≤ expires + skew)" in inst
+    assert "NOT kernel-proven" in inst  # the honest residue
+    # And the render surfaces it on the Act-3 descent.
+    blob = "\n".join(render_proof_seam("standing_before_spendability_not_bounded"))
+    assert "instantiates:" in blob
+    assert "NOT kernel-proven" in blob
+
+
 def test_every_cited_theorem_is_load_bearing():
     # No annex/scratch theorem, no merely-supporting match, may be cited here.
     # If a future edit adds one, this fails — the seam stays [1.0]-direct only.

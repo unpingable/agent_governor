@@ -1,0 +1,18 @@
+{
+  "kind": "dispatch",
+  "ts": "2026-06-11T23:18:32Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "slice": "w1-5-opa-contrast-shim",
+  "worker": "master (in-session)",
+  "spec_refs": [
+    ".governor/backlog/w1-5-opa-contrast-shim.json (acceptance)",
+    "docs/constellation-wire-plan.md §W1 item 5",
+    "working/launch-plan-2026-06-11.md §OPA contrast"
+  ],
+  "constraints": [
+    "~100 lines, demo-grade, Act 2.5 — NOT a product surface; no policy-adapter zoo",
+    "corpus untouched (closed-world; wraps case 08 input, adds no scenario)",
+    "graceful no-opa-binary degradation; live tests skip without binary; receipt/render pure-tested",
+    "layering sentence verbatim on the surface"
+  ]
+}

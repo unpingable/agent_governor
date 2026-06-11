@@ -4,7 +4,7 @@
   "kind": "build_slice",
   "spec_ref": "docs/constellation-wire-plan.md §W1 item 5 + working/launch-plan-2026-06-11.md §OPA contrast",
   "priority_tier": 1,
-  "status": "queued",
+  "status": "in_flight",
   "acceptance": "~100 lines, demo-grade, Act 2.5, NOT a product surface. Same incident (frozen corpus 08 input): OPA correctly returns allow over the unwitnessed input document; AG refuses the same incident upstream (premises failed preflight); OPA's verdict itself gets a receipt (policy hash, input provenance, decision) entering the evidence plane. Layering sentence verbatim on the surface. Graceful no-opa-binary degradation; live tests skip without binary; receipt/render tested pure; corpus untouched. No policy-adapter zoo.",
   "note": "Was candidate_next_slice in the restart seed; adjudicated by audit 2026-06-11T231101Z — queued behind the item-4 acceptance gate, not blessed."
 }

@@ -1,0 +1,12 @@
+{
+  "kind": "plan",
+  "ts": "2026-06-11T23:18:31Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "selected_slice": "w1-5-opa-contrast-shim",
+  "selected_from": "ratified backlog, priority tier 1: last W1 slab item; item-4 acceptance gate cleared by audit 2026-06-11T231830Z",
+  "queued_next": "act-two-receipt-interrogation (tier-1 spec_slice) — unless operator reorders",
+  "basis_receipts": [
+    ".governor/loop-receipts/2026-06-11T231830Z.audit.json",
+    ".governor/loop-receipts/2026-06-11T231715Z.review.json"
+  ]
+}

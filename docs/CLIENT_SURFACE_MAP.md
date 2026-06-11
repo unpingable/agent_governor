@@ -123,7 +123,7 @@ Nightshift ops work is specified.
 
 ### NQ
 
-**Repo:** `~/git/notquery` (diagnostic monitor, SECRET)
+**Repo:** `~/git/nq-root/nq` (diagnostic monitor, SECRET)
 
 **Role candidate:** Read-mostly client. Consumes signal/correlator/stability/regime
 surface for monitoring; does not write transitions.

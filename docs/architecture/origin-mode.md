@@ -8,7 +8,7 @@ Without this discriminator, a drill harness's manifest would be byte-identical t
 
 ## Two distinct axes
 
-`origin_source` and `origin_mode` answer different questions and compose orthogonally. Both live on NQ; AG consumes both. (See `~/git/notquery/crates/nq-db/migrations/057_origin_mode_discriminator.sql`.)
+`origin_source` and `origin_mode` answer different questions and compose orthogonally. Both live on NQ; AG consumes both. (See `~/git/nq-root/nq/crates/nq-db/migrations/057_origin_mode_discriminator.sql`.)
 
 - **`origin_source`** (NQ migration 046): **ingest path**. Closed set `{nq, import}`. Was this finding minted natively by NQ's evaluator pipeline, or ingested via the `nq.finding_import.v1` import wire?
 - **`origin_mode`** (NQ migration 057): **mint provenance**. Closed set `{observed, drill, replay, synthetic}`. Did the producer observe this condition, stage it, replay it from a fixture, or synthesize it without a real condition?

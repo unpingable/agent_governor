@@ -120,7 +120,7 @@ That separation is the architecture, not the documentation.
 
 | Plane      | System                           | Job                                                                  |
 | ---------- | -------------------------------- | -------------------------------------------------------------------- |
-| testimony  | NQ (`~/git/notquery`)            | what kind of wrong is happening (findings as proofs)                 |
+| testimony  | NQ (`~/git/nq-root/nq`)            | what kind of wrong is happening (findings as proofs)                 |
 | memory     | continuity (`~/git/continuity`)  | what may persist and be relied on (observe → commit → rely)          |
 | authority  | standing → wicket                | entitlement, then admissibility of a specific operation              |
 | capacity   | linear_accountant                | budget left, exactly once; eligibility ≠ spendability                |

@@ -160,3 +160,8 @@ to the operator. Do not invent an ops translation unilaterally.
   procedure-shaped artifacts (bind action to condition) and use the
   documents-vs-procedures pin above; the packet's sizing rubric maps to
   the existing `ModelTier` names as prose, not a new typed vocabulary.
+- `docs/reference/constellation-lexicon.md` — this glossary maps
+  internal↔ops *terms*; the lexicon governs *register/metaphor* in prose
+  (deprecates law-enforcement/border/carceral/courtroom framing for
+  refusal/admissibility machinery). Distinct surfaces; core invariant:
+  *refusal is an evidentiary boundary operation, not punitive enforcement.*

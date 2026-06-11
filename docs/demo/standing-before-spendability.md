@@ -80,7 +80,7 @@ That run **does not prove**:
 
 ## DRILL provenance
 
-Every receipt in every run inherits `origin_mode=drill` from the NQ `FindingSnapshot`. The discriminator was minted by NQ migration 057 (`~/git/notquery/crates/nq-db/migrations/057_origin_mode_discriminator.sql`), survives the wire DTO verbatim, and is stamped onto every emitted `evidence_bundle` by `_OriginModeReceiptSink` in `src/governor/cooked_context_orchestrator.py`. `governor why` renders `DRILL` first on every node walked.
+Every receipt in every run inherits `origin_mode=drill` from the NQ `FindingSnapshot`. The discriminator was minted by NQ migration 057 (`~/git/nq-root/nq/crates/nq-db/migrations/057_origin_mode_discriminator.sql`), survives the wire DTO verbatim, and is stamped onto every emitted `evidence_bundle` by `_OriginModeReceiptSink` in `src/governor/cooked_context_orchestrator.py`. `governor why` renders `DRILL` first on every node walked.
 
 See `docs/architecture/origin-mode.md` for the full discriminator semantics. See `docs/demo/wal-bloat-drill-transcript.md` for the captured ticket output and `why` excerpts.
 

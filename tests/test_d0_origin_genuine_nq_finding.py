@@ -64,7 +64,7 @@ _STAGER_BLOAT_ROWS = 3000
 _STAGER_ROW_BLOB_BYTES = 1024
 _NQ_BIN_ENV = "NQ_MONITOR_BIN"
 _NQ_BIN_DEFAULT_PATHS = (
-    "/home/jbeck/git/notquery/target/debug/nq-monitor",
+    "/home/jbeck/git/nq-root/nq/target/debug/nq-monitor",
     "nq-monitor",
 )
 
@@ -201,7 +201,7 @@ def genuine_nq_finding(tmp_path: Path) -> tuple[Path, dict]:
     if nq_bin is None:
         pytest.skip(
             f"nq-monitor binary not found. Set {_NQ_BIN_ENV} env var or "
-            f"build NQ via `cargo build -p nq-monitor` in ~/git/notquery."
+            f"build NQ via `cargo build -p nq-monitor` in ~/git/nq-root/nq."
         )
     sandbox_dir = tmp_path / "sandbox"
     sandbox_db = _stage_wal_bloat(sandbox_dir)

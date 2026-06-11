@@ -43,7 +43,7 @@ Every gate writes through `GateReceiptSystem` (`src/governor/gate_receipt.py`): 
 
 ### NQ observation — `origin_mode={observed,drill,replay,synthetic}`
 
-- **Where:** `nq-monitor`'s production evaluator pipeline (`~/git/notquery/crates/nq-monitor/src/...`). Migration `057_origin_mode_discriminator.sql` defines the closed CHECK on `origin_mode`.
+- **Where:** `nq-monitor`'s production evaluator pipeline (`~/git/nq-root/nq/crates/nq-monitor/src/...`). Migration `057_origin_mode_discriminator.sql` defines the closed CHECK on `origin_mode`.
 - **Receipt:** NQ-side `FindingSnapshot` (`nq.finding_snapshot.v1`). Not an AG `GateReceipt` — NQ owns its own receipts.
 - **Parent:** none (the chain root).
 - **What AG consumes:** `finding_key`, `finding_id`, `identity.host`, `identity.detector`, `origin_mode`, `observed_at` (`src/governor/drill_runner.py::load_finding_snapshot_from_json`).
@@ -134,5 +134,27 @@ The four AG-internal BA3 surfaces (`RunBudgetLedger`, `ExecutionBudget`, `Explor
 6. the mutator
 7. the drill narrator (the transcript is a receipt render, deterministic from the ledger — never a model summary; narrative laundering at the presentation layer would undo every gate beneath it, invisibly)
 8. its own retry authority (the runner owns re-invocation)
+9. **the source of its own work** (added 2026-06-10). The LLM may propose edits within an operator-curated intent, but it must not mint new backlog items, expand its own mandate, or create follow-on work for other unattended agents. Agent-generated backlog consumed by other agents is slop recursion. Allowed work sources: operator-written notes, NQ findings, explicit watchbills, human-curated backlog items.
 
 Each clause has a call-count assertion and a ledger entry behind it. Test surface: `tests/test_drill_runner_d0d1_scenarios.py`, `tests/test_drill_runner_d3_confabulation.py`.
+
+**Directional custody (why these must-nots exist):** the rule under all
+nine clauses is that a system which can act through gates must not
+rewrite those gates while acting through them. Downstream capability
+cannot mutate upstream authorization while inside the downstream flow.
+The LLM, being the most downstream actor in the spine, is structurally
+the highest-risk vector for that mutation; the must-nots enumerate the
+specific upstream surfaces it must not reach back into. See
+`working/directional-invariants.md` and `working/endgame-synthesis-2026-06-10.md`.
+
+---
+
+**Vocabulary note.** This doc uses internal/theoretical names (standing,
+wicket admission, etc.) because those are the canonical forms in the
+constellation's cross-tool vocabulary. Operator-facing surfaces (CLI
+flags, dashboards, run books) may translate to ops-friendly handles
+(e.g., `standing grant → action entitlement`). The living bilingual
+glossary at `docs/reference/internal-ops-glossary.md` carries the
+mapping. PROPOSED rows there are not yet binding on consumer-facing
+surfaces; do not rename code or internal-doctrine documents from this
+side.

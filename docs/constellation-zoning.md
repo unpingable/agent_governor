@@ -760,6 +760,118 @@ continuity.** Two witness moments (alerts at emission, logs at *seal* time), two
 integrity primitives. Rotation means logs already ship with ungoverned deletion —
 Notary is also the first place the evidence-death-rites problem gets a body.
 
+### `notary-seal-v0` — the build-ready chisel (2026-06-12)
+
+Tiny chisel, not a quarry operation. Notary touches everything, so it can become
+"one more infrastructure substrate" and eat the slab. The whole v0 is one line:
+
+> **notary v0 = seal receipt batches and make gaps visible. Nothing more.**
+
+The one doc sentence (the zoning ward):
+
+> **The notary does not decide whether claims are true. It seals what was
+> received, in what order, under which evidence class, and emits explicit gaps
+> when continuity cannot be maintained.**
+
+```
+inputs:   receipt batch · previous seal hash · sequence number · clock reading · locker id
+output    seal_receipt: notary_id · sequence · batch_hash · previous_seal_hash ·
+(seal):     sealed_at · input_count · evidence_class_counts · coverage_start/end
+refusals: sequence_gap · previous_hash_mismatch · clock_unavailable ·
+            empty_batch_unless_declared_heartbeat · synthetic_operational_mix ·
+            seal_window_expired
+```
+
+`synthetic_operational_mix` / `seal_window_expired` are **launch-relevant**: the
+notary enforces *simulated/demo evidence may be sealed, but only into a simulated
+locker or simulated segment* — defense-in-depth on the synthetic firewall, the
+same invariant guarded at the corpus (`operational=false`, the Wall-1 fence) AND
+at the seal. The forcing slice that earns v0:
+
+```
+demo run emits receipts → notary seals them into a SIMULATED segment →
+operational admission refuses to consult the simulated segment →
+query can still show the demo chain
+```
+
+Three wins: demo artifacts fenced · receipts visibly tamper-evident · the locker
+has continuity without pretending demo traffic is operational truth.
+
+Acceptance tests (`notary-seal-v0`): seals batch with previous hash · refuses
+previous-hash mismatch · refuses sequence gap · seals simulated batch as simulated
+· refuses simulated batch entering operational locker · emits coverage-gap receipt
+on missed sequence/window · **+ the loop-pinning negative below**.
+
+**Damp-hallway (do NOT build in v0):** distributed notary, quorum signing, external
+timestamping, transparency-log-grade inclusion proofs, key-rotation ceremony,
+retention/redaction machinery, Phosphor aggregate receipts, production daemon
+lifecycle, Prometheus exporter. They wait.
+
+### nq-witness is the observability surface — and the loop must be declared open
+
+**Critical cross-project rule.** The integration rule is NOT "every tool grows its
+own Prometheus exporter" (twelve unofficial belief channels — goblin architecture).
+It is **every tool emits testimony to `nq-witness`**:
+
+```
+tool-local event/state → nq-witness testimony → NQ store/query/cockpit → optional Prom/export adapters
+```
+
+Tools emit claims/testimony; `nq-witness` owns witness shape / competence /
+coverage; NQ owns query / cockpit / evidence posture; Prometheus gets *derived
+metrics only*, never canonical custody (a raccoon with a Grafana license). Per-tool
+emission sets: **notary** → seal_created, seal_refused, sequence_gap,
+previous_hash_mismatch, clock_unavailable, evidence_class_mix_refused, coverage_gap;
+**verifier** → verdict_issued, invalid_input, stale_fact_denial,
+missing_evidence_denial, rule_failure; **agent-governor** → proposal_received,
+preflight_refused, verdict_issued, action_admitted, action_refused,
+divergence_detected.
+
+**The reflexivity fix (load-bearing — resolve before wiring).** "Every tool emits
+to nq-witness" hides a fixpoint: the notary emits witness events, those events are
+things someone might seal, and now the observability plane and the custody plane are
+each other's inputs. Undeclared, that means *a notary outage stops sealing the
+witness stream that would have reported the notary outage* — the watcher-watching-
+itself trap, one altitude up (the absence-witness coverage problem, same shape every
+time the evidence plane folds on itself). The cut that breaks the loop:
+
+> **Tools emit testimony to nq-witness. nq-witness emissions are operational
+> observability, NOT sealed custody. The notary seals receipts, not the witness
+> stream about receipts.**
+
+```
+receipt spine:   append-only · sealed · legal/custody record · notary operates HERE
+witness stream:  operational observability · best-effort / coverage-scoped ·
+                 watches components · MAY cite receipts · does NOT ground them
+```
+
+nq-witness may say "I observed notary sequence gap at T" — but that observation is
+not what makes the spine continuous or discontinuous; the spine's own seal/coverage
+receipts do that. The witness stream may *look at* the custody plane; it may not
+*become* it by recursion. The loop-pinning negative test for v0:
+
+```
+test_notary_witness_events_do_not_count_as_sealed_coverage:
+  given  notary emits nq-witness testimony about a seal operation
+  assert that testimony is NOT included when computing sealed receipt coverage;
+         cannot repair a seal gap; cannot satisfy continuity;
+         may cite a seal receipt but cannot replace one.
+```
+
+If custody over the witness stream itself is ever genuinely needed (almost
+certainly not pre-launch), it is a **declared** second-order seal with its own
+coverage statement (`seal_class: second_order_observability; covers: nq-witness
+stream; does_not_cover: primary receipt spine`) — never an accident of everything
+emitting to everything. Declared fixpoint, marked and bounded; never the silent kind
+where A grounds B grounds A and both look solid until they go dark together.
+
+Owner: **Notary** (its own project, `~/git/notary`, empty) for the seal spine;
+**NQ** (`~/git/nq-root/nq`) for nq-witness. AG records (and is itself a witness
+emitter per the AG set above). Disposition: build after launch, on `notary-seal-v0`'s
+forcing slice; the hero clocks (the standing-spendability gate) are **already wired**
+(`standing_spendability.py`, 2026-06-12), so Notary blocks nothing — it sits nearby
+holding a clipboard, it does not commandeer the forklift.
+
 ---
 
 ## Transport & state exchange — the one boring pipe

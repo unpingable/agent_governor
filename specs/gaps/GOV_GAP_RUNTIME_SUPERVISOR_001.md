@@ -254,7 +254,7 @@ These are distinct queues with distinct semantics:
 
 - **Promotion queue**: "Do we accept this output?" Post-hoc review of produced work. Not time-bounded in the same way — promotions can sit pending until the operator reviews them. Promotions are about *accumulated results*.
 
-An operator in intervention mode is a traffic cop. An operator in promotion mode is a code reviewer. Different cognitive state, different UI treatment.
+An operator in intervention mode is a real-time gate. An operator in promotion mode is a code reviewer. Different cognitive state, different UI treatment.
 
 ### Intervention Outcomes: Approve / Deny / Edit-Resubmit
 

@@ -88,7 +88,7 @@ This spec pins five such questions to falsifiable shapes. It does not resolve th
 
 **Options.**
 - **A. Closed registry, policy-declared.** Every `exception_class` must appear in a ratified `policy_declaration`. Unknown classes → `INVALID_STRUCTURAL`. Additions bump `ontology_version`.
-- **B. Open registry with telemetry-only policing.** Any string accepted; validator counts occurrences per class; operators review drift.
+- **B. Open registry with telemetry-only monitoring.** Any string accepted; validator counts occurrences per class; operators review drift.
 - **C. Binary flag only.** One `compression_exception = true` bit; no class taxonomy. Accept or deny.
 
 **Declaration requirement (under A).** A `policy_declaration` of an exception class must include:

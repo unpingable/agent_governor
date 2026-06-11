@@ -31,7 +31,7 @@ The Constraint Compiler resolves all applicable constraints for a given intent +
 
 **One-liner**: `governor constraints resolve --intent production --scope "src/auth/**" --format prompt`
 
-**Core principle**: The governor already acts as a court. This adds constitutional law — compiled, projected, and hashed — so the executor doesn't have to learn the law by getting sentenced.
+**Core principle**: The governor already decides what's admissible. This adds the constraint set — compiled, projected, and hashed — so the executor can see the rules upfront instead of discovering them by refusal.
 
 ---
 

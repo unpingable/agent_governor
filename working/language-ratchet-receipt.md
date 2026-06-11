@@ -31,15 +31,27 @@ atproto-nutrition, rpp, wlp, verifier, wicket, standing, nq-root/nq. neutral.zon
 non-archive only (archive essays are exempt class 1 — literal law/politics/prison
 content).
 
-## Files changed (6 changes, 2 repos)
+## Files changed (10 changes, 2 repos)
 
-**agent_gov** (5):
+**agent_gov docs** (5):
 - `docs/architecture/OVERVIEW.md` — "Governor (traffic cop)" → "Governor (gate)".
 - `docs/architecture/claim-custody-spine.md` — "tiny courtroom" → "tiny adversarial
   review"; "the wicket judge" → "the wicket checker" (the lexicon's named example).
 - `docs/agent-governor-meta-plan.md` — "Lean is constitutional law. Z3 is the border
   scanner … before the judge has to pretend" → "Lean is the constitutional kernel. Z3
   is the boundary scanner … before it reaches a gate that would have to pretend".
+
+**agent_gov specs** (the active backlog/dogfood surface) (4):
+- `specs/core/CONSTRAINT_COMPILER_SPEC.md` — "The governor already acts as a court …
+  learn the law by getting sentenced" → "The governor already decides what's admissible
+  … see the rules upfront instead of discovering them by refusal" (the strongest
+  contamination — punitive "sentenced").
+- `specs/gaps/GOV_GAP_RUNTIME_SUPERVISOR_001.md` — "intervention mode is a traffic cop"
+  → "intervention mode is a real-time gate".
+- `specs/gaps/GOV_GAP_SLSA_001.md` — "provenance admissibility judge" → "provenance
+  admissibility checker".
+- `specs/gaps/GOV_GAP_VALIDATOR_INTEGRATION_001.md` — "telemetry-only policing" →
+  "telemetry-only monitoring".
 
 **verifier** (1):
 - `README.md` — "A border cop between measurement and claim." → "A boundary checker
@@ -61,8 +73,20 @@ Also (separate, committed in Slice 0): NQ path correction `~/git/notquery` →
 - **`verdict`** (receipt_kernel, SuiteVerdict, two-verdict ratchet, verifier output),
   **`enforcement`** (where the gate blocks), **`jurisdiction/quorum/dissent/custody/
   witness/admissibility`** (native-home terms) — retained terms of art, zero diff hunks.
-- **CS idiom "illegal transition"** (RECEIPT_KERNEL_CONTRACT.md) — standard state-machine
-  vocabulary; left (low-value, idiomatic). Logged as borderline.
+- **CS idiom "illegal transition"** (RECEIPT_KERNEL_CONTRACT.md, RECEIPT_KERNEL_ROADMAP.md,
+  PROBLEM_SOLVING_MODE.md) — standard state-machine vocabulary; left (idiomatic).
+- **"LLM judge" / "judge panel"** (MULTI_AGENT_DRIFT_GAP.md) — model-harness vocabulary
+  the lexicon explicitly retains. Untouched.
+- **"clerk, not a judge"** (GOV_GAP_LOCAL_SUPERVISOR_001.md), **"not tone policing"**
+  (GOV_GAP_FRAME_CAPTURE_001.md), **"external cop" being deprecated** (SELF_GOVERNANCE_SPEC.md:
+  "stop treating the governor as an external cop") — all contrast framing that *deprecates*
+  the metaphor by negation; already correct.
+- **"final judge"** (SWARM_ORCHESTRATION human-authority), **"worst offender"**
+  (VALIDITY_SPENDABILITY idiom), **"Judge-but-enterprise"** (DISCLOSURE_STANDING — a
+  rhetorical dystopian product-pattern name, not the governor's own machinery) — mild /
+  rhetorical; left to avoid over-reach on a guess.
+- **"judged the same / judge sameness"** (TEXT_ADMISSIBILITY_GAP), **"judged wrong"**
+  (DOC_TAXONOMY) — ordinary English verb (assessed), not courtroom metaphor.
 
 ## Deferred — cross-repo owners' call (not patched)
 

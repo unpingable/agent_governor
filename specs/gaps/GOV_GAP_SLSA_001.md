@@ -16,7 +16,7 @@ doesn't need to reinvent any of this. It needs to **require** these artifacts,
 
 ## What This Is
 
-Governor as a **provenance admissibility judge**: given a set of supply-chain
+Governor as a **provenance admissibility checker**: given a set of supply-chain
 attestations, determine whether the artifact's story is coherent and meets policy.
 
 ## What This Is NOT

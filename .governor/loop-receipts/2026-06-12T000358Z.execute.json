@@ -1,0 +1,24 @@
+{
+  "kind": "execute",
+  "ts": "2026-06-12T00:03:58Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "slice": "act-two-receipt-interrogation",
+  "output": "specs/gaps/GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001.md",
+  "probes_before_claiming": [
+    "live demo run dissected: per-run stores at <run>/receipts/gate_receipts.jsonl + content-addressed evidence/; refusal bundle carries full murder hallway incl. origin_mode=drill",
+    "governor why: works through a symlink shim (CLI wants <root>/.governor — off-by-one vs demo layout, named as build item 2); twin chain walks FOUR hops to an honest MISSING terminus; DRILL origin banner renders",
+    "governor receipts --id --evidence: dumps receipt + bundle, verified",
+    "refusal orphan found: spendability gate hardcodes parent_receipt_ids=[] — the ONE chain-walk gap, named as build item 1 with pinned mechanism",
+    "OPA verdict receipt is in-memory only — persistence named as build item 3 with pinned path"
+  ],
+  "operator_pins_honored": [
+    "same corpse (frozen pair's receipt set, named exactly)",
+    "five questions as runnable queries with asserted outputs (acceptance table)",
+    "custody reconstruction with origin_mode visible (the cameo criterion)",
+    "seam named: AG owns the beat; NQ SQL = future extraction, not dependency",
+    "anti-dashboard non-goals; negative case (honest absence); transcript criterion; composition with hero pair + OPA contrast",
+    "no build authorized; open questions carry defaults so the nod is one word"
+  ],
+  "validation": "codex flat-pass (artifact-only, codex-cli 0.139.0): 5 ambiguities named → all patched as pins (parent-threading mechanism, OPA receipt path, interrogate invocation, transcript shape, open-question defaults); its predicted first-pass mistakes all named already-forbidden things — fences legible to a cold reader. Provenance section added to the spec.",
+  "intake_during_slice": "ag-spec-slice-decomposer filed to backlog (append-only, per §2 intake lane; slice not interrupted)"
+}

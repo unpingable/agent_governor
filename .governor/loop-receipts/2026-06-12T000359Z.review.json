@@ -1,0 +1,9 @@
+{
+  "kind": "review",
+  "ts": "2026-06-12T00:03:59Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "slice": "act-two-receipt-interrogation",
+  "cargo_verdict": "pass — gap spec written in the house format (status/origin/what-exists/what-needs-building/acceptance/non-goals/open-questions), every machinery claim probed live before being written, codex-validated and patched",
+  "process_verdict": "pass — slice selected by ratified order + operator nod; operator pins carried verbatim into the spec; scope fence held (no build, no new surface); intake handled through the lane without preempting",
+  "exit_state": "spec awaits ONE ratification nod (open questions carry defaults — silence ratifies defaults). On ratification: act-two backlog entry converts to a build_slice with the spec as spec_ref; AUDIT/PLAN selects it."
+}

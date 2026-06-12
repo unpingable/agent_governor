@@ -1,0 +1,11 @@
+{
+  "id": "ag-spec-slice-decomposer",
+  "repo": "agent_gov",
+  "kind": "spec_slice",
+  "priority_tier": 2,
+  "forcing_case": "NQ doctrine backlog exceeds artisanal slicing capacity",
+  "spec_ref": null,
+  "status": "filed",
+  "admission_boundary_test": "required",
+  "notes": "CANDIDATE-SLICE COMPILER (name is load-bearing: compilers don't ship the binary). Decomposes architecture/doctrine docs into candidate spec_slices. Proposes, never admits (§8 boundary — slicing is adjudication-adjacent: it decides review grain). HitL clarification: typed, BATCHED (one batch, never serial drip), no defaults on custody questions (unanswered = parked), answers become operator-attested provenance in the spec (derived-from-docs vs resolved-by-fiat). Ships shadow-mode first: NQ doctrine doc → proposed cuts vs operator's cuts → calibration receipt (matched/over-sliced/under-specified/custody-ambiguity-correctly-parked — calibrating slice judgment, not codegen; the instrument measures the calibrator too). Three pinning tests demanded: proposal/admission wall; custody-question no-default; batch clarification. Composes with loop-as-governed-workflow W2 promotion. Surfaces: workflow lives in AG; maude hosts clarification (operator-attested by the right door), phosphor displays status. BEHIND LAUNCH — order: corpse, interrogation, rolling, then the compiler."
+}

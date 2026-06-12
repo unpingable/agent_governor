@@ -2,9 +2,9 @@
   "id": "act-two-receipt-interrogation",
   "repo": "agent_gov (machinery) + nq (SQL party trick — cross-repo seam)",
   "kind": "spec_slice",
-  "spec_ref": "working/launch-plan-2026-06-11.md §Act 2 (doctrine paragraph, no acceptance criteria yet)",
+  "spec_ref": "specs/gaps/GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001.md (spec written + codex-validated 2026-06-12; converts this entry to build_slice on ratification)",
   "priority_tier": 1,
-  "status": "queued",
+  "status": "spec_written_awaiting_ratification",
   "acceptance": "Output: a ratifiable gap spec with acceptance criteria for the Act-2 demo beat — one stranger-runnable command interrogating the frozen hero incident (what happened to X, why refused, which predicate failed, what the naive gate admitted). Must declare what is AG-side (governor why chain-walk, receipts --evidence, receipt_kernel SQLite) vs NQ-side, and whether the launch beat can ship AG-only.",
   "note": "Created by cold-start audit 2026-06-11T231101Z: Act 2 machinery exists (why.py, receipts CLI, SQLite store) but the runnable beat is unclaimed by any W1 item. Tier-1 because it is a launch demo act that hid in a repo seam."
 }

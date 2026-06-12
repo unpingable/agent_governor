@@ -1,0 +1,17 @@
+{
+  "kind": "plan",
+  "ts": "2026-06-11T23:57:06Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "selected_slice": "act-two-receipt-interrogation",
+  "selected_from": "ratified backlog, tier-1; ratified-order selection per audit 2026-06-11T232430Z, confirmed by operator nod ('Go') 2026-06-11",
+  "operator_pins": [
+    "same corpse: interrogate the frozen hero incident's receipts (corpus 08/09 runs), not a fresh scenario; spec names the exact receipt set",
+    "questions as acceptance criteria: each question maps to a runnable query with expected output (what happened to X / why refused / which predicate failed / which evidence stale under which clock witness / what did the naive gate conclude); the cycle-2 OPA verdict-receipt is Act-Two material — the interrogation can query the policy engine's own verdict in the evidence plane",
+    "custody reconstruction, not log grep: chain reconstructs from receipts with provenance intact; drill-class receipts visibly show origin_mode in results (the thesis cameos in its own demo)",
+    "name the seam: declare which repo owns the runnable beat and what crosses the boundary; NQ's SQL trick only as a named future extraction/fork, not a dependency",
+    "scope fence (anti-dashboard): ONE narrow demo beat in the act order claim→refuse→why→chain-shows-stale-premise→proof-surface→OPA-contrast; acceptance includes user-visible transcript, required receipt fields, a negative case, and composition with the frozen pair + OPA contrast",
+    "no build: the slice exits with the spec; build_slice admission awaits ratified acceptance criteria + AUDIT selection"
+  ],
+  "validation_protocol": "codex flat-prompt, spec artifact ONLY, no doctrine preamble ('is this implementable as written, what's ambiguous, what would you build wrong') — the naive misreading is the value; its confusions are the spec's bugs",
+  "queued_next": "ratification nod on the spec → build_slice entry (or operator reorder)"
+}

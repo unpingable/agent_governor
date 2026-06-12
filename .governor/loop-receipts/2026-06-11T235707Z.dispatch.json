@@ -1,0 +1,17 @@
+{
+  "kind": "dispatch",
+  "ts": "2026-06-11T23:57:07Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "slice": "act-two-receipt-interrogation",
+  "worker": "master (in-session; spec authoring + codex validation pass)",
+  "spec_refs": [
+    ".governor/backlog/act-two-receipt-interrogation.json (slice acceptance)",
+    "working/launch-plan-2026-06-11.md §Act 2 (the doctrine paragraph being converted)",
+    "plan receipt 2026-06-11T235706Z (operator pins, verbatim-binding)"
+  ],
+  "constraints": [
+    "output is a gap spec (what exists / what needs building / acceptance criteria / non-goals / open questions), ratifiable in one nod",
+    "probe the actual machinery before claiming it (grep over trust: what do the demo runs actually leave on disk; what does governor why actually need)",
+    "no build, no new CLI surface, no dashboard"
+  ]
+}

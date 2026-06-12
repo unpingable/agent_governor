@@ -1,0 +1,25 @@
+{
+  "kind": "audit",
+  "cold_start": false,
+  "ts": "2026-06-12T00:04:00Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "audited_commit": "56f5e95 (slice diff staged, mid-commit)",
+  "probes_executed_live": true,
+  "state_conformance": {
+    "dirty_tree_scoped": "new spec file + loop artifacts + one intake backlog entry — exactly the slice's output plus lane-conformant intake; nothing unaccounted",
+    "tests": "corpus 31 passed, 8 skipped (no code touched — spec_slice)"
+  },
+  "plan_conformance": {
+    "closed_slice": "act-two-receipt-interrogation spec_slice — ratified selection + operator nod on record (plan receipt 2026-06-11T235706Z)",
+    "intake_check": "ag-spec-slice-decomposer entered via the intake lane: backlog append only, tier-2, behind launch, admission_boundary_test:required carried; did NOT mutate phase/current_slice/next_action — first live exercise of the §2/§8 membrane, held",
+    "proposed_next": "NOTHING auto-selected — the spec's ratification is the operator's act; loop blocks on it rather than self-admitting the build_slice (the §8 wall the decomposer entry names is the same wall the loop itself observes here)",
+    "deviations": []
+  },
+  "obligation_conformance": {
+    "corpus_closed_world": "green, untouched",
+    "receipts": "execute + review emitted; spec carries its own validation provenance",
+    "no_build_constraint": "held — zero code/demo files changed"
+  },
+  "outcome": "pass",
+  "next": "blocked_on operator ratification of GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001 (one nod; open-question defaults pre-stated)"
+}

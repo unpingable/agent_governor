@@ -115,20 +115,31 @@ def build_opa_verdict_receipt(evaluation: Optional[dict[str, Any]]) -> dict[str,
     return {"receipt_id": f"opa_rcpt_{digest[:12]}", **body}
 
 
+OPA_RECEIPT_FILENAME = "opa_verdict_receipt.json"  # stable name, pinned by spec
+
+
 def run_contrast(*, root: Path, now: int = 0) -> dict[str, Any]:
-    """OPA's verdict and custody's, same incident."""
-    ag_dir = root / "custody"
+    """OPA's verdict and custody's, same incident. The custody run lands at
+    ``<root>/custody/.governor`` (CLI-interrogable, ratified layout default);
+    the OPA verdict receipt PERSISTS at ``<root>/opa_verdict_receipt.json`` —
+    stable filename, content-addressed receipt_id inside — so Act 2 can query
+    the policy engine's own verdict from the evidence plane (render-only would
+    make the beat a mime)."""
+    ag_dir = root / "custody" / ".governor"
     ag_dir.mkdir(parents=True, exist_ok=True)
     ag: DrillRunResult = run_drill(
         gov_dir=ag_dir, scenario=SCENARIO_TEMPORAL_LAPSE, now=now
     )
     evaluation = evaluate_with_opa()
     receipt = build_opa_verdict_receipt(evaluation)
+    receipt_path = root / OPA_RECEIPT_FILENAME
+    receipt_path.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
     assertions = _evaluate_integrity(ag, evaluation)
     return {
         "ag": ag,
         "evaluation": evaluation,
         "opa_receipt": receipt,
+        "opa_receipt_path": str(receipt_path),
         "assertions": assertions,
         "aggregate_ok": all(ok for _, ok, _ in assertions),
     }

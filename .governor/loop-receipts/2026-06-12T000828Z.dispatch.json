@@ -1,0 +1,21 @@
+{
+  "kind": "dispatch",
+  "ts": "2026-06-12T00:08:28Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "slice": "act-two-receipt-interrogation (build_slice)",
+  "worker": "master (in-session)",
+  "spec_refs": [
+    "specs/gaps/GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001.md (ratified; pins binding)",
+    ".governor/backlog/act-two-receipt-interrogation.json (acceptance + rider)"
+  ],
+  "build_items": [
+    "1: un-orphan the refusal — gate check() gains parent_receipt_ids param threaded to _emit; orchestrator passes the wicket receipt id; lineage at emission or never",
+    "2: demo runs write <run>/.governor/ (CLI-reachable, hermetic per run); fix refused-spend.sh stale GOVERNOR_DIR hint to copy-pasteable governor --root commands",
+    "3: persist OPA verdict receipt at <root>/opa_verdict_receipt.json; opa-contrast.sh prints the path",
+    "4: demo/interrogate.sh + src/governor/demo_interrogate.py — optional root arg (runs Act 1 itself when absent, says so); five questions as Q/command/output/assertion; final integrity block; exit nonzero on any wrong answer"
+  ],
+  "constraints": [
+    "rider: corpus-contract probe in the build receipt (parent ids vs frozen decision fields)",
+    "corpus untouched; anti-dashboard; no new long-lived CLI surface; transcript field-asserted not byte-asserted"
+  ]
+}

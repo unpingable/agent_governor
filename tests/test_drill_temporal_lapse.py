@@ -61,3 +61,24 @@ def test_lapse_block_is_deterministic(tmp_path: Path):
     a = run_drill(gov_dir=tmp_path / "a", scenario=SCENARIO_TEMPORAL_LAPSE)
     b = run_drill(gov_dir=tmp_path / "b", scenario=SCENARIO_TEMPORAL_LAPSE)
     assert a.spendability_block == b.spendability_block
+
+
+def test_refusal_is_not_an_orphan(tmp_path: Path):
+    # Lineage at emission (Act-Two spec, ratified rider): the refusal receipt's
+    # evidence cites the wicket receipt as parent, so `governor why` walks
+    # refusal → wicket → standing → finding-terminus, same as the consume path.
+    import json
+
+    run_drill(gov_dir=tmp_path, scenario=SCENARIO_TEMPORAL_LAPSE)
+    receipts = [
+        json.loads(line)
+        for line in (tmp_path / "receipts" / "gate_receipts.jsonl").open()
+    ]
+    by_gate = {r["gate"]: r for r in receipts}
+    refusal = by_gate["standing_spendability_seam"]
+    assert refusal["verdict"] == "block"
+    ev_hash = refusal["evidence_hash"]
+    bundle = json.loads(
+        (tmp_path / "evidence" / ev_hash[:2] / f"{ev_hash}.json").read_text()
+    )
+    assert bundle["parent_receipt_ids"] == [by_gate["wicket_seam"]["receipt_id"]]

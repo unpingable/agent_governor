@@ -1,0 +1,13 @@
+{
+  "kind": "plan",
+  "ts": "2026-06-12T00:08:27Z",
+  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "selected_slice": "act-two-receipt-interrogation (build_slice)",
+  "selected_from": "ratification nod 2026-06-12: 'Go. Defaults on all three. Convert and dispatch.' — spec GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001 ratified with defaults (per-run .governor layout / standalone interrogate.sh / opa-contrast prints receipt path)",
+  "rider_verbatim": "Build receipt must include a corpus-contract probe proving that real parent_receipt_ids on the spendability refusal do not alter frozen decision fields. Lineage must be present at emission; post-emission parent patching remains forbidden.",
+  "standing_signals_adopted": [
+    "fence_legibility_escape_count — spec_slice acceptance signal: codex cold-pass, count would-be-wrongs that escape existing pins; zero escapes = ratifiable (to be recorded in loop-protocol §8)",
+    "membrane catches recorded in cycle audits (first live catch: ag-spec-slice-decomposer intake, audit 2026-06-12T000400Z)"
+  ],
+  "note": "operator pushed the prior 5 commits by hand; origin/main now even at 24b8692"
+}

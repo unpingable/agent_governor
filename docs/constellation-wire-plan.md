@@ -229,6 +229,18 @@ sequence; this is just its wiring view). Order:
    as supported surface" stays a post-launch forcing case. Tests:
    `tests/test_demo_opa_contrast.py` (9).
 
+**Act 2 (receipt interrogation) — DONE 2026-06-12** (not a numbered slab item;
+surfaced by the loop's cold-start audit as the unclaimed demo beat, spec'd +
+ratified as `GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001`). `demo/interrogate.sh
+[root]` cross-examines the Act-1 corpse: six-question transcript (chain walk via
+`governor why` — the refusal un-orphaned, lineage at emission; typed reason;
+gap-vs-bound numbers; the named monotonic clock witness + origin_mode cameo;
+the persisted OPA verdict receipt; honest absence for a fabricated id), exit
+nonzero if any answer is wrong. Demo runs now write `<run>/.governor/`
+(CLI-interrogable, hermetic). Rider held: corpus contract green with real
+`parent_receipt_ids` (decision fields frozen, lineage was never pinned). Tests:
+`tests/test_demo_interrogate.py` (7, incl. the tampered-corpse fails-loudly pin).
+
 **Exit criteria:** a stranger reproduces one end-to-end refusal in <15 min;
 integrity tripwire holds (it cannot pass/refuse for the wrong reason — the BA3
 `LA_ONLY` bypass class); Show HN gate items all true. **Nothing in W2+ starts

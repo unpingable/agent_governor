@@ -1,10 +1,11 @@
 {
   "id": "act-two-receipt-interrogation",
-  "repo": "agent_gov (machinery) + nq (SQL party trick — cross-repo seam)",
-  "kind": "spec_slice",
-  "spec_ref": "specs/gaps/GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001.md (spec written + codex-validated 2026-06-12; converts this entry to build_slice on ratification)",
+  "repo": "agent_gov",
+  "kind": "build_slice",
+  "spec_ref": "specs/gaps/GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001.md (RATIFIED 2026-06-12, defaults on all three open questions)",
   "priority_tier": 1,
-  "status": "spec_written_awaiting_ratification",
-  "acceptance": "Output: a ratifiable gap spec with acceptance criteria for the Act-2 demo beat — one stranger-runnable command interrogating the frozen hero incident (what happened to X, why refused, which predicate failed, what the naive gate admitted). Must declare what is AG-side (governor why chain-walk, receipts --evidence, receipt_kernel SQLite) vs NQ-side, and whether the launch beat can ship AG-only.",
-  "note": "Created by cold-start audit 2026-06-11T231101Z: Act 2 machinery exists (why.py, receipts CLI, SQLite store) but the runnable beat is unclaimed by any W1 item. Tier-1 because it is a launch demo act that hid in a repo seam."
+  "status": "done (2026-06-12; four build items + rider probe green; receipts 033701Z/033702Z/033703Z; built by fable master, closed by opus successor after capacity-exhaustion transition 033659Z)",
+  "acceptance": "The spec's acceptance table: five questions as runnable queries with asserted outputs; provenance cameo (origin_mode visible); negative case (honest absence); user-visible transcript; composition with the frozen pair + OPA contrast. Ratified defaults: per-run <run>/.governor/ layout; standalone interrogate.sh; opa-contrast prints/writes the durable OPA receipt path.",
+  "rider": "Build receipt MUST include the parent-threading corpus probe: confirm real parent_receipt_ids on the spendability refusal do not alter frozen decision fields (expected pass — corpus freezes decision fields, not lineage; probe it anyway). Lineage at emission or never: post-emission parent patching forbidden.",
+  "note": "Converted from spec_slice on operator ratification 2026-06-12. The corpse gets cross-examined."
 }

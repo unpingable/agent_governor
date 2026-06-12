@@ -129,6 +129,15 @@ the head; the receipts (§6) are the custody trail.
 - **Admission:** build slices require a ratified gap spec. Doctrine without
   acceptance criteria enters only as a spec_slice. Unmodeled work is not
   admitted.
+- **spec_slice acceptance signal — `fence_legibility_escape_count`** (adopted
+  2026-06-12): run a cold flat-prompt validation pass (codex or equivalent;
+  artifact only, no doctrine preamble) and count the validator's
+  "what I'd build wrong" items that ESCAPE the spec's existing pins. Zero
+  escapes = the spec teaches its own boundaries = ratifiable. Named
+  ambiguities are patched as pins before the nod; the pass is recorded in the
+  spec's validation-provenance section. (First instance:
+  GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001 — five ambiguities patched, zero
+  escapes.)
 - **Priority:**
   1. W1 items in ratified order until W1 exit criteria;
   2. forcing-case items (a named refusal that can't currently be expressed);

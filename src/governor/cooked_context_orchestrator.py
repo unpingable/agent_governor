@@ -736,7 +736,12 @@ class CookedContextOrchestrator:
         # (the lapse must not cost budget). Only runs when a gate is composed
         # AND a window is supplied; otherwise the chain is unchanged.
         if self._spendability_gate is not None and standing_window is not None:
-            spend_check = self._spendability_gate.check(standing_window)
+            # Lineage at emission: the gate's receipt cites the admission
+            # (wicket) receipt as parent, so the refusal chain walks
+            # refusal → wicket → standing → finding, same as the consume path.
+            spend_check = self._spendability_gate.check(
+                standing_window, parent_receipt_ids=(admission_receipt_id,)
+            )
             if isinstance(spend_check, SpendabilityRefusal):
                 return ChainResult(
                     outcome=spend_check, seam=SEAM_STANDING_SPENDABILITY

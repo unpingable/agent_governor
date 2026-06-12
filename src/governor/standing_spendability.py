@@ -227,9 +227,19 @@ class StandingSpendabilityGate:
     def __init__(self, receipt_sink: Optional[ReceiptSink] = None):
         self._receipt_sink = receipt_sink
 
-    def check(self, window: StandingWindow) -> SpendabilityVerdict | SpendabilityRefusal:
+    def check(
+        self,
+        window: StandingWindow,
+        parent_receipt_ids: tuple[str, ...] | list[str] = (),
+    ) -> SpendabilityVerdict | SpendabilityRefusal:
+        """``parent_receipt_ids`` is the upstream lineage (the orchestrator
+        passes the wicket/admission receipt id) threaded into the emitted
+        receipt AT EMISSION — lineage at emission or never; a receipt that
+        acquires parents retroactively is a custody chain written by the
+        historian instead of the witness. Post-emission patching is forbidden
+        (receipts are content-addressed and append-only)."""
         verdict = evaluate_spendability_window(window)
-        receipt_id = self._emit(window, verdict)
+        receipt_id = self._emit(window, verdict, tuple(parent_receipt_ids))
         if verdict.bounded:
             return SpendabilityVerdict(
                 bounded=True,
@@ -250,7 +260,10 @@ class StandingSpendabilityGate:
         )
 
     def _emit(
-        self, window: StandingWindow, verdict: SpendabilityVerdict
+        self,
+        window: StandingWindow,
+        verdict: SpendabilityVerdict,
+        parent_receipt_ids: tuple[str, ...] = (),
     ) -> Optional[str]:
         if self._receipt_sink is None:
             return None
@@ -267,10 +280,12 @@ class StandingSpendabilityGate:
         evidence_bundle["bounded"] = verdict.bounded
         if not verdict.bounded:
             evidence_bundle["refusal_kind"] = verdict.reason
-        # Standing-spendability sits after admission; it is the chain origin
-        # from this seam's own vantage (the orchestrator threads parents at the
-        # chain level), so no parent here.
-        evidence_bundle["parent_receipt_ids"] = []
+        # Lineage at emission or never: the orchestrator passes the upstream
+        # admission (wicket) receipt id so the refusal chain walks
+        # refusal → wicket → standing → finding-terminus, same as the consume
+        # path. (Was hardcoded [] — the refusal was an orphan; found by the
+        # Act-Two spec probe, GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001.)
+        evidence_bundle["parent_receipt_ids"] = list(parent_receipt_ids)
         # Subject bytes encode the window (monotonic basis + readings + bound) so
         # identical windows content-address to the same receipt id.
         so = window.standing_observed

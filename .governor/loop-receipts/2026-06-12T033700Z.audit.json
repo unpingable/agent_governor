@@ -1,0 +1,26 @@
+{
+  "kind": "audit",
+  "cold_start": true,
+  "ts": "2026-06-12T03:37:00Z",
+  "session_id": "successor (opus master) — prior session 9cce1885-2beb-45eb-b600-6e83b2065711 (fable)",
+  "audited_commit": "24b8692",
+  "probes_executed_live": true,
+  "trigger": "controller transition (capacity-exhaustion receipt 2026-06-12T033659Z); cold start IS an audit, mandatory here because the controller is non-self-identical",
+  "state_conformance": {
+    "loop_json": "phase=EXECUTE, slice=act-two-receipt-interrogation — accurate: the slice's build is complete on disk but unexited",
+    "head_vs_last_verified": "match (24b8692)",
+    "dirty_tree_scoped": "13 files — exactly the slice's four build items + tests + docs (orchestrator/gate lineage threading; demo layout + hint fixes; OPA persistence; interrogate.sh/py; loop-protocol §8 signal line; wire-plan + file-structure notes). Nothing unaccounted.",
+    "tests": "54 passed, 8 skipped live (interrogate + corpus + spendability + temporal-lapse); interrogation end-to-end exit 0"
+  },
+  "plan_conformance": {
+    "in_flight_slice": "act-two-receipt-interrogation build_slice — ratified selection with rider; work matches the dispatch packet's four build items; no scope beyond declared files",
+    "deviations": []
+  },
+  "obligation_conformance": {
+    "rider": "corpus-contract probe was run by the predecessor and re-run live by the successor: green with real parent_receipt_ids (frozen decision fields unaltered)",
+    "corpus_closed_world": "green",
+    "pinning_tests": "lineage-at-emission pins present (unit + drill-level + tampered-corpse fails-loudly)"
+  },
+  "outcome": "pass",
+  "next": "close the slice (exit receipts + commit), then adopt the model-capacity policy as a separate doctrine commit"
+}

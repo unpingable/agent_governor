@@ -36,7 +36,7 @@ python3 -m governor.demo_refused_spend --root "${ROOT}" --format text
 status=$?
 
 echo "Receipts written under: ${ROOT}"
-echo "Inspect them with:       governor receipts   (point GOVERNOR_DIR at a run subdir)"
-echo "                         or: python3 -m governor.demo_refused_spend --root ${ROOT} --format json"
+echo "Cross-examine the corpse (Act 2):  demo/interrogate.sh ${ROOT}"
+echo "JSON envelope:                     python3 -m governor.demo_refused_spend --root ${ROOT} --format json"
 
 exit "${status}"

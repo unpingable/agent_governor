@@ -98,6 +98,19 @@ class TestRatifiedPins:
         assert sink.emits[0]["evidence_bundle"]["gap_basis"]["kind"] == "monotonic"
         assert out.receipt_id == "rcpt-0"
 
+    def test_lineage_threaded_at_emission(self):
+        # Lineage at emission or never: parents supplied to check() land in
+        # the emitted bundle verbatim; default is empty (no fabricated lineage).
+        sink = _RecordingSink()
+        gate = StandingSpendabilityGate(receipt_sink=sink)
+        gate.check(_window(exercise_s=51), parent_receipt_ids=("wicket-rcpt-abc",))
+        assert sink.emits[0]["evidence_bundle"]["parent_receipt_ids"] == [
+            "wicket-rcpt-abc"
+        ]
+        sink2 = _RecordingSink()
+        StandingSpendabilityGate(receipt_sink=sink2).check(_window(exercise_s=51))
+        assert sink2.emits[0]["evidence_bundle"]["parent_receipt_ids"] == []
+
     def test_within_bound_twin_passes(self):
         sink = _RecordingSink()
         gate = StandingSpendabilityGate(receipt_sink=sink)

@@ -1,0 +1,18 @@
+{
+  "kind": "capacity_exhaustion",
+  "ts": "2026-06-12T03:36:59Z",
+  "resource": "model_window",
+  "actor": "fable (loop master, this session's prior controller)",
+  "phase": "EXECUTE (act-two-receipt-interrogation build slice — work complete, exit receipts not yet emitted)",
+  "effect": "loop paused; operator reports window exhausted until ~23:00 local",
+  "recovery": "downgrade master to opus; fable preserved for audit/escalation (appeals court, not shift supervisor)",
+  "controller_transition": {
+    "note": "this is ALSO a controller-transition receipt (Paper-23 pin: a non-self-identical controller cannot inherit the predecessor's warm intentions, only its receipts). Session lineage broken explicitly; resume began in AUDIT because the controller changed, not as courtesy.",
+    "from_actor": "fable",
+    "to_actor": "opus",
+    "to_session": "successor session (this receipt's author)",
+    "resume_phase": "AUDIT"
+  },
+  "evidence_basis": "operator report (testimony) + live probes by the successor: slice diff intact (13 files), 54 tests green, interrogation exit 0, HEAD=24b8692 matches loop.json last_verified_commit",
+  "provenance_note": "recorded by the successor controller after the fact, citing the operator's report — testimony about the exhaustion, witness of the resume-state probes."
+}

@@ -1,0 +1,15 @@
+{
+  "kind": "execute",
+  "ts": "2026-06-12T03:37:01Z",
+  "session_id": "successor (opus master); build performed by predecessor (fable) same slice, receipts inherited per controller-transition discipline",
+  "slice": "act-two-receipt-interrogation (build_slice)",
+  "build_items_delivered": [
+    "1 un-orphan the refusal: StandingSpendabilityGate.check() gains parent_receipt_ids threaded to _emit at emission (lineage at emission or never; post-emission patching forbidden, stated in the docstring); orchestrator passes the wicket/admission receipt id. Chain now walks REFUSED → wicket → standing → honest MISSING terminus (verified live).",
+    "2 per-run .governor layout: demo runs write <run>/.governor (CLI-interrogable, hermetic); refused-spend.sh stale GOVERNOR_DIR hint replaced with demo/interrogate.sh handle; Act-1 _main prints copy-pasteable governor --root commands OUTSIDE the deterministic surface",
+    "3 OPA verdict receipt persisted at <root>/opa_verdict_receipt.json (stable name, content-addressed id inside); opa-contrast.sh prints the path",
+    "4 the beat: src/governor/demo_interrogate.py + demo/interrogate.sh — six-question transcript (Q1 chain walk / Q2 typed reason / Q3 gap-vs-bound / Q4 named clock witness + origin_mode cameo / Q5 the naive gate's receipted verdict, honest-skip when absent / Q6 fabricated id → honest absence), pinned invocation (optional root; runs Acts 1+2.5 itself when absent and says so), final integrity block, exit nonzero on any wrong answer"
+  ],
+  "rider_probe": "RAN AND GREEN (twice — predecessor and successor): tests/test_corpus_contract.py passes with real parent_receipt_ids on the spendability refusal; frozen decision fields unaltered (corpus pins decision fields + block subset, lineage never pinned). Drill-level pin test_refusal_is_not_an_orphan asserts the parent IS the wicket receipt id.",
+  "tests": "80 passed 9 skipped (slice family) + 122 passed (drill/poster frozen suites) + 7 new interrogate tests incl. tampered-corpse fails-loudly",
+  "also": "loop-protocol §8 gains the adopted fence_legibility_escape_count signal; wire-plan Act-2 DONE note; file-structure entries"
+}

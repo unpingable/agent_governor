@@ -1,0 +1,9 @@
+{
+  "kind": "review",
+  "ts": "2026-06-12T03:37:02Z",
+  "session_id": "successor (opus master)",
+  "slice": "act-two-receipt-interrogation (build_slice)",
+  "cargo_verdict": "pass — all five acceptance questions runnable with asserted answers; cameo, honest-absence, transcript, and composition criteria hold; rider probe green; tampered corpse fails loudly",
+  "process_verdict": "pass — ratified selection, dispatch constraints held (corpus untouched, anti-dashboard, no new long-lived surface, lineage at emission), defaults implemented as ratified; mid-slice controller transition handled by typed receipt + resume-AUDIT rather than warm inheritance",
+  "notes": "Q5 renders the no-engine path on this host (opa binary absent) — decision:null with honest provenance; launch-day box gets the binary so the allow verdict renders live. The demo trilogy is now: refused-spend.sh (Act 1) → interrogate.sh (Act 2) → proof seam rendered in both (Act 3), plus opa-contrast.sh (Act 2.5)."
+}

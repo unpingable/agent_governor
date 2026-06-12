@@ -1,14 +1,15 @@
 {
   "phase": "PLAN",
   "current_slice": null,
-  "candidate_next_slice": "act-two build_slice (on ratification of GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001 — open questions carry defaults, silence ratifies defaults)",
-  "slice_spec": ["specs/gaps/GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001.md"],
+  "candidate_next_slice": "model-capacity policy adoption (loop-protocol §11 AUTO_RUN + §12 model zoning, operator package + fable deltas) — doctrine commit, then ordinary PLAN selection resumes",
+  "slice_spec": [".governor/loop-receipts/2026-06-12T033659Z.capacity-exhaustion.json (the forcing event)"],
   "acceptance": null,
-  "blocked_on": "ratification: one operator nod on the Act-Two gap spec",
-  "next_action": "on nod: convert act-two-receipt-interrogation to build_slice (spec_ref = the gap spec), DISPATCH, build per the pinned mechanism (un-orphan refusal / store layout default / persist OPA receipt / interrogate.sh)",
-  "last_verified_commit": "56f5e95",
-  "last_updated": "2026-06-12T00:05:00Z",
-  "session_id": "9cce1885-2beb-45eb-b600-6e83b2065711",
+  "blocked_on": "nothing (policy package operator-ratified in-session)",
+  "next_action": "land loop-protocol §11/§12 with the four ratified deltas (controller-transition pin, patch mutation-membrane, no-tier-ratifies, A/B-from-receipts); file LA model-capacity backlog entry; then PLAN selects next launch work",
+  "last_verified_commit": "24b8692",
+  "last_updated": "2026-06-12T03:38:00Z",
+  "session_id": "opus-successor (prior: 9cce1885 fable)",
+  "loop_master": "opus (downgraded from fable per capacity-exhaustion receipt 2026-06-12T033659Z; fable = audit/escalation tier)",
   "wip_limit": 1,
   "dirty_tree_allowed": false,
   "dirty_tree_scope": ["src", "tests", "docs", "golden", "demo", "specs"],
@@ -16,8 +17,8 @@
     "cat .governor/loop.json",
     "git log --oneline -5",
     "git status --short -- src tests docs golden demo specs",
-    "python3 -m pytest tests/test_corpus_contract.py -q",
-    "grep -c 'Validation provenance' specs/gaps/GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001.md  # slice probe: spec exists + validated"
+    "python3 -m pytest tests/test_demo_interrogate.py tests/test_corpus_contract.py -q",
+    "bash demo/interrogate.sh >/dev/null && echo act-two-holds"
   ],
-  "w1_slab": "items 1, 2, 2.5, 3, 4, 5 ALL DONE — W1 exit criteria (stranger <15min; tripwire; Show HN gate) remain a separate checklist; Act-2 spec is the next launch-demo work"
+  "w1_slab": "items 1-5 DONE + Act 2 DONE — demo trilogy complete (refused-spend / interrogate / opa-contrast); W1 exit criteria (stranger <15min; tripwire; Show HN gate) remain the open checklist"
 }

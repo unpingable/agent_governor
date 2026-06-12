@@ -81,8 +81,12 @@ class RefusedSpendAggregate:
 def run_contrast(*, root: Path, now: int = 0) -> RefusedSpendAggregate:
     """Run the legitimate twin and the impostor against fresh subdirs."""
     agg = RefusedSpendAggregate()
-    twin_dir = root / "twin"
-    impostor_dir = root / "impostor"
+    # Each run is a .governor-shaped store at <run>/.governor so the CLI can
+    # interrogate it directly (`governor --root <root>/impostor why <id>`) —
+    # hermetic per run, no shared-store pollution (Act-Two spec, ratified
+    # default). The run dir is the explicit handle Act 2 takes.
+    twin_dir = root / "twin" / ".governor"
+    impostor_dir = root / "impostor" / ".governor"
     twin_dir.mkdir(parents=True, exist_ok=True)
     impostor_dir.mkdir(parents=True, exist_ok=True)
     agg.twin = run_drill(
@@ -353,6 +357,16 @@ def _main(argv: list[str] | None = None) -> int:
     surface = render_surface(agg)
     if args.format == "text":
         sys.stdout.write(surface)
+        # Copy-pasteable interrogation handles (printed OUTSIDE the
+        # deterministic surface — they carry the run root and live ids).
+        if agg.impostor is not None and agg.impostor.receipt_ids:
+            refusal_id = agg.impostor.receipt_ids[-1]
+            sys.stdout.write(
+                "Interrogate this run (Act 2):\n"
+                f"  governor --root {args.root}/impostor why {refusal_id}\n"
+                f"  governor --root {args.root}/impostor receipts --id {refusal_id} --evidence\n"
+                f"  demo/interrogate.sh {args.root}\n"
+            )
     else:
         json.dump(build_json_envelope(agg, surface), sys.stdout,
                   sort_keys=True, indent=2)

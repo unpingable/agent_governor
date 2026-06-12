@@ -32,5 +32,6 @@ cd "${REPO_ROOT}"
 python3 -m governor.demo_opa_contrast --root "${ROOT}" --format text
 status=$?
 
-echo "Custody receipts under: ${ROOT}"
+echo "Custody receipts under: ${ROOT}/custody"
+echo "OPA verdict receipt:    ${ROOT}/opa_verdict_receipt.json"
 exit "${status}"

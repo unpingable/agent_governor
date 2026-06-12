@@ -1,0 +1,10 @@
+{
+  "id": "demo-2-correctly-bored",
+  "repo": "agent_gov (loop/receipts) + linode VM (colocated runtime) + gov-webui (viewer)",
+  "kind": "build_slice_series",
+  "priority_tier": "2-high — POST-LAUNCH FIRST; quarantined behind launch because it is too good and will eat the room (a lot of organs in a trench coat)",
+  "status": "zoned (design record filed; do not dispatch before launch items close)",
+  "spec_ref": "working/demo-2-correctly-bored-and-operators-chair-2026-06-12.md §1-§2",
+  "acceptance": "Three recorded acts on the linode, colocated (zero cross-host deps): (1) CORRECTLY BORED — normal WAL pressure classified known_baseline with policy_ref, action none, coverage intact; the no-op receipt is the centerpiece; (2) BOUNDED REFLEX — chaos_drill declared (typed, scoped, time-bounded; drill-induced distinguishable from wild in audit), driftwatch container killed, pre-authorized scoped restart, remediation receipt; (3) EXHAUSTION — repeated kills exhaust the retry/blast-radius budget, loop REFUSES further restarts, escalates to human with full attempt trail. Canonical run recorded (asciinema); live rerun optional. Receipt vocabulary per record. Demo line: 'The dashboard is empty. The receipt log is not.'",
+  "note": "This build IS the forcing case for: reflex-plane v0, LA retry/blast-radius first real ledger, baseline policy custody (first policy-register residents in anger), chaos-drill typing, escalation receipt path. Composes with loop-protocol §11.1 (exhaustion = anti-flail on camera). Dependencies: webui-vocabulary-refresh (viewer), policy-register-citation-discipline (policy_refs on every classification). Demo slot 2; museum/RKL moves to slot 3."
+}

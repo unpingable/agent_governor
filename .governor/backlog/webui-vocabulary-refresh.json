@@ -1,0 +1,10 @@
+{
+  "id": "webui-vocabulary-refresh",
+  "repo": "gov-webui (github.com/unpingable/governor_webui — NOT cloned on this machine as of 2026-06-12; first step is git clone) + agent_gov (daemon RPC + integration/test_contract_*.py)",
+  "kind": "build_slice",
+  "priority_tier": 2,
+  "status": "queued (probe-first; behind launch)",
+  "spec_ref": "working/demo-2-correctly-bored-and-operators-chair-2026-06-12.md §2",
+  "acceptance": "PROBE FIRST, architecture second: clone gov-webui, run the integration contract tests against the current daemon, produce the rot map (which RPC surfaces/schemas drifted). Then teach the renderer the post-February vocabulary it predates: loop/audit receipts, origin_mode, confusion_receipt, clock_witness, policy_ref, coverage_gap/intact, known_baseline_noop, remediation_attempt, budget_exhausted. Likely labels/grouping/filters + a few receipt-specific cards, not architecture. Done when demo-2's three acts render legibly from the local daemon.",
+  "note": "Do NOT revive all five UI surfaces — webui now (demo-2 points at it), guvnah on its own spec (operator's chair), vscode-governor sleeps honorably. 'Present James must stop trying to out-design Past James while standing on Past James's roof.'"
+}

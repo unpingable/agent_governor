@@ -1,0 +1,10 @@
+{
+  "id": "guvnah-v2-operators-chair",
+  "repo": "~/git/guvnah (exists locally; Electron+Svelte, daemon as stdio child) — design spec lands there or in agent_gov working/",
+  "kind": "spec_slice",
+  "priority_tier": "2 (post-launch; design before build)",
+  "status": "queued — DESIGN SPEC IS OPERATOR-OWNED, not loop-delegable (the operator designing the operator's chair is the point, and the fun)",
+  "spec_ref": "working/demo-2-correctly-bored-and-operators-chair-2026-06-12.md §3-§5",
+  "acceptance": "A design doc leading with the role re-scope sentence (v1 = daemon cockpit; v2 = where the human-in-the-loop sits: ratification authority + attention-budget holder), covering: nod queue as center (decision cards: ask/blocker/evidence links/options/one-tap ratify-override-park; 5-minute morning audit from the couch); correctly-bored default state with evidence ('I would prefer not to bother you' + receipts); loop panel (loop.json alive + burn-per-progress sparkline, confusion amber, correlated-confusion red); constellation panel projected from the SHARED component register (same source as the public hub — the anti-seance mechanism); budgets panel including the dash metering its own interruptions against the attention ledger; presence-surface doctrine (nods carry operator-present provenance, optional freshness check; chat namespace stays dark). Phases: 1 local chair (zero network) / 2 fleet eyes (forces N0-N2; remote claims render WITH model age) / 3 remote nod (forces X1; honest interim = surface the HALT, nod over ssh, receipt records cli_origin).",
+  "note": "Dependencies: webui-vocabulary-refresh (shared contract work), policy-register-citation-discipline (cards cite policy_refs), component register (topology source; card schema in record §3 supersedes hub-v1 five-field skeleton when next touched). Phase-3 bootstrap fact worth keeping: the operator's ratification key is the FIRST standing-backed identity on the wire — the key hierarchy starts where authority actually starts."
+}

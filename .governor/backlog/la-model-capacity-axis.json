@@ -1,0 +1,11 @@
+{
+  "id": "la-model-capacity-axis",
+  "repo": "linearaccountant (+ agent_gov consumer)",
+  "kind": "spec_slice",
+  "spec_ref": "docs/loop-protocol.md §12 (the ratified policy this would mechanize); forcing receipt .governor/loop-receipts/2026-06-12T033659Z.capacity-exhaustion.json",
+  "forcing_case": "named but not yet biting twice: the loop's first capacity-exhaustion event (fable master, 2026-06-12). Promotes when a second consumer needs the ledger (e.g. AUTO_RUN metering) or when manual tier discipline visibly fails.",
+  "priority_tier": 2,
+  "status": "filed",
+  "acceptance": "Output: gap spec for model capacity as an LA resource axis. Two-level taxonomy fits the existing failure_class split: exhaustion/model_window_exhausted (spent the metabolic substrate) vs refusal/model_tier_not_admitted (wrong resource for the phase — policy, not bad luck). Dimensions: tier (worker/controller/synthesis/ratification-advice) × substrate (anthropic/openai) × window × mode. Receipts say 'consumed: model_capacity, tier=synthesis, mode=planning' instead of pretending everything is fungible tokens. Spend rule: up one tier where mistakes compound, down where contained; synthesis-tier use requires a named reason (synthesis_needed / ambiguity_custody_affecting / cold_audit_boundary / ratification_advice / failed_mid_tier_attempt). Downgrade path first-class (exhaustion receipt → checkpoint → downgrade → resume in AUDIT). NO tier is ever the admission actor.",
+  "note": "Capability is not the scarce resource; attention-shaped capability is. The vendor recon (model names, prices) is deployment config — the tier abstraction is the doctrine. The A/B (fable-master vs opus-master+fable-audit) is accumulating in the loop's own receipt trail; let the ledger settle it. BEHIND LAUNCH."
+}

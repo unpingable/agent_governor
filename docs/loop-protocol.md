@@ -201,6 +201,125 @@ maps to the Lean theorem that actually licenses it." A known doubt about that
 mapping (`proof-seam-citation-reconciliation`) means item 4 is open *in the
 acceptance sense* until resolved — selection branch 2 applies.
 
+## 11. AUTO_RUN mode — bounded overnight execution (ratified 2026-06-12)
+
+AUTO_RUN is a bounded runner for admitted work. It is not autonomous
+ratification. Best-effort with receipts, not best-effort with vibes.
+
+> Auto may continue through admitted, non-custody-affecting work when failures
+> are classified. Auto may not invent scope, ratify ambiguity, or silently
+> degrade obligations. The dangerous case is not failure; the dangerous case
+> is **successful improvisation**.
+
+**AUTO_RUN starts in AUDIT and ends in AUDIT.** The morning state is not "look
+what I did while unsupervised"; it is "here is what was admitted, what ran,
+what passed, what parked, and what I refused to fake."
+
+Allowed: execute already-admitted `build_slice`s; draft candidate
+`spec_slice`s from filed backlog items; run probes/tests/transcripts; emit
+transition/audit/capacity/deviation receipts; park blocked work with named
+reasons; select the next admitted item by ratified priority.
+
+Forbidden: custody-affecting ratification; admitting candidate slices without
+the admission gate; changing priority rules; cross-repo schema changes;
+Zenodo/public-release mutations; guessing unanswered HitL clarifications;
+treating fallback behavior as success unless the spec explicitly allows it.
+
+Failure handling (classify, never improvise):
+
+| Failure | Behavior |
+|---|---|
+| Recoverable test failure | Bounded local patch attempts, rerun |
+| Missing dependency/tool | Record dependency gap; continue only on a spec-approved fallback |
+| Usage/window exhaustion | `capacity_exhaustion` receipt, checkpoint loop state, halt |
+| Custody ambiguity | Park; typed question into the next HitL batch |
+| Spec contradiction / plan deviation | Deviation receipt; halt for ratification |
+| Dirty/ambiguous repo state | Preserve evidence; halt |
+
+**Patch mutation membrane (load-bearing):** patch attempts may not touch files
+outside the slice's declared scope. A fix that needs to reach outside it —
+another repo, a schema, the corpus, this protocol — is not a patch, it is a
+deviation, and it parks. Without this line, "two patch attempts" quietly
+becomes two scope expansions performed at 3am by a model with a budget and
+good intentions.
+
+Retry/capacity budget (metabolic cap — otherwise overnight mode is an
+archaeological site by morning):
+
+```yaml
+auto_run_budget:
+  max_slices_per_run: 3
+  max_patch_attempts_per_slice: 2
+  max_test_retries_per_failure: 2
+  max_wall_clock_hours: 6
+  halt_on_unclassified_failure: true
+```
+
+> **Retries may reduce uncertainty. Retries may not manufacture authority.**
+> retry = uncertainty about transient state; refusal = certainty about
+> inadmissible state. Exhausted retries classify (`exhaustion /
+> retry_budget_spent`), they do not upgrade absence into failure semantics
+> without evidence.
+
+Exit obligation: AUTO_RUN ends by updating `.governor/loop.json` and writing a
+compact heartbeat — slices attempted/completed, parked items,
+failures/deviations, capacity exhaustion if any, exact next action for cold
+restart.
+
+## 12. Model capacity policy (ratified 2026-06-12)
+
+The forcing event: the loop's first master was Fable-tier and exhausted its
+window mid-slice (receipt `2026-06-12T033659Z.capacity-exhaustion`). Model
+brilliance is ambient attention — scarce, exhaustible, behavior-warping, and
+governable. A bigger model is not monotonically better for loop work: it
+burns window faster, notices more seams than the slice can admit, tempts
+replanning, and turns routine dispatch into doctrine opera.
+
+- **The master loop runs on the smallest model that can enforce the protocol.**
+  Its job is bureaucratically boring: keep the program counter, enforce WIP-1,
+  dispatch, verify, refuse drift. Large synthesis models are escalation
+  resources, not default orchestration substrate.
+
+| Capacity | Tier |
+|---|---|
+| PLAN selection / DISPATCH / REVIEW | controller (Opus-class) |
+| EXECUTE implementation | worker (Sonnet/Codex/Qwen-class) |
+| AUDIT, ordinary cycles | controller + mechanized probes |
+| AUDIT at chunk/custody boundaries; doctrine synthesis; ratification advice; spec fence-legibility critique | synthesis (Fable-class) — appeals court, not shift supervisor |
+
+- Synthesis-tier use in ordinary PLAN/DISPATCH/REVIEW requires a recorded
+  reason why smaller models are insufficient. "It was available" is ambient
+  capacity abuse — `refusal / model_tier_not_admitted` is policy, distinct
+  from `exhaustion / model_window_exhausted` (spent the resource vs tried to
+  spend the wrong resource for the phase).
+- **Spend up one tier where mistakes compound; spend down where mistakes are
+  contained.** Decomposition / diagnostic planning / recomposition audit
+  default to baseline+1 (error-amplifier phases; one tier up is not luxury
+  inference, it is avoiding downstream cleanup) with `max_attempts: 1` —
+  a better first pass, not asking the owl until it writes a constitution.
+  Ladder: baseline performs the task; baseline+1 notices the shape of likely
+  mistakes; baseline+2 adjudicates ambiguous doctrine/custody.
+- **No tier ratifies.** Tier changes advice quality, never authority class.
+  Baseline+2 at a ratification boundary produces better ratification *advice*;
+  the ratification is the operator's, every time, regardless of advisor size.
+  Pinning obligation (when the loop FSM gets code): `model_tier` must never
+  appear as the admission actor on any backlog transition.
+- **Capacity exhaustion is a typed loop event, not an oops.** Emit the
+  `capacity_exhaustion` receipt, checkpoint, downgrade the master, resume.
+  The receipt is ALSO a **controller-transition receipt** (Paper-23 pin: a
+  non-self-identical controller inherits the predecessor's *receipts*, never
+  its warm intentions) — actor change recorded in loop.json, session lineage
+  broken explicitly, resume in AUDIT mandatory *because* the controller
+  changed. First instance: 2026-06-12 (fable → opus, mid-build-slice; the
+  successor's resume-audit found the work intact and closed the slice from
+  receipts alone).
+- **The A/B is already running.** Fable-master arm: this week's receipt trail
+  (token burn, exhaustion event, throughput). Opus-master arm: accumulating
+  from 2026-06-12 under identical protocol. The comparison (escalation rate,
+  window consumption, drift-catch parity) falls out of the ledger — model
+  zoning ratified by its own receipts, not vendor pricing pages. Tier→model
+  mapping is deployment config; the tier abstraction is the doctrine.
+
 ## Doctrine
 
 | Verdict | Question |

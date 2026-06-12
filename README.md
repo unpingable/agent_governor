@@ -9,6 +9,8 @@ AI agents act on your code, your infrastructure, your data. Governor puts you in
 Launch Claude Code or Gemini CLI as a governed process. Every tool call is intercepted — reads auto-approve, writes need your approval. When the session ends, you review the diff. Accept or revert. Fork from there to keep going. No changes land without your say-so.
 
 ```bash
+python3 -m venv .venv
+. .venv/bin/activate
 pip install -e .
 governor init
 governor runtime launch --task "Add error handling to users.py and write tests"
@@ -116,9 +118,11 @@ Teams can stop at any level and still get value.
 One command. Watch a credentialed action get refused — and cross-examine the evidence.
 
 ```bash
+python3 -m venv .venv
+. .venv/bin/activate
 pip install -e .
 ./demo/refused-spend.sh     # a valid credential, spent one second past its horizon — REFUSED, with receipts
-./demo/interrogate.sh       # "just one more thing": six questions against those same receipts
+./demo/interrogate.sh       # "just one more thing": six questions, answered from receipts (no arg = fresh Act 1; or pass the root Act 1 printed)
 ./demo/opa-contrast.sh      # what a policy engine would have said about the same incident (allow)
 ```
 

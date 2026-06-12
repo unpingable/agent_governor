@@ -1,8 +1,8 @@
 {
   "phase": "AUDIT",
   "current_slice": null,
-  "candidate_next_slice": "operator review of unified-check-receipt-gap receipt; further loops per operator dispatch (readme-venv-and-interrogate-wording tier-4 queued); hub/demo (launch 3/4) UNGATED once operator accepts this classification (the gating receipt surface is now fixed); push batched after 17:00 + GitHub-clone stranger verification",
-  "slice_spec": [".governor/loop-receipts/2026-06-12T144500Z.slice-unified-check-receipt.json"],
+  "candidate_next_slice": "hub/demo (launch 3/4) — ungated; interrogate-wrong-root-traceback (tier-4, new, filed with reproduction); push batched after 17:00 + GitHub-clone stranger verification",
+  "slice_spec": [".governor/loop-receipts/2026-06-12T151500Z.slice-readme-venv-interrogate.json"],
   "acceptance": null,
   "blocked_on": "operator review (or next loop dispatch)",
   "next_action": "operator reads slice receipt; dispatch next loop or batch-push after 17:00",

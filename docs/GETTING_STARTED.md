@@ -7,6 +7,8 @@ Install, try it, see what it does. Five minutes.
 ```bash
 git clone https://github.com/unpingable/agent_governor.git
 cd agent_governor
+python3 -m venv .venv
+. .venv/bin/activate
 pip install -e .
 ```
 

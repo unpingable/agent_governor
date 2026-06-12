@@ -3,7 +3,7 @@
   "repo": "agent_gov",
   "kind": "build_slice",
   "priority_tier": 4,
-  "status": "queued",
+  "status": "done (2026-06-12 morning loop, receipt 2026-06-12T151500Z)",
   "spec_ref": "stranger RERUN friction 2-5",
   "acceptance": "README install block shows the two venv lines (python3 -m venv .venv; . .venv/bin/activate) before pip install -e .; README's interrogate line passes the printed root (./demo/interrogate.sh <root-from-act-1>) or the comment stops saying 'those same receipts' for the no-arg form.",
   "note": "Doc polish; batches with any next front-door touch."

@@ -261,6 +261,43 @@ auto_run_budget:
 > retry_budget_spent`), they do not upgrade absence into failure semantics
 > without evidence.
 
+### 11.1 Backoff policy — epistemic, not rate-based (added 2026-06-12)
+
+Classic backoff answers contention ("busy → wait → retry"). Loop backoff
+answers confusion ("my action model is failing → stop mutating → observe").
+Full reasoning record: `working/pipeline-doctrine-2026-06-12.md` §1.
+
+> **When retries stop producing new evidence, retry is forbidden. When
+> failures produce too many kinds of evidence, mutation is forbidden.**
+
+- **Identical failure CLASS twice** (class match, never exact-string — strings
+  rot): transient hypothesis dead → reclassify per the failure table; further
+  retries forbidden.
+- **Distinct failure classes across attempts**: model-mismatch signature →
+  enter PROBE mode, emit a confusion receipt naming the failure classes.
+- **PROBE mode is a mode switch, not a retry.** Invariants: no mutations, no
+  commits, no generated fixes, no "while I'm here" — read-only commands,
+  state inventory, receipt inspection, failure-class synthesis only. The wall
+  is pinned mechanically: *probe sessions emit zero mutation receipts* is
+  checkable from the receipt trail after the fact (backlog:
+  `epistemic-backoff-mechanization`).
+- **Burn-per-progress** (capacity consumed / slice-advancing receipts): soft
+  threshold → mandatory PROBE downshift + confusion receipt; hard threshold →
+  capacity checkpoint + halt for morning audit. Confusion spend is metabolic:
+  it authorizes neither mutation nor continued retries; it triggers
+  observation.
+- **TIER ESCALATION IS ILLEGAL UNTIL AFTER A PROBE PASS.** Then: once,
+  baseline+1 (§12), with recorded reason — never as a retry substitute.
+- Ladder: `retry → probe → escalate-once → park (batched clarification) → halt`.
+- **Correlated confusion check (morning audit obligation):** confusion
+  receipts from multiple agents on unrelated slices in the same window =
+  environment-level failure, not slice-level — escalate to environment
+  diagnosis before any recomposition, and before any quorum over the
+  diagnosis counts agreement as evidence.
+- Confusion receipts feed the audit and, eventually, decomposer calibration:
+  recurring mismatch on a slice CLASS means the slices are cut wrong, not the
+  agents.
+
 Exit obligation: AUTO_RUN ends by updating `.governor/loop.json` and writing a
 compact heartbeat — slices attempted/completed, parked items,
 failures/deviations, capacity exhaustion if any, exact next action for cold

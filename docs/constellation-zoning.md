@@ -186,7 +186,7 @@ forcing cases.
 | ----- | ----------------- | --------------------- | ------------ | ---------------------- |
 | **Temporal authority / time plane** | constellation (NQ-adjacent) | a cross-host gap bound that must be *enforceable*, not advisory | high — embedded timestamps | none; each component is its own clock folklore |
 | **Retraction transport** | nightshift + continuity | a relied-upon claim that lapses/revokes and must reach everyone relying on it | high — reliance index | nightshift routes assertions, not retractions; no reliance index |
-| **Verdict / adjudication seam** | (unowned — mark the boundary) | a verdict consumer that renders judgment on receipts and must itself be custodied | medium | meta-plan says "verdict = downstream"; downstream is located nowhere |
+| **Verdict / adjudication seam** | (unowned — mark the boundary) | a verdict consumer that renders judgment on receipts and must itself be custodied | medium | meta-plan says "verdict = downstream"; downstream is located nowhere. **Located 2026-06-12 → §Quorum shape & policy custody**: a federation (policy register + scoped evaluators + verdict receipts citing policy@version), not an organ |
 | **Evidence death rites / retention** | continuity + evidence locker | the first coverage claim that spans a window someone compacted | high — informal pruning | `docs/HISTORY_BOUNDARY.md`; no tombstones, no standing-to-delete |
 | **Restore-from-backup epochs** | continuity (cross-cutting) | a registry restore that time-travels an authority's ledger | high — silent rewind | none; no story for "the world rewound" |
 | **Schema / interface evolution** | cross-cutting (every `_v1`) | a `v1` receipt read by a `v3` consumer that silent-defaults a missing field | high — historical evidence base | `docs/VERSIONING.md`, `specs/gaps/CROSS_DOMAIN_SCHEMA_GAP.md` |
@@ -1007,6 +1007,53 @@ Three additions to standing zoning, none of them organs:
 Forcing-case status: near-term, named — labelwatch lives on the VM and the
 ssh-tunnel era is ending; the forcing day is the first component leaving the
 host. Until then: zoned, not built.
+
+### Quorum shape & policy custody (2026-06-12 appendix, CANDIDATE)
+
+Second 2026-06-12 session (full record:
+`working/pipeline-doctrine-2026-06-12.md`). Two zoning lines and one located
+seam; no new organs.
+
+**Quorum shape — a constraint on a future organ, not an organ:**
+
+> **Quorums are divergence witnesses: they attest agreement shape with
+> provenance classes and preserved dissent. Independence is attested or
+> absent; thresholds are downstream policy over shapes, never counts.**
+
+A raw count is volume, not confidence (5-0 under a shared poisoned premise =
+one error, redundantly serialized; a same-model quorum = one opinion sampled
+N times — temperature is jitter on one voter, not independence). Nested
+quorums must propagate shape (margin, independence classes, dissent receipts),
+never bare yes/no — each flattening layer is Paper 24's aggregation masking in
+a voting booth. Aggregators may summarize; they may not erase dissent, margin,
+abstention, or provenance class. Known shared dependencies count *against*
+independence. No action escalation until the correlated-confusion check
+(loop-protocol §11.1) passes — correlated confusion counted as agreement is
+the 2am incident generator.
+
+**Policy custody — the verdict seam located, as a federation:**
+
+The constellation already has policy engines — plural, scoped, correctly
+(verifier, the OPA shim, wicket admission, LA spend, loop priority). What
+accretes implicitly is the *policies*: bounds, thresholds, budgets, priority
+orders living as constants and prose with no identity, no versions, no
+citation. The fix is custody, not unification — **do not build The Policy
+Engine** (one calculus over spend/freshness/quorum/tier either erases refusal
+surfaces or imports unlicensed structure; the no-unifier result, again).
+
+> **The register stores policy custody; evaluators remain local.**
+> **Every verdict receipt names the policy artifact and version that made the
+> verdict possible** (`policy_ref: quorum_shape.repo_mutation.v0`).
+
+Extraction by citation failure: a verdict that cannot cite its policy is an
+AUDIT deviation, and exactly that policy gets extracted — no migration death
+march. Register = directory convention (`policies/<kind>/<name>.vN.md`), typed
+by evaluator competence (a quorum-shape policy cannot be evaluated by LA).
+Policies are custody-affecting by definition; the existing ratification
+ceremony applies. First properly-born residents when built: `quorum_shape.v0`,
+`loop_backoff/epistemic_backoff.v0` (normative copy already in loop-protocol
+§11.1). Backlog: `policy-register-citation-discipline`,
+`epistemic-backoff-mechanization`.
 
 ---
 

@@ -1,0 +1,10 @@
+{
+  "id": "epistemic-backoff-mechanization",
+  "repo": "agent_gov",
+  "kind": "build_slice",
+  "priority_tier": 2,
+  "status": "queued (protocol text ratified 2026-06-12 as loop-protocol §11.1; this is the mechanization)",
+  "spec_ref": "docs/loop-protocol.md §11.1 (normative); working/pipeline-doctrine-2026-06-12.md §1 (reasoning + confusion_receipt schema)",
+  "acceptance": "(1) PROBE pinning test: 'probe sessions emit zero mutation receipts' checkable mechanically from the receipt trail — a probe that patched something is evidenced after the fact (the wall audits itself); (2) confusion receipt emitted with the §1 schema (slice_id, attempt_count, failure_classes_seen, repeated/distinct counts, capacity_spent, slice_advancing_receipts, burn_per_progress, inferred_signature, prescribed_next_mode); (3) correlated-confusion audit query: confusion receipts from N>=2 agents on unrelated slices in one window flags environment-level diagnosis, runs as part of morning AUDIT; (4) failure matching is by CLASS, never exact string.",
+  "note": "Protocol-first, code-second: §11.1 binds agent behavior today via the loop contract; this slice makes the walls evidenced rather than promised. Burn-per-progress thresholds start as named constants — they become policies/loop_backoff/epistemic_backoff.v0.md fields when the register lands (see policy-register-citation-discipline)."
+}

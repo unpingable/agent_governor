@@ -1,10 +1,22 @@
 {
   "id": "launch-5-readme-ratchet",
-  "repo": "public constellation repos (verifier DONE 2026-06-11; rest pending)",
-  "kind": "build_slice",
-  "spec_ref": "working/launch-plan-2026-06-11.md §README specimen gate v0 (explicit criteria: specimen/quickstart before first H2; one user-facing command that runs it)",
+  "repo": "public constellation repos (verifier DONE 2026-06-11; sweep in progress 2026-06-12)",
+  "kind": "build_slice_series (5.1-5.n per operator 2026-06-12: paranoid decomposition, one repo per sub-slice)",
+  "spec_ref": "working/launch-plan-2026-06-11.md §README specimen gate v0; HitL placement rule (loop-protocol §Doctrine): review at admission/boundary/budget/audit, not inside every admissible action — this envelope is the admission",
   "priority_tier": 1,
-  "status": "queued",
-  "acceptance": "Each public repo README passes the specimen gate v0: example/quickstart/specimen/30-second-run section BEFORE the first doctrine H2; one command that runs it (user-facing, not pytest). The README's specimen is the repo's receipt. Template: ~/git/verifier README (done).",
-  "note": "Launch-order item 5."
+  "status": "in_progress — audit table 2026-06-12 evening below",
+  "acceptance": "Each public repo README passes the specimen gate v0: example/quickstart/specimen/30-second-run section BEFORE the first doctrine H2; one command that runs it (user-facing, not pytest). The README's specimen is the repo's receipt. Template: ~/git/verifier README (done). Envelope fences: minimal shape only (specimen + example/golden, NO logic), commands I author executed live before landing, verbatim moves allowed without re-execution, skip operator-fenced repos (papers, lean, atproto-nutrition), local commits only / no push, foreign-repo pre-existing dirty state untouched.",
+  "audit_table": {
+    "verifier": "DONE 2026-06-11 (template; 0155f5c)",
+    "agent_governor": "PASS (Start Here trilogy before doctrine, ratcheted this week)",
+    "nq": "PASS-IN-SPIRIT, not touched — lead sections ARE specimens (concrete failure contradictions + live demo link at top); letter-of-gate gap (no examples/+golden) deferred to nq's own context, it has its own design culture",
+    "wicket": "5.1 DONE (de5cd50) — denied-irreversible-commit pair at front, live-executed against release binary",
+    "standing": "5.2 DONE (25c4cba) — stale-yes specimen (grant expired at spend, query why chain), live-executed in throwaway db",
+    "rpp": "5.3 DONE (49a8bcb) — pure section move, Quick start above Architecture, text verbatim",
+    "wicket-guard": "5.4 QUEUED — partial (Usage near front) but no examples/, needs one worked example",
+    "continuity": "5.5 QUEUED HARD — README is an essay, no quickstart, no example; needs real specimen construction",
+    "nightshift": "5.6 QUEUED HARD — all doctrine, no quickstart in first 12 headings; needs real specimen construction",
+    "atproto-labelwatch/driftwatch/labeler/feeds/archive/stats": "5.7+ QUEUED — not cloned on this machine; clone first; lower launch-visibility (below the stack section)"
+  },
+  "note": "Launch-order item 5. Hard cases (5.5/5.6) are construction sub-slices, not reorders — dispatch individually."
 }

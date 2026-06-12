@@ -370,3 +370,7 @@ replanning, and turns routine dispatch into doctrine opera.
 - *A gap is a difference between compatible clock witnesses, not numbers.*
 - *Loop-state is a claim; re-entry probes are the admissibility test.*
 - *Surfaces are not authority. Origin class and unit class are authority.*
+- *Human review belongs at admission, boundary definition, budget setting,
+  and audit — not necessarily inside every admissible action.* (operator,
+  2026-06-12: the placement rule for HitL — the nod gates the envelope, not
+  each step within it. Composes with §11 AUTO_RUN and the guvnah nod queue.)

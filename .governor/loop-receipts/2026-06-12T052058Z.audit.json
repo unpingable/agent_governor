@@ -1,0 +1,5 @@
+{"kind":"audit","cold_start":false,"ts":"2026-06-12T052058Z","session_id":"opus-successor","mode":"AUTO_RUN exit (override 043000Z)","probes_executed_live":true,
+ "outcome":"pass_with_findings","gate_rerun":"W1 stranger gate PASS — temporal-lapse refusal reproduced + evidence inspected at ~7-8/15 min (was FAIL: wrong refusal at 10-12, trilogy invisible)",
+ "deviations_named":["receipt-id mismatch found in tonight's own code — FILED not fixed (4th slice would exceed budget; §8 of the audit doc is the receipt)","strict-path taint error leak — FILED not fixed (non-queued code)"],
+ "full_audit":"working/auto-run-audit-2026-06-12.md (the 10 mandated items)",
+ "next":"halt in AUDIT; resume = dispatch refusal-receipt-id-mismatch or operator reorder"}

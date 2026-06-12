@@ -1,0 +1,10 @@
+{
+  "id": "refusal-receipt-id-mismatch",
+  "repo": "agent_gov",
+  "kind": "build_slice",
+  "spec_ref": "stranger RERUN worst moment (working/auto-run-audit-2026-06-12.md): Act-1's surface 'leaf receipt' line, the printed interrogation command, and the JSON envelope leaf_receipt_id all use impostor.receipt_ids[-1] — which is the WICKET pass (the refusal receipt id is never appended to DrillRunResult.receipt_ids on the refusal path).",
+  "priority_tier": 1,
+  "status": "queued",
+  "acceptance": "On a refused run, the refusal receipt id (verdict=block) is what the surface shows as the leaf, what the printed `why`/`receipts --id` commands cite, and what the JSON envelope carries. Root fix preferred (drill_runner appends the spendability receipt id to receipt_ids on refusal) over render-side fishing. Pin with a test asserting the printed id's verdict is block.",
+  "note": "Found by the stranger RERUN — tonight's own Act-2 print amplified a pre-existing receipt_ids gap. Out of overnight budget (3 slices spent); first candidate for morning dispatch. interrogate.sh itself is unaffected (reads the store for verdict=block)."
+}

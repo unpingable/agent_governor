@@ -1,0 +1,32 @@
+{
+  "receipt_kind": "loop_slice",
+  "slice": "launch-5.6 nightshift README specimen",
+  "dispatched_by": "operator 2026-06-12 (Chatty-drafted constraints, operator-endorsed)",
+  "dispatch_constraints": {
+    "goal": "one worked specimen before doctrine prose",
+    "prefer": "existing CLI/test fixture over new behavior",
+    "allowed": "README lead + exact command transcript + note run-dependent values",
+    "forbidden": "new policy, new closure semantics, broad rewrite",
+    "dirty_tree": "leave unrelated dirt alone",
+    "fallback": "if no CLI path exists, use a test fixture transcript; but first probe for an executable refusal",
+    "lead_line": "Night Shift does not make incidents go away. It refuses to close the loop until the witnesses needed for closure exist."
+  },
+  "classification": "routine implementation (README-only, foreign repo, no custody surface touched)",
+  "dogfood_verdict": "held — probe-before-build honored (real nq binary searched first: nq-root/nq has the liveness-export code in nq-monitor but zero built binaries; /usr/bin/nq is the Unix job-queue tool and ENQUEUED a probe command as a job — file ,19ebc9d5f08.142855 created and removed; this is the exact wrong-binary hazard nightshift commit 40ee42b hardened tests against). Forbidden list respected: zero behavior/policy/fixture changes, README only. Dirty-tree rule moot (tree clean). Power outage + context compaction mid-slice; resumed from summary without re-planning.",
+  "cargo_verdict": "shipped — nightshift 01a65bf, README +83 lines, nothing else touched",
+  "specimen": {
+    "what": "liveness-gate refusal: stale NQ witness halts watchbill run BEFORE any findings are consulted",
+    "executable_path_found": "yes — real CLI, not cargo-test fallback. CliLivenessSource shells to argv[0]='nq'; --nq-bin is the documented binary-resolution override (liveness.rs binary resolution: explicit > NIGHTSHIFT_NQ_BIN > PATH). Stub replays the stale DTO (age_seconds 600 vs 90s default threshold, DTO shape lifted from crates/nightshiftd/tests/liveness_pipeline.rs fresh_dto/stale_dto).",
+    "two_beats": [
+      "refusal: --nq-liveness + --nq-bin stub => ok_to_proceed: false; blocked: 'liveness_gate: liveness stale: witness silent for 600s (threshold 90s)'; regime 'stale: NQ liveness gate did not clear; no findings consulted'; proposed_action revalidate-only with 'no remediation proposed: liveness gate failure is not a basis for action'; authority_result governor_verdict 'not consulted — liveness gate halted the run'; ledger reason liveness_gate_failed",
+      "baseline: same command, flags dropped => normal packet from fixture manifest, ok_to_proceed: true, finding admissible for diagnosis/proposal/authorization"
+    ],
+    "live_verification": "executed twice: once while authoring, once re-running the README block verbatim (fresh /tmp/ns-specimen) — refusal markers byte-matched the README YAML excerpt (ellipsis trims disclosed in-line). Mirrors the test pipeline_halts_with_stale_packet_when_liveness_is_stale (nq.call_count()==0).",
+    "run_dependent_values_noted": "run_id, packet_id, produced_at — README states 'the refusal shape is not'"
+  },
+  "patch_attempts": 1,
+  "forbidden_adverb_grep": "clean (no provably/automatically/seamlessly/trustlessly/safely/correctly/completely in added text)",
+  "halt_state": "AUDIT",
+  "launch_item_5_status": "COMPLETE — 5.1 wicket (de5cd50), 5.2 standing (25c4cba), 5.3 rpp (49a8bcb), 5.4 operator-by-hand, 5.5 continuity (4590f11), 5.6 nightshift (01a65bf), 5.7 atproto zero-change audit; nq pass-in-spirit untouched",
+  "next": "PRE-PUSH gate: operator tone-reads limits.html; then batch push after 17:00 (agent_gov ~15, unpingable-site 2, wicket 1, standing 1, rpp 1, continuity 1, nightshift 1) + GitHub-clone stranger rerun"
+}

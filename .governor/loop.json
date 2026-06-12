@@ -1,18 +1,28 @@
 {
   "phase": "AUDIT",
   "current_slice": null,
-  "candidate_next_slice": "README ratchet continues: 5.4 wicket-guard (needs example), 5.5 continuity / 5.6 nightshift (HARD construction sub-slices, dispatch individually), 5.7+ atproto (clone first). PRE-PUSH gate unchanged: operator tone-reads limits.html; then batch push (agent_gov 13+, site 2, wicket 1, standing 1, rpp 1) + GitHub-clone stranger rerun",
-  "slice_spec": [".governor/loop-receipts/2026-06-12T210000Z.slice-readme-ratchet-5.1-5.3.json", ".governor/backlog/launch-5-readme-ratchet.json (audit table)"],
+  "candidate_next_slice": "Launch item 5 COMPLETE (5.1-5.7). PRE-PUSH gate: operator tone-reads limits.html; then batch push after 17:00 (agent_gov ~15, unpingable-site 2, wicket 1, standing 1, rpp 1, continuity 1, nightshift 1) + GitHub-clone stranger rerun. Behind that: launch 6 (Show HN, operator-sequenced) or queued backlog.",
+  "slice_spec": [
+    ".governor/loop-receipts/2026-06-12T230000Z.slice-readme-ratchet-5.6-nightshift.json",
+    ".governor/backlog/launch-5-readme-ratchet.json (audit table, now COMPLETE)"
+  ],
   "acceptance": null,
-  "blocked_on": "operator review (or next loop dispatch)",
-  "next_action": "operator reads slice receipt; dispatch next loop or batch-push after 17:00",
+  "blocked_on": "operator review (limits.html tone-read gates the batch push)",
+  "next_action": "operator reads 5.6 receipt; tone-read limits.html; batch push after 17:00",
   "last_verified_commit": "408020c",
-  "last_updated": "2026-06-12T13:30:00Z",
+  "last_updated": "2026-06-12T19:45:00Z",
   "session_id": "fable-morning-loop (operator-dispatched, local-only, no push)",
-  "loop_master": "opus (fable = audit/escalation tier per §12)",
+  "loop_master": "opus (fable = audit/escalation tier per \u00a712)",
   "wip_limit": 1,
   "dirty_tree_allowed": false,
-  "dirty_tree_scope": ["src", "tests", "docs", "golden", "demo", "specs"],
+  "dirty_tree_scope": [
+    "src",
+    "tests",
+    "docs",
+    "golden",
+    "demo",
+    "specs"
+  ],
   "re_entry_probes": [
     "cat .governor/loop.json",
     "git log --oneline -8",
@@ -20,5 +30,5 @@
     "python3 -m pytest tests/test_fresh_clone.py -q -m smoke",
     "bash demo/refused-spend.sh >/dev/null && echo front-door-holds"
   ],
-  "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: W0 FAIL → W1 PASS (~7-8min) → W2 PASS (~5min, 10 steps, zero repo-side friction). One GitHub-clone verification remains."
+  "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: W0 FAIL \u2192 W1 PASS (~7-8min) \u2192 W2 PASS (~5min, 10 steps, zero repo-side friction). One GitHub-clone verification remains."
 }

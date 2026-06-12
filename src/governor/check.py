@@ -237,7 +237,22 @@ def run_check(
 
         anchors = registry.all()
         if anchors:
-            checker = ContinuityChecker()
+            # Wire the receipt system so a block here is "blocked WITH a
+            # receipt" — same emit gap as the continuity CLI fix (the checker
+            # has fail-open emission built in; this site never passed a sink).
+            # Covers every run_check consumer, including the two
+            # write-blocking ones (pre-commit/wrap --check-continuity).
+            # No .governor store → no sink; receipt-less is correct there.
+            receipt_system = None
+            if governor_dir is not None:
+                try:
+                    from .gate_receipt import GateReceiptSystem
+
+                    receipt_system = GateReceiptSystem(governor_dir)
+                except Exception:
+                    receipt_system = None  # fail-open: never break the check
+
+            checker = ContinuityChecker(receipt_system=receipt_system)
             report = checker.check(content, anchors)
             for v in report.violations:
                 findings.append(continuity_violation_to_check(v, content))

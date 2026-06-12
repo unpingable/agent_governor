@@ -164,6 +164,28 @@ class TestCLIHappyPath:
         assert "continuity_checker" in receipts.stdout
         assert "BLOCK" in receipts.stdout
 
+    def test_unified_check_block_emits_visible_receipt(self, tmp_path):
+        """Sibling of the continuity-CLI pin: `governor check` (the unified
+        VS Code / pre-commit / wrap surface) on reject-anchor-violating
+        content must land a continuity_checker BLOCK receipt visible to
+        `governor receipts` (unified-check-receipt-gap)."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        run_gov(
+            ["continuity", "anchor", "add", "--id", "no-eval",
+             "--type", "prohibition", "--description", "no eval",
+             "--forbidden", "eval(", "--severity", "reject",
+             "--class", "invariant"],
+            cwd=tmp_path,
+        )
+        bad = tmp_path / "bad.py"
+        bad.write_text("result = eval(user_input)\n")
+        check = run_gov(["check", "bad.py"], cwd=tmp_path)
+        assert "CONTINUITY" in check.stdout
+        receipts = run_gov(["receipts", "--last", "5"], cwd=tmp_path)
+        assert "continuity_checker" in receipts.stdout
+        assert "BLOCK" in receipts.stdout
+
     def test_init_with_runtime_markers_reports_initialized(self, tmp_path):
         """The negative: runtime markers present (e.g. receipt_kernel.db) →
         init reports already-initialized and does not clobber."""

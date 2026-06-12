@@ -462,3 +462,53 @@ class TestCheckCLI:
             ["check", "/nonexistent/file.py", "--format", "json"],
         )
         assert result.exit_code != 0
+
+
+# =============================================================================
+# Receipt emission (unified-check-receipt-gap)
+# =============================================================================
+
+
+class TestRunCheckReceipts:
+    """run_check's continuity leg must be 'blocked WITH a receipt' when a
+    .governor store exists — same emit-gap class as the continuity CLI fix."""
+
+    def _gov_dir_with_reject_anchor(self, tmp: str) -> Path:
+        gov_dir = Path(tmp)
+        cont_dir = gov_dir / "continuity"
+        cont_dir.mkdir(parents=True)
+        anchors_data = {
+            "anchors": [
+                {
+                    "id": "no-badword",
+                    "anchor_type": "prohibition",
+                    "description": "No badword allowed",
+                    "forbidden_patterns": ["badword"],
+                    "severity": "reject",
+                }
+            ]
+        }
+        (cont_dir / "anchors.json").write_text(json.dumps(anchors_data))
+        return gov_dir
+
+    def test_continuity_block_emits_gate_receipt(self):
+        from governor.gate_receipt import ReceiptStore
+
+        with tempfile.TemporaryDirectory() as tmp:
+            gov_dir = self._gov_dir_with_reject_anchor(tmp)
+            result = run_check(
+                "this has badword in it", "test.txt", governor_dir=gov_dir
+            )
+            assert result.status == "error"
+
+            receipts = ReceiptStore(gov_dir).all()
+            blocks = [
+                r for r in receipts
+                if r.gate == "continuity_checker" and r.verdict == "block"
+            ]
+            assert blocks, "continuity block must land a gate receipt"
+
+    def test_no_governor_dir_emits_nothing_and_does_not_fail(self):
+        # No store → no sink; the check itself is unaffected.
+        result = run_check("hello world\n", "test.txt", governor_dir=None)
+        assert result.status == "pass"

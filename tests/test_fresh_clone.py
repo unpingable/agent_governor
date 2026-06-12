@@ -125,6 +125,22 @@ class TestCLIHappyPath:
         # The loop artifacts are untouched.
         assert (gov_dir / "loop.json").read_text() == '{"phase": "PLAN"}'
 
+    def test_strict_gate_block_has_no_internal_error_leak(self, tmp_path):
+        """strict-path-taint-error-leak, pinned: the README's recommended
+        --strict command must block WITHOUT leaking internal error text
+        ('release taint computation failed: ... _store')."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        result = run_gov(
+            ["gate", "check", "--strict",
+             "I guarantee the auth module is thread-safe."],
+            cwd=tmp_path,
+        )
+        out = result.stdout + result.stderr
+        assert "BLOCKED" in out
+        assert "computation failed" not in out
+        assert "_store" not in out
+
     def test_continuity_reject_emits_visible_receipt(self, tmp_path):
         """The stranger's worst moment, pinned unreproducible: the documented
         no-eval continuity REJECT must produce a receipt VISIBLE to

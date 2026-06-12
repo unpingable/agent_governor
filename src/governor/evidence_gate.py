@@ -1104,7 +1104,11 @@ class EvidenceGate:
             # Compute release taint (informational, non-fatal)
             try:
                 from governor.release_taint import compute_taint
-                taint = compute_taint(bridge._store, run_id)
+                # bridge.store, not bridge._store — the bad attribute made
+                # this block dead code AND leaked the AttributeError text
+                # onto the README's recommended --strict command
+                # (strict-path-taint-error-leak, found by AUTO_RUN pass 1).
+                taint = compute_taint(bridge.store, run_id)
                 result.release_taint = taint.to_dict()
             except Exception as exc:
                 logger.warning("release taint computation failed: %s", exc)

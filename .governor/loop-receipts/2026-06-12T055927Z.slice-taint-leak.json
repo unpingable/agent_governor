@@ -1,0 +1,5 @@
+{"kind":"slice_complete","ts":"2026-06-12T055927Z","session_id":"opus-successor","mode":"AUTO_RUN pass 2 (slice 2/2)","slice":"strict-path-taint-error-leak",
+ "diagnosis":"bridge._store AttributeError — the attribute is bridge.store; the bad name made the taint block dead code since wiring AND leaked the error text onto the README's recommended --strict command",
+ "fix":"one attribute (same call site as the leak — same-surface per the contract's condition); release taint now actually computes on kernel runs",
+ "cargo":"pass — strict block verified live with zero leak text; release-taint path exercised","process":"pass — smallest possible diff; regression pinned in fresh-clone smoke",
+ "tests":"232 (gate+taint) + 162 (evidence_gate suites) + fresh_clone smoke 20 passed","patch_attempts":0}

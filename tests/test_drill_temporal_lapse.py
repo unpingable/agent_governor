@@ -63,6 +63,44 @@ def test_lapse_block_is_deterministic(tmp_path: Path):
     assert a.spendability_block == b.spendability_block
 
 
+def test_leaf_receipt_is_the_refusal_not_the_wicket_pass(tmp_path: Path):
+    # refusal-receipt-id-mismatch (found by the stranger-gate RERUN): the
+    # spendability seam was missing from the chain-gates filter, so on the
+    # lapse receipt_ids[-1] was the WICKET pass and every leaf surface
+    # (Act-1 render, printed interrogation command, JSON envelope) pointed
+    # interrogation at the wrong receipt. Pin: the leaf id's verdict is
+    # block on the lapse, and the twin's leaf stays the LA consume.
+    import json
+
+    r = run_drill(gov_dir=tmp_path / "lapse", scenario=SCENARIO_TEMPORAL_LAPSE)
+    receipts = {
+        rec["receipt_id"]: rec
+        for line in (tmp_path / "lapse" / "receipts" / "gate_receipts.jsonl").open()
+        for rec in [json.loads(line)]
+    }
+    leaf = receipts[r.receipt_ids[-1]]
+    assert leaf["verdict"] == "block"
+    assert leaf["gate"] == "standing_spendability_seam"
+    # Order preserved: standing → wicket → spendability.
+    assert [receipts[i]["gate"] for i in r.receipt_ids] == [
+        "standing_seam", "wicket_seam", "standing_spendability_seam",
+    ]
+
+    t = run_drill(gov_dir=tmp_path / "twin", scenario=SCENARIO_TEMPORAL_LAPSE_TWIN)
+    receipts_t = {
+        rec["receipt_id"]: rec
+        for line in (tmp_path / "twin" / "receipts" / "gate_receipts.jsonl").open()
+        for rec in [json.loads(line)]
+    }
+    leaf_t = receipts_t[t.receipt_ids[-1]]
+    assert leaf_t["gate"] == "la_seam"
+    assert leaf_t["verdict"] == "pass"
+    # The twin's spendability PASS receipt is now in the chain too.
+    assert "standing_spendability_seam" in [
+        receipts_t[i]["gate"] for i in t.receipt_ids
+    ]
+
+
 def test_refusal_is_not_an_orphan(tmp_path: Path):
     # Lineage at emission (Act-Two spec, ratified rider): the refusal receipt's
     # evidence cites the wicket receipt as parent, so `governor why` walks

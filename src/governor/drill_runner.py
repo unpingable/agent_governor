@@ -1508,6 +1508,13 @@ def run_drill(
     chain_gates = {
         "standing_seam",
         "wicket_seam",
+        # The standing-spendability seam was MISSING here, so its receipt
+        # (pass or block) never entered receipt_ids — on the temporal-lapse
+        # refusal, receipt_ids[-1] was the WICKET pass and every "leaf
+        # receipt" surface (Act-1 render, printed interrogation command,
+        # JSON envelope) pointed interrogation at the wrong receipt.
+        # Found by the stranger-gate RERUN (refusal-receipt-id-mismatch).
+        "standing_spendability_seam",
         "la_seam",
         PROPOSAL_VALIDATOR_SEAM_GATE,
     }

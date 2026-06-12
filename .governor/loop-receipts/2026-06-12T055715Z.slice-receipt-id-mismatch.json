@@ -1,0 +1,6 @@
+{"kind":"slice_complete","ts":"2026-06-12T055715Z","session_id":"opus-successor","mode":"AUTO_RUN pass 2 (override receipt, slice 1/2)","slice":"refusal-receipt-id-mismatch",
+ "diagnosis":"chain_gates filter in drill_runner never included standing_spendability_seam — the gate's receipt (pass or block) was invisible to receipt_ids, so receipt_ids[-1] on the lapse was the wicket pass; every leaf surface (Act-1 render, printed interrogation command, JSON envelope) inherited the wrong id",
+ "fix":"root fix as the backlog preferred: one entry added to chain_gates; no render-side fishing; trilogy flow untouched",
+ "cargo":"pass — printed command + surface leaf + envelope now cite the block receipt (verified live: dda5... with verdict=block); twin leaf stays LA consume; regression pins refusal-path receipt selection AND order on both paths",
+ "process":"pass — scope: drill_runner.py one filter + one test; gap_receipt_id index check done (gap scenario emits no spendability receipt, index unaffected)",
+ "tests":"136 passed 9 skipped (temporal-lapse + all demo + corpus + poster + all drill suites)","patch_attempts":0}

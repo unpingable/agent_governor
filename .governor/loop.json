@@ -6,7 +6,7 @@
   "acceptance": null,
   "blocked_on": "operator review (or next loop dispatch)",
   "next_action": "operator reads slice receipt; dispatch next loop or batch-push after 17:00",
-  "last_verified_commit": "4d3c8c9",
+  "last_verified_commit": "1942f22",
   "last_updated": "2026-06-12T13:30:00Z",
   "session_id": "fable-morning-loop (operator-dispatched, local-only, no push)",
   "loop_master": "opus (fable = audit/escalation tier per §12)",

@@ -57,9 +57,15 @@ governor continuity check "I refactored the query to use eval(user_input) for dy
 ```
 FAILED (1 violations, score=0.00, action=hard_reprompt)
   [REJECT] no-eval: Forbidden pattern found: 'eval('
+Receipt: <id>
+  inspect: governor receipts --id <id> --evidence
 ```
 
-Blocked. The agent would have to find another approach.
+Blocked — *with a receipt*. Inspect the evidence behind any receipt:
+
+```bash
+governor receipts --id <id> --evidence   # the full evidence bundle, not just hashes
+```
 
 ## Check a file
 
@@ -80,12 +86,14 @@ Security scanning works out of the box. Anchors add your project-specific rules 
 governor receipts --last 5
 ```
 
-Every gate decision is receipted. Content-addressed, hash-chained.
+Every gate decision is receipted. Content-addressed, hash-chained. Add
+`--id <id> --evidence` to any receipt to see the evidence bundle it binds.
 
 ## What next
 
 | I want to... | Go here |
 |---|---|
+| See the full refusal demo (the two-clock temporal lapse) | `./demo/refused-spend.sh`, then cross-examine it: `./demo/interrogate.sh` |
 | Supervise a Claude Code session | [Supervised Mode](SUPERVISED_MODE.md) |
 | Add governor as a Claude Code plugin | [Plugin Quickstart](QUICKSTART_PLUGIN.md) |
 | Understand the full system | [README](../README.md) |

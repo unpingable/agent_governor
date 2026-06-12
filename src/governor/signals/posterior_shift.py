@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""
+r"""
 POSTERIOR_SHIFT_ATTRIBUTION — leave-one-out influence at the A-signal level.
 
 Answers: "How much does each Phase A signal influence the B1 diagnostic?"

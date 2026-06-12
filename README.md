@@ -113,22 +113,38 @@ Teams can stop at any level and still get value.
 
 ## Start Here
 
-Three commands. See it work.
+One command. Watch a credentialed action get refused — and cross-examine the evidence.
 
 ```bash
 pip install -e .
-governor init
-governor gate check "All tests pass. The auth module is thread-safe."
+./demo/refused-spend.sh     # a valid credential, spent one second past its horizon — REFUSED, with receipts
+./demo/interrogate.sh       # "just one more thing": six questions against those same receipts
+./demo/opa-contrast.sh      # what a policy engine would have said about the same incident (allow)
 ```
 
-That's the gate. It checks claims, issues receipts, and blocks what you tell it to block. **[Full walkthrough (5 min) >>](docs/GETTING_STARTED.md)**
+Two actions run the identical gauntlet; they differ only in *when* the spend
+happens. Naive auth says yes to both. Custody refuses the late one — and the
+receipt shows both clocks, the gap, and the exact predicate that failed.
 
-Or run `governor quickstart` to see a guided demo with anchors, violations, and receipts.
+Then try the gate on a claim:
+
+```bash
+governor init
+governor gate check --strict "I guarantee the auth module is thread-safe."
+# → BLOCKED: claim lacks evidence ("guarantee", "is thread-safe")
+```
+
+(The plain, non-strict gate passes until you add rules — the
+**[5-minute walkthrough](docs/GETTING_STARTED.md)** adds the rule and shows
+the block, with the receipt to prove it.)
+
+Or run `governor quickstart` for a guided demo with anchors, violations, and receipts.
 
 ### Find Your Path
 
 | I want to... | Start with |
 |---|---|
+| **See a refusal with receipts** | `./demo/refused-spend.sh` then `./demo/interrogate.sh` — the two-clock temporal lapse, end to end |
 | **Kick the tires** | [Getting Started](docs/GETTING_STARTED.md) — install, try the gate, add a rule, see it block |
 | **Supervise an agent session** | `governor runtime launch --task "..."` — see [Supervised Mode](docs/SUPERVISED_MODE.md) |
 | **Use a TUI** | [Maude](https://github.com/unpingable/maude) — governed REPL with supervised sessions |
@@ -216,11 +232,12 @@ Not abstract risks. Specific signals with specific enforcement actions.
 pip install -e .
 governor init
 
-# Stop an agent from lying
-governor gate check "All tests pass. The auth module is thread-safe."
-# → BLOCKED: claim "is thread-safe" lacks evidence
-#   required: benchmark data, profiler output, or documentation
-#   to proceed: provide evidence or downgrade to SOFT
+# Stop an agent from lying (strict mode: unsupported HARD claims block)
+governor gate check --strict "I guarantee the auth module is thread-safe."
+# → BLOCKED: output suppressed
+#     claim lacks evidence: "guarantee"
+#     claim lacks evidence: "is thread-safe"
+#   to proceed: provide evidence or downgrade to SOFT claim
 ```
 
 Zero config. One command. The agent claimed something it can't prove — blocked.
@@ -229,6 +246,8 @@ Zero config. One command. The agent claimed something it can't prove — blocked
 
 ```bash
 python3 govlab/serve.py
+# browserless? curl the printed URL, or use the CLI equivalent it shows:
+#   echo "I guarantee this is correct." | governor gate check --stdin --strict --format json
 ```
 
 Opens a one-screen lab where you can type agent output, see the gate decision (PASS / BLOCKED), inspect the receipt, tweak the text, and re-run. Same CLI, same receipts — just visual. No dependencies beyond governor.

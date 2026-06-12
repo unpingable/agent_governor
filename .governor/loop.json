@@ -1,8 +1,8 @@
 {
   "phase": "AUDIT",
   "current_slice": null,
-  "candidate_next_slice": "hub/demo (launch 3/4) — ungated; interrogate-wrong-root-traceback (tier-4); wlp-cross-host-x0-x3 + nq-crosstalk-n0-n4 zoned behind launch (records filed 2026-06-12, dispatch when forcing day arrives); push batched after 17:00 + GitHub-clone stranger verification",
-  "slice_spec": [".governor/loop-receipts/2026-06-12T160000Z.slice-networking-records.json"],
+  "candidate_next_slice": "demo page BUILD (launch 4, spec ready: working/SITE_GAP_DEMO_PAGE_001.md, operator answers 3 open questions or accepts spec defaults); interrogate-wrong-root-traceback (tier-4); push batched after 17:00 (agent_gov 9 commits + unpingable-site 1) + GitHub-clone stranger verification",
+  "slice_spec": [".governor/loop-receipts/2026-06-12T170000Z.slice-hub-structural.json", "working/SITE_GAP_HUB_001.md", "working/SITE_GAP_DEMO_PAGE_001.md"],
   "acceptance": null,
   "blocked_on": "operator review (or next loop dispatch)",
   "next_action": "operator reads slice receipt; dispatch next loop or batch-push after 17:00",

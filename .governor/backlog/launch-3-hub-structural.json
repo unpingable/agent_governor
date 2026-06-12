@@ -2,9 +2,9 @@
   "id": "launch-3-hub-structural",
   "repo": "unpingable.com (site) + agent_gov (topology source)",
   "kind": "spec_slice",
-  "spec_ref": "working/launch-plan-2026-06-11.md item 3 ('hub dumb but structurally right: thesis ¶ + topology map with stubs')",
+  "spec_ref": "working/launch-plan-2026-06-11.md item 3 ('hub dumb but structurally right: thesis \u00b6 + topology map with stubs')",
   "priority_tier": 1,
-  "status": "queued",
+  "status": "done (2026-06-12: spec working/SITE_GAP_HUB_001.md + build unpingable-site 9ff045e, local/unpushed; acceptance checks green)",
   "acceptance": "Output: gap spec with acceptance criteria (a phrase is not acceptance). Launch-order item 3.",
   "note": null
 }

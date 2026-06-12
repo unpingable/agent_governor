@@ -1,0 +1,10 @@
+{
+  "id": "nq-crosstalk-n0-n4",
+  "repo": "nq (build home; AG holds the recognition record only — cross-repo custody seam respected)",
+  "kind": "build_slice_series",
+  "priority_tier": "2-high (forcing case already in hand: operator wants cross-instance nq work; linode/sushi-k/plex/mac-mini exist)",
+  "status": "zoned (record filed; behind launch slab)",
+  "spec_ref": "working/constellation-networking-patterns-2026-06-12.md §4; docs/constellation-zoning.md §Networking patterns appendix",
+  "acceptance": "N0 transport (mesh preferred; linode mailbox-hub honest if typed mailbox-not-witness); N1 four keypairs + standing grants scoped to each instance's witness competence set (mac mini = narrower grant, typed partial participation); N2 ONE stream nq.heartbeat.v0 + receiver receipts (nq.receive.v0 / nq.origin_gap_detected.v0 / nq.coverage_interval.v0) — deliberately stupid first flow; N3 per-origin hash-chained selective shipping + transit receipts; N4 nq-why against local replica. Payoff specimen: absence coverage no longer shares a failure domain with the watched thing.",
+  "note": "ANTI-SCOPE (ceremony champion domain): no consensus, no gossip, no quorum, no CRDTs, no vector clocks, no distributed SQLite, push-only idempotent receive. Heartbeat absence receipts word as 'no admissible heartbeat from origin O in interval C by observer R under assumptions P', never 'host down'. Cross-host gap math refuses with gap_basis_mismatch by existing clock-witness design. N1 dogfoods the X1/X2 identity slice before WLP needs it."
+}

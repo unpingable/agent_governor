@@ -1,0 +1,11 @@
+{
+  "id": "wlp-cross-host-x0-x3",
+  "repo": "agent_gov (record); build homes: ~/git/wlp (treaty/crates), ~/git/standing (key grants), receiving seams (verification)",
+  "kind": "build_slice_series",
+  "priority_tier": 2,
+  "status": "zoned (record filed; build gated on forcing case)",
+  "spec_ref": "working/constellation-networking-patterns-2026-06-12.md §2-§3; docs/constellation-zoning.md §Networking patterns appendix",
+  "forcing_case": "the first component actually leaves the host — concretely: labelwatch reporting home becomes cross-host member traffic / first ssh-tunnel replacement. Operator forecast 2026-06-12: soon, behind launch.",
+  "acceptance": "X0 overlay pipe (likely already present, verify not build); X1 ed25519-signed envelopes both directions, stored as durable evidence; X2 keys as standing grants (one root-fiat ceremony, scope=allowed seams); X3 three-door receiver taxonomy (transport_failed / speaker_unproven w/ typed refusals signature_invalid|key_standing_lapsed|key_scope_mismatch / doctrine_refused) + replay window; X4 golden corpus incl. 'valid speaker + WLP refusal preserved as doctrine refusal'. Estimated ~two slices when forced.",
+  "note": "HARD PROHIBITIONS carried from the record: no bearer tokens (possession is not standing), no CA hierarchy, no service mesh, no OAuth, never convert between failure doors. Key revocation = retraction fan-out (zoning organ) — its forcing case is now 'first key compromise'."
+}

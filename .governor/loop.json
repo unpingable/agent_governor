@@ -1,8 +1,8 @@
 {
   "phase": "AUDIT",
   "current_slice": null,
-  "candidate_next_slice": "hub/demo (launch 3/4) — ungated; interrogate-wrong-root-traceback (tier-4, new, filed with reproduction); push batched after 17:00 + GitHub-clone stranger verification",
-  "slice_spec": [".governor/loop-receipts/2026-06-12T151500Z.slice-readme-venv-interrogate.json"],
+  "candidate_next_slice": "hub/demo (launch 3/4) — ungated; interrogate-wrong-root-traceback (tier-4); wlp-cross-host-x0-x3 + nq-crosstalk-n0-n4 zoned behind launch (records filed 2026-06-12, dispatch when forcing day arrives); push batched after 17:00 + GitHub-clone stranger verification",
+  "slice_spec": [".governor/loop-receipts/2026-06-12T160000Z.slice-networking-records.json"],
   "acceptance": null,
   "blocked_on": "operator review (or next loop dispatch)",
   "next_action": "operator reads slice receipt; dispatch next loop or batch-push after 17:00",

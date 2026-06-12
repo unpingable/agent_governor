@@ -966,6 +966,48 @@ Forbidden:  shared Redis key as truth
 This is the one component permitted to be boring *and* disposable. Finally something
 not demanding a constitution, a blood oath, and a small notarized skull.
 
+### Networking patterns — the complete map (2026-06-12 appendix, CANDIDATE)
+
+The cross-host conversation (operator + ChatGPT + Fable, 2026-06-12) closed the
+pattern zoo. Full record with stacks, phasings (wlp W-series, identity X-series,
+nq-crosstalk N-series), and anti-cathedral lists:
+`working/constellation-networking-patterns-2026-06-12.md`. The carved summary:
+
+> **Constellation networking has three primary idioms: verdict RPC, testimony
+> flow, and retraction fan-out. Blob pull and subscription tail are degenerate
+> testimony forms. Member/foreign is an orthogonal trust axis. Pipes provide
+> delivery; signed claims provide evidence; retractions require
+> reliance-indexed delivery accounting.**
+
+| Pattern | Shape | Failure concern |
+|---|---|---|
+| Verdict RPC | ask → typed outcome | don't collapse transport/speaker/doctrine failures |
+| Testimony flow | signed append, eventual push | preserve origin, detect gaps |
+| Retraction fan-out | urgent, reliance-indexed, delivery-accounted | prevent stale authority from continuing |
+| — blob pull | fetch-by-hash | integrity / availability |
+| — subscription tail | standing NQ flow | bounded live observation |
+| *(axis)* member/foreign | standing-backed vs no-standing | evidence class / egress effect |
+
+Three additions to standing zoning, none of them organs:
+
+- **Keys are standing grants** — no CA, no bearer tokens (possession is not
+  standing); component identity = operator-fiat grant over an ed25519 key,
+  verified by the standing machinery that already exists. *Transport may secure
+  delivery, but only signed envelopes create durable speaker evidence.*
+  **Tunnels secured paths; signed envelopes secure claims.**
+- **Retraction transport's forcing case moved** — the organ entry above stands
+  unchanged, but the moment a standing grant backs a wire key, key revocation
+  IS retraction fan-out ("first key compromise," not "someday"). Interim stays
+  honest: short-lived grants, bounded-lag revocation on the record.
+- **Member/foreign stays orthogonal to transport** — foreign responses (MCP,
+  firehoses) enter at the lowest evidence class regardless of pipe; promotion
+  is a notary-gate problem. Collapsing the axis into the transport abstraction
+  is "zero trust by trusting YAML."
+
+Forcing-case status: near-term, named — labelwatch lives on the VM and the
+ssh-tunnel era is ending; the forcing day is the first component leaving the
+host. Until then: zoned, not built.
+
 ---
 
 ## Reflex plane — near-real-time as composition, not a new organ

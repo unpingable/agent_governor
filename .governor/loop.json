@@ -1,15 +1,15 @@
 {
   "phase": "PLAN",
   "current_slice": null,
-  "candidate_next_slice": "model-capacity policy adoption (loop-protocol §11 AUTO_RUN + §12 model zoning, operator package + fable deltas) — doctrine commit, then ordinary PLAN selection resumes",
-  "slice_spec": [".governor/loop-receipts/2026-06-12T033659Z.capacity-exhaustion.json (the forcing event)"],
+  "candidate_next_slice": "continuity-refusal-receipt-gap (HIGH, punch-list item 5-7: the front path contradicts the thesis; pages may not claim what it contradicts) — first of the punch-list-derived fixes, unless operator reorders",
+  "slice_spec": ["working/punch-list-2026-06-12-stranger-run.md", ".governor/backlog/continuity-refusal-receipt-gap.json"],
   "acceptance": null,
-  "blocked_on": "nothing (policy package operator-ratified in-session)",
-  "next_action": "land loop-protocol §11/§12 with the four ratified deltas (controller-transition pin, patch mutation-membrane, no-tier-ratifies, A/B-from-receipts); file LA model-capacity backlog entry; then PLAN selects next launch work",
-  "last_verified_commit": "24b8692",
-  "last_updated": "2026-06-12T03:38:00Z",
-  "session_id": "opus-successor (prior: 9cce1885 fable)",
-  "loop_master": "opus (downgraded from fable per capacity-exhaustion receipt 2026-06-12T033659Z; fable = audit/escalation tier)",
+  "blocked_on": "nothing (operator order ratified: gate ✓ → punch list ✓ → pages against punch list → AUTO_RUN trial → overnight)",
+  "next_action": "on next dispatch: investigate the continuity REJECT receipt gap (emit vs read-path), fix, make the stranger's worst moment unreproducible; then README ratchet / demo page / hub against the punch list",
+  "last_verified_commit": "c95336b",
+  "last_updated": "2026-06-12T04:22:30Z",
+  "session_id": "opus-successor",
+  "loop_master": "opus (fable = audit/escalation tier per §12)",
   "wip_limit": 1,
   "dirty_tree_allowed": false,
   "dirty_tree_scope": ["src", "tests", "docs", "golden", "demo", "specs"],
@@ -17,8 +17,8 @@
     "cat .governor/loop.json",
     "git log --oneline -5",
     "git status --short -- src tests docs golden demo specs",
-    "python3 -m pytest tests/test_demo_interrogate.py tests/test_corpus_contract.py -q",
-    "bash demo/interrogate.sh >/dev/null && echo act-two-holds"
+    "python3 -m pytest tests/test_corpus_contract.py tests/test_demo_interrogate.py -q",
+    "cat working/punch-list-2026-06-12-stranger-run.md | head -20  # the gate's verdict + the work queue's source"
   ],
-  "w1_slab": "items 1-5 DONE + Act 2 DONE — demo trilogy complete (refused-spend / interrogate / opa-contrast); W1 exit criteria (stranger <15min; tripwire; Show HN gate) remain the open checklist"
+  "w1_slab": "items 1-5 + Act 2 DONE; exit-criteria gate MEASURED AND FAILED 2026-06-12 (punch list filed; re-run required post-fixes). Demo trilogy works but is invisible from the front door — that's the page work."
 }

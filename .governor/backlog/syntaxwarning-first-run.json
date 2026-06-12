@@ -1,0 +1,10 @@
+{
+  "id": "syntaxwarning-first-run",
+  "repo": "agent_gov",
+  "kind": "build_slice",
+  "spec_ref": "working/punch-list-2026-06-12-stranger-run.md item 4",
+  "priority_tier": 4,
+  "status": "queued",
+  "acceptance": "First documented gate check on a fresh install emits no Python SyntaxWarning. Find the offending pattern (likely an invalid escape in a regex/string), fix at source — no warning suppression.",
+  "note": "First-run polish; cheap; batches naturally with the README ratchet slice."
+}

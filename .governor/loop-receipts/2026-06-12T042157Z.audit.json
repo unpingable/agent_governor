@@ -1,0 +1,23 @@
+{
+  "kind": "audit",
+  "cold_start": false,
+  "ts": "2026-06-12T04:21:57Z",
+  "session_id": "opus-successor",
+  "audited_commit": "c95336b (slice artifacts staged, mid-commit)",
+  "probes_executed_live": true,
+  "state_conformance": {
+    "dirty_tree_scoped": "punch list (working/) + 4 backlog files + this receipt trail — exactly the slice's declared output; no source touched (no-fixes constraint verifiable by git status: src/tests/demo clean)",
+    "stranger_clone": "left in place at /tmp/ag-stranger.* for operator inspection (the stranger's transcript evidence)"
+  },
+  "plan_conformance": {
+    "closed_slice": "w1-exit-stranger-run — operator-dispatched, first in the ratified order (gate → punch list → pages → AUTO_RUN trial → overnight)",
+    "proposed_next": "continuity-refusal-receipt-gap (HIGH) before page work — punch-list-derived sequencing within the operator's 'pages against the punch list' step; pages may not claim what it contradicts",
+    "deviations": []
+  },
+  "obligation_conformance": {
+    "w1_exit_criteria": "stranger-15-min gate now MEASURED (FAIL recorded with evidence) — no longer an unexercised claim; the gate cannot be marked met until a re-run passes post-fixes",
+    "receipts": "execute + review emitted; punch list carries the stranger's verbatim-shaped bottom line"
+  },
+  "outcome": "pass (the audit passes; the GATE failed — distinct verdicts, recorded distinctly)",
+  "next": "commit; PLAN selects continuity-refusal-receipt-gap unless operator reorders"
+}

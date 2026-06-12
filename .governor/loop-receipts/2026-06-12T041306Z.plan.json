@@ -1,0 +1,9 @@
+{
+  "kind": "plan",
+  "ts": "2026-06-12T04:13:06Z",
+  "session_id": "opus-successor",
+  "selected_slice": "w1-exit-stranger-run",
+  "selected_from": "operator dispatch 2026-06-12: 'exit-criteria run-through first, launch items second — sequencing, not priority. Gate, then punch list, then pages built against the punch list.' Then AUTO_RUN supervised trial, then overnight.",
+  "stranger_protocol": "Cold model as stranger proxy (codex; gemini/qwen acceptable alternates). Saturation map (operator-clarified): operator = most saturated human; Fable = saturated SME; Opus master = saturated other-SME — runs the gate, READS the transcript, never plays the stranger. The stranger follows only what's on screen, forbidden from inferring, narrates every confusion.",
+  "queued_next": "launch items built against the punch list (hub / demo page / README ratchet) → AUTO_RUN supervised daytime trial (1 slice, tight budget, operator at the glass) → overnight"
+}

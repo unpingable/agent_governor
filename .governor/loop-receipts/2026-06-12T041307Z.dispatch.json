@@ -1,0 +1,17 @@
+{
+  "kind": "dispatch",
+  "ts": "2026-06-12T04:13:07Z",
+  "session_id": "opus-successor",
+  "slice": "w1-exit-stranger-run",
+  "worker": "codex (cold, fresh session) as the stranger; opus master stages the room and examines the transcript",
+  "setup": [
+    "fresh clone of the repo at HEAD into a tmp dir (what a GitHub clone would deliver once the unpushed commits land)",
+    "stranger instructed to work in a fresh virtualenv (simulates a clean machine without testing python packaging trivia; prevents the dev-install on this box from masking install friction)",
+    "flat prompt: follow only on-screen docs, no inference, narrate confusion, GUESS/STUCK markers, 15-minute discipline"
+  ],
+  "constraints": [
+    "the stranger's transcript is the evidence; the master may ANNOTATE the punch list but may not edit the stranger's findings",
+    "a failed gate is a successful slice — record PASS/FAIL honestly",
+    "no fixes in this slice: punch list only (fixes are the next items' work, built against it)"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "continuity-refusal-receipt-gap",
+  "repo": "agent_gov",
+  "kind": "build_slice",
+  "spec_ref": "working/punch-list-2026-06-12-stranger-run.md items 5-7 (acceptance criteria are the stranger's three surfaces)",
+  "priority_tier": 1,
+  "status": "queued",
+  "acceptance": "The documented continuity REJECT path ([REJECT] no-eval via governor continuity check / quickstart) emits a gate receipt that is VISIBLE to `governor receipts`, `governor trace`, and the quickstart's own output. Investigation first: emit gap vs read-path gap. The stranger's worst moment — 'blocked with receipts' showed a block and no receipt — must be unreproducible.",
+  "note": "HIGH: the product's front path contradicts its thesis. Launch-blocking in spirit; the hub/demo page may not claim what this contradicts until fixed."
+}

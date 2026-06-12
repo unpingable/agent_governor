@@ -1,13 +1,13 @@
 {
   "phase": "AUDIT",
   "current_slice": null,
-  "candidate_next_slice": "refusal-receipt-id-mismatch (tier-1, found by the gate rerun in tonight's own code; small, pinned acceptance)",
-  "slice_spec": ["working/auto-run-audit-2026-06-12.md", ".governor/backlog/refusal-receipt-id-mismatch.json"],
+  "candidate_next_slice": "morning: push + one GitHub-clone stranger verification; then PLAN candidates: check.py receipt gap (custody-adjacent sibling of the continuity fix), readme-venv-and-interrogate-wording (tier-4), launch items 3/4 (hub, demo page — now buildable against a PASSING gate)",
+  "slice_spec": ["working/auto-run-audit-2026-06-12.md (W1 + W2 audits)"],
   "acceptance": null,
-  "blocked_on": "morning review of the AUTO_RUN audit (operator); then ordinary PLAN",
-  "next_action": "operator reads working/auto-run-audit-2026-06-12.md; on go: dispatch refusal-receipt-id-mismatch; W1 gate is GREEN pending one post-push re-verification",
-  "last_verified_commit": "ff64195",
-  "last_updated": "2026-06-12T05:45:00Z",
+  "blocked_on": "morning review (operator)",
+  "next_action": "operator reads the W2 audit section; push the 3 commits; one stranger run from the real GitHub clone; then ordinary PLAN",
+  "last_verified_commit": "4d3c8c9",
+  "last_updated": "2026-06-12T06:55:00Z",
   "session_id": "opus-successor",
   "loop_master": "opus (fable = audit/escalation tier per §12)",
   "wip_limit": 1,
@@ -20,5 +20,5 @@
     "python3 -m pytest tests/test_fresh_clone.py -q -m smoke",
     "bash demo/refused-spend.sh >/dev/null && echo front-door-holds"
   ],
-  "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: PASS (rerun 2026-06-12, ~7-8/15 min, hero specimen + evidence) — re-verify once post-push. Audit: working/auto-run-audit-2026-06-12.md"
+  "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: W0 FAIL → W1 PASS (~7-8min) → W2 PASS (~5min, 10 steps, zero repo-side friction). One GitHub-clone verification remains."
 }

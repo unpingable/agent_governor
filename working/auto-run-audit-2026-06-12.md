@@ -101,3 +101,63 @@ claim it must not contradict is now true anyway.
 unpushed. **Exact resume:** run the re-entry probes in loop.json, then
 dispatch `refusal-receipt-id-mismatch` (or operator reorders). The W1 exit
 gate is GREEN pending one post-push re-verification.
+
+---
+
+# W2 audit — second bounded pass (same night, post-push baseline)
+
+Per the pass-2 override contract (receipt `*.override-auto-run-2`): max 2
+slices, taint leak only-if-same-surface, rerun gate, halt in AUDIT, no push.
+
+## Commits added
+
+| Commit | Slice | Change |
+|---|---|---|
+| `7eeff82` | 1: refusal-receipt-id-mismatch | `chain_gates` gains `standing_spendability_seam` (root fix — the gate's receipt was invisible to `receipt_ids`); leaf surfaces now cite the block receipt; regression pins selection + order on both paths |
+| `4d3c8c9` | 2: strict-path-taint-error-leak | `bridge._store` → `bridge.store` (one attribute; the bad name made the taint block dead code AND leaked the error onto the README's `--strict` command); fresh-clone regression pins block-without-leak |
+
+Slice 2 qualified as same-surface (the fix is the exact call site the leak
+prints from) — the contract's condition, met literally.
+
+## Exact W0 → W1 → W2 stranger delta
+
+| | W0 (baseline) | W1 (after pass 1) | W2 (after pass 2) |
+|---|---|---|---|
+| Refusal reached | wrong one (evidence_gate) | **hero specimen** | **hero specimen** |
+| Evidence inspected | STUCK | yes | yes (full bundle via printed command) |
+| Time | 10–12 min, budget exhausted | ~7–8 min | **~5 min, 10 steps** |
+| Trilogy discovered | never | yes | yes |
+| Worst moment | invisible continuity receipt | receipt-id mismatch (our bug) | **the codex sandbox itself** (bwrap, not repo) |
+
+## Fixed / recurring / new failures
+
+- **Fixed and confirmed by the stranger:** receipt-id mismatch (it inspected
+  `dda5…` directly); no internal error text anywhere in its transcript.
+- **Recurring:** bwrap sandbox friction only (environment artifact, all three
+  runs — not repo).
+- **New:** none repo-side. Residual minor frictions are all known/filed or
+  by-design: interrogate root-arg wording (filed, tier-4), transcript
+  ellipsis (by design — the printed `--evidence` command is the resolution),
+  Q5 honest-skip without opa-contrast (by design).
+
+## Residual risk
+
+- Stranger runs still use local clones; one post-push GitHub-clone
+  verification remains the honest final check (operator pushed the first 7;
+  tonight's 3 are unpushed).
+- `check.py` unified-check receipt gap (slice-2-pass-1's sibling) still
+  unfixed — same class as the continuity fix, different surface; next
+  custody-adjacent candidate.
+- venv lines in README (filed, tier-4).
+
+## Final loop state + morning resume point
+
+`loop.json`: phase=AUDIT, current_slice=null, master=opus.
+**3 commits ahead of origin, unpushed** (`7eeff82`, `4d3c8c9`, + this audit
+commit). Budget: 2/2 slices, 0 patch-attempt retries, no deviations, nothing
+smoothed into green.
+
+**Morning resume:** push; re-run the stranger once from the real GitHub
+clone; then ordinary PLAN — candidates: `check.py` receipt gap,
+`readme-venv-and-interrogate-wording`, launch items 3/4 (hub, demo page —
+now buildable against a passing gate).

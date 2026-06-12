@@ -1,0 +1,5 @@
+{"kind":"slice_complete","ts":"2026-06-12T051132Z","session_id":"opus-successor","mode":"AUTO_RUN(override 043000Z)","slice":"continuity-refusal-receipt-gap (HIGH)",
+ "diagnosis":"EMIT gap at the CLI call site — ContinuityChecker had fail-open receipt emission built in since the gate-receipt wiring, but cli.py continuity_check constructed it with receipt_system=None. The thesis-contradiction was one missing constructor argument.",
+ "cargo":"pass — REJECT now emits a continuity_checker BLOCK receipt visible to receipts AND trace AND quickstart (all three stranger surfaces verified live); the failing check prints the receipt id + the exact --evidence inspect command (also retires punch item 10's discoverability gap on this path); evidence bundle carries the violations",
+ "process":"pass — scope held: cli.py continuity_check only; check.py:240 (unified VS Code check path, also receipt-less) NOTED but not touched (outside the queued punch items; candidate filed in audit doc)",
+ "tests":"test_fresh_clone 19 passed (new: stranger-path regression init→anchor→REJECT→receipts shows BLOCK); test_continuity 113 passed","patch_attempts":0}

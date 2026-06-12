@@ -11719,7 +11719,13 @@ def continuity_check(ctx: click.Context, text: str, as_json: bool) -> None:
         click.echo("No anchors registered.")
         return
 
-    checker = ContinuityChecker()
+    # Wire the receipt system so a REJECT here is "blocked WITH a receipt" —
+    # the checker has fail-open emission built in; the CLI just never passed a
+    # sink (stranger-run punch list items 5-7: the documented no-eval REJECT
+    # was invisible to `governor receipts` / `trace` / `quickstart`).
+    from .gate_receipt import GateReceiptSystem
+
+    checker = ContinuityChecker(receipt_system=GateReceiptSystem(gov_dir))
     report = checker.check(text, anchors)
 
     if as_json:
@@ -11729,6 +11735,21 @@ def continuity_check(ctx: click.Context, text: str, as_json: bool) -> None:
         if report.violations:
             for v in report.violations:
                 click.echo(f"  {v}")
+        if not report.passed:
+            # Surface the receipt id the way the gate path does — the block
+            # and its evidence are inspectable, and the screen says how.
+            try:
+                from .gate_receipt import ReceiptStore
+
+                receipts = ReceiptStore(gov_dir).all()
+                if receipts:
+                    latest = receipts[-1]
+                    click.echo(f"Receipt: {latest.receipt_id}")
+                    click.echo(
+                        f"  inspect: governor receipts --id {latest.receipt_id} --evidence"
+                    )
+            except Exception:
+                pass  # display nicety only; the receipt itself already landed
 
 
 @continuity_group.command("import")

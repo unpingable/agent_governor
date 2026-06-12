@@ -125,6 +125,29 @@ class TestCLIHappyPath:
         # The loop artifacts are untouched.
         assert (gov_dir / "loop.json").read_text() == '{"phase": "PLAN"}'
 
+    def test_continuity_reject_emits_visible_receipt(self, tmp_path):
+        """The stranger's worst moment, pinned unreproducible: the documented
+        no-eval continuity REJECT must produce a receipt VISIBLE to
+        `governor receipts` (punch list items 5-7 — 'blocked with receipts'
+        must not show a block and no receipt)."""
+        git_init(tmp_path)
+        run_gov(["init"], cwd=tmp_path)
+        run_gov(
+            ["continuity", "anchor", "add", "--id", "no-eval",
+             "--type", "prohibition", "--description", "no eval",
+             "--forbidden", "eval(", "--severity", "reject",
+             "--class", "invariant"],
+            cwd=tmp_path,
+        )
+        check = run_gov(
+            ["continuity", "check", "use eval(user_input) here"], cwd=tmp_path
+        )
+        assert "[REJECT] no-eval" in check.stdout
+        assert "Receipt:" in check.stdout  # the screen says where the proof is
+        receipts = run_gov(["receipts", "--last", "5"], cwd=tmp_path)
+        assert "continuity_checker" in receipts.stdout
+        assert "BLOCK" in receipts.stdout
+
     def test_init_with_runtime_markers_reports_initialized(self, tmp_path):
         """The negative: runtime markers present (e.g. receipt_kernel.db) →
         init reports already-initialized and does not clobber."""

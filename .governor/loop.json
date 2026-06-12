@@ -1,8 +1,8 @@
 {
   "phase": "AUDIT",
   "current_slice": null,
-  "candidate_next_slice": "demo page BUILD (launch 4, spec ready: working/SITE_GAP_DEMO_PAGE_001.md, operator answers 3 open questions or accepts spec defaults); interrogate-wrong-root-traceback (tier-4); push batched after 17:00 (agent_gov 9 commits + unpingable-site 1) + GitHub-clone stranger verification",
-  "slice_spec": [".governor/loop-receipts/2026-06-12T170000Z.slice-hub-structural.json", "working/SITE_GAP_HUB_001.md", "working/SITE_GAP_DEMO_PAGE_001.md"],
+  "candidate_next_slice": "PRE-PUSH: operator tone-reads limits.html (author's voice); then batch push (agent_gov 11 + unpingable-site 2) + GitHub-clone stranger rerun. Launch items 1-4 now DONE; remaining: specimen ratchet sweep (launch 5), Show HN gate (launch 6, operator-sequenced). Also queued: interrogate-wrong-root-traceback (tier-4), epistemic-backoff-mechanization (tier-2), policy-register-citation-discipline (tier-2)",
+  "slice_spec": [".governor/loop-receipts/2026-06-12T190000Z.slice-demo-page.json"],
   "acceptance": null,
   "blocked_on": "operator review (or next loop dispatch)",
   "next_action": "operator reads slice receipt; dispatch next loop or batch-push after 17:00",

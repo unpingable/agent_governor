@@ -106,6 +106,37 @@ class TestCLIHappyPath:
         assert result.returncode == 0
         assert "already initialized" in result.stdout.lower()
 
+    def test_init_on_clone_with_loop_artifacts_only(self, tmp_path):
+        """A fresh clone legitimately ships .governor/ with ONLY the tracked
+        orchestration-loop artifacts (loop.json etc. — the repo's program
+        counter). init must initialize the runtime alongside, not report
+        'already initialized' (stranger-run punch list item 3)."""
+        git_init(tmp_path)
+        gov_dir = tmp_path / ".governor"
+        gov_dir.mkdir()
+        (gov_dir / "loop.json").write_text('{"phase": "PLAN"}')
+        (gov_dir / "loop-receipts").mkdir()
+        (gov_dir / "backlog").mkdir()
+        result = run_gov(["init"], cwd=tmp_path)
+        assert result.returncode == 0, f"init failed: {result.stderr}"
+        assert "already initialized" not in result.stdout.lower()
+        assert (gov_dir / "facts").is_dir()
+        assert (gov_dir / "proposals.json").exists()
+        # The loop artifacts are untouched.
+        assert (gov_dir / "loop.json").read_text() == '{"phase": "PLAN"}'
+
+    def test_init_with_runtime_markers_reports_initialized(self, tmp_path):
+        """The negative: runtime markers present (e.g. receipt_kernel.db) →
+        init reports already-initialized and does not clobber."""
+        git_init(tmp_path)
+        gov_dir = tmp_path / ".governor"
+        gov_dir.mkdir()
+        (gov_dir / "receipt_kernel.db").write_bytes(b"")
+        result = run_gov(["init"], cwd=tmp_path)
+        assert result.returncode == 0
+        assert "already initialized" in result.stdout.lower()
+        assert not (gov_dir / "facts").exists()
+
     def test_hook_install_creates_executable_hook(self, tmp_path):
         """governor hook install → git hook exists and is executable."""
         git_init(tmp_path)

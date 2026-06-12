@@ -1,0 +1,17 @@
+{
+  "kind": "operator_override",
+  "ts": "2026-06-12T04:30:00Z",
+  "session_id": "opus-successor",
+  "decision": "AUTO_RUN maiden voyage runs overnight WITHOUT the supervised trial — operator override, explicit, on the record ('option 2, accept risk, do an audit. We're liable to learn more from the failures here than if we gate early and fail continuously.')",
+  "rationale": "the stranger gate already proved the current front door is lying by omission; gating early preserves a known-bad interface. Failures are allowed; invisible failures are not.",
+  "contract": {
+    "budget": "max 3 build slices + stranger gate rerun; 2 patch attempts per slice; mutation membrane active; halt on unclassified failure / custody ambiguity / capacity exhaustion; preserve loop.json + all receipts/transcripts; do not smooth failures into green; no scope beyond queued punch-list/front-door fixes (deviation = record + halt)",
+    "slices": [
+      "1: init-clean-clone-detection",
+      "2: continuity-refusal-receipt-gap (HIGH)",
+      "3: readme-front-door-ratchet (AG README/GETTING_STARTED against punch list; folds syntaxwarning fix per punch-list note)"
+    ],
+    "then": "stranger gate rerun (cold codex, same protocol)",
+    "exit": "overnight audit doc with the 10 mandated items (changes-by-commit / punch items addressed / recurred / new failures / trilogy reached? / no-eval receipt visible? / docs agree? / §11 violations or stretches / residual risk + next slice / final loop state + exact resume point), then halt in AUDIT"
+  }
+}

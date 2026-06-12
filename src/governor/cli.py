@@ -269,6 +269,20 @@ def cli(ctx: click.Context, root: str) -> None:
         show_friendly_status(ctx)
 
 
+def _runtime_initialized(gov_dir: Path) -> bool:
+    """True iff init's own RUNTIME artifacts are present — not merely the
+    directory. A fresh clone legitimately ships `.governor/` containing only
+    the tracked orchestration-loop artifacts (loop.json / loop-receipts/ /
+    backlog/ — the repo's program counter, see docs/loop-protocol.md §6);
+    treating bare existence as "initialized" made `governor init` lie to every
+    fresh clone (stranger-run punch list item 3)."""
+    return any(
+        (gov_dir / marker).exists()
+        for marker in ("facts", "decisions", PROPOSALS_FILE, "config.json",
+                       "receipt_kernel.db")
+    )
+
+
 @cli.command()
 @click.option("--v2", "use_v2", is_flag=True, help="Initialize with SQLite backend (v2)")
 @click.pass_context
@@ -277,12 +291,17 @@ def init(ctx: click.Context, use_v2: bool) -> None:
     root = Path(ctx.obj["root"])
     gov_dir = root / GOVERNOR_DIR
 
-    if gov_dir.exists():
+    if gov_dir.exists() and _runtime_initialized(gov_dir):
         click.echo(f"Governor already initialized at {gov_dir}")
         return
+    if gov_dir.exists():
+        click.echo(
+            f"Found {gov_dir} with orchestration artifacts only (loop state) "
+            f"— initializing runtime alongside."
+        )
 
     # Create directory structure
-    gov_dir.mkdir()
+    gov_dir.mkdir(exist_ok=True)
     (gov_dir / "facts").mkdir()
     (gov_dir / "facts" / "receipts").mkdir()
     (gov_dir / "decisions").mkdir()

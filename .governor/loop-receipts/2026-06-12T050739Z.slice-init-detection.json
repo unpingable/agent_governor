@@ -1,0 +1,4 @@
+{"kind":"slice_complete","ts":"2026-06-12T050739Z","session_id":"opus-successor","mode":"AUTO_RUN(override 043000Z)","slice":"init-clean-clone-detection",
+ "cargo":"pass — _runtime_initialized() marker predicate (facts/decisions/proposals.json/config.json/receipt_kernel.db); clone-with-loop-artifacts initializes alongside + message; runtime markers still report initialized; loop artifacts untouched",
+ "process":"pass — scope held to cli.py init + tests; ensure_initialized() deliberately NOT widened (lazy-create behavior unchanged; membrane)",
+ "tests":"tests/test_fresh_clone.py 18 passed (2 new: clone-shaped positive + runtime-marker negative)","patch_attempts":0}

@@ -4,7 +4,7 @@
   "kind": "build_slice",
   "spec_ref": "working/punch-list-2026-06-12-stranger-run.md item 3",
   "priority_tier": 1,
-  "status": "queued",
+  "status": "done (2026-06-12 AUTO_RUN slice 1)",
   "acceptance": "`governor init` on a fresh clone (which now legitimately ships tracked .governor/{loop.json,loop-receipts,backlog} — the loop's program counter) initializes cleanly instead of reporting 'already initialized'. Key the check on runtime markers, not bare .governor/ existence. Negative test: clone-shaped fixture with only loop artifacts → init proceeds; dir with receipt_kernel.db → init reports initialized.",
   "note": "Loop self-inflicted (the carve-out that put the program counter in git collided with init's existence check). Alternative if the fix is awkward: move loop artifacts to .loop/ — bigger move, not default."
 }

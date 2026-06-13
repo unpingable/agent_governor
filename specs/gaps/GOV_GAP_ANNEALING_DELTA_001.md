@@ -121,3 +121,18 @@ placement, and nothing refuses a genesis-class target at construction.
    Phase 4? (Bias: yes, via the existing C1 REPLAY_HARNESS, once a delta has trial data.)
 3. Neutral shared-custody module name if extraction is chosen (`proposal_custody.py`?) —
    decide at Phase 2 implementation against actual shared surface size.
+
+## Required before Phase 3 activation (recorded 2026-06-13, P2.1 fuse outcome)
+
+- **Per-surface target allowlists.** P2.1 ships a normalized-substring genesis *detector*
+  on the free-form `target` (`annealing.py:_targets_genesis`). The surface allowlist is the
+  real authority gate (closed 6-element set); the genesis detector is best-effort
+  defense-in-depth — acceptable for candidate/no-apply custody, but a denylist over a
+  free-form string is the wrong shape for *granting* activation authority (it can over-refuse
+  oddly-named knobs and chases spelling evasions). **Before any Phase 3 activation, the
+  free-form `target` must be replaced/constrained by per-surface known-knob ALLOWLISTS.**
+  Doctrine: *candidate deltas may use normalized genesis detection as defense-in-depth;
+  activation requires actual target allowlists.* (Fuse fired during P2.1 on tokenizer
+  evasions — root cause was "string denylist is not the real boundary"; operator ratified
+  the normalized-substring patch for P2.1 and recorded the allowlist redesign as the
+  Phase-2.x/pre-activation direction.)

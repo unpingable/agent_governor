@@ -34,7 +34,7 @@ Two gates:
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -157,6 +157,20 @@ class RungDebt:
             "source_boundary_id": self.source_boundary_id,
             "discharged": self.discharged,
         }
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> RungDebt:
+        """Reconstruct from a stored record. Pure; __post_init__ re-enforces the
+        invariants (mandatory fields, authorized_collector != target_rung)."""
+        return cls(
+            debt_id=d["debt_id"],
+            target_rung=d["target_rung"],
+            authorized_collector=d["authorized_collector"],
+            discharge_witness=d["discharge_witness"],
+            blocks_before=d["blocks_before"],
+            source_boundary_id=d["source_boundary_id"],
+            discharged=d.get("discharged", False),
+        )
 
 
 # --------------------------------------------------------------------------- #

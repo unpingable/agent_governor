@@ -19812,6 +19812,108 @@ def doctrine_consult(
         click.echo(f"\nreceipt:  {receipt_id[:16]}...")
 
 
+@cli.group("annealing")
+@click.pass_context
+def annealing_cmd(ctx):
+    """Candidate annealing deltas — propose / list / show (read-only; no apply).
+
+    Phase 2 candidate-delta rung: deltas are PROPOSALS only. There is no apply
+    or activate verb here by design — activation is Phase 3 and operator-gated.
+    """
+    pass
+
+
+@annealing_cmd.command("propose")
+@click.option("--surface", required=True,
+              help="Tunable surface (routing/budgets/decomposition_size/"
+                   "retry_posture/witness_placement/default_gates)")
+@click.option("--target", required=True, help="Specific knob within the surface")
+@click.option("--change-summary", required=True,
+              help="Human description of the proposed change")
+@click.option("--baseline-id", required=True,
+              help="ControlBaseline reference (mandatory)")
+@click.option("--expiry", required=True, help="Expiry (mandatory)")
+@click.option("--rollback-trigger", required=True,
+              help="Rollback trigger condition (mandatory)")
+@click.option("--source-observation", "source_observations", multiple=True,
+              help="Source AnnealingObservation id (repeatable)")
+@click.option("--la-dependent", is_flag=True,
+              help="Declares LA-backed spend dependence")
+@click.option("--la-custody-ref", default=None,
+              help="LA custody reference (required if --la-dependent)")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def annealing_propose(ctx, surface, target, change_summary, baseline_id, expiry,
+                      rollback_trigger, source_observations, la_dependent,
+                      la_custody_ref, as_json):
+    """Propose a candidate delta. Records it; never applies it."""
+    import json as _json
+    from governor.annealing import AnnealingDelta, DeltaRefusal, propose_delta
+    from governor.annealing_store import AnnealingDeltaStore
+
+    gov_dir = ensure_initialized(ctx)
+    result = propose_delta(
+        surface=surface, target=target, change_summary=change_summary,
+        baseline_id=baseline_id, expiry=expiry, rollback_trigger=rollback_trigger,
+        source_observation_ids=tuple(source_observations),
+        requires_human=True,
+        la_dependent=la_dependent, la_custody_ref=la_custody_ref,
+    )
+    if isinstance(result, DeltaRefusal):
+        if as_json:
+            click.echo(_json.dumps(result.to_dict(), indent=2))
+        else:
+            click.echo(f"REFUSED [{result.code}]: {result.detail}", err=True)
+        raise SystemExit(1)
+    assert isinstance(result, AnnealingDelta)
+    AnnealingDeltaStore(gov_dir).put(result)
+    if as_json:
+        click.echo(_json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(f"proposed {result.delta_id}  {result.surface}/{result.target}"
+                   f"  baseline={result.baseline_id}")
+
+
+@annealing_cmd.command("list")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+@click.pass_context
+def annealing_list(ctx, as_json):
+    """List proposed candidate deltas (records only)."""
+    import json as _json
+    from governor.annealing_store import AnnealingDeltaStore
+
+    gov_dir = ensure_initialized(ctx)
+    store = AnnealingDeltaStore(gov_dir)
+    ids = store.list_ids()
+    if as_json:
+        click.echo(_json.dumps({"deltas": ids, "count": len(ids)}, indent=2))
+        return
+    if not ids:
+        click.echo("No proposed deltas.")
+        return
+    for did in ids:
+        d = store.get(did)
+        if d is not None:
+            click.echo(f"{did[:16]}  {d.surface}/{d.target}  "
+                       f"baseline={d.baseline_id[:16]}")
+
+
+@annealing_cmd.command("show")
+@click.argument("delta_id")
+@click.pass_context
+def annealing_show(ctx, delta_id):
+    """Show a proposed delta record by id."""
+    import json as _json
+    from governor.annealing_store import AnnealingDeltaStore
+
+    gov_dir = ensure_initialized(ctx)
+    d = AnnealingDeltaStore(gov_dir).get(delta_id)
+    if d is None:
+        click.echo(f"No delta with id {delta_id}", err=True)
+        raise SystemExit(1)
+    click.echo(_json.dumps(d.to_dict(), indent=2))
+
+
 # ---------------------------------------------------------------------------
 # Populate advanced group — dual-register all attic commands
 # ---------------------------------------------------------------------------

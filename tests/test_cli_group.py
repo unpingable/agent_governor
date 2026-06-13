@@ -190,7 +190,7 @@ class TestRealCLI:
 # curated help.  Add here only when adding a new top-level CLI group.
 # If this set grows past ~120, it's time to nest under `governor advanced`.
 ALLOWED_UNCATEGORIZED: set[str] = {
-    "adapt", "admit", "advanced", "agent", "anchor", "audit",
+    "adapt", "admit", "advanced", "agent", "anchor", "annealing", "audit",
     "autonomous", "backend", "boil", "cbi", "changes", "chat",
     "claim", "claim-diff", "claim-signals", "claude-hooks", "code", "codex-exec",
     "codex-hooks", "collapse", "conditioning", "constraints",

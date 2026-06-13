@@ -31,6 +31,7 @@ canonicalization) and no mutation-capable internals of any gate.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -318,6 +319,25 @@ class AnnealingDelta:
         payload = self.canonical_dict()
         payload["delta_id"] = self.delta_id
         return payload
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> AnnealingDelta:
+        """Reconstruct from a stored record. Pure (no IO). hard_guards is rebuilt
+        as the default all-True HardGuards — a delta can never have been stored
+        with a disabled guard (construction refuses it), so the default is the
+        only valid value; the recomputed delta_id re-verifies integrity."""
+        return cls(
+            surface=d["surface"],
+            target=d["target"],
+            change_summary=d["change_summary"],
+            baseline_id=d["baseline_id"],
+            expiry=d["expiry"],
+            rollback_trigger=d["rollback_trigger"],
+            source_observation_ids=tuple(d.get("source_observation_ids", [])),
+            requires_human=d.get("requires_human", True),
+            la_dependent=d.get("la_dependent", False),
+            la_custody_ref=d.get("la_custody_ref"),
+        )
 
 
 def propose_delta(

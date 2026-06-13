@@ -9,10 +9,13 @@ being cleared.
 
 ## Status
 
-**Candidate — informs Phase 3 (P3.0 activation preflight); not yet built.** Output
-of the 2026-06-13 recursive design pass (ChatGPT/Claude critique + grep against
-the tree + operator synthesis). The grep scorecard below is the load-bearing
-finding: AG already has the mechanisms under its own vocabulary; this gap is
+**Wirings 1–2 LANDED 2026-06-13 (P3.0 `activation_preflight.py` + P3.0b
+`debt_ledger.py`, consumed by P3.1 `activation.py`); collector-binding at the
+discharge→activation edge remains future (see
+`GOV_GAP_DISCHARGE_COLLECTOR_BINDING_001`).** Output of the 2026-06-13 recursive
+design pass (ChatGPT/Claude critique + grep against the tree + operator
+synthesis). The grep scorecard below is the load-bearing finding: AG already has
+the mechanisms under its own vocabulary; this gap is
 **two wirings + three refinements**, not new machinery. Parent doctrine:
 GOV_GAP_PLAN_DECOMPOSITION_PROTOCOL_001 (the kernel); loop §11.2/§11.3 (rungs +
 rung-scoped findings).

@@ -370,7 +370,7 @@ Every validator finding answers *"unsafe for what authority level?"* — not jus
 | Finding class | Venue | Action |
 |---|---|---|
 | **Current-rung violation** | this slice's contract | **block** — fix before commit |
-| **Future-rung requirement** | activation / enforcement / publication | record as **named debt** (plan or commit body); continue if the current rung stays safe |
+| **Future-rung requirement** | activation / enforcement / publication | mint/reference a **NonDischargeClaim in the DebtLedger** (target_rung, authorized_collector ≠ target_rung, discharge_witness, blocks_before) — never commit-body/plan prose; activation refuses while the claim is open; continue only if the current rung stays safe. *Named is not collected; carried is not collected either.* |
 | **Defense-in-depth concern** | secondary tripwire, not the authority gate | fix once if cheap; else record and require before the higher rung |
 | **Scope-expanding remedy** | changes what the slice is allowed to decide | **halt** for operator ratification |
 
@@ -378,7 +378,11 @@ The refined chain fuse: a second refinement pass halts **unless ALL hold** — n
 apply/write/enforcement path exists, the authority boundary is separately closed
 (and is not the failing mechanism), the finding is classified future-rung or
 defense-in-depth, validator and builder **agree** on that classification, and the
-commit body records the accepted debt with the named higher-rung requirement.
+accepted debt is minted as a **NonDischargeClaim in the DebtLedger** binding a
+collector and blocking its higher rung (not recorded as commit-body prose — named
+is not collected). Classification authority sits *above* the rung being decided:
+builder/validator agreement is attribution, not the authority to reclassify a
+current-rung blocker as deferrable.
 
 **Always halt for operator ratification** (no auto-accept), regardless of pass
 count: an actual write/apply/activate path appears; a surface/authority allowlist

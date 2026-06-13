@@ -279,19 +279,54 @@ lying should be structurally expensive"). Composes with [[rust_kernel_port_rulin
 (decision-kernel-only, post-launch; golden receipt corpus is the contract). NOT a
 P-phase; revisit at/after the first self-build recompose. **Hard stop after P3.2.**
 
-### P4 — promotion & expiry maturation (3.0.x)
+### Pre-P4 closure — plan-intake / decomposition gap (still pre-P4)
 
-Evidence-count promotion → new ControlBaseline via supersession ceremony; bisectable
-lineage; ops/NQ profile admitted only after a self-governance promotion receipt exists
-(constructor-refused otherwise); convergence_tuning disposition (adapter vs coexist) with
-migration receipts; loop-AUDIT shadow projection candidate.
+The work after P3.2 is *front-door hardening before promotion*, not more annealing.
+"Recomposition depends on decomposition" — so we close the decomposition gap before
+P4 can ask whether a trial activation should become baseline.
+
+**P3.3 decomposition-completeness receipt shape — LANDED 77044f2.** Schema truth
+before behavior truth: AG can no longer lie about decomposition completeness. Every
+path to `complete` requires a structured evidence object; AG-alone emits
+`enumeration=declared` / `coverage=best_effort`. Doc/gap:
+`decomposition-capability-closure-note.md` + the closure gap (AC1/AC2 landed). Also
+landed pre-P4: symbolic-instrument-witness + hotpath-and-granularity doctrine notes,
+and the conversion-path audit (0 blocker / 0 live-risk).
+
+**P3.4 prep-before-ingest indecomposable-gate blocker — NEXT.** The smallest runtime
+behavior that USES the receipt shape without pretending the sibling tools exist.
+Hot-path class: **semantic-conversion / gate-admission** (ground rule 14). Build: one
+claim kind `indecomposable_gate`; prep can emit it; ingest refuses while open; planner
+cannot self-discharge (assert-standing — proposing ≠ ratifying); operator/authorized
+discharge only. Forbidden: verifier wiring, capability kernel, seam-cap composition,
+general discharge redesign. This starts paying the **discharge hot path** (a claim
+becoming non-blocking is consequence-bearing). Composes with
+`GOV_GAP_DISCHARGE_COLLECTOR_BINDING_001`. *Before P4 can promote anything, AG needs a
+front door that can refuse plans whose gates are not yet decomposable.*
+
+### P4 — promotion & expiry maturation (3.0.x) — NOT STARTED
+
+This is **constitutional memory** (a trial shape surviving → becoming baseline), not
+activation. Minimal P4: observe the one activated tunable over `evidence_count ≥ N` →
+if in-bounds, promote trial → new ControlBaseline via the validator supersession
+ceremony; prove old/new baseline diffable by content hashes; prove expiry/rollback
+still works; refuse promotion if evidence insufficient.
+
+**P4 preconditions (all now met except the last two):** P3 lifecycle drill exists ✓;
+P3.2 enforcement green ✓; DebtLedger present ✓; P3.1 activation receipts exist ✓;
+promotion target is exactly the one P3.1 tunable; supersession ceremony chosen; baseline
+diff/revert path proven. **Plus the pre-P4 gate: P3.4 (plan-intake admission) fenced.**
+
+Still forbidden in P4: multi-delta interaction; ops/NQ profile (until self-governance
+survives one promotion cycle — constructor-refused otherwise); generic activation;
+self-modifying kernel invariants; receipt-kernel ratification-invariant change; Rust port.
 **HIGH checkpoints: replay/holdout as promotion criterion (divergence #2);
 convergence_tuning disposition; SELF_GOVERNANCE_SPEC amendment per ratified crosswalk.**
 
 ## 4. Cadence map
 
 HIGH (operator present): P0 review (crosswalk disposition + divergences); P2 exit
-(allowlist review); P3a entry (quorum question); P4 (promotion criteria, spec amendment,
+(allowlist review); P3.1 entry (quorum question); P4 (promotion criteria, spec amendment,
 convergence_tuning disposition). Everything else AUTOPILOT under the loop protocol with
 campaign exit-tickets per micro-step. codex-exec adversarial pass at the two vocabulary
 checkpoints (P0 doctrine doc, P2 allowlist) — refute-not-confirm, file:line grounded.
@@ -299,7 +334,7 @@ checkpoints (P0 doctrine doc, P2 allowlist) — refute-not-confirm, file:line gr
 ## 5. Cut list (explicitly out of MVP — refuse smuggling)
 
 - Auto-apply / any unattended delta activation.
-- Validator-quorum machinery (unless P3a HIGH checkpoint rules it in).
+- Validator-quorum machinery (unless P3.1 HIGH checkpoint rules it in).
 - Loop-protocol FSM codification (P4 candidate at most).
 - ops/NQ profile before a self-governance promotion receipt exists.
 - receipt_kernel invariant #14; any constitutional kernel surface change.
@@ -312,26 +347,32 @@ checkpoints (P0 doctrine doc, P2 allowlist) — refute-not-confirm, file:line gr
 ## 6. Sizing / sequence
 
 Minimal: P0 → P1.1 → P1.2 (receipt shape proven in shadow; stop-safe point).
-Compelling: through P3a+P3b on the self-governance profile.
-Canonical order: P0 → P1.1 → P1.2 → P1.3 → P1.4 → P2.1 → P2.2 → P2.3 → P3a → P3b → P4.
+Compelling: through P3.1+P3.2 on the self-governance profile (DONE).
+Canonical order: P0 → P1.1 → P1.2 → P1.3 → P1.4 → P2.1 → P2.2 → P2.3 → P3.0 → P3.0b
+→ P3.1 → P3.1-drill → P3.2 → [pre-P4 closure] → P3.3 → **P3.4** → P4.
 Every boundary above is a safe halt; nothing in P1–P2 changes behavior, so launch-runway
 work (W1) interleaves freely.
 
 ## 7. Slice tracker
 
+> Reconciled 2026-06-13: old `P3a`→**P3.1**, old `P3b`→**P3.2**; the
+> decomposition-completeness work is **P3.3**, prep-before-ingest is **P3.4**.
+> P4 (promotion/expiry) is unchanged and NOT started — *still pre-P4*.
+
 | Slice | Status | Notes |
 |---|---|---|
-| P0 docs/spec | **RATIFIED 2026-06-12** | crosswalk disposition = parent-track + 5 carve-outs (validator quorum, replay/holdout, significance gating, RecoveryPlanReceipt, auth/dual-ledger); spec stays byte-unmodified through P0–P1 |
-| P1.1 RecompositionReceipt + account_boundaries | **IN PROGRESS 2026-06-12** | first safe code slice; authored on Opus 4.8 (Fable 5 export-controlled mid-campaign — substrate swap witnessed in `working/forcing-case-degraded-model-availability.md`) |
-| P1.2 shadow emission at orchestrator | OPEN | blocked by P1.1 |
-| P1.3 annealing_observer | OPEN | |
-| P1.4 fidelity declaration | OPEN | |
-| P2.1 AnnealingDelta | OPEN | blocked by P1.3; dependency-direction rule binds |
-| P2.2 ControlBaseline registry | OPEN | red-line fence test mandatory |
-| P2.3 CLI read paths | OPEN | no apply verb |
-| P3a activation + rollback | OPEN | 3.0.0 line; HIGH checkpoint at entry |
-| P3b enforcing recomposition | OPEN | hard-gated on P3a drill |
-| P4 promotion / ops profile / disposition | OPEN | HIGH checkpoints |
+| P0 docs/spec | **RATIFIED 2026-06-12** | crosswalk = parent-track + 5 carve-outs; spec byte-unmodified through P0–P1 |
+| P1.1–P1.4 observation rung | **LANDED** | RecompositionReceipt + account_boundaries, shadow emission, annealing_observer, fidelity declaration |
+| P2.1–P2.3 candidate-delta rung | **LANDED** | AnnealingDelta custody, ControlBaseline registry, read-only CLI (no apply verb) |
+| P3.0 activation preflight | **LANDED** | `activation_preflight.py`; discharged P2_GENESIS_TARGET_ALLOWLIST_001 |
+| P3.0b DebtLedger | **LANDED** | `debt_ledger.py` — authoritative live claim source; flock-guarded |
+| P3.1 scoped four-office activation + rollback | **LANDED 5c88dfc** | one tunable; effect-surface fenced; reads live claims at the gate |
+| P3.1 lifecycle drill | **LANDED aa5e00b** | activate → account → replay-refuse → rollback → restore; receipts on disk |
+| P3.2 enforcing RecompositionReceipt | **LANDED 52e797f** | `refused_laundering` blocks; recomposition's only verb is refuse |
+| *Pre-P4 closure (doctrine + audit)* | **LANDED** | decomposition-closure + symbolic-witness + hotpath notes (2428072/dd7a9a0/ec99cbf); conversion-path audit 0/0 (a4bc70f) |
+| P3.3 decomposition-completeness receipt shape | **LANDED 77044f2** | every path to `complete` needs a structured evidence object; AG-alone = declared/best_effort |
+| P3.4 prep-before-ingest indecomposable-gate blocker | **NEXT** | semantic-conversion / gate-admission hot path; cashes the closure doctrine into ingest refusal |
+| P4 promotion / expiry maturation | **NOT STARTED** | preconditions in §3 P4 block; constitutional memory, not more annealing |
 
 ## 8. Model-suitability note
 

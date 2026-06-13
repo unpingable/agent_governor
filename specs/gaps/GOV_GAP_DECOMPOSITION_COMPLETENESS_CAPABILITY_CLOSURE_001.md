@@ -8,7 +8,10 @@ sound as the decomposition it accounts, and AG-alone cannot prove the boundary
 
 ## Status
 
-**Candidate — doctrine + blocker; NOT a build.** Filed 2026-06-13 (operator +
+**Receipt-shape discipline LANDED 2026-06-13 (commit 77044f2,
+`decomposition_completeness.py`); capability-closure (verified coverage, the
+capability kernel) remains future. Still a BLOCKER on further decompose/recompose
+until the enumeration/coverage split is preserved.** Filed 2026-06-13 (operator +
 interferometry, after P3.2 landed enforcing recomposition). Companion to
 `docs/cross-tool/decomposition-capability-closure-note.md` (the front-end mirror
 to `rung-activation-four-office-note.md`). This gap installs the *refusal*, the

@@ -1,0 +1,484 @@
+"""Scoped activation + rollback — one tunable, four offices (P3.1).
+
+Workflow-kernel campaign, the first EFFECT-bearing rung. Per the four-office note
+(`docs/cross-tool/rung-activation-four-office-note.md`), rung activation is a
+transaction across four offices AG co-hosts in bootstrap:
+
+    Governor/Wicket (admissibility) · Standing (act-standing) ·
+    Linear Accountant (exactly-once spend) · NQ/receipts (custody)
+
+Narrow by construction: it may activate EXACTLY ONE lowest-stakes tunable
+(``decomposition_size / max_slices``). Any other tunable is refused. No generic
+activation framework.
+
+Invariants this slice holds (each was a current-rung blocker Codex caught):
+- The config surface is mutated ONLY via a receipt — there is no bare ``set``,
+  so a debt-clear / eligibility verdict alone can never write it.
+- Freshness is recompute-at-the-gate: ``activate`` recomputes P3.0 eligibility
+  over the LIVE claim set and refuses a presented digest that does not match the
+  full live claim content (deferral is cargo; re-verification is standing).
+- Spend is exactly-once (local ledger replay guard in both modes); replay refuses
+  before any write.
+- Mode honesty: ``standalone_degraded`` uses local substitutes and may NOT claim
+  external Standing/LA/NQ backing; ``constellation`` requires all three external
+  office receipts (Standing, LA, NQ) — no faking rich. The LA ref is carried,
+  never parsed.
+- Custody is durable: activation and rollback receipts are persisted; rollback
+  restores topology (deletes a previously-absent key), never erases the
+  activation receipt.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from .activation_preflight import RungDebt, check_activation_eligibility
+from .annealing import AnnealingDelta
+from .gate_receipt import canonical_json, content_hash
+
+# The single lowest-stakes tunable P3.1 may touch. Anything else refuses.
+P31_SURFACE = "decomposition_size"
+P31_TARGET = "max_slices"
+P31_RUNG = "self_governance"
+
+MODE_CONSTELLATION = "constellation"
+MODE_STANDALONE_DEGRADED = "standalone_degraded"
+CLOSED_MODES = frozenset({MODE_CONSTELLATION, MODE_STANDALONE_DEGRADED})
+
+REFUSED_NOT_P31_TUNABLE = "refused_not_p31_tunable"
+REFUSED_INELIGIBLE = "refused_ineligible"
+REFUSED_STALE_DIGEST = "refused_stale_digest"
+REFUSED_NO_STANDING = "refused_no_standing"
+REFUSED_DEGRADED_CLAIMS_BACKING = "refused_degraded_claims_backing"
+REFUSED_REPLAY = "refused_replay"
+REFUSED_NO_ACTIVATION_RECEIPT = "refused_no_activation_receipt"
+
+CLOSED_ACTIVATION_REFUSALS = frozenset(
+    {
+        REFUSED_NOT_P31_TUNABLE,
+        REFUSED_INELIGIBLE,
+        REFUSED_STALE_DIGEST,
+        REFUSED_NO_STANDING,
+        REFUSED_DEGRADED_CLAIMS_BACKING,
+        REFUSED_REPLAY,
+        REFUSED_NO_ACTIVATION_RECEIPT,
+    }
+)
+
+
+def live_claim_set_digest(
+    debts: Sequence[RungDebt],
+    parked_boundary_ids: frozenset[str] | None = None,
+) -> str:
+    """Content digest over the FULL eligibility input — every debt's content and
+    the parked-boundary set — so a materially different live claim set yields a
+    different digest. A stale carried digest is therefore detectable at the gate.
+    """
+    return content_hash(
+        canonical_json(
+            {
+                "debts": sorted(
+                    [canonical_json(d.to_dict()).decode() for d in debts]
+                ),
+                "parked": sorted(parked_boundary_ids or ()),
+            }
+        )
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Office 3 substrate — exactly-once local activation spend (standalone)
+# --------------------------------------------------------------------------- #
+
+
+class LocalSpendLedger:
+    """Exactly-once local activation spend — the standalone substitute for LA,
+    also a defense-in-depth replay guard in constellation mode. File-backed so
+    replay refuses across calls. NOT LA: receipts using it are standalone-grade."""
+
+    def __init__(self, root: Path | str):
+        self._path = Path(root) / "activation_spend" / "ledger.json"
+
+    def _load(self) -> set[str]:
+        if not self._path.exists():
+            return set()
+        return set(json.loads(self._path.read_text()))
+
+    def consume(self, spend_key: str) -> bool:
+        spent = self._load()
+        if spend_key in spent:
+            return False
+        spent.add(spend_key)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._path.with_name(self._path.name + ".tmp")
+        tmp.write_text(json.dumps(sorted(spent)))
+        tmp.replace(self._path)
+        return True
+
+
+# --------------------------------------------------------------------------- #
+# Receipts + refusal
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class ActivationRefusal:
+    code: str
+    detail: str = ""
+    offending: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.code not in CLOSED_ACTIVATION_REFUSALS:
+            raise ValueError(
+                f"code must be one of {sorted(CLOSED_ACTIVATION_REFUSALS)}, "
+                f"got {self.code!r}"
+            )
+
+
+@dataclass(frozen=True)
+class ActivationReceipt:
+    actor: str
+    target_rung: str
+    surface: str
+    target: str
+    delta_id: str
+    eligibility_verdict: str
+    live_claim_set_digest: str
+    mode: str
+    standing_basis: str
+    spend_ref: str
+    la_spend_ref: str | None
+    nq_custody_ref: str | None
+    custody_basis: str
+    prior_value: Any
+    new_value: Any
+
+    def canonical_dict(self) -> dict[str, Any]:
+        return {
+            "schema": "activation_receipt_v0",
+            "actor": self.actor,
+            "target_rung": self.target_rung,
+            "surface": self.surface,
+            "target": self.target,
+            "delta_id": self.delta_id,
+            "eligibility_verdict": self.eligibility_verdict,
+            "live_claim_set_digest": self.live_claim_set_digest,
+            "mode": self.mode,
+            "standing_basis": self.standing_basis,
+            "spend_ref": self.spend_ref,
+            "la_spend_ref": self.la_spend_ref,
+            "nq_custody_ref": self.nq_custody_ref,
+            "custody_basis": self.custody_basis,
+            "prior_value": self.prior_value,
+            "new_value": self.new_value,
+        }
+
+    @property
+    def activation_id(self) -> str:
+        return content_hash(canonical_json(self.canonical_dict()))
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = self.canonical_dict()
+        payload["activation_id"] = self.activation_id
+        return payload
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> ActivationReceipt:
+        return cls(
+            actor=d["actor"],
+            target_rung=d["target_rung"],
+            surface=d["surface"],
+            target=d["target"],
+            delta_id=d["delta_id"],
+            eligibility_verdict=d["eligibility_verdict"],
+            live_claim_set_digest=d["live_claim_set_digest"],
+            mode=d["mode"],
+            standing_basis=d["standing_basis"],
+            spend_ref=d["spend_ref"],
+            la_spend_ref=d.get("la_spend_ref"),
+            nq_custody_ref=d.get("nq_custody_ref"),
+            custody_basis=d["custody_basis"],
+            prior_value=d.get("prior_value"),
+            new_value=d.get("new_value"),
+        )
+
+
+@dataclass(frozen=True)
+class RollbackReceipt:
+    activation_id: str
+    surface: str
+    target: str
+    restored_value: Any
+    reason: str
+    mode: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": "rollback_receipt_v0",
+            "activation_id": self.activation_id,
+            "surface": self.surface,
+            "target": self.target,
+            "restored_value": self.restored_value,
+            "reason": self.reason,
+            "mode": self.mode,
+        }
+
+
+# --------------------------------------------------------------------------- #
+# Office 4 substrate — durable custody (activation + rollback receipts)
+# --------------------------------------------------------------------------- #
+
+
+class ActivationReceiptStore:
+    """Durable custody: persists activation receipts (keyed by activation_id) and
+    rollback receipts. Rollback never erases the activation record — its file
+    remains; the rollback is an additional record."""
+
+    def __init__(self, root: Path | str):
+        self._dir = Path(root) / "activation_receipts"
+
+    def put(self, receipt: ActivationReceipt) -> Path:
+        self._dir.mkdir(parents=True, exist_ok=True)
+        path = self._dir / f"{receipt.activation_id}.json"
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(receipt.to_dict(), sort_keys=True, indent=2))
+        tmp.replace(path)
+        return path
+
+    def get(self, activation_id: str) -> ActivationReceipt | None:
+        path = self._dir / f"{activation_id}.json"
+        if not path.exists():
+            return None
+        return ActivationReceipt.from_dict(json.loads(path.read_text()))
+
+    def has(self, activation_id: str) -> bool:
+        return (self._dir / f"{activation_id}.json").exists()
+
+    def put_rollback(self, rb: RollbackReceipt) -> Path:
+        rb_dir = self._dir / "rollbacks"
+        rb_dir.mkdir(parents=True, exist_ok=True)
+        path = rb_dir / f"{rb.activation_id}.json"
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(rb.to_dict(), sort_keys=True, indent=2))
+        tmp.replace(path)
+        return path
+
+
+# --------------------------------------------------------------------------- #
+# The config surface — active tunable values. Mutated ONLY via a receipt.
+# --------------------------------------------------------------------------- #
+
+
+class ActiveTunableStore:
+    """The config surface activation mutates. There is NO bare ``set`` — the only
+    writers are :meth:`apply_activation` and :meth:`apply_rollback`, each of which
+    takes the receipt that authorizes the write. So a debt-clear / eligibility
+    verdict alone cannot reach the effect.
+
+    ``initial`` seeds pre-existing config (the value before any activation).
+    Rollback to a ``None`` prior value DELETES the key (restores absence
+    topology), rather than writing a null.
+    """
+
+    def __init__(self, root: Path | str, initial: Mapping[str, Any] | None = None):
+        self._path = Path(root) / "active_tunables" / "values.json"
+        if initial:
+            self._save(dict(initial))
+
+    def _load(self) -> dict[str, Any]:
+        if not self._path.exists():
+            return {}
+        return json.loads(self._path.read_text())
+
+    def _save(self, values: Mapping[str, Any]) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._path.with_name(self._path.name + ".tmp")
+        tmp.write_text(json.dumps(dict(values), sort_keys=True))
+        tmp.replace(self._path)
+
+    def get(self, surface: str, target: str) -> Any:
+        return self._load().get(f"{surface}/{target}")
+
+    def apply_activation(self, receipt: ActivationReceipt) -> None:
+        if not isinstance(receipt, ActivationReceipt):
+            raise TypeError("apply_activation requires an ActivationReceipt")
+        values = self._load()
+        values[f"{receipt.surface}/{receipt.target}"] = receipt.new_value
+        self._save(values)
+
+    def apply_rollback(self, rb: RollbackReceipt) -> None:
+        if not isinstance(rb, RollbackReceipt):
+            raise TypeError("apply_rollback requires a RollbackReceipt")
+        values = self._load()
+        key = f"{rb.surface}/{rb.target}"
+        if rb.restored_value is None:
+            values.pop(key, None)  # restore absence topology, not a null
+        else:
+            values[key] = rb.restored_value
+        self._save(values)
+
+
+# --------------------------------------------------------------------------- #
+# The activation transaction
+# --------------------------------------------------------------------------- #
+
+
+def activate(
+    delta: AnnealingDelta,
+    *,
+    new_value: Any,
+    actor: str,
+    mode: str,
+    spend_ledger: LocalSpendLedger,
+    tunable_store: ActiveTunableStore,
+    receipt_store: ActivationReceiptStore,
+    standing_ok: bool,
+    presented_claim_digest: str,
+    debts: Sequence[RungDebt] = (),
+    parked_boundary_ids: frozenset[str] | None = None,
+    external_standing_receipt: str | None = None,
+    external_la_spend_ref: str | None = None,
+    external_nq_custody_ref: str | None = None,
+) -> ActivationReceipt | ActivationRefusal:
+    """The four-office activation transaction. Mutates the tunable ONLY at the
+    end, via a receipt, after all four offices pass. Returns an ActivationReceipt
+    or a typed ActivationRefusal."""
+    if mode not in CLOSED_MODES:
+        raise ValueError(f"mode must be one of {sorted(CLOSED_MODES)}, got {mode!r}")
+
+    # Office 0 — scope: exactly one tunable. No activation framework.
+    if delta.surface != P31_SURFACE or delta.target != P31_TARGET:
+        return ActivationRefusal(
+            REFUSED_NOT_P31_TUNABLE,
+            f"P3.1 may activate only {P31_SURFACE}/{P31_TARGET}, "
+            f"not {delta.surface}/{delta.target}",
+            (f"{delta.surface}/{delta.target}",),
+        )
+
+    # Office 1 — admissibility: recompute eligibility over the LIVE claim set;
+    # reject a presented digest that doesn't match the full live content.
+    real_digest = live_claim_set_digest(debts, parked_boundary_ids)
+    if presented_claim_digest != real_digest:
+        return ActivationRefusal(
+            REFUSED_STALE_DIGEST,
+            "presented claim digest does not match the live claim set",
+            (presented_claim_digest,),
+        )
+    elig = check_activation_eligibility(
+        surface=delta.surface,
+        target=delta.target,
+        target_rung=P31_RUNG,
+        debts=debts,
+        parked_boundary_ids=parked_boundary_ids,
+    )
+    if not elig.eligible:
+        return ActivationRefusal(
+            REFUSED_INELIGIBLE, f"P3.0 gate refused: {elig.verdict}", elig.offending
+        )
+
+    # Office 2 — standing (act-standing or bootstrap substitute), mode-honest.
+    if not standing_ok:
+        return ActivationRefusal(
+            REFUSED_NO_STANDING, "act-standing not granted for activate_rung"
+        )
+    external_refs = (
+        external_standing_receipt,
+        external_la_spend_ref,
+        external_nq_custody_ref,
+    )
+    if mode == MODE_STANDALONE_DEGRADED and any(external_refs):
+        return ActivationRefusal(
+            REFUSED_DEGRADED_CLAIMS_BACKING,
+            "standalone_degraded may not claim external Standing/LA/NQ backing "
+            "(run poor, don't fake rich)",
+        )
+    if mode == MODE_CONSTELLATION and not all(external_refs):
+        return ActivationRefusal(
+            REFUSED_NO_STANDING,
+            "constellation mode requires external Standing + LA + NQ receipts; "
+            "absent any, declare standalone_degraded instead of faking rich",
+        )
+
+    # Office 3 — spend: exactly-once. Replay refuses BEFORE any write, so a
+    # replayed activation cannot re-mutate the tunable.
+    spend_key = (
+        f"activate:{P31_RUNG}:{delta.surface}:{delta.target}:{delta.delta_id}"
+    )
+    if not spend_ledger.consume(spend_key):
+        return ActivationRefusal(
+            REFUSED_REPLAY,
+            "activation spend already consumed for this delta (replay refused)",
+            (spend_key,),
+        )
+
+    # Office 4 — custody (durable) THEN effect. Build the receipt, persist it,
+    # then mutate the tunable through it. The LA ref is carried, never parsed.
+    prior_value = tunable_store.get(delta.surface, delta.target)
+    receipt = ActivationReceipt(
+        actor=actor,
+        target_rung=P31_RUNG,
+        surface=delta.surface,
+        target=delta.target,
+        delta_id=delta.delta_id,
+        eligibility_verdict=elig.verdict,
+        live_claim_set_digest=real_digest,
+        mode=mode,
+        standing_basis=external_standing_receipt or "bootstrap_substitute",
+        spend_ref=external_la_spend_ref if mode == MODE_CONSTELLATION else spend_key,
+        la_spend_ref=external_la_spend_ref,
+        nq_custody_ref=external_nq_custody_ref,
+        custody_basis=(
+            f"constellation:{external_nq_custody_ref}"
+            if mode == MODE_CONSTELLATION
+            else "local_receipt_chain"
+        ),
+        prior_value=prior_value,
+        new_value=new_value,
+    )
+    receipt_store.put(receipt)  # durable custody, before the effect
+    tunable_store.apply_activation(receipt)  # the effect
+    return receipt
+
+
+def rollback(
+    activation_receipt: ActivationReceipt | None,
+    *,
+    reason: str,
+    tunable_store: ActiveTunableStore,
+    receipt_store: ActivationReceiptStore,
+    mode: str,
+) -> RollbackReceipt | ActivationRefusal:
+    """Roll back an activation: restore the tunable to its prior value (topology,
+    not history) and persist a typed rollback receipt. Refuses without an
+    activation receipt; re-checks the P3.1 scope so a constructed receipt for
+    another tunable cannot drive a write; never erases the activation receipt."""
+    if not isinstance(activation_receipt, ActivationReceipt):
+        return ActivationRefusal(
+            REFUSED_NO_ACTIVATION_RECEIPT,
+            "rollback requires the activation receipt it reverts",
+        )
+    if (
+        activation_receipt.surface != P31_SURFACE
+        or activation_receipt.target != P31_TARGET
+    ):
+        return ActivationRefusal(
+            REFUSED_NOT_P31_TUNABLE,
+            f"rollback may only touch {P31_SURFACE}/{P31_TARGET}, not "
+            f"{activation_receipt.surface}/{activation_receipt.target}",
+            (f"{activation_receipt.surface}/{activation_receipt.target}",),
+        )
+    rb = RollbackReceipt(
+        activation_id=activation_receipt.activation_id,
+        surface=activation_receipt.surface,
+        target=activation_receipt.target,
+        restored_value=activation_receipt.prior_value,
+        reason=reason,
+        mode=mode,
+    )
+    receipt_store.put_rollback(rb)  # custody — the activation record remains
+    tunable_store.apply_rollback(rb)  # restore topology (delete if prior absent)
+    return rb

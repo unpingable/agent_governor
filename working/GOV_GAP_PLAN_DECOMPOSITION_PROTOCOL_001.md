@@ -164,6 +164,22 @@ why: P2.1 claims forced-True HardGuards as a construction invariant.
 action: fix before commit (done).
 ```
 
+## Grep-pass outcome (2026-06-13) — most mechanisms already exist
+
+A grep against the tree (after this file was first drafted) found the framing,
+not the machinery, was missing: `chain`/`classif`/`fuse`/`ratif`/`seam`/`debt`
+are everywhere; `rung`/`future-rung`/`scope-expand` are thin. Seam-admissibility
+is already `GOV_GAP_RECOMPOSITION_RECEIPT_001` (account_boundaries totality);
+classification jurisdiction is loop §11.2/§11.3; `independence_class` (self/peer/
+tool/operator) exists on `EvidenceRef`; `NonDischargeClaim` (gate_receipt v4) is
+the debt-binding substrate. So this protocol is mostly **wiring existing parts**,
+not new mechanism. The two surviving wirings + the conservation theorem are
+specced in **GOV_GAP_RUNG_DEBT_COLLECTION_001**:
+
+> **The authority that clears X cannot be X** — at the finding seam
+> (classification), the activation seam (collection), and the handoff between
+> them (carry). Named is not collected; carried is not collected either.
+
 ## Next-session prompt (compressed — do NOT expand to a PM system)
 
 Design the four load-bearing items only: (1) FindingClassification taxonomy,

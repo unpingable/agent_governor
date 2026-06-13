@@ -113,17 +113,51 @@ convergence_tuning migration.
 Cadence: AUTOPILOT; **HIGH checkpoint at exit: review the tunable-surface allowlist enum
 before any activation work begins.**
 
-### P3a — admitted scoped activation + rollback (3.0.0); RecompositionReceipt stays shadow
+Phase 3 reshaped (2026-06-13 design pass): the opening slice moved from "start
+activation machinery" to "prove activation cannot begin unless the debt/authority
+gates are real." Split into P3.0 → P3.1 → P3.2. The decomposition doctrine
+(GOV_GAP_RUNG_DEBT_COLLECTION_001) is P3.0 acceptance criteria, not a reason to
+stall.
+
+### P3.0 — activation preflight, NO activation (the next authorized slice)
+
+Goal: build the gates that keep activation impossible until debts are collected.
+Required:
+- per-surface target ALLOWLISTS replace/constrain the free-form `target` —
+  **discharges `P2_GENESIS_TARGET_ALLOWLIST_001` by mechanism, not prose**
+  (free-form target → `refused_activation_eligibility`; allowlisted → eligible).
+- activation-eligibility checker that **proves** activation is impossible while
+  any target is free-form OR any `NonDischargeClaim` targeting activation is open.
+- route future-rung debt into `NonDischargeClaim` (not commit prose); enforce
+  `authorized_collector != target_rung`; parked recomposition boundaries share
+  content-addressed identity with the claim they mint/reference.
+- `account_boundaries` reused as the shared total-accounting combinator; the
+  rung-transition layer owns the activation gate (operator lean — confirm against
+  rung-transition code).
+Forbidden: activate, apply, config writes (beyond allowlist/spec/test surfaces),
+rollback mutation, promotion, enforcement flip, LA changes, ops/NQ profile,
+loop-FSM codification, broad plan-decomposition implementation.
+Validator rule: §11.3 + the independence refinement — future-rung-debt and
+false-positive classifications require independence-admissible witnesses (floor
+rises with continuation authorized); scope-expanding remedy halts by identity.
+DoD: free-form target refused; eligibility checker proves activation impossible
+with open/free-form debt; `P2_GENESIS_TARGET_ALLOWLIST_001` discharged by
+witnessed mechanism; no activation/apply/config-mutation path exists.
+> Before the system may activate deltas, it must prove activation is gated by
+> debts it cannot self-clear.
+
+### P3.1 — admitted scoped activation + rollback (3.0.0); RecompositionReceipt stays shadow
 
 `activate(delta, baseline_id, checkpoint_id)` — required args, hash-validated, no defaults;
 human approval receipt; seam checkpoint `pre_delta_activation`; gate-time expiry; typed
 receipt-additive rollback. Wire exactly one pipeline: self-governance profile,
-lowest-stakes tunable (decomposition-size cap or retry posture).
+lowest-stakes tunable (decomposition-size cap or retry posture). Only after P3.0's
+gates are proven real.
 DoD: lifecycle drill (propose→approve→activate→trip→rollback→hashes==baseline); expiry
 auto-revert drill; path fence; deletion fence; lineage-validity refusal.
 **HIGH checkpoint at entry: crosswalk divergence #1 (validator quorum on activation?).**
 
-### P3b — enforcing RecompositionReceipt, hard-gated on P3a drill passing
+### P3.2 — enforcing RecompositionReceipt, hard-gated on P3.1 drill passing
 
 Flip the orchestrator-seam shadow to enforcing (`refused_laundering` blocks
 recomposition/publication); laundering drill via drill_runner pattern.

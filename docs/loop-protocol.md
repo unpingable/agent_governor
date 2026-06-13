@@ -395,6 +395,16 @@ allowlists are required before activation); the forged-`hard_guards` case was a
 cheap current-invariant hardening (fixed once). Same validator run, three
 different venues.
 
+**Known refinement (gap-tracked, not yet wired):** builder+validator *agreement*
+settles a venue, but if the two share a provenance class the agreement is
+correlated — the agent grading its own homework (NNC at the classification
+layer). The fix is to make agreement independence-typed (`independence_class`),
+with the floor rising with how much continuation the venue authorizes
+(`future_rung_debt` / `false_positive` need the strictest). Until wired,
+disagreement-halts and operator-fallback hold the line. See
+`specs/gaps/GOV_GAP_RUNG_DEBT_COLLECTION_001.md` (the authority that clears X
+cannot be X).
+
 ## 12. Model capacity policy (ratified 2026-06-12)
 
 The forcing event: the loop's first master was Fable-tier and exhausted its

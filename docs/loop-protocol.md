@@ -384,6 +384,16 @@ is not collected). Classification authority sits *above* the rung being decided:
 builder/validator agreement is attribution, not the authority to reclassify a
 current-rung blocker as deferrable.
 
+> **Enforcement status (honesty about this rule itself):** the fuse is currently
+> *practiced* by this loop, not *enforced* by the kernel — folklore with a README. A
+> conscientious runner halts on its own, which makes the unencoded invariant look
+> encoded; it breaks with a less-conscientious runner (a different model, an AUTO_RUN,
+> a drifted controller). Making fuse-firing a structural absence of mutation caps
+> (and re-arm operator-fiat) is `GOV_GAP_GOVERNOR_FUSE_ENFORCEMENT_001`; the broader
+> class — every place runner good-behavior is load-bearing — is
+> `docs/cross-tool/conscientious-behavior-not-custody-note.md`. *Claude halting is
+> weather; kernel refusal is verdict.*
+
 **Always halt for operator ratification** (no auto-accept), regardless of pass
 count: an actual write/apply/activate path appears; a surface/authority allowlist
 leak; a genesis-class target reaching the authority boundary; LA/API/front-door

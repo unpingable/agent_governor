@@ -138,11 +138,22 @@ discharge_condition: per-surface target ALLOWLISTS replace/constrain the
                      free-form `target`; activation-eligibility refuses while
                      any target label is free-form (proven, not asserted)
 owner:              operator (ratifies discharge)
+status:             DISCHARGED 2026-06-13 by mechanism (P3.0)
+discharge_witness:  src/governor/activation_preflight.py TARGET_ALLOWLISTS +
+                    check_activation_eligibility (gate 1: free-form target →
+                    refused_free_form_target). Proven by
+                    tests/test_activation_preflight.py::TestTargetAllowlist
+                    ::test_discharges_p2_genesis_debt_by_mechanism (camelCase /
+                    ALLCAPS / leetspeak all refused; only allowlisted eligible).
+collected_by:       P3.0 (external to the gated rung — P3.1 activation — so the
+                    conservation theorem holds: the authority that clears X is
+                    not X).
 ```
 
-This door does not open until the debt is paid: no activation rung may proceed
-while `target` is free-form and only the best-effort normalized genesis detector
-guards it.
+Discharged by mechanism, not prose: activation now requires per-surface allowlist
+membership, which no spelling can evade — the leaky candidate-time genesis
+detector is demoted to defense-in-depth. (The best-effort detector's residual
+digit-internal evasion is moot for activation: activation no longer consults it.)
 
 ## Required before Phase 3 activation (recorded 2026-06-13, P2.1 fuse outcome)
 

@@ -70,6 +70,15 @@ restore) PLUS one enforced `refused_laundering` at the orchestrator seam, both w
     `docs/cross-tool/decomposition-capability-closure-note.md`. SEQUENCE: document → audit →
     receipt-shape fields + guards + negative tests → shadow stubs → real wiring. **The knife:
     you cannot audit the absence of an omitted boundary; you can only make omission unexecutable.**
+14. **Hot-path declaration (2026-06-13, `docs/cross-tool/hotpath-and-granularity-note.md`):**
+    every future wiring slice MUST state whether it touches the **spine** (sovereign serial
+    chain), an **island** (sharded high-volume), **IPC** (kernel message path), a
+    **Standing-gate** (uncacheable re-check), or a **semantic-conversion** hot path — and name
+    the office that owns any conversion. Governance fires at *action* granularity, not
+    implementation granularity (gate the spend, not the syscall). No telemetry on the spine.
+    **Discharge / waiver / deferral is consequence-bearing** (a claim becoming non-blocking
+    changes what future gates may do) — it goes through an authorized decision + receipt, never
+    "a test passed." Hot-path awareness is admission, not footer.
 
 ## 2. Decisions locked (operator, 2026-06-12)
 

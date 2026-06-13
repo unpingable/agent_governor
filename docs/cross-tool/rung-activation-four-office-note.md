@@ -183,6 +183,74 @@ sane bootstrap path. Composes with the model-substrate forcing case
 (`working/forcing-case-degraded-model-availability.md`): same "witnessed
 substrate, degrade-don't-fake" shape, one axis over.
 
+## Verifier placement (cross-cutting instrument, not an office)
+
+The verifier (`~/git/verifier`, stateless Z3 admissibility sidecar; library / CLI
+/ MCP over one `run_payload`) is a **hook, not a pipeline** — it may sit *in* a
+path but must not *own* one. Its own doctrine is load-bearing here: *cooked, not
+fetched* (it does not call NQ/Standing/Continuity/Wicket on the hot path),
+stateless and offline, **no remote verifierd**. A hotpath would re-introduce the
+auth/standing/source-attribution problem the verifier exists to keep out of
+itself, plus a remote attack surface. Hook, never pipeline.
+
+Invoke it at the **measurement → finding → claim** membrane — wherever a tool is
+about to turn observations into a consequential claim: §11.3 finding→claim
+classification, recomposition summaries, eligibility derivation, report/receipt
+emission. It consumes a **freshly assembled IR** (proposal + facts + rules +
+`claim_state` + provenance) and returns `allowed | advisory | denied |
+invalid_input`.
+
+The scar that keeps it honest: **the verifier checks the inference, not the
+world.** It gates on `claim_state` (stale/revoked/expired → cannot produce
+`allowed`); it does NOT *establish* it — `claim_state`/`source` are
+caller-supplied, and ratification happens *before* the call. It faithfully
+refuses a deferral stamped `expired` and just as faithfully accepts one *falsely*
+stamped `current`. So the recompute-at-the-gate obligation is NOT absorbed by the
+verifier; it stays upstream on whoever assembles the IR. For the independence
+floor (RUNG_DEBT_COLLECTION wiring 1): a verifier verdict is the tool-class
+witness — but it tool-checks the *inference*, not the facts' currency, so
+verifier-over-an-honestly-stamped-IR clears the floor; verifier alone doesn't.
+
+> Verifier is the bouncer at the claim membrane, not the building manager.
+> "Verifier allowed this" must never mean "the world was fresh" or "the actor was
+> authorized." A re-entered `allowed` verdict is a fact like any other — it needs
+> source, claim_state, lifecycle, provenance.
+
+## Continuity placement (cross-cutting instrument: rely-time freshness)
+
+Continuity (`~/git/continuity`, local SQLite) is not read/write gates — its real
+verb is `rely`, and `rely` is the freshness office the recompute-at-gate
+discipline kept circling. `rely_ok` is computed at **query time** by walking the
+premise graph for revocations — *not* a stored "still valid" flag. That is
+recompute-at-gate generalized into a substrate: a committed memory carries no
+validity bit; reliance is re-derived fresh each query. `expires_at` is the
+`valid_until` horizon ("remember the leash, not just the dog"; temporal
+admissibility must not decay into durable legitimacy).
+
+But it **computes** reliance, it does not **decide** it: "receipt store, not the
+reliance engine"; reading the record to yield authority is "the soft monolith
+forming." `rely_ok=true` is a *fact* the eligibility office consumes (like a
+verifier verdict or NQ testimony) — never authority.
+
+So the carried-deferral freshness decomposes across three planes, each refusing
+the others' job:
+- **mechanism** (fresh `rely_ok` + `expires_at` + premise-taint) → Continuity;
+- **decision** to model a deferral as a hard-premised, expiring committed memory
+  (vs a free-text note) → the eligibility office;
+- **enforcement** at the gate (stale → non-grounding) → the verifier's
+  `claim_state` pre-gate.
+
+For rung activation, a carried deferral/waiver/prior-decision must EITHER be
+recomputed at the gate OR be a committed Continuity memory with hard premises +
+`expires_at` + `rely_ok=true` at activation time. (Open design choice — premise-
+taint vs recompute — puts the mechanism in different offices; resolve at P3.1
+resume.) Model it so activating rung N+1 *revokes* the premise "N+1 not yet
+present", flipping `rely_ok` false automatically.
+
+> Reliance is computed, not remembered. "Continuity remembered this" must never
+> mean "AG may act on it." Continuity remembers the leash; Governor decides
+> whether anyone may pick up the dog.
+
 ## Required negative tests (for P3.1, when it is built)
 
 1. A stale debt disposition must not activate if a new NonDischargeClaim appeared

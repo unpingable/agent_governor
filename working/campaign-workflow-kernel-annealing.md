@@ -49,6 +49,14 @@ restore) PLUS one enforced `refused_laundering` at the orchestrator seam, both w
     of refusal/custody/kernel semantics; loop-FSM codification before Phase 4; LA/wicket/
     standing contract changes; receipt_kernel invariant additions; governor-as-a-service
     surfaces; touching W1 launch-runway artifacts.
+12. **Cross-cutting precondition (2026-06-13, GOV_GAP_OFFICE_COLLAPSE_AND_RECEIPT_SOVEREIGNTY_001):**
+    further decompose/recompose work may continue ONLY if it preserves the conversion
+    refusals — receipt sovereignty over Governor semantics; no Governor-as-kernel path; no
+    `DebtClearVerdict → active_rung` write; no `rely_ok`/`verifier.allowed`/builder-agreement
+    → authority; no local Standing stub as real grant; no controller transition without
+    above-Governor (kernel-invariant) ratification. Verifier = hook not pipeline; Continuity
+    = rely-time freshness (computed not remembered). Every cross-level transition names the
+    office that owns the conversion, or it is forbidden.
 
 ## 2. Decisions locked (operator, 2026-06-12)
 

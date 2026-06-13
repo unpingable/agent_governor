@@ -54,13 +54,26 @@ Two completeness layers (only the first is mechanical for AG-alone):
 
 ## Acceptance criteria / negative-test matrix (NOT implemented here)
 
-Receipt-shape discipline (the cheap hardener wiring will target these):
-- AC1: a decomposition check emits `enumeration` and `coverage` fields separately;
-  AG-alone may emit `enumeration: complete` but only `coverage: best_effort`
-  (with `verifier: absent`, `proof_tier: ag_only`).
-- AC2: **no AG-alone receipt may emit `coverage: complete` or
-  `decomposition: complete`** without solver / theorem / operator evidence. A
-  unit test asserts the constructor/guard refuses it.
+Receipt-shape discipline — **LANDED 2026-06-13** (`decomposition_completeness.py`,
+`tests/test_decomposition_completeness.py`):
+- AC1: a decomposition check emits `enumeration` + `coverage` as separate qualified
+  axes (each with a basis). AG-alone emits `enumeration: declared` (basis
+  `declared_boundaries`) and `coverage: best_effort` (`verifier: absent`,
+  `proof_tier: ag_only`) — it may NOT emit `enumeration: complete` (closure is the
+  capability-kernel's, not declared boundaries'). ✓
+- AC2: **no AG-alone receipt may emit `coverage: complete`, `enumeration: complete`,
+  or any bare `decomposition_complete`** without a STRUCTURED evidence object. The
+  valve is on BOTH axes and every `complete` path carries an evidence object with a
+  provenance ref: `enumeration: complete` requires `CapabilityClosureEvidence`;
+  `coverage: complete` requires `z3`+`bounded_constraint`+`SolverCoverageEvidence`,
+  `lean_citation`+`theorem_cited`+`TheoremCoverageEvidence`, or
+  `operator_ratified`+`OperatorRatification`. Bare verifier/proof_tier strings are
+  never sufficient (no "two pleadable strings in a trench coat"). There is no
+  scalar `decomposition_complete` field (the lie is unrepresentable). Operator
+  ratification is a receipt ref, not a self-set flag
+  (`operator_ratified != self_asserted`). `best_effort` is obligation-bearing
+  (`coverage_upgrade_owed`), not terminal. The evidence objects are *shape sockets*
+  — genuine provenance of the refs is a later custody-anchoring rung. ✓
 
 Closure + composition refusals (capability-kernel era):
 - AC3: an omitted declared boundary cannot be treated as clean merely because

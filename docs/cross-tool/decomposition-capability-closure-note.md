@@ -66,37 +66,70 @@ The asymmetry collapses; recomposition was the back half of the ledger all along
 ## Two completeness layers — only one is mechanical
 
 Do not let "best-effort" become a procedural fog machine. Completeness has two
-layers and AG-alone owns exactly one:
+axes, and the valve is on BOTH — `enumeration` *is* the closure half, so pre-
+capability-kernel AG-alone owns neither as `complete`:
 
-1. **Enumeration completeness** — *the admitted boundary set equals the kernel
-   grant set.* Mechanical; AG-alone owns it fully when all boundaries are caps.
-   The kernel just knows its grants. NOT best-effort.
+1. **Enumeration completeness** — *the boundary set is closed.* Closure holds only
+   when boundaries are kernel-granted capabilities (boundary set == grant set).
+   That is mechanical *given a capability kernel* — but the kernel does not exist
+   yet. With merely *declared* boundaries (today) the honest value is
+   `enumeration: declared` (basis `declared_boundaries`): "I accounted for every
+   boundary I was *told about*", which is **not** closure. `enumeration: complete`
+   is reserved behind capability-kernel grant-ledger evidence. An omitted boundary
+   is an *enumeration* failure, not a coverage one — this is the axis the blind
+   spot was actually about.
 
 2. **Coverage completeness** — *the granted caps and their rules close over the
    plan's intended effects with no gaps, no contradictions, and no in-cap
-   composition that produces an out-of-scope effect.* This is a constraint
-   problem. AG-alone is **best-effort** here; the completeness evidence is
-   verifier/Z3 (bounded) or Lean (inductive, cited).
+   composition that produces an out-of-scope effect.* A constraint problem.
+   AG-alone is **best-effort**; the completeness evidence is verifier/Z3 (bounded)
+   or Lean (inductive, cited) or genuine operator ratification.
 
-> AG-alone is **complete on enumeration, best-effort on coverage.**
+> Before the capability kernel, AG can account **declared** boundaries; it cannot
+> prove boundary **closure**. So AG-alone is `enumeration: declared, coverage:
+> best_effort` — two qualified values, **zero bare completes**.
 
 ### Receipt-shape discipline (the anti-fog valve)
 
-A best-effort coverage check MUST emit the same receipt shape as a verified one,
-marked honestly, so a later verifier wiring can diff what AG-alone would have
-missed (convertibility, not co-location):
+A best-effort check MUST emit the same receipt shape as a verified one, marked
+honestly, so a later verifier/kernel wiring can diff what AG-alone would have
+missed (convertibility, not co-location). The honest AG-alone block vs a
+coverage-verified one:
 
 ```
-decomposition_check:                    decomposition_check:
-  enumeration: complete                   enumeration: complete
-  coverage:    best_effort                coverage:    solver_checked
-  verifier:    absent                     verifier:    z3
-  proof_tier:  ag_only                    proof_tier:  bounded_constraint
+decomposition_check:  (AG-alone, honest)    decomposition_check:  (coverage solved)
+  enumeration:      declared                  enumeration:      declared
+  enumeration_basis: declared_boundaries      enumeration_basis: declared_boundaries
+  coverage:         best_effort               coverage:         complete
+  verifier:         absent                    verifier:         z3
+  proof_tier:       ag_only                   proof_tier:       bounded_constraint
+  coverage_upgrade_owed: true                 solver_evidence: {solver_verdict_ref: …}
+                                              coverage_upgrade_owed: false
 ```
 
-**No AG-alone receipt may emit `coverage: complete` or `decomposition: complete`
-without solver / theorem / operator evidence.** That bare `complete: true` is
-where the worm enters the apple, files a Jira, and becomes staff engineer.
+The valve is symmetric and enforced by type (`decomposition_completeness.py`) —
+EVERY path to `complete` carries a structured evidence object with a provenance
+ref, never a bare enum string:
+- `enumeration: complete` requires `CapabilityClosureEvidence` (a grant-set ref);
+  AG-alone's own code has no producer (it never constructs one).
+- `coverage: complete` requires one of: `z3`+`bounded_constraint`+a structured
+  `SolverCoverageEvidence`; `lean_citation`+`theorem_cited`+a structured
+  `TheoremCoverageEvidence`; or `operator_ratified`+a structured
+  `OperatorRatification` (a receipt ref, **not** a self-set flag — a model is not
+  a principal). Bare `verifier`/`proof_tier` strings are never sufficient.
+
+These are evidence-shaped *sockets*: the ref is required and validated; whether it
+is *genuine* (a real solver verdict, theorem, kernel grant, operator receipt) is
+custody-anchoring — a later producer-swap rung, not a semantic retrofit. In one
+process a caller can still construct the objects (the documented bootstrap-custody
+substrate limit, same as P3.1); what is fenced *here* is the shape and the
+unrepresentability of the bare-scalar lie.
+
+**There is no bare `decomposition_complete` boolean** — completeness is always two
+qualified axes, so the scalar lie is unrepresentable. The field semantics:
+`declared != complete`, `best_effort != discharged`,
+`operator_ratified != self_asserted`. That bare `complete: true` is where the worm
+enters the apple, files a Jira, and becomes staff engineer.
 
 ## Prep-before-ingest: the admission gate
 

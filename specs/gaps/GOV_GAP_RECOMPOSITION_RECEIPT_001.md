@@ -7,10 +7,16 @@ decompose→recompose seam. "All slices passed" must not imply "the whole is adm
 
 ## Status
 
-Gap spec — **proposed, awaiting one-nod ratification.** Phase 0 deliverable of
-`working/campaign-workflow-kernel-annealing.md`. No build is authorized by this filing;
-the first build slice (Phase 1) enters the backlog only after ratified acceptance criteria
-+ loop AUDIT selection.
+Gap spec — **LANDED through enforcement (2026-06-13).** Phase 1 (shadow:
+`pipeline_types.RecompositionReceipt` + `account_boundaries`, P1.1; orchestrator-seam
+shadow emission, P1.2) and the Phase 3b enforcement flip both shipped. Enforcing
+recomposition is live at the cooked-context orchestrator seam (opt-in
+`run(recomposition_plan=...)`; `refused_laundering` returns a `RecompositionRefusal`
+that stops downstream and is refused at the spend type-wall). Invariant held:
+*recomposition's only verb is refuse* — no mutate/spend/retry/alternative. The
+refusal is decided before emission and reported from the same pre-emission snapshot.
+Commits 52e797f (P3.2), prior P1.1/P1.2. Remaining future work is P4 (promotion/
+expiry maturation), tracked in the campaign card — not this gap.
 
 ## Origin
 

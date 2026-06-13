@@ -198,3 +198,26 @@ to consume open `NonDischargeClaim`s as a disposition) or the rung-transition
 layer's (annealing.py/scope.py)? **Operator lean: rung-transition owns the gate;
 recomposition supplies the shared accounting primitive.** Confirm against the
 rung-transition code before the schema hardens.
+
+## SUPERSEDED by the four-office note (2026-06-13)
+
+The cross-tool interferometry pass (against the real `standing` / `linear_accountant`
+repo types) refined the answer: the "rung-activation gate" is **not one gate** —
+it is a transaction across **four offices** (Governor/Wicket admissibility ·
+Standing entitlement · LA spend · NQ custody), which AG currently co-hosts. The
+debt-collection accounting here (`account_boundaries` over open claims) is the
+**eligibility** half only; it is NOT the activation. See
+`docs/cross-tool/rung-activation-four-office-note.md` for the full ownership split.
+
+Key corrections this gap must inherit before P3.1:
+- **`DebtClearVerdict` must never write `active_rung`** — debt-clear is
+  eligibility; activation is a separate LA spend (exactly-once).
+- **Finding classification is assert-standing** (roadmap-only in Standing); rung
+  activation is act-standing + spend. Different surfaces, principals, times.
+- **Freshness: deferral is cargo, re-verification is standing.** A carried
+  eligibility digest / deferral classification must be RECOMPUTED at the
+  activation gate (bootstrap substitute) until assert-standing + Nightshift
+  freshness machinery ship.
+- **Override is custodial deposit + Δh pressure, never reversal.**
+- P3.0 (`activation_preflight.py`) built the eligibility half; P3.1 must wire the
+  act-standing / spend / custody offices per the note, not collapse them.

@@ -148,14 +148,28 @@ witnessed mechanism; no activation/apply/config-mutation path exists.
 
 ### P3.1 — admitted scoped activation + rollback (3.0.0); RecompositionReceipt stays shadow
 
-`activate(delta, baseline_id, checkpoint_id)` — required args, hash-validated, no defaults;
-human approval receipt; seam checkpoint `pre_delta_activation`; gate-time expiry; typed
-receipt-additive rollback. Wire exactly one pipeline: self-governance profile,
-lowest-stakes tunable (decomposition-size cap or retry posture). Only after P3.0's
-gates are proven real.
-DoD: lifecycle drill (propose→approve→activate→trip→rollback→hashes==baseline); expiry
-auto-revert drill; path fence; deletion fence; lineage-validity refusal.
-**HIGH checkpoint at entry: crosswalk divergence #1 (validator quorum on activation?).**
+**Reshaped 2026-06-13: rung activation is a FOUR-OFFICE transaction, not a gate**
+(`docs/cross-tool/rung-activation-four-office-note.md`): Governor/Wicket
+admissibility · Standing entitlement (act-standing) · LA spend (exactly-once) ·
+NQ custody. AG co-hosts them in bootstrap but must factor along eligibility /
+spend / custody seams. `activate(delta, baseline_id, checkpoint_id)` — required
+args, hash-validated, no defaults; human approval receipt; seam checkpoint
+`pre_delta_activation`; gate-time expiry; typed receipt-additive rollback. Wire
+exactly one pipeline: self-governance profile, lowest-stakes tunable. Only after
+P3.0's gates are proven real.
+Hard rules (from the four-office note): **`DebtClearVerdict` must never write
+`active_rung`** (debt-clear is eligibility; activation is a separate LA spend);
+**recompute the live claim set + debt disposition AT the activation gate**
+(deferral is cargo, re-verification is standing — carried digests don't authorize);
+**override = custodial deposit + Δh pressure, never reversal**; LA must not parse
+the eligibility ref.
+DoD: lifecycle drill (propose→approve→activate→trip→rollback→hashes==baseline);
+expiry auto-revert; path/deletion/lineage fences; **the note's 8 negative tests**
+(stale disposition, carried-digest staleness, assert-standing floor, no
+DebtClearVerdict→active_rung write, override-not-reversal, override-still-spends,
+repeated-override-pressure, LA-doesn't-parse).
+**HIGH checkpoints at entry: crosswalk divergence #1 (validator quorum on
+activation?) AND the four-office factoring (Standing/LA co-resident but not fused).**
 
 ### P3.2 — enforcing RecompositionReceipt, hard-gated on P3.1 drill passing
 

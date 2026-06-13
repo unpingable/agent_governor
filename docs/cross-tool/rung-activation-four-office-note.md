@@ -144,6 +144,45 @@ candidate for LA's consumer trigger (LA is frozen until a real stack wants
 `consume()` at its dispatcher; a denied activation through LA's preflight door is
 the on-record evidence that thaws the spend path).
 
+## Standalone / degraded mode (federation without hostage-taking)
+
+The four-office split is **semantic, not a hard runtime dependency** — the same
+invariant as the LA standalone rule (`docs/doctrine/annealing_and_recomposition.md`
+§5: *AG may run poor without LA; it must not run blind, and it must not fake being
+rich*), now generalized to all four offices. Standalone mode preserves office
+**separation** by using local/degraded substitutes, NOT by collapsing the offices
+into one verdict. AG may run alone; it may not pretend the other offices were
+present.
+
+```text
+ActivationMode:
+  constellation       — Standing / LA / NQ online; external receipts required
+  standalone_degraded — local substitutes; marked degraded
+
+standalone_degraded ALLOWS:
+  recompute live claim set · derive fresh eligibility ·
+  bootstrap standing substitute · local exactly-once spend ledger ·
+  local receipt/custody chain · refuse replay locally
+
+standalone_degraded FORBIDS:
+  claiming LA-backed spend · claiming external Standing entitlement ·
+  claiming NQ custody · publishing as constellation-grade activation
+```
+
+The difference must be **visible in the receipt** (`activation_mode:
+standalone_degraded`). A degraded activation may be valid for AG-local
+control-plane purposes, but later promotion / publication / reliance may require
+reconciliation or re-attestation by the missing offices.
+
+> AG may activate locally without the other offices, but it must mark the
+> activation as locally witnessed, locally spent, and locally entitled.
+> Standalone mode may run poor. It may not forge rich paperwork.
+
+This keeps federation without making AG a hostage to the federation — the only
+sane bootstrap path. Composes with the model-substrate forcing case
+(`working/forcing-case-degraded-model-availability.md`): same "witnessed
+substrate, degrade-don't-fake" shape, one axis over.
+
 ## Required negative tests (for P3.1, when it is built)
 
 1. A stale debt disposition must not activate if a new NonDischargeClaim appeared

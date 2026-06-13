@@ -163,11 +163,18 @@ Hard rules (from the four-office note): **`DebtClearVerdict` must never write
 (deferral is cargo, re-verification is standing — carried digests don't authorize);
 **override = custodial deposit + Δh pressure, never reversal**; LA must not parse
 the eligibility ref.
+Mode (federation without hostage): `ActivationMode ∈ {constellation,
+standalone_degraded}`. Constellation requires external Standing/LA/NQ receipts
+when configured present; standalone_degraded uses local substitutes (bootstrap
+standing, local exactly-once spend ledger, local custody), MUST mark the receipt
+`standalone_degraded`, and MUST NOT claim LA/Standing/NQ-backed grade. Same
+"run poor, don't fake rich" invariant as doctrine §5.
 DoD: lifecycle drill (propose→approve→activate→trip→rollback→hashes==baseline);
 expiry auto-revert; path/deletion/lineage fences; **the note's 8 negative tests**
 (stale disposition, carried-digest staleness, assert-standing floor, no
 DebtClearVerdict→active_rung write, override-not-reversal, override-still-spends,
-repeated-override-pressure, LA-doesn't-parse).
+repeated-override-pressure, LA-doesn't-parse); + degraded activation marks the
+receipt and emits no constellation-grade claim.
 **HIGH checkpoints at entry: crosswalk divergence #1 (validator quorum on
 activation?) AND the four-office factoring (Standing/LA co-resident but not fused).**
 

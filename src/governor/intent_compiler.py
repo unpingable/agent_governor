@@ -25,6 +25,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from .pipeline_types import CLOSED_FIDELITY_CLASSES
+
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -257,9 +259,19 @@ class IntentCompilationResult:
     escape_classification: EscapeClassification | None
     warnings: list[str]
     receipt_hash: str                           # content-addressed hash of compilation
+    # Inert fidelity metadata (P1.4, workflow-kernel campaign). Declared at
+    # intent time, judged later at recomposition (where losses_declared lives —
+    # see RecompositionReceipt). DEFAULT None means "unspecified", which any
+    # downstream judgment MUST treat as the most conservative class
+    # (exact-equivalent): absent fidelity NEVER licenses loss. Defaulting to
+    # 'heuristic' would silently license loss — so the default is None, not a
+    # class. Unenforced here. Kept OUT of _compilation_receipt_hash, so every
+    # existing receipt_hash is byte-identical (P1.4 bit-for-bit).
+    fidelity_class: str | None = None
+    loss_posture: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "intent_profile": self.intent_profile,
             "intent_scope": self.intent_scope,
             "intent_deny": self.intent_deny,
@@ -273,6 +285,13 @@ class IntentCompilationResult:
             "warnings": self.warnings,
             "receipt_hash": self.receipt_hash,
         }
+        # Fidelity keys appear ONLY when set, so existing (no-fidelity)
+        # serializations are byte-identical.
+        if self.fidelity_class is not None:
+            d["fidelity_class"] = self.fidelity_class
+        if self.loss_posture is not None:
+            d["loss_posture"] = self.loss_posture
+        return d
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> IntentCompilationResult:
@@ -289,6 +308,8 @@ class IntentCompilationResult:
             escape_classification=esc,
             warnings=d.get("warnings", []),
             receipt_hash=d["receipt_hash"],
+            fidelity_class=d.get("fidelity_class"),
+            loss_posture=d.get("loss_posture"),
         )
 
 
@@ -921,12 +942,28 @@ def compile_intent(
     response: IntentFormResponse,
     schema: IntentFormSchema,
     governor_dir: Path | None = None,
+    *,
+    fidelity_class: str | None = None,
+    loss_posture: str | None = None,
 ) -> IntentCompilationResult:
     """Deterministic compilation: response + schema -> Intent + ConstraintBlock.
 
     Pure except for optional constraint compilation (which reads .governor/ state)
     and optional receipt emission.
+
+    P1.4 (inert): ``fidelity_class`` / ``loss_posture`` are optional declared
+    metadata. Both default None ("unspecified" — the conservative default that
+    licenses no loss; NEVER defaulted to a permissive class). They are carried
+    on the result but NOT folded into ``receipt_hash``, so supplying them does
+    not change any existing receipt. Unenforced — judgment lives at
+    recomposition, not here. An out-of-vocabulary ``fidelity_class`` is refused.
     """
+    if fidelity_class is not None and fidelity_class not in CLOSED_FIDELITY_CLASSES:
+        raise ValueError(
+            "fidelity_class must be None or one of "
+            f"{sorted(CLOSED_FIDELITY_CLASSES)}, got {fidelity_class!r}"
+        )
+
     warnings: list[str] = []
 
     # Validate first
@@ -1015,6 +1052,8 @@ def compile_intent(
         escape_classification=escape_cls,
         warnings=warnings,
         receipt_hash=receipt_hash,
+        fidelity_class=fidelity_class,
+        loss_posture=loss_posture,
     )
 
     # Emit gate receipt if .governor/ exists

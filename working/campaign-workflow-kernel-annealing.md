@@ -313,6 +313,12 @@ decomposable.*
 
 ### P4 — promotion & expiry maturation (3.0.x) — NOT STARTED
 
+**Plan landed (docs-only) 2026-06-13: `working/P4-promotion-plan-2026-06-13.md`** —
+the exact target (the one P3.1 tunable), the seven questions (evidence /
+supersession receipt / expiry / rollback / bootstrap limits), the refusal cases, and
+the hot-path class (semantic-conversion trial→baseline + spine supersession). P4
+implementation is NOT started; entry gated on the three HIGH checkpoints.
+
 This is **constitutional memory** (a trial shape surviving → becoming baseline), not
 activation. Minimal P4: observe the one activated tunable over `evidence_count ≥ N` →
 if in-bounds, promote trial → new ControlBaseline via the validator supersession

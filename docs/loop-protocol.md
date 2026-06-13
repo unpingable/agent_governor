@@ -318,6 +318,41 @@ compact heartbeat — slices attempted/completed, parked items,
 failures/deviations, capacity exhaustion if any, exact next action for cold
 restart.
 
+### 11.2 Automation rungs — automate within, ratify before changing (ratified 2026-06-13)
+
+Throughput is bounded by *authority class*, not effort. Automation may chain
+slices that share an already-ratified authority rung; it must halt before any
+transition that changes what the system is allowed to decide, mutate, enforce,
+publish, or rely on.
+
+> **Automation may advance work inside an already-ratified authority rung. It
+> must halt before any transition that changes what the system is allowed to
+> decide, mutate, enforce, publish, or rely on.**
+
+Compact form: *automate within a rung; ratify before changing rungs.* Less
+ceremonial: let the machines carry boxes down the hallway; don't let them decide
+which walls are load-bearing.
+
+| Safe to chain (same rung) | Must halt for ratification (rung change) |
+|---|---|
+| pure accounting → shadow emission → read-only observation → inert metadata | shadow → enforcement |
+| | observation → candidate delta |
+| | candidate delta → activation |
+| | activation → promotion |
+| | local-only → publication / push |
+| | AG-local → cross-repo seam change |
+| | docs-side doctrine → code-side enforcement of it |
+
+Within a rung, bounded AUTO per slice is: build → targeted verify-run →
+adversarial seam validation (a second agent challenges only that slice) → apply
+only **blocking** findings → verify-run again → one local commit → continue only
+if clean. **Chain fuse:** more than one refinement pass means the seam is murkier
+than expected — halt. Stop immediately on enforcement/gating/mutation introduced,
+unrelated files touched, validator fail, test fail, authority-boundary ambiguity,
+or any LA/API/front-door/loop-FSM expansion. "Efficiency" here means fewer
+operator interrupts, never reduced custody — the validator reduces involvement
+but never becomes the operator.
+
 ## 12. Model capacity policy (ratified 2026-06-12)
 
 The forcing event: the loop's first master was Fable-tier and exhausted its

@@ -57,6 +57,19 @@ restore) PLUS one enforced `refused_laundering` at the orchestrator seam, both w
     above-Governor (kernel-invariant) ratification. Verifier = hook not pipeline; Continuity
     = rely-time freshness (computed not remembered). Every cross-level transition names the
     office that owns the conversion, or it is forbidden.
+13. **Decomposition-completeness precondition (2026-06-13, GOV_GAP_DECOMPOSITION_COMPLETENESS_CAPABILITY_CLOSURE_001):**
+    recomposition soundness is conditional on decomposition completeness, and that condition
+    is NOT discharged while boundaries are *declared*. Further decompose/recompose work
+    (incl. **P4**) may continue ONLY if it preserves the enumeration/coverage split:
+    AG-alone may claim `enumeration: complete` but only `coverage: best_effort`
+    (`verifier: absent`); **no AG-alone receipt may emit `coverage: complete` or
+    `decomposition: complete`** without solver/theorem/operator evidence. `account_boundaries`
+    proves admitted-boundary disposition, NEVER boundary-set closure (the omitted-boundary
+    blind spot is pinned: `tests/test_decomposition_closure_limit.py`). Closure requires
+    kernel-granted capabilities, not plan-declared surfaces. Doc:
+    `docs/cross-tool/decomposition-capability-closure-note.md`. SEQUENCE: document → audit →
+    receipt-shape fields + guards + negative tests → shadow stubs → real wiring. **The knife:
+    you cannot audit the absence of an omitted boundary; you can only make omission unexecutable.**
 
 ## 2. Decisions locked (operator, 2026-06-12)
 

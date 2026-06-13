@@ -2099,6 +2099,52 @@ def wrap(ctx: click.Context, command: tuple[str, ...], auto_approve: bool, check
     ctx.exit(exit_code)
 
 
+@cli.command("verify-run")
+@click.argument("command", nargs=-1, required=True)
+@click.option("--ci-kind", default="unit_tests", help="Verifier kind (unit_tests, lint, typecheck, build, integration_tests, e2e_tests, coverage, security_scan)")
+@click.option("--receipt-out", default=None, help="Receipt path/dir (default: .governor/verify_receipts/)")
+@click.option("--allow-masked", is_flag=True, help="Run even if the command is a pipe that may mask the exit (discouraged; only if you know the exit source)")
+@click.pass_context
+def verify_run_cmd(ctx: click.Context, command: tuple[str, ...], ci_kind: str, receipt_out: str | None, allow_masked: bool) -> None:
+    """Run a verifier command and emit a receipt backed by its REAL exit code.
+
+    A verifier result is admissible only when the verifier's own exit status is
+    observed. This runs COMMAND as a child process (no pipe, no shell), captures
+    the child's exit code directly, and emits a receipt with exit-source
+    provenance. It REFUSES a shell pipeline that would mask the exit
+    (e.g. `bash -c "cargo test | tail"`) unless the pipeline preserves the exit
+    source (`set -o pipefail` / PIPESTATUS) or --allow-masked is given.
+
+        governor verify-run -- cargo test -p nq-db
+    """
+    from .verify import verify_run
+
+    out = Path(receipt_out) if receipt_out else None
+    try:
+        result = verify_run(list(command), ci_kind, out, allow_masked=allow_masked)
+    except ValueError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
+        return
+
+    s = result.safety
+    if result.refused:
+        click.echo(
+            "REFUSED (masked-exit risk): " + s.reason + "\n"
+            "  Fix: run it bare (no pipe), or preserve the exit source "
+            "(`set -o pipefail; …; exit ${PIPESTATUS[0]}`), or pass --allow-masked.",
+            err=True,
+        )
+    if result.receipt is not None:
+        click.echo(
+            f"verifier receipt: {result.receipt.receipt_id} [{result.receipt.verdict}] "
+            f"exit_source={s.exit_source} masked_risk={s.masked_exit_risk} "
+            f"exit_observed={not result.refused} -> {result.receipt_path}",
+            err=True,
+        )
+    ctx.exit(result.exit_code)
+
+
 def _wrap_with_continuity_check(
     ctx: click.Context,
     command: list[str],

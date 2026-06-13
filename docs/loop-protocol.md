@@ -70,6 +70,21 @@ the head; the receipts (§6) are the custody trail.
   (what passed, what's open). **They do not see the backlog.**
 - Master verifies receipts against acceptance tests before REVIEW exits.
   Grep over trust — the standing house rule.
+- **Exit codes are the verdict, and they must be *observed*.** A REVIEW or AUDIT
+  may not claim tests green unless backed by the verifier's own exit status.
+  Run the test/build/lint command **bare** (its exit code stands), or via
+  `governor verify-run -- <cmd>` (runs the child directly, captures its real
+  exit, emits a verifier receipt). **Never judge pass/fail from a pipeline whose
+  last stage is `tail`/`head`/`grep`/`tee`/`sed`/`awk`** — a pipeline returns the
+  *last* command's exit code, so `cargo test | tail` reports 0 even on failure.
+  Shell pipelines are masked-exit risks unless they preserve the source
+  (`set -o pipefail` / `${PIPESTATUS[0]}`); `governor verify-run` refuses an
+  unpreserved pipe rather than mint a green from it. A "green" with no verifier
+  receipt — or one whose receipt carries `masked_exit_risk: true` /
+  `verifier_exit_observed: false` — is ceremonial green, not observed state, and
+  AUDIT refuses it. (Scar 2026-06-12: migration 058 shipped with three red tests
+  masked by `cargo test | tail`. Global rule: `~/.claude/CLAUDE.md` §
+  Verification discipline.)
 
 ## 6. Custody hardening
 

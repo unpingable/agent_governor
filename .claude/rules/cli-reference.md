@@ -58,6 +58,14 @@ governor ci verify <receipt_path> --policy <file>  # Custom JSON policy
 governor ci verify <receipt_path> --receipt-out <path>  # Write meta-receipt
 governor ci verify <receipt_path> --json   # JSON output
 
+# Verifier wrapper (exit codes are the verdict — masked-exit guard)
+governor verify-run -- cargo test -p nq-db   # Run a verifier, capture its REAL exit code, emit a receipt
+governor verify-run --ci-kind lint -- ruff check .   # ci_kind: unit_tests|lint|typecheck|build|integration_tests|e2e_tests|coverage|security_scan
+governor verify-run --receipt-out <path> -- pytest   # Receipt path/dir (default .governor/verify_receipts/)
+governor verify-run --allow-masked -- bash -c "x | tail"  # Escape hatch (discouraged); refuses unpreserved pipes by default
+    # Refuses `bash -c "cargo test | tail"` (pipeline masks the exit) unless pipefail/PIPESTATUS preserves the source.
+    # Receipt carries verifier_exit_observed / verifier_exit_source / masked_exit_risk. See docs/loop-protocol.md §3.
+
 # MCP Server
 governor mcp serve               # Run MCP server for Claude integration
 governor mcp tools               # List available MCP tools

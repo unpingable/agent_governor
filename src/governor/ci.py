@@ -193,11 +193,20 @@ def ci_wrap(
     *,
     cwd: Path | None = None,
     timestamp: str | None = None,
+    extra_evidence: dict[str, Any] | None = None,
+    gate: str = CI_WRAP_GATE,
+    subject_kind: str = "ci_wrap",
 ) -> CiWrapResult:
     """Run *command*, emit a CI receipt bundle.
 
-    Returns CiWrapResult — exit_code is always the child's exit code.
-    Receipt emission is fail-open (errors print warning to stderr).
+    Returns CiWrapResult — exit_code is always the child's exit code, captured
+    directly from ``subprocess.run`` (no pipe, no shell): the child's status is
+    never laundered through a downstream filter.
+
+    ``extra_evidence`` merges additional keys into the evidence bundle (used by
+    the verifier wrapper to record exit-source provenance). ``gate`` /
+    ``subject_kind`` override the receipt's gate identity (defaults preserve the
+    CI-lane behavior). Receipt emission is fail-open (errors print to stderr).
     """
     if ci_kind not in VALID_CI_KINDS:
         raise ValueError(
@@ -256,6 +265,8 @@ def ci_wrap(
         "command_display": shlex.join(command)[:500],
         "python_version": platform.python_version(),
     }
+    if extra_evidence:
+        evidence_bundle.update(extra_evidence)
 
     # Subject uses argv list (not joined string — avoids quoting collisions)
     subject_bytes = canonical_json({
@@ -270,9 +281,9 @@ def ci_wrap(
 
     try:
         receipt = create_receipt(
-            gate=CI_WRAP_GATE,
+            gate=gate,
             verdict=verdict,
-            subject_kind="ci_wrap",
+            subject_kind=subject_kind,
             subject_bytes=subject_bytes,
             evidence_bundle=evidence_bundle,
             gate_config={"ci_kind": ci_kind},

@@ -353,6 +353,48 @@ or any LA/API/front-door/loop-FSM expansion. "Efficiency" here means fewer
 operator interrupts, never reduced custody — the validator reduces involvement
 but never becomes the operator.
 
+### 11.3 Validator findings are rung-scoped — a halt needs jurisdiction (ratified 2026-06-13)
+
+The §11.2 chain fuse ("more than one refinement pass → halt") shipped too blunt:
+it treated "the current slice is unsafe" and "the validator found debt that only
+matters at a higher rung" as the same siren. They are different fires. A halt
+condition needs **jurisdiction**, not just a trigger.
+
+> **A validator finding must be classified by the authority boundary it
+> threatens. Halt only when the finding threatens the CURRENT rung's authority
+> boundary.**
+
+Every validator finding answers *"unsafe for what authority level?"* — not just
+"I found a weird input." Classify each into exactly one venue:
+
+| Finding class | Venue | Action |
+|---|---|---|
+| **Current-rung violation** | this slice's contract | **block** — fix before commit |
+| **Future-rung requirement** | activation / enforcement / publication | record as **named debt** (plan or commit body); continue if the current rung stays safe |
+| **Defense-in-depth concern** | secondary tripwire, not the authority gate | fix once if cheap; else record and require before the higher rung |
+| **Scope-expanding remedy** | changes what the slice is allowed to decide | **halt** for operator ratification |
+
+The refined chain fuse: a second refinement pass halts **unless ALL hold** — no
+apply/write/enforcement path exists, the authority boundary is separately closed
+(and is not the failing mechanism), the finding is classified future-rung or
+defense-in-depth, validator and builder **agree** on that classification, and the
+commit body records the accepted debt with the named higher-rung requirement.
+
+**Always halt for operator ratification** (no auto-accept), regardless of pass
+count: an actual write/apply/activate path appears; a surface/authority allowlist
+leak; a genesis-class target reaching the authority boundary; LA/API/front-door
+expansion; the validator says the *current* contract is violated; or builder and
+validator **disagree** on the classification.
+
+This prevents both failure modes: too lax ("eh, future-slice" hiding a real
+current leak) and too strict (every future-hardening concern waking the operator
+and killing throughput). Worked example (P2.1, 2026-06-13): a surface-allowlist
+leak would have been a current-rung block; the genesis-detector leetspeak evasion
+was future-rung debt (string denylist is leaky by nature; per-surface target
+allowlists are required before activation); the forged-`hard_guards` case was a
+cheap current-invariant hardening (fixed once). Same validator run, three
+different venues.
+
 ## 12. Model capacity policy (ratified 2026-06-12)
 
 The forcing event: the loop's first master was Fable-tier and exhausted its

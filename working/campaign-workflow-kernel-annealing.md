@@ -293,16 +293,23 @@ path to `complete` requires a structured evidence object; AG-alone emits
 landed pre-P4: symbolic-instrument-witness + hotpath-and-granularity doctrine notes,
 and the conversion-path audit (0 blocker / 0 live-risk).
 
-**P3.4 prep-before-ingest indecomposable-gate blocker — NEXT.** The smallest runtime
-behavior that USES the receipt shape without pretending the sibling tools exist.
-Hot-path class: **semantic-conversion / gate-admission** (ground rule 14). Build: one
-claim kind `indecomposable_gate`; prep can emit it; ingest refuses while open; planner
-cannot self-discharge (assert-standing — proposing ≠ ratifying); operator/authorized
-discharge only. Forbidden: verifier wiring, capability kernel, seam-cap composition,
-general discharge redesign. This starts paying the **discharge hot path** (a claim
-becoming non-blocking is consequence-bearing). Composes with
-`GOV_GAP_DISCHARGE_COLLECTOR_BINDING_001`. *Before P4 can promote anything, AG needs a
-front door that can refuse plans whose gates are not yet decomposable.*
+**P3.4 prep-before-ingest indecomposable-gate blocker — LANDED** (`prep_ingest.py`).
+The smallest runtime behavior that USES the receipt shape without pretending the
+sibling tools exist. Hot-path class: **semantic-conversion / gate-admission** (ground
+rule 14). One claim kind `indecomposable_gate` (namespaced by `plan_id`+`gate_id` —
+identity is custody, not decoration); `prep_detect` emits it; `assert_ingest_admissible`
+refuses while open; the planner cannot self-discharge (re-running prep with
+`decomposable=True` does not clear); the ONLY clearance is `operator_discharge` requiring
+a structured `OperatorDischargeEvidence` (non-empty ref, anti-forgery like P3.3) — no
+generic flag-flip, `DebtLedger.discharge()` untouched; the reader is **fail-closed** (a
+tampered `discharged`-without-ref record stays blocking, repairable only by genuine
+operator evidence); discharged claims remain auditable (`is_cleared` is the semantic
+predicate, not the raw flag). Three-cycle two-stroke (Codex: plan_id collision →
+gate_id collision → pass). A *clearance socket, not a discharge subsystem* — the deeper
+collector-binding/provenance hardening stays `GOV_GAP_DISCHARGE_COLLECTOR_BINDING_001`.
+P3.4 does NOT decide decomposability (operator/verifier judgment, future). *Before P4
+can promote anything, AG has a front door that refuses plans whose gates are not yet
+decomposable.*
 
 ### P4 — promotion & expiry maturation (3.0.x) — NOT STARTED
 
@@ -371,7 +378,7 @@ work (W1) interleaves freely.
 | P3.2 enforcing RecompositionReceipt | **LANDED 52e797f** | `refused_laundering` blocks; recomposition's only verb is refuse |
 | *Pre-P4 closure (doctrine + audit)* | **LANDED** | decomposition-closure + symbolic-witness + hotpath notes (2428072/dd7a9a0/ec99cbf); conversion-path audit 0/0 (a4bc70f) |
 | P3.3 decomposition-completeness receipt shape | **LANDED 77044f2** | every path to `complete` needs a structured evidence object; AG-alone = declared/best_effort |
-| P3.4 prep-before-ingest indecomposable-gate blocker | **NEXT** | semantic-conversion / gate-admission hot path; cashes the closure doctrine into ingest refusal |
+| P3.4 prep-before-ingest indecomposable-gate blocker | **LANDED** | `prep_ingest.py`; semantic-conversion/gate-admission hot path; one claim kind + one operator-gated discharge socket; plan_id+gate_id namespaced; fail-closed reader |
 | P4 promotion / expiry maturation | **NOT STARTED** | preconditions in §3 P4 block; constitutional memory, not more annealing |
 
 ## 8. Model-suitability note

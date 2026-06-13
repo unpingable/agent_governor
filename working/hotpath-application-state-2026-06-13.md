@@ -56,10 +56,12 @@ campaign-independent rule set.
 ## Next intended seam
 
 The decomposition-completeness **receipt-shape** slice is LANDED (77044f2;
-hot-path class declared **none** — the first slice under ground rule 14, inert on
-all five). Per the declared sequence (document → audit → receipt-shape → shadow
-stubs → real wiring), the next wiring slice is the **shadow-stub** rung: emit the
-honest `DecompositionCompleteness.ag_alone()` block on a real decomposition check
-(shadow / advisory), so a later verifier/kernel becomes a producer swap pointing
-the same evidence sockets at real receipts. That slice MUST declare its hot-path
-class before it starts.
+hot-path class **none**). The **P3.4 prep-before-ingest** blocker is now also LANDED
+(`prep_ingest.py`) — the first slice whose declared hot-path class is real:
+**semantic-conversion / gate-admission**, and it pays the first installment on the
+**discharge** hot path (an operator-gated, fail-closed clearance socket). Pre-P4 order:
+`0 ✓ · 1 ✓ · 2 ✓ · 3 P4 plan · 4 start P4`. Next is the **P4 promotion/expiry plan
+update** (constitutional memory), then P4. (The shadow-stub rung — emitting
+`ag_alone()` on a real decomposition check so the evidence sockets await real producers —
+remains a candidate wiring slice, sequenced after P4 planning unless a forcing case
+pulls it earlier; it too must declare its hot-path class.)

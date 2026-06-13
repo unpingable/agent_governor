@@ -122,6 +122,28 @@ placement, and nothing refuses a genesis-class target at construction.
 3. Neutral shared-custody module name if extraction is chosen (`proposal_custody.py`?) —
    decide at Phase 2 implementation against actual shared surface size.
 
+## Bound debt: P2_GENESIS_TARGET_ALLOWLIST_001 (bound 2026-06-13)
+
+Per the debt-binding rule (GOV_GAP_PLAN_DECOMPOSITION_PROTOCOL_001 §kernel #3:
+future-rung debt is admissible only if it binds a named collecting rung and
+blocks that rung until discharged), the P2.1 genesis-detector debt is recorded
+as a **standing obstacle**, not a log note:
+
+```
+debt_id:            P2_GENESIS_TARGET_ALLOWLIST_001
+class:              future_rung_debt
+collecting_rung:    Phase 3a activation preflight (P3.0)
+blocks_before:      any AnnealingDelta activation / effect conferral
+discharge_condition: per-surface target ALLOWLISTS replace/constrain the
+                     free-form `target`; activation-eligibility refuses while
+                     any target label is free-form (proven, not asserted)
+owner:              operator (ratifies discharge)
+```
+
+This door does not open until the debt is paid: no activation rung may proceed
+while `target` is free-form and only the best-effort normalized genesis detector
+guards it.
+
 ## Required before Phase 3 activation (recorded 2026-06-13, P2.1 fuse outcome)
 
 - **Per-surface target allowlists.** P2.1 ships a normalized-substring genesis *detector*

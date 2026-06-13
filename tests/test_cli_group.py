@@ -208,7 +208,7 @@ ALLOWED_UNCATEGORIZED: set[str] = {
     "scar", "scope", "security", "selfcheck", "semvar", "signals",
     "slim", "spine", "stability", "state", "strict", "taint",
     "task", "telemetry", "temporal", "transport", "tune", "unlock",
-    "vitals", "watch",
+    "verify-run", "vitals", "watch",
 }
 
 

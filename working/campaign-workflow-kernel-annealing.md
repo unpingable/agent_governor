@@ -202,6 +202,20 @@ pass-2 off-surface leak fixed under operator ruling A); fuse-classified residue
 work, recorded in `working/parked-p31-activation.md`. **Hard stop here — P3.2 not
 started.**
 
+**P3.1 LIFECYCLE DRILL LANDED 2026-06-13** (`tests/test_activation_drill.py`): the
+single end-to-end walk that gates P3.2. Proves the effect-bearing rung can
+*activate, account, and retreat without widening authority* — propose → eligibility
+from the live DebtLedger (open debt blocks, discharge unblocks) → activate the one
+tunable → observe the effect (8→4) AND the four-office receipts ON DISK (activation
+receipt file, exactly-once spend ledger entry) → replay refuses (tunable unchanged)
+→ rollback referencing the persisted activation receipt → observe restoration (→8,
+activation record not erased) → forged/off-surface activation + rollback + ghost
+(uncustodied) rollback all still refused, real tunable untouched. Test-only (no src
+change, no new authority surface) → targeted verify-run pass (exit-witnessed), no
+full suite warranted, no Codex pass. *Before enforcing recomposition, prove the
+effect-bearing rung can activate, account, and retreat without widening authority.*
+**P3.2 (enforcing RecompositionReceipt) remains gated; hard stop after the drill.**
+
 ### P3.2 — enforcing RecompositionReceipt, hard-gated on P3.1 drill passing
 
 Flip the orchestrator-seam shadow to enforcing (`refused_laundering` blocks

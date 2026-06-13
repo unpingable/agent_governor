@@ -16,9 +16,10 @@ campaign-independent rule set.
 - **Substrate hot paths are dormant, not wired:** the sovereign receipt chain runs
   serial under WIP-1 (no concurrency pressure yet); the microkernel/IPC and
   federated Standing are FUTURE — their hot-path cost is named, not incurred.
-- **Receipt-shape slice (decomposition_completeness.py):** built, awaiting the
-  Codex-fuse ruling on the coverage-axis structured-evidence symmetry (uncommitted
-  pending operator direction). This is the next intended wiring seam.
+- **Receipt-shape slice (decomposition_completeness.py): LANDED at 77044f2.** The
+  coverage-axis structured-evidence symmetry was applied (operator ruling A): every
+  path to `complete` carries a structured evidence object with a non-empty
+  provenance ref — bare z3/lean strings dead. Codex pass-3 clean.
 
 ## What the next wiring slice MUST preserve
 
@@ -54,8 +55,11 @@ campaign-independent rule set.
 
 ## Next intended seam
 
-The decomposition-completeness **receipt-shape** slice remains next (schema truth
-before behavior truth). Hot-path class it touches: **none at runtime** — it is a
-pure constructor/guard on a receipt-embeddable value type, no spine append, no
-IPC, no Standing gate, no semantic conversion fired. (The first slice to declare
-its hot-path class under the new pickup rule: it is inert on all five.)
+The decomposition-completeness **receipt-shape** slice is LANDED (77044f2;
+hot-path class declared **none** — the first slice under ground rule 14, inert on
+all five). Per the declared sequence (document → audit → receipt-shape → shadow
+stubs → real wiring), the next wiring slice is the **shadow-stub** rung: emit the
+honest `DecompositionCompleteness.ag_alone()` block on a real decomposition check
+(shadow / advisory), so a later verifier/kernel becomes a producer swap pointing
+the same evidence sockets at real receipts. That slice MUST declare its hot-path
+class before it starts.

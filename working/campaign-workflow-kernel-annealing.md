@@ -222,6 +222,41 @@ Flip the orchestrator-seam shadow to enforcing (`refused_laundering` blocks
 recomposition/publication); laundering drill via drill_runner pattern.
 DoD: blocked recomposition with walkable receipt chain; one enforcement surface this band.
 
+**LANDED 2026-06-13** (`src/governor/cooked_context_orchestrator.py`): opt-in
+`run(..., recomposition_plan=...)` enforcement; `enforce_recomposition` (effective
+receipt accounting the declared plan against the chain's own traversal);
+`RecompositionRefusal` outcome (carries receipt + accounting, NOT the laundered
+success — train stops, cargo not forwarded); `SEAM_RECOMPOSITION`; shadow
+refactored into shared `_chain_traversal`/`_chain_recomposition_meta` (P1.2
+byte-identical). 9 enforcement tests incl. the laundering drill (all visible
+slices pass + one dropped admitted boundary → blocks, zero added client calls),
+honest-plan-admits, no-plan-byte-identical, can't-be-spent (type wall),
+honest-refusal-not-relabelled, gate-is-pure, mutating-sink-cannot-suppress-or-corrupt.
+Full suite green (verify-run, exit-witnessed) twice.
+
+Two-stroke ledger: Codex pass-1 → block decided PRE-emission from the immutable
+verdict (sink can't suppress). Codex pass-2 → operator ruling A: **the refusal must
+be decided before emission AND reported from the same pre-emission snapshot** — the
+`RecompositionRefusal` + its `accounting` are now built before the sink runs, so a
+hostile `object.__setattr__` sink can corrupt neither the block nor the RETURNED
+diagnosis. §11.3 classification (operator-ratified):
+- *current-rung invariant*: `refused_laundering` blocks downstream execution. ✓
+- *current-rung hygiene*: returned refusal diagnosis snapshots pre-sink accounting. ✓
+- *substrate limit (NOT chased)*: hostile in-process `object.__setattr__` can
+  vandalise the shared receipt object's own fields — same bootstrap-custody limit
+  as P3.1: *in-process object forgery is not fenced; the admitted effect/control
+  surface is*. The diagnosis we RETURN no longer reads from that object post-sink.
+
+**Rust-extraction seam flagged for later (operator, not acted):** the invariant
+cluster now stable enough to know what NOT to port — `account_boundaries` /
+RecompositionVerdict + refusal snapshot / AnnealingDelta admission / activation
+eligibility + exactly-once + receipt-backed apply-rollback. Doctrine: *Rust is
+justified for the invariant-bearing recomposition/activation kernel, not for the
+control plane* ("Bash for crimes, Python for bureaucracy, Rust for the part where
+lying should be structurally expensive"). Composes with [[rust_kernel_port_ruling]]
+(decision-kernel-only, post-launch; golden receipt corpus is the contract). NOT a
+P-phase; revisit at/after the first self-build recompose. **Hard stop after P3.2.**
+
 ### P4 — promotion & expiry maturation (3.0.x)
 
 Evidence-count promotion → new ControlBaseline via supersession ceremony; bisectable

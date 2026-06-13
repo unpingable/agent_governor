@@ -43,10 +43,15 @@ from governor.cooked_context_orchestrator import (
     ORIGIN_MODE_STUB,
     SEAM_LA_CONSUME,
     SEAM_LA_REQUEST,
+    SEAM_RECOMPOSITION,
     SEAM_WICKET,
     ChainResult,
     CookedContextOrchestrator,
     InvalidOriginModeError,
+    NonOperationalSpendError,
+    RecompositionRefusal,
+    confer_operational_effect,
+    enforce_recomposition,
     shadow_recomposition,
     wrap_receipt_sink_with_origin_mode,
 )
@@ -976,3 +981,226 @@ class TestShadowRecomposition:
 
         assert verdicts == [VERDICT_ADMISSIBLE, VERDICT_REFUSED_CARRIED]
         assert VERDICT_REFUSED_LAUNDERING not in verdicts
+
+
+# ---------------------------------------------------------------------------
+# P3.2 — enforcing recomposition at the orchestrator seam.
+#
+# "Recomposition may stop the train; it may not choose the destination."
+# Enforcement is opt-in via recomposition_plan (the admitted decomposition
+# boundaries declared upstream). A declared boundary the chain never accounted
+# is a silently dropped slice -> refused_laundering -> the would-be-admissible
+# chain is REFUSED (the train stops; the laundered cargo is not forwarded).
+# Honest paths (admissible, honestly-refused) are unchanged. The gate's only
+# verb is refuse: no client call, no mutation, no retry, no alternative path.
+# ---------------------------------------------------------------------------
+
+# The boundaries a full consume provably traverses (spendability gate skipped
+# when it is not the firing seam). An honest decomposition plan for a success.
+_HONEST_PLAN = (SEAM_WICKET, SEAM_LA_REQUEST, SEAM_LA_CONSUME)
+# Same plan with one extra admitted boundary the chain never accounts for: a
+# slice declared at decompose but dropped before recompose. The laundering case.
+_DROPPED_BOUNDARY = "synthesis_slice"
+_LAUNDERING_PLAN = (*_HONEST_PLAN, _DROPPED_BOUNDARY)
+
+
+class TestEnforcingRecomposition:
+    def test_honest_plan_admits_and_proceeds_unchanged(self, tmp_path):
+        # A healthy chain whose declared decomposition matches what it traversed
+        # is admissible — run() returns the consume outcome unchanged.
+        orch, req, con = _success_orchestrator(tmp_path)
+        sink = _RecordingSink()
+        result = orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_sink=sink,
+            recomposition_plan=_HONEST_PLAN,
+        )
+        # Outcome is the chain's own success — NOT relabelled.
+        assert result.consumed
+        assert not result.refused
+        assert result.seam == SEAM_LA_CONSUME
+        assert req.call_count == 1 and con.call_count == 1
+        # The retained receipt is EFFECTIVE and admissible.
+        assert len(sink.receipts) == 1
+        receipt = sink.receipts[0]
+        assert receipt.effective is True and receipt.shadow is False
+        assert receipt.verdict == VERDICT_ADMISSIBLE
+
+    def test_laundering_plan_blocks_the_train(self, tmp_path):
+        # THE DRILL: all visible slices pass (the chain consumes), but the
+        # declared decomposition admitted a boundary the chain never accounted.
+        # Recomposition refuses — downstream gets a refusal, not the consume.
+        orch, req, con = _success_orchestrator(tmp_path)
+        sink = _RecordingSink()
+        result = orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_sink=sink,
+            recomposition_plan=_LAUNDERING_PLAN,
+        )
+        # The train stopped: refusal, not a consume.
+        assert result.refused
+        assert not result.consumed
+        assert result.seam == SEAM_RECOMPOSITION
+        assert isinstance(result.outcome, RecompositionRefusal)
+        # The chain itself still ran exactly once each — the gate added NO client
+        # calls; it ran after the chain and only refused to bless the result.
+        assert req.call_count == 1 and con.call_count == 1
+        # The refusal is walkable: it names the dropped boundary and the verdict.
+        refusal = result.outcome
+        assert refusal.receipt.verdict == VERDICT_REFUSED_LAUNDERING
+        assert refusal.receipt.effective is True
+        assert _DROPPED_BOUNDARY in refusal.accounting.unaccounted
+        assert refusal.accounting.is_laundering
+        # The effective receipt was retained for the record.
+        assert sink.receipts[0].verdict == VERDICT_REFUSED_LAUNDERING
+
+    def test_no_plan_is_byte_identical(self, tmp_path):
+        # recomposition_plan=None (the default) => zero enforcement, no receipt,
+        # behaviour identical to the pre-P3.2 chain.
+        orch, req, con = _success_orchestrator(tmp_path)
+        result = orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+        )
+        assert result.consumed and not result.refused
+        assert result.seam == SEAM_LA_CONSUME
+        assert req.call_count == 1 and con.call_count == 1
+
+    def test_blocked_recomposition_cannot_be_spent(self, tmp_path):
+        # A RecompositionRefusal is a refusal: the operational spend wall refuses
+        # it at the type gate. Recomposition stops the train; it does not become
+        # a second authority that can confer effect.
+        orch, _req, _con = _success_orchestrator(tmp_path)
+        result = orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_plan=_LAUNDERING_PLAN,
+        )
+        assert isinstance(result.outcome, RecompositionRefusal)
+        with pytest.raises(NonOperationalSpendError):
+            confer_operational_effect(result.outcome)
+
+    def test_block_survives_a_raising_sink(self, tmp_path):
+        # Emission is advisory (fail-open), but the BLOCK is fail-closed: a
+        # misbehaving sink cannot suppress an enforcement refusal. The gate
+        # decision comes from the receipt verdict, not the sink.
+        orch, _req, _con = _success_orchestrator(tmp_path)
+        result = orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_sink=_raising_sink,
+            recomposition_plan=_LAUNDERING_PLAN,
+        )
+        assert result.refused
+        assert result.seam == SEAM_RECOMPOSITION
+        assert isinstance(result.outcome, RecompositionRefusal)
+
+    def test_mutating_sink_cannot_suppress_or_corrupt_the_refusal(self, tmp_path):
+        # The refusal is decided AND its diagnosis is snapshotted BEFORE the sink
+        # runs. So a hostile sink that forcibly rewrites the frozen receipt's
+        # verdict AND its boundary fields — bypassing frozen via
+        # object.__setattr__ to make the receipt look admissible — can neither
+        # suppress the block nor corrupt the RETURNED diagnosis. Both are
+        # control-flow-independent of the sink (the doctrine: "decided before
+        # emission and reported from the same pre-emission snapshot"). The
+        # residual — that the shared receipt object's own fields are now
+        # vandalised — is the bootstrap-custody substrate limit (same as P3.1:
+        # in-process object forgery is not fenced; the effect/control surface is).
+        orch, req, con = _success_orchestrator(tmp_path)
+
+        def _vandal_sink(receipt: RecompositionReceipt) -> None:
+            # Try to launder the receipt into an "admissible" shape entirely.
+            object.__setattr__(receipt, "verdict", VERDICT_ADMISSIBLE)
+            object.__setattr__(receipt, "boundaries_admitted", _HONEST_PLAN)
+            object.__setattr__(
+                receipt,
+                "boundaries_accounted",
+                tuple((b, "completed") for b in _HONEST_PLAN),
+            )
+
+        result = orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_sink=_vandal_sink,
+            recomposition_plan=_LAUNDERING_PLAN,
+        )
+        # Block still holds — the decision was a local bool before the vandal ran.
+        assert result.refused
+        assert result.seam == SEAM_RECOMPOSITION
+        assert isinstance(result.outcome, RecompositionRefusal)
+        # The RETURNED diagnosis is the pre-emission snapshot, NOT recomputed from
+        # the now-vandalised receipt object: it still reports laundering and names
+        # the dropped boundary, despite the sink rewriting every boundary field.
+        assert result.outcome.accounting.is_laundering
+        assert result.outcome.accounting.verdict == VERDICT_REFUSED_LAUNDERING
+        assert _DROPPED_BOUNDARY in result.outcome.accounting.unaccounted
+        # The gate added no client calls; the chain ran once each.
+        assert req.call_count == 1 and con.call_count == 1
+
+    def test_honestly_refused_chain_is_not_relabelled(self, tmp_path):
+        # A chain that refused on its own (wicket dangling) is returned VERBATIM
+        # even under a laundering plan: enforcement acts only on would-be
+        # successes. The train already stopped; recomposition does not re-badge
+        # an honest refusal as a recomposition refusal, and adds no client calls.
+        sink_store = GateReceiptSystem(tmp_path)
+        request_mock = _CallCounter(_never_called)
+        consume_mock = _CallCounter(_never_called)
+        orch, _, _, _ = _build_orchestrator(
+            origin_mode=ORIGIN_MODE_STUB,
+            standing_known={},  # dangling -> wicket refusal before LA
+            sink=sink_store,
+            request_capacity_callable=request_mock,
+            consume_callable=consume_mock,
+        )
+        rec_sink = _RecordingSink()
+        result = orch.run(
+            cooked_context=_make_cooked_context("dangling-standing-id"),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_sink=rec_sink,
+            recomposition_plan=_LAUNDERING_PLAN,
+        )
+        # The wicket refusal is preserved — NOT converted to SEAM_RECOMPOSITION.
+        assert result.refused
+        assert result.seam == SEAM_WICKET
+        assert not isinstance(result.outcome, RecompositionRefusal)
+        assert request_mock.call_count == 0 and consume_mock.call_count == 0
+
+    def test_enforce_recomposition_is_pure(self, tmp_path):
+        # enforce_recomposition only builds a record + renders a verdict; calling
+        # it performs no client calls and no mutation. Run the chain once, then
+        # call the pure function twice — call counts are unchanged and the
+        # content-addressed receipt is identical.
+        orch, req, con = _success_orchestrator(tmp_path)
+        result = orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+        )
+        before = (req.call_count, con.call_count)
+        r1 = enforce_recomposition(
+            result, origin_mode=ORIGIN_MODE_CLI, recomposition_plan=_LAUNDERING_PLAN
+        )
+        r2 = enforce_recomposition(
+            result, origin_mode=ORIGIN_MODE_CLI, recomposition_plan=_LAUNDERING_PLAN
+        )
+        assert (req.call_count, con.call_count) == before  # no client calls added
+        assert r1.verdict == VERDICT_REFUSED_LAUNDERING
+        assert r1.recomposition_id == r2.recomposition_id  # deterministic
+        assert r1.effective is True and r1.shadow is False

@@ -84,7 +84,7 @@ What this module deliberately does NOT do:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from governor.linear_accountant_client import (
     ConsumedResult,
@@ -105,6 +105,12 @@ from governor.wicket_client import (
     WicketClient,
     WicketRefusal,
     WicketVerdict,
+)
+from governor.gate_receipt import canonical_json, content_hash
+from governor.pipeline_types import (
+    DISPOSITION_COMPLETED,
+    DISPOSITION_REFUSED,
+    RecompositionReceipt,
 )
 
 
@@ -594,6 +600,128 @@ class ChainResult:
 
 
 # ---------------------------------------------------------------------------
+# Shadow recomposition (P1.2 — workflow-kernel campaign,
+# specs/gaps/GOV_GAP_RECOMPOSITION_RECEIPT_001.md).
+#
+# A Geiger counter, not a courthouse. Given a ChainResult, derive a SHADOW
+# (effective=False) RecompositionReceipt recording the boundary-accounting
+# verdict the cooked-context chain WOULD render. Because the chain is
+# sequential and accounts every boundary it traverses, a real run reads
+# ``admissible`` (full consume) or ``refused_carried`` (any refusal) — never
+# ``refused_laundering``. That alarm is reserved for a decomposition whose
+# admitted boundaries genuinely go missing; the orchestrator never manufactures
+# one, so the shadow verdict looking "boring" is the instrument working.
+#
+# Pure: no IO, no client calls, no effect. Wired into run() behind an opt-in
+# sink that defaults off, so the chain's behavior is byte-identical without it.
+# ---------------------------------------------------------------------------
+
+RecompositionSink = Callable[[RecompositionReceipt], None]
+
+# The cooked-context chain's boundaries, in traversal order. The optional
+# standing-spendability gate is asserted as a traversed boundary ONLY when it is
+# the seam that fired — we cannot prove it ran otherwise, so the shadow
+# accounting never fabricates a boundary the ChainResult does not witness.
+_CHAIN_SEAM_ORDER: tuple[str, ...] = (
+    SEAM_WICKET,
+    SEAM_STANDING_SPENDABILITY,
+    SEAM_LA_REQUEST,
+    SEAM_LA_CONSUME,
+)
+
+_RECOMPOSITION_KERNEL = "workflow:cooked_context (provisional)"
+
+
+def _collect_chain_receipt_ids(outcome: object) -> tuple[str, ...]:
+    """Best-effort gather of receipt ids the ChainResult witnesses.
+
+    Every outcome type carries an optional ``receipt_id``; the consumed types
+    nest one (and its parent) on ``consumed_result``. Missing ids are skipped —
+    references are carried "as available", never fabricated.
+    """
+    ids: list[str] = []
+    direct = getattr(outcome, "receipt_id", None)
+    if isinstance(direct, str) and direct:
+        ids.append(direct)
+    consumed = getattr(outcome, "consumed_result", None)
+    if consumed is not None:
+        for attr in ("receipt_id", "parent_receipt_id"):
+            value = getattr(consumed, attr, None)
+            if isinstance(value, str) and value:
+                ids.append(value)
+    return tuple(dict.fromkeys(ids))  # de-dupe, preserve order
+
+
+def shadow_recomposition(
+    chain_result: ChainResult, *, origin_mode: str
+) -> RecompositionReceipt:
+    """Map a ChainResult to a SHADOW RecompositionReceipt (effective=False).
+
+    See the module section header above. Pure; the returned receipt
+    blocks/gates/retries nothing and is advisory only.
+    """
+    seam = chain_result.seam
+    refused = chain_result.refused
+
+    # Boundaries the chain provably traversed: canonical seams up to and
+    # including the firing seam, skipping the optional spendability gate unless
+    # it IS the firing seam.
+    admitted: list[str] = []
+    for boundary in _CHAIN_SEAM_ORDER:
+        if (
+            boundary == SEAM_STANDING_SPENDABILITY
+            and seam != SEAM_STANDING_SPENDABILITY
+        ):
+            continue
+        admitted.append(boundary)
+        if boundary == seam:
+            break
+
+    accounted = {boundary: DISPOSITION_COMPLETED for boundary in admitted}
+    if refused and seam in accounted:
+        accounted[seam] = DISPOSITION_REFUSED
+
+    source_receipt_ids = _collect_chain_receipt_ids(chain_result.outcome)
+
+    # No projected intent yet (intent_compiler fidelity lands in P1.4). Until
+    # then the receipt's basis reference is a content-addressed fingerprint of
+    # the chain's own identity (seam + witnessed receipts), NOT an intent. P1.4
+    # supplies the real projected_intent_hash.
+    basis = content_hash(
+        canonical_json(
+            {
+                "basis": "cooked_context_chain",
+                "seam": seam,
+                "source_receipt_ids": sorted(source_receipt_ids),
+            }
+        )
+    )
+
+    reached_la = seam in (SEAM_LA_REQUEST, SEAM_LA_CONSUME)
+    la_spend = {
+        "seam": seam,
+        "origin_mode": origin_mode,
+        # Origin fence, where available: OperationalConsumed only.
+        "origin_admitted": str(chain_result.operational).lower(),
+        "consumed": str(chain_result.consumed).lower(),
+    }
+
+    return RecompositionReceipt.from_boundaries(
+        projected_intent_hash="sha256:" + basis,
+        admitted=admitted,
+        accounted=accounted,
+        accepted_by_kernel=_RECOMPOSITION_KERNEL,
+        la_spend=la_spend,
+        # LA-backed iff the chain reached LA; a pre-LA refusal spent nothing
+        # through LA, and the downgrade is visible rather than faked.
+        la_custody=reached_la,
+        source_receipt_ids=source_receipt_ids,
+        shadow=True,
+        effective=False,
+    )
+
+
+# ---------------------------------------------------------------------------
 # The orchestrator.
 # ---------------------------------------------------------------------------
 
@@ -681,6 +809,60 @@ class CookedContextOrchestrator:
         return self._origin_mode
 
     def run(
+        self,
+        cooked_context: CookedContext,
+        capacity_request_template: CookedCapacityRequest,
+        consume_request_template: CookedConsumeRequest,
+        now: int,
+        *,
+        finding_id: Optional[str] = None,
+        standing_window: Optional[StandingWindow] = None,
+        recomposition_sink: Optional[RecompositionSink] = None,
+    ) -> ChainResult:
+        """Drive the cooked-context chain; see :meth:`_run_chain` for the steps.
+
+        P1.2 (workflow-kernel campaign): when ``recomposition_sink`` is supplied,
+        a SHADOW :class:`RecompositionReceipt` derived from the resulting
+        ChainResult is handed to the sink immediately after the chain returns —
+        advisory only, blocks/gates/retries nothing. The default (``None``)
+        leaves the chain byte-identical: no shadow receipt is built and no sink
+        is called.
+
+        Inertness contract (why this cannot affect the chain): the sink is
+        invoked strictly AFTER ``_run_chain`` has fully returned — every client
+        call made, every seam receipt minted, the outcome fixed — so it can
+        neither change the returned ChainResult nor the downstream call counts.
+        The call is fail-open: a raising sink is swallowed. It is synchronous and
+        best-effort, exactly like the orchestrator's existing receipt I/O; the
+        orchestrator imposes no timeout on it (a timeout/async hand-off would be
+        liveness machinery this shadow slice deliberately omits), so liveness of
+        an opt-in advisory sink is the caller's responsibility — the same
+        coupling run() already has to its synchronous receipt sink. A
+        ``refused_laundering`` shadow verdict (which the sequential chain never
+        organically produces) likewise changes nothing about the outcome or the
+        calls already made.
+        """
+        result = self._run_chain(
+            cooked_context,
+            capacity_request_template,
+            consume_request_template,
+            now,
+            finding_id=finding_id,
+            standing_window=standing_window,
+        )
+        if recomposition_sink is not None:
+            try:
+                recomposition_sink(
+                    shadow_recomposition(result, origin_mode=self._origin_mode)
+                )
+            except Exception:
+                # Shadow emission is advisory; a misbehaving sink must never
+                # raise through, gate, or alter the chain. Swallow and move on.
+                # (Liveness of an opt-in sink is the caller's, per the docstring.)
+                pass
+        return result
+
+    def _run_chain(
         self,
         cooked_context: CookedContext,
         capacity_request_template: CookedCapacityRequest,

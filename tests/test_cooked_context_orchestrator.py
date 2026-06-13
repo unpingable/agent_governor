@@ -47,7 +47,14 @@ from governor.cooked_context_orchestrator import (
     ChainResult,
     CookedContextOrchestrator,
     InvalidOriginModeError,
+    shadow_recomposition,
     wrap_receipt_sink_with_origin_mode,
+)
+from governor.pipeline_types import (
+    VERDICT_ADMISSIBLE,
+    VERDICT_REFUSED_CARRIED,
+    VERDICT_REFUSED_LAUNDERING,
+    RecompositionReceipt,
 )
 from governor.gate_receipt import GateReceiptSystem
 from governor.linear_accountant_client import (
@@ -725,3 +732,247 @@ class TestWrappedSinkBehavior:
         assert evidence is not None
         # Wrapper's value wins.
         assert evidence[EVIDENCE_KEY_ORIGIN_MODE] == ORIGIN_MODE_CLI
+
+
+# ---------------------------------------------------------------------------
+# P1.2 — shadow recomposition emission (workflow-kernel campaign).
+#
+# The seam crossing from pure type (P1.1) into runtime observation. Everything
+# here must be SHADOW: the orchestrator's behavior, return value, and downstream
+# call counts are byte-identical whether or not a recomposition_sink is present.
+# ---------------------------------------------------------------------------
+
+
+class _RecordingSink:
+    """A recomposition sink that records every receipt it is handed."""
+
+    def __init__(self):
+        self.receipts: list[RecompositionReceipt] = []
+
+    def __call__(self, receipt: RecompositionReceipt) -> None:
+        self.receipts.append(receipt)
+
+
+def _raising_sink(_receipt: RecompositionReceipt) -> None:
+    raise RuntimeError("a misbehaving shadow sink must never reach the chain")
+
+
+def _success_orchestrator(tmp_path, *, origin_mode=ORIGIN_MODE_CLI):
+    """Fully-passing chain: standing known -> wicket admit -> grant -> consume.
+
+    Returns (orchestrator, request_counter, consume_counter).
+    """
+    sink = GateReceiptSystem(tmp_path)
+    standing_id = _VALID_STANDING_DIGEST
+    ref = StandingReceiptRef(digest=standing_id, kind="grant_activated")
+    request_mock = _CallCounter(_granted_response())
+    consume_mock = _CallCounter(_consumed_response())
+    orchestrator, _, _, _ = _build_orchestrator(
+        origin_mode=origin_mode,
+        standing_known={standing_id: ref},
+        sink=sink,
+        request_capacity_callable=request_mock,
+        consume_callable=consume_mock,
+        admission_verifier=lambda rid: rid is not None,
+    )
+    return orchestrator, request_mock, consume_mock
+
+
+class TestShadowRecomposition:
+    def test_default_no_sink_is_unchanged(self, tmp_path):
+        # With no sink, the chain runs exactly as before — no shadow receipt is
+        # built, nothing observes, behavior is byte-identical.
+        orch, req, con = _success_orchestrator(tmp_path)
+        result = orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+        )
+        assert result.consumed
+        assert result.seam == SEAM_LA_CONSUME
+        assert req.call_count == 1
+        assert con.call_count == 1
+
+    def test_full_chain_shadow_verdict_admissible(self, tmp_path):
+        orch, _req, _con = _success_orchestrator(tmp_path)
+        sink = _RecordingSink()
+        result = orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_sink=sink,
+        )
+        # The chain outcome is unchanged by the presence of the sink.
+        assert result.consumed
+        assert result.seam == SEAM_LA_CONSUME
+
+        # Exactly one shadow receipt, and it reads admissible (every traversed
+        # boundary completed).
+        assert len(sink.receipts) == 1
+        receipt = sink.receipts[0]
+        assert isinstance(receipt, RecompositionReceipt)
+        assert receipt.verdict == VERDICT_ADMISSIBLE
+        assert receipt.shadow is True
+        assert receipt.effective is False
+        assert "provisional" in receipt.accepted_by_kernel
+        # Reached LA -> LA-backed; references captured where available.
+        assert receipt.la_custody is True
+        assert receipt.source_receipt_ids  # non-empty
+        assert len(receipt.recomposition_id) == 64
+        assert SEAM_WICKET in receipt.boundaries_admitted
+        assert SEAM_LA_CONSUME in receipt.boundaries_admitted
+
+    def test_wicket_refusal_shadow_verdict_carried(self, tmp_path):
+        # Standing unknown (dangling) -> wicket refuses before LA. The shadow
+        # verdict is an honest carried refusal, NOT laundering, and there is no
+        # LA-backed spend to claim.
+        sink_store = GateReceiptSystem(tmp_path)
+        request_mock = _CallCounter(_granted_response())
+        consume_mock = _CallCounter(_consumed_response())
+        orch, _, _, _ = _build_orchestrator(
+            origin_mode=ORIGIN_MODE_STUB,
+            standing_known={},  # dangling -> wicket-side refusal
+            sink=sink_store,
+            request_capacity_callable=request_mock,
+            consume_callable=consume_mock,
+        )
+        rec_sink = _RecordingSink()
+        result = orch.run(
+            cooked_context=_make_cooked_context("dangling-standing-id"),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_sink=rec_sink,
+        )
+        assert result.refused
+        assert result.seam == SEAM_WICKET
+        # LA never reached.
+        assert request_mock.call_count == 0
+        assert consume_mock.call_count == 0
+
+        receipt = rec_sink.receipts[0]
+        assert receipt.verdict == VERDICT_REFUSED_CARRIED
+        assert receipt.boundaries_admitted == (SEAM_WICKET,)
+        assert receipt.la_custody is False  # no LA-backed spend; visible downgrade
+
+    def test_la_request_refusal_shadow_carried_with_la_custody(self, tmp_path):
+        # Admission gate refuses at the LA request seam: the chain reached LA, so
+        # the (refusal) spend summary is LA-backed, and the verdict is carried.
+        sink_store = GateReceiptSystem(tmp_path)
+        standing_id = _VALID_STANDING_DIGEST
+        ref = StandingReceiptRef(digest=standing_id, kind="grant_activated")
+        request_mock = _CallCounter(_granted_response())
+        consume_mock = _CallCounter(_consumed_response())
+        orch, _, _, _ = _build_orchestrator(
+            origin_mode=ORIGIN_MODE_CLI,
+            standing_known={standing_id: ref},
+            sink=sink_store,
+            request_capacity_callable=request_mock,
+            consume_callable=consume_mock,
+            admission_verifier=lambda rid: False,  # LA refuses at admission
+        )
+        rec_sink = _RecordingSink()
+        result = orch.run(
+            cooked_context=_make_cooked_context(standing_id),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_sink=rec_sink,
+        )
+        assert result.refused
+        assert result.seam == SEAM_LA_REQUEST
+        receipt = rec_sink.receipts[0]
+        assert receipt.verdict == VERDICT_REFUSED_CARRIED
+        assert receipt.la_custody is True
+
+    def test_shadow_emission_does_not_change_call_counts(self, tmp_path):
+        # TEETH: the shadow path (whatever verdict it computes) must not alter
+        # what the chain does. Run the identical success scenario with and
+        # without a sink and assert the downstream LA call counts and the
+        # outcome SHAPE (seam + consumed/operational) are identical. Full
+        # ChainResult value-equality is intentionally NOT asserted: the two runs
+        # mint receipts in separate stores, so receipt ids differ by design —
+        # the stable invariants are the call counts and the outcome shape.
+        # (The orchestrator never organically yields a
+        # refused_laundering verdict — that alarm is reserved for genuine
+        # boundary loss, tested at the account_boundaries level in
+        # tests/test_pipeline_types.py. Inertness is the property that matters
+        # here, and it holds for every verdict.)
+        base_orch, base_req, base_con = _success_orchestrator(tmp_path / "a")
+        base = base_orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+        )
+        sink_orch, sink_req, sink_con = _success_orchestrator(tmp_path / "b")
+        rec_sink = _RecordingSink()
+        observed = sink_orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_sink=rec_sink,
+        )
+        assert base_req.call_count == sink_req.call_count == 1
+        assert base_con.call_count == sink_con.call_count == 1
+        assert base.seam == observed.seam
+        assert base.consumed == observed.consumed
+        assert base.operational == observed.operational
+        assert len(rec_sink.receipts) == 1
+
+    def test_raising_sink_is_fail_open(self, tmp_path):
+        # TEETH: a sink that raises must never reach the chain. The chain
+        # completes and returns its real outcome; LA was called before the sink.
+        orch, req, con = _success_orchestrator(tmp_path)
+        result = orch.run(
+            cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+            capacity_request_template=_capacity_template(),
+            consume_request_template=_consume_template(),
+            now=0,
+            recomposition_sink=_raising_sink,
+        )
+        assert result.consumed
+        assert result.seam == SEAM_LA_CONSUME
+        assert req.call_count == 1
+        assert con.call_count == 1
+
+    def test_real_seam_outcomes_never_launder(self, tmp_path):
+        # Across reachable real outcomes the shadow verdict is admissible or
+        # carried, never laundering: a sequential chain accounts every boundary
+        # it admits. (Structural property of shadow_recomposition.)
+        verdicts = []
+
+        ok_orch, _, _ = _success_orchestrator(tmp_path / "ok")
+        verdicts.append(
+            shadow_recomposition(
+                ok_orch.run(
+                    cooked_context=_make_cooked_context(_VALID_STANDING_DIGEST),
+                    capacity_request_template=_capacity_template(),
+                    consume_request_template=_consume_template(),
+                    now=0,
+                ),
+                origin_mode=ORIGIN_MODE_CLI,
+            ).verdict
+        )
+
+        ref_store = GateReceiptSystem(tmp_path / "ref")
+        ref_orch, _, _, _ = _build_orchestrator(
+            origin_mode=ORIGIN_MODE_STUB, standing_known={}, sink=ref_store
+        )
+        verdicts.append(
+            shadow_recomposition(
+                ref_orch.run(
+                    cooked_context=_make_cooked_context("dangling"),
+                    capacity_request_template=_capacity_template(),
+                    consume_request_template=_consume_template(),
+                    now=0,
+                ),
+                origin_mode=ORIGIN_MODE_STUB,
+            ).verdict
+        )
+
+        assert verdicts == [VERDICT_ADMISSIBLE, VERDICT_REFUSED_CARRIED]
+        assert VERDICT_REFUSED_LAUNDERING not in verdicts

@@ -186,6 +186,22 @@ receipt and emits no constellation-grade claim.
 **HIGH checkpoints at entry: crosswalk divergence #1 (validator quorum on
 activation?) AND the four-office factoring (Standing/LA co-resident but not fused).**
 
+**LANDED 2026-06-13** (`src/governor/activation.py`, `tests/test_activation.py`):
+the four-office transaction for the one tunable `decomposition_size/max_slices`
+(rung `self_governance`). Office 1 reads the live claim set from the authoritative
+`DebtLedger.open_claims(P31_RUNG)` at the gate (recomputes the digest, refuses on
+mismatch — caller-supplied claims can't activate); offices 2–4 = act-standing /
+exactly-once `flock`-guarded local spend / durable custody. Writes honor only
+custodied receipts AND are fenced to the one admitted P3.1 surface (forge+put+apply
+cannot write off-surface — *bootstrap custody may be forgeable; admitted effect
+surface must still be fenced*). Rollback derives the write authoritatively from the
+custodied activation, restores absence topology (delete, not null), never erases
+the activation record, inherits its mode. Two Codex validation passes (pass-1 fixed,
+pass-2 off-surface leak fixed under operator ruling A); fuse-classified residue
+(in-process forge-custody, constellation standing) is future custody/microkernel
+work, recorded in `working/parked-p31-activation.md`. **Hard stop here — P3.2 not
+started.**
+
 ### P3.2 — enforcing RecompositionReceipt, hard-gated on P3.1 drill passing
 
 Flip the orchestrator-seam shadow to enforcing (`refused_laundering` blocks

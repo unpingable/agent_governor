@@ -30,14 +30,17 @@ Invariants this slice holds (each was a current-rung blocker Codex caught):
 
 from __future__ import annotations
 
+import fcntl
 import json
 from collections.abc import Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .activation_preflight import RungDebt, check_activation_eligibility
 from .annealing import AnnealingDelta
+from .debt_ledger import DebtLedger
 from .gate_receipt import canonical_json, content_hash
 
 # The single lowest-stakes tunable P3.1 may touch. Anything else refuses.
@@ -56,6 +59,7 @@ REFUSED_NO_STANDING = "refused_no_standing"
 REFUSED_DEGRADED_CLAIMS_BACKING = "refused_degraded_claims_backing"
 REFUSED_REPLAY = "refused_replay"
 REFUSED_NO_ACTIVATION_RECEIPT = "refused_no_activation_receipt"
+REFUSED_UNCUSTODIED_RECEIPT = "refused_uncustodied_receipt"
 
 CLOSED_ACTIVATION_REFUSALS = frozenset(
     {
@@ -66,6 +70,7 @@ CLOSED_ACTIVATION_REFUSALS = frozenset(
         REFUSED_DEGRADED_CLAIMS_BACKING,
         REFUSED_REPLAY,
         REFUSED_NO_ACTIVATION_RECEIPT,
+        REFUSED_UNCUSTODIED_RECEIPT,
     }
 )
 
@@ -108,15 +113,28 @@ class LocalSpendLedger:
             return set()
         return set(json.loads(self._path.read_text()))
 
-    def consume(self, spend_key: str) -> bool:
-        spent = self._load()
-        if spend_key in spent:
-            return False
-        spent.add(spend_key)
+    @contextmanager
+    def _exclusive(self):
+        """Serialize the load-check-write so two concurrent activations with the
+        same spend key cannot both observe it unspent (exactly-once under races)."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self._path.with_name(self._path.name + ".tmp")
-        tmp.write_text(json.dumps(sorted(spent)))
-        tmp.replace(self._path)
+        lock = self._path.with_name(self._path.name + ".lock")
+        with open(lock, "w") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+
+    def consume(self, spend_key: str) -> bool:
+        with self._exclusive():
+            spent = self._load()
+            if spend_key in spent:
+                return False
+            spent.add(spend_key)
+            tmp = self._path.with_name(self._path.name + ".tmp")
+            tmp.write_text(json.dumps(sorted(spent)))
+            tmp.replace(self._path)
         return True
 
 
@@ -303,22 +321,64 @@ class ActiveTunableStore:
     def get(self, surface: str, target: str) -> Any:
         return self._load().get(f"{surface}/{target}")
 
-    def apply_activation(self, receipt: ActivationReceipt) -> None:
+    def apply_activation(
+        self, receipt: ActivationReceipt, *, receipt_store: "ActivationReceiptStore"
+    ) -> None:
+        # Custody-anchor: honor ONLY a receipt that the real activation path
+        # persisted. A directly-constructed (forged) receipt is not in custody,
+        # so it cannot drive a write. (Forge+put+apply is still possible to a
+        # determined in-process caller — Python has no private methods — so this
+        # raises the bar rather than eliminating it; bootstrap-acceptable.)
         if not isinstance(receipt, ActivationReceipt):
             raise TypeError("apply_activation requires an ActivationReceipt")
+        if not receipt_store.has(receipt.activation_id):
+            raise ValueError(
+                "uncustodied receipt: apply_activation refuses a receipt not "
+                "persisted by the activation path"
+            )
+        # Effect-surface fence: even a forged-but-custodied receipt (put+apply
+        # bypassing the office) may only ever write the one admitted P3.1 tunable.
+        # Bootstrap custody may be forgeable (Python has no private methods); the
+        # admitted effect surface must still be fenced — an off-surface write is a
+        # local authority-boundary leak, a different class from the substrate limit.
+        if receipt.surface != P31_SURFACE or receipt.target != P31_TARGET:
+            raise ValueError(
+                "off-surface write refused: apply_activation may only touch "
+                f"{P31_SURFACE}/{P31_TARGET}, not {receipt.surface}/{receipt.target}"
+            )
         values = self._load()
         values[f"{receipt.surface}/{receipt.target}"] = receipt.new_value
         self._save(values)
 
-    def apply_rollback(self, rb: RollbackReceipt) -> None:
+    def apply_rollback(
+        self, rb: RollbackReceipt, *, receipt_store: "ActivationReceiptStore"
+    ) -> None:
         if not isinstance(rb, RollbackReceipt):
             raise TypeError("apply_rollback requires a RollbackReceipt")
+        # Derive the write AUTHORITATIVELY from the custodied activation receipt,
+        # NOT from the rb's claimed surface/target/value. A forged rb pointing at
+        # a real activation_id but a different surface cannot redirect the write —
+        # it restores exactly the surface/target/prior the custodied activation
+        # recorded. (Closes "one real activation_id rewrites any tunable".)
+        act = receipt_store.get(rb.activation_id)
+        if act is None:
+            raise ValueError(
+                "uncustodied rollback: the activation it reverts is not in custody"
+            )
+        # Same effect-surface fence as apply_activation: even reverting a
+        # forged-but-custodied off-surface activation may not write outside the
+        # one admitted P3.1 tunable.
+        if act.surface != P31_SURFACE or act.target != P31_TARGET:
+            raise ValueError(
+                "off-surface rollback refused: apply_rollback may only touch "
+                f"{P31_SURFACE}/{P31_TARGET}, not {act.surface}/{act.target}"
+            )
         values = self._load()
-        key = f"{rb.surface}/{rb.target}"
-        if rb.restored_value is None:
+        key = f"{act.surface}/{act.target}"
+        if act.prior_value is None:
             values.pop(key, None)  # restore absence topology, not a null
         else:
-            values[key] = rb.restored_value
+            values[key] = act.prior_value
         self._save(values)
 
 
@@ -336,10 +396,9 @@ def activate(
     spend_ledger: LocalSpendLedger,
     tunable_store: ActiveTunableStore,
     receipt_store: ActivationReceiptStore,
+    debt_ledger: DebtLedger,
     standing_ok: bool,
     presented_claim_digest: str,
-    debts: Sequence[RungDebt] = (),
-    parked_boundary_ids: frozenset[str] | None = None,
     external_standing_receipt: str | None = None,
     external_la_spend_ref: str | None = None,
     external_nq_custody_ref: str | None = None,
@@ -359,21 +418,28 @@ def activate(
             (f"{delta.surface}/{delta.target}",),
         )
 
-    # Office 1 — admissibility: recompute eligibility over the LIVE claim set;
-    # reject a presented digest that doesn't match the full live content.
-    real_digest = live_claim_set_digest(debts, parked_boundary_ids)
+    # Office 1 — admissibility: read the LIVE claim set from the authoritative
+    # DebtLedger (recompute at the gate — NOT a caller-supplied param), then
+    # reject a presented digest that does not match it (the caller's basis must
+    # agree with the ledger; a new claim recorded since the caller looked changes
+    # the digest and refuses). This is the office that the parked draft was
+    # missing — caller-supplied claims were an alibi, not a live gate.
+    live = debt_ledger.open_claims(P31_RUNG)
+    real_digest = live_claim_set_digest(live)
     if presented_claim_digest != real_digest:
         return ActivationRefusal(
             REFUSED_STALE_DIGEST,
-            "presented claim digest does not match the live claim set",
+            "presented claim digest does not match the live DebtLedger claim set",
             (presented_claim_digest,),
         )
+    # No caller-supplied parked set: open_claims are all un-discharged, so the
+    # discharged-only handoff-identity gate never fires here. Handoff identity is
+    # checked at the DISCHARGE seam, not the activation gate.
     elig = check_activation_eligibility(
         surface=delta.surface,
         target=delta.target,
         target_rung=P31_RUNG,
-        debts=debts,
-        parked_boundary_ids=parked_boundary_ids,
+        debts=live,
     )
     if not elig.eligible:
         return ActivationRefusal(
@@ -440,7 +506,7 @@ def activate(
         new_value=new_value,
     )
     receipt_store.put(receipt)  # durable custody, before the effect
-    tunable_store.apply_activation(receipt)  # the effect
+    tunable_store.apply_activation(receipt, receipt_store=receipt_store)  # effect
     return receipt
 
 
@@ -450,12 +516,12 @@ def rollback(
     reason: str,
     tunable_store: ActiveTunableStore,
     receipt_store: ActivationReceiptStore,
-    mode: str,
 ) -> RollbackReceipt | ActivationRefusal:
     """Roll back an activation: restore the tunable to its prior value (topology,
-    not history) and persist a typed rollback receipt. Refuses without an
-    activation receipt; re-checks the P3.1 scope so a constructed receipt for
-    another tunable cannot drive a write; never erases the activation receipt."""
+    not history) and persist a typed rollback receipt. Refuses without a custodied
+    activation receipt; re-checks the P3.1 scope; never erases the activation
+    receipt. ``mode`` is inherited from the activation receipt, not caller-supplied
+    (a rollback cannot forge a different mode than the activation it reverts)."""
     if not isinstance(activation_receipt, ActivationReceipt):
         return ActivationRefusal(
             REFUSED_NO_ACTIVATION_RECEIPT,
@@ -471,14 +537,23 @@ def rollback(
             f"{activation_receipt.surface}/{activation_receipt.target}",
             (f"{activation_receipt.surface}/{activation_receipt.target}",),
         )
+    # Custody-anchor: a forged (directly-constructed) activation receipt that was
+    # never persisted by the activation path cannot drive a rollback write.
+    if not receipt_store.has(activation_receipt.activation_id):
+        return ActivationRefusal(
+            REFUSED_UNCUSTODIED_RECEIPT,
+            "rollback refuses an activation receipt not in custody (never "
+            "persisted by the activation path)",
+            (activation_receipt.activation_id,),
+        )
     rb = RollbackReceipt(
         activation_id=activation_receipt.activation_id,
         surface=activation_receipt.surface,
         target=activation_receipt.target,
         restored_value=activation_receipt.prior_value,
         reason=reason,
-        mode=mode,
+        mode=activation_receipt.mode,  # inherited, not caller-forged
     )
     receipt_store.put_rollback(rb)  # custody — the activation record remains
-    tunable_store.apply_rollback(rb)  # restore topology (delete if prior absent)
+    tunable_store.apply_rollback(rb, receipt_store=receipt_store)  # restore topology
     return rb

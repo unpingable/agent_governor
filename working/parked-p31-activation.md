@@ -57,3 +57,49 @@ caller-supplied-claims) — it was NOT committed.
 
 P3.0b (DebtLedger) → resume P3.1 reading from it + custody-anchor + (flock?). Do
 not commit P3.1 until it reads from the DebtLedger.
+
+## RESUME pass (2026-06-13) — built, re-verified, Codex pass-2 = FAIL, HALTED on fuse
+
+Resumed against the now-landed DebtLedger. Implemented carry-forward 1–4:
+- Office 1 reads `debt_ledger.open_claims(P31_RUNG)`, recomputes `real_digest`,
+  refuses on mismatch (`REFUSED_STALE_DIGEST`); eligibility over the live set.
+  `parked_boundary_ids` dropped (was caller-controlled).
+- `apply_rollback` now derives the write authoritatively from the custodied
+  activation receipt — ignores the rb's claimed surface/target/value (closes the
+  pass-1 redirect; regression test at test_activation.py:213 proves a forged rb
+  with a real activation_id + wrong surface restores the *custodied* P31 surface).
+- `LocalSpendLedger.consume` wrapped in `fcntl.flock` (`_exclusive()`).
+- `rollback()` dropped its caller `mode` param; inherits mode from the custodied
+  activation receipt.
+
+`governor verify-run` over `tests/test_activation.py`: **pass** (exit-code
+witnessed, `child_exit`, `masked_risk=False`). Then the single Codex re-validation
+(fuse pass 2): **verdict fail**, 3 "blocking" findings. §11.3 classification
+(verified against code, not Codex's framing):
+
+1. *Direct `apply_rollback` call bypasses `rollback()`* → **defense-in-depth.**
+   Post-fix the writer derives only from the custodied activation; a direct call
+   with a forged rb can only restore that real activation's own prior value — no
+   arbitrary write. The activation receipt remains the authority.
+2. *forge → `ActivationReceiptStore.put()` → `apply_activation`* → **SPLIT.**
+   - scope-leak half: `apply_activation` carries no P31 surface guard, so
+     forge+put+apply could write a non-P31 surface. **Current-rung, cheap fix** —
+     lift the P31 `surface/target` guard into the store writer (strictly tightening).
+   - forge-custody half: making `put()` unforgeable in-process is the documented
+     capability-microkernel boundary (`receipt-sovereignty-microkernel-note.md`),
+     **future custody-affecting** — already pre-classified in this note's point 2
+     ("Python has no true private methods … acceptable for bootstrap, note it").
+3. *Caller-minted standing* → **by-design + future-rung.** Standalone `standing_ok`
+   is operator-fiat by design (non-convertible stub; "the nod is the operator's").
+   Constellation presence-checking is a stub for offices not yet wired, and
+   constellation is not P3.1's dogfood claim (standalone self-governance is).
+
+**HALTED per chain fuse (>1 refinement pass).** State left uncommitted:
+`activation.py` (staged+modified `AM`), `tests/test_activation.py` (untracked).
+The one clearly in-scope current-rung fix is finding 2's scope-leak half (P31
+guard into `apply_activation`). Whether to authorize that one bounded fix + a
+final commit, or accept the documented microkernel-deferred limit and commit as-is
+with the limit noted, is the operator's jurisdiction call — findings 2 (forge-
+custody) and 3 sit exactly on the "is this current-rung or activation-generally?"
+line the operator reserved ("if it tries to become activation generally, shoot
+the radio"). No third Codex cycle without operator re-authorization.

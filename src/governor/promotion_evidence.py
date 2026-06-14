@@ -135,6 +135,28 @@ class ActivationReceipt:
     def content_hash(self) -> str:
         return content_hash(canonical_json(self.identity_dict()))
 
+    def to_dict(self) -> dict[str, Any]:
+        """Persistable form: identity fields + the derived ``content_hash``. The
+        stored hash is a tamper anchor — on load it is recomputed from the fields
+        and compared (a file that claims a hash its content does not produce is
+        refused)."""
+        payload = self.identity_dict()
+        payload["content_hash"] = self.content_hash
+        return payload
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "ActivationReceipt":
+        at = d["activated_at"]
+        return cls(
+            trial_id=d["trial_id"],
+            tunable_name=d["tunable_name"],
+            trial_value=d["trial_value"],
+            prior_baseline_value=d["prior_baseline_value"],
+            activated_at=MonotonicReading(
+                source=at["source"], epoch=at["epoch"], ns=at["ns"]
+            ),
+        )
+
 
 @dataclass(frozen=True)
 class LiveSurvivalObservationReceipt:

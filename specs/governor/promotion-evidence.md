@@ -90,9 +90,27 @@ classed act.
 - Cold-start preserved: empty bundle → `evidence_count=0` → refused (insufficient +
   not-walkable + replay-missing + operator-absent), and **not** stale (nothing to age).
 
-## Still ahead (not this slice)
+## Storage (P4.0c — first producer landed)
 
-Persisted receipts (read these types from `.governor/`), a `ReplayHoldoutReceipt`
-producer wired to the C1 `REPLAY_HARNESS`, an observation emitter for the live trial,
-and `OperatorBasisReceipt` capture. Then P4.0b proper (mint `ControlBaseline` via the
-supersession ceremony) — HIGH / operator-present, gated on Checkpoint 3.
+`src/governor/promotion_evidence_store.py` persists the chain root only:
+
+```
+<root>/promotion_evidence/activations/<trial_key>.json    (trial_key = sha256(trial_id))
+```
+
+`ActivationReceiptStore.put/get` — atomic temp+rename writes, integrity-checked
+loads. Each file carries the receipt's `content_hash`; on load it is recomputed from
+the fields and compared (`ActivationReceiptTamperError` on mismatch), and the stored
+`trial_id` is checked against the requested key (swap guard). A clean miss returns
+`None` (the walk layer treats a missing activation as not-walkable). The self-hash
+refuses a file whose declared hash disagrees with its content; a *fully* rewritten
+but internally-consistent activation is caught downstream (its hash changes, so
+observations bound to the original no longer walk). Tests:
+`tests/test_promotion_evidence_store.py`.
+
+## Still ahead (not P4.0c)
+
+The remaining producers: a live-survival observation emitter, a `ReplayHoldoutReceipt`
+producer wired to the C1 `REPLAY_HARNESS`, and `OperatorBasisReceipt` capture. Then
+P4.0b proper (mint `ControlBaseline` via the supersession ceremony) — HIGH /
+operator-present, gated on Checkpoint 3.

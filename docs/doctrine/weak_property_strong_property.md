@@ -26,6 +26,9 @@ papering over the missing step.
 | recovered (data) | re-admitted (authority) |
 | complete (claimed) | complete (proven) |
 | fresh self-report of coldness | actually cold |
+| treaty / contractual adoption | enforcement |
+| receipt (names its root) | force (universal authority) |
+| stamped `enforcement_basis` | the strength a reader actually has |
 
 Each row is a place where this repo has had to install an explicit refusal. They are not
 separate bugs; they are the **same ghost, different bedsheet**.
@@ -36,9 +39,15 @@ The reasoner *building* an anti-laundering system keeps committing micro-launder
 exactly this shape, and **cannot reliably see them in self-report** — because the
 conversion is the path of local coherence, and a same-style reviewer shares the
 attractor and waves it through. This was demonstrated live: the same author closed
-weak→strong three times in one session (standing→entitlement, "can't act in the
-dark"→impossible, tamper-evident→legitimate), and each time the catch came from a
-**different model**, never from self-review.
+weak→strong **four** times in one session (standing→entitlement, "can't act in the
+dark"→impossible, tamper-evident→legitimate, and a stamped `enforcement_basis` field on a
+receipt — *treaty→mechanical by typing the stronger word*, the field built to prevent
+laundering laundering), and each time the catch came from a **different model**, never from
+self-review. The fourth is instructive: it was caught by the system's *own axis* pointed
+back at its *own design* — "scale is root-distance, so strength is a relation between
+reader and root, therefore it cannot be a property the receipt stamps." A distance is
+between two points; it cannot live on one endpoint. (See
+`GOV_GAP_GOVERNOR_AS_SERVICE_AUTHORITY_ECONOMY_001` § "Scale is root-distance".)
 
 That is not a footnote. It *is* the argument for heterogeneous review, demonstrated on the
 arguer:

@@ -191,6 +191,84 @@ not invention:
    `[[rust_kernel_port_ruling]]` / `GOV_GAP_AUTHORITY_KERNEL_SUBSTRATE_001`. Everything
    else stays above-kernel in Python. The golden receipt corpus is the contract.
 
+## Scale is root-distance, not feature scale (the export/adoption axis)
+
+Added 2026-06-13 (three-context, post-wrap). Once the governor is a cap-bounded subject
+under a named root, the question "how big does AG get?" stops being a feature-ladder and
+becomes one axis:
+
+> **AG scale is root-distance scale: how far from the enforcement root did this receipt
+> travel, and what strength survived the trip?**
+
+This collapses the roadmap to **two builds, then receipts travel**:
+
+- **3.x — the machine.** Governor-as-a-service under a root you control: kernel-held
+  linear cap ledger, WLP witnessing, LA forbidding double-spend, the six laws. Mechanical
+  refusal is possible *because you own the enforcement root*. This is the bootstrap; it
+  does **not** wait on any external adoption.
+- **3.5 — the language.** A portable receipt grammar that carries **root lineage** so the
+  same receipt is legible outside AG. Not a new sovereignty model — an export ABI.
+
+There is **no 4.x / 5.x to build.** "Federated AG," "treaty AG," "provider/sovereign
+adoption" are not versions or features — they are **landing conditions**: the strength a
+3.5 receipt *has* when it lands at distance, computed by whoever catches it. The instant a
+3.5 receipt exists it already spans the whole axis at once.
+
+### Force is consumer-relative — the receipt names its root, the reader does the trig
+
+The load-bearing correction (and it caught this filing's own first design): **enforcement
+strength cannot be a field the emitter stamps.** Strength is a *relation*, not an intrinsic
+property —
+
+```text
+strength = f(reader_root, receipt_root_lineage, adoption_relation)
+```
+
+A distance is between two points; it cannot be a property of one endpoint. The same
+receipt is *mechanical refusal* to the root that issued/adopted it, *treaty evidence* to a
+contracted partner, *audit evidence* to a regulator, *observer-only* to a stranger, and
+*meaningless* to an untrusting root — **simultaneously, no contradiction.** So a stamped
+`enforcement_basis: mechanical_refusal` is the `effective:true` / `complete:true` footgun
+at the grammar layer: the field built to *prevent* laundering would itself launder (a 4.x
+node inflates "treaty" → "mechanical" by typing the stronger word). It is a fresh hat on
+the `weak_property_strong_property` enemy shape, and the axis caught it by pointing back at
+the field design.
+
+**The receipt carries FACTS, never a force-conclusion:**
+
+```json
+{
+  "issuer_root": "...",
+  "adoption_root_lineage": "...",
+  "witness_chain": "...",
+  "cap_lineage": "...",
+  "subject_scope": "...",
+  "action_envelope": "...",
+  "receipt_hash": "..."
+}
+```
+
+The reader derives the strength from *its own* root-relationship:
+
+```text
+same enforcement root        -> mechanical refusal
+subordinate accepted root    -> locally / tenant enforceable
+contracted external root     -> treaty evidence
+unknown / unadopted root     -> observer evidence
+conflicting root             -> inadmissible / untrusted
+```
+
+### The central invariant
+
+> **Receipts do not declare their own force. They declare their root. Force is derived by
+> the reader.** — *the receipt names its root; the reader does the trig.*
+
+This is the cross-root open question (above) resolved into grammar: cross-root strength is
+not granted by the issuer, it is *computed by the consumer* from the named root lineage —
+the same allowlist-from-your-own-root discipline, at the receipt layer. (Composes with
+`docs/doctrine/weak_property_strong_property.md`; "receipt is not force" and "treaty is not
+enforcement" are rows in that table.)
+
 ## One correction this filing pins (anti-overclaim)
 
 The governor **can** act in the dumb Unix sense (write files, fork, log, summon YAML).
@@ -236,10 +314,14 @@ lease validator.
 **Cross-root / multi-instance authority.** Law 5 lands "one named root per authority
 *instance*." A federated constellation then has *N* named roots (no meta-sovereign — that
 would rebuild the monolith). Unaddressed: what happens when a governor under root A acts
-on a scope owned by root B? Candidate answer (not ratified): cross-root action is refused
-unless an explicit, witnessed inter-root grant exists — i.e. the same allowlist-authority
-discipline at the root boundary. Flagged, not decided; it is the federation seam and
-belongs to a later forcing case.
+on a scope owned by root B? **Partially resolved by the root-distance grammar above
+(2026-06-13):** cross-root strength is not granted by the issuer — it is *computed by the
+consumer* from the named root lineage (same-root → mechanical; contract-root → treaty;
+unknown/conflicting → observer/inadmissible). What remains open is the *mechanical*
+cross-root case (root B actually enforcing root A's receipt), which requires an explicit,
+witnessed inter-root grant — the allowlist-authority discipline at the root boundary. The
+grammar makes the *evidence* portable; the *enforcement* across roots is still a later
+forcing case.
 
 ## Relationship to other gaps
 
@@ -274,7 +356,12 @@ recurring weak→strong error caught across the exchange is named in
 filing (Claude, AG-side) adds the in-tree composition points, the anti-overclaim pin, the
 cold-succession/genesis refinements on Law 6, the self-anneal-can-never-self-promote
 consequence, and the cross-root open question; and scribes the whole as a candidate
-handle. The short form:
+handle. **Post-wrap addendum (2026-06-13): the "Scale is root-distance" section** —
+ChatGPT proposed the scale table + a stamped `enforcement_basis` field; Claude-web caught
+the field as the effect-bit footgun (strength is consumer-relative; *the receipt names its
+root, the reader does the trig*) and collapsed the version-ladder to two builds + landing
+conditions. The discarded part — a literal 4.x/5.x feature ladder — is deliberately NOT
+scribed per operator instruction. The short form:
 
 > The kernel is the declared enforcement root; the governor is a cap-bearing subject;
 > WLP is the witness surface; LA prevents the authority-to-govern from being

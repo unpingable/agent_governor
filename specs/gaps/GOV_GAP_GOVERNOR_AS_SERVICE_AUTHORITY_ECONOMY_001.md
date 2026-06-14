@@ -395,6 +395,21 @@ The corrected framing, one line:
 > *derived by the consumer*, not asserted by the producer — and the obligations must be
 > *mechanically discharged*, not described.
 
+**Skim table (survives a hostile read).** Note the relation is *correction, not parallel
+lane*: PCAA's stamped `ε(a)` sits atop the exact writer-stamped-force bug AG discharges, so
+AG is closer to an erratum on the convergent design than a competing system.
+
+| Claim | PCAA | AG |
+|---|---|---|
+| Portable action envelope | yes | yes |
+| Enforceability classes | emitter/envelope-stamped (`ε(a)`) | reader-derived from root relation *(appears-to; pending full-body read)* |
+| Formal / mechanical discharge | "does not currently implement a full conformal pipeline" (paper) | refusal cases + Lean admissibility kernel + receipt_kernel invariants + tests |
+| Authority succession | framework-level | linear cap transfer + cold above-contender authorization (Law 6) |
+
+Reference-implementation status, like standing, is **adopted, not declared** — which is
+exactly why the move is to ship the smallest specimen that *discharges* what others
+*describe*, not to claim the lane. (Your own doctrine, one more time.)
+
 ## Relationship to other gaps
 
 - `GOV_GAP_AUTHORITY_KERNEL_SUBSTRATE_001` — *where* the mint lives (Rust timing). This

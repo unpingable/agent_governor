@@ -395,9 +395,11 @@ The corrected framing, one line:
 > *derived by the consumer*, not asserted by the producer — and the obligations must be
 > *mechanically discharged*, not described.
 
-**Skim table (survives a hostile read).** Note the relation is *correction, not parallel
-lane*: PCAA's stamped `ε(a)` sits atop the exact writer-stamped-force bug AG discharges, so
-AG is closer to an erratum on the convergent design than a competing system.
+**Skim table (survives a hostile read).** The relation is *correction, not parallel lane*
+— stated cold: **AG is not a competing system; it is a checked critique of the authority
+semantics that PCAA-style certificates risk leaving emitter-stamped.** ("Risk leaving,"
+not "leaves" — pending the full-body read; if PCAA turns out to *derive* rather than
+*stamp* `ε(a)`, this softens toward parallel.)
 
 | Claim | PCAA | AG |
 |---|---|---|
@@ -409,6 +411,18 @@ AG is closer to an erratum on the convergent design than a competing system.
 Reference-implementation status, like standing, is **adopted, not declared** — which is
 exactly why the move is to ship the smallest specimen that *discharges* what others
 *describe*, not to claim the lane. (Your own doctrine, one more time.)
+
+**Owed next action — a read, not a build.** Read PCAA 2606.04104 full-body like a source
+(not a horoscope): the enforceability-class section, the authority-model / hierarchy
+section, the definition of *who assigns* `ε(a)` (issuer- / runtime- / verifier- /
+consumer-stamped), and whether any root / adoption / enforcement relation appears
+materially (not as vibes). The only verdicts allowed afterward are boring:
+**confirmed | inverted | ambiguous-needs-closer-pass.** Not "we win," not "we're doomed,"
+not a new roadmap. Until that pass, every claim in this section stays **appears-to** — the
+discipline holding *there* is the whole point. The smallest sharp specimen (force cannot
+be self-declared: reader derives from root relation, kernel grants effect only where cap
+lineage discharges) is the post-confirmation artifact, deliberately NOT pre-built here
+because it would rest on the unconfirmed enforceability row.
 
 ## Relationship to other gaps
 

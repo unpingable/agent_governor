@@ -184,9 +184,41 @@ non-regression harness is later wiring.
   incl. the re-stamp refusal and end-to-end gate plug-in (valid replay → eligible on
   synthetic fixtures; missing/failed → gate still refuses).
 
-## Still ahead (not P4.0f)
+## Operator-basis producer (P4.0g — landed; the last producer)
 
-`OperatorBasisReceipt` capture — design spiked with Lean backing in
-`working/P4.0g-operator-basis-lean-spike-2026-06-14.md` (incl. the bool-vs-typed gate
-input call and the freshness-window ops scar). Then P4.0b proper (mint `ControlBaseline`
-via the supersession ceremony) — HIGH / operator-present, gated on Checkpoint 3.
+`operator_basis.py` (pure) + `OperatorBasisReceiptStore`. Captures "a qualified operator
+reviewed THIS bundle before THIS transition" without turning operator mood into evidence
+and without ever becoming a promotion verdict.
+
+`operator_basis_present` is **derived structurally**, never a detached bool (Lean:
+`OperatorBasisGateInput.bare_bool_ignores_bundle`). `derive_operator_basis_present(facts,
+consumed_bundle_hash, promote_reading, horizon)` requires: every binding present; the
+operator's `reviewed_verdict == basis_reviewed` and not auto-claiming; **the reviewed
+bundle equals the consumed bundle** (pre-state binding); the review clock compatible and
+**strictly before** promote (post-attestation refused); and the review fresh within the
+horizon. Closed refusal vocab.
+
+**Consume-relative by design** (the one asymmetry): unlike `in_bounds`/replay-verdict
+(facts-only), `operator_basis_present` cannot be derived without the consumed bundle +
+promote clock — the Lean's consumer-relativity (`no_global_section_when_consumers_disagree`)
+in the type. So `OperatorBasisReceiptStore.put` persists facts (integrity only) and
+`load_for_trial(trial_id, *, consumed_bundle_hash, promote_reading, freshness_horizon_ns)`
+runs the structural derivation, **emitting the existing simple
+`promotion_evidence.OperatorBasisReceipt` only if it passes** — else `None` (gate sees
+basis absent → refused). The detached `operator_basis_present=True` has no path: no
+receipt comes out without a matching consumed bundle and an in-time, fresh review. The
+deriver is the real gate; the assembler's bool is its shadow. `reviewed_verdict` is an
+attested INPUT (in the content hash), so re-stamping it is a content tamper (caught by
+integrity, not re-derivation — the honest difference from observations/replay). Tests:
+`tests/test_operator_basis.py`. `promotion_gate.py` and `promotion_evidence.py` untouched.
+
+## All three witnesses now have producers — next is the HIGH gate
+
+The pipeline can now return `eligible` on real evidence (live survival + replay/holdout +
+operator basis, all loaded + re-validated). The next step is **not** another producer:
+it is **P4.0b** — mint `ControlBaseline` via the supersession ceremony — which is **HIGH /
+operator-present**, gated on **Checkpoint 3** (SELF_GOVERNANCE_SPEC amendment). That line
+is not crossed cold. Also still required before a *real* `max_slices=4` promotion: a
+canonical "basis bundle hash" computation (P4.0g binds with opaque hashes; how the bundle
+hash is computed is P4.0b wiring) and the freshness-window ops policy from the P4.0g spike
+(operator-review window vs replay duration).

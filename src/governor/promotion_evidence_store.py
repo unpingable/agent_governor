@@ -41,9 +41,12 @@ from .observation_admissibility import (
     SurvivalBound,
     derive_in_bounds,
 )
+from .clock_witness import MonotonicReading
+from .operator_basis import OperatorBasisFacts, derive_operator_basis_present
 from .promotion_evidence import (
     ActivationReceipt,
     LiveSurvivalObservationReceipt,
+    OperatorBasisReceipt,
     ReplayHoldoutReceipt,
 )
 from .replay_holdout import ReplayHoldoutFacts, derive_replay_verdict
@@ -365,6 +368,109 @@ class ReplayHoldoutReceiptStore:
         )
 
 
+class OperatorBasisReceiptTamperError(ValueError):
+    """A persisted operator-basis receipt failed its integrity check on load: the
+    declared ``content_hash`` does not match the recompute, or the stored ``trial_id``
+    does not match the requested key. Note: the operator's ``reviewed_verdict`` is an
+    attested INPUT (in the hashed facts), so re-stamping it refused→basis_reviewed is a
+    content tamper caught here — unlike observations/replay, whose verdicts are derived
+    and excluded from the hash so re-derivation is the catch."""
+
+
+_OPERATOR_BASIS_SCHEMA = "promotion_operator_basis_v0"
+
+
+class OperatorBasisReceiptStore:
+    """File-per-trial store for operator-basis receipts under
+    ``<root>/promotion_evidence/operator_basis/<trial_key>.json`` (one per trial).
+
+    Asymmetric with the other two stores ON PURPOSE: ``operator_basis_present`` is
+    **consume-relative** — it cannot be derived from facts alone, only against the
+    consumed bundle + promote clock. So ``put()`` persists facts (integrity only) and
+    ``load_for_trial`` takes the consume-time inputs and runs
+    ``derive_operator_basis_present``: it emits the existing simple
+    ``promotion_evidence.OperatorBasisReceipt`` (which the assembler reads as
+    ``operator_basis_present``) **only if the structural derivation passes** — bundle
+    binding, before-the-transition, fresh, attested-reviewed. A structural failure
+    returns ``None`` (the gate sees the basis absent → refused). The detached
+    ``operator_basis_present=True`` has no path: you cannot get the receipt out without
+    a matching consumed bundle and an in-time, fresh review. The deriver is the real
+    gate; the assembler's bool is its shadow.
+    """
+
+    def __init__(self, root: Path | str):
+        self._dir = Path(root) / _EVIDENCE_DIRNAME / "operator_basis"
+
+    @property
+    def directory(self) -> Path:
+        return self._dir
+
+    def put(self, facts: OperatorBasisFacts) -> Path:
+        """Persist operator-basis facts (atomic). No verdict is derived here —
+        ``operator_basis_present`` is consume-relative (see ``load_for_trial``)."""
+        identity = dict(facts.to_dict())
+        identity["schema"] = _OPERATOR_BASIS_SCHEMA
+        payload = dict(identity)
+        payload["content_hash"] = content_hash(canonical_json(identity))
+
+        self._dir.mkdir(parents=True, exist_ok=True)
+        path = self._dir / f"{_trial_key(facts.trial_id)}.json"
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(payload, sort_keys=True, indent=2))
+        tmp.replace(path)
+        return path
+
+    def load_for_trial(
+        self,
+        trial_id: str,
+        *,
+        consumed_bundle_hash: str,
+        promote_reading: MonotonicReading,
+        freshness_horizon_ns: int,
+    ) -> OperatorBasisReceipt | None:
+        """Integrity-check, then DERIVE ``operator_basis_present`` against the consumed
+        bundle + promote clock. Emits the simple ``OperatorBasisReceipt`` iff present;
+        ``None`` on a clean miss OR a structural failure (the gate then refuses
+        operator-basis-absent). Raises :class:`OperatorBasisReceiptTamperError` on an
+        integrity failure (tampered facts / restamped verdict / trial swap)."""
+        path = self._dir / f"{_trial_key(trial_id)}.json"
+        if not path.exists():
+            return None
+        d = json.loads(path.read_text())
+        facts = OperatorBasisFacts.from_dict(d)
+
+        identity = dict(facts.to_dict())
+        identity["schema"] = _OPERATOR_BASIS_SCHEMA
+        recomputed = content_hash(canonical_json(identity))
+        if d.get("content_hash") != recomputed:
+            raise OperatorBasisReceiptTamperError(
+                f"operator-basis for trial {trial_id!r} failed content integrity: "
+                f"declared {d.get('content_hash')!r} != recomputed {recomputed!r}"
+            )
+        if facts.trial_id != trial_id:
+            raise OperatorBasisReceiptTamperError(
+                f"operator-basis at key for {trial_id!r} carries trial_id "
+                f"{facts.trial_id!r} (swap / key collision)"
+            )
+
+        verdict = derive_operator_basis_present(
+            facts,
+            consumed_bundle_hash=consumed_bundle_hash,
+            promote_reading=promote_reading,
+            freshness_horizon_ns=freshness_horizon_ns,
+        )
+        if not verdict.present:
+            return None  # structural failure -> gate sees operator-basis absent
+
+        return OperatorBasisReceipt(
+            trial_id=facts.trial_id,
+            operator_actor=facts.operator_id,
+            promotion_basis=facts.promotion_basis,
+            scope=facts.scope,
+            explicitly_not_auto_baseline=True,
+        )
+
+
 __all__ = [
     "ActivationReceiptStore",
     "ActivationReceiptTamperError",
@@ -372,4 +478,6 @@ __all__ = [
     "ObservationReceiptTamperError",
     "ReplayHoldoutReceiptStore",
     "ReplayHoldoutReceiptTamperError",
+    "OperatorBasisReceiptStore",
+    "OperatorBasisReceiptTamperError",
 ]

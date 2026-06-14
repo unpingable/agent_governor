@@ -323,6 +323,78 @@ witnessed inter-root grant — the allowlist-authority discipline at the root bo
 grammar makes the *evidence* portable; the *enforcement* across roots is still a later
 forcing case.
 
+## Related work / external positioning (the seam is crowded — position precisely)
+
+Added 2026-06-13 after a literature pass corrected an earlier "empty seam" belief. The
+agent-governance corner **lit up across 2025–2026**; this is not open wilderness. Position
+AG as the *checked authority substrate*, not as a competitor to the now-published
+certificate frameworks.
+
+**The near-twin (the cite, not a rival to ignore): "Proof-Carrying Agent Actions" (PCAA),
+arXiv 2606.04104, Zexun Wang / Ond Holdings, 2026-06-02.** Beat-for-beat close to the
+governor-as-service / PCAR shape: a runtime-neutral **action certificate** (not a vendor
+session record), five checkpoints (pre-action admissibility · action open · assumption
+capture · approval · outcome closure), a portable action envelope, runtime/approval
+receipts, replay-ready proof closure, and an explicit three-way authority split (workspace
+/ runtime / external governor). Treat it as the related-work anchor.
+
+**What survives as AG's distinctive seam** — confirmed against the PCAA v1 HTML
+(structured read 2026-06-13; *this is one LLM read of v1, not a checked fact — a careful
+full-body read of 2606.04104 is the real confirmation, still owed*):
+
+1. **Root-distance / reader-derived force.** PCAA **stamps** the enforceability class
+   `ε(a) ∈ {pre_execution_gate, observe_only, delegated_runtime_control,
+   runtime_controlled}` *on the envelope, by the issuer*. It has no "root," no
+   reader-relative force, no adoption-root vs enforcement-root split; authority is a fixed
+   hierarchy, not a distance. AG's axis — *force = f(reader_root, receipt_root_lineage,
+   adoption_relation)* — is absent. **And PCAA's stamped `ε(a)` is itself an instance of
+   the writer-stamped-force footgun** this gap's "Scale is root-distance" section names
+   (`weak_property_strong_property`): so AG does not merely sit adjacent, it identifies a
+   specific weakness in the leading near-twin. *(Hold this "PCAA stamps, doesn't derive"
+   claim as appears-to pending the full read; if it inverts, so does the sharpened
+   contribution.)*
+2. **Checked, not typed.** PCAA states it "does not currently implement a full conformal
+   pipeline in the product" — framework/schema-typed, no formal verification / theorem
+   proving / kernel enforcement. AG's contribution is the *mechanically discharged refusal
+   surface*: the invariants that actually refuse laundering, replay, self-promotion,
+   effect-bit fraud, stale authority, and governance-cap double-spend (receipt_kernel's 13
+   invariants; the Lean admissibility kernel above). **"PCAA names the obligations; AG
+   makes the obligations executable."** *Typed is not checkable* — and the gap between
+   claiming the shape and discharging it is the graveyard of failing cases, not a
+   related-work paragraph.
+
+**Adjacent convergence (per the operator's abstract survey 2026-06-13; not independently
+fetched here):** Verifiability-First signed per-action receipts in append-only logs (Dec);
+the intent/enforcement split as a theorem — model supplies intent, a deterministic gate
+outside the model supplies enforcement (Feb); Dawn Song's group on **source-relative
+validity** — same action legitimate or violation by *who produced the instruction* (Mar).
+Note the precise distinction: source-relative validity is the **producer** end of "valid
+to whom" (provenance of the instruction); AG's root-distance is the **consumer** end
+(force graded by the reader's relation to the issuing root). Both are "valid to whom," at
+opposite ends — the producer end is now occupied; the consumer end is AG's. Also in the
+neighborhood: Agentic JWT (agent identity as a hash of prompt/tools/config), AGENT-C
+(tool-call-sequence contracts), DID principal-anchoring, and the industry stack (A2A,
+AP2's cryptographic user-intent proofs, ERC-8004 trustless-agent registries).
+
+**Corrected novelty stack (do NOT claim novelty on occupied terms):**
+- *Not novel:* action certificates, portable envelopes, runtime-neutral agent governance,
+  replay-ready proof bundles, approval receipts, observer-vs-pre-execution coverage
+  disclosure.
+- *Sharper / possibly novel:* `receipt force ≠ receipt content`; force reader-derived from
+  root relation; adoption-root vs enforcement-root; treaty-evidence vs mechanical-refusal;
+  no writer-stamped enforcement strength; governance-cap succession as linear transfer
+  authorized above contenders; **checked discharge over typed framework.**
+- *Stylistically AG:* governor demoted from sovereign to cap-bearing subject; WLP as
+  witness-not-throne; LA as exactly-once wall for the authority-to-govern; heterogeneous
+  model review as the anti-laundering interferometer.
+
+The corrected framing, one line:
+
+> PCAA establishes portable certificate-bearing action governance (typed). AG addresses
+> the next problem: when such certificates cross roots, their authority strength must be
+> *derived by the consumer*, not asserted by the producer — and the obligations must be
+> *mechanically discharged*, not described.
+
 ## Relationship to other gaps
 
 - `GOV_GAP_AUTHORITY_KERNEL_SUBSTRATE_001` — *where* the mint lives (Rust timing). This

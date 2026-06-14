@@ -1,18 +1,20 @@
 {
   "phase": "AUDIT",
   "current_slice": null,
-  "candidate_next_slice": "Launch item 5 COMPLETE (5.1-5.7). PRE-PUSH gate: operator tone-reads limits.html; then batch push after 17:00 (agent_gov ~15, unpingable-site 2, wicket 1, standing 1, rpp 1, continuity 1, nightshift 1) + GitHub-clone stranger rerun. Behind that: launch 6 (Show HN, operator-sequenced) or queued backlog.",
+  "candidate_next_slice": "P4.0b — tuning_proposal_bridge.py (one-way: convergence_tuning.TuningProposal -> annealing.AnnealingDelta, admissible+allowlisted+custody-complete ONLY) + PromotionReceipt substrate + refusal tests, on top of promotion_gate.py (P4.0a, landed green). Checkpoints 1 & 2 RESOLVED. STOP rule from operator: do NOT 'just inspect P4.0b a little' before a cold pass; open Checkpoint 3 (SELF_GOVERNANCE_SPEC amendment) tomorrow ONLY if P4.0b needs spec text at that point.",
   "slice_spec": [
-    ".governor/loop-receipts/2026-06-12T230000Z.slice-readme-ratchet-5.6-nightshift.json",
-    ".governor/backlog/launch-5-readme-ratchet.json (audit table, now COMPLETE)"
+    "working/checkpoint-2-convergence-tuning-disposition-2026-06-13.md (Checkpoint 2 RESOLVED: coexist + one-way bridge; DispositionReceipt; guardrail TuningApply!=PromotionReceipt, TuningProposal!=ControlBaseline)",
+    "working/P4-promotion-plan-2026-06-13.md (Checkpoint 1 dual gate + Checkpoint 2 status)",
+    "src/governor/promotion_gate.py + tests/test_promotion_gate.py (P4.0a, 17/17 green warm)"
   ],
-  "acceptance": null,
-  "blocked_on": "operator review (limits.html tone-read gates the batch push)",
-  "next_action": "operator reads 5.6 receipt; tone-read limits.html; batch push after 17:00",
-  "last_verified_commit": "408020c",
-  "last_updated": "2026-06-12T19:45:00Z",
-  "session_id": "fable-morning-loop (operator-dispatched, local-only, no push)",
-  "loop_master": "opus (fable = audit/escalation tier per \u00a712)",
+  "acceptance": "P4.0b NOT YET SCOPED FOR ACCEPTANCE — gated on cold re-entry. Bridge mints AnnealingDelta only; PromotionReceipt/ControlBaseline mint from annealing/promotion custody on an eligible evaluate_promotion_eligibility verdict, never from TuningProposal/TuningApply.",
+  "blocked_on": "cold session (operator: resume tomorrow in an ACTUAL cold session; warm continuation forbidden for the P4.0b custody-affecting work)",
+  "next_action": "COLD RE-ENTRY: run re_entry_probes; confirm Checkpoint 1 + Checkpoint 2 resolved from the disposition docs (not memory); then start P4.0b OR open Checkpoint 3 only if P4.0b needs spec text. Do not trust warm-me's green — probes re-verify HEAD.",
+  "last_verified_commit": "e7f9b44",
+  "last_verified_note": "Deliberately the PARENT of the P4-entry sprint commit. The sprint (Checkpoint 1 + P4.0a + cold-start gap + governor-as-service record + Checkpoint 2 disposition) is the new HEAD but was verified WARM only (test_promotion_gate.py exit 0 observed in-session). Per cold-start discipline, HEAD != last_verified_commit is intentional: the cold pass re-runs probes against HEAD before trusting P4.0a, and P4.0b is custody-affecting so it MUST be cold. The cold pass updates this field after re-verifying.",
+  "last_updated": "2026-06-13T00:00:00Z",
+  "session_id": "p4-entry (warm; pinned for cold resume — Checkpoints 1 & 2 ratified this session)",
+  "loop_master": "opus",
   "wip_limit": 1,
   "dirty_tree_allowed": false,
   "dirty_tree_scope": [
@@ -21,14 +23,18 @@
     "docs",
     "golden",
     "demo",
-    "specs"
+    "specs",
+    "working",
+    ".governor"
   ],
   "re_entry_probes": [
     "cat .governor/loop.json",
     "git log --oneline -8",
-    "git status --short -- src tests docs golden demo specs",
-    "python3 -m pytest tests/test_fresh_clone.py -q -m smoke",
-    "bash demo/refused-spend.sh >/dev/null && echo front-door-holds"
+    "git status --short -- src tests docs golden demo specs working",
+    "python3 -m pytest tests/test_promotion_gate.py -q",
+    "python3 -m pytest tests/test_fresh_clone.py -q -m smoke"
   ],
-  "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: W0 FAIL \u2192 W1 PASS (~7-8min) \u2192 W2 PASS (~5min, 10 steps, zero repo-side friction). One GitHub-clone verification remains."
+  "preexisting_dirt_note": "At this session's start the tree already carried unrelated dirty/untracked files NOT part of the P4 sprint (docs/visual_registers.md, working/campaign-standing-before-spendability.md, working/nightshift-governor-unsettled-integration-state.md, working/parked-constellation-alignment-pass.md, docs/doctrine/briefings_not_cockpits.md, and several working/GOV_GAP_*.md / working/*.md candidates). They were left untouched and are NOT in the P4-entry commit. The cold pass should treat them as pre-existing triage, not sprint output.",
+  "prior_pointer_note": "Superseded the 2026-06-12 launch-item-5 pointer (limits.html tone-read / batch push after 17:00), which was STALE: P4 planning landed 2026-06-13 (e7f9b44) without advancing this pointer. The launch-5 push gate is real but is a different campaign (tracked in .governor/backlog/launch-5-readme-ratchet.json).",
+  "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: W0 FAIL -> W1 PASS -> W2 PASS. One GitHub-clone verification remains. (Launch campaign — not the active annealing/P4 thread.)"
 }

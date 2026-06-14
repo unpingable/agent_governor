@@ -117,3 +117,32 @@ blocking P1):
 The amendment-not-rewrite mechanic stands: SELF_GOVERNANCE_SPEC gains the vocabulary-bridge
 preamble + section-by-section "superseded by implementation" marks **when Phase 2 lands**,
 not before. The spec remains byte-unmodified through Phases 0–1.
+
+## Divergence #2 RESOLVED 2026-06-13 (P4 entry, Checkpoint 1)
+
+**Decision: replay/holdout IS a promotion criterion.** Promotion of the surviving
+`max_slices=4` trial into a `ControlBaseline` requires a **dual gate**, both witnesses
+mandatory and **never folded into one**:
+
+1. **live survival witness** — `evidence_count >= N` fresh, in-bounds, walkable-from-
+   activation receipts (*did the trial survive reality?*);
+2. **replay/holdout falsification witness** — a Phase C1 `REPLAY_HARNESS` non-regression
+   pass against a frozen corpus, emitting a separate `ReplayHoldoutReceipt` (frozen corpus
+   hash, harness version, comparator baseline id, verdict) (*does promotion avoid known
+   regression?*).
+
+**Scope:** replay/holdout is a **promotion falsification gate** — not a tuning optimizer,
+not a new selection surface. No post-hoc case selection, no mutation on failure, no claim
+that replay proves optimality. Failure of either witness blocks promotion and leaves the
+prior baseline authoritative.
+
+**Rationale (operator):** P4 is precedent-setting authority conversion; the first
+promotion ceremony becomes the template. An evidence-count-only first baseline would teach
+the governor that spec-MUSTs are aspirational. The criterion **applies to this first P4
+promotion**, not merely to future tunables — the root of the promoted lineage must carry
+the criterion its descendants inherit (no poisoned-bootstrap exception).
+
+Recorded in `working/P4-promotion-plan-2026-06-13.md` (the seven-questions doc, evidence
+section + refusal cases + `PromotionEligible` predicate) and reflected in
+`specs/gaps/GOV_GAP_CONTROL_BASELINE_001.md` (Phase-4 promotion). Divergences #1 (validator
+quorum), #3 (significance gating), #4 (RecoveryPlanReceipt) remain as recorded.

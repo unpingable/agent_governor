@@ -63,6 +63,17 @@ auto_tuning BaselineProfile = metric distribution; ExecutionState = resumability
 5. **Promotion** (Phase 4): trial checkpoint earns baseline status via the supersession
    ceremony; lineage is content-addressed so any two baselines are diffable from hashes
    alone (bisectability: "the badness entered at C3" is a query, not an archaeology dig).
+   **Promotion eligibility is a DUAL gate (Checkpoint 1, RATIFIED 2026-06-13, crosswalk
+   divergence #2):** a live survival witness (`evidence_count >= N` fresh, in-bounds,
+   walkable-from-activation receipts) AND a replay/holdout falsification witness (Phase C1
+   `REPLAY_HARNESS` non-regression pass against a frozen corpus, emitting a separate
+   `ReplayHoldoutReceipt`: frozen corpus hash, harness version, comparator baseline id,
+   verdict). The two witnesses are **never folded** (different epistemology, different
+   receipt). Replay is a *promotion falsification gate*, not a tuning optimizer or
+   selection surface. The eligibility predicate is implemented substrate-agnostically in
+   `src/governor/promotion_gate.py` (P4.0a); minting the ControlBaseline on an eligible
+   verdict is P4.0b (gated on the convergence_tuning disposition). See
+   `working/P4-promotion-plan-2026-06-13.md`.
 6. **Lineage validity rule**: rollback target must be lineage-compatible with the current
    constitution (the spec's policy-hash rule) — you cannot roll back across an admitted
    kernel upgrade.
@@ -79,6 +90,10 @@ auto_tuning BaselineProfile = metric distribution; ExecutionState = resumability
 - AC4 (Phase 3a): deletion fence — deleting a referenced baseline is a typed refusal.
 - AC5 (Phase 4): bisectability — given any two baselines in a lineage, the config diff is
   reconstructable from stored hashes alone.
+- AC5b (Phase 4, Checkpoint 1): the dual promotion gate refuses on a missing/failed
+  replay/holdout witness even when the live survival witness passes, and vice versa; the
+  two witnesses are carried as separate receipt references, never folded. (Predicate-level
+  refusals: `tests/test_promotion_gate.py`; ceremony-level: P4.0b.)
 - AC6: rollback across a kernel-upgrade boundary refused (lineage validity).
 
 ## Non-goals

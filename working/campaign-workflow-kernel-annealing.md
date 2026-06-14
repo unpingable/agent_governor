@@ -333,8 +333,22 @@ diff/revert path proven. **Plus the pre-P4 gate: P3.4 (plan-intake admission) fe
 Still forbidden in P4: multi-delta interaction; ops/NQ profile (until self-governance
 survives one promotion cycle — constructor-refused otherwise); generic activation;
 self-modifying kernel invariants; receipt-kernel ratification-invariant change; Rust port.
-**HIGH checkpoints: replay/holdout as promotion criterion (divergence #2);
-convergence_tuning disposition; SELF_GOVERNANCE_SPEC amendment per ratified crosswalk.**
+**HIGH checkpoints: ~~replay/holdout as promotion criterion (divergence #2)~~ RESOLVED
+2026-06-13 (dual gate: live survival + replay/holdout falsification, never folded; replay
+scoped as falsification gate; applies to the FIRST promotion, no poisoned bootstrap);
+convergence_tuning disposition RESOLVED 2026-06-13 (operator fiat → COEXIST with one-way
+external bridge; `annealing.py` never imports `convergence_tuning`; PromotionReceipt/
+ControlBaseline mint from annealing/promotion custody NOT `TuningProposal`/`TuningApply`;
+bridge = `tuning_proposal_bridge.py`, admissible-only, custody-complete; guardrail:
+TuningApply≠PromotionReceipt, TuningProposal≠ControlBaseline —
+`working/checkpoint-2-convergence-tuning-disposition-2026-06-13.md`); SELF_GOVERNANCE_SPEC
+amendment per ratified crosswalk (OPEN, LAST — open tomorrow only if P4.0b needs spec
+text now).**
+
+**P4.0 split by substrate dependency:** P4.0a = substrate-agnostic `PromotionEligible`
+predicate + refusal-first tests (`promotion_gate.py`; gate's only verb is refuse → safe
+before checkpoint 2; in progress 2026-06-13). P4.0b = `ControlBaseline` mint + supersession
+ceremony (gated on checkpoint 2). See `working/P4-promotion-plan-2026-06-13.md` Status.
 
 ## 4. Cadence map
 

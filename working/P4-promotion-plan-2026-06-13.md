@@ -31,12 +31,47 @@ convergence_tuning disposition; SELF_GOVERNANCE_SPEC amendment per ratified cros
 ## The seven questions
 
 **What evidence proves the trial survived?**
-`evidence_count >= N` of IN-BOUNDS post-activation observation receipts — *scars-style
-evidence-count, never wall-clock*. "In-bounds" = the trial value held without its
-`RollbackTrigger` firing (e.g. `refusal_rate <= 0.2`). Evidence must be FRESH (the
-two-clock discipline from `standing_spendability` — trial evidence observed within its
-horizon; stale evidence does not count) and walkable from the P3.1 activation receipt
-forward.
+
+> **SUPERSEDED by Checkpoint 1 (RATIFIED 2026-06-13).** The original criterion below was
+> *evidence-count only*. Checkpoint 1 (crosswalk divergence #2 — replay/holdout as a
+> promotion criterion) resolved to a **dual gate**: promotion requires BOTH a live
+> survival witness AND a replay/holdout falsification witness. The two are **never
+> folded** — different epistemology, different receipt. Recorded, not silently edited.
+
+**Two witnesses, never soup:**
+
+1. **Live survival witness** — `evidence_count >= N` of IN-BOUNDS post-activation
+   observation receipts — *scars-style evidence-count, never wall-clock*. "In-bounds" =
+   the trial value held without its `RollbackTrigger` firing (e.g. `refusal_rate <= 0.2`).
+   Evidence must be FRESH (the two-clock discipline from `standing_spendability` — trial
+   evidence observed within its horizon; stale evidence does not count) and walkable from
+   the P3.1 activation receipt forward. *Answers: did the trial survive reality?*
+2. **Replay/holdout falsification witness** — a Phase C1 `REPLAY_HARNESS`
+   non-regression pass against a **frozen** corpus, emitting a separate
+   `ReplayHoldoutReceipt` carrying: frozen corpus hash (recorded before evaluation),
+   harness version, prior-baseline comparator id, pass/fail verdict. **Scoped as a
+   promotion falsification gate, NOT a tuning optimizer and NOT a new selection
+   surface** — no post-hoc case selection, no mutation on failure, no claim that replay
+   proves optimality. *Answers: does promotion avoid known regression?*
+
+The two witnesses stay physically separate (do not fold replay into `evidence_count`):
+`live receipts = did the trial survive reality?` vs `replay/holdout = does promotion
+avoid known regression?`. Failure of either blocks promotion and leaves the prior
+baseline authoritative.
+
+**PromotionEligible predicate (ratified shape):**
+
+```
+PromotionEligible :=
+      live_evidence_count >= N
+  AND live_receipts_fresh
+  AND live_receipts_walkable_from_activation
+  AND replay_holdout_non_regression_passed
+  AND no_open_NonDischargeClaim
+  AND no_off_surface_tunable
+  AND no_kernel_fuse_ratification_side_effect
+  AND operator_basis_present
+```
 
 **What receipt makes baseline supersession valid?**
 The validator **supersession ceremony** (the one proven across validator
@@ -70,6 +105,13 @@ the fuse not yet kernel-enforced (`GOV_GAP_GOVERNOR_FUSE_ENFORCEMENT_001`).
 
 - insufficient `evidence_count` (< N in-bounds receipts);
 - stale / expired trial evidence (freshness horizon lapsed);
+- live evidence not walkable from the P3.1 activation receipt forward;
+- **missing replay/holdout receipt** (Checkpoint 1: a passing live witness alone does NOT
+  promote — the falsification witness must be present);
+- **replay/holdout non-regression FAILED** (regression detected against the comparator
+  baseline);
+- **replay corpus-hash mismatch** (the evaluated corpus is not the frozen, recorded one);
+- **replay harness version not walkable** (cannot bind the verdict to a known harness);
 - an open `NonDischargeClaim` targets the promotion rung (DebtLedger — promotion is a
   rung transition; open claims block it, recomputed at the gate);
 - missing activation receipt (no custodied P3.1 receipt to promote from);
@@ -92,11 +134,17 @@ basis.
 
 ## Minimal P4 slice shape (when authorized — NOT now)
 
-1. **P4.0 promotion gate** — observe the one tunable over `evidence_count >= N`
-   in-bounds fresh receipts → if met, mint a new `ControlBaseline` via the
-   supersession ceremony (PromotionReceipt + content-addressed lineage). Refuse on any
-   refusal case above. Prove old/new baseline diffable by content hashes; prove
-   expiry auto-revert and rollback-to-baseline still pass.
+1. **P4.0 promotion gate** — split into two micro-slices by substrate dependency:
+   - **P4.0a (substrate-agnostic, no checkpoint-2 dependency):** the pure/total
+     `PromotionEligible` predicate + refusal-first tests. The gate's only verb is
+     *refuse* — it grants nothing, so it is safe to build before the receipt substrate is
+     decided. `src/governor/promotion_gate.py` + `tests/test_promotion_gate.py`.
+   - **P4.0b (gated on Checkpoint 2 — convergence_tuning disposition):** mint a new
+     `ControlBaseline` via the supersession ceremony (PromotionReceipt + content-addressed
+     lineage) once the predicate returns eligible. Prove old/new baseline diffable by
+     content hashes; prove expiry auto-revert and rollback-to-baseline still pass. The
+     PromotionReceipt substrate (adapter over `convergence_tuning.TuningProposal` vs
+     coexist) is exactly what Checkpoint 2 decides — hence the split.
 2. **P4.1 second profile (gated)** — ops/NQ profile admitted ONLY after self-governance
    survives one full promotion cycle (the ops-profile constructor refuses absent a
    self-governance PromotionReceipt). convergence_tuning final disposition decided here
@@ -110,6 +158,24 @@ loop-AUDIT shadow projection (candidate at most). One promotion surface this ban
 
 ## Status
 
-Plan only. Pre-P4 order: `0 ✓ · 1 ✓ · 2 ✓ · 3 ✓ (this doc) · 4 start P4`. P4 entry is
-gated on the three HIGH checkpoints (operator present). Next action is the operator's
-go for P4.0 implementation — not taken here.
+Pre-P4 order: `0 ✓ · 1 ✓ · 2 ✓ · 3 ✓ · 4 start P4`.
+
+**Entry HIGH checkpoints (operator present):**
+- **Checkpoint 1 — replay/holdout as promotion criterion (divergence #2): RATIFIED
+  2026-06-13** → dual gate (live survival + replay/holdout falsification), two witnesses
+  never folded, replay scoped as falsification gate only. Recorded above + in the
+  crosswalk's ratified section.
+- **Checkpoint 2 — convergence_tuning disposition: RESOLVED 2026-06-13 (operator fiat) →
+  COEXIST with a one-way external bridge.** `convergence_tuning` stays a domain
+  proposal/evidence producer; `annealing` stays the generic custody substrate;
+  `annealing.py` never imports `convergence_tuning`; PromotionReceipt/ControlBaseline mint
+  from annealing/promotion custody, NOT from `TuningProposal`/`TuningApply`. A separate
+  `tuning_proposal_bridge.py` (P4.0b) may translate an admissible `TuningProposal` →
+  `AnnealingDelta` only with allowlist + baseline + expiry + rollback + source
+  observations + human-approval custody. Guardrail: **`TuningApply` is not
+  `PromotionReceipt`; `TuningProposal` is not `ControlBaseline`.** Full record:
+  `working/checkpoint-2-convergence-tuning-disposition-2026-06-13.md`.
+- **Checkpoint 3 — SELF_GOVERNANCE_SPEC amendment per ratified crosswalk: OPEN, LAST.**
+
+**P4.0a (predicate + refusal tests) is authorized and in progress** (substrate-agnostic;
+operator directed refusal-first this session). P4.0b waits on Checkpoint 2.

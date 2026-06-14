@@ -108,9 +108,38 @@ but internally-consistent activation is caught downstream (its hash changes, so
 observations bound to the original no longer walk). Tests:
 `tests/test_promotion_evidence_store.py`.
 
-## Still ahead (not P4.0c)
+## Observation admissibility (P4.0d — `in_bounds` is derived, landed)
 
-The remaining producers: a live-survival observation emitter, a `ReplayHoldoutReceipt`
-producer wired to the C1 `REPLAY_HARNESS`, and `OperatorBasisReceipt` capture. Then
-P4.0b proper (mint `ControlBaseline` via the supersession ceremony) — HIGH /
-operator-present, gated on Checkpoint 3.
+`src/governor/observation_admissibility.py` defines what counts as in-bounds, so the
+live-survival witness cannot ride a writer-stamped vibe field.
+
+> bad: `in_bounds: true` (the writer says so) · good:
+> `in_bounds = derive_in_bounds(facts, bound)` (the evaluator decides)
+
+- `ObservationFacts` — raw facts (trial_id, clock reading, `(metric, value)` pairs,
+  disqualifying events). **No `in_bounds` field** — there is no slot to stamp (the
+  headline refusal test: constructing with `in_bounds=` raises `TypeError`).
+- `SurvivalBound` — the evaluable form of the trial's rollback trigger
+  (`metric`, `trip_comparator` ∈ {gt,ge,lt,le}, `threshold`); trips when
+  `observed <cmp> threshold`. Promotion-path-native (does **not** import
+  `convergence_tuning` — ground rule 6); a future `tuning_proposal_bridge` may
+  translate a `RollbackTrigger` into it with custody.
+- `derive_in_bounds(facts, bound, expected_basis=None)` — pure: in-bounds requires no
+  disqualifying events, the bound's metric actually observed (no survival claim on an
+  unmeasured metric), the trigger not tripped, and (optionally) a compatible clock
+  basis. All failing reasons surface (never collapse). Tests:
+  `tests/test_observation_admissibility.py`.
+
+P4.0d is admissibility only: no producer, no receipt, no store; `promotion_evidence`'s
+`evidence_count` derivation is untouched.
+
+## Still ahead (not P4.0d)
+
+P4.0e — the live-survival observation **producer**: persist an observation receipt,
+bind it to `activation.content_hash`, populate `LiveSurvivalObservationReceipt.in_bounds`
+**via `derive_in_bounds`** (producer-derived, like `fresh`/`walkable`), prove
+tamper/orphan/wrong-activation refusal, and move `evidence_count` off zero only through
+real derived observations. Then the `ReplayHoldoutReceipt` producer (wired to the C1
+`REPLAY_HARNESS`) and `OperatorBasisReceipt` capture. Then P4.0b proper (mint
+`ControlBaseline` via the supersession ceremony) — HIGH / operator-present, gated on
+Checkpoint 3.

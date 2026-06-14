@@ -30,7 +30,7 @@ domain module.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from .clock_witness import MonotonicReading
 
@@ -109,6 +109,21 @@ class SurvivalBound:
             return observed < self.threshold
         return observed <= self.threshold  # TRIP_LE
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "metric": self.metric,
+            "trip_comparator": self.trip_comparator,
+            "threshold": self.threshold,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "SurvivalBound":
+        return cls(
+            metric=d["metric"],
+            trip_comparator=d["trip_comparator"],
+            threshold=d["threshold"],
+        )
+
 
 @dataclass(frozen=True)
 class ObservationFacts:
@@ -149,6 +164,30 @@ class ObservationFacts:
             if n == name:
                 return v
         return None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "trial_id": self.trial_id,
+            "observed_at": {
+                "source": self.observed_at.source,
+                "epoch": self.observed_at.epoch,
+                "ns": self.observed_at.ns,
+            },
+            "metrics": [[n, v] for n, v in self.metrics],
+            "disqualifying_events": list(self.disqualifying_events),
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "ObservationFacts":
+        at = d["observed_at"]
+        return cls(
+            trial_id=d["trial_id"],
+            observed_at=MonotonicReading(
+                source=at["source"], epoch=at["epoch"], ns=at["ns"]
+            ),
+            metrics=tuple((p[0], p[1]) for p in d["metrics"]),
+            disqualifying_events=tuple(d.get("disqualifying_events", ())),
+        )
 
 
 @dataclass(frozen=True)

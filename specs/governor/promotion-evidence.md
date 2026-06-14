@@ -133,13 +133,29 @@ live-survival witness cannot ride a writer-stamped vibe field.
 P4.0d is admissibility only: no producer, no receipt, no store; `promotion_evidence`'s
 `evidence_count` derivation is untouched.
 
-## Still ahead (not P4.0d)
+## Observation producer/store (P4.0e — landed; the first slice that can lift `evidence_count` off zero)
 
-P4.0e — the live-survival observation **producer**: persist an observation receipt,
-bind it to `activation.content_hash`, populate `LiveSurvivalObservationReceipt.in_bounds`
-**via `derive_in_bounds`** (producer-derived, like `fresh`/`walkable`), prove
-tamper/orphan/wrong-activation refusal, and move `evidence_count` off zero only through
-real derived observations. Then the `ReplayHoldoutReceipt` producer (wired to the C1
-`REPLAY_HARNESS`) and `OperatorBasisReceipt` capture. Then P4.0b proper (mint
-`ControlBaseline` via the supersession ceremony) — HIGH / operator-present, gated on
-Checkpoint 3.
+`ObservationReceiptStore` (`promotion_evidence_store.py`) persists live-survival
+observations under `<root>/promotion_evidence/observations/<trial_key>/<observation_id>.json`.
+
+**Producer-derived is not producer-trusted.** `put()` derives `in_bounds` via
+`derive_in_bounds(facts, bound)` and persists the *inputs* (facts + bound + activation
+binding) plus the derived conclusion. The `content_hash` covers **inputs only**. On
+`load_for_trial()` the evaluator: (1) recomputes `content_hash` over the inputs →
+refuses a mismatch (tampered facts); (2) checks the stored `trial_id` (swap guard); (3)
+**re-derives `in_bounds` from the stored facts+bound and refuses if it disagrees with
+the stored conclusion** — so a tripped observation re-stamped `in_bounds: true` is
+caught even though editing only the conclusion leaves `content_hash` intact. It then
+emits plain `LiveSurvivalObservationReceipt`s (carrying the *re-derived* `in_bounds`)
+for the existing walk/assembler, which independently enforces activation binding, trial
+match, and freshness. `evidence_count` therefore moves off zero **only** through
+observations that are tamper-clean, walked, fresh, and derived-in-bounds. Tests:
+`tests/test_promotion_evidence_store.py` (P4.0e block) — incl. the re-stamp refusal and
+the end-to-end "evidence_count off zero" path on synthetic fixtures (not the real
+`max_slices=4` trial, which still has no evidence).
+
+## Still ahead (not P4.0e)
+
+The `ReplayHoldoutReceipt` producer (wired to the C1 `REPLAY_HARNESS`) and
+`OperatorBasisReceipt` capture. Then P4.0b proper (mint `ControlBaseline` via the
+supersession ceremony) — HIGH / operator-present, gated on Checkpoint 3.

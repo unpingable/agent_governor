@@ -154,8 +154,39 @@ observations that are tamper-clean, walked, fresh, and derived-in-bounds. Tests:
 the end-to-end "evidence_count off zero" path on synthetic fixtures (not the real
 `max_slices=4` trial, which still has no evidence).
 
-## Still ahead (not P4.0e)
+## Replay/holdout producer (P4.0f — landed; the second witness)
 
-The `ReplayHoldoutReceipt` producer (wired to the C1 `REPLAY_HARNESS`) and
-`OperatorBasisReceipt` capture. Then P4.0b proper (mint `ControlBaseline` via the
-supersession ceremony) — HIGH / operator-present, gated on Checkpoint 3.
+`replay_holdout.py` (pure) + `ReplayHoldoutReceiptStore` (`promotion_evidence_store.py`).
+Answers exactly one question: *did this trial/candidate non-regress against this prior
+baseline on this frozen corpus, using this witnessed harness run?*
+
+**Design call resolved: C1 `REPLAY_HARNESS` is a semantic mismatch, not wrapped.** The
+C1 harness (`signals/replay_harness.py`) replays *signal derivations* under alternative
+thresholds (drift statistics) — not trial-vs-baseline non-regression over a frozen
+corpus. So P4.0f neither wraps C1 nor invents a second replay semantics: it is a
+**receipting/attestation layer** that records facts about a witnessed run (harness named
+by `replay_harness_id`/`version`) and binds them. Live invocation of a real
+non-regression harness is later wiring.
+
+- `ReplayHoldoutFacts` — raw facts (trial/candidate/comparator-baseline bindings, corpus
+  id + hash + frozen hash, monotonic `started_at`/`completed_at` with `duration_ns()` via
+  the licensed subtraction, `child_exit`/`exit_observed`, `raw_result_hash`, and the
+  harness's own `result_non_regression`). No trusted verdict field.
+- `derive_replay_verdict(facts)` — `non_regression_passed` requires all bindings, a
+  frozen-and-matching corpus, observed+zero exit, and the harness pass; else `refused`
+  with all reasons (closed vocab). The harness's pass is one gate, not the authority.
+- `ReplayHoldoutReceiptStore.put/load_for_trial` — same trust boundary as observations:
+  `content_hash` over inputs only; on load, recompute hash (tampered facts), check
+  trial_id (swap), and **re-derive the verdict, refusing a disagreement** (a refused run
+  re-stamped passed is caught). Emits the existing `promotion_evidence.ReplayHoldoutReceipt`
+  (re-derived pass/fail) for the walk/assembler. A legitimately-refused run loads as
+  `passed=False`; only integrity failures raise. Tests: `tests/test_replay_holdout.py`,
+  incl. the re-stamp refusal and end-to-end gate plug-in (valid replay → eligible on
+  synthetic fixtures; missing/failed → gate still refuses).
+
+## Still ahead (not P4.0f)
+
+`OperatorBasisReceipt` capture — design spiked with Lean backing in
+`working/P4.0g-operator-basis-lean-spike-2026-06-14.md` (incl. the bool-vs-typed gate
+input call and the freshness-window ops scar). Then P4.0b proper (mint `ControlBaseline`
+via the supersession ceremony) — HIGH / operator-present, gated on Checkpoint 3.

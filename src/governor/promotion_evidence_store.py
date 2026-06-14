@@ -41,11 +41,17 @@ from .observation_admissibility import (
     SurvivalBound,
     derive_in_bounds,
 )
-from .promotion_evidence import ActivationReceipt, LiveSurvivalObservationReceipt
+from .promotion_evidence import (
+    ActivationReceipt,
+    LiveSurvivalObservationReceipt,
+    ReplayHoldoutReceipt,
+)
+from .replay_holdout import ReplayHoldoutFacts, derive_replay_verdict
 
 _EVIDENCE_DIRNAME = "promotion_evidence"
 _ACTIVATIONS_DIRNAME = "activations"
 _OBSERVATIONS_DIRNAME = "observations"
+_REPLAY_HOLDOUTS_DIRNAME = "replay_holdouts"
 
 
 class ActivationReceiptTamperError(ValueError):
@@ -259,9 +265,111 @@ class ObservationReceiptStore:
         return out
 
 
+class ReplayHoldoutReceiptTamperError(ValueError):
+    """A persisted replay/holdout receipt failed its integrity check on load: the
+    declared ``content_hash`` (over inputs) does not match the recompute, the stored
+    ``trial_id`` does not match the requested key, OR the stored verdict does not match
+    the value re-derived from the stored facts. The last is the load-bearing one:
+    producer-derived is not producer-trusted — a refused run re-stamped passed is
+    caught by re-derivation."""
+
+
+_REPLAY_SCHEMA = "promotion_replay_holdout_v0"
+
+
+class ReplayHoldoutReceiptStore:
+    """File-per-trial store for replay/holdout receipts under
+    ``<root>/promotion_evidence/replay_holdouts/<trial_key>.json`` (one per trial).
+
+    ``put()`` derives the verdict (``derive_replay_verdict``) and persists the INPUT
+    facts plus the derived verdict; ``content_hash`` covers INPUTS only. ``load_for_trial``
+    recomputes the content hash (tampered facts), checks the stored ``trial_id`` (swap),
+    and **re-derives the verdict from the stored facts, refusing a disagreement** — then
+    emits a plain ``promotion_evidence.ReplayHoldoutReceipt`` (carrying the RE-DERIVED
+    pass/fail) for the existing walk/assembler, which independently checks corpus-frozen
+    match, harness walkability, and the pass bool. A legitimately-refused run still loads
+    (as ``passed=False``); only integrity failures raise. The stored verdict is never
+    trusted.
+    """
+
+    def __init__(self, root: Path | str):
+        self._dir = Path(root) / _EVIDENCE_DIRNAME / _REPLAY_HOLDOUTS_DIRNAME
+
+    @property
+    def directory(self) -> Path:
+        return self._dir
+
+    def put(self, facts: ReplayHoldoutFacts) -> Path:
+        """Derive the verdict and persist the replay/holdout receipt (atomic)."""
+        verdict = derive_replay_verdict(facts)
+        identity = dict(facts.to_dict())
+        identity["schema"] = _REPLAY_SCHEMA
+        payload = dict(identity)
+        payload["verdict"] = verdict.verdict
+        payload["reasons"] = list(verdict.reasons)
+        payload["content_hash"] = content_hash(canonical_json(identity))
+
+        self._dir.mkdir(parents=True, exist_ok=True)
+        path = self._dir / f"{_trial_key(facts.trial_id)}.json"
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(payload, sort_keys=True, indent=2))
+        tmp.replace(path)
+        return path
+
+    def load_for_trial(self, trial_id: str) -> ReplayHoldoutReceipt | None:
+        """Load, integrity-check, and RE-DERIVE the verdict for a trial's replay/holdout
+        receipt. Returns ``None`` on a clean miss (the walk treats a missing replay as
+        refused-MISSING). Raises :class:`ReplayHoldoutReceiptTamperError` on any failed
+        check."""
+        path = self._dir / f"{_trial_key(trial_id)}.json"
+        if not path.exists():
+            return None
+        d = json.loads(path.read_text())
+        facts = ReplayHoldoutFacts.from_dict(d)
+
+        identity = dict(facts.to_dict())
+        identity["schema"] = _REPLAY_SCHEMA
+        recomputed = content_hash(canonical_json(identity))
+        if d.get("content_hash") != recomputed:
+            raise ReplayHoldoutReceiptTamperError(
+                f"replay/holdout for trial {trial_id!r} failed content integrity: "
+                f"declared {d.get('content_hash')!r} != recomputed {recomputed!r}"
+            )
+        if facts.trial_id != trial_id:
+            raise ReplayHoldoutReceiptTamperError(
+                f"replay/holdout at key for {trial_id!r} carries trial_id "
+                f"{facts.trial_id!r} (swap / key collision)"
+            )
+        verdict = derive_replay_verdict(facts)
+        if verdict.verdict != d.get("verdict"):
+            raise ReplayHoldoutReceiptTamperError(
+                f"replay/holdout for trial {trial_id!r}: stored verdict "
+                f"{d.get('verdict')!r} != re-derived {verdict.verdict!r} — "
+                f"producer-derived is not producer-trusted"
+            )
+
+        basis = (
+            "non-regression vs comparator baseline on frozen corpus"
+            if verdict.passed
+            else "refused: " + ",".join(verdict.reasons)
+        )
+        return ReplayHoldoutReceipt(
+            trial_id=facts.trial_id,
+            replay_subject=facts.replay_subject,
+            passed=verdict.passed,
+            corpus_hash=facts.corpus_hash,
+            frozen_corpus_hash=facts.frozen_corpus_hash,
+            harness_version=facts.harness_version,
+            comparator_baseline_id=facts.comparator_baseline_id,
+            falsification_basis=basis,
+        )
+
+
 __all__ = [
     "ActivationReceiptStore",
     "ActivationReceiptTamperError",
     "ObservationReceiptStore",
     "ObservationReceiptTamperError",
+    "ReplayHoldoutReceiptStore",
+    "ReplayHoldoutReceiptTamperError",
 ]

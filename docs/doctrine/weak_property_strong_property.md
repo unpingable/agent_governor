@@ -83,6 +83,40 @@ with everything else accountable relative to it. (See
 `GOV_GAP_GOVERNOR_AS_SERVICE_AUTHORITY_ECONOMY_001` Law 5 and
 `GOV_GAP_STATE_REENTRY_PROTOCOL_001`.)
 
+## The refusal posture is scoop-proof (convergence includes the bug)
+
+The enemy shape is *convergent*: anyone sufficiently allergic to bullshit and exposed to
+enough governance / compliance / moderation / agent substrate eventually builds legibility
+— receipts, checkpoints, envelopes, attestations — and then walks into the same mistake:
+treating a well-formed artifact as force-bearing because it is well-formed. The rival and
+the flaw converge *together*. The bug is not incidental; it is the gravity well. (Live
+case: the leading near-twin, PCAA arXiv 2606.04104, *appears* to stamp its enforceability
+class issuer-side — found the shape, built through the crack. Held at `appears-to` pending
+a full read; the posture survives either verdict.)
+
+So the durable claim is **not** "I built the legibility tool" — those converge; the rival
+builds one too, and "I made it legible" is itself scoopable. The durable claim is one layer
+down:
+
+> **Most legibility systems accidentally launder description into authority. This work
+> exists to catch that conversion error.**
+
+That is scoop-proof, because reaching it means *not making the convergent mistake*, and the
+mistake is part of the shape everyone else builds through. A certificate can describe; a
+witness can attest; a receipt can preserve — **none self-promotes into binding force.**
+Force is derived by the receiver / adopting root, never stamped by the packet because it
+wore a little suit. *Everyone builds the stamp; the question is who gave the stamp a gun.*
+It is a **refusal posture, not a feature** — which is exactly why a feature comparison
+misses it.
+
+**The proof it is real: the posture ran on itself.** The convergent meta-bug, one level up,
+would have been treating an LLM's clean structured read of a rival paper as a *confirmed
+finding* — well-formed testimony mistaken for force, on good news, under emotional load.
+The discipline held it at `appears-to` instead. A feature can be copied; "the thing refuses
+to launder even its own vindication" cannot be copied without actually building the refusal.
+The product claim (catch the description→authority conversion) and the night's own process
+(refuse to convert a clean read into a verdict) are the *same move*. That is the artifact.
+
 ## Promotion note
 
 This shape recurs across the constellation (standing, AG, the kernel-fuse work, cold-start,

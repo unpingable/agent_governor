@@ -177,5 +177,10 @@ Pre-P4 order: `0 ✓ · 1 ✓ · 2 ✓ · 3 ✓ · 4 start P4`.
   `working/checkpoint-2-convergence-tuning-disposition-2026-06-13.md`.
 - **Checkpoint 3 — SELF_GOVERNANCE_SPEC amendment per ratified crosswalk: OPEN, LAST.**
 
-**P4.0a (predicate + refusal tests) is authorized and in progress** (substrate-agnostic;
-operator directed refusal-first this session). P4.0b waits on Checkpoint 2.
+**P4.0a (predicate + refusal tests) LANDED + green** — `src/governor/promotion_gate.py`
++ `tests/test_promotion_gate.py`, committed `d7bd635`; `pytest tests/test_promotion_gate.py`
+→ 17 passed, exit 0 (re-verified cold 2026-06-14). The gate's only verb is refuse.
+P4.0b waits on Checkpoint 2 (resolved → COEXIST) **and** Checkpoint 3 (spec amendment,
+OPEN) **and** an actual evidence substrate. Cold-start run of the real trial through the
+gate → `block` (no live-survival corpus, no replay/holdout receipt, no operator basis):
+`working/EXIT_2026-06-14_p4-cold-start-promotion-refused.md`.

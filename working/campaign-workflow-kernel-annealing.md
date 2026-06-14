@@ -347,8 +347,12 @@ text now).**
 
 **P4.0 split by substrate dependency:** P4.0a = substrate-agnostic `PromotionEligible`
 predicate + refusal-first tests (`promotion_gate.py`; gate's only verb is refuse → safe
-before checkpoint 2; in progress 2026-06-13). P4.0b = `ControlBaseline` mint + supersession
-ceremony (gated on checkpoint 2). See `working/P4-promotion-plan-2026-06-13.md` Status.
+before checkpoint 2; **LANDED + green d7bd635**, 17/17 exit 0, re-verified cold 2026-06-14).
+P4.0b = `ControlBaseline` mint + supersession ceremony (gated on checkpoint 2 + checkpoint 3
++ an evidence substrate). Cold-start run of the real `max_slices=4` trial through the gate →
+`block` (no live-survival corpus, no replay/holdout receipt): trial survival is not baseline.
+See `working/P4-promotion-plan-2026-06-13.md` Status +
+`working/EXIT_2026-06-14_p4-cold-start-promotion-refused.md`.
 
 ## 4. Cadence map
 

@@ -53,7 +53,8 @@ already converted to a typed gate — healthy, not silent).
 ## Lean / Python division (operator, 2026-06-14)
 - **Lean** proves the classification boundary (`valid_deferrals_can_deadlock`,
   `deadlock_is_not_refusal_or_exhaustion`, `circular_deferral_requires_operator`) —
-  owned by the Lean-Claude, `Scratch/DeadlockTrajectory.lean` (in progress, [scratch]).
+  owned by the Lean-Claude, `Scratch/DeadlockTrajectory.lean` (LANDED [scratch] 2026-06-15:
+  `deadlock_is_not_refusal_or_exhaustion`, `ownerless_deferral_requires_operator`).
   No string-matching / retry-counters / JSON-shape in Lean.
 - **Python (this module)** detects the runtime symptom. No metaphysics in Python.
 

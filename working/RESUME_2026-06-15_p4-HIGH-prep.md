@@ -1,3 +1,66 @@
+# ═══ P4 STOPPING CHECKPOINT — docs-only, 2026-06-15 (context switch → NQ) ═══
+
+**P4 is STOPPED here, deliberately, with the chamber empty.** This is the unambiguous
+stopping line. Everything below this banner is the running P4 history; this banner is the
+state of record at stop.
+
+## Latest local commits — NOT pushed (oldest → newest)
+```
+85601bd  P4.0a HIGH-prep — authority/spec (promotion basis: doctrine + bundle/freshness)
+632414d  P4.0a — raw-hex basis_bundle_hash clarification (docs only)
+e8cb8e2  P4.0b — synthetic four-office mint (basis_bundle.py + promotion_mint.py)
+2e94dee  slice-2 — operator-basis weak↔strong projection alignment/refusal
+2b7fa5a  P4 closeout — cold-start map (docs only)
+f449164  slice-3a — read-only real-evidence discovery
+bc1dc90  slice-3b — discovery-backed mint input (no auto-mint)
+4a43a8e  slice-3c — operational promotion path (explicit act + durable supersession write)
+076b927  loop.json pointer advance (suite verified, last_verified_commit = 4a43a8e)
+```
+
+## P4 STOPPING INVARIANT (the load-bearing line)
+> **No `ControlBaseline` / `PromotionReceipt` byte reaches disk except through
+> `operational_promote` carrying operator act inputs (`baseline_name` + `minted_by`) AND a
+> mint that re-derived eligibility + strong operator basis from real on-disk evidence.**
+
+Proven three ways (tests in `tests/test_operational_promotion.py`): behavioral (discovery /
+prepare write nothing), static (read-only modules carry no write-path import), structural
+(no `force`/`allow_missing`/override knob; missing act inputs raise before any disk read).
+
+## Live-root result (a real run against `.governor/`)
+Refused cleanly, **no writes**, with the full witness stack:
+```
+promotion_evidence_insufficient
+promotion_evidence_not_walkable
+promotion_replay_holdout_missing
+promotion_operator_basis_absent
+```
+`.governor/control_baselines/` and `.governor/promotion_evidence/promotion_receipts/` were
+empty before AND after. This refusal IS the successful 3c outcome — the trigger assembly is
+complete; the chamber is empty by design.
+
+## Boundary (what P4 can and cannot do at stop)
+P4 can now **discover real evidence, report eligibility, prepare mint input, and execute the
+operational promotion path** end-to-end. But the live root **currently refuses because the
+chamber is empty**. **No real `max_slices=4` promotion occurred** (config_hashes remain the
+accepted fixture stand-in — no live config custody).
+
+## Remaining gated P4 work — DO NOT open on momentum (each needs fresh COLD admission)
+1. **real-trial evidence** — a real self-governance trial producing real on-disk live-
+   survival + replay-holdout receipts (the precondition for ANY real `max_slices=4`).
+2. **second profile** (ops/NQ) — gated on self-governance surviving one full real promotion
+   cycle.
+3. **fuse / kernel enforcement** (`GOV_GAP_GOVERNOR_FUSE_ENFORCEMENT_001`) — LAST; fuse
+   hardens settled doctrine, it is not where doctrine is discovered.
+
+Cold-admission discipline (loop §9 / [[feedback_inherit_receipts_not_warm_intentions]]):
+resume each of these from receipts, not warm momentum; produce a fresh admission BEFORE
+code. The verb only changes (report → prepare → promote → real-trial) on operator-present
+authority.
+
+**Context after this checkpoint: switching to NQ. No push unless explicitly instructed.**
+
+---
+
 # RESUME — P4 mint LANDED 2026-06-15 (committed local, NOT pushed)
 
 P4.0a HIGH-prep AND P4.0b (the mint) are both done and committed locally. The

@@ -1,60 +1,64 @@
-# RESUME — P4 HIGH gate (HIGH-prep DONE 2026-06-15; next = P4.0b mint)
+# RESUME — P4 mint LANDED 2026-06-15 (committed local, NOT pushed)
 
-HIGH-prep is complete. The three authorities were ratified operator-present 2026-06-15.
-The constitution did NOT move yet — no `ControlBaseline`, no `PromotionReceipt`, nothing
-minted. What changed is **docs/spec only**: the ceremony is now specified, so P4.0b starts
-from a precise target instead of an open question.
+P4.0a HIGH-prep AND P4.0b (the mint) are both done and committed locally. The
+constitutional furniture moved: a surviving trial value can now be minted into a
+`ControlBaseline` via the four-office ceremony, gated by the dual-witness predicate and
+the operator-basis act-standing. Green, exit-witnessed, **not pushed**.
 
-> Eligibility opens the courtroom door. Promotion moves the constitution.
-> HIGH-prep specified the move. P4.0b makes it. P4.0b is still HIGH / operator-present.
+> Eligibility opens the courtroom door. Promotion moves the constitution. P4.0b made the
+> move. Operator basis authorizes attribution; it does not legitimize promotion and
+> cannot cure missing evidence.
 
-## What landed this session (docs/spec only, NOT pushed, no code)
-1. **Doctrine — Checkpoint 3 RATIFIED.** Appended § "Checkpoint 3 / P4 Promotion" to
-   `specs/core/SELF_GOVERNANCE_SPEC.md` (additive mapping of the built kernel onto v0.1;
-   NO v0.2 bump, NO separate spec). Promotion = a **four-office classed act**
-   (admissibility=`PromotionEligible` · act-standing=operator basis · exactly-once=single
-   supersession mint · durable custody=`ControlBaseline`+lineage). Fence pinned: operator
-   basis is **attributable/authorizing, never legitimizing, and cannot cure an evidentiary
-   gap.**
-2. **Custody — basis-bundle hash specified.** `specs/governor/promotion-evidence.md`
-   § "P4.0b-prep". `basis_bundle_hash = sha256(canonical_json({...}))`. Excludes operator
-   basis (circular) + clocks (different object); observation hashes sorted; prior-baseline
-   bound by hash/receipt not bare value; open-claims a **frozen snapshot**, not a live
-   pointer. *The bundle binds the reviewed world-state, not the operator's later act and
-   not the evaluation clock.*
-3. **Time — two-clock freshness ratified.** Review freshness (short sized window,
-   ceremony-bound) vs survival-horizon freshness (must outlive replay+review+slack). Replay
-   is upstream (frozen into the bundle), so the P4.0g scar's framing was inverted. No
-   paused clock (deferred deposition mechanism). Keeper test pinned. *Don't use one clock
-   to smuggle the other.*
-4. **P4.0b acceptance criteria (6) + negative tests (9)** written in promotion-evidence.md
-   § "P4.0b-prep" — the contract P4.0b must satisfy before any mint.
-
-## Stack state (unchanged from session start — still all green, exit-witnessed, NOT pushed)
+## Commits this session (local, NOT pushed)
 ```
-dca358c  P4 cold-start refusal artifact
-433cad6  evidence walkability model (P4.0a gate consumed)
-792a22d  activation store (P4.0c)
-d2a28c5  observation admissibility — in_bounds derived (P4.0d)
-32e6539  observation store — re-derive on load (P4.0e)
-34845ac  replay/holdout producer (P4.0f)
-2e38296  operator-basis producer — operator_basis_present derived (P4.0g)
+85601bd  P4.0a-HIGH-prep: ratify promotion basis spec (doctrine + bundle/freshness spec)
+632414d  P4.0a clarification: basis_bundle_hash is raw SHA-256 hex (docs only)
+e8cb8e2  P4.0b: promotion mint — basis_bundle_hash + ControlBaseline supersession
+2e94dee  P4 slice-2: align operator-basis shadow with strong facts (substitution seam closed)
 ```
-This session added NO commits (docs edits to SELF_GOVERNANCE_SPEC.md + promotion-evidence.md
-are uncommitted working-tree changes). Last verifier: `0381129f` [pass], 111 passed, exit 0.
+Closeout map: `working/P4_CLOSEOUT_2026-06-15.md` (the six-section "no séance" artifact).
+Boundary held verbatim: `85601bd`+`632414d` = authority/spec surface; `e8cb8e2` =
+implementation that CONSUMES that authority (never co-authors, never self-cites).
 
-## Next: P4.0b — mint ControlBaseline via the supersession ceremony (HIGH / operator-present)
-The first slice where the constitutional furniture actually moves. Now fully specified:
-- implement `basis_bundle_hash` per the canonical spec; wire it into the operator-basis
-  consume path (replace P4.0g's opaque hash with the computed one)
-- mint `PromotionReceipt` + `ControlBaseline` with content-addressed lineage, via the
-  validator supersession ceremony
-- satisfy the 6 acceptance criteria; pass the 9 negative tests (incl. the slow-replay keeper)
-- Checkpoint 2 already RESOLVED → COEXIST (a `tuning_proposal_bridge.py` is optional, gated)
+## What P4.0b shipped (`e8cb8e2`, zero existing source modified)
+- `src/governor/basis_bundle.py` — `compute_basis_bundle_hash` (pure; raw-hex; excludes
+  operator basis + clocks; sorted observations; frozen open-claims).
+- `src/governor/promotion_mint.py` — `PromotionReceipt` (content-addressed, no hash
+  cycle), `mint_promotion` (four-office: gate eligibility + STRONG
+  `derive_operator_basis_present` bound to the computed bundle hash + single receipt +
+  `ControlBaseline` admission w/ `supersedes` lineage), `revert_promoted_baseline`
+  (supersession, not undo).
+- `tests/test_promotion_mint.py` — 6 acceptance + 9 negative, synthetic fixtures only.
+- Cargo verdict PASS (15 new + full suite 15910 passed / 62 skipped, exit 0). Dogfood
+  verdict HELD (fail-closed; fence held; keeper passed).
 
-### Hard NOT in P4.0b either
-- no real `max_slices=4` promotion until a real live-survival + replay corpus exists on disk
-  (the real trial still has zero evidence — synthetic fixtures only for the mint tests)
-- no second profile (ops/NQ) until self-governance survives one full promotion cycle
-- no receipt-kernel / fuse / ratification invariant changes (supersession ceremony only)
-- no push unless separately instructed
+## Review acceptances recorded (operator-present 2026-06-15)
+1. raw-hex `basis_bundle_hash` ratified (`632414d`); algorithm identity from field
+   semantics, not an inline prefix.
+2. `kernel_fuse_ratification_side_effect` is OUTSIDE the bundle hash — separate gate
+   predicate, refused independently.
+3. two-operator-basis seam ACCEPTED for this slice + carried as **explicit follow-up
+   debt** (marker in `promotion_mint.py` docstring): weak gate-shadow bool vs strong
+   mint-time derivation must not substitute; future work aligns them or adds a bridge.
+4. synthetic `config_hashes` are fixture stand-ins only — no live config custody, no real
+   `max_slices=4` promotion.
+
+## Next (operator-set order; 2 and 2.5 DONE)
+- **(2) Two-operator-basis alignment — DONE (`2e94dee`).** Reduction proved weak =
+  pure projection of strong → alignment, not bridge. `OperatorBasisFacts.project()` is the
+  one readout; mint refuses `operator_basis_weak_strong_mismatch`. Seam closed.
+- **(2.5) P4 closeout specimen — DONE.** `working/P4_CLOSEOUT_2026-06-15.md` (docs-only).
+- **(3) Real evidence substrate** — an actual `max_slices=4` promotion needs a real
+  live-survival observation corpus + replay/holdout on disk (the trial must run). Still
+  zero evidence on disk; synthetic only until then. NEXT UP.
+- **(4) Second profile (ops/NQ)** — gated on self-governance surviving one full promotion
+  cycle (constructor-refused otherwise). After real custody, not before.
+- **(5) Fuse kernel-enforcement LAST** — `GOV_GAP_GOVERNOR_FUSE_ENFORCEMENT_001` (still
+  folklore). Fuse hardens settled doctrine; it is not where doctrine is discovered.
+
+## Still NOT done / NOT touched
+- No push (operator owns that signal; work-hours rule).
+- No real `max_slices=4` promotion.
+- No kernel/fuse/ratification invariant change.
+- `working/GOV_GAP_ESTIMATION_CALIBRATION_RECEIPTS_001.md` filed this session (candidate,
+  uncommitted, separate surface — estimation/calibration, NOT P4).

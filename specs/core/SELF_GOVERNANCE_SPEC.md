@@ -2495,9 +2495,15 @@ basis_bundle_hash = sha256(canonical_json({
   survival_horizon_ns,
   allowed_surface,           # the single-tunable allowlist
   open_non_discharge_claims  # FROZEN snapshot content of debt state at review time
-}))  # -> "sha256:<hex>"
+}))  # -> raw SHA-256 hex digest (NO "sha256:" prefix)
 ```
 
+- **Hash shape: raw SHA-256 hex, no prefix** (ratified 2026-06-15). This matches the
+  shape of `ActivationReceipt.content_hash` and `ControlBaseline.baseline_id`, so the
+  bundle hash is directly comparable to the chain hashes it is built from (no second
+  canonicalization). The algorithm identity is supplied by the field semantics —
+  `schema_version: "promotion-basis-bundle-v1"` and the field name `basis_bundle_hash` —
+  not by an inline `sha256:` string prefix.
 - **Excludes the operator basis receipt** — it binds *to* this bundle; including it is
   circular.
 - **Excludes live clocks** — clock witnesses are freshness/evaluation basis, a *different

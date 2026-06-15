@@ -253,7 +253,12 @@ basis_bundle_hash = sha256(canonical_json({
   "survival_horizon_ns":  ...,
   "allowed_surface":      ...,         # the single-tunable allowlist
   "open_non_discharge_claims": [...],  # FROZEN snapshot content at review time (not a live pointer)
-}))  # canonical_json is the repo's existing sorted-key canonicalizer; output "sha256:<hex>"
+}))  # canonical_json is the repo's existing sorted-key canonicalizer.
+     # Output: RAW SHA-256 hex digest (NO "sha256:" prefix) — same shape as
+     # ActivationReceipt.content_hash / ControlBaseline.baseline_id, so the bundle hash
+     # is comparable to the chain hashes it is built from. Algorithm identity is supplied
+     # by the field semantics (schema_version + the basis_bundle_hash field name), not an
+     # inline prefix. Ratified 2026-06-15.
 ```
 
 Binding rules (each is a negative test below):

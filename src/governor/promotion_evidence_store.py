@@ -420,19 +420,10 @@ class OperatorBasisReceiptStore:
         tmp.replace(path)
         return path
 
-    def load_for_trial(
-        self,
-        trial_id: str,
-        *,
-        consumed_bundle_hash: str,
-        promote_reading: MonotonicReading,
-        freshness_horizon_ns: int,
-    ) -> OperatorBasisReceipt | None:
-        """Integrity-check, then DERIVE ``operator_basis_present`` against the consumed
-        bundle + promote clock. Emits the simple ``OperatorBasisReceipt`` iff present;
-        ``None`` on a clean miss OR a structural failure (the gate then refuses
-        operator-basis-absent). Raises :class:`OperatorBasisReceiptTamperError` on an
-        integrity failure (tampered facts / restamped verdict / trial swap)."""
+    def _load_facts_checked(self, trial_id: str) -> OperatorBasisFacts | None:
+        """Read + integrity-check the strong facts (no derivation). ``None`` on a clean
+        miss; raises :class:`OperatorBasisReceiptTamperError` on a tampered file /
+        restamped verdict / trial swap."""
         path = self._dir / f"{_trial_key(trial_id)}.json"
         if not path.exists():
             return None
@@ -452,6 +443,33 @@ class OperatorBasisReceiptStore:
                 f"operator-basis at key for {trial_id!r} carries trial_id "
                 f"{facts.trial_id!r} (swap / key collision)"
             )
+        return facts
+
+    def load_facts_for_trial(self, trial_id: str) -> OperatorBasisFacts | None:
+        """Read-only, integrity-checked STRONG ``OperatorBasisFacts`` — NO derivation, NO
+        projection, NO verdict. For the 3b mint-input path: the mint needs the strong
+        facts to run its OWN ``derive_operator_basis_present`` (prepare gathers, the mint
+        decides). This accessor decides nothing about ``operator_basis_present`` — that
+        stays consume-relative in :meth:`load_for_trial`. ``None`` on a clean miss; raises
+        :class:`OperatorBasisReceiptTamperError` on integrity failure."""
+        return self._load_facts_checked(trial_id)
+
+    def load_for_trial(
+        self,
+        trial_id: str,
+        *,
+        consumed_bundle_hash: str,
+        promote_reading: MonotonicReading,
+        freshness_horizon_ns: int,
+    ) -> OperatorBasisReceipt | None:
+        """Integrity-check, then DERIVE ``operator_basis_present`` against the consumed
+        bundle + promote clock. Emits the simple ``OperatorBasisReceipt`` iff present;
+        ``None`` on a clean miss OR a structural failure (the gate then refuses
+        operator-basis-absent). Raises :class:`OperatorBasisReceiptTamperError` on an
+        integrity failure (tampered facts / restamped verdict / trial swap)."""
+        facts = self._load_facts_checked(trial_id)
+        if facts is None:
+            return None
 
         verdict = derive_operator_basis_present(
             facts,

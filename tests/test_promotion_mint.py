@@ -396,3 +396,78 @@ def test_neg9_mint_does_not_touch_kernel_fuse_or_ratification():
     )
     assert result.minted is False
     assert "promotion_kernel_fuse_ratification_side_effect" in result.refusals
+
+
+# ============== WEAK<->STRONG OPERATOR-BASIS ALIGNMENT (2026-06-15) ==============
+
+
+def test_weak_is_lossy_projection_of_strong():
+    """The weak receipt is a pure readout of the strong facts (no independent field).
+    The canonical happy-path bundle receipt IS exactly project(strong facts)."""
+    facts = _operator_facts(_bundle())
+    weak = facts.project()
+    assert weak.trial_id == facts.trial_id
+    assert weak.operator_actor == facts.operator_id
+    assert weak.promotion_basis == facts.promotion_basis
+    assert weak.scope == facts.scope
+    assert weak.explicitly_not_auto_baseline == facts.explicitly_not_auto_baseline
+    assert weak == _operator_receipt(_bundle().candidate.trial_id)
+
+
+def test_neg10_weak_strong_mismatch_refuses():
+    """A hand-constructed weak shadow that satisfies the gate but does NOT match the
+    strong facts the mint binds is a substitution attempt — refused. (The seam.)"""
+    bundle = _bundle(
+        operator_basis=OperatorBasisReceipt(
+            trial_id="trial-1",
+            operator_actor="someone-else",  # != strong facts operator_id "jbeck"
+            promotion_basis="trial held in-bounds across window",
+            scope="self_governance",
+            explicitly_not_auto_baseline=True,
+        )
+    )
+    result = mint_promotion(
+        bundle,
+        _operator_facts(bundle),  # operator_id="jbeck"
+        promote_reading=_PROMOTE,
+        operator_review_horizon_ns=HORIZON,
+        baseline_name="x",
+        minted_by="jbeck",
+    )
+    assert result.minted is False
+    assert "operator_basis_weak_strong_mismatch" in result.refusals
+
+
+def test_matching_weak_shadow_mints():
+    """When the bundle's weak shadow IS the projection of the strong facts, the mint
+    proceeds (no mismatch). Explicit positive for the alignment gate."""
+    bundle = _bundle()
+    facts = _operator_facts(bundle)
+    bundle = _bundle(operator_basis=facts.project())  # shadow == projection
+    result = mint_promotion(
+        bundle,
+        facts,
+        promote_reading=_PROMOTE,
+        operator_review_horizon_ns=HORIZON,
+        baseline_name="b",
+        minted_by="jbeck",
+    )
+    assert result.minted is True
+    assert "operator_basis_weak_strong_mismatch" not in result.refusals
+
+
+def test_strong_present_but_no_weak_shadow_is_absent_not_mismatch():
+    """No weak shadow in the bundle ⇒ the gate refuses operator-basis-ABSENT (distinct
+    from mismatch). The bundle must carry the projection; strong-facts-alone do not mint."""
+    bundle = _bundle(operator_basis=None)
+    result = mint_promotion(
+        bundle,
+        _operator_facts(bundle),
+        promote_reading=_PROMOTE,
+        operator_review_horizon_ns=HORIZON,
+        baseline_name="x",
+        minted_by="jbeck",
+    )
+    assert result.minted is False
+    assert "promotion_operator_basis_absent" in result.refusals
+    assert "operator_basis_weak_strong_mismatch" not in result.refusals

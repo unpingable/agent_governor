@@ -156,6 +156,30 @@ class OperatorBasisFacts:
             explicitly_not_auto_baseline=d["explicitly_not_auto_baseline"],
         )
 
+    def project(self) -> "Any":
+        """The canonical lossy projection/readout onto the weak
+        ``promotion_evidence.OperatorBasisReceipt`` the gate assembler reads.
+
+        **Weak operator basis is not an office — it is a readout of these strong
+        facts.** It drops the binding/temporal fields (``basis_bundle_hash``,
+        ``reviewed_at``, ``reviewed_verdict``, …) the strong derivation enforces, so a
+        hand-constructed weak receipt has **no independent authority**: it may summarize
+        the strong form, never substitute for it. This is the ONE projection — both the
+        ``OperatorBasisReceiptStore`` producer and the promotion mint's weak↔strong
+        consistency gate route through here, so the shadow cannot drift from the object
+        casting it. (Function-local import: ``promotion_evidence`` does not import
+        ``operator_basis``; keeping the readout here avoids a module cycle.)
+        """
+        from .promotion_evidence import OperatorBasisReceipt
+
+        return OperatorBasisReceipt(
+            trial_id=self.trial_id,
+            operator_actor=self.operator_id,
+            promotion_basis=self.promotion_basis,
+            scope=self.scope,
+            explicitly_not_auto_baseline=self.explicitly_not_auto_baseline,
+        )
+
 
 @dataclass(frozen=True)
 class OperatorBasisVerdict:

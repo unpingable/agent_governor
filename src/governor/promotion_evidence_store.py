@@ -462,13 +462,10 @@ class OperatorBasisReceiptStore:
         if not verdict.present:
             return None  # structural failure -> gate sees operator-basis absent
 
-        return OperatorBasisReceipt(
-            trial_id=facts.trial_id,
-            operator_actor=facts.operator_id,
-            promotion_basis=facts.promotion_basis,
-            scope=facts.scope,
-            explicitly_not_auto_baseline=True,
-        )
+        # The weak receipt is the canonical projection of the strong facts (one
+        # projection, shared with the mint's weak<->strong consistency gate). Reached
+        # only after the derivation passed, so ``explicitly_not_auto_baseline`` is True.
+        return facts.project()
 
 
 __all__ = [

@@ -33,17 +33,20 @@ Scope (P4.0b): mint + revert-as-supersession + the 6 acceptance / 9 negative tes
 SYNTHETIC fixtures. No real ``max_slices=4`` promotion (zero evidence on disk), no second
 profile, no kernel/fuse/ratification change, no config write to a live surface.
 
-Follow-up debt (accepted at P4.0b review, operator-present 2026-06-15)
----------------------------------------------------------------------
-**Two-operator-basis seam — DEBT, not resolved here.** Two representations of operator
-basis coexist: the *weak* ``promotion_evidence.OperatorBasisReceipt`` the gate assembler
-reads (trial-match + not-auto only) and the *strong* ``operator_basis.OperatorBasisFacts``
-+ ``derive_operator_basis_present`` the mint runs (full pre-state bundle binding). For
-this slice the mint's strong derivation is the real act-standing gate and the gate's bool
-is its shadow; **the two must NOT substitute for each other** (the mint requires BOTH the
-gate's eligibility AND the strong derivation — neither alone admits). Future work should
-either align the two representations or introduce an explicit bridge so the assembler's
-shadow cannot drift from the mint's gate. Marker so it is not dropped; not a P4.0b task.
+Two-operator-basis seam — RESOLVED 2026-06-15 (alignment, operator-present)
+---------------------------------------------------------------------------
+The P4.0b debt is discharged. Reduction proved the weak
+``promotion_evidence.OperatorBasisReceipt`` has **zero fields absent** from the strong
+``operator_basis.OperatorBasisFacts`` and that the canonical producer
+(``OperatorBasisReceiptStore.load_for_trial``) already emits it only after the strong
+derivation passes — i.e. the weak form is a pure lossy projection, not a second office.
+So a bridge receipt would be ceremony. Resolution: **alignment by projection +
+mismatch refusal.** ``OperatorBasisFacts.project()`` is the one canonical readout (the
+store routes through it); the mint refuses with ``operator_basis_weak_strong_mismatch``
+unless the bundle's weak shadow equals ``operator_basis_facts.project()``. The mint still
+requires BOTH the gate's eligibility AND the strong derivation — neither alone admits —
+and now the shadow cannot drift from the object casting it. *Weak operator basis is a
+readout of strong; a hand-constructed weak receipt has no independent authority.*
 
 ``kernel_fuse_ratification_side_effect`` is deliberately OUTSIDE ``basis_bundle_hash``
 (accepted at review): the bundle hash binds the *evidence* world; the fuse/ratification
@@ -64,6 +67,13 @@ from .promotion_evidence import (
     PromotionEvidenceBundle,
     evaluate_promotion_from_evidence,
 )
+
+# The mint-level refusal that closes the weak<->strong operator-basis seam: the bundle's
+# weak shadow must be EXACTLY the projection of the strong facts the mint binds. A
+# hand-constructed weak receipt that satisfies the gate's shadow but does not match the
+# strong basis is a substitution attempt — refused. (Resolution of the P4.0b follow-up
+# debt: weak operator basis is a readout of strong, never an independent authority.)
+OPERATOR_BASIS_WEAK_STRONG_MISMATCH = "operator_basis_weak_strong_mismatch"
 
 
 @dataclass(frozen=True)
@@ -183,6 +193,16 @@ def mint_promotion(
     )
     refusals.extend(ob.reasons)
 
+    # weak<->strong consistency: the gate reads the bundle's weak operator-basis as a
+    # shadow; the mint binds the strong facts. They must not float free — the shadow must
+    # be exactly the projection of the strong facts, or it is a substitution. (No
+    # independent authority for the weak form.)
+    if (
+        bundle.operator_basis is not None
+        and bundle.operator_basis != operator_basis_facts.project()
+    ):
+        refusals.append(OPERATOR_BASIS_WEAK_STRONG_MISMATCH)
+
     if refusals:
         # Prior baseline stays authoritative; nothing minted (the fence: neither office
         # may substitute for the other — any refusal blocks).
@@ -257,6 +277,7 @@ def revert_promoted_baseline(
 
 
 __all__ = [
+    "OPERATOR_BASIS_WEAK_STRONG_MISMATCH",
     "PromotionReceipt",
     "PromotionResult",
     "mint_promotion",

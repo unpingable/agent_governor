@@ -1,15 +1,36 @@
-# RESUME — P4 HIGH gate prep (pick up 2026-06-15)
+# RESUME — P4 HIGH gate (HIGH-prep DONE 2026-06-15; next = P4.0b mint)
 
-Stopped 2026-06-14 at the right line: **all three producers exist, the eligible
-evidence path works, but promotion is not authorized.**
+HIGH-prep is complete. The three authorities were ratified operator-present 2026-06-15.
+The constitution did NOT move yet — no `ControlBaseline`, no `PromotionReceipt`, nothing
+minted. What changed is **docs/spec only**: the ceremony is now specified, so P4.0b starts
+from a precise target instead of an open question.
 
 > Eligibility opens the courtroom door. Promotion moves the constitution.
+> HIGH-prep specified the move. P4.0b makes it. P4.0b is still HIGH / operator-present.
 
-The producers can testify; they cannot crown a baseline. Next is deciding the exact
-ceremony by which testimony becomes law — and that ceremony is **HIGH / operator-present**.
-Do not resume on momentum.
+## What landed this session (docs/spec only, NOT pushed, no code)
+1. **Doctrine — Checkpoint 3 RATIFIED.** Appended § "Checkpoint 3 / P4 Promotion" to
+   `specs/core/SELF_GOVERNANCE_SPEC.md` (additive mapping of the built kernel onto v0.1;
+   NO v0.2 bump, NO separate spec). Promotion = a **four-office classed act**
+   (admissibility=`PromotionEligible` · act-standing=operator basis · exactly-once=single
+   supersession mint · durable custody=`ControlBaseline`+lineage). Fence pinned: operator
+   basis is **attributable/authorizing, never legitimizing, and cannot cure an evidentiary
+   gap.**
+2. **Custody — basis-bundle hash specified.** `specs/governor/promotion-evidence.md`
+   § "P4.0b-prep". `basis_bundle_hash = sha256(canonical_json({...}))`. Excludes operator
+   basis (circular) + clocks (different object); observation hashes sorted; prior-baseline
+   bound by hash/receipt not bare value; open-claims a **frozen snapshot**, not a live
+   pointer. *The bundle binds the reviewed world-state, not the operator's later act and
+   not the evaluation clock.*
+3. **Time — two-clock freshness ratified.** Review freshness (short sized window,
+   ceremony-bound) vs survival-horizon freshness (must outlive replay+review+slack). Replay
+   is upstream (frozen into the bundle), so the P4.0g scar's framing was inverted. No
+   paused clock (deferred deposition mechanism). Keeper test pinned. *Don't use one clock
+   to smuggle the other.*
+4. **P4.0b acceptance criteria (6) + negative tests (9)** written in promotion-evidence.md
+   § "P4.0b-prep" — the contract P4.0b must satisfy before any mint.
 
-## Where the stack is (all green, exit-witnessed, NOT pushed)
+## Stack state (unchanged from session start — still all green, exit-witnessed, NOT pushed)
 ```
 dca358c  P4 cold-start refusal artifact
 433cad6  evidence walkability model (P4.0a gate consumed)
@@ -19,51 +40,21 @@ d2a28c5  observation admissibility — in_bounds derived (P4.0d)
 34845ac  replay/holdout producer (P4.0f)
 2e38296  operator-basis producer — operator_basis_present derived (P4.0g)
 ```
-Last verifier: `0381129f` [pass], 111 passed, exit 0. Spec: `specs/governor/promotion-evidence.md`.
-Design backing: `working/P4.0g-operator-basis-lean-spike-2026-06-14.md` (Lean [scratch],
-incl. observer foundation, freshness-window scar).
+This session added NO commits (docs edits to SELF_GOVERNANCE_SPEC.md + promotion-evidence.md
+are uncommitted working-tree changes). Last verifier: `0381129f` [pass], 111 passed, exit 0.
 
-## Do NOT open P4.0b directly. Open HIGH-prep first (docs/spec only).
+## Next: P4.0b — mint ControlBaseline via the supersession ceremony (HIGH / operator-present)
+The first slice where the constitutional furniture actually moves. Now fully specified:
+- implement `basis_bundle_hash` per the canonical spec; wire it into the operator-basis
+  consume path (replace P4.0g's opaque hash with the computed one)
+- mint `PromotionReceipt` + `ControlBaseline` with content-addressed lineage, via the
+  validator supersession ceremony
+- satisfy the 6 acceptance criteria; pass the 9 negative tests (incl. the slow-replay keeper)
+- Checkpoint 2 already RESOLVED → COEXIST (a `tuning_proposal_bridge.py` is optional, gated)
 
-The three unsettled items are the actual HIGH gate — three *authorities*, not chores:
-
-1. **Checkpoint 3 / SELF_GOVERNANCE_SPEC amendment — the DOCTRINE authority.**
-   What does "promotion" mean under the now-built kernel/userland/four-office/rung-debt
-   structure? Deferred all campaign as "OPEN, LAST." Operator-present decision.
-   **Scope guard (from `working/anti-laundering-not-legitimacy-ag-consumption-2026-06-15.md`):**
-   promotion via operator basis is **attributable, not legitimate** — the ceremony forces
-   the mint to bear the operator's name; it does NOT certify the trial was good. Operator
-   basis licenses the *authority* gap only, never the evidentiary (live/replay) ones
-   (best-effort-completeness round-3: operator ≠ universal solvent). Keep the P4.0b
-   narrative out of legitimacy-engine creep: the kernel is anti-laundering, not legitimacy.
-   Now all-green specimen-backed (`authority_ratification_does_not_discharge_evidentiary_gap`
-   / `_custodial_gap`; `nonsatisfied_closed_but_not_discharged` + 4 named residues) — but
-   cite as a CONFIRMING specimen on a stipulated diagonal, [scratch], NOT independent proof
-   the architecture is correct.
-2. **Canonical basis-bundle hash — the CUSTODY authority.**
-   What EXACT bundle does the operator basis review/consume? P4.0g binds with opaque
-   hashes deliberately; left opaque too long it becomes "trust me bro, but hashed."
-   Specify the fields + order over activation + observations + replay + operator basis.
-3. **Freshness-window / pause-clock — the TIME authority.**
-   Operator review competes with replay duration (the P4.0g scar). Either a sized review
-   window (`> max replay runtime + slack`) OR explicit paused-clock receipt semantics.
-   Otherwise fresh evidence rots during ceremony. Operator prefers the sized window
-   unless operationally stupid; a pause must be explicit in the replay/operator receipt
-   pair ("paused clocks are a future deposition").
-
-## P4.0a-HIGH-prep slice scope (when the operator is present)
-- draft/finalize the Checkpoint 3 SELF_GOVERNANCE_SPEC amendment text
-- define the canonical basis-bundle hash (fields + canonical order)
-- decide freshness policy: fixed review window vs explicit paused-clock receipt
-- produce P4.0b acceptance criteria + negative tests (before any mint)
-
-### Hard NOT in HIGH-prep
-- no `ControlBaseline` mint
-- no `PromotionReceipt`
-- no `convergence_tuning` migration
+### Hard NOT in P4.0b either
+- no real `max_slices=4` promotion until a real live-survival + replay corpus exists on disk
+  (the real trial still has zero evidence — synthetic fixtures only for the mint tests)
+- no second profile (ops/NQ) until self-governance survives one full promotion cycle
+- no receipt-kernel / fuse / ratification invariant changes (supersession ceremony only)
 - no push unless separately instructed
-- no real `max_slices=4` promotion (the real trial still has zero evidence on disk)
-
-## Then, and only then: P4.0b (mint ControlBaseline via the supersession ceremony)
-The first slice where the constitutional furniture actually moves. Gated on the three
-above being settled. HIGH / operator-present, Checkpoint-3-gated.

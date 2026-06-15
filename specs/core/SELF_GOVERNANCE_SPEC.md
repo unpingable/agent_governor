@@ -2404,3 +2404,165 @@ Design the auth interface as a stubbed middleware now, so 3.x isn't a refactor.
 3. **Keep the constitution small.** Every new clause is another surface for drift, loopholes, or implementation mismatch. Put the rest in "statutes" (tunable policy), not the constitution (protected invariants).
 
 4. **Don't over-engineer 3.x while building 2.x.** The gaps above are documented. They'll get solved when you hit them, not before.
+
+---
+
+## Checkpoint 3 / P4 Promotion (amendment, ratified 2026-06-15)
+
+> **Framing — read first.** This section is **additive**. The spec above is v0.1
+> planning text written *before* the kernel existed; it is not rewritten here and is
+> not bumped to v0.2. This section **maps the already-built kernel** (kernel/userland
+> split, four-office activation, rung-debt / `DebtLedger`, recomposition enforcement,
+> decomposition completeness) onto v0.1's vision of self-governance. Where v0.1
+> sketched `RollbackController` / `ThetaSnapshot` / `AcceptanceGate` as future Python,
+> the built structure realizes the same intent through different, shipped furniture.
+> Do not read "promotion kernel landed" as "self-governance spec fully rebuilt" — that
+> is the promotion-by-title bug this framing exists to refuse.
+
+### What promotion is
+
+**Promotion** turns one surviving *trial value* of the single P3.1-activated tunable
+(`decomposition_size / max_slices` on rung `self_governance`) into a new named
+**`ControlBaseline`** — the known-good policy baseline future activations measure drift
+against. It is the v0.1 `ThetaSnapshot`-becomes-baseline event, made classed.
+
+> **Red line (verbatim from the campaign):** checkpoints / forks / promotions are
+> resumability machinery *unless explicitly admitted as control-plane baselines*. A
+> promoted session state is NOT automatically a known-good baseline. Promotion is a
+> separate, classed act: *observe trial survives → mint baseline via ceremony.*
+
+### Promotion is a four-office classed act
+
+Promotion uses the same four offices P3.1 activation already uses — the offices are the
+mapping from v0.1's monolithic `AcceptanceGate` onto the built kernel:
+
+| Office | v0.1 analogue | P4 realization |
+|---|---|---|
+| **Admissibility** | meta-invariants + measurement gating | `PromotionEligible` predicate (`promotion_gate.py`), the gate whose only verb is *refuse* |
+| **Act-standing** | operator authority / credential | operator basis bound to the reviewed bundle (`operator_basis.py`) |
+| **Exactly-once spend** | single Δθ per epoch (`SingleChangeEnforcer`) | one supersession mint — the `PromotionReceipt`, serial under WIP-1 |
+| **Durable custody** | `PersistentState` / signed snapshots | `ControlBaseline` + content-addressed lineage (any two baselines diffable from hashes alone) |
+
+### The fence — attributable, not legitimate
+
+Operator basis makes the mint **attributable** (it bears the named operator-root's name)
+and **authorizes the act**. It does **not** make the trial good or the promotion correct,
+and it **cannot cure an evidentiary gap.** Operator basis licenses the *authority* office
+only; it can never substitute for live observation, replay/holdout, freshness, or
+walkability. (Source: anti-laundering scope correction — *the kernel is an anti-laundering
+engine, not a legitimacy engine*; `working/anti-laundering-not-legitimacy-ag-consumption-2026-06-15.md`.
+The operator can SIGN, never LAUNDER.)
+
+This is the v0.1 "No Epistemic Laundering" rule expressed at the promotion seam, plus the
+synchronic/diachronic split: the producer gates are synchronic (does *this* receipt
+discharge its kind here-and-now); laundering-over-time is a diachronic pattern watched by
+the deadlock/sequence layer, never folded into a token-local pass.
+
+### PromotionEligible predicate (dual witness, never folded — Checkpoint 1)
+
+```
+PromotionEligible :=
+      live_evidence_count >= N            # live survival witness
+  AND live_receipts_fresh
+  AND live_receipts_walkable_from_activation
+  AND replay_holdout_non_regression_passed # replay/holdout falsification witness
+  AND no_open_NonDischargeClaim
+  AND no_off_surface_tunable
+  AND no_kernel_fuse_ratification_side_effect
+  AND operator_basis_present
+```
+
+The two witnesses stay **physically separate** — `live receipts = did the trial survive
+reality?` vs `replay/holdout = does promotion avoid known regression?`. A perfect replay
+cannot rescue missing live evidence, and vice versa. Failure of either blocks promotion
+and leaves the prior baseline authoritative.
+
+### Custody authority — the canonical basis-bundle (ratified 2026-06-15)
+
+The operator reviews a **basis bundle**: the pre-state evidence world. Its canonical hash
+binds *what the operator reviewed* so the promotion gate can prove the consumed bundle ==
+the reviewed bundle (pre-state binding, `operator_basis.py`).
+
+```
+basis_bundle_hash = sha256(canonical_json({
+  schema_version,            # "promotion-basis-bundle-v1"
+  candidate,                 # trial_id, tunable_name, trial_value,
+                             #   prior_baseline_value AND prior_baseline_hash/receipt if present
+  activation_hash,           # ActivationReceipt.content_hash
+  observation_hashes,        # sorted list of LiveSurvivalObservationReceipt content hashes
+  replay_holdout_hash,       # ReplayHoldoutReceipt.content_hash (already frozen — see freshness)
+  required_count,            # N
+  survival_horizon_ns,
+  allowed_surface,           # the single-tunable allowlist
+  open_non_discharge_claims  # FROZEN snapshot content of debt state at review time
+}))  # -> "sha256:<hex>"
+```
+
+- **Excludes the operator basis receipt** — it binds *to* this bundle; including it is
+  circular.
+- **Excludes live clocks** — clock witnesses are freshness/evaluation basis, a *different
+  object* (clock-witness doctrine); putting them in the content hash makes every
+  evaluation a different reviewed object.
+- **Prior baseline as lineage, not a bare value** — `prior = 8` is weaker than `prior
+  baseline receipt X says 8`. Bind the receipt/hash when one exists.
+- **Open-claims is frozen content, not a live query pointer** — the bundle binds the debt
+  state *at review time*. Later claims may change future eligibility; they must not
+  retroactively mutate what the operator reviewed.
+
+> **Doctrine line:** *The basis bundle binds the reviewed promotion world-state, not the
+> operator's later act and not the evaluation clock.*
+
+### Time authority — two clocks (ratified 2026-06-15)
+
+Freshness is two clocks, and only one is coupled to ceremony time. Replay is **upstream**
+of operator review because the reviewed basis bundle already includes the replay receipt
+(it is frozen before review). So the P4.0g scar's original framing ("review window must
+outlive replay") is inverted; the real constraint moves to the survival horizon.
+
+```
+operator_review_freshness:           # protects the operator act
+    reviewed_at must be fresh at t_promote
+    -> short sized ceremony window (review window)
+
+live_observation_freshness:          # protects the evidence
+    observations must still be fresh at t_promote
+    -> survival horizon must outlive (replay runtime + operator review + mint slack)
+```
+
+No paused-clock object now — a paused-clock receipt is a *deposition mechanism* (its whole
+job is to assert "this interval didn't count"), introduced only if sized windows become
+operationally stupid. **Keeper test:** a holdout/replay longer than the review window must
+**not** auto-fail an otherwise-valid promotion when replay is already frozen into the
+reviewed bundle and observations remain fresh at mint.
+
+> **Doctrine line:** *Review freshness protects the operator act. Survival freshness
+> protects the evidence. Don't use one clock to smuggle the other.*
+
+### Supersession, expiry, rollback (mapping v0.1's `RollbackController`)
+
+- **Mint** uses the validator supersession ceremony (proven across validator
+  v0.1.0→v0.4.0): the new `ControlBaseline` carries a `PromotionReceipt` produced under
+  the prior baseline, with content-addressed lineage (bisectable). The receipt binds
+  `prior_baseline_id`, `trial_activation_id(s)`, `evidence_count` + in-bounds evidence
+  refs, `new_baseline` content-hash, and the operator/standing basis.
+- **Expiry** — the trial activation carries gate-time expiry. No promotion before expiry →
+  **auto-revert to prior baseline.** The trial is time-boxed: promoted (→ baseline) or
+  expired (→ rollback); never a silent third state.
+- **Rollback** — reverting a *promoted* baseline is itself a supersession (a new ceremony
+  back to the prior, with lineage), NOT a silent undo. Rollback reason types
+  (`regressed | exhausted | refused`) never collapse.
+
+### Still bootstrap / degraded (documented, accepted)
+
+In-process forgeability of evidence/receipts (substrate limit — the producer gates fence
+the *shape*, not provenance); operator-fiat standing for the promotion authorization;
+local supersession ceremony (no external offices); single tunable only (ops/NQ profile
+gated on surviving one full promotion cycle); the fuse not yet kernel-enforced
+(`GOV_GAP_GOVERNOR_FUSE_ENFORCEMENT_001`).
+
+### Provenance
+
+Predicate, witnesses, and refusal vocabulary: `specs/governor/promotion-evidence.md`.
+Plan: `working/P4-promotion-plan-2026-06-13.md`. Checkpoint 1 (dual gate) RATIFIED
+2026-06-13; Checkpoint 2 (convergence_tuning → COEXIST) RESOLVED 2026-06-13; Checkpoint 3
+(this section) RATIFIED 2026-06-15.

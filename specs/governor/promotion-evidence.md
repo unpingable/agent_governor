@@ -218,7 +218,123 @@ The pipeline can now return `eligible` on real evidence (live survival + replay/
 operator basis, all loaded + re-validated). The next step is **not** another producer:
 it is **P4.0b** — mint `ControlBaseline` via the supersession ceremony — which is **HIGH /
 operator-present**, gated on **Checkpoint 3** (SELF_GOVERNANCE_SPEC amendment). That line
-is not crossed cold. Also still required before a *real* `max_slices=4` promotion: a
-canonical "basis bundle hash" computation (P4.0g binds with opaque hashes; how the bundle
-hash is computed is P4.0b wiring) and the freshness-window ops policy from the P4.0g spike
-(operator-review window vs replay duration).
+is not crossed cold.
+
+## P4.0b-prep — HIGH gate settled (2026-06-15, docs/spec only, NO mint)
+
+The three HIGH authorities are ratified (operator-present, 2026-06-15). The doctrine home
+is `specs/core/SELF_GOVERNANCE_SPEC.md` § "Checkpoint 3 / P4 Promotion". This section is
+the **technical specification** that P4.0b implements. **Nothing here mints, persists, or
+promotes** — no `ControlBaseline`, no `PromotionReceipt`, no `convergence_tuning`
+migration, no real `max_slices=4` promotion (the real trial still has zero evidence on
+disk).
+
+### Canonical basis-bundle hash (custody authority — ratified)
+
+The bundle is the **pre-state evidence world the operator reviews**. Its hash lets the
+gate prove `consumed_bundle_hash == reviewed_bundle_hash` (pre-state binding, already
+enforced structurally in `operator_basis.py` — P4.0g binds with this hash *opaque*; P4.0b
+defines how it is computed).
+
+```python
+basis_bundle_hash = sha256(canonical_json({
+  "schema_version":  "promotion-basis-bundle-v1",
+  "candidate": {
+      "trial_id": ...,
+      "tunable_name": ...,
+      "trial_value": ...,
+      "prior_baseline_value": ...,
+      "prior_baseline_hash": ...,      # receipt/hash if a prior baseline exists; null at genesis
+  },
+  "activation_hash":      ...,         # ActivationReceipt.content_hash
+  "observation_hashes":   [...],       # SORTED list of LiveSurvivalObservationReceipt content hashes
+  "replay_holdout_hash":  ...,         # ReplayHoldoutReceipt.content_hash (frozen before review)
+  "required_count":       N,
+  "survival_horizon_ns":  ...,
+  "allowed_surface":      ...,         # the single-tunable allowlist
+  "open_non_discharge_claims": [...],  # FROZEN snapshot content at review time (not a live pointer)
+}))  # canonical_json is the repo's existing sorted-key canonicalizer; output "sha256:<hex>"
+```
+
+Binding rules (each is a negative test below):
+- **Excludes** the `OperatorBasisReceipt` (it binds *to* the bundle — including it is circular).
+- **Excludes** all live clock readings (clocks are freshness/evaluation basis, a different
+  object per clock-witness doctrine; in-content clocks make every evaluation a distinct
+  reviewed object).
+- `observation_hashes` is **sorted** (determinism — same set ⇒ same bundle hash regardless
+  of collection order).
+- `prior_baseline_hash` binds lineage when present (`prior = 8` alone is true-but-ungrounded).
+- `open_non_discharge_claims` is **frozen content**, not a query pointer — later claims may
+  change future eligibility but must not retroactively mutate the reviewed world-state.
+
+> **Doctrine line:** the basis bundle binds the reviewed promotion world-state, not the
+> operator's later act and not the evaluation clock.
+
+### Freshness policy (time authority — ratified, two-clock)
+
+Replay is **upstream** of operator review (its receipt is frozen *into* the reviewed
+bundle), so freshness is two independent clocks:
+
+```
+operator_review_freshness   reviewed_at fresh at t_promote   short sized review window (ceremony-bound)
+live_observation_freshness  observations fresh at t_promote   survival_horizon > replay_runtime + review + mint_slack
+```
+
+No paused-clock object now (deferred — a deposition mechanism, only if sized windows become
+operationally stupid). **Keeper test:** a replay/holdout longer than the review window must
+NOT auto-fail an otherwise-valid promotion when replay is frozen into the reviewed bundle
+and observations remain fresh at mint.
+
+> **Doctrine line:** review freshness protects the operator act; survival freshness
+> protects the evidence; don't use one clock to smuggle the other.
+
+### P4.0b acceptance criteria (what the mint slice must prove)
+
+1. **Eligible → mint.** A bundle that satisfies `PromotionEligible` (live + replay +
+   operator basis, all re-validated on load) mints exactly one `PromotionReceipt` + one
+   `ControlBaseline` with content-addressed lineage to the prior baseline.
+2. **Diffable baselines.** Any two `ControlBaseline`s are diffable from content hashes
+   alone (no side-channel); the new baseline's `prior_baseline_id` resolves to the prior.
+3. **Exactly-once.** Re-running the mint on the same eligible bundle does not produce a
+   second baseline (idempotent / serial under WIP-1); a second distinct mint requires a
+   fresh ceremony.
+4. **Expiry → auto-revert.** A trial that reaches gate-time expiry with no mint reverts the
+   config surface to prior-baseline hashes; post-revert hashes == baseline (drilled).
+5. **Rollback-of-promoted is supersession.** Reverting a promoted baseline mints a new
+   ceremony back to the prior (with lineage), never a silent undo; rollback reason types
+   (`regressed | exhausted | refused`) never collapse.
+6. **Bundle binding holds.** The mint consumes the exact bundle the operator basis reviewed
+   (`consumed_bundle_hash == reviewed_bundle_hash`); a mismatch refuses.
+
+### P4.0b negative tests (mint must REFUSE)
+
+- `mint_refuses_when_predicate_ineligible` — any single `PromotionEligible` conjunct false
+  (insufficient count / stale / not-walkable / replay missing / replay failed / corpus-hash
+  mismatch / operator basis absent / open NonDischargeClaim / off-surface tunable) → refuse,
+  prior baseline stays authoritative.
+- `mint_refuses_consumed_bundle_ne_reviewed_bundle` — operator basis reviewed bundle B, mint
+  attempts bundle B′ → refuse (pre-state binding).
+- `bundle_hash_excludes_operator_basis` — adding/removing the operator basis receipt does not
+  change `basis_bundle_hash`.
+- `bundle_hash_excludes_clocks` — two evaluations differing only in clock readings produce the
+  same `basis_bundle_hash`.
+- `bundle_hash_order_invariant` — permuting `observation_hashes` collection order yields an
+  identical hash (sorted).
+- `frozen_open_claims_not_live` — a NonDischargeClaim opened *after* review does not mutate
+  the reviewed bundle hash (but is recomputed at the gate and blocks the mint via the
+  predicate, not via bundle mutation).
+- `slow_replay_does_not_stale_operator_basis` (keeper) — replay runtime > review window does
+  NOT auto-fail when replay is frozen into the bundle and observations are fresh at mint.
+- `promoted_rollback_is_supersession_not_undo` — reverting a promoted baseline without a new
+  ceremony is refused.
+- `mint_does_not_touch_kernel_fuse_or_ratification` — no promotion side effect alters
+  receipt-kernel / fuse / ratification invariants (supersession ceremony only).
+
+### Scope fences (still hold at P4.0b)
+
+Mints one baseline for the one scoped tunable; no second profile (ops/NQ) until
+self-governance survives a full promotion cycle; operator-fiat standing only; local
+supersession ceremony (no external offices); `convergence_tuning` stays COEXIST (a future
+`tuning_proposal_bridge.py` may translate a `TuningProposal` → `AnnealingDelta` only with
+allowlist + baseline + expiry + rollback + source observations + human-approval custody —
+`TuningApply` is not `PromotionReceipt`, `TuningProposal` is not `ControlBaseline`).

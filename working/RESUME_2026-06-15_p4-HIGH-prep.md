@@ -58,11 +58,16 @@ implementation that CONSUMES that authority (never co-authors, never self-cites)
   packages eligible discovery into mint input; never mints/writes; MintInput is
   preparation, not authorization. Mint stays an explicit operator-present act that
   re-derives.
-- **(3c) Actual operational promotion — GATED, NOT OPENED (the loaded gun).** Performs a
-  real mint against real on-disk evidence as an operational baseline. Requires a FRESH
-  admission, explicitly labelled operator-present + (semantically) irreversible-ish even
-  though supersession/revert exist. Do not open on momentum. Still: no real `max_slices=4`
-  until a real trial has run and produced real live-survival + replay receipts on disk.
+- **(3c) Actual operational promotion — DONE (operator-present, cold re-entry 2026-06-15).**
+  `src/governor/operational_promotion.py`: `operational_promote` (the explicit act:
+  prepare→mint→persist) + `PromotionReceiptStore` (durable spend-ledger, no delete) +
+  `OperationalPromotionOutcome`. 15 tests green; full suite green (exit-code observed).
+  Live-root specimen: fired at the real `.governor/` → refused (empty chamber:
+  `evidence_insufficient`/`not_walkable`/`replay_missing`/`operator_basis_absent`), **zero
+  writes** — the successful 3c outcome. No path from discovery/prepare to a write (proven
+  behaviorally + statically + no-fiat-knob). Admission/closeout:
+  `working/P4-slice-3c-{admission,closeout}-2026-06-15.md`. Still: no real `max_slices=4`
+  (config_hashes remain the accepted fixture stand-in); no CLI front door (candidate).
 - **(4) Second profile (ops/NQ)** — gated on self-governance surviving one full promotion
   cycle (constructor-refused otherwise). After real custody, not before.
 - **(5) Fuse kernel-enforcement LAST** — `GOV_GAP_GOVERNOR_FUSE_ENFORCEMENT_001` (still

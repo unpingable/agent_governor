@@ -1,19 +1,19 @@
 {
   "phase": "AUDIT",
   "current_slice": null,
-  "candidate_next_slice": "P4.0b — tuning_proposal_bridge.py (one-way: convergence_tuning.TuningProposal -> annealing.AnnealingDelta, admissible+allowlisted+custody-complete ONLY) + PromotionReceipt substrate + refusal tests, on top of promotion_gate.py (P4.0a, landed green). Checkpoints 1 & 2 RESOLVED. STOP rule from operator: do NOT 'just inspect P4.0b a little' before a cold pass; open Checkpoint 3 (SELF_GOVERNANCE_SPEC amendment) tomorrow ONLY if P4.0b needs spec text at that point.",
+  "candidate_next_slice": "NONE to open on momentum. P4 slice-3c (operational promotion) DONE 2026-06-15 (4a43a8e). The operational promotion path exists end-to-end and refuses cleanly against an empty live chamber. Remaining P4 items are GATED, not queued: (a) a real self-governance TRIAL that produces real on-disk live-survival + replay-holdout receipts — the precondition for ANY real max_slices=4 promotion (3c only proved the trigger assembly; the chamber is still empty by design); (b) second profile (ops/NQ), gated on self-governance surviving one full real promotion cycle; (c) fuse/kernel enforcement LAST (GOV_GAP_GOVERNOR_FUSE_ENFORCEMENT_001, still folklore). Each is operator-present / HIGH; open only on a fresh admission, never on session momentum.",
   "slice_spec": [
-    "working/checkpoint-2-convergence-tuning-disposition-2026-06-13.md (Checkpoint 2 RESOLVED: coexist + one-way bridge; DispositionReceipt; guardrail TuningApply!=PromotionReceipt, TuningProposal!=ControlBaseline)",
-    "working/P4-promotion-plan-2026-06-13.md (Checkpoint 1 dual gate + Checkpoint 2 status)",
-    "src/governor/promotion_gate.py + tests/test_promotion_gate.py (P4.0a, 17/17 green warm)"
+    "working/P4-slice-3c-admission-2026-06-15.md (the cold admission/estimate)",
+    "working/P4-slice-3c-closeout-2026-06-15.md (the six-part closeout + live-root specimen)",
+    "src/governor/operational_promotion.py + tests/test_operational_promotion.py (15/15 green; full suite 15946 passed exit 0)"
   ],
-  "acceptance": "P4.0b NOT YET SCOPED FOR ACCEPTANCE — gated on cold re-entry. Bridge mints AnnealingDelta only; PromotionReceipt/ControlBaseline mint from annealing/promotion custody on an eligible evaluate_promotion_eligibility verdict, never from TuningProposal/TuningApply.",
-  "blocked_on": "cold session (operator: resume tomorrow in an ACTUAL cold session; warm continuation forbidden for the P4.0b custody-affecting work)",
-  "next_action": "COLD RE-ENTRY: run re_entry_probes; confirm Checkpoint 1 + Checkpoint 2 resolved from the disposition docs (not memory); then start P4.0b OR open Checkpoint 3 only if P4.0b needs spec text. Do not trust warm-me's green — probes re-verify HEAD.",
-  "last_verified_commit": "e7f9b44",
-  "last_verified_note": "Deliberately the PARENT of the P4-entry sprint commit. The sprint (Checkpoint 1 + P4.0a + cold-start gap + governor-as-service record + Checkpoint 2 disposition) is the new HEAD but was verified WARM only (test_promotion_gate.py exit 0 observed in-session). Per cold-start discipline, HEAD != last_verified_commit is intentional: the cold pass re-runs probes against HEAD before trusting P4.0a, and P4.0b is custody-affecting so it MUST be cold. The cold pass updates this field after re-verifying.",
-  "last_updated": "2026-06-13T00:00:00Z",
-  "session_id": "p4-entry (warm; pinned for cold resume — Checkpoints 1 & 2 ratified this session)",
+  "acceptance": "P4 slice-3c acceptance MET: eligible real evidence -> persisted superseding ControlBaseline via explicit operator-present act; missing/stale/out-of-bounds/wrong-trial/off-surface refuse with zero writes; no path from discovery/prepare to a write (behavioral + static + no-fiat-knob); revert is supersession; idempotent. No real max_slices=4 (config_hashes remain the accepted fixture stand-in).",
+  "blocked_on": "Next HIGH/operator-present slice requires a COLD re-entry + fresh admission. No slice is queued for momentum execution.",
+  "next_action": "If/when the operator opens slice-4 (second profile) or a real-trial evidence slice: COLD RE-ENTRY — run re_entry_probes, confirm 3c green at HEAD, produce a fresh admission BEFORE code. Do not promote a real baseline until a real trial has produced real survival+replay receipts on disk.",
+  "last_verified_commit": "4a43a8e",
+  "last_verified_note": "P4 slice-3c. Full suite re-run COLD after the slice: 15946 passed, 62 skipped, exit 0 (observed via ${PIPESTATUS[0]}, not eyeballed). test_operational_promotion.py 15/15. Live-root specimen: operational_promote against real .governor/ refused with zero writes (the successful 3c outcome). HEAD == last_verified_commit (slice verified at its own tree, unlike the prior warm-only sprint).",
+  "last_updated": "2026-06-15T00:00:00Z",
+  "session_id": "p4-slice-3c (cold re-entry from receipts; operator-present HIGH; committed local, NOT pushed)",
   "loop_master": "opus",
   "wip_limit": 1,
   "dirty_tree_allowed": false,
@@ -31,10 +31,10 @@
     "cat .governor/loop.json",
     "git log --oneline -8",
     "git status --short -- src tests docs golden demo specs working",
-    "python3 -m pytest tests/test_promotion_gate.py -q",
+    "python3 -m pytest tests/test_promotion_gate.py tests/test_promotion_mint.py tests/test_promotion_discovery.py tests/test_promotion_mint_input.py tests/test_operational_promotion.py -q",
     "python3 -m pytest tests/test_fresh_clone.py -q -m smoke"
   ],
-  "preexisting_dirt_note": "At this session's start the tree already carried unrelated dirty/untracked files NOT part of the P4 sprint (docs/visual_registers.md, working/campaign-standing-before-spendability.md, working/nightshift-governor-unsettled-integration-state.md, working/parked-constellation-alignment-pass.md, docs/doctrine/briefings_not_cockpits.md, and several working/GOV_GAP_*.md / working/*.md candidates). They were left untouched and are NOT in the P4-entry commit. The cold pass should treat them as pre-existing triage, not sprint output.",
-  "prior_pointer_note": "Superseded the 2026-06-12 launch-item-5 pointer (limits.html tone-read / batch push after 17:00), which was STALE: P4 planning landed 2026-06-13 (e7f9b44) without advancing this pointer. The launch-5 push gate is real but is a different campaign (tracked in .governor/backlog/launch-5-readme-ratchet.json).",
-  "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: W0 FAIL -> W1 PASS -> W2 PASS. One GitHub-clone verification remains. (Launch campaign — not the active annealing/P4 thread.)"
+  "preexisting_dirt_note": "The tree carries unrelated dirty/untracked files NOT part of the P4 thread (docs/visual_registers.md, working/campaign-standing-before-spendability.md, working/nightshift-governor-unsettled-integration-state.md, working/parked-constellation-alignment-pass.md, docs/doctrine/briefings_not_cockpits.md, several working/GOV_GAP_*.md and working/*.md candidates, .tick/tick0{1,2}-gov/). They predate this slice, are NOT in any P4 commit, and were left untouched. The 3c commit (4a43a8e) staged ONLY its own 5 files. Treat the rest as pre-existing triage.",
+  "prior_pointer_note": "Superseded the 2026-06-13 pointer that still named P4.0b as candidate and was last_verified at e7f9b44 — STALE: it never advanced through the 2026-06-15 work (P4.0a/b mint, 3a, 3b, 3c all landed after it). Authoritative resume is git log + working/RESUME_2026-06-15_p4-HIGH-prep.md.",
+  "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: W0 FAIL -> W1 PASS -> W2 PASS. One GitHub-clone verification remains. (Launch campaign — not the active P4 thread.)"
 }

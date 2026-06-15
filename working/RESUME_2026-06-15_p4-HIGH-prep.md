@@ -15,6 +15,9 @@ the operator-basis act-standing. Green, exit-witnessed, **not pushed**.
 632414d  P4.0a clarification: basis_bundle_hash is raw SHA-256 hex (docs only)
 e8cb8e2  P4.0b: promotion mint — basis_bundle_hash + ControlBaseline supersession
 2e94dee  P4 slice-2: align operator-basis shadow with strong facts (substitution seam closed)
+2b7fa5a  P4 closeout specimen (docs-only cold-start map)
+f449164  P4 slice-3a: real evidence substrate (read-only discovery)
+bc1dc90  P4 slice-3b: discovery-backed mint input path (no auto-mint)
 ```
 Closeout map: `working/P4_CLOSEOUT_2026-06-15.md` (the six-section "no séance" artifact).
 Boundary held verbatim: `85601bd`+`632414d` = authority/spec surface; `e8cb8e2` =
@@ -48,9 +51,18 @@ implementation that CONSUMES that authority (never co-authors, never self-cites)
   pure projection of strong → alignment, not bridge. `OperatorBasisFacts.project()` is the
   one readout; mint refuses `operator_basis_weak_strong_mismatch`. Seam closed.
 - **(2.5) P4 closeout specimen — DONE.** `working/P4_CLOSEOUT_2026-06-15.md` (docs-only).
-- **(3) Real evidence substrate** — an actual `max_slices=4` promotion needs a real
-  live-survival observation corpus + replay/holdout on disk (the trial must run). Still
-  zero evidence on disk; synthetic only until then. NEXT UP.
+- **(3a) Real evidence substrate, read-only — DONE (`f449164`).** `promotion_discovery`
+  reads the four real stores → assembles bundle → runs the gate. Custody, not permission;
+  discovery is not admissibility.
+- **(3b) Discovery-backed mint input path — DONE (`bc1dc90`).** `prepare_mint_input`
+  packages eligible discovery into mint input; never mints/writes; MintInput is
+  preparation, not authorization. Mint stays an explicit operator-present act that
+  re-derives.
+- **(3c) Actual operational promotion — GATED, NOT OPENED (the loaded gun).** Performs a
+  real mint against real on-disk evidence as an operational baseline. Requires a FRESH
+  admission, explicitly labelled operator-present + (semantically) irreversible-ish even
+  though supersession/revert exist. Do not open on momentum. Still: no real `max_slices=4`
+  until a real trial has run and produced real live-survival + replay receipts on disk.
 - **(4) Second profile (ops/NQ)** — gated on self-governance surviving one full promotion
   cycle (constructor-refused otherwise). After real custody, not before.
 - **(5) Fuse kernel-enforcement LAST** — `GOV_GAP_GOVERNOR_FUSE_ENFORCEMENT_001` (still

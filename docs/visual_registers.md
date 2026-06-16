@@ -17,6 +17,8 @@ evidence.
 
 > State below, pixels above. Never let the pixels outrun the state.
 
+**See also** [`doctrine/briefings_not_cockpits.md`](doctrine/briefings_not_cockpits.md) — the *genre* companion to this register discipline: ops/governance surfaces are "news apps for systems under stress" (far view / near view, headline-first, contestation panel, briefings-not-cockpits). That doctrine governs what to *lead with*; this one governs what the pixels may *assert*. They compose: a briefing's headline is itself a claim and inherits this register's "don't outrun the state" rule.
+
 ## Why this exists
 
 Governor's doctrine is a claim about authority: law below, verbs

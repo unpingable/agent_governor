@@ -1,6 +1,38 @@
 # Parked — Constellation Alignment Pass
 
-**Status: parked / TODO-much-later. Not a gap spec. Not ratified doctrine.
+**Status (2026-06-10): UNPARKED with bilingual refinement.** Operator
+directive after sprint commit + endgame synthesis: the legal→ops rename
+pass moves to active before any Maude/LA dispatcher wiring begins (step
+2 of the endgame sequence at
+`working/endgame-synthesis-2026-06-10.md`). Reduces ambiguity before the
+custody-affecting step.
+
+**Critical refinement:** the rename pass is NOT a rip-and-replace. It is
+**bilingual maintenance** — internal/theory names stay at their native
+homes (papers, doctrine docs, other repos' SPECs, cross-claude
+continuity), and ops names appear on consumer-facing surfaces (CLI,
+errors, dashboards, README). The translation surface itself is the
+artifact, not a one-way transformation. The living glossary at
+`docs/reference/internal-ops-glossary.md` carries the canonical mapping.
+
+Other claudes (papers, standing, wicket, nq, scheduler, continuity) are
+writing the internal vocabulary in parallel. AG cannot unilaterally
+rename the shared terms. The bilingual discipline is how the
+constellation maintains coherence across the rename without forcing a
+synchronized rewrite.
+
+The original parked content below is preserved as historical context;
+sections marked **(superseded by bilingual refinement)** are now
+handled through the glossary, not through the original
+"replace everywhere" framing.
+
+---
+
+(Original parked content follows.)
+
+---
+
+**Original status: parked / TODO-much-later. Not a gap spec. Not ratified doctrine.
 Not authorization to rename.**
 
 A naming-discipline pass across runtime-facing surfaces of AG / NS /

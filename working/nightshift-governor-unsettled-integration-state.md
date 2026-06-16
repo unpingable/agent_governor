@@ -120,6 +120,10 @@ Listed in suggested order. Pick the next one against forcing-case pressure; do n
 - Adding more `NonDischargeKind` variants — closed enum, ratification gate.
 - Fixing standing-validator bootstrap drift — unrelated; separate session.
 
+**Parked candidate (forcing case exists; scope discipline holds until ≥2 instances):**
+
+- **Nightshift-local conversion route checker** (`ns.claim_route.v1`) — see [`candidate-2026-06-09-nightshift-claim-route.md`](candidate-2026-06-09-nightshift-claim-route.md). WLP3 is the first instance of *"refuse to mint warranty when a structural bridge is missing."* The user has reframed this from *"park until forcing consumer exists"* (no longer applies — Nightshift IS the consumer) to *"scope as Nightshift's conversion gate, not a general language."* Filed, not opened. Open when at least two more refusal-shapes in the family have landed (e.g., `Authority`- or `Standing`-unsettled refusal rules), so the seed inventory has more than one edge. Generic Cedar-like infrastructure is explicitly out of scope; Nightshift-local until runtime pressure proves otherwise.
+
 ## Operating discipline reminder (verbatim from prior slices)
 
 > Closed enum for machine-facing classification. Freeform prose only where prose cannot corrupt dispatch.

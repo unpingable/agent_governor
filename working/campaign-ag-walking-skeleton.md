@@ -45,7 +45,22 @@
 > unilaterally. Recommended sequence: (iii) then (i).
 
 **Opened:** 2026-06-16
-**Status:** SLICE 2 DONE + GREEN. The bootstrap-lab effect gate runs against the
+**Status:** SLICE 3 HELD — the live dogfood passed. A **real `claude` CLI inner
+worker** under AG supervision wrote `alpha.txt` (consumed the one LA unit), then
+had `beta.txt` **refused before effect** by `capacity_refused` (first attempt +
+its own retry), terminated read-only, and reported honestly — the outer
+controller kept the reins and the model did **not** escape the governed refusal.
+Exactly one file on disk; durable chain binds session/proposal/`la_boundary`
+(v0.0.0, `a56c372`)/consume/effect; BA3 absent. Witness:
+`working/witness-slice3-dogfood-2026-06-16.md`; driver:
+`working/slice3_dogfood.py`. The walking skeleton is a runnable, governed,
+dogfooded loop. Remaining are completeness items (scope_mismatch via a
+multi-scope path; `capacity_refused` legibility to the worker; replay
+reconstruction) — none blockers. P4 PARKED; fence held throughout.
+
+---
+
+### Prior status: SLICE 2 DONE + GREEN. The bootstrap-lab effect gate runs against the
 **real Linear Accountant** via a thin `la_cli` subprocess bridge (AG `8bea2bc`;
 LA `a56c372`, v0.0.0, protocol v0 — a thin transport adding no policy). AG spawns
 one `la_cli` per session, seeds the allocation, routes capacity decisions to the

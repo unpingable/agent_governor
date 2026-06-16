@@ -73,3 +73,57 @@ rather than riding the trial slice's momentum.
 - **Confirmed but blocked:** no single canonical execution point exists / the
   refactor is larger than a wire → re-scope at B's admission, do not force it.
 - **Declined:** B stays a named candidate; the trial-evidence path stays blocked.
+
+---
+
+## INSPECTION RESULT — STOPPED BEFORE CODE (operator-present go, 2026-06-16)
+
+Operator gave B the go; first task was inspection, not wiring, with an explicit
+stop condition: *stop before code if there is no single honest insertion point.*
+**That condition fired.** Read-only inspection finding:
+
+> **There is no slice-count-bounded executor anywhere.** `max_slices` limits nothing
+> today — not planned, not scheduled, not completed slices.
+
+Evidence (cheapest falsification, run first — *who builds a plan / reads a cap in
+production?* → nobody):
+
+- The only surface that carries decomposition boundaries is
+  `cooked_context_orchestrator.run(recomposition_plan=...)`. That plan is a
+  **caller-supplied `Sequence[str]`** the orchestrator only *accounts* (against the
+  chain's traversal) — it never **cuts or caps** it.
+- `recomposition_plan` is constructed **only inside the orchestrator module itself**;
+  there is **no production caller** of `.run()` (none in `cli.py` / `daemon.py`). The
+  orchestrator's only users are `drill_runner.py` and `why.py` → it is a **drill-only
+  SPEC harness**, not a live execution path (matches `file-structure.md`'s label).
+- `max_slices` / `slice_cap` are allowlisted *targets* under `decomposition_size`
+  (`activation_preflight.TARGET_ALLOWLISTS`) — names a delta *may activate*. The
+  allowlist gates **activation eligibility, not consumption**. Zero readers.
+
+The operator's six pins, answered by the inspection:
+- **what `max_slices` limits:** nothing — no executor cuts/caps slices; the only
+  plan-bearing surface is a caller-supplied boundary sequence in a drill-only harness.
+- **where default `8` comes from:** nowhere in code — "prior baseline 8" was
+  illustrative in the P4 plan doc, not a live default.
+- **when the active value is resolved:** never (no consumer) → moot.
+- **missing/malformed/stale/unsupported active state:** moot (nothing resolves it).
+- **how `activation_id` reaches the execution witness:** there is no execution
+  witness — no execution consumes the value.
+- **what observable difference proves `4 ≠ 8`:** none is honestly producible. The
+  only candidate (truncating `recomposition_plan` to a cap) **drops declared
+  boundaries**, which is exactly the `refused_laundering` condition the enforcement
+  gate exists to refuse. Capping it would be incoherent, not a behavioral delta — and
+  it would only ever cap drill fixtures.
+
+The trap the operator named ("don't let the orchestrator merely *report*
+`max_slices=4` while producing the same work") is, in this codebase, the **only**
+thing currently possible — which is why the honest move is to stop.
+
+**Conclusion:** making `max_slices` operational is not "one bounded consumer." It
+requires inventing a slice-planning/capping **actuator** on a real execution path and
+deciding where decomposition authority lives — duplicating policy / widening
+authority, beyond B's scope. B is **STOPPED before code**, pending an operator
+decision on whether to (i) re-target the trial onto a tunable that *already* has a
+live consumer, or (ii) open a separate, properly-admitted slice to build the
+decomposition actuator first (a much larger surface than B), or (iii) leave the
+self-governance trial-evidence path parked as architecturally premature.

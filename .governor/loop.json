@@ -1,19 +1,21 @@
 {
   "phase": "AUDIT",
   "current_slice": null,
-  "candidate_next_slice": "NONE to open on momentum. P4 slice-3c (operational promotion) DONE 2026-06-15 (4a43a8e). The operational promotion path exists end-to-end and refuses cleanly against an empty live chamber. Remaining P4 items are GATED, not queued: (a) a real self-governance TRIAL that produces real on-disk live-survival + replay-holdout receipts — the precondition for ANY real max_slices=4 promotion (3c only proved the trigger assembly; the chamber is still empty by design); (b) second profile (ops/NQ), gated on self-governance surviving one full real promotion cycle; (c) fuse/kernel enforcement LAST (GOV_GAP_GOVERNOR_FUSE_ENFORCEMENT_001, still folklore). Each is operator-present / HIGH; open only on a fresh admission, never on session momentum.",
+  "p0_result": "P0-shadow-pass = a REACHABILITY AUDIT THAT FALSIFIED ITS OWN LOAD-BEARING HYPOTHESIS. Hypothesis: normal_form observes a live epistemic-conversion seam in AG promotion evidence. Falsified: across all 11 real bundle shapes the shadow returns a constant ADMITTED (refuses 0/11; gate refuses 9/11); all 8 production-facing refusal rules are unreachable from current AG receipt shapes. Status: Observed<projection integrity and noninterference>; Not observed<live epistemic-conversion seam>. normal_form + promotion_shadow stay ISOLATED + PROSPECTIVE (dormant tripwire for a future overclaiming evidence type); NO reliance wiring authorized; do NOT promote the tripwire into architecture. Matrix: working/P0-shadow-matrix-2026-06-16.md. P0 DELETED FROM ACTIVE QUEUE.",
+  "candidate_next_slice": "Cold-admit P4 REAL TRIAL-EVIDENCE PATH (operator-set 2026-06-16; HIGH / operator-present; open only on a fresh admission, NOT this session's momentum): (1) run an actual bounded max_slices=4 self-governance trial; (2) produce on-disk activation + observation/survival + replay-holdout + operator-basis receipts; (3) verify lineage/freshness/replay/expiry against REAL artifacts, not the accepted config-hash fixtures; (4) STOP before promotion and inspect whether the chamber is genuinely sufficient. AG's live risk lives HERE -- whether a trial can manufacture an apparently-complete promotion record from weak/stale/circular DOMAIN evidence -- NOT in epistemic-species laundering.",
   "slice_spec": [
-    "working/P4-slice-3c-admission-2026-06-15.md (the cold admission/estimate)",
-    "working/P4-slice-3c-closeout-2026-06-15.md (the six-part closeout + live-root specimen)",
-    "src/governor/operational_promotion.py + tests/test_operational_promotion.py (15/15 green; full suite 15946 passed exit 0)"
+    "src/governor/promotion_shadow.py (NEW; read-only; imports normal_form + promotion_evidence/discovery; no write path)",
+    "tests/test_promotion_shadow.py (NEW)",
+    "ACCEPTANCE: (1) shadow classification cannot alter eligibility/refusal -- decision_effect=none on report + every finding, no store/path, gate eligibility passed-through untouched; (2) adapter failure becomes an observable shadow_error finding, never a promotion refusal; (3) exploration-quarantine vs reliance-refusal remain distinct for the same projected violation; (4) clean real-shaped bundle -> all ADMITTED (licensed-conversion witness); (5) absent pieces (empty chamber) -> recorded absent, shadow refuses nothing.",
+    "HAZARD (operator-flagged): the adapter PROJECTS evidence into claim-conversion terms; it must NOT become a second evaluator. normal_form judges legitimacy-of-conversion; derive_in_bounds/the gate still own domain facts."
   ],
-  "acceptance": "P4 slice-3c acceptance MET: eligible real evidence -> persisted superseding ControlBaseline via explicit operator-present act; missing/stale/out-of-bounds/wrong-trial/off-surface refuse with zero writes; no path from discovery/prepare to a write (behavioral + static + no-fiat-knob); revert is supersession; idempotent. No real max_slices=4 (config_hashes remain the accepted fixture stand-in).",
-  "blocked_on": "Next HIGH/operator-present slice requires a COLD re-entry + fresh admission. No slice is queued for momentum execution.",
-  "next_action": "If/when the operator opens slice-4 (second profile) or a real-trial evidence slice: COLD RE-ENTRY — run re_entry_probes, confirm 3c green at HEAD, produce a fresh admission BEFORE code. Do not promote a real baseline until a real trial has produced real survival+replay receipts on disk.",
-  "last_verified_commit": "4a43a8e",
-  "last_verified_note": "P4 slice-3c. Full suite re-run COLD after the slice: 15946 passed, 62 skipped, exit 0 (observed via ${PIPESTATUS[0]}, not eyeballed). test_operational_promotion.py 15/15. Live-root specimen: operational_promote against real .governor/ refused with zero writes (the successful 3c outcome). HEAD == last_verified_commit (slice verified at its own tree, unlike the prior warm-only sprint).",
-  "last_updated": "2026-06-15T00:00:00Z",
-  "session_id": "p4-slice-3c (cold re-entry from receipts; operator-present HIGH; committed local, NOT pushed)",
+  "acceptance": "P0-shadow-pass: a read-only module that classifies real promotion-evidence through normal_form and REPORTS what would be quarantined/refused at the promotion reliance point, with zero effect on the gate's decision. Library-only (imported by nothing yet, like normal_form). Turns P0's status from Normative<consistent-with-spec> toward Observed by exercising classify against real evidence shapes.",
+  "blocked_on": null,
+  "next_action": "Build src/governor/promotion_shadow.py + tests; run bare pytest, observe exit code; if green, emit closeout + two-verdict (cargo + dogfood). Do NOT broaden coverage or open any P4 item without a fresh operator-present admission.",
+  "last_verified_commit": "76497ab",
+  "last_verified_note": "2026-06-16. P0-shadow-pass (promotion_shadow.py + tests + closeout + matrix) is the unpushed tip on top of 76497ab: committed LOCAL, ahead of origin/main, NOT pushed (off push-time by operator). Verified: full suite 15972 passed / 62 skipped, exit 0 (bare, PIPESTATUS[0]=0); shadow 12/12; verifier receipt ace79d36 (pass, exit_observed, child_exit). Slice was additive (imported by nothing). last_verified_commit kept at the 76497ab baseline because the file cannot reference its own amended commit hash; the slice tip is git HEAD. Older resume docs' 'P4 NOT pushed' notes are STALE -- P4 is on origin/main; only this P0 slice is unpushed.",
+  "last_updated": "2026-06-16T00:00:00Z",
+  "session_id": "p0-shadow-pass (cold re-entry from receipts; operator authorized read-only continuation of P0 normal-form)",
   "loop_master": "opus",
   "wip_limit": 1,
   "dirty_tree_allowed": false,
@@ -31,10 +33,10 @@
     "cat .governor/loop.json",
     "git log --oneline -8",
     "git status --short -- src tests docs golden demo specs working",
-    "python3 -m pytest tests/test_promotion_gate.py tests/test_promotion_mint.py tests/test_promotion_discovery.py tests/test_promotion_mint_input.py tests/test_operational_promotion.py -q",
-    "python3 -m pytest tests/test_fresh_clone.py -q -m smoke"
+    "python3 -m pytest tests/test_normal_form.py tests/test_promotion_gate.py tests/test_promotion_mint.py tests/test_promotion_discovery.py tests/test_promotion_mint_input.py tests/test_operational_promotion.py -q",
+    "python3 -m pytest tests/test_promotion_shadow.py -q"
   ],
-  "preexisting_dirt_note": "The tree carries unrelated dirty/untracked files NOT part of the P4 thread (docs/visual_registers.md, working/campaign-standing-before-spendability.md, working/nightshift-governor-unsettled-integration-state.md, working/parked-constellation-alignment-pass.md, docs/doctrine/briefings_not_cockpits.md, several working/GOV_GAP_*.md and working/*.md candidates, .tick/tick0{1,2}-gov/). They predate this slice, are NOT in any P4 commit, and were left untouched. The 3c commit (4a43a8e) staged ONLY its own 5 files. Treat the rest as pre-existing triage.",
-  "prior_pointer_note": "Superseded the 2026-06-13 pointer that still named P4.0b as candidate and was last_verified at e7f9b44 — STALE: it never advanced through the 2026-06-15 work (P4.0a/b mint, 3a, 3b, 3c all landed after it). Authoritative resume is git log + working/RESUME_2026-06-15_p4-HIGH-prep.md.",
-  "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: W0 FAIL -> W1 PASS -> W2 PASS. One GitHub-clone verification remains. (Launch campaign — not the active P4 thread.)"
+  "preexisting_dirt_note": "The tree carries unrelated dirty/untracked files NOT part of the P0/P4 thread (docs/visual_registers.md, working/campaign-standing-before-spendability.md, working/nightshift-governor-unsettled-integration-state.md, working/parked-constellation-alignment-pass.md, docs/doctrine/briefings_not_cockpits.md, several working/GOV_GAP_*.md and working/*.md candidates, .tick/tick0{1,2}-gov/). They predate this slice. The P0-shadow-pass commit should stage ONLY its own new files. Treat the rest as pre-existing triage.",
+  "prior_pointer_note": "Superseded the 2026-06-15 pointer (last_verified 4a43a8e, P4 slice-3c) which predated the two P0 commits (7923014 normal-form gate, 76497ab closeout). P4 is STOPPED/GATED with the chamber empty (working/RESUME_2026-06-15_p4-HIGH-prep.md); P0 is the active thread.",
+  "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: W0 FAIL -> W1 PASS -> W2 PASS. One GitHub-clone verification remains. (Launch campaign -- not the active P0 thread.)"
 }

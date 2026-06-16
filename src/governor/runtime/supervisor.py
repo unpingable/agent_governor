@@ -118,6 +118,7 @@ class RuntimeFacet:
     pending_promotion: Any = None  # Promotion | None (avoid circular import)
     budget_ledger: Any = None  # RunBudgetLedger | None (avoid circular import)
     budget_policy: Any = None  # BudgetPolicy | None
+    lab_gate: Any = None  # LabGate | None (bootstrap_lab LA-backed effect gate)
     event_thread: threading.Thread | None = None
     running: bool = False
 
@@ -291,13 +292,38 @@ class SessionSupervisor:
         from governor.runtime.budget import RunBudgetLedger, default_budget_policy
 
         facet = RuntimeFacet()
-        facet.budget_policy = policy_context.get("budget_policy") if policy_context else None
-        if facet.budget_policy is None:
-            facet.budget_policy = default_budget_policy()
-        facet.budget_ledger = RunBudgetLedger(
-            session_id=session_id,
-            policy_id=facet.budget_policy.policy_id if facet.budget_policy else "",
-        )
+        lab_cfg = (policy_context or {}).get("bootstrap_lab")
+        if lab_cfg:
+            # bootstrap_lab: LA is the SOLE spend authority on the effect path.
+            # Deliberately do NOT stand up the BA3 budget ledger here, so no
+            # internal budget competes with LA (acceptance §8). The action bound
+            # is the LA grant, not an AG tunable — no ActiveTunableStore touched.
+            from governor.runtime.lab_gate import LabGate
+
+            gate = LabGate(
+                la_client=lab_cfg["la_client"],
+                session_id=session_id,
+                actor=lab_cfg.get("actor", "inner_worker"),
+                scope=lab_cfg.get("scope", f"lab/{session_id}"),
+            )
+            gate.acquire_grant(
+                requested_capacity=lab_cfg.get("requested_capacity", 1),
+                admission_receipt_id=lab_cfg.get("admission_receipt_id"),
+                eligibility_valid_until=lab_cfg.get("eligibility_valid_until", 0),
+                expires_after=lab_cfg.get("expires_after", 0),
+                now=lab_cfg.get("now", 0),
+            )
+            facet.lab_gate = gate
+        else:
+            facet.budget_policy = (
+                policy_context.get("budget_policy") if policy_context else None
+            )
+            if facet.budget_policy is None:
+                facet.budget_policy = default_budget_policy()
+            facet.budget_ledger = RunBudgetLedger(
+                session_id=session_id,
+                policy_id=facet.budget_policy.policy_id if facet.budget_policy else "",
+            )
 
         with self._lock:
             self._sessions[session_id] = record
@@ -561,6 +587,64 @@ class SessionSupervisor:
         # Classify action: READ < WRITE < COMMUNICATE
         tool_input = event.payload.get("tool_input", {})
         action_class = classify_action(tool_name, tool_input)
+
+        # Bootstrap-lab LA-backed effect gate (the atlas spine made executable):
+        # a WRITE effect crosses ONLY after LA authorizes consumption against the
+        # session-scoped grant. The AG receipt/event witnesses the LA decision +
+        # effect; it manufactures neither. Replay of a proposal → already_consumed;
+        # exhausted grant → capacity_refused — both refuse BEFORE the effect.
+        if facet.lab_gate is not None and action_class == ActionClass.WRITE:
+            from governor.runtime.lab_gate import BOOTSTRAP_LAB_PROFILE
+
+            decision = facet.lab_gate.decide_write_effect(
+                tool_call_id=tool_call_id, now=int(time.monotonic() * 1000)
+            )
+            if not decision.allowed:
+                bus.emit(
+                    EventKind.TOOL_CALL_DENIED,
+                    SourceLayer.POLICY,
+                    record.backend_kind,
+                    payload={
+                        "tool_call_id": tool_call_id,
+                        "tool_name": tool_name,
+                        "profile": BOOTSTRAP_LAB_PROFILE,
+                        "reason": f"LA refused effect: {decision.la_kind} ({decision.reason})",
+                        "la_kind": decision.la_kind,
+                        "consume_receipt_id": decision.consume_receipt_id,
+                        "grant_receipt_id": facet.lab_gate.grant_receipt_id,
+                    },
+                    tool_call_id=tool_call_id,
+                )
+                if facet.handle:
+                    adapter.send_control(facet.handle, ControlAction(
+                        kind="deny", target_id=tool_call_id,
+                        payload={"reason": f"LA refused: {decision.la_kind}"},
+                    ))
+                return
+            # Consumed → the effect may cross. Bind the LA decision identity into
+            # the effect event (acceptance §7: session · proposal · LA grant/consume · effect).
+            bus.emit(
+                EventKind.TOOL_CALL_ALLOWED,
+                SourceLayer.POLICY,
+                record.backend_kind,
+                payload={
+                    "tool_call_id": tool_call_id,
+                    "tool_name": tool_name,
+                    "action_class": action_class.value,
+                    "profile": BOOTSTRAP_LAB_PROFILE,
+                    "la_kind": "consumed",
+                    "token_id": str(decision.token_id),
+                    "consume_receipt_id": decision.consume_receipt_id,
+                    "grant_receipt_id": facet.lab_gate.grant_receipt_id,
+                    "remaining_capacity": decision.remaining_capacity,
+                },
+                tool_call_id=tool_call_id,
+            )
+            if facet.handle:
+                adapter.send_control(facet.handle, ControlAction(
+                    kind="approve", target_id=tool_call_id,
+                ))
+            return
 
         # In interactive mode, block write and communicate tools
         needs_approval = (

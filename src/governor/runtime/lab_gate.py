@@ -102,6 +102,11 @@ class LabGate:
     # proposals cannot race the gate. LA's accountant is itself single-writer;
     # this lock makes AG's decision-then-act atomic from the gate's side too.
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    # Logical clock (LA's Tick is caller-supplied; there is no ambient now()).
+    # Starts at the grant tick and advances one per consume, staying within the
+    # token's freshness horizon. NOT wall/monotonic time — a monotonic_ms value
+    # would read as "expired" against a logically-bounded grant.
+    _tick: int = field(default=0, repr=False)
 
     def acquire_grant(
         self,
@@ -119,6 +124,7 @@ class LabGate:
         ``dangling_receipt_reference``) when it is absent/unresolvable — AG
         does not manufacture the admission.
         """
+        self._tick = now  # logical clock starts at the grant tick
         req = CookedCapacityRequest(
             request_id=f"labgrant_{self.session_id}",
             actor=self.actor,
@@ -143,7 +149,7 @@ class LabGate:
         self,
         *,
         tool_call_id: str,
-        now: int,
+        now: int | None = None,
     ) -> LabEffectDecision:
         """Decide whether one WRITE proposal may cross, via LA ``consume``.
 
@@ -160,6 +166,9 @@ class LabGate:
                 la_kind=self.grant_refusal or "no_session_grant",
             )
 
+        if now is None:
+            self._tick += 1
+            now = self._tick
         cooked = CookedConsumeRequest(
             consumption_event_id=f"{self.session_id}:{tool_call_id}",
             token_id=self.token_id,

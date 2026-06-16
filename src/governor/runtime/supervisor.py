@@ -314,6 +314,21 @@ class SessionSupervisor:
                 now=lab_cfg.get("now", 0),
             )
             facet.lab_gate = gate
+            # Record the constellation edge: exactly which LA (version/commit/
+            # binary) authorized this session's spend, pinned in the durable
+            # event chain alongside the grant receipt.
+            la_boundary = lab_cfg.get("la_boundary")
+            if la_boundary:
+                bus.emit(
+                    "la_boundary",
+                    SourceLayer.SUPERVISOR,
+                    backend_kind,
+                    payload={
+                        **la_boundary,
+                        "session_grant_scope": gate.scope,
+                        "grant_receipt_id": gate.grant_receipt_id,
+                    },
+                )
         else:
             facet.budget_policy = (
                 policy_context.get("budget_policy") if policy_context else None
@@ -596,9 +611,9 @@ class SessionSupervisor:
         if facet.lab_gate is not None and action_class == ActionClass.WRITE:
             from governor.runtime.lab_gate import BOOTSTRAP_LAB_PROFILE
 
-            decision = facet.lab_gate.decide_write_effect(
-                tool_call_id=tool_call_id, now=int(time.monotonic() * 1000)
-            )
+            # The gate owns its logical tick (LA's clock is caller-supplied; a
+            # monotonic_ms tick would read as expired against the logical grant).
+            decision = facet.lab_gate.decide_write_effect(tool_call_id=tool_call_id)
             if not decision.allowed:
                 bus.emit(
                     EventKind.TOOL_CALL_DENIED,

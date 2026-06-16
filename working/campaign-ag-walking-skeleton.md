@@ -45,7 +45,22 @@
 > unilaterally. Recommended sequence: (iii) then (i).
 
 **Opened:** 2026-06-16
-**Status:** SLICE 1 DONE + GREEN (commit `6a742d8`). The bootstrap-lab LA-backed
+**Status:** SLICE 2 DONE + GREEN. The bootstrap-lab effect gate runs against the
+**real Linear Accountant** via a thin `la_cli` subprocess bridge (AG `8bea2bc`;
+LA `a56c372`, v0.0.0, protocol v0 — a thin transport adding no policy). AG spawns
+one `la_cli` per session, seeds the allocation, routes capacity decisions to the
+Rust accountant; `la_boundary` event pins LA version/commit in AG's event chain.
+`tests/test_runtime_lab_gate_real_la.py` 4/4 (real subprocess + real file effects
+in a disposable git worktree); LA `tests/la_cli_transport.rs` 8/8; runtime
+regression 103/103. **Cross-repo:** AG `8bea2bc` depends on LA `a56c372`; both
+unpushed, push together. **Remaining (slice 3 / manual dogfood):** the fully-live
+inner-Claude-CLI session (§1/§7 with a real LLM worker) — interactive, not an
+automated test. `scope_mismatch` proven at the transport level (LA), not via the
+single-scope supervised gate. P4 PARKED; bootstrap_lab fence holds.
+
+---
+
+### Slice 1 (superseded by slice 2's real bridge; logic unchanged) — DONE + GREEN (`6a742d8`). The bootstrap-lab LA-backed
 effect gate is wired into the real supervisor hot path
 (`runtime/supervisor.py:_handle_tool_proposed`) via `runtime/lab_gate.py`;
 `tests/test_runtime_lab_gate.py` 7/7 covers all 9 amended acceptance criteria

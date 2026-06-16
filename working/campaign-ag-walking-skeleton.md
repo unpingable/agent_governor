@@ -1,7 +1,51 @@
 # Campaign card — AG bootstrap-lab walking skeleton (cold admission)
 
+> **AMENDED 2026-06-16 (operator) — the tunable fork (§Open A/B/C) is REJECTED.**
+> The `ActiveTunableStore` requirement was misframed: `max_actions` **is capacity
+> authority**, and LA already owns and implements that concept (complete, frozen,
+> tested — `/home/jbeck/git/linearaccountant`). So: do NOT widen the P3.1 store,
+> do NOT reuse `max_slices`, do NOT create a parallel lab custody store, do NOT
+> make the lab runtime a pretext to alter P4's activation boundary. The action
+> bound comes from an **LA capacity grant**, not an AG self-annealing tunable.
+>
+> **New topology:** operator → controller/outer Claude → AG supervised session →
+> LA capacity decision → worker/inner Claude tool effect. AG mediates a real
+> planner/worker split; the outer Claude reacts to refusals and receipts. More
+> bugs, found sooner.
+>
+> **New first slice (narrower than "build the whole skeleton" — most of the
+> supervised machinery already exists):**
+> > Wire ONE AG supervised tool-effect boundary to ONE LA capacity `consume`
+> > decision, under `profile=bootstrap_lab`, with no P4 or production-promotion
+> > claims.
+>
+> **Acceptance (amended):**
+> 1. outer Claude can create and drive an AG-supervised inner session;
+> 2. one inner tool class crosses only after LA authorizes consumption;
+> 3. an exhausted / replayed grant refuses the effect;
+> 4. AG records the LA request/decision identity in its event/receipt trail;
+> 5. two concurrent attempts against one unit → exactly one effect;
+> 6. NO `ActiveTunableStore` changes;
+> 7. no BA3 authority survives as a competing decision-maker;
+> 8. no promotion evidence minted.
+>
+> Components 1/2/4/5/6 of the original (entry point, sandbox actuator, governance
+> path, replay, scope label) still hold; original component 3 (intrinsic tunable
+> from `ActiveTunableStore`) is **replaced** by the LA-backed effect gate. §Open
+> below is superseded by this amendment.
+>
+> **One cross-repo sub-decision remains (the real bridge):** a genuine LA decision
+> from AG-Python needs a transport — LA is a Rust library with "no binary" by
+> design. Options: (i) subprocess to a thin LA CLI bin, (ii) PyO3 in-proc link,
+> (iii) build the AG-side gate first against the EXISTING injected-callable seam
+> in `linear_accountant_client.py` (contract-faithful, what LA's own tests use),
+> then swap the real bridge in. LA's "no new slices without a consumer trigger"
+> rule is now satisfied — the trigger has fired — so a minimal LA bin is licensed,
+> but it touches the LA repo (dedicated owner) and should be flagged, not done
+> unilaterally. Recommended sequence: (iii) then (i).
+
 **Opened:** 2026-06-16
-**Status:** COLD-ADMITTED, build NOT started (one fork awaits operator fiat — see §Open).
+**Status:** COLD-ADMITTED + AMENDED to the LA-backed effect gate (above). Fork A/B/C rejected. AG-side build (against the injected LA seam) is unblocked; the real LA bridge is a flagged cross-repo follow-on.
 **Provenance:** operator reframe after the mcp_safety retirement. The "AG is at a
 legitimate stopping point, wait for LA" read was an over-correction —
 *"guarding against Potemkin machinery and accidentally proposing no machinery."*

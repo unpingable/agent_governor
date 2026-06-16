@@ -82,3 +82,25 @@ noncanonical choice. Post-MVP, the bypass must end.
 - `working/linear-accountant-handoff.md` — in-flight cross-repo work
   that gates the trigger.
 - `memory/linearaccountant_repo.md` — LA boundary + packet shape.
+
+## Addendum 2026-06-16 — two `BudgetPolicy` honesty findings (read-only audit)
+
+Surfaced by `working/audit-2026-06-16-budgetpolicy-custody.md`. These are
+in-scope *completeness/honesty* items on the existing BA3 surface, **not** a
+new campaign and **not** authorization to start the hard-short. File-but-don't-
+build until the LA trigger fires, or fold F2 into the hard-short when it lands.
+The forbidden-work fence above is unchanged.
+
+- **F1 — dead budget dimensions.** `default_budget_policy()`
+  (`src/governor/runtime/budget.py:207`) advertises a 500k-`total_tokens` and a
+  50-`remote_calls` hard limit that can **never fire**: the supervisor records
+  every step as `Spend(tool_calls=1)` / `provider_kind="local"`, so those
+  dimensions stay `None`/`0` and `BudgetPolicy.check` skips them
+  (`if actual is None: continue`, budget.py:105-106). Only `tool_calls` (100)
+  and `max_steps` (200) actuate. Resolution: either measure token/remote spend,
+  or drop the inert limits from the default so configured == enforced.
+- **F2 — `runtime.budget.get` reporting overclaim.** `get_budget`
+  (supervisor.py:850) returns the full `policy` including the inert limits,
+  so an operator sees enforcement that does not exist. Resolution: distinguish
+  *enforced* from *merely configured* limits in the reported payload (mark or
+  omit dimensions never measured on the current path).

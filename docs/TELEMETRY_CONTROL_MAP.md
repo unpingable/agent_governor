@@ -43,7 +43,6 @@ Signals that exist but are NOT yet consumed for routing.
 |--------|-----------|--------|-----------------|-------------------|
 | **success_rate by model** | routing.py:550 (dt-aware EMA) | model_name, tier | Router.route() tier escalation | **PARTIAL** — used for tier escalation; lane selection reads telemetry directly |
 | **Validator fail reasons** | lanes.py CascadeResult.validators_failed | validator_name, lane, model | CooldownStore (keyed by model+lane) | **PARTIAL** — stored for cooldown, not yet used for per-validator banning |
-| **MCP rate limit / circuit breaker** | mcp_safety.py:127 | client_id, tool, p95_ms | mcp_safety.py get_stats() (monitoring only) | MEDIUM — feed latency into model selection |
 | **Error rate by operation** | telemetry.py:1018 record_error | error_code, context | CLI display | MEDIUM — per-model error rate for cooldown |
 
 ### Category C: Cost/Budget Dynamics (Budgeted Control)

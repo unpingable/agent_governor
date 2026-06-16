@@ -62,7 +62,6 @@ Items that directly gate, transition, constrain, authorize, recover, supervise, 
 **Interactive Violation Resolution (W4)** — Author-friendly chat. Blocking violations present 3 choices: fix/revise/proceed. ViolationResolver with persistent state, resolution command detection, exception logging.
 **Code Autopilot** — Intent-based governance. 5 profiles (greenfield/established/production/hotfix/refactor), intent resolution from 6 layers, constraint classes (invariant vs preference), scoped time-limited overrides with receipts, branch heuristics.
 **External Constraint Attachment** — Bind claims to external substrate snapshots (Wikidata/Wikipedia/Scholar). NOT fact verification — structural constraint logging. Discrepancies surfaced, never auto-corrected. Human-only resolution.
-**MCP Safety Controls** — Self-protective infrastructure: RateLimiter, BackpressureController, CircuitBreaker, IdempotencyLayer, LatencyEnforcer, FaultHandler (sensor/actuator classification), SafetyController (unified).
 **SDK Middleware** — Drop-in governor enforcement for Anthropic SDK. `client = GovernorMiddleware(Anthropic())`. Advisory/blocking/strict modes, claim extraction, anchor checking, security scanning, ledger integration, streaming + async.
 **Session Continuity** — Capsule-based session management. Resume intent + constraints + authority, NOT chat replay. Three-layer model (Ledger/Workspace/Transcript), fork/promote semantics, checkpoints, content hashing, YAML ledger persistence.
 **Git Governance** — Integrity invariants at commit boundaries. Artifact integrity, cross-index validation (DOI/version tags), tagging discipline, pre-commit provenance. Profile-based severity, YAML config, secrets check integration.
@@ -146,6 +145,10 @@ Extracted to [github.com/unpingable/vscode-governor](https://github.com/unpingab
 ### WebUI Backend Toggle [RETIRED 2026-05-26: ABSORBED_INTO gov-webui — chat_bridge backend capability remains in core]
 
 Runtime backend switching via sidebar dropdown. `GET /v1/backends`, `POST /v1/backends/switch`.
+
+### MCP Safety Controls [RETIRED 2026-06-16: REMOVED_UNUSED — code deleted, see specs/gaps/GOV_GAP_MCP_SAFETY_DISPOSITION_001.md]
+
+RateLimiter, BackpressureController, CircuitBreaker, IdempotencyLayer, LatencyEnforcer, FaultHandler (sensor/actuator classification), SafetyController (unified). Was listed as 3.x platform but had **zero production consumers** — never imported by `mcp_server.py`, the daemon, or any gate; not in `__init__.py`; no entry point; no config reference. `src/governor/mcp_safety.py` + `tests/test_mcp_safety.py` deleted 2026-06-16 after the operational-authority census (`working/campaign-operational-authority-census.md`) found it shipped-dead-and-undispositioned. **The capability class is retired, not the idea** — resurrection condition in the gap spec. Implementation was generic (token bucket / circuit-breaker FSM / idempotency cache / latency deadline); rebuild from the operational seam when a measured daemon/MCP failure mode forces it.
 
 ## Follow-up audits (not gap closure work)
 

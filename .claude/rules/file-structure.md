@@ -236,7 +236,6 @@ src/governor/
 # Demo / SDK:
 ├── webui_demo.py          # Scripted reproducible WebUI screenshots: DemoScenario, DemoStep, DemoManifest
 ├── sdk.py                 # Anthropic SDK drop-in enforcement middleware: GovernorMiddleware, EnforcementMode
-├── mcp_safety.py          # MCP server self-protection: RateLimiter, ShedPolicy, backpressure (feature: MCP Safety Controls)
 │
 # Experimental / research (reachable via CLI but pre-stable — not platform-guaranteed):
 ├── epistemic_evasion.py   # Discourse-pattern evasion detection: EvasionOperator, FailureMode, EvasionResult (`evasion`)

@@ -238,63 +238,6 @@ class TestExternalConstraintLifecycle:
 
 
 # =============================================================================
-# Lifecycle Test: MCP Safety Flow
-# =============================================================================
-
-
-class TestMCPSafetyLifecycle:
-    """Test MCP safety controls flow."""
-
-    def test_rate_limiter_lifecycle(self):
-        """Rate limiter tracks and limits requests."""
-        from governor.mcp_safety import (
-            RateLimiter, RateLimitConfig, RateLimitStatus,
-        )
-
-        config = RateLimitConfig(
-            requests_per_minute=10,
-            burst_allowance=3,
-            backoff_base=2.0,
-        )
-        limiter = RateLimiter(config)
-
-        client_id = "test-client"
-
-        # First few requests should succeed
-        for i in range(3):
-            result = limiter.check(client_id)
-            assert result.status == RateLimitStatus.ALLOWED, f"Request {i} should be allowed"
-            limiter.record(client_id)
-
-        # Rapid requests should eventually be limited
-        # (depends on implementation details)
-
-    def test_circuit_breaker_lifecycle(self):
-        """Circuit breaker transitions through states."""
-        from governor.mcp_safety import (
-            CircuitBreaker, CircuitState, CircuitBreakerConfig,
-        )
-
-        config = CircuitBreakerConfig(
-            failure_threshold=3,
-            recovery_timeout=0.1,  # Short for testing
-        )
-        breaker = CircuitBreaker("test-breaker", config)
-
-        # Initially closed
-        assert breaker.state == CircuitState.CLOSED
-
-        # Record failures using the internal method
-        # (public API may be different; specific tests in test_mcp_safety.py)
-        for _ in range(3):
-            breaker._record_failure()
-
-        # Should be open after reaching threshold
-        # Note: may need more failures depending on implementation
-        # Just verify no crash
-
-
-# =============================================================================
 # Lifecycle Test: SDK Middleware Flow
 # =============================================================================
 

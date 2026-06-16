@@ -104,11 +104,15 @@ Go here with knives out.
 
 ## Relationship to existing MCP code
 
-The governor already has `src/governor/mcp_server.py` (MCP server for Claude integration)
-and `src/governor/mcp_safety.py` (rate limiter, backpressure, circuit breaker, idempotency,
-latency enforcer, fault handler). These are v2 implementations. The v3 work should:
+The governor already has `src/governor/mcp_server.py` (MCP server for Claude integration).
+A `src/governor/mcp_safety.py` (rate limiter, backpressure, circuit breaker, idempotency,
+latency enforcer, fault handler) existed as a v2 implementation but was **retired-unused
+and deleted 2026-06-16** — it had no production consumer (see
+`specs/gaps/GOV_GAP_MCP_SAFETY_DISPOSITION_001.md`). The v3 work should:
 
-- Evaluate whether existing safety controls are sufficient for broader MCP exposure
+- Treat MCP self-protection as greenfield, built from a measured failure mode
+  outward (do NOT resurrect the deleted module — the resurrection condition is
+  in the disposition gap)
 - Add the receipt protocol hooks (every tool call → GateReceipt)
 - Add the abuse harness tests
 - Decide on multi-server topology (one combined server vs. split by concern)

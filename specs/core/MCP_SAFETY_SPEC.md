@@ -1,18 +1,28 @@
 # MCP Safety Controls Specification
 
+> **RETIRED-UNUSED 2026-06-16.** The implementation this spec described
+> (`src/governor/mcp_safety.py` + `tests/test_mcp_safety.py`) was deleted: it
+> had **zero production consumers** — never imported by `mcp_server.py`, the
+> daemon, or any gate. The earlier `implemented: true` / `status: canonical`
+> frontmatter overstated reality (shipped code ≠ wired code). The **capability
+> class** (rate limit / backpressure / circuit breaking / idempotency / latency
+> deadline) is sound but is retired pending a forcing case. See
+> `specs/gaps/GOV_GAP_MCP_SAFETY_DISPOSITION_001.md` for the disposition ruling
+> and the resurrection condition. The spec body below is preserved as historical
+> design reference only — it does NOT describe live behavior.
+
 ## Version 0.1 — Self-Protective Control Infrastructure
 
 ```yaml
-status: canonical
-implemented: true
-module: src/governor/mcp_safety.py
-tests: tests/test_mcp_safety.py (~70 tests)
+status: retired-unused          # was: canonical (overstated — never wired)
+implemented: false              # code deleted 2026-06-16, see disposition gap
+module: (deleted) src/governor/mcp_safety.py
+tests: (deleted) tests/test_mcp_safety.py
+disposition: specs/gaps/GOV_GAP_MCP_SAFETY_DISPOSITION_001.md
 depends_on:
   - KERNEL_CONSTRAINTS_SPEC.md
-  - mcp_server.py (existing 21 tools)
 enables:
-  - Production MCP deployment
-  - High-throughput agent scenarios
+  - (none — was never on a production path)
 ```
 
 ---

@@ -45,7 +45,18 @@
 > unilaterally. Recommended sequence: (iii) then (i).
 
 **Opened:** 2026-06-16
-**Status:** COLD-ADMITTED + AMENDED to the LA-backed effect gate (above). Fork A/B/C rejected. AG-side build (against the injected LA seam) is unblocked; the real LA bridge is a flagged cross-repo follow-on.
+**Status:** SLICE 1 DONE + GREEN (commit `6a742d8`). The bootstrap-lab LA-backed
+effect gate is wired into the real supervisor hot path
+(`runtime/supervisor.py:_handle_tool_proposed`) via `runtime/lab_gate.py`;
+`tests/test_runtime_lab_gate.py` 7/7 covers all 9 amended acceptance criteria
+(LA-gated cross, exhaustion→capacity_refused, replay→already_consumed,
+concurrency→one-effect, identity-in-event chain, no-BA3, fence). Runtime
+regression 92/92. Built against the **injected contract-faithful LA seam** — no
+cross-repo transport yet. **Honest gap:** `scope_mismatch` (acceptance §3) is
+mapped by the client but not exercised — the slice-1 gate uses one scope per
+session, so it isn't reachable; the refusal-path mechanism is proven by
+capacity_refused/already_consumed. Slice 2 = real LA bridge (cross-repo, FLAG) +
+real supervised inner-Claude + disposable worktree.
 **Provenance:** operator reframe after the mcp_safety retirement. The "AG is at a
 legitimate stopping point, wait for LA" read was an over-correction —
 *"guarding against Potemkin machinery and accidentally proposing no machinery."*

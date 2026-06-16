@@ -50,6 +50,38 @@
 legitimate stopping point, wait for LA" read was an over-correction —
 *"guarding against Potemkin machinery and accidentally proposing no machinery."*
 
+## Build plan — slice 1 (grounded, AG-side, no cross-repo)
+
+Reconned attach points (file:line):
+- **LA client seam** — `linear_accountant_client.py:339` `LinearAccountantClient`,
+  ctor takes injected `request_capacity_callable` / `consume_callable` /
+  `admission_verifier` / `receipt_sink`; `.consume(CookedConsumeRequest, now,
+  parent_grant_receipt_id=) -> ConsumedResult | RefusalResult` (:716). Replay →
+  `already_consumed`; exhaustion → `capacity_refused`; emits GateReceipts. This
+  injected seam is contract-faithful (what LA's own tests + the orchestrator use)
+  → slice 1 needs NO real LA bridge.
+- **Tool-effect boundary** — `runtime/supervisor.py:534` `_handle_tool_proposed`
+  (the existing pre-tool gate; today a BA3 budget deny sits here). Under
+  `bootstrap_lab`, the LA `consume` decision becomes the gate for the chosen tool
+  class and the BA3 budget gate must NOT also act (acceptance §7).
+
+Design defaults for slice 1 (override if wrong):
+- **Grant lifecycle:** one LA `request_capacity` per supervised session at launch
+  (N units = the action bound); each governed tool effect of the chosen class does
+  one `consume(amount=1)` against the session token. The action limit is thus the
+  LA grant, not an AG tunable.
+- **Chosen tool class:** the reversible sandbox actuator (temp-file write /
+  subprocess `echo`) — observable effect on `Consumed`, observable refusal on
+  `capacity_refused`/`already_consumed`.
+- **Testable core first:** the `bootstrap_lab` LA-backed effect gate as a unit
+  (injected `consume_callable` mirroring `InMemoryAccountant` — grant/consume/
+  replay-kill/exhaustion), provable for acceptance §2–§5 + §7–§8 + concurrency
+  WITHOUT spinning a real Claude backend. The supervisor "outer drives inner"
+  integration (§1) layers on top once the gate core is green.
+- **Fence (§6 of original / §7-§8 amended):** `profile=bootstrap_lab` tag on the
+  session + receipts; a load-bearing test that lab receipts cannot be consumed as
+  promotion/production evidence and cannot mutate `ControlBaseline`.
+
 ## Forcing case (independent — NOT P4)
 
 A **runnable AG** is itself an independently-justified forcing case: integration

@@ -119,6 +119,7 @@ class RuntimeFacet:
     budget_ledger: Any = None  # RunBudgetLedger | None (avoid circular import)
     budget_policy: Any = None  # BudgetPolicy | None
     lab_gate: Any = None  # LabGate | None (bootstrap_lab LA-backed effect gate)
+    transition_probe: Any = None  # TransitionProbe | None (A2b: additive, flag-gated, default off)
     event_thread: threading.Thread | None = None
     running: bool = False
 
@@ -339,6 +340,32 @@ class SessionSupervisor:
                 session_id=session_id,
                 policy_id=facet.budget_policy.policy_id if facet.budget_policy else "",
             )
+
+        # A2b: additive, flag-gated transition-kernel probe. Absent unless policy_context opts in, so
+        # default behavior is byte-identical. Accepts a ready TransitionProbe or a config dict.
+        probe_cfg = (policy_context or {}).get("transition_probe")
+        if probe_cfg is not None:
+            from governor.runtime.transition_subprocess import (
+                TransitionProbe,
+                TransitionSubprocess,
+                default_office_context,
+            )
+            if isinstance(probe_cfg, TransitionProbe):
+                facet.transition_probe = probe_cfg
+            else:
+                transport = probe_cfg.get("transport") or TransitionSubprocess(
+                    binary_path=probe_cfg.get("binary_path")
+                )
+                if transport.identity is None:
+                    transport.start()
+                facet.transition_probe = TransitionProbe(
+                    transport=transport,
+                    mode=probe_cfg.get("mode", "observe"),
+                    receipt_system=probe_cfg.get("receipt_system"),
+                    build_office_context=probe_cfg.get("build_office_context")
+                    or default_office_context,
+                    memory_context_builder=probe_cfg.get("memory_context_builder"),
+                )
 
         with self._lock:
             self._sessions[session_id] = record
@@ -602,6 +629,105 @@ class SessionSupervisor:
         # Classify action: READ < WRITE < COMMUNICATE
         tool_input = event.payload.get("tool_input", {})
         action_class = classify_action(tool_name, tool_input)
+
+        # A2b: transition-kernel probe (additive, flag-gated; default off → unchanged behavior).
+        # Runs BEFORE the LA consume seam, on WRITE proposals only.
+        #   observe → record the kernel decision; if the kernel would REFUSE while the governed path
+        #             continues, emit a LOUD divergence receipt (never silently advisory), then fall
+        #             through to the unchanged governed path.
+        #   hold    → record the kernel decision, then STOP before any LA consume / effect. A hold, not
+        #             an enforce: the candidate never mints authority here.
+        probe = facet.transition_probe
+        # 3b2 enforce: the full live consequence chain owns the decision. The legacy lab_gate route is
+        # STRUCTURALLY UNREACHABLE from here — this branch always returns, so control never falls through
+        # to the lab_gate block below. enforce never degrades into observe/legacy.
+        if probe is not None and probe.mode == "enforce" and action_class == ActionClass.WRITE:
+            res = probe.enforce(
+                tool_name=tool_name, tool_input=tool_input, tool_call_id=tool_call_id,
+            )
+            succeeded = res.get("result") == "consumed_effect_succeeded"
+            if succeeded:
+                bus.emit(
+                    EventKind.TOOL_CALL_ALLOWED, SourceLayer.POLICY, record.backend_kind,
+                    payload={
+                        "tool_call_id": tool_call_id, "tool_name": tool_name, "enforce": True,
+                        "terminal": res["result"],
+                        "consumption_event_id": res.get("consumption_event_id"),
+                    },
+                    tool_call_id=tool_call_id,
+                )
+                if facet.handle:
+                    adapter.send_control(facet.handle, ControlAction(
+                        kind="approve", target_id=tool_call_id))
+            else:
+                # Refuse / Escalate / malformed / timeout / unavailable kernel-or-LA / failed
+                # revalidation / failed correspondence / non-success terminal all block — fail-closed.
+                bus.emit(
+                    EventKind.TOOL_CALL_DENIED, SourceLayer.POLICY, record.backend_kind,
+                    payload={
+                        "tool_call_id": tool_call_id, "tool_name": tool_name, "enforce": True,
+                        "terminal": res.get("result"), "reason": res.get("reason"),
+                    },
+                    tool_call_id=tool_call_id,
+                )
+                if facet.handle:
+                    adapter.send_control(facet.handle, ControlAction(
+                        kind="deny", target_id=tool_call_id,
+                        payload={"reason": f"enforce: {res.get('result')}"}))
+            return
+
+        if probe is not None and probe.mode in ("observe", "hold") and action_class == ActionClass.WRITE:
+            probe_scope = getattr(facet.lab_gate, "scope", None) or "lab"
+            kdec = probe.evaluate(
+                tool_name=tool_name, tool_input=tool_input, scope=probe_scope, target=tool_name,
+            )
+            kernel_refused = (kdec is None) or (kdec.get("decision") != "admit")
+            if probe.mode == "hold":
+                if kernel_refused:
+                    probe.record_divergence(
+                        kernel_decision=kdec, tool_name=tool_name, tool_call_id=tool_call_id,
+                        governed_path="stopped_by_hold",
+                    )
+                bus.emit(
+                    "transition_probe_held",
+                    SourceLayer.POLICY,
+                    record.backend_kind,
+                    payload={
+                        "tool_call_id": tool_call_id,
+                        "tool_name": tool_name,
+                        "mode": "hold",
+                        "transition_decision": (kdec or {}).get("decision", "fail_closed"),
+                        "reason": "transition_probe hold: stop before LA/effect (no consequence)",
+                    },
+                    tool_call_id=tool_call_id,
+                )
+                if facet.handle:
+                    adapter.send_control(facet.handle, ControlAction(
+                        kind="deny", target_id=tool_call_id,
+                        payload={"reason": "transition_probe hold (no consequence)"},
+                    ))
+                return
+            # observe: the governed path will continue below. If the kernel refused, that is a
+            # divergence we record loudly — we do not act on it (no enforce in A2b).
+            if kernel_refused:
+                probe.record_divergence(
+                    kernel_decision=kdec, tool_name=tool_name, tool_call_id=tool_call_id,
+                    governed_path="continues",
+                )
+                bus.emit(
+                    "transition_divergence_observed",
+                    SourceLayer.POLICY,
+                    record.backend_kind,
+                    payload={
+                        "tool_call_id": tool_call_id,
+                        "tool_name": tool_name,
+                        "mode": "observe",
+                        "transition_decision": (kdec or {}).get("decision", "fail_closed"),
+                        "classification": "kernel_refuse_vs_governed_continue",
+                    },
+                    tool_call_id=tool_call_id,
+                )
+            # fall through to the unchanged governed path
 
         # Bootstrap-lab LA-backed effect gate (the atlas spine made executable):
         # a WRITE effect crosses ONLY after LA authorizes consumption against the

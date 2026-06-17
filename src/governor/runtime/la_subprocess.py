@@ -210,6 +210,25 @@ class LASubprocess:
             return {"decision": "Denied", "denial_reason": "la_transport_failure", "receipt": "none"}
         return resp
 
+    def issue_capability(
+        self,
+        token_id: str,
+        target: str,
+        effect_class: str,
+        capability_id: str,
+        *,
+        now: int = 0,
+    ) -> dict[str, Any] | None:
+        """Mint a single-use SpendCapability against a granted token handle. Returns the capability
+        JSON (the wire shape transition-kernel's `LaCapability` expects) or None (fail-closed)."""
+        return self._exchange("issue_capability", {
+            "token_id": token_id,
+            "target": target,
+            "effect_class": effect_class,
+            "capability_id": capability_id,
+            "tick": now,
+        })
+
     def consume(self, la_request: dict[str, Any], now: int) -> dict[str, Any]:
         """Injected-callable shape. Fail-closed → a decision-less dict the client
         maps to a capacity refusal (closed-set invariant preserved)."""

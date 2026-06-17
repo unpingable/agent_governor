@@ -23,7 +23,10 @@ import time
 
 import pytest
 
-from governor.linear_accountant_client import LinearAccountantClient
+from governor.linear_accountant_client import (
+    CAPACITY_EXHAUSTED_MESSAGE,
+    LinearAccountantClient,
+)
 from governor.runtime.adapter import (
     AdapterCapabilities,
     BackendHandle,
@@ -323,3 +326,95 @@ def test_read_tools_do_not_consume(tmp_path):
 
     # The read did not consume; only the write did.
     assert fake.consume_calls == [f"{record.session_id}:tc_w"]
+
+
+# --------------------------------------------------------------------------- #
+# Slice 2 — capacity_refused legibility: the deny payload carries an
+# authoritative retry_disposition + terminal_scope so a worker can tell
+# "authority exhausted" from "retry later". The disposition is assigned at
+# consume()/InsufficientCapacity and carried verbatim through the gate; it is
+# NEVER re-derived from la_kind here.
+# --------------------------------------------------------------------------- #
+
+
+def test_slice2_exhausted_grant_deny_payload_requires_new_authority(tmp_path):
+    """Acceptance §2: an InsufficientCapacity refusal reaches the worker as
+    new_authority_required / current_grant with agreeing human text — in BOTH
+    the bus event payload and the deny ControlAction delivered to the worker."""
+    ctx, _fake, _sink = _lab_context(capacity=1)
+    sup = SessionSupervisor(state_dir=tmp_path / "rt")
+    adapter = _WriteWorkerAdapter([("tc_1", "write"), ("tc_2", "write")])
+    record = _run(sup, adapter, ctx)
+
+    denied = _by_kind(sup.get_events(record.session_id), EventKind.TOOL_CALL_DENIED)
+    assert denied, "the second write must be refused before effect"
+    for d in denied:
+        assert d.payload["la_kind"] == "capacity_refused"  # unchanged token (§1)
+        assert d.payload["retry_disposition"] == "new_authority_required"
+        assert d.payload["terminal_scope"] == "current_grant"
+        assert d.payload["message"] == CAPACITY_EXHAUSTED_MESSAGE
+    # The carrier actually delivered to the inner worker carries it too.
+    deny_controls = [c for c in adapter.controls if getattr(c, "kind", None) == "deny"]
+    assert deny_controls
+    for c in deny_controls:
+        assert c.payload["retry_disposition"] == "new_authority_required"
+        assert c.payload["terminal_scope"] == "current_grant"
+
+
+def test_slice2_replay_deny_payload_defaults_unknown(tmp_path):
+    """Acceptance §4/§5: a replay (already_consumed) is NOT capacity exhaustion;
+    its deny payload defaults to the unknown disposition — no guessed semantics."""
+    ctx, _fake, _sink = _lab_context(capacity=5)
+    sup = SessionSupervisor(state_dir=tmp_path / "rt")
+    adapter = _WriteWorkerAdapter([("tc_dup", "write"), ("tc_dup", "write")])
+    record = _run(sup, adapter, ctx)
+
+    denied = _by_kind(sup.get_events(record.session_id), EventKind.TOOL_CALL_DENIED)
+    assert len(denied) == 1
+    assert denied[0].payload["la_kind"] == "already_consumed"
+    assert denied[0].payload["retry_disposition"] == "unknown"
+    assert denied[0].payload["terminal_scope"] is None
+
+
+def _denied_grant_context():
+    """A context whose LA refuses the GRANT request (request-time Denied). The
+    session never acquires a grant, so writes hit the no_session_grant path —
+    whose la_kind bubbles up as capacity_refused but must NOT inherit
+    new_authority_required (load-bearing constraint #2)."""
+    class _DenyGrantLA:
+        def request_capacity(self, req, now):
+            return {"decision": "Denied", "denial_reason": "no stock", "receipt": "la_deny"}
+
+        def consume(self, req, now):  # pragma: no cover - never reached
+            raise AssertionError("consume must not be called without a grant")
+
+    fake = _DenyGrantLA()
+    client = LinearAccountantClient(
+        request_capacity_callable=fake.request_capacity,
+        consume_callable=fake.consume,
+        admission_verifier=lambda rid: rid == "adm_lab",
+        receipt_sink=_FakeSink(),
+    )
+    return {
+        "bootstrap_lab": {
+            "la_client": client, "actor": "inner_worker", "scope": "lab/sandbox",
+            "requested_capacity": 1, "admission_receipt_id": "adm_lab",
+            "eligibility_valid_until": 10_000, "expires_after": 10_000, "now": 0,
+        }
+    }
+
+
+def test_slice2_grant_time_capacity_refusal_does_not_inherit_new_authority(tmp_path):
+    """Constraint #2: a GRANT-time capacity_refused (no_session_grant) is a
+    different animal from consume-time exhaustion — it must default to the
+    unknown disposition, never new_authority_required, even though its la_kind
+    token can read as capacity_refused."""
+    ctx = _denied_grant_context()
+    sup = SessionSupervisor(state_dir=tmp_path / "rt")
+    adapter = _WriteWorkerAdapter([("tc_1", "write")])
+    record = _run(sup, adapter, ctx)
+
+    denied = _by_kind(sup.get_events(record.session_id), EventKind.TOOL_CALL_DENIED)
+    assert denied, "with no grant, the write must be refused"
+    assert denied[0].payload["retry_disposition"] == "unknown"
+    assert denied[0].payload["terminal_scope"] is None

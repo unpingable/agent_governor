@@ -627,13 +627,26 @@ class SessionSupervisor:
                         "la_kind": decision.la_kind,
                         "consume_receipt_id": decision.consume_receipt_id,
                         "grant_receipt_id": facet.lab_gate.grant_receipt_id,
+                        # Slice 2: worker-facing control fields so a denied worker
+                        # knows whether retrying the same write can ever succeed.
+                        "retry_disposition": decision.retry_disposition,
+                        "terminal_scope": decision.terminal_scope,
+                        "message": decision.message,
                     },
                     tool_call_id=tool_call_id,
                 )
                 if facet.handle:
                     adapter.send_control(facet.handle, ControlAction(
                         kind="deny", target_id=tool_call_id,
-                        payload={"reason": f"LA refused: {decision.la_kind}"},
+                        payload={
+                            "reason": f"LA refused: {decision.la_kind}",
+                            # The carrier actually delivered to the inner worker:
+                            # an exhausted-grant denial says new authority is
+                            # required, so the worker won't retry the same write.
+                            "retry_disposition": decision.retry_disposition,
+                            "terminal_scope": decision.terminal_scope,
+                            "message": decision.message,
+                        },
                     ))
                 return
             # Consumed → the effect may cross. Bind the LA decision identity into

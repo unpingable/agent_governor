@@ -24,10 +24,14 @@ from governor.linear_accountant_client import (
     LA_DECISION_REVOKED,
     LA_DECISION_SCOPE_MISMATCH,
     LA_DECISION_UNKNOWN_TOKEN,
+    CAPACITY_EXHAUSTED_MESSAGE,
+    NEW_AUTHORITY_REQUIRED,
     REFUSAL_ADMISSION_DENIED,
     REFUSAL_ALREADY_CONSUMED,
     REFUSAL_CAPACITY_REFUSED,
     REFUSAL_DANGLING_RECEIPT_REFERENCE,
+    RETRY_UNKNOWN,
+    TERMINAL_SCOPE_CURRENT_GRANT,
     ConsumedResult,
     CookedCapacityRequest,
     CookedConsumeRequest,
@@ -797,3 +801,157 @@ def test_d0c_a_la_refusal_cites_real_wicket_emitted_admission_id_as_parent(
     la_bundle = sink.evidence_for(la_receipt)
     assert la_bundle is not None
     assert la_bundle["parent_receipt_ids"] == [real_admission_id]
+
+
+# ===========================================================================
+# Slice 2 — capacity_refused legibility (retry_disposition / terminal_scope).
+#
+# The discrimination lives HERE, at consume()/request_capacity(): `la_kind`
+# says WHAT failed, `retry_disposition` says what to do about it. Only the
+# consume()/InsufficientCapacity branch earns new_authority_required; every
+# other refusal — including request-time Denied, which ALSO maps to
+# capacity_refused — defaults to `unknown`.
+# ===========================================================================
+
+
+def _insufficient_capacity_consume():
+    def response(la_request: dict, now: int) -> dict:
+        return {
+            "decision": LA_DECISION_INSUFFICIENT_CAPACITY,
+            "token_id": la_request["token_id"],
+            "remaining_capacity": 0,
+            "requested_amount": la_request["amount"],
+            "receipt": "la_rcpt_insufficient",
+        }
+
+    return response
+
+
+def test_slice2_insufficient_capacity_requires_new_authority():
+    """The ONE path that earns a non-unknown disposition: consume() →
+    InsufficientCapacity is terminal under the current grant and explicitly
+    requires new authority (acceptance §2), with agreeing human text (§6)."""
+    client = LinearAccountantClient(
+        request_capacity_callable=_CountingCallable(_never_called),
+        consume_callable=_CountingCallable(_insufficient_capacity_consume()),
+        admission_verifier=_admission_present({"ag_admit_001"}),
+    )
+
+    result = client.consume(_consume_request(), now=0)
+
+    assert isinstance(result, RefusalResult)
+    assert result.kind == REFUSAL_CAPACITY_REFUSED  # la_kind unchanged (§1)
+    assert result.retry_disposition == NEW_AUTHORITY_REQUIRED
+    assert result.terminal_scope == TERMINAL_SCOPE_CURRENT_GRANT
+    assert result.message == CAPACITY_EXHAUSTED_MESSAGE
+
+
+def test_slice2_request_denied_is_capacity_refused_but_unknown_disposition():
+    """Discrimination guard (acceptance §4): a request-time Denied maps to the
+    SAME `capacity_refused` kind, but must NOT inherit new_authority_required —
+    the bucket is not blanket-assigned. Disposition defaults to `unknown`."""
+    client = LinearAccountantClient(
+        request_capacity_callable=_CountingCallable(_denied_response()),
+        consume_callable=_CountingCallable(_never_called),
+        admission_verifier=_admission_present({"ag_admit_001"}),
+    )
+
+    result = client.request_capacity(_valid_capacity_request(), now=0)
+
+    assert isinstance(result, RefusalResult)
+    assert result.kind == REFUSAL_CAPACITY_REFUSED  # same token as the consume path
+    assert result.retry_disposition == RETRY_UNKNOWN  # but NOT new_authority_required
+    assert result.terminal_scope is None
+    assert result.message is None
+
+
+@pytest.mark.parametrize(
+    "la_variant",
+    [
+        LA_DECISION_EXPIRED,
+        LA_DECISION_REVOKED,
+        LA_DECISION_UNKNOWN_TOKEN,
+        LA_DECISION_SCOPE_MISMATCH,
+    ],
+)
+def test_slice2_other_consume_variants_default_unknown(la_variant):
+    """Acceptance §4/§5: every other consume refusal class gets NO guessed retry
+    semantics — disposition defaults to `unknown` (not retry_after_delay), with
+    no terminal_scope or message."""
+
+    def response(la_request: dict, now: int) -> dict:
+        return {
+            "decision": la_variant,
+            "token_id": la_request["token_id"],
+            "receipt": "la_rcpt_variant",
+        }
+
+    client = LinearAccountantClient(
+        request_capacity_callable=_CountingCallable(_never_called),
+        consume_callable=_CountingCallable(response),
+        admission_verifier=_admission_present({"ag_admit_001"}),
+    )
+
+    result = client.consume(_consume_request(), now=0)
+
+    assert isinstance(result, RefusalResult)
+    assert result.retry_disposition == RETRY_UNKNOWN
+    assert result.terminal_scope is None
+    assert result.message is None
+
+
+def test_slice2_already_consumed_defaults_unknown():
+    """Replay → already_consumed is NOT a capacity exhaustion; disposition
+    defaults to `unknown` (acceptance §4)."""
+    client = LinearAccountantClient(
+        request_capacity_callable=_CountingCallable(_never_called),
+        consume_callable=_CountingCallable(_replay_consume_callable()),
+        admission_verifier=_admission_present({"ag_admit_001"}),
+    )
+    req = _consume_request(event_id="evt-replay")
+    assert isinstance(client.consume(req, now=0), ConsumedResult)
+
+    replay = client.consume(req, now=1)
+    assert isinstance(replay, RefusalResult)
+    assert replay.kind == REFUSAL_ALREADY_CONSUMED
+    assert replay.retry_disposition == RETRY_UNKNOWN
+    assert replay.terminal_scope is None
+
+
+def test_slice2_post_init_enforces_disposition_and_agreement():
+    """Acceptance §6, enforced by construction: an out-of-set disposition is
+    rejected, and new_authority_required cannot drift apart from its
+    terminal_scope + human message."""
+    # Out-of-set retry_disposition.
+    with pytest.raises(ValueError):
+        RefusalResult(kind=REFUSAL_CAPACITY_REFUSED, detail="x",
+                      retry_disposition="sleep_a_bit")
+    # new_authority_required without terminal_scope / message → rejected.
+    with pytest.raises(ValueError):
+        RefusalResult(kind=REFUSAL_CAPACITY_REFUSED, detail="x",
+                      retry_disposition=NEW_AUTHORITY_REQUIRED)
+    with pytest.raises(ValueError):
+        RefusalResult(kind=REFUSAL_CAPACITY_REFUSED, detail="x",
+                      retry_disposition=NEW_AUTHORITY_REQUIRED,
+                      terminal_scope=TERMINAL_SCOPE_CURRENT_GRANT)  # missing message
+    # With both → valid.
+    ok = RefusalResult(kind=REFUSAL_CAPACITY_REFUSED, detail="x",
+                       retry_disposition=NEW_AUTHORITY_REQUIRED,
+                       terminal_scope=TERMINAL_SCOPE_CURRENT_GRANT,
+                       message=CAPACITY_EXHAUSTED_MESSAGE)
+    assert ok.retry_disposition == NEW_AUTHORITY_REQUIRED
+
+
+def test_slice2_refusalresult_backward_compatible_defaults():
+    """Acceptance §7: a RefusalResult built the old way (no new args) is valid
+    and defaults to the unknown disposition — existing constructions don't break
+    and don't silently acquire a retry policy."""
+    import dataclasses
+
+    r = RefusalResult(kind=REFUSAL_ALREADY_CONSUMED, detail="legacy")
+    assert r.retry_disposition == RETRY_UNKNOWN
+    assert r.terminal_scope is None
+    assert r.message is None
+    d = dataclasses.asdict(r)
+    assert d["retry_disposition"] == RETRY_UNKNOWN
+    assert d["terminal_scope"] is None

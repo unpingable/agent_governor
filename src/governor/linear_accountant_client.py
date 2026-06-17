@@ -131,6 +131,50 @@ CLOSED_REFUSAL_KINDS = frozenset(
 BYPASS_BA3_FOR_MVP = "BA3_BYPASSED_FOR_MVP"
 
 
+# ---------------------------------------------------------------------------
+# Retry disposition vocabulary (slice 2: capacity_refused legibility).
+#
+# A refusal's `kind` says WHAT failed; `retry_disposition` says what a worker
+# receiving the denial should do about it. The two are orthogonal: a single
+# `kind` (notably `capacity_refused`, which four distinct LA paths collapse to)
+# does NOT determine the disposition. The disposition is assigned ONLY at the
+# one structural branch where the failure is unambiguous (consume() →
+# InsufficientCapacity) and carried forward — never re-derived downstream from
+# the `kind` token. Every other refusal class defaults to `unknown`; we do NOT
+# decree one retry policy for a whole bucket.
+# ---------------------------------------------------------------------------
+RETRY_SAME_AUTHORITY = "retry_same_authority"
+RETRY_AFTER_DELAY = "retry_after_delay"
+NEW_AUTHORITY_REQUIRED = "new_authority_required"
+OPERATOR_ACTION_REQUIRED = "operator_action_required"
+NEVER_RETRY = "never_retry"
+RETRY_UNKNOWN = "unknown"  # default; deliberately NOT retry_after_delay
+
+RETRY_DISPOSITIONS = frozenset(
+    {
+        RETRY_SAME_AUTHORITY,
+        RETRY_AFTER_DELAY,
+        NEW_AUTHORITY_REQUIRED,
+        OPERATOR_ACTION_REQUIRED,
+        NEVER_RETRY,
+        RETRY_UNKNOWN,
+    }
+)
+
+# Scoped terminality marker: this refusal is terminal under the current grant
+# (a new grant — new authority — could still succeed). The narrowest true scope
+# for InsufficientCapacity; NOT "never_retry" (the action is not forbidden, only
+# unfundable under this grant).
+TERMINAL_SCOPE_CURRENT_GRANT = "current_grant"
+
+# Human text for the one path that earns new_authority_required. Must AGREE with
+# the machine fields (enforced by RefusalResult.__post_init__).
+CAPACITY_EXHAUSTED_MESSAGE = (
+    "Write capacity for this grant is exhausted. "
+    "Retrying under the same grant cannot succeed."
+)
+
+
 # The closed set this client may emit at this seam. Runtime invariant on
 # `_emit_refusal_receipt`. Note this is the FULL S4-lite refusal set minus
 # `standing_required` / `dangling_receipt_reference` (those are owned by
@@ -273,6 +317,14 @@ class RefusalResult:
     la_decision: Optional[dict] = None  # raw LA response if the call happened
     receipt_id: Optional[str] = None
     parent_receipt_id: Optional[str] = None
+    # Slice 2: worker-facing control fields. `kind` says what failed;
+    # `retry_disposition` says what to do about it. Defaults make every existing
+    # construction valid unchanged and keep unknown/legacy refusals at `unknown`
+    # (NOT retry_after_delay). `terminal_scope` / `message` are populated only on
+    # the one path that earns a non-unknown disposition.
+    retry_disposition: str = RETRY_UNKNOWN
+    terminal_scope: Optional[str] = None
+    message: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.kind not in CLOSED_REFUSAL_KINDS:
@@ -282,6 +334,19 @@ class RefusalResult:
             raise ValueError(
                 f"refusal kind {self.kind!r} is not in the closed refusal set"
             )
+        if self.retry_disposition not in RETRY_DISPOSITIONS:
+            raise ValueError(
+                f"retry_disposition {self.retry_disposition!r} is not in the "
+                "closed retry-disposition set"
+            )
+        # Agreement invariant (acceptance §6): the strong, actionable
+        # disposition must carry the scope it is terminal under AND human text,
+        # so the machine fields and prose cannot drift apart.
+        if self.retry_disposition == NEW_AUTHORITY_REQUIRED:
+            if not self.terminal_scope or not self.message:
+                raise ValueError(
+                    "new_authority_required requires terminal_scope and message"
+                )
 
 
 @dataclass(frozen=True)
@@ -546,12 +611,20 @@ class LinearAccountantClient:
         evidence_extra: dict[str, Any],
         parent_receipt_id: Optional[str],
         la_decision: Optional[dict] = None,
+        retry_disposition: str = RETRY_UNKNOWN,
+        terminal_scope: Optional[str] = None,
+        message: Optional[str] = None,
     ) -> RefusalResult:
         """Build a RefusalResult with a freshly minted receipt id.
 
         Centralizes the "emit then construct" pattern so each refusal
         path stays one expression instead of a manual two-step that can
         forget to populate ``receipt_id``.
+
+        ``retry_disposition`` / ``terminal_scope`` / ``message`` default to the
+        unknown disposition so every existing call site keeps ``unknown``
+        semantics; only the InsufficientCapacity branch passes the strong
+        disposition explicitly.
         """
         rid = self._emit_refusal_receipt(
             refusal_kind=kind,
@@ -567,6 +640,9 @@ class LinearAccountantClient:
             la_decision=la_decision,
             receipt_id=rid,
             parent_receipt_id=parent_receipt_id,
+            retry_disposition=retry_disposition,
+            terminal_scope=terminal_scope,
+            message=message,
         )
 
     # ------------------------------------------------------------------
@@ -814,6 +890,13 @@ class LinearAccountantClient:
             )
 
         if decision == LA_DECISION_INSUFFICIENT_CAPACITY:
+            # The ONE path that earns a non-unknown disposition. This is the
+            # sole structural branch where capacity_refused unambiguously means
+            # "the grant is exhausted" — retrying the same write under the same
+            # grant cannot succeed, but new authority (a fresh grant) could.
+            # The disposition is assigned here and carried forward; it is NEVER
+            # re-derived downstream from kind == capacity_refused (three other
+            # paths collapse to that same token with disposition=unknown).
             return self._refuse(
                 kind=REFUSAL_CAPACITY_REFUSED,
                 detail=(
@@ -826,6 +909,9 @@ class LinearAccountantClient:
                 evidence_extra={**evidence_common, "la_response": la_response},
                 parent_receipt_id=None,
                 la_decision=la_response,
+                retry_disposition=NEW_AUTHORITY_REQUIRED,
+                terminal_scope=TERMINAL_SCOPE_CURRENT_GRANT,
+                message=CAPACITY_EXHAUSTED_MESSAGE,
             )
 
         # Ratified per-variant mapping (S4-lite 2026-06-09; codex review):

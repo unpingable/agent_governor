@@ -76,6 +76,13 @@ class LabEffectDecision:
     token_id: Any = None
     consume_receipt_id: Optional[str] = None
     remaining_capacity: Optional[int] = None
+    # Slice 2: worker-facing control fields, carried verbatim from RefusalResult.
+    # Defaults keep the no_session_grant path (which constructs this directly) at
+    # the unknown disposition — a grant-time capacity_refused must NOT inherit
+    # new_authority_required.
+    retry_disposition: str = "unknown"
+    terminal_scope: Optional[str] = None
+    message: Optional[str] = None
 
 
 @dataclass
@@ -194,9 +201,16 @@ class LabGate:
             )
         # RefusalResult — closed kind set (capacity_refused / already_consumed /
         # scope_mismatch / token_expired / …). The effect does not cross.
+        # Carry the disposition assigned at the consume() branch verbatim; do NOT
+        # re-derive it from result.kind here (four sources collapse to
+        # capacity_refused — only consume()/InsufficientCapacity earns the strong
+        # disposition).
         return LabEffectDecision(
             allowed=False,
             reason=result.detail,
             la_kind=result.kind,
             consume_receipt_id=result.receipt_id,
+            retry_disposition=result.retry_disposition,
+            terminal_scope=result.terminal_scope,
+            message=result.message,
         )

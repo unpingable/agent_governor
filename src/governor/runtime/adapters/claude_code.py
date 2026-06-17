@@ -74,6 +74,26 @@ def _deny(reason):
         }
     }))
 
+def _worker_denial_reason(result):
+    # Render the structured refusal (slice 2) into the worker-facing permission
+    # reason WITHOUT mutating the stable `reason` token: base reason, then any
+    # of message / retry_disposition / terminal_scope that the supervisor
+    # supplied. Legacy/unknown responses (only `reason`) render exactly as
+    # before. Missing optional fields are simply omitted — never None or empty
+    # punctuation, never a guessed disposition.
+    base = str(result.get("reason") or "Blocked by governor")
+    details = []
+    message = result.get("message")
+    disposition = result.get("retry_disposition")
+    terminal_scope = result.get("terminal_scope")
+    if message:
+        details.append(str(message))
+    if disposition:
+        details.append("Retry disposition: %s." % disposition)
+    if terminal_scope:
+        details.append("Terminal scope: %s." % terminal_scope)
+    return " ".join([base] + details)
+
 def _env_float(name, default):
     try:
         return float(os.environ[name])
@@ -124,7 +144,7 @@ def main():
         if decision == "allow":
             return  # allow — output nothing, exit 0
         if decision == "deny":
-            _deny(result.get("reason", "Blocked by governor"))
+            _deny(_worker_denial_reason(result))
             return
         _deny("Governor supervised session: unrecognized supervisor decision %r — failing closed." % (decision,))
     except socket.timeout:
@@ -513,11 +533,22 @@ class ClaudeCodeAdapter:
 
         elif action.kind == "deny":
             tool_call_id = action.target_id or ""
-            reason = action.payload.get("reason", "Blocked by operator")
             conn = self._pending_hooks.pop(tool_call_id, None)
             if conn:
                 try:
-                    resp = json.dumps({"decision": "deny", "reason": reason}) + "\n"
+                    # `reason` stays byte-stable. Forward the slice-2 structured
+                    # refusal fields as SIBLING keys when present so the hook can
+                    # render them into permissionDecisionReason; the hook renders
+                    # legacy (reason-only) responses unchanged.
+                    resp_obj = {
+                        "decision": "deny",
+                        "reason": action.payload.get("reason", "Blocked by operator"),
+                    }
+                    for key in ("retry_disposition", "terminal_scope", "message"):
+                        value = action.payload.get(key)
+                        if value is not None:
+                            resp_obj[key] = value
+                    resp = json.dumps(resp_obj) + "\n"
                     conn.sendall(resp.encode())
                     conn.close()
                 except OSError:

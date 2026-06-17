@@ -155,12 +155,19 @@ def _hash_file_capped(path: Path, cap: int) -> tuple[str, bool]:
     return content_hash(data), truncated
 
 
-def _write_bundle(bundle: CiReceiptBundle, receipt_out: Path) -> Path:
+def _write_bundle(
+    bundle: CiReceiptBundle, receipt_out: Path, label: str | None = None
+) -> Path:
     """Write bundle to the path indicated by suffix convention.
 
     - ``.jsonl`` suffix  → append one JSONL line
     - ``.json`` suffix   → write single JSON object
     - no recognised suffix → treat as directory, write individual file
+
+    *label*, when given, is preferred for the directory-mode filename in place
+    of the ``ci_wrap_{ci_kind}`` prefix. It affects ONLY the on-disk filename —
+    never the bundle, the receipt, or the hashed evidence. Callers that pass no
+    label keep the existing ``ci_wrap_{ci_kind}_{uid}.json`` name.
     """
     suffix = receipt_out.suffix.lower()
 
@@ -178,9 +185,12 @@ def _write_bundle(bundle: CiReceiptBundle, receipt_out: Path) -> Path:
 
     # Directory mode
     receipt_out.mkdir(parents=True, exist_ok=True)
-    kind = bundle.evidence.get("ci_kind", "unknown")
     uid = uuid.uuid4().hex[:8]
-    fname = f"ci_wrap_{kind}_{uid}.json"
+    if label:
+        fname = f"{label}_{uid}.json"
+    else:
+        kind = bundle.evidence.get("ci_kind", "unknown")
+        fname = f"ci_wrap_{kind}_{uid}.json"
     out = receipt_out / fname
     out.write_text(bundle.to_json() + "\n")
     return out
@@ -196,6 +206,7 @@ def ci_wrap(
     extra_evidence: dict[str, Any] | None = None,
     gate: str = CI_WRAP_GATE,
     subject_kind: str = "ci_wrap",
+    label: str | None = None,
 ) -> CiWrapResult:
     """Run *command*, emit a CI receipt bundle.
 
@@ -206,7 +217,11 @@ def ci_wrap(
     ``extra_evidence`` merges additional keys into the evidence bundle (used by
     the verifier wrapper to record exit-source provenance). ``gate`` /
     ``subject_kind`` override the receipt's gate identity (defaults preserve the
-    CI-lane behavior). Receipt emission is fail-open (errors print to stderr).
+    CI-lane behavior). ``label``, when given, is preferred for the directory-mode
+    receipt filename — it affects ONLY the on-disk name, never the receipt
+    identity, subject bytes, or hashed evidence; callers passing no label keep the
+    ``ci_wrap_{ci_kind}_{uid}.json`` name. Receipt emission is fail-open (errors
+    print to stderr).
     """
     if ci_kind not in VALID_CI_KINDS:
         raise ValueError(
@@ -291,7 +306,7 @@ def ci_wrap(
             timing=timing,
         )
         bundle = CiReceiptBundle(receipt=receipt, evidence=evidence_bundle)
-        written_path = _write_bundle(bundle, receipt_out)
+        written_path = _write_bundle(bundle, receipt_out, label=label)
         return CiWrapResult(exit_code=returncode, receipt=receipt, receipt_path=written_path)
     except Exception as exc:
         print(

@@ -2104,8 +2104,9 @@ def wrap(ctx: click.Context, command: tuple[str, ...], auto_approve: bool, check
 @click.option("--ci-kind", default="unit_tests", help="Verifier kind (unit_tests, lint, typecheck, build, integration_tests, e2e_tests, coverage, security_scan)")
 @click.option("--receipt-out", default=None, help="Receipt path/dir (default: .governor/verify_receipts/)")
 @click.option("--allow-masked", is_flag=True, help="Run even if the command is a pipe that may mask the exit (discouraged; only if you know the exit source)")
+@click.option("--label", "-l", default=None, help="Receipt filename label (preferred over the ci-kind-derived name; falls back to the command's program name). Cosmetic — does not change the receipt hash/identity.")
 @click.pass_context
-def verify_run_cmd(ctx: click.Context, command: tuple[str, ...], ci_kind: str, receipt_out: str | None, allow_masked: bool) -> None:
+def verify_run_cmd(ctx: click.Context, command: tuple[str, ...], ci_kind: str, receipt_out: str | None, allow_masked: bool, label: str | None) -> None:
     """Run a verifier command and emit a receipt backed by its REAL exit code.
 
     A verifier result is admissible only when the verifier's own exit status is
@@ -2121,7 +2122,7 @@ def verify_run_cmd(ctx: click.Context, command: tuple[str, ...], ci_kind: str, r
 
     out = Path(receipt_out) if receipt_out else None
     try:
-        result = verify_run(list(command), ci_kind, out, allow_masked=allow_masked)
+        result = verify_run(list(command), ci_kind, out, allow_masked=allow_masked, label=label)
     except ValueError as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)

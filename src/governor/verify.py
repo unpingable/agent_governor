@@ -29,6 +29,7 @@ masked-risk evidence mechanically:
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -73,6 +74,31 @@ class VerifyResult:
 
 def _basename(arg: str) -> str:
     return os.path.basename(arg)
+
+
+# Receipt-filename label length cap. The label is cosmetic (it names the file on
+# disk), so a generous-but-bounded slug keeps the trail readable without
+# unbounded filenames.
+_LABEL_MAXLEN = 40
+
+
+def _slugify(text: str) -> str:
+    """Conservative filename-safe slug: lowercased, non-alphanumerics → ``_``,
+    stripped, truncated. Sanitizes both operator labels (so a label can never
+    traverse paths or carry unsafe chars) and the command-basename fallback."""
+    slug = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+    return slug[:_LABEL_MAXLEN]
+
+
+def _command_label(command: list[str]) -> str:
+    """Fallback receipt label when the operator supplies none: a slug of the
+    command's program name only — ``basename(argv[0])``. This is NOT a shell
+    parser; ``["lake", "build"]`` → ``"lake"``, ``["cargo", "test"]`` →
+    ``"cargo"``. Returns ``""`` for an empty command (caller then falls back to
+    the ``ci_wrap_{ci_kind}`` name)."""
+    if not command:
+        return ""
+    return _slugify(_basename(command[0]))
 
 
 def _contains_pipe(script: str) -> bool:
@@ -166,6 +192,7 @@ def _emit_refusal_receipt(
     safety: CommandSafety,
     receipt_out: Path,
     timestamp: str | None,
+    label: str | None = None,
 ):
     """Mint a block receipt recording that a masked-risk command was refused
     *before* running it (so no green can ever be claimed from it)."""
@@ -192,7 +219,7 @@ def _emit_refusal_receipt(
         timestamp=timestamp,
     )
     bundle = CiReceiptBundle(receipt=receipt, evidence=evidence)
-    path = _write_bundle(bundle, receipt_out)
+    path = _write_bundle(bundle, receipt_out, label=label)
     return receipt, path
 
 
@@ -204,9 +231,18 @@ def verify_run(
     allow_masked: bool = False,
     cwd: Path | None = None,
     timestamp: str | None = None,
+    label: str | None = None,
 ) -> VerifyResult:
     """Run *command* as a verifier and emit a receipt whose verdict is backed by
     the command's own exit code.
+
+    ``label`` names the on-disk receipt file. When given it is sanitized and
+    preferred; when omitted it falls back to a slug of the command's program name
+    (``basename(argv[0])``) so a ``lake build`` receipt is named ``lake_*`` rather
+    than mislabeled by ``ci_kind``. The label is cosmetic — it affects ONLY the
+    filename, never ``receipt_id`` / subject bytes / hashed evidence (the command
+    is already recorded in evidence as ``command_display``). Both the success and
+    the masked-exit-refusal paths use it.
 
     Refuses (does not run; verdict=block, ``verifier_exit_observed=False``) when
     the command is a shell pipeline that would mask the verifier's exit, unless
@@ -217,10 +253,17 @@ def verify_run(
     if out == _DEFAULT_RECEIPT_DIR:
         out.mkdir(parents=True, exist_ok=True)
 
+    # Operator label preferred; else a conservative basename(argv[0]) slug. Used
+    # identically on the success and masked-exit-refusal paths; filename-only.
+    effective_label = _slugify(label) if label else _command_label(command)
+    effective_label = effective_label or None
+
     safety = analyze_command(command)
 
     if safety.masked_exit_risk and not allow_masked:
-        receipt, path = _emit_refusal_receipt(command, ci_kind, safety, out, timestamp)
+        receipt, path = _emit_refusal_receipt(
+            command, ci_kind, safety, out, timestamp, label=effective_label
+        )
         return VerifyResult(
             refused=True,
             exit_code=REFUSAL_EXIT,
@@ -246,6 +289,7 @@ def verify_run(
         extra_evidence=extra,
         gate=VERIFY_GATE,
         subject_kind=VERIFY_SUBJECT_KIND,
+        label=effective_label,
     )
     return VerifyResult(
         refused=False,

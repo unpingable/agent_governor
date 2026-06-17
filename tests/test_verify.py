@@ -17,6 +17,8 @@ from governor.verify import (
     EXIT_PIPEFAIL,
     EXIT_UNKNOWN,
     REFUSAL_EXIT,
+    _command_label,
+    _slugify,
     analyze_command,
     verify_run,
 )
@@ -168,6 +170,68 @@ class TestVerifyRun:
     def test_invalid_ci_kind_rejected(self, tmp_path) -> None:
         with pytest.raises(ValueError):
             verify_run(_PASS, "not_a_real_kind", tmp_path / "r.json")
+
+
+# --------------------------------------------------------------------------- #
+# Receipt filename label (#1) — operator-preferred / command-basename fallback,
+# cosmetic-only: it must never change the receipt identity/hash.
+# --------------------------------------------------------------------------- #
+
+
+class TestReceiptLabel:
+    def test_command_label_uses_argv0_basename_only(self) -> None:
+        # NOT a shell parser — only basename(argv[0]).
+        assert _command_label(["lake", "build"]) == "lake"
+        assert _command_label(["cargo", "test", "-p", "x"]) == "cargo"
+        assert _command_label(["/usr/bin/pytest", "-q"]) == "pytest"
+        assert _command_label([]) == ""
+
+    def test_slugify_is_filename_safe(self) -> None:
+        assert _slugify("My Lean Build") == "my_lean_build"
+        # no path traversal can survive the slug
+        assert "/" not in _slugify("../../etc/passwd")
+        assert ".." not in _slugify("../../etc/passwd")
+        # bounded length
+        assert len(_slugify("x" * 200)) <= 40
+
+    def test_operator_label_preferred_in_filename(self, tmp_path) -> None:
+        d = tmp_path / "receipts"  # directory mode → filename is generated
+        r = verify_run(_PASS, "unit_tests", d, label="My Lean Build")
+        assert r.refused is False
+        assert r.receipt_path.parent == d
+        assert r.receipt_path.name.startswith("my_lean_build_")
+        assert r.receipt_path.name.endswith(".json")
+        # the misleading ci_kind no longer drives the name when a label is given
+        assert "unit_tests" not in r.receipt_path.name
+
+    def test_command_basename_fallback_when_no_label(self, tmp_path) -> None:
+        d = tmp_path / "receipts"
+        r = verify_run(_PASS, "unit_tests", d)  # no label
+        expected = _command_label(_PASS)  # slug of basename(sys.executable)
+        assert expected
+        assert r.receipt_path.name.startswith(expected + "_")
+        # the headline defect — `ci_wrap_unit_tests_*` for a non-unit-test cmd —
+        # is gone: the default ci_kind no longer mislabels the file.
+        assert not r.receipt_path.name.startswith("ci_wrap_unit_tests_")
+
+    def test_label_does_not_change_receipt_identity(self, tmp_path) -> None:
+        # The load-bearing invariant: the label is cosmetic (filename only). With
+        # the same command + timestamp, a labeled and an unlabeled run produce
+        # DIFFERENT filenames but the SAME receipt identity/hash — the label
+        # enters neither the subject bytes nor the hashed evidence.
+        ts = "2026-06-17T00:00:00Z"
+        r_lab = verify_run(_PASS, "unit_tests", tmp_path / "a", label="custom", timestamp=ts)
+        r_plain = verify_run(_PASS, "unit_tests", tmp_path / "b", label=None, timestamp=ts)
+        assert r_lab.receipt_path.name.startswith("custom_")
+        assert not r_plain.receipt_path.name.startswith("custom_")
+        assert r_lab.receipt.receipt_id == r_plain.receipt.receipt_id
+
+    def test_masked_refusal_receipt_also_uses_label(self, tmp_path) -> None:
+        # Both paths use the label — the refusal (block) receipt is named too.
+        d = tmp_path / "receipts"
+        r = verify_run(["bash", "-c", "false | tail"], "unit_tests", d, label="refused-probe")
+        assert r.refused is True
+        assert r.receipt_path.name.startswith("refused_probe_")
 
 
 def _evidence(result) -> dict:

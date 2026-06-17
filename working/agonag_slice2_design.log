@@ -1,0 +1,195 @@
+Preparing worktree (detached HEAD c383a66)
+HEAD is now at c383a66 loop.json: #1 fix landed (ce77d3e, suite green); next = Phase C capacity_refused legibility
+[outer] DESIGN PASS — read-only (0-unit grant). worktree /tmp/agonag2_wt_e2_rqe9h/ag @ c383a662
+[outer] LA boundary: 0.0.0 repo=a56c372a
+[outer] deposited 0 units into 'lab/agonag2-design' (NO top-up)
+[outer] session sess_83c4499179cb; launching real claude…
+  [evt] la_boundary :: {"la": "linear-accountant", "version": "0.0.0", "commit": "unknown", "protocol": "v0", "binary_path": "/home/jbeck/git/linearaccountant/target/debug/la_cli", "repo_commit": "a56c372a10a415263c18fb503ab5d14305a90000", "session_grant_scope": 
+  [evt] session_created :: {"cwd": "/tmp/agonag2_wt_e2_rqe9h/ag", "task": "You are doing a READ-ONLY DESIGN PASS on a real Python codebase (the Agent Governor) in this directory. DO NOT EDIT ANY FILE. (Write/Edit are gated to zero capacity and will be refused \u2014 
+  [evt] session_launching :: {}
+  [evt] session_attached :: {"pid": 1231720}
+  [evt] session_running :: {}
+  [evt] session_running :: {}
+  [evt] session_running :: {}
+  [evt] tool_call_proposed :: {"tool_name": "Read", "tool_input": {"file_path": "/tmp/agonag2_wt_e2_rqe9h/ag/src/governor/runtime/lab_gate.py"}, "tool_call_id": "toolu_012WEbcVZdxyq1Kw8gNfz3Bg"}
+  [evt] tool_call_allowed :: {"tool_call_id": "toolu_012WEbcVZdxyq1Kw8gNfz3Bg", "tool_name": "Read", "action_class": "read", "auto": true}
+  [evt] tool_call_completed :: {"tool_name": "Read", "tool_call_id": "toolu_012WEbcVZdxyq1Kw8gNfz3Bg"}
+  [evt] tool_call_proposed :: {"tool_name": "Read", "tool_input": {"file_path": "/tmp/agonag2_wt_e2_rqe9h/ag/src/governor/linear_accountant_client.py"}, "tool_call_id": "toolu_011vDKx8pSJ13JJe2eWjKyr9"}
+  [evt] tool_call_allowed :: {"tool_call_id": "toolu_011vDKx8pSJ13JJe2eWjKyr9", "tool_name": "Read", "action_class": "read", "auto": true}
+  [evt] tool_call_completed :: {"tool_name": "Read", "tool_call_id": "toolu_011vDKx8pSJ13JJe2eWjKyr9"}
+  [evt] tool_call_completed :: {"tool_name": "Read", "tool_call_id": "toolu_011vDKx8pSJ13JJe2eWjKyr9"}
+  [evt] tool_call_completed :: {"tool_name": "Read", "tool_call_id": "toolu_011vDKx8pSJ13JJe2eWjKyr9"}
+  [evt] tool_call_proposed :: {"tool_name": "Grep", "tool_input": {"pattern": "TOOL_CALL_DENIED|decide_write_effect|LabEffectDecision|capacity_refused|la_kind|ControlAction|deny", "path": "/tmp/agonag2_wt_e2_rqe9h/ag/src/governor/runtime/supervisor.py", "output_mode": "
+  [evt] tool_call_allowed :: {"tool_call_id": "toolu_013cseAYNWJGz79mvzJwyFhC", "tool_name": "Grep", "action_class": "read", "auto": true}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_013cseAYNWJGz79mvzJwyFhC"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_013cseAYNWJGz79mvzJwyFhC"}
+  [evt] tool_call_proposed :: {"tool_name": "Read", "tool_input": {"file_path": "/tmp/agonag2_wt_e2_rqe9h/ag/src/governor/runtime/supervisor.py", "offset": 560, "limit": 120}, "tool_call_id": "toolu_016fsnDZkpjj5dLaYJK1YaSv"}
+  [evt] tool_call_allowed :: {"tool_call_id": "toolu_016fsnDZkpjj5dLaYJK1YaSv", "tool_name": "Read", "action_class": "read", "auto": true}
+  [evt] tool_call_completed :: {"tool_name": "Read", "tool_call_id": "toolu_016fsnDZkpjj5dLaYJK1YaSv"}
+  [evt] tool_call_completed :: {"tool_name": "Read", "tool_call_id": "toolu_016fsnDZkpjj5dLaYJK1YaSv"}
+  [evt] tool_call_completed :: {"tool_name": "Read", "tool_call_id": "toolu_016fsnDZkpjj5dLaYJK1YaSv"}
+  [evt] tool_call_proposed :: {"tool_name": "Bash", "tool_input": {"command": "ls tests/ | grep -iE \"lab_gate|lab|supervisor|la_|linear|capacity|effect\" 2>/dev/null; echo \"---grep refs---\"; grep -rln \"decide_write_effect\\|LabEffectDecision\\|capacity_refused\\|la_
+  [evt] tool_call_denied :: {"tool_call_id": "toolu_01JXGbeve61ugpx71wh5KFQx", "tool_name": "Bash", "profile": "bootstrap_lab", "reason": "LA refused effect: capacity_refused (no_session_grant (capacity_refused))", "la_kind": "capacity_refused", "consume_receipt_id": 
+  [evt] tool_call_denied :: {"tool_call_id": "toolu_01JXGbeve61ugpx71wh5KFQx", "tool_name": "Bash", "profile": "bootstrap_lab", "reason": "LA refused effect: capacity_refused (no_session_grant (capacity_refused))", "la_kind": "capacity_refused", "consume_receipt_id": 
+  [evt] tool_call_denied :: {"tool_call_id": "toolu_01JXGbeve61ugpx71wh5KFQx", "tool_name": "Bash", "profile": "bootstrap_lab", "reason": "LA refused effect: capacity_refused (no_session_grant (capacity_refused))", "la_kind": "capacity_refused", "consume_receipt_id": 
+  [evt] tool_call_proposed :: {"tool_name": "Grep", "tool_input": {"pattern": "decide_write_effect|LabEffectDecision|capacity_refused|la_kind|lab_gate|LabGate", "path": "/tmp/agonag2_wt_e2_rqe9h/ag/tests", "output_mode": "files_with_matches"}, "tool_call_id": "toolu_01X
+  [evt] tool_call_allowed :: {"tool_call_id": "toolu_01XSHvJxUogrNyd5GPFhcKgT", "tool_name": "Grep", "action_class": "read", "auto": true}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01XSHvJxUogrNyd5GPFhcKgT"}
+  [evt] tool_call_proposed :: {"tool_name": "Read", "tool_input": {"file_path": "/tmp/agonag2_wt_e2_rqe9h/ag/tests/test_runtime_lab_gate.py"}, "tool_call_id": "toolu_01Axnp9Dpq91CXuEAfiDkoQe"}
+  [evt] tool_call_allowed :: {"tool_call_id": "toolu_01Axnp9Dpq91CXuEAfiDkoQe", "tool_name": "Read", "action_class": "read", "auto": true}
+  [evt] tool_call_completed :: {"tool_name": "Read", "tool_call_id": "toolu_01Axnp9Dpq91CXuEAfiDkoQe"}
+  [evt] tool_call_completed :: {"tool_name": "Read", "tool_call_id": "toolu_01Axnp9Dpq91CXuEAfiDkoQe"}
+  [evt] tool_call_completed :: {"tool_name": "Read", "tool_call_id": "toolu_01Axnp9Dpq91CXuEAfiDkoQe"}
+  [evt] tool_call_proposed :: {"tool_name": "Grep", "tool_input": {"pattern": "capacity_refused|la_kind|retry_disposition|terminal_scope|LabEffectDecision", "path": "/tmp/agonag2_wt_e2_rqe9h/ag/tests/test_runtime_lab_gate_real_la.py", "output_mode": "content", "-n": tru
+  [evt] tool_call_allowed :: {"tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh", "tool_name": "Grep", "action_class": "read", "auto": true}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] tool_call_completed :: {"tool_name": "Grep", "tool_call_id": "toolu_01UC6dmQBVtWHqjZF7FouQNh"}
+  [evt] agent_output :: {"text": "I have everything I need. Here is the concrete plan \u2014 no files were edited."}
+  [evt] agent_output :: {"text": "---"}
+  [evt] agent_output :: {"text": "# Design Plan: `capacity_refused` as an intelligible control signal"}
+  [evt] agent_output :: {"text": "## 0. Key finding that drives the whole design (the load-bearing constraint)"}
+  [evt] agent_output :: {"text": "`la_kind == \"capacity_refused\"` is **emitted from four distinct LA paths**, and the ratified mapping discipline says only **one** of them earns `new_authority_required`:"}
+  [evt] agent_output :: {"text": "| Source | Location | ratified disposition |"}
+  [evt] agent_output :: {"text": "|---|---|---|"}
+  [evt] agent_output :: {"text": "| consume \u2192 `InsufficientCapacity` | `linear_accountant_client.py:816-829` | **`new_authority_required` / `current_grant`** \u2705 |"}
+  [evt] agent_output :: {"text": "| request-time `Denied` | `linear_accountant_client.py:683-698` | `unknown` (must NOT be guessed) |"}
+  [evt] agent_output :: {"text": "| unknown `CapacityDecision` variant | `linear_accountant_client.py:700-710` | `unknown` |"}
+  [evt] agent_output :: {"text": "| unknown `ConsumptionDecision` variant | `linear_accountant_client.py:853-865` | `unknown` |"}
+  [evt] agent_output :: {"text": "**Therefore the disposition cannot be derived downstream from `la_kind`** (all four look identical there). It must be assigned at the one structural branch where `InsufficientCapacity` is unambiguous \u2014 inside `consume()`. Der
+  [evt] agent_output :: {"text": "A second consequence: the `no_session_grant` path in `lab_gate.py:162-167` sets `la_kind = self.grant_refusal`, which **can itself be `capacity_refused`** (a request-time `Denied` bubbling up). That path must default to `unknown` 
+  [evt] agent_output :: {"text": "---"}
+  [evt] agent_output :: {"text": "## 1. Where LA's decision becomes AG's worker-facing deny payload"}
+  [evt] agent_output :: {"text": "Two hops:"}
+  [evt] agent_output :: {"text": "1. **`linear_accountant_client.consume()`** (`linear_accountant_client.py:716-865`) maps the LA `ConsumptionDecision` \u2192 `RefusalResult(kind=\u2026)`."}
+  [evt] agent_output :: {"text": "2. **`lab_gate.decide_write_effect()`** (`lab_gate.py:148-202`) wraps that `RefusalResult` \u2192 `LabEffectDecision`."}
+  [evt] agent_output :: {"text": "3. **`SessionSupervisor._handle_tool_proposed()`** (`supervisor.py:617-638`) turns `LabEffectDecision` into (a) the `TOOL_CALL_DENIED` **bus event** payload and (b) the `ControlAction(kind=\"deny\", payload=\u2026)` that `adapter.
+  [evt] agent_output :: {"text": "## 2. Are distinct LA refusal variants already preserved?"}
+  [evt] agent_output :: {"text": "**Yes, for the non-`capacity_refused` variants** \u2014 `linear_accountant_client.py:836-851` already maps `Expired/Revoked/UnknownToken/ScopeMismatch` to their own closed kinds (`token_expired`, etc.) per the S4-lite ratification
+  [evt] agent_output :: {"text": "**No, within the `capacity_refused` bucket** \u2014 the four sources above collapse to one `la_kind`. That collapse is exactly what blocks \"retry later vs. authority exhausted,\" and it is preserved only inside the branch structu
+  [evt] agent_output :: {"text": "## 3. Minimum schema-bearing object"}
+  [evt] agent_output :: {"text": "**Do not introduce a new wrapper dataclass.** Extend the two existing AG-side result types with three fields each, plus a closed enum defined alongside the existing `CLOSED_REFUSAL_KINDS`. This matches the repo's closed-vocab idio
+  [evt] agent_output :: {"text": "New vocabulary (in `linear_accountant_client.py`, near line 124):"}
+  [evt] agent_output :: {"text": "```python"}
+  [evt] agent_output :: {"text": "RETRY_SAME_AUTHORITY     = \"retry_same_authority\""}
+  [evt] agent_output :: {"text": "RETRY_AFTER_DELAY        = \"retry_after_delay\""}
+  [evt] agent_output :: {"text": "NEW_AUTHORITY_REQUIRED   = \"new_authority_required\""}
+  [evt] agent_output :: {"text": "OPERATOR_ACTION_REQUIRED = \"operator_action_required\""}
+  [evt] agent_output :: {"text": "NEVER_RETRY              = \"never_retry\""}
+  [evt] agent_output :: {"text": "RETRY_UNKNOWN            = \"unknown\"          # default; NOT retry_after_delay"}
+  [evt] agent_output :: {"text": "RETRY_DISPOSITIONS = frozenset({...all six...})"}
+  [evt] agent_output :: {"text": "TERMINAL_SCOPE_CURRENT_GRANT = \"current_grant\""}
+  [evt] agent_output :: {"text": "CAPACITY_EXHAUSTED_MESSAGE = ("}
+  [evt] agent_output :: {"text": "    \"Write capacity for this grant is exhausted. \""}
+  [evt] agent_output :: {"text": "    \"Retrying under the same grant cannot succeed.\""}
+  [evt] agent_output :: {"text": ")"}
+  [evt] agent_output :: {"text": "```"}
+  [evt] agent_output :: {"text": "Carriers (defaults make every existing call site valid unchanged):"}
+  [evt] agent_output :: {"text": "- `RefusalResult` (`:257`): `+ retry_disposition: str = RETRY_UNKNOWN`, `+ terminal_scope: Optional[str] = None`, `+ message: Optional[str] = None`."}
+  [evt] agent_output :: {"text": "- `LabEffectDecision` (`lab_gate.py:68`): same three fields, same defaults."}
+  [evt] agent_output :: {"text": "**Agreement enforced by construction** (acceptance \u00a76) \u2014 extend `RefusalResult.__post_init__` (`:277-284`):"}
+  [evt] agent_output :: {"text": "```python"}
+  [evt] agent_output :: {"text": "if self.retry_disposition not in RETRY_DISPOSITIONS:"}
+  [evt] agent_output :: {"text": "    raise ValueError(...)"}
+  [evt] agent_output :: {"text": "if self.retry_disposition == NEW_AUTHORITY_REQUIRED:"}
+  [evt] agent_output :: {"text": "    if not self.terminal_scope or not self.message:"}
+  [evt] agent_output :: {"text": "        raise ValueError(\"new_authority_required requires terminal_scope and message\")"}
+  [evt] agent_output :: {"text": "```"}
+  [evt] agent_output :: {"text": "This makes \"machine fields and human text agree\" a cheap falsifiable invariant rather than a convention."}
+  [evt] agent_output :: {"text": "Reaches the worker via: `consume()` sets the fields \u2192 `decide_write_effect()` copies them \u2192 supervisor writes them into both the bus event payload and the `ControlAction.payload` delivered by `send_control`."}
+  [evt] agent_output :: {"text": "## 4. Backward-compatibility implications"}
+  [evt] agent_output :: {"text": "- All three new fields have defaults \u2192 every existing positional/keyword construction of `RefusalResult` and `LabEffectDecision` stays valid."}
+  [evt] agent_output :: {"text": "- `la_kind`/`reason` are **untouched**: existing tests pinning `payload[\"la_kind\"] == \"capacity_refused\" | \"already_consumed\" | \"consumed\"` (`test_runtime_lab_gate.py:217,242,262`; `test_runtime_lab_gate_real_la.py:163-181
+  [evt] agent_output :: {"text": "- The ratified schema's `reason` slot \u2261 AG's existing **`la_kind`** (the stable machine token); the ratified `message` is the **new** key. I deliberately do **not** rename `la_kind`\u2192`reason` or repurpose the existing pro
+  [evt] agent_output :: {"text": "- Bus/ControlAction payloads are free-form dicts (`bus.emit(payload=\u2026)`), so added keys need no migration; consumers reading specific keys are unaffected."}
+  [evt] agent_output :: {"text": "- `__post_init__` is stricter, but only on the new field \u2014 defaults pass, so no existing construction newly raises."}
+  [evt] agent_output :: {"text": "## 5. Specific files + edits + tests"}
+  [evt] agent_output :: {"text": "**Edit A \u2014 `src/governor/linear_accountant_client.py`**"}
+  [evt] agent_output :: {"text": "- After `CLOSED_REFUSAL_KINDS` (~`:124`): add the six `RETRY_*` constants, `RETRY_DISPOSITIONS`, `TERMINAL_SCOPE_CURRENT_GRANT`, `CAPACITY_EXHAUSTED_MESSAGE`."}
+  [evt] agent_output :: {"text": "- `RefusalResult` (`:257-284`): add 3 fields after `parent_receipt_id`; extend `__post_init__` with the closed-enum check + agreement invariant."}
+  [evt] agent_output :: {"text": "- `_refuse()` (`:539-570`): add params `retry_disposition: str = RETRY_UNKNOWN, terminal_scope: Optional[str] = None, message: Optional[str] = None`; pass them into the `RefusalResult(...)` it builds. (All other callers omit \u219
+  [evt] agent_output :: {"text": "- `consume()` `InsufficientCapacity` branch (`:816-829`): the **only** call that passes `retry_disposition=NEW_AUTHORITY_REQUIRED, terminal_scope=TERMINAL_SCOPE_CURRENT_GRANT, message=CAPACITY_EXHAUSTED_MESSAGE`. Leave the request
+  [evt] agent_output :: {"text": "**Edit B \u2014 `src/governor/runtime/lab_gate.py`**"}
+  [evt] agent_output :: {"text": "- `LabEffectDecision` (`:68-78`): add `retry_disposition: str = \"unknown\"`, `terminal_scope: Optional[str] = None`, `message: Optional[str] = None`."}
+  [evt] agent_output :: {"text": "- `decide_write_effect()` RefusalResult return (`:197-202`): copy `result.retry_disposition / .terminal_scope / .message` into the `LabEffectDecision`. The `no_session_grant` direct-construct path (`:162-167`) is left defaulting t
+  [evt] agent_output :: {"text": "**Edit C \u2014 `src/governor/runtime/supervisor.py`**"}
+  [evt] agent_output :: {"text": "- Deny block (`:618-637`): add `\"retry_disposition\": decision.retry_disposition`, `\"terminal_scope\": decision.terminal_scope`, `\"message\": decision.message` to **both** the `TOOL_CALL_DENIED` bus payload (`:622-630`) and the
+  [evt] agent_output :: {"text": "**Tests to add**"}
+  [evt] agent_output :: {"text": "- `tests/test_linear_accountant_client.py` (unit, where the discrimination lives):"}
+  [evt] agent_output :: {"text": "  1. `InsufficientCapacity` \u2192 `kind==capacity_refused`, `retry_disposition==new_authority_required`, `terminal_scope==\"current_grant\"`, `message==CAPACITY_EXHAUSTED_MESSAGE`."}
+  [evt] agent_output :: {"text": "  2. **Discrimination guard** (acceptance \u00a74): request-time `Denied` \u2192 `kind==capacity_refused` **but** `retry_disposition==unknown`, `terminal_scope is None`. Proves the bucket isn't blanket-assigned."}
+  [evt] agent_output :: {"text": "  3. unknown `ConsumptionDecision` variant \u2192 `capacity_refused`, `retry_disposition==unknown`."}
+  [evt] agent_output :: {"text": "  4. `AlreadyConsumed`, `token_expired`, `scope_mismatch`, `unknown_token`, `token_revoked` \u2192 each `retry_disposition==unknown`, `terminal_scope is None`, `message is None` (acceptance \u00a74/\u00a75)."}
+  [evt] agent_output :: {"text": "  5. `__post_init__` rejects an out-of-set `retry_disposition`; rejects `new_authority_required` with missing `terminal_scope`/`message` (acceptance \u00a76 \u2014 the agreement invariant)."}
+  [evt] agent_output :: {"text": "  6. Serialization/back-compat (acceptance \u00a77): `dataclasses.asdict(RefusalResult(kind=\"already_consumed\", detail=\"x\"))` yields `retry_disposition==\"unknown\"`, `terminal_scope is None`; constructing without the new args
+  [evt] agent_output :: {"text": "- `tests/test_runtime_lab_gate.py` (integration on the real supervisor path):"}
+  [evt] agent_output :: {"text": "  7. Extend `test_exhausted_grant_refuses_before_effect` (or add a sibling): each denied payload has `retry_disposition==\"new_authority_required\"`, `terminal_scope==\"current_grant\"`, `message==CAPACITY_EXHAUSTED_MESSAGE`; asse
+  [evt] agent_output :: {"text": "  8. Extend `test_replay_proposal_refused_already_consumed`: denied payload `retry_disposition==\"unknown\"`, `terminal_scope is None`."}
+  [evt] agent_output :: {"text": "  9. `no_session_grant` path (token never acquired, e.g. request-time `capacity_refused` grant refusal): deny payload `retry_disposition==\"unknown\"` \u2014 proves a *grant-time* capacity refusal does NOT inherit `new_authority_r
+  [evt] agent_output :: {"text": "**Acceptance coverage:** \u00a71 (la_kind/reason untouched), \u00a72 (InsufficientCapacity terminal+new_authority via test 1/7), \u00a74 (tests 2/4), \u00a75 (default `unknown`, tests 3/4/8/9), \u00a76 (`__post_init__` invariant, 
+  [evt] agent_output :: {"text": "**Out of scope / not touched:** LA contract field names, `CookedConsumeRequest`/`CookedCapacityRequest`, the closed `CLOSED_REFUSAL_KINDS` set (no `capacity_refused` split), `ActiveTunableStore`, P4, and the existing positive (`co
+  [evt] agent_output :: {"text": "---"}
+  [evt] agent_output :: {"text": "STOP \u2014 read-only pass complete; no edits, commits, or pushes made."}
+  [evt] agent_output :: {"text": "STOP \u2014 read-only pass complete; no edits, commits, or pushes made."}
+  [evt] session_exited :: {"returncode": 0, "stderr_tail": []}
+
+==================== SLICE 2 DESIGN PASS ====================
+ALLOWED write effects (must be 0 — read-only): 0
+REFUSED write effects (gate backstop if it tried): 1
+worktree (KEEP for implement): /tmp/agonag2_wt_e2_rqe9h/ag
+raw plan text -> /home/jbeck/git/agent_gov/working/slice2_design_plan_raw.md (10757 chars)
+OUTER NEXT: review the plan; if concrete, write the approved plan to a
+file and run:  python3 working/agonag_slice2_driver.py implement /tmp/agonag2_wt_e2_rqe9h/ag <plan_file>
+============================================================

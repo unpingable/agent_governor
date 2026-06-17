@@ -103,6 +103,64 @@ byte-identical. CI-lane callers (no label) keep current `ci_kind`-based names.
 - **FAILED-OPEN** — inner effect crossed without LA authorization, or host/LA
   touched. Stop, full stop; this is the nightmare the fence exists to prevent.
 
+## Slice 1 — RESULT (2026-06-17)
+
+Dogfood **HELD** (AG governed AG-source mutation; 9th write refused before effect;
+host byte-unchanged); cargo **INCOMPLETE** (worker nibbled, exhausted 8-unit grant,
+promotion rejected). #1 then **finished outer-side** (operator decision: self-hosting
+is a capability not a purity test) — commit `ce77d3e`, full suite 15923/62 exit 0.
+Witness: `working/witness-agonag-slice1-2026-06-17.md`.
+
+## Slice 2 — capacity_refused legibility (OPEN, operator-ratified 2026-06-17)
+
+**Goal:** make a refusal an intelligible *control signal*, not a wall the worker
+bounces off. Slice 1 showed the worker misread `capacity_refused` as transient and
+self-retried; the fence held regardless, but the refusal was illegible.
+
+**Ratified schema (operator) — ONE authoritative disposition + scoped terminality,
+NOT four drifting booleans:**
+
+```
+reason            = capacity_refused          # UNCHANGED, stable (req #1)
+retry_disposition = new_authority_required    # for the InsufficientCapacity path
+terminal_scope    = current_grant
+message           = "Write capacity for this grant is exhausted. Retrying under the same grant cannot succeed."  # optional human text
+```
+
+`retry_disposition` enum: `retry_same_authority` · `retry_after_delay` ·
+`new_authority_required` · `operator_action_required` · `never_retry` · `unknown`.
+
+**Mapping discipline (load-bearing):** ONLY the LA `InsufficientCapacity` →
+`capacity_refused` path is assigned `new_authority_required` / `current_grant`.
+Every other refusal class (`already_consumed`, `no_session_grant`, anything novel)
+defaults conservatively to `unknown` — do NOT decree one retry policy for the whole
+`capacity_refused`/refusal bucket, and do NOT guess other classes' semantics.
+
+**Boundary (where to edit):** `LabEffectDecision` (`runtime/lab_gate.py:69`) gains
+the disposition fields, computed from `la_kind` via a small authoritative map;
+surfaced in the supervisor's `TOOL_CALL_DENIED` payload + the worker-facing deny
+`ControlAction` (`runtime/supervisor.py` ~617-638). NOTE: this is the runtime
+machinery that *drives* AG-on-AG — so acceptance #3 (live no-retry) requires the
+supervisor to run the patched code (PYTHONPATH=worktree/src), not just the worktree.
+
+**Modality — two-phase (operator: "we have met Nibble Claude"):**
+1. Inner worker does a **read-only design pass** (0 write grant → writes
+   mechanically refused; reads auto-approved) returning a concrete file-and-edit
+   plan: where LA's decision becomes the worker-facing deny payload; whether
+   distinct LA refusal variants are preserved; the minimum schema-bearing object;
+   compat implications for clients/tests.
+2. Outer (me) reviews the plan. ONLY if concrete → open a bounded **8-unit, no-refill**
+   mutation grant for the implement pass.
+
+**Acceptance:** (1) existing `reason` values stable; (2) `InsufficientCapacity`
+terminal under current grant + explicitly requires new authority; (3) the real
+inner Claude no longer retries the same denied write after receiving the payload;
+(4) other refusal classes get no guessed retry semantics; (5) unknown/legacy →
+`unknown`, not `retry_after_delay`; (6) machine semantics + human text agree;
+(7) tests pin serialization + backward compat; (8) NO LA-policy or P4 change.
+
+Driver: `working/agonag_slice2_driver.py` (phase-parameterized: `design` / `implement`).
+
 ## Provenance
 
 Forcing case: `working/field-report-verify-run-2026-06-16.md` (external — overnight

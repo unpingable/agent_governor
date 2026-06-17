@@ -1,0 +1,169 @@
+diff --git a/src/governor/ci.py b/src/governor/ci.py
+index e25564d..d59982d 100644
+--- a/src/governor/ci.py
++++ b/src/governor/ci.py
+@@ -155,12 +155,19 @@ def _hash_file_capped(path: Path, cap: int) -> tuple[str, bool]:
+     return content_hash(data), truncated
+ 
+ 
+-def _write_bundle(bundle: CiReceiptBundle, receipt_out: Path) -> Path:
++def _write_bundle(
++    bundle: CiReceiptBundle, receipt_out: Path, label: str | None = None
++) -> Path:
+     """Write bundle to the path indicated by suffix convention.
+ 
+     - ``.jsonl`` suffix  → append one JSONL line
+     - ``.json`` suffix   → write single JSON object
+     - no recognised suffix → treat as directory, write individual file
++
++    *label*, when given, is preferred for the directory-mode filename in place
++    of the ``ci_wrap_{ci_kind}`` prefix. It affects ONLY the on-disk filename —
++    it never enters the bundle, the receipt, or the hashed evidence. Callers
++    that pass no label keep the existing ``ci_wrap_{ci_kind}_{uid}.json`` name.
+     """
+     suffix = receipt_out.suffix.lower()
+ 
+@@ -178,9 +185,12 @@ def _write_bundle(bundle: CiReceiptBundle, receipt_out: Path) -> Path:
+ 
+     # Directory mode
+     receipt_out.mkdir(parents=True, exist_ok=True)
+-    kind = bundle.evidence.get("ci_kind", "unknown")
+     uid = uuid.uuid4().hex[:8]
+-    fname = f"ci_wrap_{kind}_{uid}.json"
++    if label:
++        fname = f"{label}_{uid}.json"
++    else:
++        kind = bundle.evidence.get("ci_kind", "unknown")
++        fname = f"ci_wrap_{kind}_{uid}.json"
+     out = receipt_out / fname
+     out.write_text(bundle.to_json() + "\n")
+     return out
+@@ -196,6 +206,7 @@ def ci_wrap(
+     extra_evidence: dict[str, Any] | None = None,
+     gate: str = CI_WRAP_GATE,
+     subject_kind: str = "ci_wrap",
++    label: str | None = None,
+ ) -> CiWrapResult:
+     """Run *command*, emit a CI receipt bundle.
+ 
+@@ -206,7 +217,11 @@ def ci_wrap(
+     ``extra_evidence`` merges additional keys into the evidence bundle (used by
+     the verifier wrapper to record exit-source provenance). ``gate`` /
+     ``subject_kind`` override the receipt's gate identity (defaults preserve the
+-    CI-lane behavior). Receipt emission is fail-open (errors print to stderr).
++    CI-lane behavior). ``label``, when given, is preferred for the
++    directory-mode receipt filename — it affects ONLY the on-disk name, never
++    the receipt identity, subject bytes, or hashed evidence; callers that pass
++    no label keep the ``ci_wrap_{ci_kind}_{uid}.json`` name. Receipt emission is
++    fail-open (errors print to stderr).
+     """
+     if ci_kind not in VALID_CI_KINDS:
+         raise ValueError(
+@@ -291,7 +306,7 @@ def ci_wrap(
+             timing=timing,
+         )
+         bundle = CiReceiptBundle(receipt=receipt, evidence=evidence_bundle)
+-        written_path = _write_bundle(bundle, receipt_out)
++        written_path = _write_bundle(bundle, receipt_out, label=label)
+         return CiWrapResult(exit_code=returncode, receipt=receipt, receipt_path=written_path)
+     except Exception as exc:
+         print(
+diff --git a/src/governor/verify.py b/src/governor/verify.py
+index a651567..be05138 100644
+--- a/src/governor/verify.py
++++ b/src/governor/verify.py
+@@ -29,6 +29,7 @@ masked-risk evidence mechanically:
+ from __future__ import annotations
+ 
+ import os
++import re
+ from dataclasses import dataclass
+ from pathlib import Path
+ 
+@@ -75,6 +76,32 @@ def _basename(arg: str) -> str:
+     return os.path.basename(arg)
+ 
+ 
++# Receipt-filename label length cap. The label is cosmetic (it names the file
++# on disk), so a generous-but-bounded slug keeps the trail readable without
++# unbounded filenames.
++_LABEL_MAXLEN = 40
++
++
++def _slugify(text: str) -> str:
++    """Conservative filename-safe slug: lowercased, non-alphanumerics → ``_``,
++    collapsed, stripped, truncated. Used for both operator labels (sanitized so
++    a label can never traverse paths or carry unsafe chars) and the
++    command-basename fallback."""
++    slug = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
++    return slug[:_LABEL_MAXLEN]
++
++
++def _command_label(command: list[str]) -> str:
++    """Fallback receipt label when the operator supplies none: a slug of the
++    command's program name only — ``basename(argv[0])``. This is NOT a shell
++    parser; ``["lake", "build"]`` → ``"lake"``, ``["cargo", "test"]`` →
++    ``"cargo"``. Returns ``""`` for an empty command (caller falls back to the
++    ``ci_wrap_{ci_kind}`` name)."""
++    if not command:
++        return ""
++    return _slugify(os.path.basename(command[0]))
++
++
+ def _contains_pipe(script: str) -> bool:
+     """True if *script* contains a pipe operator (``|``) that is not a logical
+     OR (``||``).
+@@ -166,6 +193,7 @@ def _emit_refusal_receipt(
+     safety: CommandSafety,
+     receipt_out: Path,
+     timestamp: str | None,
++    label: str | None = None,
+ ):
+     """Mint a block receipt recording that a masked-risk command was refused
+     *before* running it (so no green can ever be claimed from it)."""
+@@ -192,7 +220,7 @@ def _emit_refusal_receipt(
+         timestamp=timestamp,
+     )
+     bundle = CiReceiptBundle(receipt=receipt, evidence=evidence)
+-    path = _write_bundle(bundle, receipt_out)
++    path = _write_bundle(bundle, receipt_out, label=label)
+     return receipt, path
+ 
+ 
+@@ -204,6 +232,7 @@ def verify_run(
+     allow_masked: bool = False,
+     cwd: Path | None = None,
+     timestamp: str | None = None,
++    label: str | None = None,
+ ) -> VerifyResult:
+     """Run *command* as a verifier and emit a receipt whose verdict is backed by
+     the command's own exit code.
+@@ -212,15 +241,27 @@ def verify_run(
+     the command is a shell pipeline that would mask the verifier's exit, unless
+     ``allow_masked`` is set *and* the pipeline preserves the exit source. There
+     is no way to get ``verifier_exit_observed=True`` from a masked pipeline.
++
++    ``label`` names the on-disk receipt file. When given it is sanitized and
++    preferred; when omitted it falls back to a slug of the command's program
++    name (``basename(argv[0])``) so a ``lake build`` receipt is named ``lake_*``
++    rather than mislabeled by ``ci_kind``. The label is cosmetic — it affects
++    ONLY the filename, never ``receipt_id`` / subject bytes / hashed evidence
++    (the command is already recorded in evidence as ``command_display``).
+     """
+     out = receipt_out or _DEFAULT_RECEIPT_DIR
+     if out == _DEFAULT_RECEIPT_DIR:
+         out.mkdir(parents=True, exist_ok=True)
+ 
++    effective_label = _slugify(label) if label else _command_label(command)
++    effective_label = effective_label or None
++
+     safety = analyze_command(command)
+ 
+     if safety.masked_exit_risk and not allow_masked:
+-        receipt, path = _emit_refusal_receipt(command, ci_kind, safety, out, timestamp)
++        receipt, path = _emit_refusal_receipt(
++            command, ci_kind, safety, out, timestamp, label=effective_label
++        )
+         return VerifyResult(
+             refused=True,
+             exit_code=REFUSAL_EXIT,

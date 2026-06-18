@@ -358,7 +358,9 @@ class TransitionProbe:
 CONT_DISABLED = "disabled"  # no continuation call; behavior byte-identical to baseline
 CONT_OBSERVE = "observe"    # decide + receipt; legacy loop continues; loud divergence on refuse/escalate
 CONT_HOLD = "hold"          # decide + receipt; then STOP before the next agent step
-CONT_MODES = frozenset({CONT_DISABLED, CONT_OBSERVE, CONT_HOLD})
+CONT_ENFORCE = "enforce"    # C3: a grant must be presented + durably BURNED before the next step reaches
+                            # the transition gate; no grant -> no next step (legacy unreachable)
+CONT_MODES = frozenset({CONT_DISABLED, CONT_OBSERVE, CONT_HOLD, CONT_ENFORCE})
 
 # continuation decision -> closed gate-receipt verdict. A grant here is a MEASUREMENT ("the office would
 # grant"), never authority: C2 records, it never burns. The burn/enforce point is C3.
@@ -429,10 +431,14 @@ class ContinuationProbe:
     # Continuation policy: admissible_next_step_classes, current_policy_version, grant_ttl.
     policy: dict[str, Any] = field(default_factory=dict)
     next_step_builder: Callable[..., dict[str, Any]] = field(default=default_next_step)
+    # C3 enforce: the durable continuation ledger. The single-use burn lives here, not in memory.
+    enforce_ledger_path: Any = None  # Path | None
 
     def __post_init__(self) -> None:
         if self.mode not in CONT_MODES:
             raise ValueError(f"continuation probe mode {self.mode!r} not in {sorted(CONT_MODES)}")
+        if self.mode == CONT_ENFORCE and self.enforce_ledger_path is None:
+            raise ValueError("continuation enforce mode requires enforce_ledger_path (durable burn)")
 
     def build_request(self, tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
         nxt = self.next_step_builder(tool_name, tool_input)
@@ -489,3 +495,34 @@ class ContinuationProbe:
             gate_config={"seam": "continuation_kernel"},
             receipt_role=ROLE_MEASUREMENT,
         )
+
+    # --- C3 enforce: durable present/burn (the single-use authority lives in the ledger) ----------- #
+
+    def present(self, *, grant: dict[str, Any], tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
+        """Present the issued grant for the proposed next step and durably BURN it (before the transition
+        gate). The presentation is built from the grant's own binds (the grant was issued for exactly this
+        step), so correspondence holds on the happy path; the burn record is fsynced before this returns
+        admitted. Returns the present_continuation result."""
+        from governor.runtime.continuation_enforce import present_continuation
+
+        now = self.next_step_builder(tool_name, tool_input).get("now", 0)
+        presentation = {
+            "session_id": grant.get("session_id"), "actor_id": grant.get("actor_id"),
+            "chain_tip": grant.get("chain_tip"), "scope": grant.get("scope"),
+            "next_step_class": grant.get("next_step_class"), "now": now,
+        }
+        return present_continuation(self.enforce_ledger_path, grant, presentation, now)
+
+    def finalize(self, grant_id: str) -> None:
+        """Record that the burned next step reached the transition gate."""
+        from governor.runtime.continuation_enforce import finalize_continuation
+
+        finalize_continuation(self.enforce_ledger_path, grant_id)
+
+    def record_refusal(self, *, grant_id: str | None, reason: str) -> None:
+        """Durably record a non-burning refusal (no grant / refuse / escalate / fail-closed) so a denied
+        continuation is never fail-silent."""
+        from governor.runtime.continuation_enforce import record_continuation_refusal
+
+        if self.enforce_ledger_path is not None:
+            record_continuation_refusal(self.enforce_ledger_path, grant_id=grant_id, reason=reason)

@@ -392,6 +392,7 @@ class SessionSupervisor:
                     prior_terminal=cont_cfg.get("prior_terminal", {}),
                     policy=cont_cfg.get("policy", {}),
                     next_step_builder=cont_cfg.get("next_step_builder") or default_next_step,
+                    enforce_ledger_path=cont_cfg.get("enforce_ledger_path"),
                 )
 
         with self._lock:
@@ -664,6 +665,65 @@ class SessionSupervisor:
         # divergence — the old loop self-authorizes continuation); hold records and STOPS before the next
         # step. NO grant burn, no LA consume, no effect — that (present/burn) is C3, not here.
         cprobe = facet.continuation_probe
+        # C3 enforce: a single-use continuation grant must be presented and durably BURNED before the next
+        # step may reach the transition gate. No grant -> no next step; the legacy route is structurally
+        # unreachable (this branch returns on every non-admit). The burn is the agent's next breath: it is
+        # spent on the *attempt*, even if the downstream effect gate later refuses. Fail-closed, durable.
+        if cprobe is not None and cprobe.mode == "enforce" and action_class == ActionClass.WRITE:
+            cdec = cprobe.evaluate(tool_name=tool_name, tool_input=tool_input)
+            if cdec is None or cdec.get("decision") != "grant":
+                # No grant: fail-closed kernel, refusal, or escalation. Record durably (never fail-silent),
+                # deny, and STOP — never fall through to legacy.
+                reason = "fail_closed" if cdec is None else cdec.get("decision")
+                detail = (cdec or {}).get("kind") or (cdec or {}).get("required_authority") or reason
+                cprobe.record_refusal(grant_id=None, reason=f"continuation_{reason}:{detail}")
+                bus.emit(
+                    "continuation_denied", SourceLayer.POLICY, record.backend_kind,
+                    payload={
+                        "tool_call_id": tool_call_id, "tool_name": tool_name, "mode": "enforce",
+                        "continuation_decision": reason, "detail": detail,
+                    },
+                    tool_call_id=tool_call_id,
+                )
+                if facet.handle:
+                    adapter.send_control(facet.handle, ControlAction(
+                        kind="deny", target_id=tool_call_id,
+                        payload={"reason": f"continuation enforce: {reason}"}))
+                return
+            # Grant issued — present and durably BURN it before the next step reaches the transition gate.
+            grant = cdec["grant"]
+            pres = cprobe.present(grant=grant, tool_name=tool_name, tool_input=tool_input)
+            if pres.get("result") != "admitted":
+                # Reused / expired / correspondence mismatch: the grant does not admit this step.
+                cprobe.record_refusal(grant_id=grant.get("grant_id"),
+                                      reason=f"continuation_present_refused:{pres.get('refusal')}")
+                bus.emit(
+                    "continuation_denied", SourceLayer.POLICY, record.backend_kind,
+                    payload={
+                        "tool_call_id": tool_call_id, "tool_name": tool_name, "mode": "enforce",
+                        "continuation_decision": "present_refused", "detail": pres.get("refusal"),
+                    },
+                    tool_call_id=tool_call_id,
+                )
+                if facet.handle:
+                    adapter.send_control(facet.handle, ControlAction(
+                        kind="deny", target_id=tool_call_id,
+                        payload={"reason": f"continuation present refused: {pres.get('refusal')}"}))
+                return
+            # Burned. The next step reaches the transition gate; record that it did. A crash between the
+            # burn and here leaves the grant spent_outcome_unknown (spent, not retryable).
+            cprobe.finalize(grant["grant_id"])
+            bus.emit(
+                "continuation_admitted", SourceLayer.POLICY, record.backend_kind,
+                payload={
+                    "tool_call_id": tool_call_id, "tool_name": tool_name, "mode": "enforce",
+                    "grant_id": grant["grant_id"],
+                },
+                tool_call_id=tool_call_id,
+            )
+            # Fall through to the unchanged transition/effect gate — the grant got the step *to* the gate,
+            # not past it. The effect gate owns whether the effect happens.
+
         if cprobe is not None and cprobe.mode in ("observe", "hold") \
                 and action_class == ActionClass.WRITE:
             cdec = cprobe.evaluate(tool_name=tool_name, tool_input=tool_input)

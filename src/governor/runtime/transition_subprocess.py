@@ -164,6 +164,17 @@ class TransitionSubprocess:
             return None
         return obj
 
+    def decide_continuation(
+        self, request: dict[str, Any], policy: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """GAP-2 C2: ask the continuation OFFICE whether a proposed next step may continue from the prior
+        governed step's terminal chain. Returns the decision dict (`{"decision": grant|refuse|escalate,
+        ...}`) or None (fail-closed). Runs the office only — no consumer, no burn, no effect."""
+        obj = self._send_raw({"continuation": {"request": request, "policy": policy}})
+        if obj is None or "decision" not in obj:
+            return None
+        return obj
+
     def _repo_commit(self) -> Optional[str]:
         repo = self.repo_dir
         if repo is None and "target" in self.binary_path:
@@ -338,5 +349,143 @@ class TransitionProbe:
             subject_bytes=(tool_call_id or "").encode("utf-8"),
             evidence_bundle=bundle,
             gate_config={"seam": "transition_kernel"},
+            receipt_role=ROLE_MEASUREMENT,
+        )
+
+
+# --- GAP-2 C2: the continuation office in the live artery (observe/hold; no burn) -------------------- #
+
+CONT_DISABLED = "disabled"  # no continuation call; behavior byte-identical to baseline
+CONT_OBSERVE = "observe"    # decide + receipt; legacy loop continues; loud divergence on refuse/escalate
+CONT_HOLD = "hold"          # decide + receipt; then STOP before the next agent step
+CONT_MODES = frozenset({CONT_DISABLED, CONT_OBSERVE, CONT_HOLD})
+
+# continuation decision -> closed gate-receipt verdict. A grant here is a MEASUREMENT ("the office would
+# grant"), never authority: C2 records, it never burns. The burn/enforce point is C3.
+_VERDICT_FOR_CONTINUATION = {"grant": "observe", "refuse": "block", "escalate": "warn"}
+
+
+def default_next_step(tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
+    """Project a proposed tool call into the next step it represents: its class, the scope it requests,
+    and the clock. Tests drive hostile next steps (scope expansion, unknown class) via tool_input."""
+    return {
+        "next_step_class": tool_input.get("next_step_class", tool_name),
+        "scope": tool_input.get("scope"),
+        "now": tool_input.get("now", 0),
+    }
+
+
+def record_continuation_decision(
+    system: Any, *, request: dict[str, Any], decision: dict[str, Any], binary_path: str
+) -> Any:
+    """Record a continuation decision as a non-authority MEASUREMENT receipt. Mints no grant, burns
+    nothing, confers no effect — it witnesses what the office would decide about the *next step*."""
+    from governor.gate_receipt import ROLE_MEASUREMENT
+
+    gate_verdict = _VERDICT_FOR_CONTINUATION.get(decision.get("decision"), "observe")
+    evidence_bundle = {
+        "decision": decision.get("decision"),
+        "kind": decision.get("kind"),
+        "required_authority": decision.get("required_authority"),
+        "prior_chain_tip": request.get("prior_chain_tip"),
+        "terminal_outcome": request.get("terminal_outcome"),
+        "requested_next_step": request.get("requested_next_step"),
+        "scope": request.get("scope"),
+        "transition_cli_binary": binary_path,
+        # The grant, if any, is DESCRIBED (its binds) — not consumed. No burn happens by recording it.
+        "grant": decision.get("grant"),
+    }
+    subject_bytes = json.dumps(request, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return system.emit(
+        gate="continuation_seam",
+        verdict=gate_verdict,
+        subject_kind="continuation_request",
+        subject_bytes=subject_bytes,
+        evidence_bundle=evidence_bundle,
+        gate_config={"seam": "continuation_kernel"},
+        receipt_role=ROLE_MEASUREMENT,
+    )
+
+
+@dataclass
+class ContinuationProbe:
+    """GAP-2 C2: the continuation office spliced into the live AG artery, observe/hold only.
+
+    Given a prior governed step's terminal Stage 3c chain and a proposed next step, it asks the Rust
+    continuation OFFICE whether the agent earns one more step, and records the decision/divergence. It
+    holds no consumer and burns no grant — `observe` records and lets the legacy loop continue, `hold`
+    records and stops before the next step, `disabled` is a no-op (byte-identical baseline). The
+    present/burn enforce point is C3, not here: minting-and-burning authority for a path the kernel does
+    not yet control would be accounting cosplay.
+    """
+
+    transport: TransitionSubprocess
+    mode: str = CONT_DISABLED
+    receipt_system: Any = None
+    # The prior governed step's terminal chain (a Stage 3c result): prior_snapshot (dict|None),
+    # terminal_outcome, prior_chain_tip, session_id, actor_id, policy_version, kernel_version, scope,
+    # remaining_capacity_ref.
+    prior_terminal: dict[str, Any] = field(default_factory=dict)
+    # Continuation policy: admissible_next_step_classes, current_policy_version, grant_ttl.
+    policy: dict[str, Any] = field(default_factory=dict)
+    next_step_builder: Callable[..., dict[str, Any]] = field(default=default_next_step)
+
+    def __post_init__(self) -> None:
+        if self.mode not in CONT_MODES:
+            raise ValueError(f"continuation probe mode {self.mode!r} not in {sorted(CONT_MODES)}")
+
+    def build_request(self, tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
+        nxt = self.next_step_builder(tool_name, tool_input)
+        p = self.prior_terminal
+        return {
+            "prior_snapshot": p.get("prior_snapshot"),
+            "terminal_outcome": p.get("terminal_outcome", "consumed_outcome_unknown"),
+            "prior_chain_tip": p.get("prior_chain_tip", ""),
+            "session_id": p.get("session_id", ""),
+            "actor_id": p.get("actor_id", "ag:main"),
+            "requested_next_step": nxt["next_step_class"],
+            "scope": nxt.get("scope") or p.get("scope", "lab"),
+            "remaining_capacity_ref": p.get("remaining_capacity_ref", ""),
+            "policy_version": p.get("policy_version", ""),
+            "kernel_version": p.get("kernel_version", ""),
+            "now": nxt.get("now", 0),
+        }
+
+    def evaluate(self, *, tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any] | None:
+        """Decide via the kernel continuation office and record a measurement receipt. Returns the
+        decision dict (or None, fail-closed). No grant is burned."""
+        request = self.build_request(tool_name, tool_input)
+        decision = self.transport.decide_continuation(request, self.policy)
+        if decision is not None and self.receipt_system is not None:
+            record_continuation_decision(
+                self.receipt_system, request=request, decision=decision,
+                binary_path=self.transport.binary_path,
+            )
+        return decision
+
+    def record_divergence(
+        self, *, decision: dict[str, Any] | None, tool_name: str, tool_call_id: str, governed_path: str
+    ) -> Any:
+        """Emit a LOUD classified divergence receipt: the kernel would NOT grant continuation while the
+        legacy loop would continue. A warning-role measurement — it records the disagreement, it does not
+        act on it (and burns nothing)."""
+        if self.receipt_system is None:
+            return None
+        from governor.gate_receipt import ROLE_MEASUREMENT
+
+        bundle = {
+            "classification": "kernel_refuse_continuation_vs_legacy_continue",
+            "continuation_decision": decision or {"decision": "fail_closed"},
+            "governed_path": governed_path,
+            "tool_name": tool_name,
+            "mode": self.mode,
+        }
+        return self.receipt_system.emit(
+            gate="continuation_divergence",
+            verdict="warn",
+            subject_kind="continuation_divergence",
+            subject_bytes=(tool_call_id or "").encode("utf-8"),
+            evidence_bundle=bundle,
+            gate_config={"seam": "continuation_kernel"},
             receipt_role=ROLE_MEASUREMENT,
         )

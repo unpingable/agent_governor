@@ -120,6 +120,7 @@ class RuntimeFacet:
     budget_policy: Any = None  # BudgetPolicy | None
     lab_gate: Any = None  # LabGate | None (bootstrap_lab LA-backed effect gate)
     transition_probe: Any = None  # TransitionProbe | None (A2b: additive, flag-gated, default off)
+    continuation_probe: Any = None  # ContinuationProbe | None (GAP-2 C2: observe/hold, no burn, default off)
     event_thread: threading.Thread | None = None
     running: bool = False
 
@@ -365,6 +366,32 @@ class SessionSupervisor:
                     build_office_context=probe_cfg.get("build_office_context")
                     or default_office_context,
                     memory_context_builder=probe_cfg.get("memory_context_builder"),
+                )
+
+        # GAP-2 C2: additive, flag-gated continuation probe (observe/hold; no burn). Absent unless
+        # policy_context opts in. Accepts a ready ContinuationProbe or a config dict.
+        cont_cfg = (policy_context or {}).get("continuation_probe")
+        if cont_cfg is not None:
+            from governor.runtime.transition_subprocess import (
+                ContinuationProbe,
+                TransitionSubprocess,
+                default_next_step,
+            )
+            if isinstance(cont_cfg, ContinuationProbe):
+                facet.continuation_probe = cont_cfg
+            else:
+                transport = cont_cfg.get("transport") or TransitionSubprocess(
+                    binary_path=cont_cfg.get("binary_path")
+                )
+                if transport.identity is None:
+                    transport.start()
+                facet.continuation_probe = ContinuationProbe(
+                    transport=transport,
+                    mode=cont_cfg.get("mode", "observe"),
+                    receipt_system=cont_cfg.get("receipt_system"),
+                    prior_terminal=cont_cfg.get("prior_terminal", {}),
+                    policy=cont_cfg.get("policy", {}),
+                    next_step_builder=cont_cfg.get("next_step_builder") or default_next_step,
                 )
 
         with self._lock:
@@ -629,6 +656,56 @@ class SessionSupervisor:
         # Classify action: READ < WRITE < COMMUNICATE
         tool_input = event.payload.get("tool_input", {})
         action_class = classify_action(tool_name, tool_input)
+
+        # GAP-2 C2: continuation gate (additive, flag-gated; default off → unchanged behavior). At the
+        # next-step boundary, ask the kernel whether the agent earns ANOTHER governed step *before* the
+        # per-effect transition gate. The previous effect being legitimate does not authorize the next
+        # step. observe records the decision and lets the legacy loop continue (a non-grant is a LOUD
+        # divergence — the old loop self-authorizes continuation); hold records and STOPS before the next
+        # step. NO grant burn, no LA consume, no effect — that (present/burn) is C3, not here.
+        cprobe = facet.continuation_probe
+        if cprobe is not None and cprobe.mode in ("observe", "hold") \
+                and action_class == ActionClass.WRITE:
+            cdec = cprobe.evaluate(tool_name=tool_name, tool_input=tool_input)
+            granted = (cdec is not None) and (cdec.get("decision") == "grant")
+            if cprobe.mode == "hold":
+                # A hold stops before the next step regardless; a non-grant is additionally a divergence.
+                if not granted:
+                    cprobe.record_divergence(
+                        decision=cdec, tool_name=tool_name, tool_call_id=tool_call_id,
+                        governed_path="stopped_by_continuation_hold",
+                    )
+                bus.emit(
+                    "continuation_held", SourceLayer.POLICY, record.backend_kind,
+                    payload={
+                        "tool_call_id": tool_call_id, "tool_name": tool_name, "mode": "hold",
+                        "continuation_decision": (cdec or {}).get("decision", "fail_closed"),
+                        "reason": "continuation hold: stop before next step (no burn, no consequence)",
+                    },
+                    tool_call_id=tool_call_id,
+                )
+                if facet.handle:
+                    adapter.send_control(facet.handle, ControlAction(
+                        kind="deny", target_id=tool_call_id,
+                        payload={"reason": "continuation hold (no consequence)"}))
+                return
+            # observe: the legacy loop continues below. A non-grant (refuse/escalate/fail-closed) while
+            # the loop continues is exactly the AG-on-AG self-authorization we record loudly.
+            if not granted:
+                cprobe.record_divergence(
+                    decision=cdec, tool_name=tool_name, tool_call_id=tool_call_id,
+                    governed_path="continues",
+                )
+                bus.emit(
+                    "continuation_divergence_observed", SourceLayer.POLICY, record.backend_kind,
+                    payload={
+                        "tool_call_id": tool_call_id, "tool_name": tool_name, "mode": "observe",
+                        "continuation_decision": (cdec or {}).get("decision", "fail_closed"),
+                        "classification": "kernel_refuse_continuation_vs_legacy_continue",
+                    },
+                    tool_call_id=tool_call_id,
+                )
+            # fall through to the unchanged path (transition probe / lab_gate / legacy)
 
         # A2b: transition-kernel probe (additive, flag-gated; default off → unchanged behavior).
         # Runs BEFORE the LA consume seam, on WRITE proposals only.

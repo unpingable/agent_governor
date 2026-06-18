@@ -72,10 +72,12 @@ def test_live_consume_spends_capacity_and_is_operational(tmp_path):
         assert res["result"] == T_NOT_ATTEMPTED
         assert res["operational"] is True
 
-        # The consume receipt is durable and was written BEFORE the effect outcome.
+        # The composed snapshot is pinned before the burn; the consume receipt is durable and written
+        # BEFORE the effect outcome (Stage 3c order: snapshot -> consume -> outcome).
         records = [json.loads(l) for l in durable.read_text().splitlines() if l.strip()]
-        assert [r["kind"] for r in records] == ["consume_receipt", "effect_outcome"]
-        assert records[0]["operational"] is True
+        assert [r["kind"] for r in records] == ["composed_snapshot", "consume_receipt", "effect_outcome"]
+        consume = next(r for r in records if r["kind"] == "consume_receipt")
+        assert consume["operational"] is True
 
         # Reconstruction: spent, effect not attempted.
         assert reconstruct(durable) == {res["consumption_event_id"]: T_NOT_ATTEMPTED}

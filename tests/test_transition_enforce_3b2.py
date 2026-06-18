@@ -87,9 +87,10 @@ def test_marker_created_once_and_verified(tmp_path):
         assert act.marker_path.read_bytes() == CONTENT
         assert hashlib.sha256(act.marker_path.read_bytes()).hexdigest() == act.content_sha256
 
-        # Required ordering on disk: consume -> attempt -> outcome.
+        # Required ordering on disk: snapshot -> consume -> attempt -> outcome (Stage 3c pins the
+        # admission snapshot before the burn).
         kinds = [json.loads(l)["kind"] for l in durable.read_text().splitlines() if l.strip()]
-        assert kinds == ["consume_receipt", "effect_attempt", "effect_outcome"]
+        assert kinds == ["composed_snapshot", "consume_receipt", "effect_attempt", "effect_outcome"]
         assert reconstruct(durable) == {res["consumption_event_id"]: T_SUCCEEDED}
 
         # Replay of the same operation refuses at LA (the effect does not run twice).

@@ -54,6 +54,37 @@ def _append(durable_path: Path, record: dict[str, Any]) -> None:
         os.fsync(f.fileno())
 
 
+def composed_snapshot_hash(snapshot: dict[str, Any]) -> str:
+    """Recompute the canonical hash of a composed execution snapshot (Stage 3c).
+
+    Must reproduce the kernel's `ComposedExecutionSnapshot::snapshot_hash` byte-for-byte: RFC 8785 (JCS)
+    canonicalization -> SHA-256, prefixed `sha256:`. For the snapshot's shape (all-ASCII keys; string,
+    bool and integer values) this is exactly `json.dumps(sort_keys, separators=(",",":"))`. The agreement
+    is pinned by a cross-language regression test; do not let the two canonicalizations drift.
+    """
+    canonical = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def verify_snapshot_coherence(
+    cev: str, snapshot: dict[str, Any], claimed_hash: str
+) -> str | None:
+    """Stage 3c coherence: does this snapshot pin the admission state that governed `cev`?
+
+    Mirrors the kernel's `ComposedExecutionSnapshot::verify_consume_binding`. Returns an incoherence
+    reason, or None when the snapshot coheres. A lossy snapshot (claims liveness but pins no execution
+    clock) is rejected before the hash is trusted — that is the case the Lean
+    `lossy_receipt_cannot_pin_snapshot` model rules out.
+    """
+    if snapshot.get("revalidation_live") and not snapshot.get("revalidated_at"):
+        return "missing_revalidation_clock"
+    if composed_snapshot_hash(snapshot) != claimed_hash:
+        return "snapshot_hash_mismatch"
+    if snapshot.get("consumption_event_id") != cev:
+        return "consumption_event_mismatch"
+    return None
+
+
 def _refused(reason: str, *, durable_path: Path | None = None) -> dict[str, Any]:
     # Fail-closed is not fail-silent: record infrastructure refusal durably when a sink is available.
     if durable_path is not None:
@@ -180,9 +211,25 @@ def enforce_chain(
         return _refused("eligibility_reference_drift", durable_path=durable_path)
     cev = corr["consumption_event_id"]
 
+    # Stage 3c: the kernel pins the composed admission snapshot that governs this effect. Require it
+    # (fail-closed: a kernel that cannot pin the snapshot cannot be allowed to spend) and verify it
+    # coheres before the burn, so the durable receipt provably describes the state that governed admission.
+    snapshot = corr.get("composed_snapshot")
+    snapshot_hash = corr.get("snapshot_hash")
+    if snapshot is None or snapshot_hash is None:
+        return _refused("composed_snapshot_missing", durable_path=durable_path)
+    incoherence = verify_snapshot_coherence(cev, snapshot, snapshot_hash)
+    if incoherence is not None:
+        return _refused(f"composed_snapshot_incoherent:{incoherence}", durable_path=durable_path)
+
     # Crash point 1: before consume -> nothing spent; a new operation may be admitted later.
     if crash_at == CRASH_BEFORE_CONSUME:
         return {"result": "crashed_before_consume", "operational": False, "consumption_event_id": cev}
+
+    # Durable composed snapshot — written BEFORE the consume so a crash after consume still reconstructs
+    # with the governing admission snapshot attached (Stage 3c). LA has not yet burned anything here.
+    _append(durable_path, {"kind": "composed_snapshot", "consumption_event_id": cev,
+                           "snapshot_hash": snapshot_hash, "snapshot": snapshot})
 
     # 4. LA consume — the AUTHORITATIVE burn.
     dec = la.consume(
@@ -197,9 +244,11 @@ def enforce_chain(
     if dec.get("decision") != "Consumed":
         return _refused(f"consume_refused:{dec.get('decision')}", durable_path=durable_path)
 
-    # 5. Durable ConsumeReceipt — after this, capacity is spent.
+    # 5. Durable ConsumeReceipt — after this, capacity is spent. References the composed snapshot hash so
+    #    the burn is bound to the exact admission state that governed it (Stage 3c).
     _append(durable_path, {"kind": "consume_receipt", "consumption_event_id": cev,
-                           "token_id": token_handle, "la_decision": dec, "operational": True})
+                           "token_id": token_handle, "la_decision": dec, "operational": True,
+                           "snapshot_hash": snapshot_hash})
 
     # Crash point 2: after consume, before attempt receipt -> Consumed + OutcomeUnknown.
     if crash_at == CRASH_AFTER_CONSUME:
@@ -276,3 +325,57 @@ def reconstruct(durable_path: Path) -> dict[str, str]:
         else:
             terminal[cev] = T_UNKNOWN  # crash after consume, before attempt.
     return terminal
+
+
+def reconstruct_composed(durable_path: Path) -> dict[str, dict[str, Any]]:
+    """Stage 3c reconstruction: per consumption event, the terminal outcome **and** the governing composed
+    admission snapshot, with coherence checked.
+
+    Where `reconstruct` answers "was capacity spent, and how did the effect end?", this answers the
+    stronger composed-coherence question: "under exactly which admission snapshot was this effect
+    allowed, and does the durable chain prove it?" Each entry carries `outcome`, the `snapshot` and its
+    `snapshot_hash`, `coherent` (bool), and `incoherence` (reason or None). Reconstruction classifies the
+    past; it never repeats an effect or mints authority.
+
+    Coherence fails when: no composed snapshot exists for a consumed event (`missing_snapshot`); the
+    consume receipt references a different snapshot hash than the snapshot record (`consume_snapshot_hash_
+    mismatch`); or the snapshot itself does not cohere (recomputed hash, consumption-event, or
+    execution-clock — see `verify_snapshot_coherence`).
+    """
+    durable_path = Path(durable_path)
+    if not durable_path.exists():
+        return {}
+    records = [json.loads(line) for line in durable_path.read_text().splitlines() if line.strip()]
+    consumes = {r["consumption_event_id"]: r for r in records if r["kind"] == "consume_receipt"}
+    snapshots = {r["consumption_event_id"]: r for r in records if r["kind"] == "composed_snapshot"}
+    attempts = {r["consumption_event_id"]: r for r in records if r["kind"] == "effect_attempt"}
+    outcomes = {r["consumption_event_id"]: r["outcome"] for r in records if r["kind"] == "effect_outcome"}
+
+    out: dict[str, dict[str, Any]] = {}
+    for cev, consume in consumes.items():
+        if cev in outcomes:
+            terminal = outcomes[cev]
+        elif cev in attempts:
+            terminal = _reconcile_marker(attempts[cev])
+        else:
+            terminal = T_UNKNOWN
+
+        snap_rec = snapshots.get(cev)
+        if snap_rec is None:
+            coherent, incoherence, snapshot, snap_hash = False, "missing_snapshot", None, None
+        else:
+            snapshot = snap_rec.get("snapshot")
+            snap_hash = snap_rec.get("snapshot_hash")
+            reason = verify_snapshot_coherence(cev, snapshot, snap_hash)
+            if reason is None and consume.get("snapshot_hash") != snap_hash:
+                reason = "consume_snapshot_hash_mismatch"
+            coherent, incoherence = (reason is None), reason
+
+        out[cev] = {
+            "outcome": terminal,
+            "snapshot": snapshot,
+            "snapshot_hash": snap_hash,
+            "coherent": coherent,
+            "incoherence": incoherence,
+        }
+    return out

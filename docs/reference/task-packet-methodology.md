@@ -128,6 +128,38 @@ The dogfood verdict (does the pipeline that gates this still hold?) is operator-
 never delegated — an agent grading the pipeline that gates it is self-amendment-adjacent
 (memory `feedback_campaign_card_discipline`).
 
+## Authoring surface: structured Markdown, stable headings
+
+The format is Markdown — but *structured* Markdown, not essay soup. The distinction that
+matters:
+
+> **Markdown is the authoring surface; stable headings are the structure; a code schema
+> waits for a forcing consumer.**
+
+LLM executors do better with **named slots** (the regularity the packet experiments showed),
+and named slots live perfectly well in headings — they do not require YAML. The template's
+ten fields *are* the stable slot names; render them as regular Markdown headings (the
+`packet-waiver-completeness` brief is the reference rendering). Same heading names, same
+order, every packet — that regularity is the whole benefit a schema would have bought, minus
+the costs.
+
+A machine-readable block (YAML/JSON front-matter, or a fenced `deps/files/tests` block) is
+justified **only when a real consumer parses it** — not before. The forcing consumers, named
+so the trigger is recognizable when it arrives:
+
+- an overnight runner that needs machine-readable `deps` / `allowed_files` / verify commands;
+- CI that validates packet structure;
+- a dashboard that indexes packet status;
+- an AG scheduler that dispatches packets.
+
+Until one of those exists, YAML is a costume the prose wears to look employed — and it drags
+in a validation surface, migration burden, compatibility promises, and the failure mode where
+**fields become authority by accident** and agents optimize to satisfy the schema instead of
+doing the work. That is the "schema as institution" disease this very methodology exists to
+prevent; do not contract it five minutes after writing the cure. When a forcing consumer does
+arrive, add the machine block *alongside* the prose (the prose stays the source of truth for
+review), and let the parser read only the block it needs.
+
 ## Not built (deliberately)
 
 - **No Packetizer subsystem, no code.** This is prose, like the template. No forcing case.

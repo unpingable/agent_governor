@@ -51,9 +51,15 @@ For each claim, classify against the *actual repo* (this is `grep-before-sketch`
 | **New build surface** | Forcing-case gate applies (YAGNI). Usually a record, not a build, until a forcing case exists. |
 | **Rejected / duplicate / dangerous** | Tombstone (below). |
 
-The grep is non-optional. Today three dialogues' worth of "new architecture" collapsed to
-~four additive sentences against `activation.py`, `gate_receipt.py`, `overrides.py`, and the
-zoning notes.
+The grep is non-optional, and it is a **gate, not a courtesy**: no architecture dialogue may
+produce a *build request* until substrate-check returns **absent** — where "absent" means *an
+actual repo check found nothing*, not "seems absent" and not "the model thinks it's new."
+Firing evidence: across one 2026-06-22 session, **four** separate "new architecture" dialogues
+each collapsed on grep to "already built + one tiny pin/reservation" (laundering-conservation
+→ `weak_property`; organ-separation → `activation.py`; `ag-admit` → `governed_dispatch`
+`PreflightClient`; claimdocs core/profile/corpus → `config.py` "the firewall"). The
+interferometer saturates: once a corpus is mature, dialogues re-derive it faster than they
+extend it. **The repo, not the dialogue, decides absence.**
 
 ### 3. Delta extraction — packet from a sentence, not a program
 

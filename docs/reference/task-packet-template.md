@@ -104,6 +104,9 @@ model ladder.
 
 ## Composes with
 
+- `docs/reference/task-packet-methodology.md` — the front-half: how you decide a packet
+  should exist at all (intake → substrate-check → delta → tombstone) and when packets may
+  batch. This template describes the brief; the methodology describes earning it.
 - `working/campaign-tick-tock-builder-ratchet.md` — standing objectives + the
   two-verdict ratchet. A packet's acceptance criteria feed the **cargo verdict**; the
   **dogfood verdict** is operator-side and never delegated to the executor — an agent

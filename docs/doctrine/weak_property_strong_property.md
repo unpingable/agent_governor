@@ -117,6 +117,51 @@ to launder even its own vindication" cannot be copied without actually building 
 The product claim (catch the description→authority conversion) and the night's own process
 (refuse to convert a clean read into a verdict) are the *same move*. That is the artifact.
 
+## Laundering is conserved (the law-form of "predictive")
+
+The shape above names *what* the error is. There is a sharper, falsifiable statement of
+*where it goes when you fix it*, recovered 2026-06-22 in a fourth same-genre exchange
+(operator + ChatGPT + Claude) that re-derived this whole table independently — itself a
+confirming pass, and a live instance of the coupling caveat below (the two LLM witnesses
+share a prior; agreement is partly resonance, not only confirmation):
+
+> **Laundering is conserved. Close the conversion at one seam and it reappears at the
+> first unreceipted boundary or interval. You never annihilate it — you force it upward,
+> narrow it, name it, and make the residual assumption visible.**
+
+The relocation ladder, each rung an actual AG seam:
+
+```
+read-time laundering        -> closed by demanding the receipt at the sink, not the read
+sink-check laundering       -> moves to the check->commit interval (TOCTOU at the sink)
+check->commit laundering    -> moves to resource-side enforcement (fencing / idempotency)
+resource-fencing laundering -> moves to authority incumbency (is the closer still seated?)
+authority-incumbency        -> moves to anchor fiat (the named genesis root)
+anchor fiat                 -> the one irreducible exception above; named, not eliminated
+```
+
+This is why the shape is *predictive*: it does not just classify a past bug, it points at
+the next site. Two consequences worth holding:
+
+- **Enforcement belongs at the sink, not the read.** A read-time receipt is testimony; a
+  refusal at the irreversible effect is enactment. `Declared ⊬ Enacted` at the protocol
+  layer. AG already honors this on the temporal axis: the check->commit relocation is
+  exactly the seam `standing_spendability.py` closes (*valid when observed, void when
+  spent*), and `demo_refused_spend` is the enacted refusal. Scope this precisely: the
+  **temporal axis has an enacted witness; the fencing axis (below) remains
+  declaration-only**. One enacted case does not launder into "the doctrine is enacted" —
+  that would be this table's own ghost, on the table.
+- **The next unreceipted rung is authority incumbency.** Following the ladder past the
+  seams AG has already closed lands on the one rung with *no* primitive yet: the closure
+  authority's own standing at issue time (see the fencing-token candidate,
+  `docs/cross-tool/closure-authority-incumbency-note.md`). The conservation law *found*
+  that gap — which is the law paying rent.
+
+The bound is also not a scalar. Temporal freshness collapses to one duration
+(age ± skew); a causal frontier is a position in a partial order and does not. Folding a
+frontier into one ε is the eigenstructure collapse the repo already refuses elsewhere —
+admission is membership in a product region, not a `fresh_enough: bool`.
+
 ## Promotion note
 
 This shape recurs across the constellation (standing, AG, the kernel-fuse work, cold-start,

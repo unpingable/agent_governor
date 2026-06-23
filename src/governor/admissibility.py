@@ -21,6 +21,15 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from .gate_receipt import (
+    ROLE_MEASUREMENT,
+    VERDICT_PASS,
+    VERDICT_PROCEED,
+    GateReceipt,
+    GateReceiptSystem,
+    NonDischargeClaim,
+)
+
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -477,3 +486,85 @@ def make_admissibility_event(
         "details": details or {},
         "ts": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Waiver / override admission receipt emission (waiver-completeness packet)
+# ---------------------------------------------------------------------------
+#
+# A waiver/override admits an action DESPITE an unsatisfied antecedent. Such an
+# admission must be (a) verdict-distinct from a clean pass and (b) carry an explicit
+# non-claim naming what it did NOT certify, so a consumer can refuse it.
+#
+# Model A (operator-ratified 2026-06-23): "clean antecedents not certified" is expressed
+# as a NonDischargeClaim of the SPECIFIC existing non-discharge kind the waiver claims to
+# bypass — NOT a new `clean_antecedents` kind. The meaning rides in the prose `reason`,
+# never in the closed enum. Adding a kind to VALID_NON_DISCHARGE_KINDS is a separate
+# closed-enum-authority campaign (Model B), out of scope here.
+
+WAIVER_ADMISSION_GATE = "waiver_admission"
+
+
+def build_clean_antecedents_unsettled(
+    bypassed_kind: str,
+    *,
+    detail: str,
+    required_consumer: str | None = None,
+) -> NonDischargeClaim:
+    """The Model-A non-claim: 'clean antecedents not certified' over an EXISTING kind.
+
+    `bypassed_kind` must be one of the closed VALID_NON_DISCHARGE_KINDS — the specific
+    antecedent the waiver/override claims to bypass. NonDischargeClaim.__post_init__
+    rejects unknown kinds, so no ad-hoc string can smuggle in a new vocabulary item.
+    """
+    return NonDischargeClaim(
+        kind=bypassed_kind,
+        reason=f"clean antecedents not certified: {detail}",
+        required_consumer=required_consumer,
+    )
+
+
+def emit_waiver_admission(
+    receipt_system: GateReceiptSystem,
+    *,
+    bypassed_kind: str,
+    detail: str,
+    subject_bytes: bytes,
+    granted_by: str,
+    gate: str = WAIVER_ADMISSION_GATE,
+    gate_config: dict[str, Any] | None = None,
+    required_consumer: str | None = None,
+    principal_ref: str | None = None,
+    extra_evidence: dict[str, Any] | None = None,
+) -> GateReceipt:
+    """Emit the admission receipt for a waiver/override-granted admission.
+
+    No-silent-override-path invariant: this path ALWAYS emits VERDICT_PROCEED (never
+    VERDICT_PASS) and ALWAYS attaches a non-empty `unsettled` block. The helper exposes
+    neither a `verdict` nor an `unsettled` parameter, so a caller structurally cannot
+    turn a waiver admission into a bare clean pass.
+    """
+    # Verdict and unsettled are fixed by construction; a clean pass is unrepresentable.
+    assert VERDICT_PROCEED != VERDICT_PASS  # waiver-admission ≠ clean pass
+    claim = build_clean_antecedents_unsettled(
+        bypassed_kind, detail=detail, required_consumer=required_consumer
+    )
+    evidence: dict[str, Any] = {
+        "granted_by": granted_by,
+        "bypassed_kind": bypassed_kind,
+        "clean_antecedents_certified": False,
+        "detail": detail,
+    }
+    if extra_evidence:
+        evidence.update(extra_evidence)
+    return receipt_system.emit(
+        gate=gate,
+        verdict=VERDICT_PROCEED,
+        subject_kind="waiver_admission",
+        subject_bytes=subject_bytes,
+        evidence_bundle=evidence,
+        gate_config=gate_config or {},
+        receipt_role=ROLE_MEASUREMENT,
+        unsettled=(claim,),
+        principal_ref=principal_ref,
+    )

@@ -28,6 +28,8 @@ from pathlib import Path
 from typing import Any
 
 from .gate_receipt import (
+    VALID_NON_DISCHARGE_KINDS,
+    VERDICT_PROCEED,
     GateReceipt,
     canonical_json,
     content_hash,
@@ -380,12 +382,17 @@ class CiPolicy:
     required_kinds: frozenset[str]
     require_clean: bool = True
     require_same_sha: bool = True
+    # Opt-in: rely on waiver-admission-shaped `proceed` receipts. Default False =
+    # refuse-by-default. This accepts a specific waiver-admission SHAPE, never the verdict
+    # `proceed` generally — `proceed` is not `pass` with better cheekbones.
+    accepts_waiver_admitted: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "required_kinds": sorted(self.required_kinds),
             "require_clean": self.require_clean,
             "require_same_sha": self.require_same_sha,
+            "accepts_waiver_admitted": self.accepts_waiver_admitted,
         }
 
     @classmethod
@@ -394,6 +401,7 @@ class CiPolicy:
             required_kinds=frozenset(d.get("required_kinds", [])),
             require_clean=d.get("require_clean", True),
             require_same_sha=d.get("require_same_sha", True),
+            accepts_waiver_admitted=d.get("accepts_waiver_admitted", False),
         )
 
 
@@ -421,6 +429,48 @@ class CiVerifyResult:
         if self.receipt is not None:
             d["receipt"] = self.receipt.to_dict()
         return d
+
+
+def _is_waiver_admission_shaped(receipt: GateReceipt) -> bool:
+    """True iff `receipt` is a structurally valid waiver-admission proceed receipt.
+
+    The shape (not the bare verdict) is what a consumer may opt into relying on:
+      - verdict is VERDICT_PROCEED (a clean pass is a different thing entirely), AND
+      - a non-empty `unsettled` block, AND
+      - every non-discharge claim names an existing closed kind.
+    A `proceed` with an empty/invalid unsettled block is a malformed proceed, not a
+    waiver admission — it is refused even when the opt-in is on.
+    """
+    if receipt.verdict != VERDICT_PROCEED:
+        return False
+    if not receipt.unsettled:
+        return False
+    return all(c.kind in VALID_NON_DISCHARGE_KINDS for c in receipt.unsettled)
+
+
+def _receipt_acceptable(
+    receipt: GateReceipt, *, accepts_waiver_admitted: bool
+) -> tuple[bool, str | None]:
+    """Decide whether a single receipt is acceptable to ci_verify. Refuse-by-default.
+
+    Returns (acceptable, refusal_reason). A clean `pass` always relies. A waiver-admission
+    `proceed` relies only under explicit opt-in. Everything else is refused.
+    """
+    if receipt.verdict == "pass":
+        return True, None
+    if receipt.verdict == VERDICT_PROCEED:
+        if not accepts_waiver_admitted:
+            return False, (
+                "verdict=proceed (waiver admission) not accepted; "
+                "set accepts_waiver_admitted to opt in"
+            )
+        if not _is_waiver_admission_shaped(receipt):
+            return False, (
+                "verdict=proceed but not a valid waiver-admission shape "
+                "(needs non-empty unsettled existing-kind non-discharge claims)"
+            )
+        return True, None
+    return False, f"verdict={receipt.verdict}"
 
 
 def ci_verify(
@@ -469,12 +519,20 @@ def ci_verify(
     else:
         checks["required_kinds_present"] = True
 
-    # 3. all_pass — every receipt has verdict == "pass"
-    all_pass = all(b.receipt.verdict == "pass" for b in bundles) if bundles else True
-    checks["all_pass"] = all_pass
+    # 3. all_pass — every receipt is acceptable. A clean "pass" is always acceptable.
+    #    A waiver-admission-shaped "proceed" (verdict=proceed + non-empty unsettled
+    #    existing-kind non-discharge claims) is acceptable ONLY when the policy explicitly
+    #    opts in via accepts_waiver_admitted. "proceed" is never treated as "pass"; a
+    #    malformed proceed (no valid unsettled claims) is refused even with the opt-in.
+    all_pass = True
     for b in bundles:
-        if b.receipt.verdict != "pass":
-            errors.append(f"Receipt {b.receipt.receipt_id[:12]} has verdict={b.receipt.verdict}")
+        ok, reason = _receipt_acceptable(
+            b.receipt, accepts_waiver_admitted=policy.accepts_waiver_admitted
+        )
+        if not ok:
+            all_pass = False
+            errors.append(f"Receipt {b.receipt.receipt_id[:12]} refused: {reason}")
+    checks["all_pass"] = all_pass
 
     # 4. sha_known — all git_sha values non-empty
     if policy.require_same_sha:

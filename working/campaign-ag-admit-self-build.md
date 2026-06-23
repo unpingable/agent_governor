@@ -1,8 +1,16 @@
 # Campaign — AG governed self-build loop (ag-admit + disposable conductor)
 
-Status: **Slices 0–2 BUILT + GREEN** (2026-06-23). Slice 3 (waiver-completeness
-dogfood) and Slice 4+ (earned widening) PARKED behind a witnessed promotion note.
-Plan of record: `~/.claude/plans/abstract-brewing-hippo.md` (operator-approved).
+Status: **Slices 0–3 + 3b BUILT + GREEN** (2026-06-23). Slices 0–2 committed `fb4322d`;
+Slice 3 (waiver-completeness dogfood, Model A) + Slice 3b (ci.py consumer edge) complete —
+all four packet criteria stand. Slice 4+ (earned widening) PARKED behind a witnessed
+promotion note. Plan of record: `~/.claude/plans/abstract-brewing-hippo.md`.
+
+Slice 3 lineage: `working/promotion-ag-admit-to-waiver-completeness.md` (one-packet
+widening) → `working/EXIT_2026-06-23_ag-admit-slice3-needs-human.md` (Model A decision +
+3b resolution) → impl in `admissibility.py`/`overrides.py`/`ci.py` + pins in
+`tests/test_waiver_admission_completeness.py`. Next named build: `ForbiddenSurfaceGate`
+(semantic companion to DiffPathScopeGate), then self-correction-within-scope. See
+`working/doctrine-ag-admit-throttle-ladder.md`.
 
 ## Question
 

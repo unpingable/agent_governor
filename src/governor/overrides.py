@@ -462,3 +462,51 @@ def check_override(
     """
     manager = OverrideManager(gov_dir=gov_dir)
     return manager.check(anchor_id, path)
+
+
+# =============================================================================
+# Override-granted admission receipt (waiver-completeness packet)
+# =============================================================================
+#
+# When an active override admits an action DESPITE an anchor violation, that admission
+# must emit a verdict-distinct, non-silent receipt. Reuses the sanctioned waiver→receipt
+# emission path in admissibility.py (Model A): the override names which existing
+# non-discharge kind it claims to bypass; "clean antecedents not certified" rides in the
+# unsettled block, not in a new closed-enum kind.
+
+OVERRIDE_ADMISSION_GATE = "override_admission"
+
+
+def emit_override_admission(
+    receipt_system,
+    override: OverrideReceipt,
+    *,
+    bypassed_kind: str,
+    path: str,
+    gate_config: dict[str, Any] | None = None,
+):
+    """Emit the proceed+unsettled admission receipt for an override-granted admission.
+
+    `bypassed_kind` must be one of gate_receipt.VALID_NON_DISCHARGE_KINDS — the specific
+    antecedent the override claims to bypass. Always VERDICT_PROCEED, never a clean pass.
+    """
+    from .admissibility import emit_waiver_admission
+
+    return emit_waiver_admission(
+        receipt_system,
+        bypassed_kind=bypassed_kind,
+        detail=(
+            f"override {override.id} admits {path} despite anchor "
+            f"{override.anchor_id} violation"
+        ),
+        subject_bytes=f"override:{override.id}:{path}".encode(),
+        granted_by=override.operator,
+        gate=OVERRIDE_ADMISSION_GATE,
+        gate_config=gate_config
+        or {"override_id": override.id, "anchor_id": override.anchor_id, "path": path},
+        extra_evidence={
+            "override_id": override.id,
+            "anchor_id": override.anchor_id,
+            "path": path,
+        },
+    )

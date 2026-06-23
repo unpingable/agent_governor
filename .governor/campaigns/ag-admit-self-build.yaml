@@ -1,0 +1,44 @@
+# Inert discovery manifest — ag-admit self-build campaign.
+# This is NOT live WIP state. It does not mutate loop state and is never spliced into
+# .governor/loop.json. It exists so a cold-start agent can DISCOVER the campaign capsule
+# and apply already-ratified decisions without re-asking the operator.
+# Authoritative prose lives in docs/campaigns/ag-admit-self-build/.
+
+schema: ag-campaign-manifest/v0
+campaign: ag-admit-self-build
+kind: discovery-metadata
+updated: "2026-06-23"
+
+capsule_dir: docs/campaigns/ag-admit-self-build/
+files:
+  campaign: docs/campaigns/ag-admit-self-build/CAMPAIGN.md
+  decisions: docs/campaigns/ag-admit-self-build/DECISIONS.md
+  grants: docs/campaigns/ag-admit-self-build/GRANTS.yaml
+  replay: docs/campaigns/ag-admit-self-build/REPLAY.md
+  status: docs/campaigns/ag-admit-self-build/STATUS.md
+  next: docs/campaigns/ag-admit-self-build/NEXT.md
+
+# Binding on future agents (see DECISIONS.md "The rule"):
+# If a question matches a ratified decision, apply its default_action and cite the ID.
+# Do not re-ask the operator unless the case is outside applies_when or hits requires_human_if.
+ratified_decisions: [D001, D002, D003, D004, D005, D006, D007, D008]
+
+committed:
+  - { commit: fb4322d, slice: "0-2", summary: "ag_admit toy loop" }
+  - { commit: 8a76306, slice: "3/3b", summary: "waiver-completeness + ci consumer edge" }
+
+state:
+  unpushed: true
+  known_red: "test_pyproject_version_matches_latest_git_tag (pre-existing version/tag drift)"
+  expected_untracked: ["working/slice3_receipts/ (regenerable; only after running the dogfood)"]
+
+next_build:
+  id: ForbiddenSurfaceGate
+  status: named-not-built
+  seed: docs/campaigns/ag-admit-self-build/NEXT.md
+  then: self-correction-within-scope
+
+source_code:
+  module: src/governor/ag_admit.py
+  conductor: working/ag_admit_conductor.py
+  tests: [tests/test_ag_admit.py, tests/test_ag_admit_conductor.py, tests/test_waiver_admission_completeness.py]

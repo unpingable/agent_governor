@@ -32,6 +32,7 @@ venv/
 !.governor/loop.json
 !.governor/loop-receipts/
 !.governor/backlog/
+!.governor/campaigns/
 baselines/
 *.tar.gz
 

@@ -1,0 +1,74 @@
+# Grants and stop surfaces — ag-admit self-build.
+# Keeps "inside path" from silently becoming "inside authority".
+# Inert metadata. Does not mutate loop state.
+
+campaign: ag-admit-self-build
+updated: "2026-06-23"
+
+committed_slices:
+  - id: slice-0-2
+    commit: fb4322d
+    summary: ag_admit mouth + StepVerdict + DiffPathScopeGate + disposable conductor + toy trace
+  - id: slice-3
+    commit: 8a76306
+    summary: waiver-completeness Model A (criteria 1/2/4) within the packet path grant
+  - id: slice-3b
+    commit: 8a76306
+    summary: ci_verify consumer edge (criterion 3) under a one-file micro-grant
+
+# Active grants: what an admitted change may touch. A grant is path-scope only;
+# it never confers authority over the forbidden surfaces below.
+grants:
+  - id: waiver-completeness-packet
+    kind: path-allowlist
+    source: working/promotion-ag-admit-to-waiver-completeness.md
+    status: spent  # packet criteria 1-4 complete
+    allowed_paths:
+      - src/governor/overrides.py
+      - src/governor/admissibility.py
+      - src/governor/gate_receipt.py   # additive unsettled constant ONLY; not exercised (Model A needed none)
+      - tests/test_overrides.py
+      - tests/test_admissibility.py
+      - tests/test_waiver_admission_completeness.py
+      - src/governor/constraint_compiler.py  # candidate consumer (unused; real one was ci.py)
+  - id: ci-consumer-micro-grant
+    kind: single-file-consumer-edge
+    source: operator 2026-06-23 (Slice 3b)
+    status: spent
+    allowed_paths:
+      - src/governor/ci.py            # ci_verify only
+      - tests/test_waiver_admission_completeness.py
+    notes: refuse-by-default + explicit accepts_waiver_admitted; no global receipt-verdict reinterpretation
+
+# Forbidden surfaces: editing any of these requires an explicit, witnessed grant first.
+# A change touching an allowed path that ALSO mutates one of these is NOT admissible on
+# path grounds alone (this is the gap ForbiddenSurfaceGate will mechanize — see NEXT.md).
+forbidden_surfaces:
+  - id: stepverdict_projection
+    where: src/governor/ag_admit.py
+    markers: ["class StepVerdict", "def project_source_verdict", "_ADMIT_SOURCES", "_REJECT_SOURCES"]
+  - id: preflight_contract
+    where: src/governor/governed_dispatch.py
+    markers: ["class PreflightClient", "class PreflightRequest", "class PreflightDecision", "def governed_dispatch"]
+  - id: conductor_authority
+    where: working/ag_admit_conductor.py
+    markers: ["_VERDICT_TABLE", "def conduct"]
+  - id: closed_receipt_enums
+    where: src/governor/gate_receipt.py
+    markers: ["VALID_VERDICTS", "VALID_RECEIPT_ROLES", "VALID_NON_DISCHARGE_KINDS", "VALID_HORIZON_KINDS"]
+  - id: receipt_emission_semantics
+    where: src/governor/gate_receipt.py
+    markers: ["def create_receipt", "def _compute_receipt_id", "def canonical_json", "RECEIPT_SCHEMA_VERSION"]
+  - id: loop_state
+    where: .governor/loop.json
+    markers: []   # whole file: any edit is forbidden without an explicit grant
+  - id: ci_accept_semantics
+    where: src/governor/ci.py
+    markers: ["accepts_waiver_admitted", "_receipt_acceptable", "_is_waiver_admission_shaped"]
+
+stop_conditions:
+  - a CandidateStep cannot be grounded in existing signatures
+  - a repair would change policy/admission semantics
+  - a change touches a forbidden_surface without an explicit grant
+  - the loop wants to widen from the current packet to another without a witnessed promotion note
+  - receipts prove execution but not admissibility

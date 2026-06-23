@@ -28,7 +28,14 @@ Pins: (a) mismatched `(action,target)` → `ScopeMismatch`, grant still `Active`
 emitted; (b) matching `(action,target)` → spends as before; (c) the existing expiry/spend/replay/
 subject refusals still hold and still precede/compose correctly.
 
-## Slice 1b — AG adapter  (`activation.py` Office 2)  — **ACTIVE NEXT**
+## Slice 1b — AG adapter  (`activation.py` Office 2)  — **BLOCKED on Slice 1a-bis**
+
+Transport reduction done ([TRANSPORT.md](TRANSPORT.md)): verdict **C** — Standing's `grant use`
+emits prose only, so AG cannot consume it honestly. Slice 1b is gated on **Slice 1a-bis**
+(Standing adds a `--json` typed verdict to `grant use`: success + typed refusal class to stdout).
+After that, the AG adapter subprocess-invokes `standing grant use --json`, applies the refusal
+map (TRANSPORT.md), and keeps transport-failure (`no_verified_result`) distinct from a real
+Standing refusal. Spec below stands; the gating prerequisite is new.
 
 Replace `standing_ok: bool` with a verified Standing grant-use **result**. AG receives:
 - admitted use receipt / token spend receipt → may mint/continue **this act**;

@@ -36,11 +36,21 @@ slices_done:
     commit: 1e62ba9          # NOT pushed
     summary: "Store::transition_scoped refuses ScopeMismatch non-consuming; CLI grant use --action/--target; Standing now refuses all 5 load-bearing classes"
 
+transport_reduction:
+  doc: docs/campaigns/transition-kernel-pickup/TRANSPORT.md
+  verdict: "C — Standing must add machine-readable --json verdict to `grant use` before AG can consume honestly (prose-only today)"
+  shape: "subprocess to standing CLI + typed JSON; no AG access to Standing SQLite; no AG-local adjudication"
+  invariant: "transport failure (no_verified_result) must stay distinct from a real Standing refusal in the AG receipt"
+
 next_build:
-  id: slice-1b-AGGrantAdapter-at-activation-office-2
-  status: active
-  seed: docs/campaigns/transition-kernel-pickup/NEXT.md
-  note: "replace activation.py Office 2 standing_ok: bool with a verified Standing grant-use result; inherit all refusals incl. scope; standing_basis carries the receipt id"
+  id: slice-1a-bis-standing-json-verdict
+  status: active-prerequisite
+  repo: ~/git/standing
+  note: "add --json typed verdict to `grant use` (success + typed refusal_class to stdout, exit codes preserved); BLOCKS slice-1b"
+  then:
+    id: slice-1b-AGGrantAdapter-at-activation-office-2
+    status: blocked-on-1a-bis
+    note: "subprocess-invoke `standing grant use --json`; apply TRANSPORT.md refusal map; replace activation.py Office 2 standing_ok: bool; standing_basis carries verified/refused/no_verified_result"
 
 cross_repo:
   standing_repo: ~/git/standing

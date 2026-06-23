@@ -15,6 +15,9 @@ committed_slices:
   - id: slice-3b
     commit: 8a76306
     summary: ci_verify consumer edge (criterion 3) under a one-file micro-grant
+  - id: forbidden-surface-gate
+    commit: "see git log (this slice)"
+    summary: ForbiddenSurfaceGate — semantic companion to DiffPathScopeGate; mechanizes the forbidden_surfaces list below
 
 # Active grants: what an admitted change may touch. A grant is path-scope only;
 # it never confers authority over the forbidden surfaces below.
@@ -42,7 +45,8 @@ grants:
 
 # Forbidden surfaces: editing any of these requires an explicit, witnessed grant first.
 # A change touching an allowed path that ALSO mutates one of these is NOT admissible on
-# path grounds alone (this is the gap ForbiddenSurfaceGate will mechanize — see NEXT.md).
+# path grounds alone. This list is now MECHANIZED by ForbiddenSurfaceGate
+# (src/governor/forbidden_surface_gate.py: DEFAULT_FORBIDDEN_SURFACES mirrors this).
 forbidden_surfaces:
   - id: stepverdict_projection
     where: src/governor/ag_admit.py

@@ -33,12 +33,17 @@ state:
   expected_untracked: ["working/slice3_receipts/ (regenerable; only after running the dogfood)"]
 
 next_build:
-  id: ForbiddenSurfaceGate
+  id: self-correction-within-scope
   status: named-not-built
   seed: docs/campaigns/ag-admit-self-build/NEXT.md
-  then: self-correction-within-scope
+  prior_done: ForbiddenSurfaceGate
 
 source_code:
   module: src/governor/ag_admit.py
   conductor: working/ag_admit_conductor.py
-  tests: [tests/test_ag_admit.py, tests/test_ag_admit_conductor.py, tests/test_waiver_admission_completeness.py]
+  forbidden_surface_gate: src/governor/forbidden_surface_gate.py
+  tests:
+    - tests/test_ag_admit.py
+    - tests/test_ag_admit_conductor.py
+    - tests/test_waiver_admission_completeness.py
+    - tests/test_forbidden_surface_gate.py

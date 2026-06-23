@@ -32,11 +32,13 @@ committed). See [REPLAY.md](REPLAY.md) "regenerable vs dirty".
 - Slices 0–2: governed toy loop (refuse→repair→admit→execute→commit, receipt-reconstructable).
 - Slice 3 + 3b: waiver-completeness packet — **all four acceptance criteria stand** (Model A;
   `ci_verify` consumer edge). `gate_receipt.py` untouched; no closed-enum change.
+- `ForbiddenSurfaceGate`: semantic companion to `DiffPathScopeGate` (`src/governor/forbidden_surface_gate.py`,
+  `tests/test_forbidden_surface_gate.py`). Path authority ≠ semantic authority now mechanized.
 
 ## Current next packet
 
-`ForbiddenSurfaceGate` — **named, not built** (the reproducibility capsule lands first, per
-[D008](DECISIONS.md)). Seed in [NEXT.md](NEXT.md). After it: self-correction-within-scope.
+`self-correction-within-scope` — **named, not built** (per [D008](DECISIONS.md), it follows
+the now-built `ForbiddenSurfaceGate`). Seed in [NEXT.md](NEXT.md).
 
 ## Cold-start discovery
 

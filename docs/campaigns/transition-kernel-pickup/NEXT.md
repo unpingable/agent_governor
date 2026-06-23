@@ -3,7 +3,16 @@
 Reduction done (verdict B); D010 **ratified Model X** (DECISIONS.md). Standing owns spend-time
 scope-mismatch refusal; AG only inherits. Build order: **Slice 1a in Standing first, then 1b in AG.**
 
-## Slice 1a — Standing scope-checked use  (`~/git/standing`, Rust)  — ACTIVE
+## Slice 1a — Standing scope-checked use  (`~/git/standing`, Rust)  — **DONE** (commit `1e62ba9`, not pushed)
+
+Built: `grant use` names the attempted `(action,target)`; `Store::transition_scoped` refuses
+`StoreError::ScopeMismatch{granted, attempted}` before any write (non-consuming — a mismatch
+leaves the grant `Active`). Pins: `scope_mismatch_refuses_and_does_not_consume`,
+`scope_match_spends_and_single_spend_still_holds` (store), `use_with_wrong_scope_is_refused_and_does_not_consume`
+(CLI end-to-end). Full Standing workspace green. Standing now refuses all five load-bearing
+classes — the token is fully present for AG to inherit.
+
+### Original Slice 1a spec (for the record)
 
 `grant use` must name the attempted `(action, target)` (and subject/session if not already
 present); the store must refuse `StoreError::ScopeMismatch{granted, attempted}` when it differs
@@ -19,7 +28,7 @@ Pins: (a) mismatched `(action,target)` → `ScopeMismatch`, grant still `Active`
 emitted; (b) matching `(action,target)` → spends as before; (c) the existing expiry/spend/replay/
 subject refusals still hold and still precede/compose correctly.
 
-## Slice 1b — AG adapter  (`activation.py` Office 2)
+## Slice 1b — AG adapter  (`activation.py` Office 2)  — **ACTIVE NEXT**
 
 Replace `standing_ok: bool` with a verified Standing grant-use **result**. AG receives:
 - admitted use receipt / token spend receipt → may mint/continue **this act**;

@@ -30,11 +30,17 @@ resolved_fork:
   decision: "scope-mismatch refusal locus -> Model X (Standing owns it); AG inherits, never synthesizes"
   ratified: "2026-06-23 operator-fiat"
 
+slices_done:
+  - id: slice-1a-standing-scope-checked-use
+    repo: ~/git/standing
+    commit: 1e62ba9          # NOT pushed
+    summary: "Store::transition_scoped refuses ScopeMismatch non-consuming; CLI grant use --action/--target; Standing now refuses all 5 load-bearing classes"
+
 next_build:
-  id: slice-1a-standing-scope-checked-use
+  id: slice-1b-AGGrantAdapter-at-activation-office-2
   status: active
   seed: docs/campaigns/transition-kernel-pickup/NEXT.md
-  then: slice-1b-AGGrantAdapter-at-activation-office-2
+  note: "replace activation.py Office 2 standing_ok: bool with a verified Standing grant-use result; inherit all refusals incl. scope; standing_basis carries the receipt id"
 
 cross_repo:
   standing_repo: ~/git/standing

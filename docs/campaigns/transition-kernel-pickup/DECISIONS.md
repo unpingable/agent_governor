@@ -35,6 +35,26 @@ Decided 2026-06-23. Standing closes its own token; the alternative (Model Y, ada
 matching) was rejected as authority because it makes AG the scope adjudicator — "trusted
 construction with a nicer hat." It survives only as a non-authorizing diagnostic.
 
+### D010c — `standing.grant_use.v1` has asymmetric custody  (RATIFIED 2026-06-23)
+
+The JSON witness packet for `grant use`. **`used`**: `receipt_digest` REQUIRED,
+`receipt_kind: "grant_used"`; AG may record the digest as `standing_basis`. **`refused`**:
+`refusal_class` REQUIRED (closed set: `scope_mismatch | expired | already_spent | replay |
+subject_mismatch | not_found`), `receipt_digest: null`, `receipt_kind: null`; AG must mint
+nothing. Preserves Standing's invariant (no transition → no Standing receipt); a non-consuming
+refusal is the *absence* of a transition, so there is no receipt to cite. **Not weaker** — AG
+never mints on a refusal, so there is no authority to custody.
+
+AG must distinguish three cases (load-bearing — no JSON raincoat):
+1. `used` + digest → verified standing basis; may mint.
+2. `refused` + typed class + null digest → verified Standing refusal; must not mint.
+3. invalid / missing / unparseable / transport failure → **no verified result**; must not mint,
+   but must **not** claim Standing refused.
+
+Refusal-witness receipts (Model A) are parked as a **separate future Standing custody campaign**
+(are they receipts/events/observations? content-addressed? same chain? spammable? part of token
+custody?) — explicitly NOT a CLI-flag tweak.
+
 ### D010a — scope check is non-consuming (no DoS primitive)
 
 A scope mismatch **must be checked BEFORE spend** and **must NOT consume the grant** (it emits

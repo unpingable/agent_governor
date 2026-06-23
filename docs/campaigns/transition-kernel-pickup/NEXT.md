@@ -28,14 +28,23 @@ Pins: (a) mismatched `(action,target)` → `ScopeMismatch`, grant still `Active`
 emitted; (b) matching `(action,target)` → spends as before; (c) the existing expiry/spend/replay/
 subject refusals still hold and still precede/compose correctly.
 
-## Slice 1b — AG adapter  (`activation.py` Office 2)  — **BLOCKED on Slice 1a-bis**
+## Slice 1a-bis — Standing `grant use --json` witness packet  — **DONE** (commit `f101c55`, not pushed)
 
-Transport reduction done ([TRANSPORT.md](TRANSPORT.md)): verdict **C** — Standing's `grant use`
-emits prose only, so AG cannot consume it honestly. Slice 1b is gated on **Slice 1a-bis**
-(Standing adds a `--json` typed verdict to `grant use`: success + typed refusal class to stdout).
-After that, the AG adapter subprocess-invokes `standing grant use --json`, applies the refusal
-map (TRANSPORT.md), and keeps transport-failure (`no_verified_result`) distinct from a real
-Standing refusal. Spec below stands; the gating prerequisite is new.
+`standing.grant_use.v1` implemented with asymmetric custody (D010c): success carries
+`receipt_digest` + `receipt_kind: grant_used`; refusal carries a closed `refusal_class`
+(scope_mismatch/expired/already_spent/subject_mismatch/not_found) + `receipt_digest: null`.
+Unmapped `StoreError` stays prose (consumer reads "cannot verify", not a refusal). 5 CLI pins;
+full Standing workspace green.
+
+## Slice 1b — AG adapter  (`activation.py` Office 2)  — **ACTIVE NEXT** (unblocked)
+
+AG subprocess-invokes `standing grant use --json …`, parses `standing.grant_use.v1`, applies
+the refusal map ([TRANSPORT.md](TRANSPORT.md)), and replaces `activation.py` Office 2's
+`standing_ok: bool` with the verified result. Three-way distinction enforced: `used`+digest →
+mint + `standing_basis`; `refused`+class → `REFUSED_NO_STANDING`; transport/parse failure →
+`REFUSED_NO_STANDING` as *no_verified_result* (NOT a Standing refusal). AG does no local
+adjudication. Open sub-question: how AG locates/invokes the `standing` binary (PATH / configured
+path / built artifact) — a small reduction at the start of 1b.
 
 Replace `standing_ok: bool` with a verified Standing grant-use **result**. AG receives:
 - admitted use receipt / token spend receipt → may mint/continue **this act**;

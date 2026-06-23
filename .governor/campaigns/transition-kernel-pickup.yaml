@@ -23,7 +23,7 @@ reduction_verdict: "B — close, missing spend-time scope-mismatch refusal"
 pickup_boundary: "Standing grant token -> AGGrantAdapter -> governed actor/session/step authority"
 cleanest_seam: "src/governor/activation.py Office 2 (replace standing_ok: bool)"
 
-ratified_decisions: [D010, D010a]   # D010 pickup boundary (Model X); D010a scope-check is non-consuming
+ratified_decisions: [D010, D010a, D010b, D010c]   # pickup boundary (Model X); non-consuming scope check; grant_use.v1 contract; asymmetric custody
 proposed_decisions: []
 
 resolved_fork:
@@ -34,23 +34,24 @@ slices_done:
   - id: slice-1a-standing-scope-checked-use
     repo: ~/git/standing
     commit: 1e62ba9          # NOT pushed
-    summary: "Store::transition_scoped refuses ScopeMismatch non-consuming; CLI grant use --action/--target; Standing now refuses all 5 load-bearing classes"
+    summary: "Store::transition_scoped refuses ScopeMismatch non-consuming; Standing refuses all 5 load-bearing classes"
+  - id: slice-1a-bis-standing-json-verdict
+    repo: ~/git/standing
+    commit: f101c55          # NOT pushed
+    summary: "grant use --json emits standing.grant_use.v1 witness packet (asymmetric custody D010c); 5 CLI pins; full Standing workspace green"
 
 transport_reduction:
   doc: docs/campaigns/transition-kernel-pickup/TRANSPORT.md
-  verdict: "C — Standing must add machine-readable --json verdict to `grant use` before AG can consume honestly (prose-only today)"
+  verdict: "C (resolved) — Standing now emits standing.grant_use.v1 via `grant use --json`"
   shape: "subprocess to standing CLI + typed JSON; no AG access to Standing SQLite; no AG-local adjudication"
   invariant: "transport failure (no_verified_result) must stay distinct from a real Standing refusal in the AG receipt"
 
 next_build:
-  id: slice-1a-bis-standing-json-verdict
-  status: active-prerequisite
-  repo: ~/git/standing
-  note: "add --json typed verdict to `grant use` (success + typed refusal_class to stdout, exit codes preserved); BLOCKS slice-1b"
-  then:
-    id: slice-1b-AGGrantAdapter-at-activation-office-2
-    status: blocked-on-1a-bis
-    note: "subprocess-invoke `standing grant use --json`; apply TRANSPORT.md refusal map; replace activation.py Office 2 standing_ok: bool; standing_basis carries verified/refused/no_verified_result"
+  id: slice-1b-AGGrantAdapter-at-activation-office-2
+  status: active
+  repo: ~/git/agent_gov
+  note: "subprocess-invoke `standing grant use --json`; parse standing.grant_use.v1; replace activation.py Office 2 standing_ok: bool; three-way used/refused/no_verified_result; standing_basis = verified digest"
+  open_subquestion: "how AG locates/invokes the standing binary (PATH / configured / built artifact)"
 
 cross_repo:
   standing_repo: ~/git/standing

@@ -2,6 +2,10 @@
 
 Date: 2026-06-23. Reduction only — no adapter, no `activation.py` change.
 
+> **STATUS: contract RATIFIED (D010b/D010c) and BUILT.** The `standing.grant_use.v1` witness
+> packet is implemented in Standing (`grant use --json`, commit `f101c55`) with asymmetric
+> custody. The shape below is final, not proposed. Slice 1b (AG adapter) is unblocked.
+
 ## Verdict: **(C)** — Standing must add machine-readable verdict output before AG can consume `grant use` honestly
 
 The transport *shape* is settled (subprocess + JSON; see below), but the Standing CLI does

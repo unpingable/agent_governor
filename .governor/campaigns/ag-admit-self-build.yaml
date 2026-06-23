@@ -21,7 +21,7 @@ files:
 # Binding on future agents (see DECISIONS.md "The rule"):
 # If a question matches a ratified decision, apply its default_action and cite the ID.
 # Do not re-ask the operator unless the case is outside applies_when or hits requires_human_if.
-ratified_decisions: [D001, D002, D003, D004, D005, D006, D007, D008]
+ratified_decisions: [D001, D002, D003, D004, D005, D006, D007, D008, D009]
 
 committed:
   - { commit: fb4322d, slice: "0-2", summary: "ag_admit toy loop" }
@@ -33,17 +33,19 @@ state:
   expected_untracked: ["working/slice3_receipts/ (regenerable; only after running the dogfood)"]
 
 next_build:
-  id: self-correction-within-scope
-  status: named-not-built
+  id: none-ladder-complete
+  status: operational  # D008 ladder done; next is operating at reduced throttle + optional Codex RepairProvider
   seed: docs/campaigns/ag-admit-self-build/NEXT.md
-  prior_done: ForbiddenSurfaceGate
+  prior_done: [reproducibility-capsule, ForbiddenSurfaceGate, self-correction-within-scope]
 
 source_code:
   module: src/governor/ag_admit.py
   conductor: working/ag_admit_conductor.py
   forbidden_surface_gate: src/governor/forbidden_surface_gate.py
+  self_correction: src/governor/self_correction.py
   tests:
     - tests/test_ag_admit.py
     - tests/test_ag_admit_conductor.py
     - tests/test_waiver_admission_completeness.py
     - tests/test_forbidden_surface_gate.py
+    - tests/test_self_correction.py

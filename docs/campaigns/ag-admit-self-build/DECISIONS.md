@@ -98,4 +98,26 @@ Each record: `decision` · `applies_when` · `default_action` · `forbidden` ·
   ("an obedient burglar"); more building must not precede reproducibility ("oral tradition").
 - **forbidden:** jumping to self-correction or ForbiddenSurfaceGate before its predecessor lands.
 - **requires_human_if:** the operator re-orders explicitly.
-- **evidence:** operator 2026-06-23; this capsule; [NEXT.md](NEXT.md).
+- **evidence:** operator 2026-06-23; this capsule; [NEXT.md](NEXT.md). **Status: the D008
+  ladder is complete — capsule, ForbiddenSurfaceGate, and self-correction all built.**
+
+### D009 — Self-correction requires repair identity (ancestry) + same/narrower scope + same intent
+
+- **decision:** A repaired `CandidateStep` must carry `RepairProvenance`
+  (`repairs_step_id`, `repairs_receipt_id`, `repair_reason`, `scope_relation ∈
+  {same,narrower}`, `intent_relation == same`), preserve the original `declared_intent`,
+  declare same-or-narrower scope, and **cite the refusal/test receipt it answers**. The
+  harness validates this and re-admits through the **same** gates; the worker proposes,
+  the gates+validation decide.
+- **applies_when:** a repair worker (Codex/other) produces a repaired step from a failure.
+- **default_action:** validate ancestry/scope/intent, then re-admit through
+  `DiffPathScopeGate` + `ForbiddenSurfaceGate`. `NEEDS_HUMAN` stops; `CANNOT_TESTIFY`
+  requests evidence (no mutation, never rewritten to `NEEDS_HUMAN`); a missing/ambiguous
+  source receipt → no repair.
+- **forbidden:** scope widening, intent drift, treating a repaired step as admitted before
+  it passes the gates, or any forbidden-surface change. A "new" step without ancestry is a
+  laundering repair.
+- **requires_human_if:** the repair would change admission semantics or touch a forbidden
+  surface (→ stop, hand back).
+- **evidence:** operator 2026-06-23; `src/governor/self_correction.py`;
+  `tests/test_self_correction.py`.

@@ -16,8 +16,11 @@ committed_slices:
     commit: 8a76306
     summary: ci_verify consumer edge (criterion 3) under a one-file micro-grant
   - id: forbidden-surface-gate
-    commit: "see git log (this slice)"
+    commit: 92a91e1
     summary: ForbiddenSurfaceGate — semantic companion to DiffPathScopeGate; mechanizes the forbidden_surfaces list below
+  - id: self-correction
+    commit: "see git log (this slice)"
+    summary: repair harness — validates ancestry/scope/intent (D009), re-admits through the same gates; worker proposes, gates+validation decide
 
 # Active grants: what an admitted change may touch. A grant is path-scope only;
 # it never confers authority over the forbidden surfaces below.

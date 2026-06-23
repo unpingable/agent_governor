@@ -1,55 +1,38 @@
-# Next packet — self-correction within scope (named, NOT built)
+# Next — the D008 build ladder is complete; what follows is operational
 
-Per [D008](DECISIONS.md): build order is **reproducibility capsule → ForbiddenSurfaceGate
-→ self-correction-within-scope**. The first two have landed; this file is now the seed for
-the third. **Do not build it in the gate packet.**
+Per [D008](DECISIONS.md) the build order was **reproducibility capsule →
+ForbiddenSurfaceGate → self-correction-within-scope**. **All three have landed.** There is
+no queued *new mechanism* — the next moves are operational (run the loop at reduced
+throttle) and integration, not fresh admission machinery. Do not invent a new gate without
+a forcing case.
 
-## Done (prior step)
+## Built (the ladder)
 
-`ForbiddenSurfaceGate` is **built** — `src/governor/forbidden_surface_gate.py` +
-`tests/test_forbidden_surface_gate.py`. It is the semantic companion to
-`DiffPathScopeGate`: a classifier over the declared forbidden-surface list
-([GRANTS.yaml](GRANTS.yaml)), conservative (forbidden file without a marker, or an
-unparseable diff → `CANNOT_TESTIFY`), routed through the existing `ag_admit` projection,
-with the dumb conductor unchanged. The composition specimen holds: a diff that is
-path-allowed but mutates a closed enum gets ADMIT from `DiffPathScopeGate` and REJECT from
-`ForbiddenSurfaceGate`. Path authority ≠ semantic authority is now mechanized.
+- **Reproducibility capsule** — this directory (`d60850d`) + cold-start discovery rule in
+  `docs/loop-protocol.md` §9 (`c708df0`).
+- **ForbiddenSurfaceGate** — `src/governor/forbidden_surface_gate.py` (`92a91e1`). Path
+  authority ≠ semantic authority, mechanized.
+- **Self-correction within scope** — `src/governor/self_correction.py` +
+  `tests/test_self_correction.py`. The worker proposes a repaired `CandidateStep` from a
+  failure receipt; the harness validates ancestry/scope/intent ([D009](DECISIONS.md)) and
+  re-admits through the same gates. The first real throttle reducer (T2).
 
-## Goal (self-correction)
+## What follows (named, not a new build surface)
 
-Reduce operator throttle by letting the loop repair its own refused/failing steps **inside
-already-admitted scope** — not "trust the model more," but "stop making the human re-type
-case law." This is the first real throttle reducer (T2 on the ladder, see
-`working/doctrine-ag-admit-throttle-ladder.md`).
+1. **Operate at reduced throttle (T2→T3).** Run real refused/failing steps through
+   `attempt_repair`; the operator reviews **boundary moves** (scope relation, intent
+   preservation, receipt causality, forbidden-surface refusals, promotion requests), not
+   every mechanical repair. See `working/doctrine-ag-admit-throttle-ladder.md`.
+2. **Wire a real `RepairProvider` (Codex).** Today's providers are deterministic stubs.
+   The `RepairProvider` Protocol exists so Codex can be the dumb repair worker: hand it
+   `REPLAY.md` + `DECISIONS.md` + a refusal receipt; it returns a `RepairProposal`. It may
+   self-correct *implementation*; it may **not** self-authorize *jurisdiction* — the
+   harness enforces that. **Named, not built** — needs an operator go + an integration
+   forcing case.
+3. **Promotion criteria as a checklist** (from the throttle-ladder doctrine) before any
+   throttle reduction: N traces in class, zero mutation after refusal, commits causally
+   linked, repairs preserve intent, no conductor diffs, no unknown verdict as admit/reject,
+   full reconstruction from receipts.
 
-## Shape
-
-```
-refusal/test receipt + original CandidateStep + same declared intent
-  → repaired CandidateStep (constrained by the refusal receipt)
-  → SAME ag_admit path (DiffPathScopeGate + ForbiddenSurfaceGate)
-  → admit / refuse / cannot_testify
-```
-
-Not a planner, not autopilot. A bounded repair that bounces off the fence without making
-the fence.
-
-## Invariant
-
-A repair may run **only** within the original declared scope, intent, **and semantic-surface
-class**. Every repair **cites the refusal/test receipt it answers**. Resubmission goes
-through the same `ag_admit` path. The conductor stays dumb (D003/D005).
-
-## Forbidden
-
-No repair may widen scope, edit admission semantics, alter the `StepVerdict` projection,
-modify the conductor, mutate loop state, or touch any forbidden surface ([GRANTS.yaml](GRANTS.yaml)).
-Human review stays required for promotion, widening, authority-surface changes, and any
-`NEEDS_HUMAN` source verdict (D005). Codex/repair-worker may self-correct *implementation*;
-it may **not** self-authorize *jurisdiction*.
-
-## Exit
-
-A refused step is repaired within the same grant and re-admitted, with the repaired
-admission receipt citing the refusal receipt it answers; a repair that strays outside scope
-/ intent / semantic class is itself refused. Pins prove each.
+A genuinely new admission mechanism would need its own forcing case, promotion note, and a
+new `NEXT.md` entry — it is not implied by reaching the end of this ladder.

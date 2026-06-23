@@ -34,11 +34,16 @@ committed). See [REPLAY.md](REPLAY.md) "regenerable vs dirty".
   `ci_verify` consumer edge). `gate_receipt.py` untouched; no closed-enum change.
 - `ForbiddenSurfaceGate`: semantic companion to `DiffPathScopeGate` (`src/governor/forbidden_surface_gate.py`,
   `tests/test_forbidden_surface_gate.py`). Path authority ≠ semantic authority now mechanized.
+- `self-correction-within-scope`: repair harness (`src/governor/self_correction.py`,
+  `tests/test_self_correction.py`). Worker proposes a repaired step from a failure receipt;
+  harness validates ancestry/scope/intent ([D009](DECISIONS.md)) and re-admits through the
+  same gates. **The D008 build ladder is complete.**
 
 ## Current next packet
 
-`self-correction-within-scope` — **named, not built** (per [D008](DECISIONS.md), it follows
-the now-built `ForbiddenSurfaceGate`). Seed in [NEXT.md](NEXT.md).
+No new mechanism queued — the build ladder is done. What follows is **operational**: run
+the loop at reduced throttle (T2→T3) and optionally wire a real Codex `RepairProvider`
+(named, not built). See [NEXT.md](NEXT.md).
 
 ## Cold-start discovery
 

@@ -169,6 +169,19 @@ Cycle: `PLAN → DISPATCH → EXECUTE → REVIEW → AUDIT → PLAN`.
 **Cold start is an AUDIT invocation** (re-entry unified with the cycle, not a
 special case).
 
+**Campaign discovery (cold start, added 2026-06-23).** Before asking the operator
+for campaign context, a cold AUDIT inspects `.governor/campaigns/*.yaml` (inert
+discovery manifests) and `docs/campaigns/*/STATUS.md`. Each manifest's `files:`
+index points at that campaign's `CAMPAIGN`/`DECISIONS`/`GRANTS`/`REPLAY`/`STATUS`/
+`NEXT`. **If a question matches a ratified decision in a capsule's `DECISIONS.md`,
+apply its `default_action` and cite the decision ID — do not re-ask the operator**
+unless the case falls outside that decision's `applies_when` or hits a
+`requires_human_if`. These capsules are **inert metadata**: discovering one does NOT
+make its campaign active, change `phase`, touch `current_slice`, or alter WIP-1
+ownership — `loop.json` remains the single live program counter. (This rule is the
+cold-start *protocol* form of the convention; the first capsule is
+`docs/campaigns/ag-admit-self-build/`.)
+
 AUDIT checks, mechanized where possible:
 
 1. **State conformance** — `loop.json` claims vs live probes; HEAD vs

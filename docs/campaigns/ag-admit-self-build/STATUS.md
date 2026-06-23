@@ -38,6 +38,13 @@ committed). See [REPLAY.md](REPLAY.md) "regenerable vs dirty".
 `ForbiddenSurfaceGate` — **named, not built** (the reproducibility capsule lands first, per
 [D008](DECISIONS.md)). Seed in [NEXT.md](NEXT.md). After it: self-correction-within-scope.
 
+## Cold-start discovery
+
+Registered as protocol, not just convention: `docs/loop-protocol.md` §9 (AUDIT) directs a
+cold start to inspect `.governor/campaigns/*.yaml` + `docs/campaigns/*/STATUS.md` and apply
+ratified `DECISIONS.md` defaults by ID before asking the operator. Inert — discovery does
+not make this campaign active or touch `loop.json` WIP state.
+
 ## Live boundary
 
 Path authority is necessary but **not** semantic authority (Slice 3 specimen). The forbidden

@@ -102,3 +102,31 @@ def test_opa_receipt_persisted_at_pinned_path(corpse: Path):
     body = json.loads(path.read_text())
     assert body["receipt_id"].startswith("opa_rcpt_")
     assert body["input_provenance"] == "unwitnessed_self_report"
+
+
+# Wrong/nonexistent root: clean one-line message, nonzero exit, NO raw traceback
+# (backlog: interrogate-wrong-root-traceback).
+
+
+def test_wrong_root_raises_clean_systemexit(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit) as exc:
+        interrogate(tmp_path / "nonexistent")
+    msg = str(exc.value)
+    assert "no Act-1 corpse" in msg
+    assert "impostor" in msg  # names the expected layout
+
+
+def test_wrong_root_cli_exits_nonzero_without_traceback() -> None:
+    import subprocess
+    import sys
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "governor.demo_interrogate", "/tmp/ag-nope-root/impostor"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode != 0
+    assert "Traceback (most recent call last)" not in combined  # no raw traceback
+    assert "no Act-1 corpse" in combined  # human message

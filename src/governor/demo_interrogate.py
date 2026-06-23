@@ -88,6 +88,13 @@ def interrogate(root: Path) -> tuple[str, bool]:
     t = _Transcript()
     impostor_root = root / "impostor"
     store = impostor_root / ".governor"
+    receipts = store / "receipts" / "gate_receipts.jsonl"
+    if not receipts.exists():
+        raise SystemExit(
+            f"interrogate: no Act-1 corpse at {root} (expected {receipts}) — pass the "
+            f"run ROOT Act 1 printed (the dir that contains 'impostor/'), not the "
+            f"impostor subdir."
+        )
     refusal = _find_refusal(store)
     rid = refusal["receipt_id"]
     evidence = _load_evidence(store, refusal["evidence_hash"])

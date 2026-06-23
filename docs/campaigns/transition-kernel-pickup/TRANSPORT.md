@@ -83,6 +83,43 @@ records `standing_refused:<class>`; on transport failure it records `no_verified
    `standing_basis` carries the distinction (verified / standing_refused / no_verified_result).
    `StandingClient` graduates from VERIFY-stub to a real subprocess client **only** for this seam.
 
+## Custody finding — rule #4 fired (STOP): no `receipt_digest` for non-consuming use-refusals
+
+When tightening the wire contract to `standing.grant_use.v1`, the requirement "refusal packet
+carries `receipt_digest`" hit Standing's core model. Reduction (2026-06-23):
+
+- Standing invariant: **"no receipt without a valid transition"** (`standing-store/src/lib.rs:7`).
+- `ReceiptKind`: `GrantRequested/Issued/Denied/Activated/Used/Expired/Revoked/Abandoned` —
+  **no `GrantRefused`/use-refusal kind**. `GrantState` has **no "use-refused" state**.
+  `GrantDenied` works only because `Requested → Denied` is a real transition.
+- A grant-**use** refusal has **no transition**, so no receipt:
+  - `scope_mismatch`, `subject_mismatch` → **non-consuming** (D010a) → grant stays `Active` → no transition → no digest;
+  - `not_found` → no grant → no digest;
+  - `already_spent` → grant already `Used`; the *first* `GrantUsed` receipt exists, the second attempt writes nothing;
+  - `expired` → currently errors without transitioning to `Expired`.
+
+So `receipt_digest` cannot be honestly required on a non-consuming refusal without a **Standing
+constitutional change**. The SUCCESS path is unaffected — `Active → Used` mints a `GrantUsed`
+receipt, so the success packet's `receipt_digest` (the load-bearing `standing_basis`) is real.
+
+### Fork (operator-fiat — blocks Slice 1a-bis)
+
+- **(A) Mint refusal-witness receipts.** Add a `GrantRefused` receipt + an `Active → Active`
+  (or side-log) refusal transition, OR relax "no receipt without a transition." A Standing
+  constitutional slice; gives every refusal a `receipt_digest`. Cost: the receipt chain grows
+  on refused attempts (a wrong-target spammer inflates the chain, though never consumes the grant).
+- **(B) Refusal is typed-class-only; `receipt_digest` is success-only.** A non-consuming refusal
+  is the *absence* of a transition, so there is no receipt to cite. **Not weaker in the
+  load-bearing sense:** AG never *mints* on a refusal, so there is no authority to custody — the
+  typed `refusal_class` is sufficient for AG to record *why* it refused. `receipt_digest` stays
+  **required on `used`** (the real `standing_basis`) and `null`/absent on `refused`.
+
+**Recommendation: (B).** Receipts witness transitions; a non-consuming refusal has none, so a
+refusal `receipt_digest` would be either fabricated or force a model change that grows the chain
+on hostile input. The custody that matters (the mint's `standing_basis`) is on the success path
+and is real. If the operator wants refusal-witness receipts for audit, that is a separate
+Standing constitutional slice, not a precondition for the AG pickup.
+
 ## Open sub-question for Slice 1b (flag, do not resolve here)
 
 Does AG *trigger the spend* (`grant use`) at the mint boundary, or *verify a use-receipt* the

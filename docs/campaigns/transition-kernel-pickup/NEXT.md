@@ -43,8 +43,30 @@ the refusal map ([TRANSPORT.md](TRANSPORT.md)), and replaces `activation.py` Off
 `standing_ok: bool` with the verified result. Three-way distinction enforced: `used`+digest →
 mint + `standing_basis`; `refused`+class → `REFUSED_NO_STANDING`; transport/parse failure →
 `REFUSED_NO_STANDING` as *no_verified_result* (NOT a Standing refusal). AG does no local
-adjudication. Open sub-question: how AG locates/invokes the `standing` binary (PATH / configured
-path / built artifact) — a small reduction at the start of 1b.
+adjudication.
+
+### Slice 1b cold-start plan (start here next session, ideally fresh)
+
+1. **Reduce the binary-invocation seam first** (before touching `activation.py`). How AG locates
+   and invokes the `standing` binary, preferred order:
+   1. **Configured explicit path** (e.g. `STANDING_BIN=/path/to/standing`) — best for tests +
+      deployment, no PATH séance. **Preferred.**
+   2. PATH lookup by command name — acceptable for dev; the receipt should record the resolved
+      binary path (and `--version`/commit if available).
+   3. Repo-relative cargo artifact (`~/git/standing/target/...`) — local lab only, not durable.
+   4. **Direct DB / shared store — NO.** That makes AG a Standing organ, not a consumer.
+2. Build `StandingGrantUseClient` around a **subprocess-runner interface** (inject the runner).
+3. **Unit-test with a FAKE runner** (canned `standing.grant_use.v1` stdout) for all three
+   branches — do not make AG tests hostage to a sibling repo's build path.
+4. One **optional live integration specimen** hitting the real `standing` binary if present.
+5. Rewire `activation.py` Office 2: `standing_ok: bool` → verified grant-use packet / digest.
+6. Pin the boundary (table in [TRANSPORT.md](TRANSPORT.md) refusal map) incl. invalid-JSON /
+   unknown-schema / missing-digest → `no_verified_result` (NOT a Standing refusal).
+7. Old `standing_ok=True` path gone or quarantined.
+
+Three-way distinction is the acceptance core: `used`+digest → mint + `standing_basis`;
+`refused`+class → `REFUSED_NO_STANDING`; transport/parse/schema/digest failure →
+`REFUSED_NO_STANDING` as *no_verified_result*, never claiming Standing refused.
 
 Replace `standing_ok: bool` with a verified Standing grant-use **result**. AG receives:
 - admitted use receipt / token spend receipt → may mint/continue **this act**;

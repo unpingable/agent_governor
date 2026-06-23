@@ -1,11 +1,18 @@
 # Decisions — transition-kernel pickup
 
-## D010 — transition-kernel pickup boundary  **(PROPOSED — NOT RATIFIED)**
+## D010 — transition-kernel pickup boundary  **(RATIFIED 2026-06-23, Model X)**
 
-Status: proposed 2026-06-23, pending the scope-locus fork below. Per the operator: "record
-D010 as a proposed decision, not ratified until the inventory supports it." The inventory
-supports the *boundary* but leaves the *scope-refusal locus* open, so D010 is proposed, not
-ratified.
+Status: **RATIFIED** (operator, 2026-06-23). The scope-locus fork was decided **Model X**:
+**Standing owns spend-time scope-mismatch refusal.** The `AGGrantAdapter` may only *inherit*
+Standing's grant-use verdicts; it must **not** synthesize scope authority from carried grant
+fields. Model Y (adapter-local scope matching) is acceptable **only** as a temporary
+diagnostic specimen to demonstrate the gap — never to authorize mint/continuation in
+production.
+
+Ratified rule (verbatim intent): *Standing decides whether the grant authorizes the attempted
+act; AG only consumes that decision at the mint boundary.* The adapter must inherit all five
+refusals (expiry, replay, spent-token, subject-binding, **scope-mismatch**) and must not mint
+or continue from carried scope fields alone.
 
 - **decision:** AG does **not** pick up the transition kernel at `ag_admit`, self-correction,
   or repair-provider wiring — those are transport/admission rails. Pickup begins **only at the
@@ -22,20 +29,15 @@ ratified.
   kernel vocabulary.
 - **evidence:** [INVENTORY.md](INVENTORY.md) (verdict B); operator seed 2026-06-23.
 
-### Open ratification fork (blocks ratifying D010) — scope-mismatch refusal locus
+### Resolved fork — scope-mismatch refusal locus → **Model X**
 
-The Standing `Grant` refuses expiry/spend/replay/subject itself but **not** spend-time
-scope-mismatch (INVENTORY.md). Two models; ratify D010 only after the operator chooses:
+Decided 2026-06-23. Standing closes its own token; the alternative (Model Y, adapter-local
+matching) was rejected as authority because it makes AG the scope adjudicator — "trusted
+construction with a nicer hat." It survives only as a non-authorizing diagnostic.
 
-- **Model X — Standing closes its own token.** Add `StoreError::ScopeMismatch` to Standing's
-  spend path; AG adapts the then-complete token. Honors the invariant literally. Cost: cross-repo
-  Standing change first.
-- **Model Y — consumer matches the attested scope.** Standing attests the scope value; the
-  `AGGrantAdapter` matches it against the requested act and refuses a mismatch. Not laundering
-  (the value is attested, not invented), but the refusal's *locus* is AG.
+### D010a — scope check is non-consuming (no DoS primitive)
 
-Whichever is chosen, the scope-mismatch refusal must be **explicit and receipted** — never an
-implicit pass. This is a custody/authority-boundary call (`requires_human` per the rule above),
-so it is operator-fiat, not loop-resolved.
-
-> When this is ratified, copy D010 into the campaign's ratified set and update STATUS.
+A scope mismatch **must be checked BEFORE spend** and **must NOT consume the grant** (it emits
+a refusal receipt, leaves the token unspent) — unless Standing adopts an explicit "failed
+presentation burns tokens" doctrine. Otherwise any wrong-target presentation becomes a
+denial-of-service primitive against a single-use grant. (Operator catch, 2026-06-23.)

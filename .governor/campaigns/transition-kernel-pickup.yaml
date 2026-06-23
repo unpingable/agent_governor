@@ -23,19 +23,18 @@ reduction_verdict: "B — close, missing spend-time scope-mismatch refusal"
 pickup_boundary: "Standing grant token -> AGGrantAdapter -> governed actor/session/step authority"
 cleanest_seam: "src/governor/activation.py Office 2 (replace standing_ok: bool)"
 
-ratified_decisions: []           # none yet
-proposed_decisions: [D010]       # transition-kernel pickup boundary — PROPOSED, blocked on scope-locus fork
+ratified_decisions: [D010, D010a]   # D010 pickup boundary (Model X); D010a scope-check is non-consuming
+proposed_decisions: []
 
-blocked_on:
-  decision: "scope-mismatch refusal locus — Model X (Standing adds ScopeMismatch) vs Model Y (AGGrantAdapter matches attested scope)"
-  owner: operator-fiat
-  why: "custody/authority-boundary call; ratifies D010 and selects Slice 1 shape"
+resolved_fork:
+  decision: "scope-mismatch refusal locus -> Model X (Standing owns it); AG inherits, never synthesizes"
+  ratified: "2026-06-23 operator-fiat"
 
 next_build:
-  id: AGGrantAdapter-at-activation-office-2
-  status: named-not-built
+  id: slice-1a-standing-scope-checked-use
+  status: active
   seed: docs/campaigns/transition-kernel-pickup/NEXT.md
-  gated_on: scope-locus fork
+  then: slice-1b-AGGrantAdapter-at-activation-office-2
 
 cross_repo:
   standing_repo: ~/git/standing

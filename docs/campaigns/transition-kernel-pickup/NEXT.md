@@ -1,45 +1,41 @@
-# Next — recommended Slice 1 (named, NOT built)
+# Next — Slice 1a (Standing) then Slice 1b (AG)
 
-Reduction is done (verdict B). Implementation is gated on one operator decision.
+Reduction done (verdict B); D010 **ratified Model X** (DECISIONS.md). Standing owns spend-time
+scope-mismatch refusal; AG only inherits. Build order: **Slice 1a in Standing first, then 1b in AG.**
 
-## Operator decision required first (the scope-locus fork)
+## Slice 1a — Standing scope-checked use  (`~/git/standing`, Rust)  — ACTIVE
 
-Choose **Model X** (Standing adds spend-time `ScopeMismatch`) or **Model Y** (`AGGrantAdapter`
-matches the Standing-attested scope at the mint boundary). See [DECISIONS.md](DECISIONS.md). This
-ratifies D010 and selects Slice 1's shape. It is a custody/authority-boundary call → operator-fiat.
+`grant use` must name the attempted `(action, target)` (and subject/session if not already
+present); the store must refuse `StoreError::ScopeMismatch{granted, attempted}` when it differs
+from the grant's bound `GrantScope`.
 
-## Recommended Slice 1 (after the fork is decided)
+**Non-consuming (D010a):** the scope check runs **before spend**; a mismatch emits a **refusal
+receipt** and **leaves the token unspent** (no `Active→Used`). Failed presentation must not burn
+a single-use grant — that would be a DoS primitive. (Only flip to consuming if Standing adopts an
+explicit "failed presentation burns" doctrine.)
 
-**Target seam:** `activation.py` Office 2 (`activation.py:449`) — the cleanest, isolated,
-already-typed act-standing office. Replace the `standing_ok: bool` parameter with a verified
-`StandingGrantToken`. (The supervisor actor/session/step boundaries are the higher-value
-follow-on slices; activation proves the pattern at low blast radius first.)
+Discipline: failing test first (`cargo test`, observe the real exit code), then the refusal.
+Pins: (a) mismatched `(action,target)` → `ScopeMismatch`, grant still `Active`, refusal receipt
+emitted; (b) matching `(action,target)` → spends as before; (c) the existing expiry/spend/replay/
+subject refusals still hold and still precede/compose correctly.
 
-**Forcing artifact (failing test):** AG cannot activate the rung without a Standing-issued grant
-token — a bare `standing_ok=True` no longer admits; a missing / expired / wrong-scope /
-already-spent token refuses with the corresponding typed reason.
+## Slice 1b — AG adapter  (`activation.py` Office 2)
 
-**If Model X:** Slice 1a is a *Standing-side* failing test + refusal: `grant use` with a
-mismatched `(action,target)` → `StoreError::ScopeMismatch`. Then `AGGrantAdapter` consumes the
-now-complete token (verify via the real cross-repo `StandingClient`, map Standing refusals onto
-AG's: `GrantExpired`→expiry, `Unauthorized`→subject, terminal `Used`→already-spent, `GrantNotFound`
-→`REFUSED_NO_STANDING`, `ScopeMismatch`→wrong-scope).
+Replace `standing_ok: bool` with a verified Standing grant-use **result**. AG receives:
+- admitted use receipt / token spend receipt → may mint/continue **this act**;
+- missing / expired / spent / replay / subject / **scope-mismatch** → `REFUSED_NO_STANDING`.
 
-**If Model Y:** Slice 1b is the `AGGrantAdapter` at Office 2 that verifies the token AND matches
-its attested `GrantScope` against the activation's `(action,target)`, refusing a mismatch locally
-with an explicit receipt that records "scope matched by adapter against Standing-attested scope"
-(so the locus is auditable, not laundered).
+`AGGrantAdapter` **inherits** Standing's verdicts; it does **not** inspect grant fields to decide
+scope, and does **not** synthesize a scope refusal. Records the Standing receipt id in
+`standing_basis` (`activation.py:496`). `StandingClient` graduates from SPEC-stub to a real
+cross-repo client **only** for this seam.
 
-**Either way — Slice 1 invariants:**
-- the adapter VERIFIES; it does not mint scope/expiry/spend refusals Standing already owns;
-- the receipt records token id, scope, spend, actor/session binding, and which refusals were
-  inherited vs locally applied;
-- `standing_basis` (`activation.py:496`) carries the verified token id, not a bare bool;
-- no change to conductor / `StepVerdict` projection / admission semantics / closed enums;
-- `StandingClient` graduates from SPEC-stub to a real cross-repo client **only** for this seam.
+## Forbidden (operator, 2026-06-23)
 
-## Hard limit
+- no AG-local scope adjudication as authority; no adapter-synthesized scope refusal;
+- no mint/continue from carried scope fields alone;
+- no supervisor hot-path pickup yet (`create_session`/`fork_session`/`_handle_tool_proposed`);
+- no conductor/planner changes; no self-hosting-first.
 
-Do not touch the supervisor hot path, `fork_session`, or the `observe`-mode divergence in Slice 1.
-Those are named laundering surfaces (CAMPAIGN.md) and are follow-on slices, each with its own
-forcing case — not a "while I'm here."
+Model Y (adapter-local matching) may appear only as a **non-authorizing diagnostic** demonstrating
+the gap — never as the production authority path.

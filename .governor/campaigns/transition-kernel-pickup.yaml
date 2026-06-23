@@ -1,0 +1,44 @@
+# Inert discovery manifest — transition-kernel pickup campaign.
+# NOT live WIP state. Does not mutate loop state / loop.json. Lets a cold-start agent
+# discover the campaign and its reduction verdict. Authoritative prose under
+# docs/campaigns/transition-kernel-pickup/.
+
+schema: ag-campaign-manifest/v0
+campaign: transition-kernel-pickup
+kind: discovery-metadata
+updated: "2026-06-23"
+phase: reduction-complete
+
+capsule_dir: docs/campaigns/transition-kernel-pickup/
+files:
+  campaign: docs/campaigns/transition-kernel-pickup/CAMPAIGN.md
+  inventory: docs/campaigns/transition-kernel-pickup/INVENTORY.md
+  decisions: docs/campaigns/transition-kernel-pickup/DECISIONS.md
+  next: docs/campaigns/transition-kernel-pickup/NEXT.md
+
+# Reduction verdict (see INVENTORY.md): an honest Standing grant-token exists, refusing
+# expiry/single-spend/replay/subject-binding; the one gap is spend-time scope-mismatch.
+reduction_verdict: "B — close, missing spend-time scope-mismatch refusal"
+
+pickup_boundary: "Standing grant token -> AGGrantAdapter -> governed actor/session/step authority"
+cleanest_seam: "src/governor/activation.py Office 2 (replace standing_ok: bool)"
+
+ratified_decisions: []           # none yet
+proposed_decisions: [D010]       # transition-kernel pickup boundary — PROPOSED, blocked on scope-locus fork
+
+blocked_on:
+  decision: "scope-mismatch refusal locus — Model X (Standing adds ScopeMismatch) vs Model Y (AGGrantAdapter matches attested scope)"
+  owner: operator-fiat
+  why: "custody/authority-boundary call; ratifies D010 and selects Slice 1 shape"
+
+next_build:
+  id: AGGrantAdapter-at-activation-office-2
+  status: named-not-built
+  seed: docs/campaigns/transition-kernel-pickup/NEXT.md
+  gated_on: scope-locus fork
+
+cross_repo:
+  standing_repo: ~/git/standing
+  standing_grant_type: "crates/standing-grant/src/grant.rs:30 (Grant{id,subject,scope,issued_at,expires_at})"
+  standing_mint_boundary: "GrantAction::Request -> GrantMachine::issue -> record_transition(Issued)"
+  ag_consumer_seam: src/governor/standing_client.py (StandingClient.verify — SPEC stub today)

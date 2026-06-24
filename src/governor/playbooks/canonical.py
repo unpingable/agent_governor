@@ -22,8 +22,16 @@ CANONICAL_VERSION = "playbook-canonical.v0"
 
 
 def canonical_spec_mapping(spec: PlaybookSpec) -> dict[str, Any]:
-    """The canonical mapping projection of a spec (pre-serialization)."""
-    return {
+    """The canonical mapping projection of a spec (pre-serialization).
+
+    ``imports`` (Slice 2) appears ONLY when non-empty — an import-less spec
+    canonicalizes byte-identically to its Slice 0 form, so its
+    ``playbook_spec_digest`` is unchanged (no canonical/digest version bump). The
+    import REFS are authored content and belong in this spec's digest ("I
+    reference X"); the *resolved* dependency content does NOT — that is the
+    separate ``dependency_closure_digest`` (no free smoothie).
+    """
+    mapping: dict[str, Any] = {
         "schema": spec.schema,
         "kind": spec.kind,
         "name": spec.name,
@@ -31,6 +39,13 @@ def canonical_spec_mapping(spec: PlaybookSpec) -> dict[str, Any]:
             {"id": s.id, "action": s.action, "target": s.target} for s in spec.steps
         ],
     }
+    if spec.imports:
+        # Imports are a dependency SET — declaration order is not semantic (unlike
+        # steps, which are an ordered sequence). Sorting makes the root spec digest
+        # (and therefore the closure digest) stable under import reordering, while a
+        # change to WHICH refs are present still moves the digest.
+        mapping["imports"] = sorted(spec.imports)
+    return mapping
 
 
 def canonical_spec_bytes(spec: PlaybookSpec) -> bytes:

@@ -29,6 +29,18 @@ from .certify import (
     certify,
     measurement_basis,
 )
+from .closure import (
+    CLOSURE_DIGEST_BASIS_VERSION,
+    ClosureError,
+    DependencyClosure,
+    ImportCycleError,
+    ImportNotFoundError,
+    Resolver,
+    closure_basis,
+    dependency_closure_digest,
+    resolve_closure,
+    resolve_closure_digest,
+)
 from .digest import DIGEST_BASIS_VERSION, digest_basis, playbook_spec_digest
 from .spec import (
     PARSER_VERSION,
@@ -67,4 +79,14 @@ __all__ = [
     "certify",
     "measurement_basis",
     "certified_kind_measurement_digest",
+    "CLOSURE_DIGEST_BASIS_VERSION",
+    "Resolver",
+    "ClosureError",
+    "DependencyClosure",
+    "ImportCycleError",
+    "ImportNotFoundError",
+    "closure_basis",
+    "dependency_closure_digest",
+    "resolve_closure",
+    "resolve_closure_digest",
 ]

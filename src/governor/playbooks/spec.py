@@ -29,7 +29,9 @@ import yaml
 SCHEMA_V0 = "governed-playbook.v0"
 PARSER_VERSION = "playbook-parser.v0"
 
-_TOP_KEYS = frozenset({"schema", "kind", "name", "steps"})
+_REQUIRED_TOP_KEYS = frozenset({"schema", "kind", "name", "steps"})
+_OPTIONAL_TOP_KEYS = frozenset({"imports"})
+_ALL_TOP_KEYS = _REQUIRED_TOP_KEYS | _OPTIONAL_TOP_KEYS
 _STEP_KEYS = frozenset({"id", "action", "target"})
 
 _MERGE_TAG = "tag:yaml.org,2002:merge"
@@ -106,6 +108,10 @@ class PlaybookSpec:
     kind: str
     name: str
     steps: tuple[PlaybookStep, ...]
+    # Opaque local dependency refs (Slice 2). NOT filesystem paths — the playbook
+    # layer never interprets a ref; a resolver does. Empty is normalized to () and
+    # omitted from the canonical form, so an import-less spec's digest is unchanged.
+    imports: tuple[str, ...] = ()
 
 
 def _require_str(value: object, field: str) -> str:
@@ -142,10 +148,10 @@ def parse_playbook(source: str | bytes) -> PlaybookSpec:
         )
 
     keys = set(data)
-    unknown = keys - _TOP_KEYS
+    unknown = keys - _ALL_TOP_KEYS
     if unknown:
         raise PlaybookSchemaError(f"unknown top-level key(s): {sorted(unknown)}")
-    missing = _TOP_KEYS - keys
+    missing = _REQUIRED_TOP_KEYS - keys
     if missing:
         raise PlaybookSchemaError(f"missing required key(s): {sorted(missing)}")
 
@@ -190,4 +196,33 @@ def parse_playbook(source: str | bytes) -> PlaybookSpec:
             )
         )
 
-    return PlaybookSpec(schema=schema, kind=kind, name=name, steps=tuple(steps))
+    imports = _parse_imports(data.get("imports"))
+
+    return PlaybookSpec(
+        schema=schema, kind=kind, name=name, steps=tuple(steps), imports=imports
+    )
+
+
+def _parse_imports(raw: object) -> tuple[str, ...]:
+    """Validate the optional ``imports`` field into a tuple of opaque refs.
+
+    Absent or empty → ``()`` (normalized; omitted from the canonical form so an
+    import-less spec's digest is byte-unchanged). Each ref is a non-empty string;
+    duplicate refs refuse (v0 chooses refuse over silent canonicalization).
+    """
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise PlaybookSchemaError(
+            f"imports must be a list, got {type(raw).__name__}"
+        )
+    refs: list[str] = []
+    for i, ref in enumerate(raw):
+        if not isinstance(ref, str) or not ref:
+            raise PlaybookSchemaError(
+                f"imports[{i}] must be a non-empty string ref, got {ref!r}"
+            )
+        if ref in refs:
+            raise PlaybookSchemaError(f"duplicate import ref: {ref!r}")
+        refs.append(ref)
+    return tuple(refs)

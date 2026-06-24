@@ -21,7 +21,8 @@
 - **Track A — transition kernel** · `feat/transition-kernel-slice-1b`
   - Slice 1b complete (Standing grant-use client + `activation.py` Office 2).
   - card: `docs/campaigns/transition-kernel-pickup/STATUS.md`
-  - **PUSH DEPENDENCY: Standing commits (`~/git/standing` `1e62ba9`, `f101c55`) must land first.**
+  - Standing dependency **SATISFIED** (`~/git/standing` `1e62ba9`, `f101c55` are on their remote);
+    Track A is pushed and coherent.
   - STOP: supervisor hot-path pickup parked (no forcing case).
 
 - **Constellation records** · `docs/constellation-records`

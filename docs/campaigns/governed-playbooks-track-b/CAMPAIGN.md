@@ -35,19 +35,25 @@ diff; no reactors/pipelines/imports leaking into v0.
 
 ## Slice queue
 
-- **Slice 0 — DONE** (`e3a1490`): parse → canonical → digest. `docs/playbooks/slice-0-exit-ticket.md`.
-- **Slice 1 — certified_kind measurement** (`governor.playbooks.certify`): the checker emits
-  `certified_kind` from a parsed spec; binds `playbook_spec_digest` + parser/canonical/checker
-  versions; measurement semantics, **not authority**. Unsupported/malformed kind refuses typed.
-- **Slice 2 — dependency_closure_digest** (local only): root-only + local-import closure;
-  missing import refuses; canonical order; digest changes with imported content. No network,
-  no `latest`, no dynamic resolution.
-- **Slice 3 — Wicket consumes measurements as evidence** (runtime-adjacent; do only after 1+2
-  are boring): Wicket subject/evidence carries the three digests; absent/mismatched measurement
-  refuses admission; **measurement does not become authority**; Wicket stays procedural. Fresh
-  eyes — first seam where "measurement" can find an authority hat in a drawer.
+- **Slice 0 — DONE** (`e3a1490`): parse → canonical → digest. `slice-0-exit-ticket.md`.
+- **Slice 1 — DONE** (`c582a7e`): `certified_kind` as a measurement (checker-emitted, binds
+  the spec digest + versions, not authority). `slice-1-exit-ticket.md`.
+- **Slice 2 — DONE** (`60aadd9`): local dependency closure + `dependency_closure_digest`
+  (injected resolver; missing/cycle/duplicate refuse; order-stable, content-sensitive; the
+  import-less golden digest is byte-pinned). `slice-2-exit-ticket.md`.
+- **Slice 3 — NOT STARTED (STOP LINE).** Wicket consumes the three measurements as *evidence*;
+  absent/mismatched measurement refuses admission; **measurement does not become authority**;
+  Wicket stays procedural. First runtime-adjacent seam — the one place "measurement" can find an
+  authority hat in a drawer. **Reserved for fresh eyes; do not begin without operator go.**
+
+## Loop state (2026-06-24)
+
+All three frontend-native measurements now exist as digests: `playbook_spec_digest` (S0),
+`certified_kind_measurement_digest` (S1), `dependency_closure_digest` (S2). The measurement
+surface is complete through Slice 2. **Stopped before Wicket**, per the stop line.
 
 ## Exit
 
 The loop ends when Track B's measurement surface is complete through Slice 2 (and Slice 3 is
 handed to a fresh review), or when a slice surfaces a forcing question that needs operator fiat.
+**Reached: Slices 0–2 done, stopped at the Wicket line 2026-06-24.**

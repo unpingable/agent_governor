@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Governed Playbooks — the inert authoring + measurement layer.
+
+Slice 0 (custody over authored bytes): restricted-YAML source → deterministic
+canonical ``PlaybookSpec`` bytes → ``playbook_spec_digest``. **Measurement only.**
+No Wicket, no Standing, no LA, no certified_kind, no dependency closure, no
+ConvergenceFence — those are AG / sibling-organ surfaces this layer *cites*, never
+redefines (see ``docs/playbooks/``). This package mints exactly one thing: a stable
+digest over the authored bytes.
+"""
+
+from __future__ import annotations
+
+from .canonical import (
+    CANONICAL_VERSION,
+    canonical_spec_bytes,
+    canonical_spec_mapping,
+)
+from .digest import DIGEST_BASIS_VERSION, digest_basis, playbook_spec_digest
+from .spec import (
+    PARSER_VERSION,
+    SCHEMA_V0,
+    PlaybookError,
+    PlaybookSchemaError,
+    PlaybookSpec,
+    PlaybookStep,
+    RestrictedYAMLError,
+    parse_playbook,
+)
+
+__all__ = [
+    "PARSER_VERSION",
+    "SCHEMA_V0",
+    "PlaybookError",
+    "PlaybookSchemaError",
+    "PlaybookSpec",
+    "PlaybookStep",
+    "RestrictedYAMLError",
+    "parse_playbook",
+    "CANONICAL_VERSION",
+    "canonical_spec_bytes",
+    "canonical_spec_mapping",
+    "DIGEST_BASIS_VERSION",
+    "digest_basis",
+    "playbook_spec_digest",
+]

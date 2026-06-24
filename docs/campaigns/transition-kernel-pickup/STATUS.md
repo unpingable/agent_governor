@@ -39,12 +39,33 @@ committed). `src/governor/standing_grant_use.py` + `tests/test_standing_grant_us
   unrecognized class → `no_verified_result`, never a synthesized refusal.
   *(TRANSPORT.md / D010c prose should drop `replay` from the grant-use set.)*
 
-**Step B — rewire `activation.py` Office 2 — NEXT.** Replace `standing_ok: bool` (`:400/:450`)
-with the verified `GrantUseResult`: `GrantUsed` → mint + `standing_basis = receipt_digest`;
-`GrantRefused` → `REFUSED_NO_STANDING` (inherited class); `NoVerifiedResult` → `REFUSED_NO_STANDING`
-as *no_verified_result* (never claiming Standing refused). Quarantine the old `standing_ok=True`
-fiat. Blast radius contained: `activation.py` + `tests/test_activation*.py`. Optional live
-specimen (real `standing` binary, skipped if absent) before/after Step B.
+**Step B — rewire `activation.py` Office 2 — DONE** (this session, committed separately from
+Step A per the revertability rule). `standing_ok: bool` + the carried-not-parsed
+`external_standing_receipt` are **gone**; Office 2 now consumes a typed `standing` input:
+
+- **`constellation`** consumes a verified `GrantUseResult` (D010 Model X — AG inherits, never
+  adjudicates): `GrantUsed` → mint, `standing_basis = receipt_digest` (the verified digest, not
+  a carried string) + still requires external LA + NQ; `GrantRefused` → `REFUSED_NO_STANDING`
+  (`standing_refused:<class>`, inherited verbatim); `NoVerifiedResult` → `REFUSED_NO_STANDING`
+  (`no_verified_result:<reason>`, **never** claiming Standing refused).
+- **`standalone_degraded`** carries an explicit `BootstrapStanding(granted: bool)` operator-fiat
+  (replaces the bare `standing_ok` bool; `granted=False` is the honest deny path;
+  `standing_basis = "bootstrap_substitute"`). Presenting a constellation `GrantUseResult` or
+  external LA/NQ refs in degraded mode → `REFUSED_DEGRADED_CLAIMS_BACKING` ("run poor, don't
+  fake rich"). The fiat is now a *named type* Office 2 can reject in constellation mode, not a
+  laundering boolean.
+
+Design note: a **type split** (`GrantUseResult | BootstrapStanding`), not a bool + optional —
+mode-honesty is type-enforced, consistent with the Step-A result discipline. Tests:
+`test_activation.py` (+4 new constellation branches: inherit refusal / no_verified_result ≠
+refusal / reject bootstrap fiat / verified-digest-as-basis), `test_activation_drill.py`. Relevant
+suite (5 files) 93 passed exit 0; full-suite collection 16180 clean (no cycle from the new
+`activation → standing_grant_use` import; no `src` module imports `activation` — P4-parked, zero
+readers, so blast radius is the 5 test files).
+
+**Remaining (optional):** one live integration specimen against a real `standing` binary
+(skipped if absent). Supervisor hot-path pickup (`supervisor.py:752/:433`) stays deferred —
+separate forcing case each (Office 2 was the sanctioned seam).
 
 ## Unpushed (nothing pushed — operator's trigger)
 

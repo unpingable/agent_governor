@@ -28,6 +28,7 @@ import pytest
 from governor.activation import (
     MODE_STANDALONE_DEGRADED,
     P31_RUNG,
+    BootstrapStanding,
     P31_SURFACE,
     P31_TARGET,
     REFUSED_INELIGIBLE,
@@ -103,7 +104,7 @@ def test_p31_activation_lifecycle_drill(tmp_path: Path) -> None:
         tunable_store=tunables,
         receipt_store=receipts,
         debt_ledger=debts,
-        standing_ok=True,
+        standing=BootstrapStanding(granted=True),
         presented_claim_digest=_digest(debts),  # honest digest over the live set
     )
     assert isinstance(blocked, ActivationRefusal)
@@ -124,7 +125,7 @@ def test_p31_activation_lifecycle_drill(tmp_path: Path) -> None:
         tunable_store=tunables,
         receipt_store=receipts,
         debt_ledger=debts,
-        standing_ok=True,
+        standing=BootstrapStanding(granted=True),
         presented_claim_digest=_digest(debts),  # now over the discharged (empty) set
     )
     assert isinstance(receipt, ActivationReceipt)
@@ -160,7 +161,7 @@ def test_p31_activation_lifecycle_drill(tmp_path: Path) -> None:
         tunable_store=tunables,
         receipt_store=receipts,
         debt_ledger=debts,
-        standing_ok=True,
+        standing=BootstrapStanding(granted=True),
         presented_claim_digest=_digest(debts),
     )
     assert isinstance(replay, ActivationRefusal)

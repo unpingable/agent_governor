@@ -19,6 +19,7 @@ from governor.activation import (
     MODE_CONSTELLATION,
     MODE_STANDALONE_DEGRADED,
     P31_RUNG,
+    BootstrapStanding,
     REFUSED_DEGRADED_CLAIMS_BACKING,
     REFUSED_INELIGIBLE,
     REFUSED_NOT_P31_TUNABLE,
@@ -40,9 +41,22 @@ from governor.activation import (
 from governor.activation_preflight import RungDebt, check_activation_eligibility
 from governor.annealing import AnnealingDelta, propose_delta
 from governor.debt_ledger import DebtLedger
+from governor.standing_grant_use import GrantRefused, GrantUsed, NoVerifiedResult
 
 _HASH = "a" * 64
 _KEY = "decomposition_size/max_slices"
+
+
+def _used(digest: str = "standing_digest_1", action: str = "set", target: str = "max_slices"):
+    """A verified Standing grant-use result for constellation-mode tests."""
+    return GrantUsed(
+        grant_id="g-1",
+        receipt_digest=digest,
+        action=action,
+        target=target,
+        subject="subj-1",
+        raw={},
+    )
 
 
 def _delta(surface="decomposition_size", target="max_slices"):
@@ -89,7 +103,7 @@ def _activate(tmp_path, *, stores=None, delta=None, **over):
         tunable_store=store,
         receipt_store=rstore,
         debt_ledger=dledger,
-        standing_ok=True,
+        standing=BootstrapStanding(granted=True),
         presented_claim_digest=live_claim_set_digest(dledger.open_claims(P31_RUNG)),
     )
     base.update(over)
@@ -112,10 +126,11 @@ class TestHappyPath:
         assert rstore.has(res.activation_id)
 
     def test_constellation_requires_all_three_offices(self, tmp_path) -> None:
+        # Verified Standing (GrantUsed) + LA, but no NQ → still refused.
         res, *_ = _activate(
             tmp_path,
             mode=MODE_CONSTELLATION,
-            external_standing_receipt="s",
+            standing=_used(),
             external_la_spend_ref="la",
         )
         assert isinstance(res, ActivationRefusal)
@@ -125,13 +140,16 @@ class TestHappyPath:
         res, *_ = _activate(
             tmp_path,
             mode=MODE_CONSTELLATION,
-            external_standing_receipt="standing_1",
+            standing=_used(digest="standing_1"),
             external_la_spend_ref="la_spend_1",
             external_nq_custody_ref="nq_1",
         )
         assert isinstance(res, ActivationReceipt)
         assert res.la_spend_ref == "la_spend_1"
         assert res.custody_basis == "constellation:nq_1"
+        # The verified Standing receipt digest is the standing_basis (not a
+        # carried-not-parsed string) — the D010 Model X pickup.
+        assert res.standing_basis == "standing_1"
 
 
 # --------------------------------------------------------------------------- #
@@ -301,7 +319,9 @@ class TestNegatives:
         assert store.get("decomposition_size", "max_slices") == 2  # not 99
 
     def test_standalone_cannot_claim_external_backing(self, tmp_path) -> None:
-        res, *_ = _activate(tmp_path, external_standing_receipt="forged")
+        # Presenting a constellation Standing result (a verified GrantUsed) in
+        # standalone_degraded is faking rich → refused.
+        res, *_ = _activate(tmp_path, standing=_used())
         assert isinstance(res, ActivationRefusal)
         assert res.code == REFUSED_DEGRADED_CLAIMS_BACKING
 
@@ -314,9 +334,49 @@ class TestNegatives:
         assert store.get("routing", "lane_weights") is None
 
     def test_no_standing_refused(self, tmp_path) -> None:
-        res, *_ = _activate(tmp_path, standing_ok=False)
+        res, *_ = _activate(tmp_path, standing=BootstrapStanding(granted=False))
         assert isinstance(res, ActivationRefusal)
         assert res.code == REFUSED_NO_STANDING
+
+    def test_constellation_inherits_standing_refusal(self, tmp_path) -> None:
+        # D010 Model X: AG inherits Standing's typed refusal verbatim — it does
+        # not synthesize scope authority, and it records the class as cause.
+        res, *_ = _activate(
+            tmp_path,
+            mode=MODE_CONSTELLATION,
+            standing=GrantRefused(grant_id="g", refusal_class="scope_mismatch", detail=None, raw={}),
+            external_la_spend_ref="la",
+            external_nq_custody_ref="nq",
+        )
+        assert isinstance(res, ActivationRefusal)
+        assert res.code == REFUSED_NO_STANDING
+        assert "standing_refused:scope_mismatch" in res.detail
+
+    def test_constellation_no_verified_result_is_not_a_standing_refusal_claim(self, tmp_path) -> None:
+        # Transport ≠ refusal: AG could not verify Standing, so it refuses to mint
+        # but must NOT claim Standing refused (it records no_verified_result).
+        res, *_ = _activate(
+            tmp_path,
+            mode=MODE_CONSTELLATION,
+            standing=NoVerifiedResult(reason="standing_unknown_custody"),
+            external_la_spend_ref="la",
+            external_nq_custody_ref="nq",
+        )
+        assert isinstance(res, ActivationRefusal)
+        assert res.code == REFUSED_NO_STANDING
+        assert "no_verified_result:standing_unknown_custody" in res.detail
+        assert "standing_refused" not in res.detail
+
+    def test_constellation_rejects_bootstrap_fiat(self, tmp_path) -> None:
+        res, *_ = _activate(
+            tmp_path,
+            mode=MODE_CONSTELLATION,
+            standing=BootstrapStanding(granted=True),
+            external_la_spend_ref="la",
+            external_nq_custody_ref="nq",
+        )
+        assert isinstance(res, ActivationRefusal)
+        assert res.code == REFUSED_DEGRADED_CLAIMS_BACKING
 
     def test_rollback_without_receipt_refused(self, tmp_path) -> None:
         _l, store, rstore, _d = _stores(tmp_path)

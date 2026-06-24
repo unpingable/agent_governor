@@ -16,6 +16,19 @@ from .canonical import (
     canonical_spec_bytes,
     canonical_spec_mapping,
 )
+from .certify import (
+    CERT_MEASUREMENT_BASIS_VERSION,
+    CHECKER_VERSION,
+    KIND_PROCEDURE,
+    KNOWN_KINDS,
+    CertificationError,
+    CertifiedKindMeasurement,
+    KindCheckError,
+    UnsupportedKindError,
+    certified_kind_measurement_digest,
+    certify,
+    measurement_basis,
+)
 from .digest import DIGEST_BASIS_VERSION, digest_basis, playbook_spec_digest
 from .spec import (
     PARSER_VERSION,
@@ -43,4 +56,15 @@ __all__ = [
     "DIGEST_BASIS_VERSION",
     "digest_basis",
     "playbook_spec_digest",
+    "CHECKER_VERSION",
+    "CERT_MEASUREMENT_BASIS_VERSION",
+    "KIND_PROCEDURE",
+    "KNOWN_KINDS",
+    "CertificationError",
+    "CertifiedKindMeasurement",
+    "KindCheckError",
+    "UnsupportedKindError",
+    "certify",
+    "measurement_basis",
+    "certified_kind_measurement_digest",
 ]

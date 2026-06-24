@@ -1,9 +1,9 @@
 # Scope — rename `governor.spine` (the project-structure lock)
 
-> **Scoping note, not authorization to execute.** Read-only analysis 2026-06-24. The pinned
-> decision (memory `pinned_spine_rename_decision`): the `~/git/spine` *repo* keeps the name
-> "Spine"; **AG's `governor.spine` is the one slated to rename when next touched** (don't churn
-> pre-emptively). This note scopes that rename so it's not oral tradition when the time comes.
+> **Scope RATIFIED, execution PARKED (2026-06-24).** Name + shape decided (below); **not done.**
+> A scoped future cleanup, not a blocker — do it only when it's explicitly the next tiny task.
+> Per `pinned_spine_rename_decision`: the `~/git/spine` *repo* keeps "Spine"; **AG's
+> `governor.spine` renames to `structure_lock` when next touched** (don't churn pre-emptively).
 
 ## Disambiguation FIRST — "spine" means three unrelated things in AG; only one renames
 
@@ -37,29 +37,55 @@ A blind `s/spine/<new>/` wrecks two metaphors and the doctrine. The rename is sc
 > keep the on-disk format (`spine_id`, `.governor/spines/`, JSON keys) byte-identical. Storage is
 > opaque — no migration, no golden churn, no laundering-test fight. A storage rename pays no rent.
 
-## The name (pinned: "workspace/boundary")
+## The name — DECIDED: `structure_lock` (operator, 2026-06-24)
 
-- **`workspace`** — **collides**: `session_continuity` already owns a *Workspace* layer
-  (Ledger/Workspace/Transcript). Avoid.
-- **`boundary`** — the pinned fallback; fits (it's a write-fence); generic (AG has many "boundaries").
-- **`structure_lock` / `layout_lock`** — more precise (locks the project *structure/layout*); no
-  collision. Slight lean.
+- **`workspace`** — rejected: collides with `session_continuity`'s *Workspace* layer.
+- **`boundary`** — rejected: philosophically right but too broad ("a 'misc' drawer in a
+  cathedral" — half the repo is about boundaries).
+- **`structure_lock`** — **chosen.** Says what it does: locks allowed project structure, checks/
+  activates a bounded layout, prevents files outside the envelope, and does NOT imply the
+  read-plane Spine.
 
-Whichever: the **point** is freeing the bare `spine` name. Once `governor.spine` is gone,
-`~/git/spine/NAMING.md`'s "don't ship a bare `spine` package" constraint lifts; the name belongs
-to the read-plane organ if it ever lands in AG. (Per NAMING: any interim read-plane code is
-`spine_readplane` / `constellation_spine`, never bare `spine`.)
+The **point** is freeing the bare `spine` name: once `governor.spine` is gone,
+`~/git/spine/NAMING.md`'s "don't ship a bare `spine` package" constraint lifts. (Per NAMING: any
+interim read-plane code is `spine_readplane` / `constellation_spine`, never bare `spine`.)
 
-## Suggested execution shape (when actually doing it)
+### Exact rename mapping
 
-1. Pick the name (`boundary` or `structure_lock`).
-2. Rename module + classes + the 11 import sites + `__init__` exports.
-3. Rename the CLI group; **keep `spine` as a hidden deprecated alias** for one cycle (scripts/muscle-memory).
-4. **Do NOT touch storage or goldens.**
-5. `pytest tests/ -q` bare. The golden + no-laundering tests are the canary — green = the rename
+```
+module:  governor.spine            → governor.structure_lock
+classes: Spine / SpineManager      → StructureLock / StructureLockManager
+CLI:     governor spine ...        → governor structure-lock ...
+         + keep `governor spine` as a HIDDEN DEPRECATED ALIAS for one cycle
+```
+
+### KEEP unchanged (storage-era names — ugly but stable; stability > aesthetic laundering)
+
+```
+spine_id · spine_dir · .governor/spines/*.json · serialized "spine" keys · goldens
+```
+
+## Execution shape (when actually doing it — NOT NOW)
+
+1. Rename module + classes (→ `StructureLock` / `StructureLockManager`) + the 11 import sites +
+   `__init__` exports.
+2. Rename the CLI group (`governor structure-lock`); **keep `governor spine` as a hidden
+   deprecated alias** for one cycle (scripts/muscle-memory).
+3. **Do NOT touch storage or goldens.**
+4. `pytest tests/ -q` bare. The golden + no-laundering tests are the canary — green = the rename
    did not leak into storage.
 
+### Acceptance
+
+```
+- no golden churn
+- no storage migration
+- no broad s/spine/structure_lock/   (symbol+surface only; metaphors untouched)
+- tests green
+```
+
 Effort: ~half-day mechanical IF storage stays frozen; multi-day IF migrated. No reason to migrate.
+The patch refuses to confuse **naming** with **state migration**.
 
 ## Forcing-case note
 

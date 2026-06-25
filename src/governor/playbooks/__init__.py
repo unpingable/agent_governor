@@ -29,6 +29,20 @@ from .certify import (
     certify,
     measurement_basis,
 )
+from .admission_evidence import (
+    ADMISSION_EVIDENCE_BASIS_VERSION,
+    BINDING_REASONS,
+    REASON_CERT_DIGEST_TAMPERED,
+    REASON_CERT_NOT_BOUND_TO_SPEC,
+    REASON_CLOSURE_DIGEST_TAMPERED,
+    REASON_CLOSURE_NOT_ROOTED_AT_SPEC,
+    REASON_CLOSURE_ROOT_NOT_MEMBER,
+    REASON_INCOMPLETE,
+    REASON_SPEC_DIGEST_MALFORMED,
+    EvidenceBindingResult,
+    PlaybookAdmissionEvidence,
+    verify_admission_evidence,
+)
 from .closure import (
     CLOSURE_DIGEST_BASIS_VERSION,
     ClosureError,
@@ -89,4 +103,16 @@ __all__ = [
     "dependency_closure_digest",
     "resolve_closure",
     "resolve_closure_digest",
+    "ADMISSION_EVIDENCE_BASIS_VERSION",
+    "BINDING_REASONS",
+    "REASON_INCOMPLETE",
+    "REASON_SPEC_DIGEST_MALFORMED",
+    "REASON_CERT_NOT_BOUND_TO_SPEC",
+    "REASON_CERT_DIGEST_TAMPERED",
+    "REASON_CLOSURE_NOT_ROOTED_AT_SPEC",
+    "REASON_CLOSURE_ROOT_NOT_MEMBER",
+    "REASON_CLOSURE_DIGEST_TAMPERED",
+    "PlaybookAdmissionEvidence",
+    "EvidenceBindingResult",
+    "verify_admission_evidence",
 ]

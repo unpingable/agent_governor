@@ -41,19 +41,26 @@ diff; no reactors/pipelines/imports leaking into v0.
 - **Slice 2 — DONE** (`60aadd9`): local dependency closure + `dependency_closure_digest`
   (injected resolver; missing/cycle/duplicate refuse; order-stable, content-sensitive; the
   import-less golden digest is byte-pinned). `slice-2-exit-ticket.md`.
-- **Slice 3 — NOT STARTED (STOP LINE).** Wicket consumes the three measurements as *evidence*;
-  absent/mismatched measurement refuses admission; **measurement does not become authority**;
-  Wicket stays procedural. First runtime-adjacent seam — the one place "measurement" can find an
-  authority hat in a drawer. **Reserved for fresh eyes; do not begin without operator go.**
+- **Slice 3 — DONE** (2026-06-25, operator go given): Wicket consumes the three measurements as
+  *evidence*. `admission_evidence.py` (pure binding verifier, re-derives digests, closed reason
+  vocab) + `WicketClient.check_playbook_admission` (two conjunctive gates: evidence coherence →
+  authority/Standing, in that order). Authority gets `verdict="pass"` (`wicket_seam`); evidence gets
+  `verdict="observe"` (`wicket_playbook_evidence`) — no path promotes observe→pass. Generic `check()`
+  byte-untouched. Laundering wall pinned: coherent evidence + absent Standing → refusal. The Standing
+  semantics, supervisor, activation, and executor are all untouched (stop line held). `slice-3-exit-ticket.md`.
 
-## Loop state (2026-06-24)
+## Loop state (2026-06-25)
 
-All three frontend-native measurements now exist as digests: `playbook_spec_digest` (S0),
-`certified_kind_measurement_digest` (S1), `dependency_closure_digest` (S2). The measurement
-surface is complete through Slice 2. **Stopped before Wicket**, per the stop line.
+All three frontend-native measurements exist as digests (S0/S1/S2) and Wicket now consumes them as
+**evidence, not authority** (S3). The Track A forcing-case watch (evidence wanting to cross into
+activation/supervisor/grant-use) was held: it **did not fire** — evidence coherence is decidable
+upstream of the authority gate, as a pure function over the measurement objects. The natural ingress
+into Track A is the *spend* slice (Slice 4 candidate: a playbook admission that consumes LA capacity),
+not this evidence seam.
 
 ## Exit
 
-The loop ends when Track B's measurement surface is complete through Slice 2 (and Slice 3 is
-handed to a fresh review), or when a slice surfaces a forcing question that needs operator fiat.
-**Reached: Slices 0–2 done, stopped at the Wicket line 2026-06-24.**
+The loop ends when Track B's measurement surface is complete and Wicket consumes it as evidence (S0–S3),
+or when a slice surfaces a forcing question that needs operator fiat. **Reached: Slices 0–3 done
+2026-06-25.** Slice 4 (playbook-governed *spend* → Track A ingress) is the next stop line and needs
+operator go.

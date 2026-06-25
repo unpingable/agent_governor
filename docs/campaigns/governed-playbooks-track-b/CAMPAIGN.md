@@ -55,21 +55,36 @@ diff; no reactors/pipelines/imports leaking into v0.
   observe evidence record (`build_authority_admission_verifier` + `is_authority_admission_receipt`).
   Failure taxonomy pinned by owner (evidence/authority/effect). Supervisor, activation, executor,
   Standing semantics untouched. `slice-4-exit-ticket.md`.
+- **Slice 5 — DONE** (2026-06-25, operator go given): *durable, exactly-once spend* — the first Track A
+  pickup and the **runtime-law** line. `playbooks/durable_spend.py` (`DurableSpendLedger`, write-ahead
+  exactly-once, ported from activation.py's ratified Office-3 pattern) + an optional
+  `DurablePlaybookSpendGate` composed post-admission/pre-LA. Boss fight pinned: same spend retried
+  (new process, same ledger) refuses at `SEAM_DURABLE_SPEND` (`playbook_spend_replayed`) — **exactly
+  one LA consume across both runs, no double-spend.** Spend is authority-bound (admission receipt +
+  step/effect/resource/principal/amount/spec-digest); unbound spend rejected. The four non-collapses
+  hold: observe≠pass, pass≠spend, spend≠execution, durability≠permission. **Deliberately did NOT touch
+  `supervisor.py` or `activate()`** (fenced activate; divergent supervisor) — durability crossed via a
+  new gate; supervisor-dispatch is the named obstruction → Slice 6. `slice-5-exit-ticket.md`.
 
 ## Loop state (2026-06-25)
 
-Measurement surface complete (S0–S2); Wicket consumes it as evidence (S3); playbook-governed spend
-runs evidence→authority→LA-consume without laundering (S4). **The Track A forcing-case watch fired
-TWICE and held BOTH times** — S3 (evidence is decidable upstream of authority) and S4 (the spend
-*shape* is expressible through the existing LA seam at harness grade). The honest finding: Track A is
-forced not by *shape* but by *durable runtime* — persisted exactly-once spend (`activation.py`'s
-transaction) and live tool-dispatch wiring (`supervisor.py` pre-tool gate). Those are the Slice 5
-candidate, where the runtime obstruction supplies the forcing case. Reaching into the supervisor
-before that would be tool-tourism.
+S0–S2 measurement; S3 Wicket-as-evidence; S4 playbook spend (evidence→authority→LA-consume); **S5
+durable exactly-once spend (runtime law).** Roadmap (operator, 2026-06-25): **S5 = runtime law (done);
+S6 = first self-hosted chore** (AG runs ONE boring governed-playbook task end-to-end — dogfood
+execution, NOT autopilot, and where the supervisor live-dispatch wiring earns its forcing case against
+a real task); **S7 = bounded autopilot** (fresh Wicket admission per run, scoped/expiring Standing, LA
+spend per effect, failures→receipts). The dogfood line: *"Autopilot begins when the agent can spend a
+permission without remembering it."* S5 builds exactly that spend-without-remembering; S6 makes AG
+*use* it on a toaster-grade chore; S7 is the ration card.
+
+Track A status: durability axis crossed narrowly via the new durable gate (no `activate()`/supervisor
+edit). The **supervisor-dispatch axis is the named obstruction**, deferred to S6 where a real task
+exists to route through it. Branch-custody: S5 did NOT need `feat/transition-kernel-slice-1b`
+(GrantUseResult) — durable spend is downstream of the already-present S3/S4 authority.
 
 ## Exit
 
-The loop ends when the measurement surface is complete, Wicket consumes it as evidence, and a
-playbook-governed spend composes without laundering (S0–S4), or when a slice surfaces a forcing
-question that needs operator fiat. **Reached: Slices 0–4 done 2026-06-25.** Slice 5 (durable/enforced
-spend → the genuine Track A pickup) is the next stop line and needs operator go.
+The loop ends when a playbook-governed spend is durable, replay-safe, and authority-bound (S0–S5), or
+when a slice surfaces a forcing question that needs operator fiat. **Reached: Slices 0–5 done
+2026-06-25.** Slice 6 (first self-hosted governed-playbook chore → dogfood execution, where supervisor
+dispatch is forced) is the next stop line and needs operator go.

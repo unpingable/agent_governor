@@ -75,6 +75,18 @@ diff; no reactors/pipelines/imports leaking into v0.
   chore recorded (`ok=False`). **Supervisor watch held a 4th time:** a self-hosted chore is AG's own
   code, NOT an external-agent dispatch — `supervisor.py` is the wrong surface; it earns its forcing
   case at Slice 7 (live external agent). `slice-6-exit-ticket.md`.
+- **Slice 7 (allowlist slice) — DONE** (2026-06-25, operator go given): ration-card dispatch of one
+  live external agent — the *allowlist* slice, NOT bounded autopilot. `playbooks/ration_card.py`:
+  `dispatch_under_ration_card` runs ONE named agent (injected `RationedAgentRunner`) for ONE
+  predeclared task, gated by **human-refusal → ration card → governed chain (spend) → dispatch once →
+  fence output → non-authoritative report**. `RationCard` is absence-restrictive with git/doctrine/
+  network/non-observe **locked closed by type**. Boss fight: agent dispatched once; transcript (digest
+  only) / success / report / dispatch-receipt **none mint authority** (6th non-collapse:
+  dispatch≠authority). Laundering walls pinned (allowlist≠Standing, Standing≠spend, spend≠arbitrary
+  tools, dispatch-receipt≠re-dispatch, agent-output fenced ⊆ card). Replay inherits S5 idempotency.
+  **Did NOT bloat `SessionSupervisor`** (operator: "one ration card, not understand-playbooks-
+  generally"); the live Claude Code adapter binding is named production wiring, NOT built. Remaining:
+  (1) thin live-adapter `RationedAgentRunner`; (2) bounded autopilot loop. `slice-7-exit-ticket.md`.
 
 ## Loop state (2026-06-25)
 
@@ -87,18 +99,19 @@ spend per effect, failures→receipts). The dogfood line: *"Autopilot begins whe
 permission without remembering it."* S5 builds exactly that spend-without-remembering; S6 makes AG
 *use* it on a toaster-grade chore; S7 is the ration card.
 
-Track A status: **supervisor watch held a 4th time at S6.** The dispatch axis did NOT force
-`supervisor.py` — a self-hosted chore is AG's own code, not an external-agent dispatch, so the
-supervisor (which gates external Claude Code / Gemini agent sessions) is the wrong surface. Its
-genuine forcing case is **S7 (bounded autopilot)**: a *live external agent* whose tool calls must
-route through the governed chain. Held reasons by slice: S3 evidence-upstream · S4 shape-via-LA · S5
-durability-via-new-gate · S6 self-hosted≠external-dispatch. Branch-custody: S5/S6 did NOT need
-`feat/transition-kernel-slice-1b` (GrantUseResult).
+Track A status: S7 (allowlist slice) built the **ration card** — the tiny door the supervisor would
+carry — over a narrow injected `RationedAgentRunner`, **without** bloating `SessionSupervisor` (per
+operator's "one ration card, not understand-playbooks-generally"). The live Claude Code adapter
+binding is named production wiring, not built. The non-collapse ladder is complete: S3 observe≠pass ·
+S4 pass≠spend · S5 spend≠execution & durability≠permission · S6 report≠authority · **S7
+dispatch≠authority.** Branch-custody: S5–S7 did NOT need `feat/transition-kernel-slice-1b`.
 
 ## Exit
 
-The loop ends when AG can run a bounded governed chore self-hosted (durable, replay-safe,
-non-authoritative output) (S0–S6), or when a slice surfaces a forcing question that needs operator
-fiat. **Reached: Slices 0–6 done 2026-06-25.** Slice 7 (bounded autopilot → a *live external agent*
-on a ration card, where `supervisor.py` is finally the right surface) is the next stop line and needs
-operator go.
+The loop ends when a governed playbook can dispatch one live external agent under a ration card —
+fresh admission, durable spend, non-authoritative output, every laundering wall held (S0–S7), or when
+a slice surfaces a forcing question that needs operator fiat. **Reached: Slices 0–7 (allowlist) done
+2026-06-25.** Remaining (needs operator go + fresh-eyes allowlist pass): (1) thin live-adapter
+`RationedAgentRunner` over `runtime.adapters.claude_code`; (2) bounded autopilot loop (still
+one-dispatch-per-iteration, fresh admission + spend each). The campaign's core arc — measurement →
+evidence → spend → durable → dogfood → governed external dispatch — is complete.

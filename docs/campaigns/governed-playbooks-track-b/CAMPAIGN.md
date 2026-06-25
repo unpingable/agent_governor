@@ -65,6 +65,16 @@ diff; no reactors/pipelines/imports leaking into v0.
   hold: observe≠pass, pass≠spend, spend≠execution, durability≠permission. **Deliberately did NOT touch
   `supervisor.py` or `activate()`** (fenced activate; divergent supervisor) — durability crossed via a
   new gate; supervisor-dispatch is the named obstruction → Slice 6. `slice-5-exit-ticket.md`.
+- **Slice 6 — DONE** (2026-06-25, operator go given): first self-hosted governed-playbook chore —
+  *dogfood execution, NOT autopilot*. `playbooks/chore.py`: `run_governed_chore` runs ONE boring
+  read-only audit (`read_only_receipt_audit`) through the S3–S5 chain, dispatching the chore IFF the
+  chain spent, then emitting a **non-authoritative report receipt** (`verdict=observe`, gate
+  `governed_chore_report`, `non_authoritative=True`) that fails `is_authority_admission_receipt`.
+  Boss fight: AG runs the chore, leaves receipts, future AG can't mistake the report for authority.
+  Fifth non-collapse: **report≠authority.** Replay inherits S5 idempotency (no re-execute). Failed
+  chore recorded (`ok=False`). **Supervisor watch held a 4th time:** a self-hosted chore is AG's own
+  code, NOT an external-agent dispatch — `supervisor.py` is the wrong surface; it earns its forcing
+  case at Slice 7 (live external agent). `slice-6-exit-ticket.md`.
 
 ## Loop state (2026-06-25)
 
@@ -77,14 +87,18 @@ spend per effect, failures→receipts). The dogfood line: *"Autopilot begins whe
 permission without remembering it."* S5 builds exactly that spend-without-remembering; S6 makes AG
 *use* it on a toaster-grade chore; S7 is the ration card.
 
-Track A status: durability axis crossed narrowly via the new durable gate (no `activate()`/supervisor
-edit). The **supervisor-dispatch axis is the named obstruction**, deferred to S6 where a real task
-exists to route through it. Branch-custody: S5 did NOT need `feat/transition-kernel-slice-1b`
-(GrantUseResult) — durable spend is downstream of the already-present S3/S4 authority.
+Track A status: **supervisor watch held a 4th time at S6.** The dispatch axis did NOT force
+`supervisor.py` — a self-hosted chore is AG's own code, not an external-agent dispatch, so the
+supervisor (which gates external Claude Code / Gemini agent sessions) is the wrong surface. Its
+genuine forcing case is **S7 (bounded autopilot)**: a *live external agent* whose tool calls must
+route through the governed chain. Held reasons by slice: S3 evidence-upstream · S4 shape-via-LA · S5
+durability-via-new-gate · S6 self-hosted≠external-dispatch. Branch-custody: S5/S6 did NOT need
+`feat/transition-kernel-slice-1b` (GrantUseResult).
 
 ## Exit
 
-The loop ends when a playbook-governed spend is durable, replay-safe, and authority-bound (S0–S5), or
-when a slice surfaces a forcing question that needs operator fiat. **Reached: Slices 0–5 done
-2026-06-25.** Slice 6 (first self-hosted governed-playbook chore → dogfood execution, where supervisor
-dispatch is forced) is the next stop line and needs operator go.
+The loop ends when AG can run a bounded governed chore self-hosted (durable, replay-safe,
+non-authoritative output) (S0–S6), or when a slice surfaces a forcing question that needs operator
+fiat. **Reached: Slices 0–6 done 2026-06-25.** Slice 7 (bounded autopilot → a *live external agent*
+on a ration card, where `supervisor.py` is finally the right surface) is the next stop line and needs
+operator go.

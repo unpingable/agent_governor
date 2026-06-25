@@ -49,18 +49,27 @@ diff; no reactors/pipelines/imports leaking into v0.
   byte-untouched. Laundering wall pinned: coherent evidence + absent Standing → refusal. The Standing
   semantics, supervisor, activation, and executor are all untouched (stop line held). `slice-3-exit-ticket.md`.
 
+- **Slice 4 — DONE** (2026-06-25, operator go given): playbook-governed *spend*. The orchestrator
+  (`cooked_context_orchestrator.run(playbook_evidence=...)`) routes evidence → authority → LA consume.
+  The Slice 4 laundering wall: the LA spend basis is the wicket-seam **pass** admission, never the
+  observe evidence record (`build_authority_admission_verifier` + `is_authority_admission_receipt`).
+  Failure taxonomy pinned by owner (evidence/authority/effect). Supervisor, activation, executor,
+  Standing semantics untouched. `slice-4-exit-ticket.md`.
+
 ## Loop state (2026-06-25)
 
-All three frontend-native measurements exist as digests (S0/S1/S2) and Wicket now consumes them as
-**evidence, not authority** (S3). The Track A forcing-case watch (evidence wanting to cross into
-activation/supervisor/grant-use) was held: it **did not fire** — evidence coherence is decidable
-upstream of the authority gate, as a pure function over the measurement objects. The natural ingress
-into Track A is the *spend* slice (Slice 4 candidate: a playbook admission that consumes LA capacity),
-not this evidence seam.
+Measurement surface complete (S0–S2); Wicket consumes it as evidence (S3); playbook-governed spend
+runs evidence→authority→LA-consume without laundering (S4). **The Track A forcing-case watch fired
+TWICE and held BOTH times** — S3 (evidence is decidable upstream of authority) and S4 (the spend
+*shape* is expressible through the existing LA seam at harness grade). The honest finding: Track A is
+forced not by *shape* but by *durable runtime* — persisted exactly-once spend (`activation.py`'s
+transaction) and live tool-dispatch wiring (`supervisor.py` pre-tool gate). Those are the Slice 5
+candidate, where the runtime obstruction supplies the forcing case. Reaching into the supervisor
+before that would be tool-tourism.
 
 ## Exit
 
-The loop ends when Track B's measurement surface is complete and Wicket consumes it as evidence (S0–S3),
-or when a slice surfaces a forcing question that needs operator fiat. **Reached: Slices 0–3 done
-2026-06-25.** Slice 4 (playbook-governed *spend* → Track A ingress) is the next stop line and needs
-operator go.
+The loop ends when the measurement surface is complete, Wicket consumes it as evidence, and a
+playbook-governed spend composes without laundering (S0–S4), or when a slice surfaces a forcing
+question that needs operator fiat. **Reached: Slices 0–4 done 2026-06-25.** Slice 5 (durable/enforced
+spend → the genuine Track A pickup) is the next stop line and needs operator go.

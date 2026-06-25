@@ -1,6 +1,14 @@
 # Live-Adapter Allowlist Review — GATE before any live external-agent code
 
 > **Ration card exists. No one has eaten with it yet.**
+>
+> **Passing this review authorizes a SANDBOX EXPERIMENT, not operational
+> external-agent use.** "Operator reviewed the allowlist" is NOT "permission to
+> eat the furniture." A reviewed card + a green sandbox slice is a demonstration
+> of structure (origin `stub`/`drill` → `DemonstratedConsumed`, effect fenced by
+> Wall 1); operational external-agent use is a *separate, later, separately-
+> ratified* decision. The card is the contract; the sandbox is the cage; review
+> ratifies the contract, not the conferral of real-world effect.
 
 This is a **review gate**, not an implementation doc. Before a single line of
 live-adapter code (a `RationedAgentRunner` backed by a real Claude Code / Gemini
@@ -60,4 +68,6 @@ open questions. Each row is a decision to ratify, defer, or tighten.
 
 When every row above has an operator decision and the four open questions are
 answered, the live-adapter binding may be written — and only then, sandbox-only,
-one-shot-only, no loop.
+one-shot-only, no loop. **And even a fully-passed review buys exactly one thing: a
+sandbox experiment.** It does not buy operational external-agent use, a loop, or a
+widened card; each of those is its own gate.

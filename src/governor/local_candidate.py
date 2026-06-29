@@ -390,9 +390,10 @@ def ollama_candidate_client(
     lazy so this module loads without the chat-bridge dependency."""
     import asyncio
 
-    from .chat_bridge import ChatMessage, OllamaBackend
+    from .chat_bridge import ChatMessage, create_backend
 
-    backend = OllamaBackend(host=host)
+    # create_backend supplies ollama's default egress gate (localhost = internal).
+    backend = create_backend("ollama", host=host)
 
     class _OllamaClient:
         def complete(self, prompt: str) -> str:

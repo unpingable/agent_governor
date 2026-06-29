@@ -21,13 +21,26 @@ Host mini-ollama
 
 After this, every command below is just `ssh mini-ollama` — no credentials in the repo.
 
-## Verified state (probe 2026-06-29, read-only)
+## Verified state (2026-06-29 — live smoke PASSED end-to-end)
 
-- `ssh mini-ollama` works; lands on the mini.
-- `ollama` is installed (`/opt/homebrew/bin/ollama`).
-- **`http://127.0.0.1:11434/api/tags` returns `[]` — NO model is pulled** on the running
-  loopback ollama. The separate `:11435` appliance was **down** at probe time.
-- ⇒ **First blocker is not code. It is: pull a model.** Nothing to A/B until then.
+- `ssh mini-ollama` works; `ollama` installed (`/opt/homebrew/bin/ollama`).
+- Models pulled on the loopback ollama (`:11434`): `qwen2.5-coder:7b`, `qwen3.5:9b`.
+- After fixing two gotchas (below), the worker ran end-to-end against `qwen2.5-coder:7b`
+  via the SSH tunnel: **6/6 `candidate_observed`** with sensible diagnoses, authority
+  discipline intact. The AG side is proven; the remaining work is the 20–30-case A/B.
+
+### Gotchas hit + fixed (so future-you doesn't re-debug)
+
+1. **The mini is usually OFF / asleep** (per `working/tier0-appliance-mini.md`). Wake it
+   first; SSH gives "No route to host" when it's down.
+2. **Homebrew ollama can ship without its runner.** `ollama 0.30.7` returned HTTP 500
+   `"error starting llama-server: llama-server binary not found"` on `/api/chat` — model
+   pulled, API up, but no inference process. Fix on the mini (as the box owner; `claude`
+   has no brew write): `brew upgrade ollama`, or use the official ollama macOS app/binary
+   (ships the runner). Confirm with the `/api/chat` curl returning a `message`, not a 500.
+3. **Local models wrap JSON ~1/3 of the time** (fences/prose). The worker now extracts the
+   first balanced `{...}` before parsing (commit `00b0087`); reliability went 2/3 → 6/6.
+   No action needed — noted so the refusal rate is understood.
 
 ## Step 0 — pull a model (operator action; mutates the mini)
 

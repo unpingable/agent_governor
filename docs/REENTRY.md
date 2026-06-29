@@ -31,8 +31,7 @@
     The real near-term value is not live autonomy; it is *lossless delegation* — offline
     production of reviewable work. Active development moved to a new branch (below). B-12
     stays radioactive: operator-manual, blocked on a real cage backend, not next.
-  - **Push state:** branch pushed at `19b310f`; **three commits local/unpushed**
-    (`94cfd52`, `7c88ee2`, `515afb0`) — operator holds push timing.
+  - **Push state: PUSHED to `515afb0`** (B-8/9-10/11 now on remote, off the disk-SPOF).
 
 - **Synthetic overnight conveyor** · `feat/playbooks-synthetic-conveyor`  *(ACTIVE lane, 2026-06-29)*
   - Branched off `feat/playbooks-gov-loop` @ `515afb0`. Doctrine: *the overnight system may
@@ -61,11 +60,31 @@
     where this format becomes a reusable handoff machine). Then S7 (actor-output → ReviewPacket
     normalizer). The external harness (H-series) stays OUTSIDE AG; AG is the courthouse, not
     the getaway car. Ladder: S6 → S7 → (checkpoint) → H1.
-  - **Push state: NOTHING pushed — 5 commits local/unpushed (S1–S5), disk-SPOF.** Operator
-    holds push timing (checkpoint push considered after S5, deferred). If this disk is lost the
-    branch is gone; a session *clear* keeps it (commits are on disk).
+  - **Push state: PUSHED (2026-06-29)** — S1–S5 on remote, off the disk-SPOF.
   - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
     should show S1–S5 (`c909e89 a6f8299 0d32639 5c2f831 08d3b45`); `pytest tests/playbooks -q` green.
+
+- **Local candidate worker + cargo-triage** · `feat/local-candidate-worker`  *(live-validated, PUSHED)*
+  - Off `feat/playbooks-gov-loop` @ `515afb0`. Budget valve: a cheap LOCAL model (Ollama/Qwen on
+    the mini) does first-pass triage so the frontier isn't spent reading slop. *"Local output is
+    cheap testimony, never standing."*
+  - **Slice 0** (`960c6ed`) — `src/governor/local_candidate.py`: `triage_failure` over
+    `ModelTier.LOCAL` via `chat_bridge.OllamaBackend`; structured candidate receipt
+    (`verdict=observe`, fails `is_authority_admission_receipt`); hard-refuses authority claims
+    (`tests_pass` / `safe_to_commit` / …). Reuses `ration_card.RationCard` (all-closed) as the
+    fence — NO new origin enum, NO spend chain, NO repo write. Live seam `ollama_candidate_client`.
+  - **A/B (live, qwen2.5-coder:7b on the mini):** Python 21/21 schema-valid, ~18/21 useful, 0
+    authority escapes, 0 mutations; **Rust 8/8** (better `failure_kind` accuracy). **`failure_triage`
+    RATIFIED to the allowed-local lane (operator, 2026-06-29).** Caveat: `failure_kind` unreliable
+    for Python runtime errors. Results `working/local-candidate-ab-results.md`; runbook + verified
+    gotchas (wake mini; homebrew ollama needs its `llama-server` runner; models wrap JSON ~1/3 →
+    worker extracts the object) `working/local-candidate-worker-ab-runbook.md`.
+  - **cargo-triage Slice 0** (`a8abb81`) — `src/governor/cargo_triage.py`: generic, on-prem,
+    frontier-free driver (run cargo → capture env → split rustc diagnostics → triage each via the
+    ratified worker → candidate receipts). For the SECRET NQ mac-port: run it locally; build output
+    never touches the frontier. NEXT = Slice 1 `platform_specificity`
+    (mac_only|rust_version|dependency|environment|unknown) + the operator's live NQ-on-mac run.
+  - **Push state: PUSHED.**
 
 - **Track A — transition kernel** · `feat/transition-kernel-slice-1b`
   - Slice 1b complete (Standing grant-use client + `activation.py` Office 2).

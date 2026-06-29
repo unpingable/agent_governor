@@ -27,13 +27,45 @@
       `evaluate_cage_safety` is safe only when every isolation property is confirmed;
       `admit_origin_under_cage` refuses any non-stub origin under an unconfirmed cage.
   - card: `docs/campaigns/governed-playbooks-track-b/CAMPAIGN.md`
-  - **STOP before B-12 (live sandbox experiment).** B-12 is operator-MANUAL by definition
-    (one explicit experiment, not autopilot) and is **blocked on a real cage backend** —
-    only `NullCage` exists, which refuses every live origin by design, so there is no safe
-    cage to run under yet. A real Docker/Podman/bubblewrap backend is its own prior slice.
-    Bounded autopilot remains a separate, later, separately-ratified gate.
+  - **B-12 (live sandbox experiment) was REFRAMED as a decoy gate** (operator, 2026-06-29).
+    The real near-term value is not live autonomy; it is *lossless delegation* — offline
+    production of reviewable work. Active development moved to a new branch (below). B-12
+    stays radioactive: operator-manual, blocked on a real cage backend, not next.
   - **Push state:** branch pushed at `19b310f`; **three commits local/unpushed**
-    (`94cfd52`, `7c88ee2`, `515afb0`) — operator holds push timing; witness step still owed.
+    (`94cfd52`, `7c88ee2`, `515afb0`) — operator holds push timing.
+
+- **Synthetic overnight conveyor** · `feat/playbooks-synthetic-conveyor`  *(ACTIVE lane, 2026-06-29)*
+  - Branched off `feat/playbooks-gov-loop` @ `515afb0`. Doctrine: *the overnight system may
+    create EVIDENCE, never FACTS* — synthetic/offline work + operator-delayed review, with
+    `Synthetic safe ≠ live safe` and live execution kept structurally out of reach.
+  - Slices landed green + local (each its own commit; all in `src/governor/playbooks/`):
+    - **S1** (`c909e89`) — `rationed_runner.py`: `ORIGIN_SYNTHETIC` first-class no-process
+      origin; live still refused (not in `NO_PROCESS_ORIGINS`).
+    - **S2** (`a6f8299`) — `sandbox_cage.py`: `SyntheticCage` / `synthetic_only` verdict;
+      `safe==True` made *insufficient for live by construction* (verdict `__post_init__`
+      makes a synthetic verdict that permits live unconstructable; admission gates on
+      `live_admission_permitted`, never `safe`).
+    - **S3** (`0d32639`) — `review_packet.py`: inert `ReviewPacket` (evidence, not authority);
+      `used <= granted` structural; `operator_review_required` defaults True; deterministic
+      serialize + round-trip.
+    - **S4** (`5c2f831`) — `playbook_queue.py`: inert queue parser; per-item explicit
+      `operator_approved` latch (anti-recursion), fully-closed authority, `review_packet`
+      output, static-safe paths. Parser, NOT scheduler.
+    - **S5** (`08d3b45`) — `review_packet_validator.py`: pure ReviewPacket-vs-QueuedPlaybook
+      cross-validator (identity / authority boundary / path fences / required-test
+      representation / review latch); returns a deterministic report, runs nothing.
+  - **The branch is a complete inert "law machine": synthetic origin → synthetic cage verdict
+    → review packet → queue parser → queue-vs-review validator.** Tests: full playbooks dir
+    189/189 green; full-suite collection clean (16377).
+  - **NEXT = S6** (handoff renderer: a `QueuedPlaybook` → sealed Claude/Codex operator packet —
+    where this format becomes a reusable handoff machine). Then S7 (actor-output → ReviewPacket
+    normalizer). The external harness (H-series) stays OUTSIDE AG; AG is the courthouse, not
+    the getaway car. Ladder: S6 → S7 → (checkpoint) → H1.
+  - **Push state: NOTHING pushed — 5 commits local/unpushed (S1–S5), disk-SPOF.** Operator
+    holds push timing (checkpoint push considered after S5, deferred). If this disk is lost the
+    branch is gone; a session *clear* keeps it (commits are on disk).
+  - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
+    should show S1–S5 (`c909e89 a6f8299 0d32639 5c2f831 08d3b45`); `pytest tests/playbooks -q` green.
 
 - **Track A — transition kernel** · `feat/transition-kernel-slice-1b`
   - Slice 1b complete (Standing grant-use client + `activation.py` Office 2).

@@ -213,6 +213,42 @@ class TestRefusals:
 
 
 # --------------------------------------------------------------------------- #
+# JSON extraction — tolerate fence/prose wrapping (real models do this ~1/3 of
+# the time), WITHOUT weakening the schema/authority gate.
+# --------------------------------------------------------------------------- #
+
+
+class TestJsonExtraction:
+    def test_fenced_json_is_observed(self):
+        r = triage_failure(_request(), client=_FixedClient("```json\n" + _GOOD + "\n```"))
+        assert r.verdict == CANDIDATE_OBSERVED
+        assert r.candidate.failure_kind == "assertion_failure"
+
+    def test_prose_wrapped_json_is_observed(self):
+        wrapped = "Here is the triage you asked for:\n" + _GOOD + "\nHope that helps!"
+        r = triage_failure(_request(), client=_FixedClient(wrapped))
+        assert r.verdict == CANDIDATE_OBSERVED
+
+    def test_fenced_json_with_authority_claim_still_refused(self):
+        bad = json.dumps(
+            {
+                "failure_kind": "x",
+                "likely_files": [],
+                "next_action": "y",
+                "confidence": "low",
+                "authority_claims": ["tests_pass"],
+            }
+        )
+        r = triage_failure(_request(), client=_FixedClient("```json\n" + bad + "\n```"))
+        assert r.verdict == CANDIDATE_REFUSED
+        assert r.refusal_reason == REFUSED_AUTHORITY_CLAIM
+
+    def test_prose_with_no_json_refused(self):
+        r = triage_failure(_request(), client=_FixedClient("I think it's probably fine."))
+        assert r.refusal_reason == REFUSED_SCHEMA_INVALID
+
+
+# --------------------------------------------------------------------------- #
 # Receipt invariants.
 # --------------------------------------------------------------------------- #
 

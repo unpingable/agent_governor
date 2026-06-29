@@ -29,6 +29,7 @@ Deliberate scope (Slice 0):
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Protocol
 
@@ -209,6 +210,44 @@ class LocalCandidateReceipt:
 
 _REQUIRED_KEYS = ("failure_kind", "likely_files", "next_action", "confidence", "authority_claims")
 
+_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
+
+
+def _extract_json_object(raw: str) -> Optional[str]:
+    """Extract a single JSON object from possibly fence- or prose-wrapped model
+    output (chat models often wrap JSON in ```json fences``` or chatter). Robustness
+    ONLY — the extracted object still passes the full schema + authority-claim gate,
+    so this never weakens the discipline. Returns None if no balanced object exists.
+    The first balanced ``{...}`` (string-aware) is taken."""
+    text = raw.strip()
+    fence = _FENCE_RE.search(text)
+    if fence:
+        text = fence.group(1).strip()
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(text)):
+        c = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
 
 def build_triage_prompt(request: LocalCandidateRequest) -> str:
     """A bounded, JSON-only triage prompt. The model is told it may NOT claim
@@ -316,9 +355,12 @@ def triage_failure(
         return _refuse(REFUSED_EMPTY_OUTPUT)
     output_digest = _hash({"output": raw})
 
-    # 3. Parse + schema-validate.
+    # 3. Extract a JSON object (tolerate fences/prose), then parse + schema-validate.
+    json_text = _extract_json_object(raw)
+    if json_text is None:
+        return _refuse(REFUSED_SCHEMA_INVALID, output_digest=output_digest)
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(json_text)
     except (json.JSONDecodeError, ValueError):
         return _refuse(REFUSED_SCHEMA_INVALID, output_digest=output_digest)
     if not isinstance(parsed, dict) or any(k not in parsed for k in _REQUIRED_KEYS):

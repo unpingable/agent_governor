@@ -34,7 +34,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Protocol
 
-from .rationed_runner import ORIGIN_STUB
+from .rationed_runner import ORIGIN_STUB, ORIGIN_SYNTHETIC
 
 # --------------------------------------------------------------------------- #
 # Isolation property vocabulary (closed). Each is a property a real cage backend
@@ -71,6 +71,17 @@ ISOLATION_PROPERTIES = frozenset(
 REQUIRED_ISOLATION = ISOLATION_PROPERTIES
 
 
+# Verdict scope (closed). A verdict's scope says what it is allowed to admit —
+# NOT how "safe" it feels. ``safe`` alone is deliberately insufficient for live
+# admission; the scope + ``live_admission_permitted`` carry that, structurally.
+SCOPE_LIVE = "live"  # a real cage attesting real isolation; may permit a live origin
+SCOPE_SYNTHETIC_ONLY = "synthetic_only"  # a fixture verdict; NEVER permits live
+CAGE_VERDICT_SCOPES = frozenset({SCOPE_LIVE, SCOPE_SYNTHETIC_ONLY})
+
+# Admission scope reported back for a stub origin (no cage was consulted at all).
+SCOPE_NONE = "none"
+
+
 # --------------------------------------------------------------------------- #
 # Attestation + verdicts.
 # --------------------------------------------------------------------------- #
@@ -101,9 +112,23 @@ class CageAttestation:
 
 @dataclass(frozen=True)
 class CageSafetyVerdict:
-    """Whether an attestation satisfies the required isolation set. ``missing``
-    names exactly what is unconfirmed — the verdict never says "safe" by rounding
-    up."""
+    """Whether a cage verdict admits within its scope. ``safe`` is NOT sufficient
+    for live admission — that is gated by ``live_admission_permitted``, which a
+    synthetic-scoped verdict can never carry.
+
+    The invariants (enforced in ``__post_init__``, not by comment) make a lying
+    verdict unconstructable:
+
+    - ``scope == synthetic_only`` ⇒ ``attests_live_isolation`` False AND
+      ``live_admission_permitted`` False. A synthetic verdict CANNOT permit live.
+    - ``live_admission_permitted`` ⇒ ``attests_live_isolation`` (you cannot permit
+      live without having attested real isolation).
+    - ``attests_live_isolation`` ⇒ ``scope == live`` (real isolation is only
+      attestable in live scope).
+
+    So ``safe == True`` on a synthetic verdict is structurally insufficient to
+    admit a live origin — by construction, not by convention.
+    """
 
     safe: bool
     backend_id: str
@@ -111,6 +136,31 @@ class CageSafetyVerdict:
     missing: frozenset[str]
     required: frozenset[str]
     reason: str
+    scope: str = SCOPE_LIVE
+    attests_live_isolation: bool = False
+    live_admission_permitted: bool = False
+
+    def __post_init__(self) -> None:
+        if self.scope not in CAGE_VERDICT_SCOPES:
+            raise ValueError(
+                f"scope {self.scope!r} not in {sorted(CAGE_VERDICT_SCOPES)}"
+            )
+        if self.scope == SCOPE_SYNTHETIC_ONLY:
+            if self.attests_live_isolation:
+                raise ValueError(
+                    "a synthetic_only verdict cannot attest live isolation"
+                )
+            if self.live_admission_permitted:
+                raise ValueError(
+                    "a synthetic_only verdict cannot permit live admission "
+                    "(synthetic safe != live safe)"
+                )
+        if self.live_admission_permitted and not self.attests_live_isolation:
+            raise ValueError(
+                "live_admission_permitted requires attested live isolation"
+            )
+        if self.attests_live_isolation and self.scope != SCOPE_LIVE:
+            raise ValueError("live isolation can only be attested in live scope")
 
 
 def evaluate_cage_safety(
@@ -127,6 +177,9 @@ def evaluate_cage_safety(
         if safe
         else f"unconfirmed isolation: {sorted(missing)}"
     )
+    # The live path: real isolation is attested iff safe, and live admission is
+    # permitted iff that real isolation is attested. A NullCage (confirms nothing)
+    # is unsafe ⇒ attests nothing ⇒ permits no live admission.
     return CageSafetyVerdict(
         safe=safe,
         backend_id=attestation.backend_id,
@@ -134,6 +187,28 @@ def evaluate_cage_safety(
         missing=missing,
         required=required,
         reason=reason,
+        scope=SCOPE_LIVE,
+        attests_live_isolation=safe,
+        live_admission_permitted=safe,
+    )
+
+
+def synthetic_cage_verdict(backend_id: str = "synthetic_cage") -> CageSafetyVerdict:
+    """The synthetic-only verdict factory. ``safe`` within synthetic scope, but it
+    confirms NO real isolation (``missing`` = every required property) and — by the
+    verdict invariants — cannot attest live isolation or permit live admission. It
+    exists so a synthetic origin can exercise the positive admission path; it can
+    never be adapted into live authority."""
+    return CageSafetyVerdict(
+        safe=True,
+        backend_id=backend_id,
+        confirmed=frozenset(),
+        missing=frozenset(REQUIRED_ISOLATION),
+        required=frozenset(REQUIRED_ISOLATION),
+        reason="synthetic-only verdict: positive-path fixture, NOT real containment",
+        scope=SCOPE_SYNTHETIC_ONLY,
+        attests_live_isolation=False,
+        live_admission_permitted=False,
     )
 
 
@@ -209,6 +284,39 @@ class NullCage:
         return validate_writes(produced_writes, allowed_writes)
 
 
+class SyntheticCage:
+    """A synthetic FIXTURE cage for the overnight conveyor. It confirms NO real
+    isolation — its attestation is empty, exactly like ``NullCage`` — so it can
+    never be confused with real containment, and ``evaluate_cage_safety`` on it is
+    never live-safe. The synthetic-ness lives entirely in its ``verdict()``: a
+    ``synthetic_only`` verdict that is ``safe`` within synthetic scope but cannot
+    attest live isolation or permit a live origin. It lets synthetic origins
+    exercise the positive cage-admission path without any real backend."""
+
+    backend_id = "synthetic_cage"
+
+    def __init__(self, sandbox_id: str = "sbx-synthetic-1") -> None:
+        self._sandbox_id = sandbox_id
+
+    def attest(self) -> CageAttestation:
+        # Confirms NOTHING real — identical isolation posture to NullCage. We do
+        # not fake a live attestation; the synthetic verdict is a separate object.
+        return CageAttestation(
+            backend_id=self.backend_id,
+            backend_version="synthetic",
+            confirmed=frozenset(),
+            sandbox_id=self._sandbox_id,
+        )
+
+    def verdict(self) -> CageSafetyVerdict:
+        return synthetic_cage_verdict(self.backend_id)
+
+    def validate_writes(
+        self, produced_writes: frozenset[str], allowed_writes: frozenset[str]
+    ) -> WriteValidation:
+        return validate_writes(produced_writes, allowed_writes)
+
+
 # --------------------------------------------------------------------------- #
 # The admission seam (B-12 will enforce this before a non-stub origin runs).
 # --------------------------------------------------------------------------- #
@@ -216,47 +324,101 @@ class NullCage:
 
 @dataclass(frozen=True)
 class CageAdmission:
-    """Whether an origin of a given kind may run under a cage with this safety
-    verdict. The rule: a stub origin executes no real process and needs no cage
-    (admitted, but it gets NO safety claim); any other origin requires a
-    confirmed-safe cage."""
+    """Whether an origin of a given kind may run under a cage with this verdict,
+    and what the admission *is*. ``scope`` records the lane the decision was made
+    in (``none`` for stub, ``synthetic_only`` / ``live``); ``confers_live_effect``
+    is True ONLY for an admitted live origin under a live-permitting verdict — a
+    synthetic admission is structurally inert."""
 
     admitted: bool
     origin_kind: str
     requires_cage: bool
     reason: str
+    scope: str = SCOPE_NONE
+    confers_live_effect: bool = False
 
 
 def admit_origin_under_cage(
     origin_kind: str, cage_verdict: CageSafetyVerdict
 ) -> CageAdmission:
-    """Pure guard. Stub origins are admitted without a cage requirement; any
-    non-stub origin is admitted ONLY when the cage verdict is safe — otherwise
-    refused with the unconfirmed-isolation reason. The live slice (B-12) calls
-    this before running a non-stub origin; it cannot launder a NullCage into a
-    sandbox."""
+    """Pure guard. The admission depends on origin kind + verdict scope + live
+    permission — **never on ``safe`` alone**:
+
+    - **stub** — no real process; admitted without a cage and with no safety claim.
+    - **synthetic** — admitted ONLY under a ``synthetic_only`` safe verdict; the
+      admission is inert (no live effect). It cannot borrow a live verdict.
+    - **live (any other)** — admitted ONLY when ``live_admission_permitted`` is
+      True. A synthetic verdict can never carry that (verdict invariant), and a
+      NullCage is unsafe, so neither admits a live origin even though a synthetic
+      verdict's ``safe`` is True. ``safe`` is insufficient for live by construction.
+    """
     if origin_kind == ORIGIN_STUB:
         return CageAdmission(
             admitted=True,
             origin_kind=origin_kind,
             requires_cage=False,
             reason="stub origin executes no real process; no cage required, no safety claimed",
+            scope=SCOPE_NONE,
+            confers_live_effect=False,
         )
-    if cage_verdict.safe:
+
+    if origin_kind == ORIGIN_SYNTHETIC:
+        if cage_verdict.safe and cage_verdict.scope == SCOPE_SYNTHETIC_ONLY:
+            return CageAdmission(
+                admitted=True,
+                origin_kind=origin_kind,
+                requires_cage=True,
+                reason=(
+                    f"synthetic origin admitted under synthetic-only verdict "
+                    f"{cage_verdict.backend_id!r}; inert, no live effect"
+                ),
+                scope=SCOPE_SYNTHETIC_ONLY,
+                confers_live_effect=False,
+            )
+        return CageAdmission(
+            admitted=False,
+            origin_kind=origin_kind,
+            requires_cage=True,
+            reason=(
+                f"synthetic origin requires a synthetic-only safe verdict; got "
+                f"scope={cage_verdict.scope!r} safe={cage_verdict.safe}"
+            ),
+            scope=cage_verdict.scope,
+            confers_live_effect=False,
+        )
+
+    # Live / any other origin: gated on live_admission_permitted, NOT on safe.
+    if cage_verdict.live_admission_permitted:
         return CageAdmission(
             admitted=True,
             origin_kind=origin_kind,
             requires_cage=True,
-            reason=f"non-stub origin admitted under confirmed-safe cage {cage_verdict.backend_id!r}",
+            reason=f"live origin admitted under live-permitting cage {cage_verdict.backend_id!r}",
+            scope=SCOPE_LIVE,
+            confers_live_effect=True,
+        )
+    if cage_verdict.scope == SCOPE_SYNTHETIC_ONLY:
+        return CageAdmission(
+            admitted=False,
+            origin_kind=origin_kind,
+            requires_cage=True,
+            reason=(
+                f"live origin refused: synthetic-only verdict {cage_verdict.backend_id!r} "
+                "does not permit live admission (synthetic safe != live safe)"
+            ),
+            scope=cage_verdict.scope,
+            confers_live_effect=False,
         )
     return CageAdmission(
         admitted=False,
         origin_kind=origin_kind,
         requires_cage=True,
         reason=(
-            f"non-stub origin refused: cage {cage_verdict.backend_id!r} did not confirm "
+            f"live origin refused: cage {cage_verdict.backend_id!r} did not confirm "
             f"isolation ({cage_verdict.reason})"
         ),
+        scope=cage_verdict.scope,
+        confers_live_effect=False,
     )
 
 
@@ -272,13 +434,19 @@ __all__ = [
     "POST_RUN_WRITE_VALIDATION",
     "ISOLATION_PROPERTIES",
     "REQUIRED_ISOLATION",
+    "SCOPE_LIVE",
+    "SCOPE_SYNTHETIC_ONLY",
+    "SCOPE_NONE",
+    "CAGE_VERDICT_SCOPES",
     "CageAttestation",
     "CageSafetyVerdict",
     "evaluate_cage_safety",
+    "synthetic_cage_verdict",
     "WriteValidation",
     "validate_writes",
     "SandboxCage",
     "NullCage",
+    "SyntheticCage",
     "CageAdmission",
     "admit_origin_under_cage",
 ]

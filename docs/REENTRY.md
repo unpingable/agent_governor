@@ -18,13 +18,22 @@
     spend → durable/replay-safe spend → self-hosted chore → one-shot ration-card dispatch.
   - **Live-adapter allowlist review gate PASSED (2026-06-29)** — `docs/playbooks/live-adapter-allowlist-review.md`:
     all 11 ration-card terms decided + 4 open questions answered (conservative defaults).
-    The decision doc *is* slice B-8; no runner code was written under it.
+  - Post-review slices landed green (2026-06-29):
+    - **B-8** (`94cfd52`) — the allowlist decision doc *is* the slice; no runner code under it.
+    - **B-9/10** (`7c88ee2`) — `playbooks/rationed_runner.py`: stub-origin execution contract
+      (timeout / kill-before / kill-during / closed result vocab / non-authoritative receipt),
+      all via injected fakes. No subprocess, no live origin.
+    - **B-11** (`515afb0`) — `playbooks/sandbox_cage.py`: cage contract + honest `NullCage`.
+      `evaluate_cage_safety` is safe only when every isolation property is confirmed;
+      `admit_origin_under_cage` refuses any non-stub origin under an unconfirmed cage.
   - card: `docs/campaigns/governed-playbooks-track-b/CAMPAIGN.md`
-  - **STOP before B-9 (runner contract tests, stub-origin only).** A passed review buys
-    exactly one sandbox experiment: sandbox-only, one-shot, no loop. Bounded autopilot is
-    a separate, later, separately-ratified gate.
-  - **Push state:** branch is pushed at `19b310f`; the B-8 decision commit `94cfd52` is
-    **local/unpushed** (operator holds push timing) — witness step still owed.
+  - **STOP before B-12 (live sandbox experiment).** B-12 is operator-MANUAL by definition
+    (one explicit experiment, not autopilot) and is **blocked on a real cage backend** —
+    only `NullCage` exists, which refuses every live origin by design, so there is no safe
+    cage to run under yet. A real Docker/Podman/bubblewrap backend is its own prior slice.
+    Bounded autopilot remains a separate, later, separately-ratified gate.
+  - **Push state:** branch pushed at `19b310f`; **three commits local/unpushed**
+    (`94cfd52`, `7c88ee2`, `515afb0`) — operator holds push timing; witness step still owed.
 
 - **Track A — transition kernel** · `feat/transition-kernel-slice-1b`
   - Slice 1b complete (Standing grant-use client + `activation.py` Office 2).

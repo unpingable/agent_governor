@@ -52,3 +52,19 @@ allowed-local lane as a non-authoritative first-pass. The caveat travels with it
 (`failure_kind` unreliable for runtime errors). The actual runtime wiring (auto-fire
 on real failures, route into the AG loop) is a **later slice** — this records that
 the task class *earned* the lane, not that it is wired.
+
+## Polyglot bonus — Rust (8/8, 2026-06-29)
+
+Same worker, 8 real `rustc`/`cargo --test` failures (use-after-move, type mismatch,
+missing semicolon, unresolved import, wrong return type, cannot-find-value, borrow
+conflict, test assert). **8/8 observed, 8/8 useful, 0 escapes** — and `failure_kind`
+was *more* accurate than Python: correct Rust terminology (`borrow_of_moved_value`,
+`type_mismatch`, `borrow checker violation`, `undefined_variable`), with `file:line:col`
+cited in several. The Python "mislabels runtime errors as syntax_error" weakness did
+NOT appear — Rust's compile-time errors are highly structured (explicit `error[Exxxx]`
+codes), so the model has rich signal. Implication: the local triage valve is
+**polyglot**, not AG-Python-specific — relevant to the Rust-heavy constellation
+(`standing` / `wicket` / `linearaccountant` / `claimc` + the future Rust kernel port).
+Candidate next dogfood: a generic `cargo errors → triage` harness (split on
+`error[Exxxx]:`) pointed at the NQ-on-mac port — **on-prem / frontier-free** (NQ is
+secret; local Qwen keeps the build output on your machines).

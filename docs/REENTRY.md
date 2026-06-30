@@ -75,17 +75,27 @@
     handoff → actor-output normalizer.** Tests: full playbooks dir 229/229 green;
     full-suite collection clean (16417). End-to-end S4→S6→S7→S5 dogfood: the
     anti-laundering wall held (actor claim stripped, S5 refused).
-  - **NEXT = checkpoint, then H1.** S6/S7 close the inert in-AG conveyor. The external
-    H-series harness (which actually runs the offline actor) stays OUTSIDE AG — gated
-    behind a fresh-eyes checkpoint + the live-adapter allowlist review. AG is the
-    courthouse, not the getaway car. Do NOT start live-adapter / bounded-autopilot work
-    without operator go (note the Track-B "S7" naming collision — that one is the
-    *live* dispatch slice, already done + gated, unrelated to this conveyor S7).
-  - **Push state: S1–S5 PUSHED (2026-06-29); S6 (`4022f22`) + S7 (`ba11c7e`) + contract
-    note LOCAL (unpushed — disk-SPOF until pushed).**
+  - **Fresh-eyes checkpoint DONE (2026-06-30): CLEAN.** Inert S1–S7 conveyor verified;
+    the one named seam — `verifier_results` is the sole AG path to a passing test and
+    `ActorOutput` has no route to it — became H1's load-bearing invariant.
+  - **H1 LANDED (`aa147c8`, LOCAL).** First slice of the external **H-series harness**,
+    in a new top-level `harness/` dir **OUTSIDE the governor package** (operator
+    placement call: strict no-import; the contract is the `actor_output.v0` JSON
+    envelope, not shared Python types). H1 captures a *supplied* offline-actor reply
+    into inert JSON; AG ingests it (S7→S5) and **still refuses** an actor-claimed
+    passing test (`required_test_not_passing`). No live actor (`captured_text` is
+    supplied). 5 AG-side contract tests; harness+playbooks 234 green; collection 16422.
+    Ticket: `docs/playbooks/h1-exit-ticket.md`; doctrine: `harness/README.md`.
+  - **NEXT = H2+, GATED.** Live actor execution / transcript streaming / any path that
+    lets the harness drive a real Claude/Codex stays behind the **live-adapter
+    allowlist review** + operator go. AG is the courthouse, not the getaway car. (Note
+    the Track-B "S7" naming collision — that one is the *live* dispatch slice, already
+    done + gated, unrelated to this conveyor S7.)
+  - **Push state: S1–S5 PUSHED (2026-06-29); S6 `4022f22` + S7 `ba11c7e` + S7-contract
+    `d8f847c`/`75caa28` + H1 `aa147c8` LOCAL (5 unpushed — disk-SPOF until pushed).**
   - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
-    should show S1–S7 (`c909e89 a6f8299 0d32639 5c2f831 08d3b45 4022f22 … ba11c7e`);
-    `pytest tests/playbooks -q` green (229).
+    should show S1–S7 then H1 (`c909e89 … ba11c7e 75caa28 aa147c8`);
+    `pytest tests/playbooks tests/harness -q` green (234).
 
 - **Local candidate worker + cargo-triage** · `feat/local-candidate-worker`  *(live-validated, PUSHED)*
   - Off `feat/playbooks-gov-loop` @ `515afb0`. Budget valve: a cheap LOCAL model (Ollama/Qwen on

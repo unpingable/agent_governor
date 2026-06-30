@@ -53,16 +53,25 @@
     - **S5** (`08d3b45`) — `review_packet_validator.py`: pure ReviewPacket-vs-QueuedPlaybook
       cross-validator (identity / authority boundary / path fences / required-test
       representation / review latch); returns a deterministic report, runs nothing.
+    - **S6** (`4022f22`, LOCAL) — `handoff_renderer.py`: `QueuedPlaybook` → sealed actor
+      handoff. The format becomes a reusable handoff machine: a content-sealed
+      (`sha256(canonical_body)`, tamper-evident) bounded instruction for an offline
+      Claude/Codex actor whose only licensed output is a ReviewPacket. NO
+      authority-permitting surface (all 8 axes prohibited = unrepresentable, not
+      guarded); pure renderer (no IO/actor/subprocess/git). `to_prompt_markdown` +
+      `to_file_map` (handoff.json + PROMPT.md, strings only).
   - **The branch is a complete inert "law machine": synthetic origin → synthetic cage verdict
-    → review packet → queue parser → queue-vs-review validator.** Tests: full playbooks dir
-    189/189 green; full-suite collection clean (16377).
-  - **NEXT = S6** (handoff renderer: a `QueuedPlaybook` → sealed Claude/Codex operator packet —
-    where this format becomes a reusable handoff machine). Then S7 (actor-output → ReviewPacket
-    normalizer). The external harness (H-series) stays OUTSIDE AG; AG is the courthouse, not
-    the getaway car. Ladder: S6 → S7 → (checkpoint) → H1.
-  - **Push state: PUSHED (2026-06-29)** — S1–S5 on remote, off the disk-SPOF.
+    → review packet → queue parser → queue-vs-review validator → sealed actor handoff.**
+    Tests: full playbooks dir 213/213 green; full-suite collection clean (16401).
+  - **NEXT = S7** (actor-output → ReviewPacket normalizer: take what an offline actor
+    actually returns and normalize it into a valid ReviewPacket, ready for the S5
+    validator). The external harness (H-series) stays OUTSIDE AG; AG is the courthouse,
+    not the getaway car. Ladder: S7 → (checkpoint) → H1.
+  - **Push state: S1–S5 PUSHED (2026-06-29); S6 LOCAL (`4022f22`, unpushed — disk-SPOF
+    until pushed).**
   - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
-    should show S1–S5 (`c909e89 a6f8299 0d32639 5c2f831 08d3b45`); `pytest tests/playbooks -q` green.
+    should show S1–S6 (`c909e89 a6f8299 0d32639 5c2f831 08d3b45 4022f22`);
+    `pytest tests/playbooks -q` green (213).
 
 - **Local candidate worker + cargo-triage** · `feat/local-candidate-worker`  *(live-validated, PUSHED)*
   - Off `feat/playbooks-gov-loop` @ `515afb0`. Budget valve: a cheap LOCAL model (Ollama/Qwen on
@@ -82,9 +91,22 @@
   - **cargo-triage Slice 0** (`a8abb81`) — `src/governor/cargo_triage.py`: generic, on-prem,
     frontier-free driver (run cargo → capture env → split rustc diagnostics → triage each via the
     ratified worker → candidate receipts). For the SECRET NQ mac-port: run it locally; build output
-    never touches the frontier. NEXT = Slice 1 `platform_specificity`
-    (mac_only|rust_version|dependency|environment|unknown) + the operator's live NQ-on-mac run.
-  - **Push state: PUSHED.**
+    never touches the frontier.
+  - **NQ-on-mac live run DONE (2026-06-30, fork 1).** The shipped `triage_cargo_project`
+    ran entirely on the mini against the SECRET NQ mac port, frontier-free. Result: **the
+    port is GREEN** — `cargo check`/`test` both exit 0, 359 passed / 0 failed across 14
+    binaries, 129 crates compiled fresh (rustc 1.96.0, aarch64-apple-darwin). Validated the
+    SECRET/local custody path (full transcripts stayed on the mini; frontier saw only
+    sanitized aggregate; exit read from `subprocess.returncode`, no `|tail`; every receipt
+    observe-verdict; no repo mutation except cargo `target/`). The harness emitted ZERO
+    diagnostics rather than inventing work. Results: `working/cargo-triage-nq-live-run-results.md`
+    (`d9bb5cb` on `feat/local-candidate-worker`, LOCAL). Reproduce: bundle+venv armed on the
+    mini at `~/nq_triage_run/`.
+  - **Slice 1 `platform_specificity` PARKED** (operator, 2026-06-30): designing the enum
+    (mac_only|rust_version|dependency|environment|unknown) after a clean run is fake
+    precision. Unpark on **natural** breakage or a relevant historical broken commit — not
+    manufactured breakage. Synthetic Rust A/B already proved the worker reads rustc failures.
+  - **Push state: Slice 0 PUSHED; results note `d9bb5cb` LOCAL (unpushed).**
 
 - **Track A — transition kernel** · `feat/transition-kernel-slice-1b`
   - Slice 1b complete (Standing grant-use client + `activation.py` Office 2).

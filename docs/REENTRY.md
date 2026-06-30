@@ -86,13 +86,19 @@
     passing test (`required_test_not_passing`). No live actor (`captured_text` is
     supplied). 5 AG-side contract tests; harness+playbooks 234 green; collection 16422.
     Ticket: `docs/playbooks/h1-exit-ticket.md`; doctrine: `harness/README.md`.
-  - **NEXT = H2+, GATED.** Live actor execution / transcript streaming / any path that
-    lets the harness drive a real Claude/Codex stays behind the **live-adapter
-    allowlist review** + operator go. AG is the courthouse, not the getaway car. (Note
-    the Track-B "S7" naming collision — that one is the *live* dispatch slice, already
-    done + gated, unrelated to this conveyor S7.)
+  - **NEXT = harness-cage review (operator pass), then a cage-DESIGN slice. NOT H2.**
+    Gate moved (operator, 2026-06-30): the in-AG live-adapter review is **SUPERSEDED**
+    (path B ratified) — live/offline actor execution belongs OUTSIDE AG (H-series
+    harness), AG ingests only inert `actor_output.v0`. The real next gate is
+    `docs/playbooks/harness-cage-review.md` (OPENED, DRAFT, awaiting operator pass; 10
+    terms, items 4/9/10 already RATIFIED by H1). The 11 ration-card terms carry forward
+    as inherited constraints. The superseded fossil:
+    `docs/playbooks/live-adapter-allowlist-review.md`. No live actor / cage backend /
+    subprocess runner built. AG is the courthouse, not the getaway car. (Note the
+    Track-B "S7" naming collision — that one is the *live* dispatch slice, unrelated.)
   - **Push state: S1–S5 PUSHED (2026-06-29); S6 `4022f22` + S7 `ba11c7e` + S7-contract
-    `d8f847c`/`75caa28` + H1 `aa147c8` LOCAL (5 unpushed — disk-SPOF until pushed).**
+    `d8f847c`/`75caa28` + H1 `aa147c8` + supersession/harness-cage `69528bf` LOCAL
+    (6 unpushed — disk-SPOF until pushed).**
   - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
     should show S1–S7 then H1 (`c909e89 … ba11c7e 75caa28 aa147c8`);
     `pytest tests/playbooks tests/harness -q` green (234).

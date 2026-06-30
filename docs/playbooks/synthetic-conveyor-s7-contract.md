@@ -1,10 +1,12 @@
-# Synthetic conveyor — S7 contract note (CANDIDATE, non-binding)
+# Synthetic conveyor — S7 contract note (RATIFIED + IMPLEMENTED)
 
-> **Status: CANDIDATE.** This is a handle for review, not authorization to build.
-> S7 is *not yet clearly specified* in the repo (only a one-line direction in
-> `docs/REENTRY.md`), the **actor-output input shape is undefined**, and there is a
-> real custody fork (below). Per the operator's S7 fence (2026-06-30): write the
-> contract, stop, do not improvise a normalizer or jump to live-adapter work.
+> **Status: RATIFIED + LANDED (2026-06-30).** Operator ratified **Model B** and the
+> minimal `ActorOutput` schema; S7 shipped as
+> `src/governor/playbooks/actor_output_normalizer.py` (+16 tests, commit `ba11c7e` on
+> `feat/playbooks-synthetic-conveyor`). This note is kept as the design record.
+> Original status was CANDIDATE — written and stopped at, per the operator's S7 fence,
+> precisely because the actor-output shape was undefined and the custody fork (below)
+> was unresolved. Both are now closed.
 
 ## Naming hazard (read first)
 

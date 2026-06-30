@@ -72,6 +72,26 @@ The emitted JSON is what you hand to AG. AG re-parses it with its own
 `ActorOutput.from_dict`; if the wire shape ever drifts, that parse fails loudly —
 which is the intended drift control, not shared types.
 
+## The cage (`harness/cage.py`) — contract-first, refuse-live
+
+The cage-design slice (harness-cage review, operator pass 2026-06-30) defines the cage
+**contract** and ships exactly one backend — `RefusingCage` / `NoLiveCage` — that
+**always refuses live actor admission**. There is **no execution surface**: admission is
+a *decision*, never an invocation. Running a live actor is H2, a separate later gate.
+
+- **Refuse-live by attestation.** A cage admits a live actor only if its attestation
+  *confirms isolation* in *live* scope. `RefusingCage` attests nothing, so live is
+  refused — typed (`LiveAdmission.refusal_code`, or the raising `require_live_admission`).
+  No shipped backend attests live isolation, so live admission is structurally unreachable
+  (`evaluate_live_admission` is the pure guard; `CageAttestation.__post_init__` forbids a
+  half-confirmed cage). bubblewrap is the *named, not authorized* first real backend.
+- **Audit store, outside AG.** `audit_store_root()` →
+  `$XDG_STATE_HOME/agent-gov/harness-runs/` (fallback `~/.local/state/...`); `run_dir(id)`
+  is a per-run dir under it. Pure path computation — writes nothing. Tainted transcripts
+  live here, never in the repo, never in AG's ingest path; AG must not crawl it.
+- **One-artifact boundary.** `assert_ag_ingestible()` refuses anything but
+  `actor_output.v0` — no diff reference, no verifier result, no auxiliary bundle.
+
 ## The one seam to guard going forward
 
 The single path that turns a required test `passed` on the AG side is

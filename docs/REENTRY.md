@@ -86,20 +86,25 @@
     passing test (`required_test_not_passing`). No live actor (`captured_text` is
     supplied). 5 AG-side contract tests; harness+playbooks 234 green; collection 16422.
     Ticket: `docs/playbooks/h1-exit-ticket.md`; doctrine: `harness/README.md`.
-  - **Real cage backend review (bubblewrap) OPENED (`0e36635`, LOCAL, DRAFT — awaiting
-    operator pass). NEXT = operator pass on the containment facts. No code / runner / live
-    actor.** `docs/playbooks/real-cage-backend-review.md` decides what `confirms_isolation
-    =True` (`harness/cage.py`) is allowed to MEAN — the one earned boolean that admits a
-    live actor. Principle (NLAI on the cage itself): configured ≠ contained; the
-    attestation is earned by **witnessing** (negative probes — run the forbidden thing,
-    confirm it fails), not by passing `bwrap` flags. Closed conjunctive fact set **C1–C10**
-    (no network · pid/ipc/uts/cgroup iso · non-root/no-priv-esc · read-only input · one
-    narrow writable area · no host fs/creds · minimal /dev · clean env allowlist ·
-    resource+time limits · disposable per-run workspace; egress fence = C1∧C6∧C8). Witness
-    discipline: per-run not standing, negative probes mandatory, one unwitnessed fact → no
-    attestation, unknown → refuse. Passing ratifies the constitution; **building the bwrap
-    backend is the next gate; a live run is the H2-impl gate after that.** A cage that can
-    attest live is necessary, not sufficient.
+  - **Real cage backend review (bubblewrap) PASSED (`bafd3e5`, LOCAL — operator pass,
+    constitution only). NEXT = a bwrap-backend IMPLEMENTATION slice (separate authorization
+    needed; not started). No code / runner / live actor / H2 built.**
+    `docs/playbooks/real-cage-backend-review.md` ratifies what `confirms_isolation=True`
+    (`harness/cage.py`) is allowed to MEAN. Principle (NLAI on the cage itself): configured
+    ≠ contained; the attestation is earned by **witnessing** (negative probes — run the
+    forbidden thing, confirm it fails), never by passing `bwrap` flags. Closed conjunctive
+    fact set **C1–C11** (no network · pid/ipc/uts/cgroup iso · non-root/no-priv-esc ·
+    read-only input · one narrow writable area · no host fs/creds · minimal /dev · clean env
+    allowlist · resource+time limits · disposable per-run workspace · **C11 seccomp profile
+    active, REQUIRED**; egress fence = C1∧C6∧C8). Witness discipline: **pre-flight self-test
+    per run** (bound to that run's attestation), negative probes mandatory, one unwitnessed
+    fact → no attestation, unknown → refuse-live. Host: **Linux-only**, bubblewrap + user
+    namespaces required, else refuse-live (no Docker/Podman fallback). Evidence: probe
+    outputs + bwrap summary + attestation under the XDG audit store, AG never crawls it,
+    referenced by digest/run id only. **Necessity-not-sufficiency:** a passing battery may
+    permit `require_live_admission` for that run but does NOT authorize H2 impl; cage
+    attestation is necessary for live execution, not sufficient to admit actor output as
+    verified work.
   - **H2 live-run CONTRACT review PASSED (`ce71af6`, LOCAL — operator pass, shape only).**
     H2 implementation is gated on a real cage backend (the review just above). NOT H2
     execution.
@@ -115,8 +120,9 @@
     never admit live; unreachable with shipped cages); (5) I-1 hard confirmed — **H2 ≠
     operational** (stays `DemonstratedConsumed`; `confer_operational_effect` refused).
     **No runner / actor run / execution method built.** Gate stack (all gated, in order):
-    real cage backend (bubblewrap, **review in progress**) → H2 contract (PASSED
-    shape-only) → H2 implementation (UNBUILT) → operational effect (separate, even later).
+    real cage backend (bubblewrap, **constitution PASSED — impl slice = next gate, not
+    started**) → H2 contract (PASSED shape-only) → H2 implementation (UNBUILT) →
+    operational effect (separate, even later).
   - **Prior gates (this lane):** cage-DESIGN slice LANDED `179de67` (`harness/cage.py`:
     contract-first `RefusingCage`/`NoLiveCage`, refuse-live by attestation, XDG audit
     store outside AG, one-artifact `assert_ag_ingestible`, 29 tests); harness-cage review
@@ -127,10 +133,11 @@
   - **Push state: S1–S5 PUSHED (2026-06-29); S6 `4022f22` + S7 `ba11c7e` + S7-contract
     `d8f847c`/`75caa28` + H1 `aa147c8` + supersession/harness-cage `69528bf` +
     cage-pass `3406882` + cage-slice `179de67` + H2-contract-review `be00c63` +
-    H2-contract-pass `ce71af6` + real-cage-backend-review `0e36635` LOCAL
-    (11 unpushed — disk-SPOF until pushed).**
+    H2-contract-pass `ce71af6` + real-cage-backend-review `0e36635` +
+    real-cage-backend-pass `bafd3e5` LOCAL (12 unpushed — disk-SPOF until pushed).**
   - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
-    should show S1–S7, H1, cage slice, H2-contract review+pass (`c909e89 … be00c63 ce71af6`);
+    should show S1–S7, H1, cage slice, then the review/pass chain
+    (`c909e89 … be00c63 ce71af6 0e36635 bafd3e5`);
     `pytest tests/playbooks tests/harness -q` green (263).
 
 - **Local candidate worker + cargo-triage** · `feat/local-candidate-worker`  *(live-validated, PUSHED)*

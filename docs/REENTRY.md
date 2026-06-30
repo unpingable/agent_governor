@@ -60,18 +60,32 @@
       authority-permitting surface (all 8 axes prohibited = unrepresentable, not
       guarded); pure renderer (no IO/actor/subprocess/git). `to_prompt_markdown` +
       `to_file_map` (handoff.json + PROMPT.md, strings only).
-  - **The branch is a complete inert "law machine": synthetic origin → synthetic cage verdict
-    → review packet → queue parser → queue-vs-review validator → sealed actor handoff.**
-    Tests: full playbooks dir 213/213 green; full-suite collection clean (16401).
-  - **NEXT = S7** (actor-output → ReviewPacket normalizer: take what an offline actor
-    actually returns and normalize it into a valid ReviewPacket, ready for the S5
-    validator). The external harness (H-series) stays OUTSIDE AG; AG is the courthouse,
-    not the getaway car. Ladder: S7 → (checkpoint) → H1.
-  - **Push state: S1–S5 PUSHED (2026-06-29); S6 LOCAL (`4022f22`, unpushed — disk-SPOF
-    until pushed).**
+    - **S7** (`ba11c7e`, LOCAL) — `actor_output_normalizer.py`: actor-output →
+      ReviewPacket normalizer (**Model B**, operator-ratified 2026-06-30; contract
+      `docs/playbooks/synthetic-conveyor-s7-contract.md`). Inert `ActorOutput`
+      (fail-closed parse) + S6 handoff → S3 ReviewPacket (schema unchanged) ready for
+      S5. Actor claims are testimony: each required test represented as `not_run`
+      (claim → advisory summary) unless an INDEPENDENT verifier receipt covers it, so
+      S5's `required_test_not_passing` fires on actor testimony (the actor cannot green
+      its own gate); authority claims stripped/refused (kept as risk evidence);
+      `operator_review_required` stays True; handoff seal binding preserved + mismatch
+      refused. NO live actor (`capture_origin` is descriptive, not a typed origin enum).
+  - **The conveyor is a COMPLETE inert "law machine": synthetic origin → synthetic cage
+    verdict → review packet → queue parser → queue-vs-review validator → sealed actor
+    handoff → actor-output normalizer.** Tests: full playbooks dir 229/229 green;
+    full-suite collection clean (16417). End-to-end S4→S6→S7→S5 dogfood: the
+    anti-laundering wall held (actor claim stripped, S5 refused).
+  - **NEXT = checkpoint, then H1.** S6/S7 close the inert in-AG conveyor. The external
+    H-series harness (which actually runs the offline actor) stays OUTSIDE AG — gated
+    behind a fresh-eyes checkpoint + the live-adapter allowlist review. AG is the
+    courthouse, not the getaway car. Do NOT start live-adapter / bounded-autopilot work
+    without operator go (note the Track-B "S7" naming collision — that one is the
+    *live* dispatch slice, already done + gated, unrelated to this conveyor S7).
+  - **Push state: S1–S5 PUSHED (2026-06-29); S6 (`4022f22`) + S7 (`ba11c7e`) + contract
+    note LOCAL (unpushed — disk-SPOF until pushed).**
   - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
-    should show S1–S6 (`c909e89 a6f8299 0d32639 5c2f831 08d3b45 4022f22`);
-    `pytest tests/playbooks -q` green (213).
+    should show S1–S7 (`c909e89 a6f8299 0d32639 5c2f831 08d3b45 4022f22 … ba11c7e`);
+    `pytest tests/playbooks -q` green (229).
 
 - **Local candidate worker + cargo-triage** · `feat/local-candidate-worker`  *(live-validated, PUSHED)*
   - Off `feat/playbooks-gov-loop` @ `515afb0`. Budget valve: a cheap LOCAL model (Ollama/Qwen on

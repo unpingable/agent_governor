@@ -86,19 +86,23 @@
     passing test (`required_test_not_passing`). No live actor (`captured_text` is
     supplied). 5 AG-side contract tests; harness+playbooks 234 green; collection 16422.
     Ticket: `docs/playbooks/h1-exit-ticket.md`; doctrine: `harness/README.md`.
-  - **H2 live-run CONTRACT review OPENED (`be00c63`, LOCAL, DRAFT — awaiting operator
-    pass). NEXT = operator pass on that review. NOT H2 execution.**
-    `docs/playbooks/h2-live-run-contract-review.md` defines the smallest one-shot actor
-    invocation a FUTURE real cage backend would be allowed to run — a spec, not code.
-    Proposed shape `run_once_under_cage(cage, handoff, *, actor_kind, run_id, timeout_s,
-    armed_live) -> one actor_output.v0`, gated on `require_live_admission` (every shipped
-    cage refuses → unreachable today). Permanent invariants: **H2 ≠ operational** (run
-    stays `DemonstratedConsumed`; actor output is testimony; `confer_operational_effect`
-    refused), one-invocation/one-artifact, refuse-live-until-attested, cage-is-the-
-    containment. Items 6/7 inherited RATIFIED; 1–5/8 PROPOSE; 5 open questions.
+  - **H2 live-run CONTRACT review PASSED (`ce71af6`, LOCAL — operator pass, shape only).
+    NEXT = nothing authorized to build; H2 implementation is gated on a real cage backend
+    (separate review). NOT H2 execution.**
+    `docs/playbooks/h2-live-run-contract-review.md` — the smallest one-shot actor
+    invocation contract (spec, not code), all 8 rows ratified + 4 invariants confirmed.
+    Decisions: (1) first actor kind = smallest **inert** `offline_echo_actor` (text-only;
+    NO repo/git/doctrine/network/verifier/patch; not claude/codex — adding the kind is the
+    future impl gate); (2) `timeout_s=30`, hard max 60, timeout→captured refusal/no
+    artifact, never verifier results; (3) future `run_once_under_cage` lives in
+    `harness/run.py`, harness lane only, never AG/`runtime.adapters.claude_code`; (4)
+    arming = **both** `armed_live=True` AND `require_live_admission`, neither sufficient
+    alone (`armed_live` is a second key, never a substitute — a lone `--armed-live` must
+    never admit live; unreachable with shipped cages); (5) I-1 hard confirmed — **H2 ≠
+    operational** (stays `DemonstratedConsumed`; `confer_operational_effect` refused).
     **No runner / actor run / execution method built.** Gate stack (all gated, in order):
-    real cage backend (bubblewrap, unbuilt) → H2 contract (this, in review) → H2
-    implementation (unbuilt) → operational effect (separate, even later).
+    real cage backend (bubblewrap, UNBUILT — separate review) → H2 contract (this, PASSED
+    shape-only) → H2 implementation (UNBUILT) → operational effect (separate, even later).
   - **Prior gates (this lane):** cage-DESIGN slice LANDED `179de67` (`harness/cage.py`:
     contract-first `RefusingCage`/`NoLiveCage`, refuse-live by attestation, XDG audit
     store outside AG, one-artifact `assert_ag_ingestible`, 29 tests); harness-cage review
@@ -108,10 +112,10 @@
     getaway car.
   - **Push state: S1–S5 PUSHED (2026-06-29); S6 `4022f22` + S7 `ba11c7e` + S7-contract
     `d8f847c`/`75caa28` + H1 `aa147c8` + supersession/harness-cage `69528bf` +
-    cage-pass `3406882` + cage-slice `179de67` + H2-contract-review `be00c63` LOCAL
-    (9 unpushed — disk-SPOF until pushed).**
+    cage-pass `3406882` + cage-slice `179de67` + H2-contract-review `be00c63` +
+    H2-contract-pass `ce71af6` LOCAL (10 unpushed — disk-SPOF until pushed).**
   - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
-    should show S1–S7, H1, cage slice, H2-contract-review (`c909e89 … 179de67 be00c63`);
+    should show S1–S7, H1, cage slice, H2-contract review+pass (`c909e89 … be00c63 ce71af6`);
     `pytest tests/playbooks tests/harness -q` green (263).
 
 - **Local candidate worker + cargo-triage** · `feat/local-candidate-worker`  *(live-validated, PUSHED)*

@@ -86,19 +86,25 @@
     passing test (`required_test_not_passing`). No live actor (`captured_text` is
     supplied). 5 AG-side contract tests; harness+playbooks 234 green; collection 16422.
     Ticket: `docs/playbooks/h1-exit-ticket.md`; doctrine: `harness/README.md`.
-  - **NEXT = harness-cage review (operator pass), then a cage-DESIGN slice. NOT H2.**
-    Gate moved (operator, 2026-06-30): the in-AG live-adapter review is **SUPERSEDED**
-    (path B ratified) — live/offline actor execution belongs OUTSIDE AG (H-series
-    harness), AG ingests only inert `actor_output.v0`. The real next gate is
-    `docs/playbooks/harness-cage-review.md` (OPENED, DRAFT, awaiting operator pass; 10
-    terms, items 4/9/10 already RATIFIED by H1). The 11 ration-card terms carry forward
-    as inherited constraints. The superseded fossil:
-    `docs/playbooks/live-adapter-allowlist-review.md`. No live actor / cage backend /
-    subprocess runner built. AG is the courthouse, not the getaway car. (Note the
-    Track-B "S7" naming collision — that one is the *live* dispatch slice, unrelated.)
+  - **NEXT = a cage-DESIGN slice with a REFUSE-LIVE backend only. NOT H2.**
+    Harness-cage review **PASSED (operator pass, contract-first, 2026-06-30)** —
+    `docs/playbooks/harness-cage-review.md`. The in-AG live-adapter review is
+    **SUPERSEDED** (path B): live/offline actor execution belongs OUTSIDE AG (H-series
+    harness), AG ingests only inert `actor_output.v0`. Ratified terms: (1) cage is
+    **contract-first** — next slice defines the cage contract + a `RefusingCage`/
+    `NoLiveCage` backend that always refuses live admission (bubblewrap named as likely
+    first *real* backend to evaluate LATER, not authorized; no Docker/Podman); (2) audit
+    store outside repo + outside AG ingest at `$XDG_STATE_HOME/agent-gov/harness-runs/`
+    (fallback `~/.local/state/...`), AG never crawls it; (3) one-artifact-only hard
+    default (`actor_output.v0`; diff ref = future named schema bump + separate review).
+    **H2 / live execution UNAUTHORIZED.** The cage-design slice may build only the
+    contract + refusing backend + audit-layout/one-artifact tests — no live actor, no
+    real cage backend, no subprocess runner, no envelope widening. Superseded fossil:
+    `docs/playbooks/live-adapter-allowlist-review.md`. AG is the courthouse, not the
+    getaway car.
   - **Push state: S1–S5 PUSHED (2026-06-29); S6 `4022f22` + S7 `ba11c7e` + S7-contract
-    `d8f847c`/`75caa28` + H1 `aa147c8` + supersession/harness-cage `69528bf` LOCAL
-    (6 unpushed — disk-SPOF until pushed).**
+    `d8f847c`/`75caa28` + H1 `aa147c8` + supersession/harness-cage `69528bf` +
+    cage-pass `3406882` LOCAL (7 unpushed — disk-SPOF until pushed).**
   - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
     should show S1–S7 then H1 (`c909e89 … ba11c7e 75caa28 aa147c8`);
     `pytest tests/playbooks tests/harness -q` green (234).

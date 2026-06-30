@@ -1,11 +1,15 @@
 # H2 Live-Run Contract Review — the smallest one-shot actor invocation
 
-> **OPENED 2026-06-30. Status: DRAFT — awaiting operator pass.**
+> **OPENED 2026-06-30. Status: PASSED 2026-06-30 (operator pass — contract shape only).**
 > This is a **review gate**, not an implementation doc. It defines the *contract* for the
 > smallest one-shot external-actor invocation a **future real cage backend** would be
 > allowed to run. **It authorizes nothing to execute.** No runner is built, no actor is
-> run, no execution method is added, under it. Each row is a decision to ratify, defer,
-> or tighten in the operator pass.
+> run, no execution method is added, under it.
+>
+> **Operator pass recorded below ("Operator pass — recorded decisions").** The four
+> permanent invariants are ratified; the five decisions are recorded. The pass approves
+> the **contract shape only** — not H2 implementation, not a real cage backend, not
+> bubblewrap, not any live actor run.
 
 ## What is NOT being authorized (read first)
 
@@ -89,14 +93,14 @@ run_once_under_cage(
 
 | # | Decision | Proposed default (awaiting ratification) | Status |
 |---|----------|-------------------------------------------|--------|
-| 1 | **Preconditions** before a single invocation | (a) real cage `admit_live(...).admitted` True via `require_live_admission`; (b) `armed_live=True` (explicit operator arming) and no replay fixture overriding; (c) kill switch clear; (d) handoff seal verified, item operator-approved, all 8 authority axes prohibited; (e) `actor_kind` matches handoff. Any miss → typed refusal, no launch. | PROPOSE |
-| 2 | **One-shot semantics** | One actor process, one handoff, at most one `actor_output.v0`. No recursion, loop, continuation, follow-up queue, or "continue until done." Complete only when: process exits/times-out/killed → sandbox sealed → writes inspected → `actor_output.v0` captured. | PROPOSE (I-2) |
-| 3 | **What the invocation may touch** | Read-only repo snapshot + the sealed handoff (PROMPT.md/handoff.json) + the per-run writable dir (scratch/output/transcript) inside the cage. Nothing else: no real checkout, `.git`, host `$HOME`, network, creds. Enforced by the cage, validated post-run. | PROPOSE |
-| 4 | **Timeout / kill** | Low first timeout (**30–60 s** — control-flow, not work); kill switch checked before launch and polled during; TERM-then-KILL; hung actor terminated. Outcome recorded as descriptive metadata in the audit run dir + (descriptive only) in `actor_output.v0`. | PROPOSE |
+| 1 | **Preconditions** before a single invocation | Conjunctive, fail-closed. (a) real cage `admit_live(...).admitted` True via `require_live_admission`; (b) `armed_live=True` — a **second** key, never a substitute for (a); no replay fixture overriding; (c) kill switch clear; (d) handoff seal verified, item operator-approved, all 8 authority axes prohibited; (e) `actor_kind` matches handoff. Any miss → typed refusal, no launch. | RATIFIED |
+| 2 | **One-shot semantics** | One actor process, one handoff, at most one `actor_output.v0`. No recursion, loop, continuation, follow-up queue, or "continue until done." Complete only when: process exits/times-out/killed → sandbox sealed → writes inspected → `actor_output.v0` captured. | RATIFIED (I-2) |
+| 3 | **What the invocation may touch** | Read-only repo snapshot + the sealed handoff (PROMPT.md/handoff.json) + the per-run writable dir (scratch/output/transcript) inside the cage. Nothing else: no real checkout, `.git`, host `$HOME`, network, creds. Enforced by the cage, validated post-run. | RATIFIED |
+| 4 | **Timeout / kill** | Default `timeout_s = 30`, **hard maximum 60**; kill switch checked before launch and polled during; TERM-then-KILL; hung actor terminated. A timeout yields a captured refusal/failure artifact or no artifact — **never verifier results**. Outcome recorded as descriptive metadata in the audit run dir + (descriptive only) in `actor_output.v0`. | RATIFIED |
 | 5 | **Output + capture** | Exactly one `actor_output.v0` via `capture_from_handoff`, stored in `run_dir(run_id)`. Raw transcript/logs stay in the run dir (tainted audit); only the envelope (or its `captured_text` field) crosses to AG. Forbidden-write detected → run invalid even on exit 0. | PROPOSE |
 | 6 | **What never crosses** | Only `actor_output.v0`. No transcript stream, no inline diff, no verifier result, no `ReviewTestResult`, no executable, no process handle, no auxiliary bundle. (`assert_ag_ingestible`.) | RATIFIED (cage slice) |
 | 7 | **Origin / operational posture** | `capture_origin` descriptive; AG stays `DemonstratedConsumed` / non-operational. Operational effect (`observed` + `confer_operational_effect`) is a separate, even-later gate. | RATIFIED (I-1) |
-| 8 | **Replay / arming** | Replay/stub is the default; live needs explicit `armed_live` + a live-mode signal; a replay fixture suppresses live unless deliberately overridden. Tests never go live by accident. | PROPOSE |
+| 8 | **Replay / arming** | Replay/stub is the default. Live needs **both** `armed_live=True` **and** a successful `require_live_admission` — `armed_live` is a *second* key, **never a substitute** for cage admission (a lone `--armed-live` flag must never admit live). A replay fixture suppresses live unless deliberately overridden. Tests never go live by accident. | RATIFIED |
 
 ## Rationale (per proposed default)
 
@@ -124,25 +128,65 @@ audit store; transcripts stay tainted-audit; only the envelope crosses.
 tests" from becoming "run a live agent." The arming signal's exact form is an open
 question below.
 
-## Open questions for the operator pass
+## Operator pass — recorded decisions (2026-06-30)
 
-1. **Actor kind for the first live run** — one only (claude *or* codex), or either? (Lean:
-   pick one — narrower blast radius for the first real invocation.)
-2. **Timeout** — 30 s or 60 s for the first run; and is there a wall-clock hard cap
-   independent of the actor's own exit?
-3. **Where the invocation lives** — confirm a future `harness/` execution module (e.g.
-   `harness/run.py`) carrying `run_once_under_cage`, gated on `require_live_admission`,
-   never in AG. (This review does not build it.)
-4. **Arming signal** — env var, CLI flag, and/or an explicit live-mode field on the card?
-   What exactly flips `armed_live` to True?
-5. **Confirm I-1 firmly** — even a successful live run stays `DemonstratedConsumed`;
-   operational effect is a separate, even-later gate. (Lean: yes.)
+The four permanent invariants are **ratified as written** (I-1 H2 ≠ operational; I-2
+one invocation / one artifact / no loop; I-3 refuse-live until truthfully attested; I-4
+the cage is the containment). The five open questions are decided:
 
-## Exit (to be completed by the operator pass)
+### 1. First actor kind — the smallest inert actor
+The first live actor is the **smallest inert kind**: an `offline_echo_actor` /
+`captured_reply_actor` equivalent. It may produce text for capture and **nothing else** —
+no repo write, no git, no doctrine, no network, no verifier, no patch authority. (This is
+*not* `claude`/`codex`; it is the most powerless thing that still counts as "a live
+process produced text." Adding such a kind to the harness `ACTOR_KINDS` vocabulary is part
+of the future H2-*implementation* gate — named here, not built.)
 
-> Pending. When the operator completes the pass, record per-row decisions + answers to the
-> open questions, and the recommendation (authorize an H2-*implementation* slice against a
-> real cage backend / refuse / defer). Until then: **no H2 implementation, no runner, no
-> live actor.** This review, even when passed, buys exactly one thing — a ratified
-> contract — and *not* permission to run it; running waits on (i) a real cage backend gate
-> and (ii) a separate H2-implementation gate.
+### 2. Timeout — 30 s default, 60 s hard max
+`timeout_s = 30` by default; **hard maximum 60**. A timeout produces a captured
+refusal/failure artifact, or no artifact, per the contract — **never verifier results.**
+
+### 3. Invocation module — `harness/run.py`, harness lane only
+The future `run_once_under_cage` lives in `harness/run.py`, the **external harness lane
+only** — never AG / governor internals, never `runtime.adapters.claude_code`. (This review
+does not build it.)
+
+### 4. Arming — two keys, neither sufficient alone
+A live invocation requires **both** `armed_live=True` **and** a successful
+`require_live_admission(cage, ...)`. Both necessary; **neither alone sufficient.**
+`armed_live` is a *second* key, **never a substitute for cage admission** — a lone
+`--armed-live` flag must never admit live. (CLI flags are the traditional source of
+constitutional crises; this one is fenced.) With the currently shipped cages this stays
+**unreachable**, because they refuse live admission.
+
+### 5. I-1 — hard confirmed
+Hard confirmed. Even a fully successful live run stays `DemonstratedConsumed` /
+non-operational; `confer_operational_effect` stays refused; actor claims stay claims;
+required tests still need an independent AG verifier. **H2 changes who produces testimony,
+not what AG can admit.**
+
+## Exit — PASSED 2026-06-30 (contract shape only)
+
+All eight contract rows are ratified (6/7 inherited; 1–5/8 by this pass) and the four
+invariants confirmed. **This pass approves the H2 contract shape and nothing more.**
+
+It does **NOT** authorize:
+
+- H2 implementation (no `harness/run.py`, no `run_once_under_cage`, no runner) — gated on
+  a **real cage backend that exists and is separately reviewed**;
+- a real cage backend, or bubblewrap implementation;
+- any live actor run;
+- loops, transcript streaming, diff references, verifier results, `ReviewTestResult`,
+  operational effect, or any AG-internal live-adapter work.
+
+The gate stack, unchanged and all gated, in order:
+
+```
+real cage backend (bubblewrap, UNBUILT — separate review)
+  → H2 contract (THIS — PASSED, shape only)
+    → H2 implementation (UNBUILT — separate gate, needs the real cage first)
+      → operational effect (UNBUILT — separate, even later)
+```
+
+The contract is ratified. Running it waits on (i) a real cage backend gate and (ii) a
+separate H2-implementation gate. The shape has a constitution; it still has no keycard.

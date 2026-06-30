@@ -1,12 +1,16 @@
 # Real Cage Backend Review (bubblewrap) — the containment facts for live admission
 
-> **OPENED 2026-06-30. Status: DRAFT — awaiting operator pass.**
+> **OPENED 2026-06-30. Status: PASSED 2026-06-30 (operator pass — constitution only).**
 > This is a **review gate**, not an implementation doc. It decides the closed set of
 > **containment facts** a real cage backend (bubblewrap, `bwrap`) must enforce **and
 > witness** before it may truthfully attest `confirms_isolation=True` — the single
 > boolean that, in `harness/cage.py`, is the only thing that lets `evaluate_live_admission`
-> admit a live actor. **No code, no runner, no live actor is built under it.** Each fact
-> is a decision to ratify, tighten, or defer in the operator pass.
+> admit a live actor. **No code, no runner, no live actor is built under it.**
+>
+> **Operator pass recorded below ("Operator pass — recorded decisions").** The core
+> principle is ratified, the fact set is **C1–C11** (seccomp added as C11), and the five
+> decisions are recorded. Passing buys the **constitution for the cage**, not a cage, not
+> a live run — building the bwrap backend is the next gate, H2 implementation the one after.
 
 ## What is NOT being authorized
 
@@ -53,6 +57,7 @@ fact falsifies the attestation. Not "mostly contained."
 | C8 | **Clean env allowlist** | a leaked `API_KEY`/token in the environment is exfiltration even with C1 | `--clearenv` + explicit `--setenv` allowlist only | env inside == the declared allowlist exactly; no host secret vars present |
 | C9 | **Resource + time limits** | a runaway actor is a DoS on the host; bounds the blast in time | rlimits (cpu/mem/nproc/fsize) + the H2 `timeout_s` (30, hard-max 60), `--die-with-parent`, `--new-session` | limits observed set; cage dies with the harness; the H2 timeout/kill (harness-owned) terminates a hung run |
 | C10 | **Disposable, per-run workspace** | no state carried between runs; no accretion of effect or evidence | per-run dir under `run_dir(run_id)`; tmpfs scratch; destroyed/sealed after | workspace path is per-run; absent on the next run; sealed for audit, never reused as input |
+| C11 | **Syscall surface constrained (seccomp profile active)** | namespaces fence *resources*; seccomp fences the *syscall surface* itself — the escape/privilege paths namespaces don't cover. **Required, not optional hardening.** | `bwrap --seccomp <fd>` with the expected profile (default-deny / curated allowlist) | confirm the expected seccomp profile is **installed** for the run; run ≥1 forbidden-syscall/action probe where practical → **blocked**; if seccomp cannot be installed or witnessed → **no `confirms_isolation`** |
 
 **The egress fence is C1 ∧ C6 ∧ C8 read together:** no network, no credentials on disk, no
 secrets in env — so even a maximally adversarial actor has nothing to take and nowhere to
@@ -60,7 +65,7 @@ send it. None of the three alone suffices; the conjunction is the fence.
 
 ## The witness discipline (the meta-decision)
 
-1. **Attestation is earned per run, not standing.** The probe battery (C1–C10 witnesses)
+1. **Attestation is earned per run, not standing.** The probe battery (C1–C11 witnesses)
    runs at cage construction **for that run**, against **that run's** workspace. A passing
    battery mints `CageAttestation(confirms_isolation=True, scope=live)` bound to the run;
    a failing or partial battery mints nothing (→ refuse-live). No caching a "this backend
@@ -69,7 +74,7 @@ send it. None of the three alone suffices; the conjunction is the fence.
    is necessary but **not** a witness. The witness is the forbidden action *attempted and
    observed to fail* (the connection that doesn't open, the write that returns EROFS). A
    fact with only a positive config check is **unwitnessed**.
-3. **Conjunctive admission.** `confirms_isolation=True` iff **all** of C1–C10 are
+3. **Conjunctive admission.** `confirms_isolation=True` iff **all** of C1–C11 are
    witnessed. One missing → the attestation is not minted. (Guarantee-typed seam: a
    90%-contained cage is breached, you just don't know through which fact yet.)
 4. **The attestation records its evidence.** The minted attestation carries the per-fact
@@ -81,11 +86,11 @@ send it. None of the three alone suffices; the conjunction is the fence.
 
 ## What passing this review authorizes (proposed)
 
-Passing ratifies **the containment-fact constitution** — the C1–C10 set + the witness
+Passing ratifies **the containment-fact constitution** — the C1–C11 set + the witness
 discipline. The recommended *next* gate is a **bubblewrap-backend implementation slice**
 whose only job is to build a backend that:
 
-- enforces C1–C10 via `bwrap`, and
+- enforces C1–C11 via `bwrap`, and
 - mints `confirms_isolation=True` **only** after the per-run negative-probe battery passes,
   else attests nothing (refuse-live),
 
@@ -93,29 +98,71 @@ with **still no live actor run** (that is the H2-implementation gate, separately
 that backend exists and witnesses the battery, `RefusingCage` remains the only cage and
 live admission stays unreachable.
 
-## Open questions for the operator pass
+## Operator pass — recorded decisions (2026-06-30)
 
-1. **Is C1–C10 the complete required set,** or are facts missing/over-scoped? (e.g. seccomp
-   syscall filtering as a C11; or is bwrap's namespace set sufficient for the first real
-   backend?)
-2. **Probe battery placement** — does the battery run inside the cage as a tiny first step
-   of every run, or as a separate pre-flight cage launch whose only job is to self-test
-   before the actor is admitted? (Lean: pre-flight self-test, so the actor never shares a
-   process with a cage that hasn't yet been witnessed.)
-3. **Backend host requirements** — bwrap needs unprivileged user namespaces enabled
-   (kernel/distro dependent). Is the first backend Linux-only with an explicit
-   `unsupported_host` refusal where userns is off? (Lean: yes — refuse on hosts that can't
-   contain, never silently downgrade.)
-4. **Attestation evidence retention** — the per-run witness record lives in the audit store
-   (`run_dir`), tainted/non-authoritative, like the transcript? (Lean: yes.)
-5. **Confirm necessity-not-sufficiency** — a backend that can attest live still does not
-   authorize a live run; H2 implementation + `armed_live` remain required. (Lean: yes,
-   firmly.)
+The **core principle is ratified**: cage configuration is not containment testimony; `bwrap`
+invoked with the right flags is still only a claim; `confirms_isolation=True` is admissible
+only when the run's containment facts are **witnessed**; **negative probes are mandatory**;
+**unknown/unwitnessed → refuse-live**; the fact set is **conjunctive** — one missing fact
+means no live admission.
 
-## Exit (to be completed by the operator pass)
+### 1. Completeness — C1–C10 accepted; **C11 (seccomp) added, required**
+C1–C10 accepted as written. **C11 — syscall surface constrained / seccomp profile active —
+is added and is REQUIRED, not optional hardening.** Witness: confirm the expected seccomp
+profile is *installed* for the run; run ≥1 forbidden-syscall/action probe where practical;
+**if seccomp cannot be installed or witnessed → no `confirms_isolation`.** The fact set is
+now **C1–C11**, conjunctive.
 
-> Pending. On the pass, record per-fact decisions (ratify/tighten C1–C10), the witness
-> discipline, and the recommendation (authorize a bubblewrap-backend *implementation* slice
-> bound to the witnessed battery / refuse / defer). Until then: **no bubblewrap code, no
-> backend, no live actor.** Passing this review buys a *constitution for the cage*, not a
-> cage — and certainly not a live run.
+### 2. Probe-battery placement — pre-flight self-test per run (ratified)
+The cage backend must run the probe battery **before** admitting the actor. Probe evidence
+is bound to **that run's** attestation. Positive config inspection alone is insufficient.
+**Probe failure / refusal / timeout → no live admission.** (The actor never shares a process
+with a cage that has not yet witnessed its own battery.)
+
+### 3. Host requirements — Linux-only first backend (ratified)
+Require a **Linux host**, **bubblewrap available**, and **user namespaces / needed kernel
+features enabled**. If user namespaces or required isolation features are unavailable →
+**refuse-live** (never silently downgrade). **No Docker/Podman fallback** in this review.
+
+### 4. Evidence retention — tainted audit store (ratified)
+Probe outputs, the `bwrap` invocation summary, the cage attestation, run id, timestamps, and
+the refusal/admission decision go under the harness audit store, **outside AG ingest**:
+`$XDG_STATE_HOME/agent-gov/harness-runs/` (fallback `~/.local/state/agent-gov/harness-runs/`).
+**AG may ingest only `actor_output.v0`; AG must not crawl the audit store.** Cage evidence
+may be **referenced by digest / run id**, never imported as authority.
+
+### 5. Necessity-not-sufficiency — confirmed
+Passing this review authorizes only a future **bwrap backend implementation slice**. A
+passing probe battery may permit `require_live_admission` *for that run*, but it does **not**
+authorize H2 implementation by itself. **H2 implementation remains a separate gate;
+operational effect a separate later gate; actor claims remain claims.** Cage attestation is
+**necessary** for live actor execution, **not sufficient** for admitting actor output as
+verified work.
+
+## Exit — PASSED 2026-06-30 (constitution only)
+
+The containment-fact constitution is ratified: **C1–C11** (seccomp now required) + the
+witness discipline (per-run, negative-probe-mandatory, conjunctive, evidence-carried,
+unknown→refuse) + pre-flight self-test + Linux-only + tainted audit retention +
+necessity-not-sufficiency.
+
+**Recommendation: authorize a bubblewrap-backend *implementation* slice** — and ONLY that —
+whose sole job is a backend that (a) enforces C1–C11 via `bwrap`, (b) runs the pre-flight
+negative-probe battery per run, and (c) mints `confirms_isolation=True` **only** when the
+full battery passes, else attests nothing (refuse-live). That slice builds **no live actor
+run, no runner, no H2** — those remain separate later gates.
+
+This pass authorizes **nothing to build right now.** Until a separately-authorized build
+slice ships such a backend and witnesses the battery, `RefusingCage` remains the only cage
+and live admission stays unreachable.
+
+The gate stack, unchanged and all gated, in order:
+
+```
+real cage backend (bubblewrap) — constitution PASSED; implementation slice = next gate
+  → H2 implementation (UNBUILT — separate gate; needs a witnessing backend first)
+    → operational effect (UNBUILT — separate, even later)
+```
+
+Passing this review buys a **constitution for the cage**, not a cage — and certainly not a
+live run.

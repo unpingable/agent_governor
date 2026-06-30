@@ -1,11 +1,16 @@
 # H-series Harness-Cage Review — GATE before any live actor runs in `harness/`
 
-> **OPENED 2026-06-30. Status: DRAFT — awaiting operator pass.**
+> **OPENED 2026-06-30. Status: PASSED 2026-06-30 (operator pass; contract-first).**
 > This is a **review gate**, not an implementation doc, and **not H2**. No live actor,
 > no cage backend, no subprocess runner is built under it. It decides the *terms* a
 > future H-series cage must satisfy before a real Claude/Codex actor may execute inside
 > the external harness. Passing it buys exactly one thing: permission to *design+review*
-> a cage slice — not to run one. Each row is a decision to ratify, defer, or tighten.
+> a **refuse-live cage-contract** slice — not to run anything. Each row is a decision to
+> ratify, defer, or tighten.
+>
+> **Operator pass recorded below (see "Operator pass — recorded decisions").** The
+> headline: the cage answer is **contract-first**, not "pick Docker because containers
+> exist." The cage gets a constitution before it gets a keycard.
 
 ## Why this gate exists (the supersession)
 
@@ -56,14 +61,14 @@ Mapping (the term is the contract; the home moved):
 
 | # | Decision | What H1 already fixes | Proposed default (awaiting ratification) | Status |
 |---|----------|------------------------|-------------------------------------------|--------|
-| 1 | What the external harness cage **is** | nothing yet (H1 runs no actor) | OS/container-enforced (Docker/Podman/bubblewrap); disposable per-run workspace; read-only input snapshot; non-root; no network; no host `$HOME`/creds; process+time limits; env allowlist; post-run write-manifest validation. **No "safe" claim unless the backend confirms isolation.** | PROPOSE |
+| 1 | What the external harness cage **is** | nothing yet (H1 runs no actor) | **Contract-first.** Define the cage *contract* and ship a `RefusingCage`/`NoLiveCage` backend that **always refuses live admission** — proves the API without pretending containment exists. The eventual real cage shape (OS/namespace-enforced: disposable workspace, read-only input, non-root, no net/creds/host-`$HOME`, limits, env allowlist, write-manifest validation) is named, not built. **No "safe" claim unless a real backend confirms isolation.** | RATIFIED (refuse-live) |
 | 2 | What actor execution may **touch** | — | Read-only repo snapshot + the S6 `handoff` (PROMPT.md/handoff.json) + per-run scratch/output/transcript. Nothing else: not the real checkout, `.git`, host home, network, creds, AG's repo. | PROPOSE |
-| 3 | Where **transcripts** live | `captured_text` is advisory; S7 routes it to `design_notes` | In the per-run cage transcript dir (outside AG). Only the `captured_text` *field* of `actor_output.v0` crosses, as tainted advisory text. Raw streams/logs stay in the harness audit store. | PROPOSE |
+| 3 | Where **transcripts** live | `captured_text` is advisory; S7 routes it to `design_notes` | Harness audit store **outside the repo and outside AG's ingest path**: `$XDG_STATE_HOME/agent-gov/harness-runs/` (fallback `~/.local/state/agent-gov/harness-runs/`), one run dir per run. Full transcripts stay there; only the `captured_text` *field* of `actor_output.v0` crosses, as tainted advisory text. AG must not crawl/import the store. | RATIFIED |
 | 4 | What gets **imported into AG** | exactly one `actor_output.v0`, fail-closed parse | **One `actor_output.v0` JSON file. Nothing else.** | RATIFIED (H1) |
 | 5 | What **never** crosses into AG | harness can't import governor; emits only the envelope | Raw transcript streams; inline diff/patch content; any executable; process handles; network artifacts; creds; **any `ReviewTestResult` / verifier result / receipt** (item 9). | PROPOSE (4+9 already hard) |
 | 6 | **Timeout / kill-switch** behavior | — (harness owns the process) | One-shot; low first timeout (**30–60 s**); TERM-then-KILL; global kill (`PLAYBOOKS_RATION_KILL=1` + `.playbooks-kill` sentinel) checked before launch and during; hung actor terminated; partial output kept as tainted audit, never consumed as success; harness may not write/clear the switch. | PROPOSE |
 | 7 | **Replay** discipline | AG durable-spend gate refuses replay | Replay/stub is the default; live execution requires an explicit operator-armed mode; a replay fixture suppresses live unless deliberately overridden. Tests never "accidentally" go live. | PROPOSE |
-| 8 | Any artifact **besides** `actor_output.v0`? | envelope has no diff field | **No.** One envelope crosses. A diff, if ever needed, crosses as a **reference (path+sha256) inside the envelope**, never inline, and only via a *separately-ratified* `actor_output` schema bump (hotter change — name it, don't slip it). | PROPOSE (default: no) |
+| 8 | Any artifact **besides** `actor_output.v0`? | envelope has no diff field | **No — hard default.** Exactly one AG-ingestable artifact type: `actor_output.v0`. No diff-reference field, no `ReviewTestResult`, no verifier results, no receipt-greening object, no auxiliary bundle. Any future diff reference requires a named `actor_output` schema bump **and** a separate review. | RATIFIED (no) |
 | 9 | Explicit **ban on `ReviewTestResult` / verifier-result emission by H** | AST-scan test already fails the build if H names a verifier surface | **Hard ban, permanent.** H produces only testimony. Only an **AG-owned independent verifier** creates `verifier_results`. The `normalize(..., verifier_results=...)` seam stays sealed because `ActorOutput` has no route to it. | RATIFIED (H1) |
 | 10 | Confirm **actor claims remain claims** | S7 Model B: claims → `not_run`; S5 refuses claimed pass | **Confirmed, permanent.** No cage capability ever upgrades a claim to a verified result; a real green still requires an independent verifier inside AG. | RATIFIED (H1) |
 
@@ -138,18 +143,67 @@ conveyor.
   bounded loop, autopilot, a widened envelope, or any in-AG actor execution. Each of those
   is its own later, separately-ratified gate.
 
-## Open questions for the operator pass
+## Operator pass — recorded decisions (2026-06-30)
 
-1. **Cage backend choice** — Docker / Podman / bubblewrap / "decide per environment"? (Or
-   defer: first slice demonstrates the cage *contract* with an honest no-containment
-   backend that refuses live admission, and the backend choice is its own decision.)
-2. **Where the harness audit store lives** — inside `harness/` working tree, a sibling
-   dir, or `$XDG_*`? (It holds tainted transcripts; it must be outside AG's ingest path.)
-3. **Item 8** — confirm "one artifact only" as a hard default, and that any diff-reference
-   field is deferred to a named future schema bump.
+The three open questions are answered. Contract-first throughout: *the cage gets a
+constitution before it gets a keycard.*
 
-## Exit (to be completed by the operator pass)
+### 1. Cage backend — contract-first / refuse-live; no executing backend yet
+Ratified. The next cage-design slice may define the cage **contract** and implement an
+honest `RefusingCage` / `NoLiveCage` backend that **always refuses live actor
+admission** — proving the review/cage API without pretending containment exists.
 
-> Pending. When the operator completes the pass, record per-row decisions here and the
-> recommendation (authorize a cage-*design* slice / refuse / defer), exactly as the
-> superseded review recorded its exit. Until then, **no cage slice and no H2.**
+- Do **not** choose Docker / Podman / bubblewrap as an *executing* backend in this pass.
+- **bubblewrap** is marked the *likely first real Linux backend to evaluate later* —
+  named, **not authorized**. (Docker/Podman are heavier and easier to confuse with "safe
+  because container"; that confusion is exactly what contract-first refuses.)
+- Passing this review **does not authorize H2 / live execution.** It authorizes a
+  cage-*design* slice whose only backend is a refusing one.
+
+### 2. Harness audit store — outside the repo, outside AG ingest
+Ratified. Tainted harness transcripts live outside AG's repo and outside AG's ingest
+path:
+
+```text
+default:   $XDG_STATE_HOME/agent-gov/harness-runs/
+fallback:  ~/.local/state/agent-gov/harness-runs/
+```
+
+- Each run gets a content-addressed or timestamped run directory; full transcripts stay
+  there.
+- AG ingests **only** an explicit `actor_output.v0` artifact; AG must **not** crawl or
+  import the audit store.
+- `ActorOutput` may carry a run id / digest / descriptive capture metadata (e.g.
+  `capture_origin`, `captured_at`), but **not authority** — these remain descriptive,
+  never gating, exactly as H1 ships them.
+
+### 3. One artifact only — hard default
+Ratified. H may emit exactly one AG-ingestable artifact type: **`actor_output.v0`**.
+
+- No diff-reference field in this schema; no `ReviewTestResult`; no verifier results; no
+  receipt-greening object; no auxiliary bundle imported into AG.
+- Any future diff reference requires a **named `actor_output` schema bump and a separate
+  review**. (One file crosses. "Helpful extra bundle" is how treaties become airports.)
+
+## Exit — PASSED 2026-06-30 (contract-first)
+
+All ten terms are decided: items 4/9/10 inherited as RATIFIED from H1; items 1/3/8
+ratified by this operator pass (contract-first cage, XDG audit store, one-artifact-only);
+items 2/5/6/7 stand at their proposed conservative defaults, to be exercised — not
+loosened — by the cage-design slice.
+
+**Recommendation: authorize a cage-DESIGN slice with a refuse-live backend ONLY.** That
+slice may:
+
+- define the cage contract (the API a real backend must satisfy: workspace lifecycle,
+  input mount, write-manifest validation, isolation attestation);
+- implement a `RefusingCage` / `NoLiveCage` backend that admits **no** live actor (mirrors
+  how `sandbox_cage.py` ships only `NullCage` / `SyntheticCage` and refuses live origins);
+- define the audit-store layout (XDG paths above) and the one-artifact ingest boundary as
+  tests.
+
+It may **not**: run a live actor, build an executing/real cage backend, add a subprocess
+runner, widen the `actor_output.v0` envelope, emit any verifier-shaped object, run a loop,
+or do anything in-AG. **H2 remains unauthorized.** The next gate after the cage-design
+slice — if any — is a *separate, later, separately-ratified* review of a real backend
+(bubblewrap first to evaluate) before a single live actor runs.

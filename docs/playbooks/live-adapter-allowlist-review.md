@@ -1,5 +1,23 @@
 # Live-Adapter Allowlist Review — GATE before any live external-agent code
 
+> ## ⛔ SUPERSEDED 2026-06-30 — FOSSIL. Do not act on this gate.
+>
+> **Operator ratified path (B) on 2026-06-30.** This gate reviewed an **in-AG** live
+> adapter (`runtime.adapters.claude_code`, B-9..B-12). The architecture moved: H1
+> established that live/offline actor execution belongs **outside AG**, in the H-series
+> harness, and AG ingests only the inert `actor_output.v0` artifact. A passed-but-stale
+> in-AG gate must not authorize the moved experiment.
+>
+> **This document is preserved as historical evidence only.** Its 11 ration-card terms
+> are carried forward as *inherited constraints* by the successor gate. Do not build
+> B-9..B-12; do not build an in-AG live adapter.
+>
+> **Successor gate (the real next one):** `docs/playbooks/harness-cage-review.md` —
+> the H-series harness-cage review. Read that, not this, for any live-actor question.
+>
+> *(The full fresh-eyes reconciliation that produced this decision is the dated section
+> "Fresh-eyes re-review (2026-06-30)" near the end of this file.)*
+
 > **Ration card exists. No one has eaten with it yet.**
 >
 > **Passing this review authorizes a SANDBOX EXPERIMENT, not operational

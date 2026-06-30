@@ -86,9 +86,22 @@
     passing test (`required_test_not_passing`). No live actor (`captured_text` is
     supplied). 5 AG-side contract tests; harness+playbooks 234 green; collection 16422.
     Ticket: `docs/playbooks/h1-exit-ticket.md`; doctrine: `harness/README.md`.
+  - **Bubblewrap backend IMPLEMENTATION slice LANDED (`d4e6115`, LOCAL). NEXT = nothing
+    authorized to build; named follow-ups (real C11 seccomp filter · live validation on a
+    capable host · H2 impl) are each their own gate. No live actor / runner / H2.**
+    `harness/bwrap_cage.py`: `BwrapCage` over `bwrap`, **runs no actor** (only bwrap probe
+    commands). `confirms_isolation=True` earned by witnessing: host gate (`assess_host`:
+    Linux + bwrap + userns + seccomp + cage smoke) → pre-flight C1–C11 negative-probe
+    battery per run → conjunctive mint (`all_required_witnessed`; one missing fact → attest
+    nothing) → `admit_live` reuses `evaluate_live_admission`, no second path to True. Per-
+    fact `FactWitness` evidence in `CageRunAttestation`, persisted under the tainted audit
+    store (`run_dir`, outside AG). **Honest v0:** bwrap can't build a cage in this nested
+    sandbox (loopback EPERM) + v0 compiles no seccomp filter → real `BwrapProber` never
+    witnesses C11 → real backend **refuses live by construction**; logic proven against an
+    injected `FakeProber` (synthetic compatibility, not live testimony). 33 tests; harness+
+    playbooks **296 green**; collection 16484. Ticket: `docs/playbooks/bwrap-backend-slice-exit-ticket.md`.
   - **Real cage backend review (bubblewrap) PASSED (`bafd3e5`, LOCAL — operator pass,
-    constitution only). NEXT = a bwrap-backend IMPLEMENTATION slice (separate authorization
-    needed; not started). No code / runner / live actor / H2 built.**
+    constitution only; the slice above implements it).**
     `docs/playbooks/real-cage-backend-review.md` ratifies what `confirms_isolation=True`
     (`harness/cage.py`) is allowed to MEAN. Principle (NLAI on the cage itself): configured
     ≠ contained; the attestation is earned by **witnessing** (negative probes — run the
@@ -120,9 +133,9 @@
     never admit live; unreachable with shipped cages); (5) I-1 hard confirmed — **H2 ≠
     operational** (stays `DemonstratedConsumed`; `confer_operational_effect` refused).
     **No runner / actor run / execution method built.** Gate stack (all gated, in order):
-    real cage backend (bubblewrap, **constitution PASSED — impl slice = next gate, not
-    started**) → H2 contract (PASSED shape-only) → H2 implementation (UNBUILT) →
-    operational effect (separate, even later).
+    real cage backend (bubblewrap, **constitution PASSED + impl slice LANDED `d4e6115`;
+    real backend refuses live in v0**) → H2 contract (PASSED shape-only) → H2 implementation
+    (UNBUILT) → operational effect (separate, even later).
   - **Prior gates (this lane):** cage-DESIGN slice LANDED `179de67` (`harness/cage.py`:
     contract-first `RefusingCage`/`NoLiveCage`, refuse-live by attestation, XDG audit
     store outside AG, one-artifact `assert_ag_ingestible`, 29 tests); harness-cage review
@@ -134,11 +147,12 @@
     `d8f847c`/`75caa28` + H1 `aa147c8` + supersession/harness-cage `69528bf` +
     cage-pass `3406882` + cage-slice `179de67` + H2-contract-review `be00c63` +
     H2-contract-pass `ce71af6` + real-cage-backend-review `0e36635` +
-    real-cage-backend-pass `bafd3e5` LOCAL (12 unpushed — disk-SPOF until pushed).**
+    real-cage-backend-pass `bafd3e5` + bwrap-backend-slice `d4e6115` LOCAL
+    (13 unpushed — disk-SPOF until pushed).**
   - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
-    should show S1–S7, H1, cage slice, then the review/pass chain
-    (`c909e89 … be00c63 ce71af6 0e36635 bafd3e5`);
-    `pytest tests/playbooks tests/harness -q` green (263).
+    should show S1–S7, H1, cage slice, the review/pass chain, then the bwrap slice
+    (`c909e89 … 0e36635 bafd3e5 d4e6115`);
+    `pytest tests/playbooks tests/harness -q` green (296).
 
 - **Local candidate worker + cargo-triage** · `feat/local-candidate-worker`  *(live-validated, PUSHED)*
   - Off `feat/playbooks-gov-loop` @ `515afb0`. Budget valve: a cheap LOCAL model (Ollama/Qwen on

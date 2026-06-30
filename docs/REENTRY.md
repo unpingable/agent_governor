@@ -86,27 +86,32 @@
     passing test (`required_test_not_passing`). No live actor (`captured_text` is
     supplied). 5 AG-side contract tests; harness+playbooks 234 green; collection 16422.
     Ticket: `docs/playbooks/h1-exit-ticket.md`; doctrine: `harness/README.md`.
-  - **Cage-DESIGN slice LANDED (`179de67`, LOCAL). NEXT = nothing authorized; a real
-    cage backend (bubblewrap) is a future separately-ratified gate. NOT H2.**
-    `harness/cage.py`: contract-first cage (`HarnessCage` Protocol, **no execution
-    method**) + `RefusingCage`/`NoLiveCage` that refuses every live admission **by
-    attestation** (typed refusal; live admission structurally unreachable — no shipped
-    backend attests live isolation). Audit store `audit_store_root()` →
-    `$XDG_STATE_HOME/agent-gov/harness-runs/` (fallback `~/.local/state/...`), pure path
-    comp, outside repo + outside AG ingest. `assert_ag_ingestible()` = only
-    `actor_output.v0`. 29 tests incl. a static proof AG never references the harness/
-    audit store. Ticket: `docs/playbooks/cage-design-slice-exit-ticket.md`.
-    Gate history: harness-cage review **PASSED** (`docs/playbooks/harness-cage-review.md`);
-    in-AG live-adapter review **SUPERSEDED** (fossil:
-    `docs/playbooks/live-adapter-allowlist-review.md`). **H2 / live execution / real cage
-    backend UNAUTHORIZED.** AG is the courthouse, not the getaway car. The cage has a
-    constitution; it has no keycard.
+  - **H2 live-run CONTRACT review OPENED (`be00c63`, LOCAL, DRAFT — awaiting operator
+    pass). NEXT = operator pass on that review. NOT H2 execution.**
+    `docs/playbooks/h2-live-run-contract-review.md` defines the smallest one-shot actor
+    invocation a FUTURE real cage backend would be allowed to run — a spec, not code.
+    Proposed shape `run_once_under_cage(cage, handoff, *, actor_kind, run_id, timeout_s,
+    armed_live) -> one actor_output.v0`, gated on `require_live_admission` (every shipped
+    cage refuses → unreachable today). Permanent invariants: **H2 ≠ operational** (run
+    stays `DemonstratedConsumed`; actor output is testimony; `confer_operational_effect`
+    refused), one-invocation/one-artifact, refuse-live-until-attested, cage-is-the-
+    containment. Items 6/7 inherited RATIFIED; 1–5/8 PROPOSE; 5 open questions.
+    **No runner / actor run / execution method built.** Gate stack (all gated, in order):
+    real cage backend (bubblewrap, unbuilt) → H2 contract (this, in review) → H2
+    implementation (unbuilt) → operational effect (separate, even later).
+  - **Prior gates (this lane):** cage-DESIGN slice LANDED `179de67` (`harness/cage.py`:
+    contract-first `RefusingCage`/`NoLiveCage`, refuse-live by attestation, XDG audit
+    store outside AG, one-artifact `assert_ag_ingestible`, 29 tests); harness-cage review
+    **PASSED** (`docs/playbooks/harness-cage-review.md`); in-AG live-adapter review
+    **SUPERSEDED** (fossil: `docs/playbooks/live-adapter-allowlist-review.md`). H1 = the
+    external harness producing inert `actor_output.v0`. AG is the courthouse, not the
+    getaway car.
   - **Push state: S1–S5 PUSHED (2026-06-29); S6 `4022f22` + S7 `ba11c7e` + S7-contract
     `d8f847c`/`75caa28` + H1 `aa147c8` + supersession/harness-cage `69528bf` +
-    cage-pass `3406882` + cage-slice `179de67` LOCAL (8 unpushed — disk-SPOF until
-    pushed).**
+    cage-pass `3406882` + cage-slice `179de67` + H2-contract-review `be00c63` LOCAL
+    (9 unpushed — disk-SPOF until pushed).**
   - Re-entry probe: `git log --oneline feat/playbooks-gov-loop..feat/playbooks-synthetic-conveyor`
-    should show S1–S7, H1, then the cage slice (`c909e89 … aa147c8 … 179de67`);
+    should show S1–S7, H1, cage slice, H2-contract-review (`c909e89 … 179de67 be00c63`);
     `pytest tests/playbooks tests/harness -q` green (263).
 
 - **Local candidate worker + cargo-triage** · `feat/local-candidate-worker`  *(live-validated, PUSHED)*

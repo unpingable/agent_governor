@@ -92,6 +92,30 @@ a *decision*, never an invocation. Running a live actor is H2, a separate later 
 - **One-artifact boundary.** `assert_ag_ingestible()` refuses anything but
   `actor_output.v0` — no diff reference, no verifier result, no auxiliary bundle.
 
+## The real cage backend (`harness/bwrap_cage.py`) — bubblewrap, witness-earned
+
+The bubblewrap-backend slice (real-cage-backend review, operator pass 2026-06-30: facts
+**C1–C11**, seccomp required as C11). It implements the `HarnessCage` contract over
+`bwrap` and **runs no actor** — the only subprocesses are the `bwrap` probe commands that
+test the cage itself. `confirms_isolation=True` is **earned by witnessing**, never by
+configuration:
+
+- **Host gate** (`assess_host`): Linux + `bwrap` + user namespaces + seccomp support + a
+  *cage smoke test* (bwrap actually starts an isolated cage). Any miss → no battery →
+  refuse-live.
+- **Pre-flight negative-probe battery, per run**: for each of C1–C11 the prober attempts
+  the forbidden action inside a fresh cage and witnesses it fails. `confirms_isolation=True`
+  is minted **only** when **all** C1–C11 are witnessed (`all_required_witnessed`,
+  conjunctive); one missing/unknown/refused/failed/timed-out fact → attest nothing.
+- **Evidence carried + persisted**: per-fact `FactWitness` results ride in
+  `CageRunAttestation`; `persist_run_attestation()` writes them under the tainted audit
+  store (`run_dir`), outside AG ingest.
+- **Honest v0 status**: live witnessing is real-shaped but gated behind a host where bwrap
+  can build a cage; the v0 prober does **not** compile a seccomp filter, so the real
+  `BwrapProber` never witnesses C11 → the real backend **refuses live in v0 by
+  construction**. The battery/decision/evidence logic is proven against an injected prober
+  (synthetic compatibility), never live testimony.
+
 ## The one seam to guard going forward
 
 The single path that turns a required test `passed` on the AG side is

@@ -289,3 +289,34 @@ def test_bwrap_cage_does_not_import_governor():
                 assert not a.name.startswith("governor")
         elif isinstance(node, ast.ImportFrom):
             assert not (node.module or "").startswith("governor")
+
+
+# --------------------------------------------------------------------------- #
+# C5 root-seal — construction check (NOT live testimony).
+#
+# Real-substrate finding capable-vm-noble-001 (docs/playbooks/capable-vm-substrate-
+# finding.md): bwrap's root `/` is a writable tmpfs by default, so the cage had TWO
+# writable areas (/tmp + root /), violating C5. The fix seals the root with
+# `--remount-ro /`. This test asserts the SEAL IS PRESENT IN THE CONFIG — it does not
+# and cannot prove containment on a real host (that is what the capable-VM run does).
+# --------------------------------------------------------------------------- #
+
+
+def test_base_args_seal_the_container_root_for_c5():
+    # `--remount-ro /` must be present, and must come AFTER the writable /tmp + the
+    # ro-binds (bwrap applies mount ops in order; the remount seals the root last).
+    args = list(BWRAP_BASE_ARGS)
+    assert "--remount-ro" in args, "cage root is not sealed (C5 regression)"
+    ri = args.index("--remount-ro")
+    assert args[ri + 1] == "/", "--remount-ro must target the container root /"
+    # /tmp stays the one declared writable area, mounted before the seal
+    tmp_i = args.index("/tmp")
+    assert tmp_i < ri, "the writable /tmp mount must precede the root seal"
+
+
+def test_exactly_one_declared_writable_area_is_tmp():
+    # C5 = "exactly one narrow writable area". The only writable mount declared is --tmpfs
+    # /tmp; every other bound path is --ro-bind and the root is remounted read-only.
+    args = BWRAP_BASE_ARGS
+    tmpfs_targets = [args[i + 1] for i, a in enumerate(args) if a == "--tmpfs"]
+    assert tmpfs_targets == ["/tmp"], f"expected one writable tmpfs (/tmp), got {tmpfs_targets}"

@@ -227,11 +227,18 @@ BWRAP_BASE_ARGS: tuple[str, ...] = (
     "--uid", "65534", "--gid", "65534",  # C3 non-root (nobody)
     "--proc", "/proc",
     "--dev", "/dev",  # C7 minimal /dev
-    "--tmpfs", "/tmp",  # C5 the one writable area
+    "--tmpfs", "/tmp",  # C5 the one declared writable area
     "--ro-bind", "/usr", "/usr",  # C4 read-only system
     "--ro-bind", "/bin", "/bin",
     "--ro-bind", "/lib", "/lib",
     "--ro-bind", "/lib64", "/lib64",
+    # C5 seal the container root. bwrap's root `/` is a fresh tmpfs and is WRITABLE by
+    # default, so without this a probe could `echo x > /file` — a second writable area
+    # besides /tmp, violating "exactly one narrow writable area". Real-substrate finding
+    # (capable-vm-noble-001, 2026-07-01): FakeProber masked this; real bwrap exposed it.
+    # `--remount-ro /` runs after the mounts above; /tmp is a separate mount and stays
+    # writable, so exactly one writable area remains.
+    "--remount-ro", "/",
     "--chdir", "/",
 )
 

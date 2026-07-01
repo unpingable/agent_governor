@@ -1,7 +1,14 @@
 # Next-Gate Selection Review — bwrap backend: live C1–C10 substrate compatibility validation (fresh-eyes)
 
-> **PROPOSED 2026-07-01. Status: DRAFT — fresh-eyes gate-selection recommendation, not yet
-> opened by an operator. NON-AUTHORIZING.** This packet recommends *which* gate an operator
+> **PROPOSED 2026-07-01. PASSED 2026-07-01 (operator pass, with amendments — see
+> "Operator pass" at end). Status: the proposed evidence-only gate is OPEN.** The operator
+> authorized exactly one code slice: a **minimal fenced validation entrypoint** for the live
+> C1–C10 substrate compatibility run — **an evidence run, not implementation.** Still no actor,
+> no H2, no seccomp implementation, no operational effect, no live admission; C11 unavailable
+> must force refusal.
+>
+> *(Original proposal header, preserved:)*
+> **fresh-eyes gate-selection recommendation, not yet opened by an operator. NON-AUTHORIZING.** This packet recommends *which* gate an operator
 > should open next and fixes what that gate may and may not do. It authorizes no build, no
 > seccomp, no H2, no live admission, no operational effect. It does **not** itself open a
 > gate — only an operator does that. If passed, the gate it proposes would authorize **only
@@ -208,3 +215,32 @@ foundation from synthetic to live substrate compatibility — the strict prerequ
 trusting any future C11/seccomp work. Seccomp design is the gate *after*; H2 and operational
 effect remain where they are, unarmed. This DRAFT authorizes nothing until an operator pass is
 recorded here.
+
+## Operator pass — recorded decisions (2026-07-01)
+
+**PASSED with amendments.** The operator opened the proposed evidence-only gate and authorized
+**one code slice**: build the *minimal fenced validation entrypoint* required to perform the
+approved live C1–C10 substrate compatibility run. The authorization is bounded by these
+constraints, which are hard:
+
+- **No actor execution.** The entrypoint runs `bwrap` probe / host-detection commands only —
+  never a Claude/Codex/echo/actor invocation. No `run`/`spawn`/`run_once`.
+- **No H2**, **no seccomp implementation**, **no operational effect**, **no live admission.**
+- **C11 unavailable must force refusal.** The entrypoint never mints or asserts
+  `confirms_isolation=True`; it consumes the backend's attestation, which refuses in v0 by
+  construction (C11 unwitnessable). A C1–C10-green / C11-unavailable outcome is recorded as
+  **successful refusal plus partial substrate evidence**, never as admission.
+- **Output: exactly one tainted audit record** under the harness audit store
+  (`audit_store_root()` / `run_dir(run_id)`, AG-never-ingested), carrying the **declared
+  host/substrate facts** (host identity/class, kernel, `bwrap` version, userns/seccomp
+  availability, nested-sandbox status, audit-store path) and the **probe transcript** (exact
+  commands + captured output/exit for what the validation ran).
+- **Tests may cover parser / recording / refusal behaviour only** — built on injected
+  fakes / synthetic inputs. **Tests must not be described as live testimony.** A green test
+  suite proves the entrypoint's logic, not that any cage contained anything.
+- **`harness/run.py` is not created and not resembled.** The entrypoint is battery/probe-only
+  and is named as validation.
+
+The slice lands as `harness/validate_bwrap_substrate.py` (+ tests). Building it does **not**
+authorize the next gates (seccomp design, then H2 implementation, then operational effect);
+each remains separate and unarmed.

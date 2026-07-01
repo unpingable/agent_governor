@@ -56,9 +56,11 @@ from .manuscript import (
     ExtractedLocation,
     ExtractedEvent,
     ExtractedThread,
-    scan_manuscript_to_canon,
     scan_single_chapter,
 )
+# scan_manuscript_to_canon removed 2026-07-01 (direct-to-canon laundering vector;
+# see docs/doctrine/fiction-governor-consumer-boundary.md). Extraction stays; canon
+# ingestion must be an explicit author act or PENDING staging.
 from .similarity import (
     SimilarityMatch,
     VoiceAnalysis,
@@ -167,7 +169,6 @@ __all__ = [
     "ExtractedLocation",
     "ExtractedEvent",
     "ExtractedThread",
-    "scan_manuscript_to_canon",
     "scan_single_chapter",
     # Similarity matching
     "SimilarityMatch",

@@ -553,66 +553,21 @@ class ManuscriptScanner:
 # Integration Functions
 # =============================================================================
 
-def scan_manuscript_to_canon(
-    manuscript_dir: Path,
-    canon,  # Canon instance from .canon
-    min_character_mentions: int = 3,
-    min_event_confidence: float = 0.5,
-    known_characters: list[str] | None = None,
-) -> dict[str, Any]:
-    """
-    Scan a manuscript directory and populate canon.
-
-    Args:
-        manuscript_dir: Directory containing manuscript files
-        canon: Canon instance to populate
-        min_character_mentions: Minimum mentions to add a character
-        min_event_confidence: Minimum confidence to add a thread
-        known_characters: List of already-known character names
-
-    Returns:
-        Summary of what was added
-    """
-    # Get known characters from canon's bible if available
-    if known_characters is None:
-        known_characters = []
-
-    scanner = ManuscriptScanner(known_characters=known_characters)
-    result = scanner.scan_directory(manuscript_dir)
-
-    summary = {
-        "characters_found": len(result.characters),
-        "locations_found": len(result.locations),
-        "events_found": len(result.events),
-        "threads_found": len(result.threads),
-        "events_added": 0,
-        "threads_added": 0,
-    }
-
-    # Add events to canon
-    for event in result.events:
-        canon.add_event(
-            chapter=event.chapter,
-            summary=event.summary,
-            characters=event.characters,
-            location=event.location,
-            quote=event.quote,
-        )
-        summary["events_added"] += 1
-
-    # Add threads to canon (only high-confidence ones)
-    for thread in result.threads:
-        if thread.confidence >= min_event_confidence:
-            canon.add_thread(
-                name=thread.description[:50],
-                thread_type=thread.thread_type,
-                description=thread.description,
-                planted_chapter=thread.chapter,
-                planted_text=thread.quote,
-            )
-            summary["threads_added"] += 1
-
-    return summary
+# REMOVED 2026-07-01: scan_manuscript_to_canon().
+#
+# This function scanned a manuscript directory and wrote regex-extracted events
+# and threads STRAIGHT INTO CANON with no author confirmation and no provisional
+# marker (CanonEvent carries no source-confidence field, so an auto-scraped event
+# was byte-indistinguishable from a hand-authored one). That is exactly the silent
+# assertion→canon laundering the Fiction Governor must not do: only an explicit
+# author act may canonize (see docs/doctrine/fiction-governor-consumer-boundary.md).
+#
+# It was dormant (zero callers, zero tests) but a loaded gun on the shelf, and was
+# removed before the module goes human-facing. DO NOT re-add a bulk manuscript→canon
+# writer. Manuscript EXTRACTION stays available below (ManuscriptScanner /
+# scan_single_chapter → ScanResult, which write nothing). Ingestion into canon must
+# go through an explicit author command (canon event add / proposal approve) or the
+# PENDING staging path (CanonCaptureClassifier), never an auto-write.
 
 
 def scan_single_chapter(

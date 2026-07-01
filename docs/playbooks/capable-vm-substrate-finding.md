@@ -36,6 +36,8 @@ never live testimony about a production estate.*
 
 Record preserved at `~/git/porter/outputs/ag-bwrap-substrate/capable-vm-noble-001.json` and in
 the guest's tainted audit store.
+**Artifact identity** — run id `capable-vm-noble-001`, host `porter-cage-vm` (Ubuntu 24.04 KVM
+`vm`), sha256 `1c074dd06eb0432f1f09a6047a3df1da6dbf6c3f0aa846c27bec7fb93dfb458a`.
 
 ## The result
 
@@ -115,6 +117,8 @@ operational-effect / live-admission surface was touched.
 | outcome | **`successful_refusal_partial_substrate_evidence`** |
 
 Record preserved at `~/git/porter/outputs/ag-bwrap-substrate/capable-vm-noble-002.json`.
+**Artifact identity** — run id `capable-vm-noble-002`, host `porter-cage-vm` (Ubuntu 24.04 KVM
+`vm`), sha256 `c8a180216d2211b5a0c0bf9407f22ddcb6257af55296f90e71eea95850ff2ca6`.
 
 **What this pair establishes.** `capable-vm-noble-001` (failure) proves synthetic `FakeProber`
 green was not substrate evidence — real bwrap found an unsealed writable root. `capable-vm-

@@ -136,6 +136,25 @@
     real cage backend (bubblewrap, **constitution PASSED + impl slice LANDED `d4e6115`;
     real backend refuses live in v0**) → H2 contract (PASSED shape-only) → H2 implementation
     (UNBUILT) → operational effect (separate, even later).
+  - **Substrate-validation gate PASSED + branch-3 discharged (2026-07-01, branch
+    `feat/playbooks-synthetic-conveyor`).** Fenced evidence-only entrypoint
+    `harness/validate_bwrap_substrate.py` LANDED (`62cee85`, PUSHED): runs the existing
+    backend's battery on a real host, declares substrate facts + probe transcript, writes ONE
+    tainted audit record, refuses live by construction (raises on any `confirms_isolation=True`).
+    Review `docs/playbooks/next-gate-selection-review.md` (PROPOSED→PASSED w/ amendments).
+    **First real capable-host run** (local Ubuntu 24.04 KVM VM — this CC env + mini/NAS/crow/
+    linode all unsupported/unavailable/off-limits) **found a C5 containment gap the FakeProber
+    had masked**: bwrap's root `/` is a writable tmpfs → two writable areas, violating "exactly
+    one narrow writable area" (`capable-vm-noble-001`, sha256 `1c074dd0…`, outcome
+    `refused_incomplete_substrate`). **C5 fixed** by sealing the root (`--remount-ro /`,
+    `b765e9e`; C5 not weakened — config corrected). **Second run witnessed C1–C10 on real
+    bwrap**, C11 unavailable, `confirms_isolation=False`, `live_admission=False`, outcome
+    `successful_refusal_partial_substrate_evidence` (`capable-vm-noble-002`, sha256
+    `c8a18021…`). Finding doc `docs/playbooks/capable-vm-substrate-finding.md`; records preserved
+    under `~/git/porter/outputs/ag-bwrap-substrate/` (tainted, AG-never-ingested). Full harness
+    suite 82 green. **Push state: finding/fix/clean-doc/digest commits (`000eccd b765e9e 64e098a`
+    +1) LOCAL/unpushed on the branch.** **UNARMED, each its own separate gate: C11/seccomp
+    (design not opened), H2 implementation, operational effect, and Porter extraction.**
   - **Prior gates (this lane):** cage-DESIGN slice LANDED `179de67` (`harness/cage.py`:
     contract-first `RefusingCage`/`NoLiveCage`, refuse-live by attestation, XDG audit
     store outside AG, one-artifact `assert_ag_ingestible`, 29 tests); harness-cage review

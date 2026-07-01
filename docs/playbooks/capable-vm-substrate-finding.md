@@ -90,3 +90,37 @@ After the fix, rerun on the same capable VM. Expected clean result: C1–C10 all
 (including C5), C11 unavailable, `confirms_isolation=False`, `live_admission=False`, outcome
 `successful_refusal_partial_substrate_evidence`. That clean record is a **separate** artifact;
 this failure finding stands on its own.
+
+---
+
+## Clean rerun after the C5 fix — `capable-vm-noble-002`
+
+**The fix.** `BWRAP_BASE_ARGS` now appends `--remount-ro /`, sealing the container root after
+the writable `/tmp` and the ro-binds are established. Verified on real bwrap *before* the code
+change: a root write (`echo x > /__root__`) went `rc=0` unsealed → `rc=2` (`Read-only file
+system`) sealed, while `/tmp` stayed writable (`rc=0`) — so exactly one writable area remains.
+**C5 was not weakened**; the config was corrected to satisfy the fact. No actor / H2 / seccomp /
+operational-effect / live-admission surface was touched.
+
+**The clean rerun** (same hot VM, fixed backend):
+
+| | Result |
+|---|---|
+| cage_smoke | passed (real cage started) |
+| witnessed | **C1–C10 all witnessed on real bwrap** (C5 probe now `rc=2` — root write correctly fails) |
+| unwitnessed | **C11 only** (seccomp filter still uncompiled — expected) |
+| confirms_isolation | `False` |
+| live_admission | `False` |
+| mandatory_c11_refusal | `True` |
+| outcome | **`successful_refusal_partial_substrate_evidence`** |
+
+Record preserved at `~/git/porter/outputs/ag-bwrap-substrate/capable-vm-noble-002.json`.
+
+**What this pair establishes.** `capable-vm-noble-001` (failure) proves synthetic `FakeProber`
+green was not substrate evidence — real bwrap found an unsealed writable root. `capable-vm-
+noble-002` (clean) proves the fix produced *new* live-substrate evidence: C1–C10 genuinely
+witnessed on real bwrap, live admission still structurally unreachable (C11 uncompiled). The
+knife found the infection; the pass is hygiene after. Both specimens are retained.
+
+Branch 3 is discharged (containment fix landed + re-validated). The C11/seccomp design gate
+remains closed and **is not opened by this work** — it is the next, separate decision.

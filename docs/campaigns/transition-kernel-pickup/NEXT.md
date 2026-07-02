@@ -86,3 +86,99 @@ cross-repo client **only** for this seam.
 
 Model Y (adapter-local matching) may appear only as a **non-authorizing diagnostic** demonstrating
 the gap — never as the production authority path.
+
+---
+
+# B-series — Rust-kernel lane (added 2026-07-02, roadmap program)
+
+Slice 1b above **is B4** in program numbering; it remains ACTIVE NEXT, gated only
+by Q-B1 (operator confirm+push of Standing `1e62ba9`/`f101c55`) — NOT by the
+reconciliation campaign. Six-field shape per `docs/roadmaps/ROUTING.md`.
+
+### B0 — capsule reconciliation  **(EXECUTED with program setup 2026-07-02)**
+tier: conceptual · executor: fable · prereq: []
+- purpose: capsule reflects the three-world state (AG parked branch ·
+  `~/git/transition-kernel` repo · Standing unpushed 1a/1a-bis) and carries the
+  Rust-lane stop-lines.
+- files: CAMPAIGN.md, NEXT.md, STATUS.md, DECISIONS.md (this update).
+- tests: doc-only; capsule cross-references resolve.
+- refusal mode: n/a. · receipt shape: the program-setup commit.
+- stop condition: no ratified-decision text altered — additive only.
+
+### B1 — three-world inventory refresh
+tier: mechanical · executor: codex · prereq: [B0]
+- purpose: INVENTORY.md gains the Rust-kernel world: diff AG parked branch
+  `feat/transition-kernel-slice-1b` vs `~/git/transition-kernel` HEAD vs Standing
+  HEAD; record the 9-case corpus list, differential.py invocation, and the wicket
+  verdict map as the frozen contract surface.
+- files: INVENTORY.md (append §"Three worlds, 2026-07-02").
+- tests: `~/git/transition-kernel/scripts/differential.py` run recorded verbatim
+  with real exit code; every claim carries repo+hash.
+- refusal mode: n/a. · receipt shape: commit citing all three HEADs.
+- stop condition: differential fails or corpus ≠ 9 cases — record verbatim, STOP
+  (that changes B2's ground truth; do not reinterpret).
+
+### B2 — invariant survival map (packet core)
+tier: conceptual · executor: fable · prereq: [B1]
+- purpose: the table of Lean-backed distinctions that must survive in Rust types/
+  verdicts/receipts/refusals: typed refusals **naming the offender** (v5/v6);
+  metric-time freshness (4 refusals + skew/divergence params); finitary
+  exhaustively-matched verdict enums; corrective = down-edge;
+  `checkpoint_mints_nothing`; one-receipt-one-discharge; the
+  Standing/LA/kernel/receipts separation; citation tiers ([1.0] citable / ANNEX
+  exact-theorem / SCRATCH pilot-only / CANDIDATE uncitable).
+- files: INVENTORY.md §"Invariant survival map" — row = invariant · Lean source ·
+  Rust surface · corpus case · refusal mode.
+- tests: every row cites Lean module+theorem+tier; rows lacking a corpus case
+  enumerate into B5.
+- refusal mode: may name missing refusals; adds none.
+- receipt shape: commit citing lean repo HEAD.
+- stop condition: an invariant statable only with new kernel vocabulary — mark
+  `requires_operator`, file in DECISIONS.
+
+### B3 — corpus plan (operator sign-off)
+tier: conceptual · executor: fable · prereq: [B2]
+- purpose: settle corpus custody. Recommendation: `~/git/transition-kernel`
+  remains custodian (owns differential.py + the conformant 9); wicket fixtures
+  grow in wicket for wicket's contract, cross-referenced not merged; AG
+  contributes cases via its v7 JSON-schema lane.
+- files: INVENTORY.md §corpus + DECISIONS Q-B3.
+- tests: n/a (plan doc). · refusal mode: n/a.
+- receipt shape: commit; Q-B3 OPEN until ruled.
+- stop condition: recommendation conflicts with C2's repo-boundary evidence —
+  surface both, do not pick silently.
+
+### B5..Bn — corpus expansion (one case = one slice, enumerated by B2)
+tier: mechanical · executor: local-qwen or codex · prereq: [B2, B3 ruled]
+- purpose: every B2 row without a differential case gets one: scope-mismatch
+  non-consuming; stale-basis-as-live; each freshness refusal (expired /
+  not_yet_valid / divergence_excessive / incoherent_interval); replay/single-spend.
+- files: corpus home per Q-B3 ruling; differential harness only.
+- tests: differential.py green over old+new cases (real exit code).
+- refusal mode: the case's named refusal, from existing closed vocab.
+- receipt shape: one commit per case citing the B2 row.
+- stop condition: a case needs kernel behavior change to pass — STOP; that is a
+  kernel slice, not a corpus slice.
+
+### B6 — Lean v6 proof-of-payment checker pilot
+tier: review · executor: codex-exec (framing by fable) · prereq: [B2]
+- purpose: run the v6 finite-support checker (typed `CheckResult`, offender-naming
+  refusals, `firstDeficient_decides_check`) as a **non-binding oracle** over the
+  corpus; report divergences.
+- files: report → INVENTORY.md §pilot; no kernel changes.
+- tests: checker invocation + verdicts recorded verbatim.
+- refusal mode: n/a (SCRATCH-tier pilot; uncitable as authority).
+- receipt shape: report commit citing lean v6.0.0 tag.
+- stop condition: any temptation to make the checker load-bearing — v6 is
+  SCRATCH-promoted; pilot only until Lean promotes.
+
+### B7 — v7 wire-format lane draft
+tier: conceptual · executor: fable · prereq: [B2]
+- purpose: draft AG's v7-assigned lane (JSON schemas for artifact-authority
+  profiles against the CANDIDATE fields), explicitly non-binding until v7
+  ratifies; WLP stays envelope/causal-parent, never semantics.
+- files: new working/ draft (promotes to specs/ only on v7 ratification).
+- tests: schema examples validate (`python3 -m json.tool`).
+- refusal mode: draft marks every field CANDIDATE — nothing citable.
+- receipt shape: commit citing lean v7 gap spec.
+- stop condition: v7 gap spec changes under us — re-sync, do not guess.

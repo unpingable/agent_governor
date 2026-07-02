@@ -1,5 +1,31 @@
 # Decisions — transition-kernel pickup
 
+## B-series sign-off questions (filed 2026-07-02, roadmap program resume)
+
+### Q-B1 — confirm + push Standing 1a/1a-bis  **(OPEN — gates B4/Slice 1b)**
+Standing commits `1e62ba9` (scope-mismatch refusal, non-consuming) and `f101c55`
+(`standing.grant_use.v1` witness packet) implement ratified D010 Model X but are
+**local-only** — a custody hazard (the ratified implementation exists nowhere
+durable). Ask: confirm these as the D010 implementation and push. B4 starts on
+confirmation.
+
+### Q-B3 — corpus custody home  **(OPEN — gates B5..Bn)**
+Recommendation: `~/git/transition-kernel` remains custodian of the shared
+differential corpus (it owns `scripts/differential.py` + the 9 conformant cases);
+wicket fixtures grow in wicket for wicket's own contract, cross-referenced not
+merged; AG contributes cases via its v7 JSON-schema lane. Alternative: charter a
+separate corpus home. One master, no forks.
+
+### Q-B4 — sequencing of the two mint-boundary efforts  **(OPEN, default named)**
+Recommendation: B4 (Python adapter Slice 1b) lands before Rust-kernel resume work
+— it is unblocked, fully specified, and its receipts become corpus feedstock.
+Default on silence: recommendation stands.
+
+### Q-B7 — v7 CANDIDATE exposure  **(OPEN, default named)**
+Recommendation: draft the AG JSON-schema lane against Lean v7's CANDIDATE fields
+now, explicitly non-binding until v7 ratifies. Default on silence: draft in
+`working/`, promote nothing.
+
 ## D010 — transition-kernel pickup boundary  **(RATIFIED 2026-06-23, Model X)**
 
 Status: **RATIFIED** (operator, 2026-06-23). The scope-locus fork was decided **Model X**:

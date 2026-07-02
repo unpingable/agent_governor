@@ -32,6 +32,12 @@ Relation to `nq-operator` (Q-A7 successor direction): the phosphor lane is the
 remains a possible future product boundary only if the lane outgrows the shell.
 One of them, not both, at any given time.
 
+**Governed-session lane (2026-07-02):** phosphor's FIRST new lane is the web
+mirror of maude's desk — queue/session/board over `ag_shell_client`,
+RPC-only (begins split-brain retirement). Design:
+`docs/design/governed-shell/phosphor-lanes.md`; build: governed-shell
+campaign GS-16 (registry) + GS-17 (lane).
+
 ## 1. Contract snapshot — what AG assumes today
 
 - Split-brain architecture (its ARCHITECTURE.md): chat path over daemon RPC
@@ -77,6 +83,11 @@ tier: mechanical · executor: codex · prereq: []
 
 ### R-PHOS-2 — ops-casework lane design (design-only)
 tier: conceptual · executor: fable + operator-paired · prereq: [R-PHOS-1]
+**(MACHINERY HALF DELIVERED 2026-07-02:** the lane abstraction is designed in
+`docs/design/governed-shell/phosphor-lanes.md` and builds as governed-shell
+GS-16; the decision envelope already carries `refs[]` for casework. THIS
+slice retains the CONTENT half — case-card ontology, source boundaries,
+next-safe-move surface — which stays operator-owned.)
 - purpose: define the lane contract before any code: case card model, source boundaries (which fields come from NQ export vs Nightshift verdicts vs AG receipts vs ticketing), refusal/receipt rendering, and the "next safe operator move" surface. This names a product boundary — the ontology gets nailed to the table before a mechanical executor builds cards.
 - files: design doc (phosphor-side or working/ note first); no daemon pin bump, no direct-import expansion, no NQ/ticketing integration in this slice.
 - tests: n/a (design); the contract enumerates R-PHOS-3's work orders.

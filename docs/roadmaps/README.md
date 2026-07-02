@@ -21,6 +21,7 @@ operator rulings recorded in campaign DECISIONS files.
 | Consolidation lane | [CONSOLIDATION.md](CONSOLIDATION.md) | overlap register; absorption criteria; operator rules |
 | Packet A campaign | [../campaigns/constellation-reconciliation/](../campaigns/constellation-reconciliation/CAMPAIGN.md) | handoff-language reconciliation (slices A1–A9, C1–C2) |
 | Packet B campaign | [../campaigns/transition-kernel-pickup/](../campaigns/transition-kernel-pickup/CAMPAIGN.md) | Lean→Rust transition-kernel resume (slices B0–B7) |
+| Governed-shell campaign | [../campaigns/governed-shell/](../campaigns/governed-shell/CAMPAIGN.md) | easy+governed shell: decision queue, watch stream, ag_shell_client, maude 3.0, phosphor lane (GS-0–GS-17; fills R-MAUDE-3 + R-PHOS-2 machinery) |
 | Machine legibility | `.governor/backlog/roadmap-*.json` | one backlog stub per tool roadmap (exporter-visible) |
 | Exporter gap | `specs/gaps/GOV_GAP_ROADMAP_INDEX_LEGIBILITY_001.md` | docs/roadmaps/ not yet scanned; filed, not built |
 

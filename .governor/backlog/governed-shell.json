@@ -1,0 +1,11 @@
+{
+  "id": "governed-shell",
+  "repo": "agent_gov",
+  "kind": "campaign",
+  "spec_ref": "docs/campaigns/governed-shell/CAMPAIGN.md",
+  "forcing_case": "Q-C2-1 amendment reframed maude/phosphor as operator shells; operator brought the deferred product conversation forward — no captured workflow was both easy AND governed",
+  "priority_tier": 1,
+  "status": "filed",
+  "acceptance": "GS-0/GS-1 done with filing. Campaign completes when maude 3.0 ships the desk (queue/session/board/diff over operator.decisions + operator.watch + send_input), ag_shell_client is extracted and CI-tested against the daemon, and phosphor's governed-session lane v0 passes generated lane-contract tests. Sandwiched slices (GS-3, GS-5, GS-7) carry mandatory codex-exec review.",
+  "note": "Design docs in docs/design/governed-shell/ (loop-ux, shell-contract-v0 CANDIDATE, maude-boundary = R-MAUDE-3 executed, phosphor-lanes). Ratified: queue-first, chat cut, lanes new-only, widening offers parked. Boundary law: maude runs the room; AG decides what the room may claim."
+}

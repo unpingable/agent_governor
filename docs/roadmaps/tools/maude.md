@@ -25,11 +25,10 @@ substrate Maude can invoke** — not Maude's whole product boundary.
   transitions; it must not become the whole terminal runtime.
 
 Consolidation effect: maude **exits the generic "Governor UI shell" bucket**
-(CONSOLIDATION.md #1). The evaluation question is no longer "is Maude the
-winning Governor UI?" but "is Maude the terminal control plane for supervised
-agents, with AG as one governed substrate?" Deeper product work on that shape
-is a **deferred operator conversation** — this file records the boundary, not
-a build authorization.
+(CONSOLIDATION.md #1). **The deferred product conversation was HELD and
+DECIDED 2026-07-02:** the full boundary + maude 3.0 design is ratified in
+`docs/design/governed-shell/maude-boundary.md`; the build lane is
+`docs/campaigns/governed-shell/` (GS-9..GS-15).
 
 ## 1. Contract snapshot — what AG assumes today
 
@@ -64,23 +63,17 @@ tier: mechanical · executor: codex · prereq: []
 - receipt shape: one commit citing both HEADs.
 - stop condition: none — pure read.
 
-### R-MAUDE-2 — resync to current daemon (unblocked by Q-C2-1)
+### R-MAUDE-2 — resync to current daemon  **(NARROWED 2026-07-02, D-GS-8)**
 tier: mechanical · executor: codex · prereq: [R-MAUDE-1]
-- purpose: repair what R-MAUDE-1's table shows broken (renamed/gone methods, response-shape changes) so the kept operator shell works against AG 2.8.1.
-- files: enumerated by R-MAUDE-1's findings (maude-side; cross in maude's idiom).
-- tests: maude's own suite bare (real exit code) + a live daemon smoke against `governor serve`.
-- refusal mode: n/a (client repair; the daemon's authority surface is untouched).
-- receipt shape: maude-side commits citing the R-MAUDE-1 table.
-- stop condition: a repair requiring a daemon-side change — obstruction note (that is an AG slice, sandwich rules apply).
+- purpose: ~~full old-client resync~~ **superseded**: GS-9 replaces maude's hand-rolled client with `libs/ag_shell_client` (CI-tested against the daemon), making a full resync dead work. R-MAUDE-1's surface-diff table survives as GS-9 input evidence. Any pre-GS-9 repair is limited to keeping the current build launchable, nothing more.
+- files/tests/receipts: see `docs/campaigns/governed-shell/NEXT.md` GS-9.
+- stop condition: any old-client repair beyond launchability — that effort belongs to GS-9.
 
-### R-MAUDE-3 — terminal control-plane product boundary (deferred, operator conversation first)
-tier: conceptual · executor: fable + operator · prereq: [operator conversation; R-MAUDE-2]
-- purpose: turn §0's reframe into a scoped product record (what of the runtime-supervisor surface moves toward maude, what stays AG) — a boundary paper, not code.
-- files: design note; possibly a maude-side charter doc.
-- tests: n/a (design).
-- refusal mode: the boundary rule in §0 is the constraint — any design where maude mints/refuses authority fails on arrival.
-- receipt shape: design-note commit.
-- stop condition: explicitly deferred — do not open before the operator conversation happens.
+### R-MAUDE-3 — terminal control-plane product boundary  **(EXECUTED 2026-07-02)**
+The operator conversation happened; the boundary is ratified in
+`docs/design/governed-shell/maude-boundary.md` (role, ownership table —
+adapters stay AG — maude 3.0 fork-in-place shape, PLAN/BUILD cut). Build
+slices: governed-shell campaign GS-9..GS-15.
 
 ## 5. Do-not-build
 

@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-spine",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/spine.md",
+  "forcing_case": "Three read-planes (spine / governor-atlas / state_index_export) growing toward each other",
+  "priority_tier": 3,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/spine.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "R-SPINE-1 boundary note after C2 candidate #5"
+}

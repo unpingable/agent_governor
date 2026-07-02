@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-guvnah",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/guvnah.md",
+  "forcing_case": "Hard pin >=2.3.2 <2.4.0 BREAKS vs AG 2.8.1; disposition conflict in exploration",
+  "priority_tier": 2,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/guvnah.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "All build slices blocked on Q-A7; recommendation: defer to UI-shell family verdict"
+}

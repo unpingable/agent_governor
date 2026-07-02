@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-wicket-guard",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/wicket-guard.md",
+  "forcing_case": "None \u2014 pre-alpha, no AG edge; consolidation candidate #2",
+  "priority_tier": 3,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/wicket-guard.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "No AG slices; wicket-guard covers its surface set first"
+}

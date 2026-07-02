@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-maude",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/maude.md",
+  "forcing_case": "Operator TUI 3 months behind daemon; called-RPC set unrecorded (silent drift)",
+  "priority_tier": 2,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/maude.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "R-MAUDE-1 surface diff now; R-MAUDE-2 blocked on UI-shell verdict"
+}

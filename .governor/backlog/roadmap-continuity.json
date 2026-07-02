@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-continuity",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/continuity.md",
+  "forcing_case": "GateReceipts carry no continuity linkage; reliance queries unwired",
+  "priority_tier": 2,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/continuity.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "R-CONT-1 design gated on A8; linkage is testimony, never gating"
+}

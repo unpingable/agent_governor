@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-phosphor",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/phosphor.md",
+  "forcing_case": "Pinned >=2.3.0 vs AG 2.8.1; direct-import read path unverified across 5 minor versions",
+  "priority_tier": 2,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/phosphor.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "R-PHOS-1 compat audit (record only); R-PHOS-2 blocked on UI-shell verdict"
+}

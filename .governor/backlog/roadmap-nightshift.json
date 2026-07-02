@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-nightshift",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/nightshift.md",
+  "forcing_case": "Only FRESHNESS NonDischargeKind wired of six; CLI renders raw JSON",
+  "priority_tier": 2,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/nightshift.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "R-NS-1 sandwich per kind; R-NS-3 watchbill question after"
+}

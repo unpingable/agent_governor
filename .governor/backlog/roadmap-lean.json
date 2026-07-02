@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-lean",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/lean.md",
+  "forcing_case": "Lean at v6.0.0 + v7 gap spec; AG scoping ~5 releases behind; AG-AUDIT-CHECKLIST unapplied",
+  "priority_tier": 1,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/lean.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "Catch-up lane: A3a/A3b + R-LEAN-2 citation-tier audit + B7 schema lane"
+}

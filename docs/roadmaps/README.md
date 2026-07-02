@@ -17,7 +17,7 @@ operator rulings recorded in campaign DECISIONS files.
 |---|---|---|
 | Routing doctrine | [ROUTING.md](ROUTING.md) | NORMATIVE: tiers, six-field slice shape, sandwich rule |
 | Per-tool roadmaps | [tools/](tools/) — 17 files | contract snapshot · drift · gaps · slices per tool |
-| Parked lane | [PARKED.md](PARKED.md) | 12 backburner residents + revive triggers |
+| Parked lane | [PARKED.md](PARKED.md) | 9 backburner residents + revive triggers |
 | Consolidation lane | [CONSOLIDATION.md](CONSOLIDATION.md) | overlap register; absorption criteria; operator rules |
 | Packet A campaign | [../campaigns/constellation-reconciliation/](../campaigns/constellation-reconciliation/CAMPAIGN.md) | handoff-language reconciliation (slices A1–A9, C1–C2) |
 | Packet B campaign | [../campaigns/transition-kernel-pickup/](../campaigns/transition-kernel-pickup/CAMPAIGN.md) | Lean→Rust transition-kernel resume (slices B0–B7) |
@@ -54,9 +54,9 @@ the rest may ratify from exploration evidence alone.
 | claimc | ~/git/claimc | 2026-06-28 | NONE — slices 1–3 complete, consumer-pull | [tools/claimc.md](tools/claimc.md) |
 | nightshift | ~/git/nightshift | 2026-06-12 | MED — unsettled-claim kinds partially wired | [tools/nightshift.md](tools/nightshift.md) |
 | verifier | ~/git/verifier | 2026-06-11 | LOW — schema 0.3.0 tracked | [tools/verifier.md](tools/verifier.md) |
-| maude | ~/git/maude | 2026-04-07 | MED — 3 months behind daemon, silent-drift risk | [tools/maude.md](tools/maude.md) |
-| phosphor (gov-webui) | ~/git/gov-webui | 2026-03-28 | HIGH — pinned >=2.3.0 vs AG 2.8.1 | [tools/phosphor.md](tools/phosphor.md) |
-| guvnah | ~/git/guvnah | 2026-02-24 | **BREAKING** — pin <2.4.0 vs AG 2.8.1 | [tools/guvnah.md](tools/guvnah.md) |
+| maude | ~/git/agent_gov_ui/maude | 2026-04-07 | MED — 3 months behind daemon, silent-drift risk | [tools/maude.md](tools/maude.md) |
+| phosphor (gov-webui) | ~/git/agent_gov_ui/gov-webui | 2026-03-28 | HIGH — pinned >=2.3.0 vs AG 2.8.1 | [tools/phosphor.md](tools/phosphor.md) |
+| guvnah | ~/git/agent_gov_ui/guvnah | 2026-02-24 | **RETIRED** (Q-A7 ruled 2026-07-02; specimen only) | [tools/guvnah.md](tools/guvnah.md) |
 | porter | ~/git/porter | design-only | n/a — no commits; no AG client yet | [tools/porter.md](tools/porter.md) |
 | transition-kernel | ~/git/transition-kernel | 2026-06-18 | MED — three worlds to reconcile (B0/B1) | [tools/transition-kernel.md](tools/transition-kernel.md) |
 | lean | ~/git/lean | 2026-07-02 | **HIGH** — v6.0.0 + v7 gap spec, way past AG scoping | [tools/lean.md](tools/lean.md) |
@@ -66,13 +66,17 @@ AG↔sibling edges as **specified vs wired** — the tool roadmaps cite atlas ca
 docket and do not restate the edge inventory. Atlas's own honest finding stands:
 most constellation edges are *specified, not wired*.
 
-## PARKED lane (12) — see [PARKED.md](PARKED.md)
+## PARKED lane (9) — see [PARKED.md](PARKED.md)
 
-cadence · clerk · custody · dossier · gov-webui(backburner dup) · nlai · resonance
-· sorry/pysorry · thinkulator · vscode-governor · witness-stack · wlp(spec,
-name-collision). **Parked = focus/resource constraint only, never a worth
-judgment** (operator, 2026-07-02). Every entry carries revive triggers; a live
-slice landing on a parked repo pulls it into drive.
+cadence · custody · dossier · nlai · receipt_kernel · resonance · sorry/pysorry
+· thinkulator · witness-ledger-protocol (formerly "wlp", renamed 2026-07-02).
+**Parked = focus/resource constraint only, never a worth judgment** (operator,
+2026-07-02). Every entry carries revive triggers; a live slice landing on a
+parked repo pulls it into drive. UI shells regrouped under `~/git/agent_gov_ui/`
+and **ruled 2026-07-02 (Q-C2-1)**: guvnah retired (specimen only) · maude kept as
+THE operator TUI · phosphor audit-then-retire-or-narrow · clerk and
+vscode-governor parked shells · thinkulator reclassified nonfiction-lane.
+witness-stack graveyarded 2026-07-02.
 
 ## Program dependency graph
 

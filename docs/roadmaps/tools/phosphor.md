@@ -1,10 +1,9 @@
 # Roadmap — phosphor (gov-webui) × AG
 
 **Status:** DRAFT (2026-07-02; ratifiable from exploration evidence)
-Repo: `~/git/gov-webui` (HEAD `2eaed6d`, 2026-03-28; v0.5.0) · Docket:
-governor-atlas constellation case · ⚠ duplicate checkout at
-`~/git/backburner/gov-webui` (same HEAD) — C1 disambiguates; canonical assumed
-`~/git/gov-webui`
+Repo: `~/git/agent_gov_ui/gov-webui` (HEAD `2eaed6d`, 2026-03-28; v0.5.0) · Docket:
+governor-atlas constellation case · (backburner duplicate checkout removed by
+operator 2026-07-02 — this path is canonical)
 
 ## 1. Contract snapshot — what AG assumes today
 
@@ -35,25 +34,28 @@ governor-atlas constellation case · ⚠ duplicate checkout at
 ### R-PHOS-1 — compat audit vs AG 2.8.1 (record, don't fix)
 tier: mechanical · executor: codex · prereq: []
 - purpose: run phosphor's own test suite (incl. test_parity.py) against AG 2.8.1; record pass/fail per suite — evidence for the shell-family verdict.
-- files: read-only in ~/git/gov-webui; results → reconciliation INVENTORY §2 (A7 rows).
+- files: read-only in ~/git/agent_gov_ui/gov-webui; results → reconciliation INVENTORY §2 (A7 rows).
 - tests: phosphor's suite invoked bare, real exit codes recorded per suite (no piped tails).
 - refusal mode: n/a (audit).
 - receipt shape: one commit with the verbatim run log digest.
 - stop condition: suite won't even collect (import errors) — record that AS the finding; do not patch imports.
 
-### R-PHOS-2 — revive or absorb (blocked)
-tier: conceptual · executor: fable · prereq: [R-PHOS-1, C2 UI-shell verdict]
-- purpose: execute the ruling (re-pin + fix parity path, or record absorption target and retire).
-- files/tests/receipts: TBD by verdict.
-- stop condition: no pin bumps, no Phase-1 sandbox work, before the verdict.
+### R-PHOS-2 — retire or narrow to read/status (per Q-C2-1)
+tier: conceptual · executor: fable · prereq: [R-PHOS-1]
+- purpose: on R-PHOS-1's evidence, execute the ruled fork: retire phosphor, or narrow it to a read/status surface (chat/builder paths dropped; the direct-import split-brain resolved in whichever direction survives).
+- files: TBD by the fork taken; recommendation memo first.
+- tests: TBD. · refusal mode: n/a. · receipt shape: memo commit citing R-PHOS-1.
+- stop condition: any outcome that grows phosphor's surface — the ruling permits retire or NARROW only.
 
 ## 5. Do-not-build
 
-- No version-pin bump or parity fix ahead of the ruling (evidence first).
-- No Phase-1 builder sandboxing while the shell's fate is open.
-- No new state query endpoints justified solely by phosphor's direct-import
-  workaround (that architecture is itself under adjudication).
+- No version-pin bump ahead of R-PHOS-1 evidence.
+- No Phase-1 builder sandboxing — builders do not survive either fork of the
+  ruling.
+- No new daemon endpoints justified solely by phosphor's direct-import
+  workaround.
 
 ## 6. Operator questions
 
-- Folded into the UI-shell family ruling (Q-A7 / Q-C2).
+None open. **Q-C2-1 RULED 2026-07-02: audit, then retire or narrow to
+read/status.**

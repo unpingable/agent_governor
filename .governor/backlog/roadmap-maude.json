@@ -7,5 +7,5 @@
   "priority_tier": 2,
   "status": "filed",
   "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/maude.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "R-MAUDE-1 surface diff now; R-MAUDE-2 blocked on UI-shell verdict"
+  "note": "Q-C2-1 ruled: maude KEPT as operator TUI unless explicitly superseded. R-MAUDE-1 surface diff, then R-MAUDE-2 resync (unblocked)."
 }

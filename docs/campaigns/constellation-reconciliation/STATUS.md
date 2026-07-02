@@ -10,6 +10,25 @@ As of 2026-07-02.
 - **A6 executed with program setup** (ROADMAP.md supersession rewrite — landed as
   its own commit in the setup sequence; A8 cites it).
 
+## 2026-07-02 (later) — operator pre-resolutions after skim + external review
+
+- Consolidation candidates resolved by operator action/ruling: #1 UI-shell
+  family (**Q-C2-1**: guvnah retire / maude keep as operator TUI / phosphor
+  audit-then-retire-or-narrow / clerk + vscode-governor parked shells /
+  thinkulator reclassified nonfiction-lane), #3 transition-kernel boundary (keep
+  separate — core-separation ratification), #4 receipt_kernel (parked; in-tree
+  canonical), #6 two-wlps (fossil renamed `witness-ledger-protocol` + LINEAGE,
+  executed), #7 witness-stack (graveyarded), #8 nlai (stays parked).
+  **C1/C2 scope shrinks to #2 (wicket-guard, inclination: absorb into wicket)
+  and #5 (read-plane trio).**
+- **Q-A7 RULED: guvnah RETIRED** (specimen/lineage only; no pin bump, no compat
+  work; successor direction = greenfield `nq-operator`, a new product boundary).
+- UI shells regrouped under `~/git/agent_gov_ui/`; backburner roster now 9.
+- R-MAUDE-2 (resync maude to current daemon) unblocked by the ruling; R-PHOS-2
+  reshaped to retire-or-narrow.
+- Nits from external review patched: C1 candidate cardinality, wlp.md numbering,
+  nq.md HEAD (bumped to `59616dc` — NQ moved again since the sweep).
+
 ## Current next
 
 A1 (surface-inventory verification) and the independent slices A3a/A4/A5/A7/C1

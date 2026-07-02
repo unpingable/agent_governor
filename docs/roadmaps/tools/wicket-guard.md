@@ -37,5 +37,7 @@ also dossier's revive trigger — see PARKED.md; the two may be one forcing case
 ## 6. Operator questions
 
 - Consolidation candidate #2 (CONSOLIDATION.md): does the diff-cook earn a
-  separate repo, or fold into wicket until it grows? Adjudicated by C2, ruled by
-  operator. No AG work is blocked either way.
+  separate repo, or fold into wicket until it grows? Operator inclination
+  recorded 2026-07-02: absorb into wicket (e.g. `wicket/examples/`); execution
+  awaits an explicit go since it touches wicket's repo. No AG work is blocked
+  either way.

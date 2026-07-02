@@ -2,8 +2,9 @@
 
 **Status:** DRAFT (2026-07-02; ratifiable from exploration evidence)
 Repo: `~/git/wlp` (HEAD `081b1bb`, 2026-06-03; v0.2, Rust) · Docket:
-governor-atlas constellation case · ⚠ name collision with parked
-`~/git/backburner/wlp` ("Witness Ledger Protocol" spec) — CONSOLIDATION.md #7
+governor-atlas constellation case · (name collision RESOLVED 2026-07-02: the
+parked spec renamed `~/git/backburner/witness-ledger-protocol`, LINEAGE.md
+in-repo — CONSOLIDATION.md #6)
 
 ## 1. Contract snapshot — what AG assumes today
 
@@ -47,9 +48,7 @@ tier: conceptual · executor: fable · prereq: [forcing case: a wicket admission
   native composition is not broken.
 - WLP never carries semantics into AG (v7 lane split, verbatim): envelope and
   causal parentage only.
-- No resolving the name collision from AG (that is C1 evidence → C2
-  recommendation → operator ruling).
-
 ## 6. Operator questions
 
-- Consolidation candidate #6 (two wlps). Evidence via C1; no AG work blocked.
+None open. (The two-wlp name collision was resolved 2026-07-02 by
+operator-authorized rename of the parked fossil; see CONSOLIDATION.md #6.)

@@ -21,46 +21,57 @@ Default is SHARED. "It felt like a separate thing at the time" is not a criterio
 Corollary: absorption must not launder authority — merging a testimony surface
 into an authority surface needs an explicit boundary note inside the merged repo.
 
-## Overlap candidates (C1 gathers evidence per row; C2 adjudicates)
+**Ratified (operator, 2026-07-02): the core surfaces stay separate.** NQ
+(evidence/basis lifecycle), Standing (grant/authority standing), LA (consumable
+capacity/spend), Wicket (context authorization verdict), Lean (formal proof
+surface), transition-kernel (Rust invariant-bearing kernel), wlp (envelope wire
+protocol), verifier (constraint checking, not governance), claimc (settleability,
+not truth) — distinct authority or implementation surfaces; merging would create
+more laundering risk than cleanup. Candidates below re-open only on new evidence.
 
-### 1. UI-shell family (richest target) — six operator surfaces over one daemon/CLI
+## Overlap candidates (C1 gathers evidence for OPEN rows; C2 adjudicates)
 
-guvnah (Electron RPC cockpit, 2026-02-24, pin **breaks** vs AG 2.8.1) ·
-phosphor/gov-webui (web UI, 2026-03-28, pin 2.3.x) · clerk (parked Electron
-assistant, working v0.1.0) · maude (TUI, 2026-04-07) · vscode-governor (parked IDE
-extension v2.7.0) · thinkulator (parked spec, nonfiction lane).
+### 1. UI-shell family — six operator surfaces over one daemon/CLI  **(RULED 2026-07-02, operator)**
 
-Question for C2: how many operator surfaces does the constellation actually
-sustain, and which one is canonical per modality (desktop / web / terminal / IDE)?
-Evidence wanted: RPC-method coverage overlap (guvnah 39/88 vs phosphor 5/88 vs
-maude), maintenance cost per shell, operator's actual usage. Prior signal:
-maude is the governor's operator TUI by doctrine (memory: maude_dogfood_gap);
-agent-4 called guvnah "deprecated" while agent-5 found a live-but-stale cockpit —
-that conflict is itself evidence the boundary is undocumented.
+Regrouped under **`~/git/agent_gov_ui/`** (clerk · gov-webui · guvnah · maude ·
+vscode-governor; thinkulator spec-only in backburner), then ruled per shell:
 
-### 2. wicket-guard → wicket
+| shell | disposition |
+|---|---|
+| guvnah | **RETIRE** (Q-A7 — lineage/specimen only; successor direction is a greenfield `nq-operator`, a NEW product boundary, not a revival) |
+| maude | **KEEP as the operator TUI** unless explicitly superseded |
+| phosphor (gov-webui) | **AUDIT** (R-PHOS-1); then possibly retire, or **narrow to read/status** |
+| clerk | parked assistant shell (kept, inactive) |
+| vscode-governor | parked IDE-specialized shell (kept, inactive) |
+| thinkulator | nonfiction-lane product spec — **not a Governor shell** (leaves this family) |
+
+Residual work: R-MAUDE-1 (surface diff) + maude resync now unblocked;
+R-PHOS-1 audit feeds the phosphor retire-vs-narrow call. No new shells; any
+future operator cockpit starts as its own product boundary with its own record.
+
+### 2. wicket-guard → wicket  **(OPEN, operator inclination recorded)**
 
 wicket-guard is pre-alpha (one commit, LICENSE-only cook) over the wicket kernel.
 Question: does the diff→Intent cook earn a separate repo (criterion 2: different
 consumers?) or is it a wicket `examples/`+module until it grows?
+Operator inclination (2026-07-02): "not sure why wicket-guard exists" — absorb
+into wicket (e.g. `wicket/examples/`). Execution awaits an explicit go (the move
+touches wicket's repo, a sibling authority surface).
 
-### 3. transition-kernel repo boundary vs AG in-repo kernel work
+### 3. transition-kernel repo boundary vs AG in-repo kernel work  **(RESOLVED 2026-07-02: keep separate)**
 
-`~/git/transition-kernel` (Rust, 9-case byte-conformance, differential.py) vs AG's
-in-repo transition-probe tests and the pickup campaign. Packet B (B0/B1/B3) already
-reconciles content; the consolidation question is narrower: is the **repo boundary**
-right? Prior signal says yes (criterion 1+2: Rust invariant-bearing kernel vs
-Python control plane; rust_kernel_port_ruling), but C1 should verify the corpus
-custody recommendation (B3) doesn't leave two masters.
+Covered by the core-separation ratification above (criterion 1+2: Rust
+invariant-bearing kernel vs Python control plane). Residual: B3's corpus-custody
+ruling (Q-B3) must not leave two masters — tracked in the pickup campaign.
 
-### 4. receipt_kernel repo vs libs/receipt_kernel (in AG)
+### 4. receipt_kernel repo vs libs/receipt_kernel (in AG)  **(RESOLVED 2026-07-02)**
 
-Same library in two places (standalone repo frozen 2026-03-14; in-tree
-`libs/receipt_kernel` actively used). Question: retire one direction explicitly —
-likely "in-tree is canonical, standalone is a fossil/extraction-candidate" — and
-write it down so the next session doesn't re-derive it.
+Operator: the standalone repo was a PyPI self-promotion experiment (like nlai);
+now parked in `~/git/backburner/receipt_kernel`. **In-tree `libs/receipt_kernel`
+is canonical.** Re-extraction FROM in-tree is the only future path if an external
+consumer appears.
 
-### 5. Read-plane trio: spine vs governor-atlas vs state_index_export
+### 5. Read-plane trio: spine vs governor-atlas vs state_index_export  **(OPEN)**
 
 Three index/legibility surfaces: spine (constellation read plane, "findability is
 not legitimacy"), governor-atlas (claim graph, specified-vs-wired docket),
@@ -69,25 +80,26 @@ distinct scopes (constellation-wide reading / AG-architecture claims / AG-repo
 state) — but the boundaries should be *written*, because all three will grow
 toward each other.
 
-### 6. wlp (live Rust wire protocol) vs wlp (backburner spec)
+### 6. wlp (live Rust wire protocol) vs wlp (backburner spec)  **(RESOLVED 2026-07-02: fossil renamed)**
 
-Name collision. Live `~/git/wlp` is healthy and v7-aligned; backburner "Witness
-Ledger Protocol" (WLP-1 draft-4) is an older spec + Python ref impl. Adjudicate
-lineage: rename the fossil, absorb as historical spec in the live repo, or
-graveyard with LINEAGE note. (Two things answering to one name in a constellation
-whose whole doctrine is unambiguous reference is a standing hazard.)
+Name collision, intolerable under unambiguous-reference doctrine. Operator
+authorized the fix; executed same day: `~/git/backburner/wlp` →
+`~/git/backburner/witness-ledger-protocol`, with an in-repo LINEAGE.md (commit
+`ee88cf5`) recording the collision and pointing at the live `~/git/wlp`. The
+fossil stays parked as a historical spec — convergent name, different design,
+not superseded-by.
 
-### 7. witness-stack (parked spec) vs AG receipt doctrine + wlp
+### 7. witness-stack (spec) vs AG receipt doctrine + wlp  **(RESOLVED 2026-07-02: graveyarded)**
 
-Overlapping vocabulary claims about receipted operations. Question: does
-witness-stack's grammar add anything the AG doctrine + wlp envelope don't already
-own? If yes, cite it; if no, retire with pointer.
+Operator moved witness-stack to `~/git/graveyard/` (spec-only, no remote). Its
+receipted-ops vocabulary is owned by AG doctrine + the wlp envelope; anything
+citing witness-stack cites the graveyard copy as historical.
 
-### 8. nlai (parked) vs AG in-tree claim_signals / evidence_gate
+### 8. nlai (parked) vs AG in-tree claim_signals / evidence_gate  **(RESOLVED 2026-07-02: stays parked)**
 
-AG grew claim extraction in-tree after nlai parked. Question: any capability in
-nlai v0.3.0 worth harvesting (sentence-level extraction?) before marking it
-absorbed. Harvest-then-retire is a legitimate verdict.
+Operator: nlai (like receipt_kernel) was a PyPI self-promotion experiment; it
+stays in backburner. Harvest question closed — reopens only with a fresh forcing
+case naming a capability the in-tree modules lack.
 
 ## Non-goals
 

@@ -50,8 +50,8 @@ tier: conceptual · executor: fable · prereq: []
 
 ### A5 — memory-index correction
 tier: mechanical · executor: local-qwen · prereq: []
-- purpose: correct the custody/cadence/dossier/clerk repo references — they are PARKED in ~/git/backburner (relocation), not standalone live repos.
-- files: ~/.claude/projects/-home-jbeck-git-agent-gov/memory/{MEMORY.md,custody_repo.md,cadence_repo.md,dossier_repo.md,admissibility_family.md} + any AG doc referencing them as live paths (grep `~/git/custody|~/git/cadence|~/git/dossier` in docs/).
+- purpose: correct the custody/cadence/dossier repo references — they are PARKED in ~/git/backburner (relocation, not deletion); clerk lives in ~/git/agent_gov_ui/ with the other UI shells.
+- files: ~/.claude/projects/-home-jbeck-git-agent-gov/memory/{MEMORY.md,custody_repo.md,cadence_repo.md,dossier_repo.md,admissibility_family.md} + any AG doc referencing them as live top-level paths (grep `~/git/custody|~/git/cadence|~/git/dossier` in docs/).
 - tests: `grep -rn 'git/custody\|git/cadence\|git/dossier' docs/ | wc -l` → 0 uncorrected; memory files point at backburner + PARKED.md.
 - refusal mode: n/a.
 - receipt shape: one commit (AG side) + memory file edits noted in STATUS.
@@ -68,18 +68,18 @@ tier: mechanical · executor: local-qwen · prereq: []
 
 ### A7 — UI-pin drift record
 tier: mechanical · executor: codex · prereq: []
-- purpose: record (not fix) the UI version-pin breakage so the disposition question is decided on evidence.
-- files: INVENTORY.md §2 rows + DECISIONS.md Q-A7 (guvnah `>=2.3.2 <2.4.0` vs AG 2.8.1 = breaking; phosphor `>=2.3.0`, 5/88 RPC + direct-import split-brain).
+- purpose: record (not fix) the UI version-pin breakage for the report. (Q-A7 and Q-C2-1 were RULED 2026-07-02 before this slice ran — the record is now report evidence + R-PHOS-1 feedstock, not decision input.)
+- files: INVENTORY.md §2 rows (guvnah `>=2.3.2 <2.4.0` vs AG 2.8.1 = breaking, retired under Q-A7; phosphor `>=2.3.0`, 5/88 RPC + direct-import split-brain, pending R-PHOS-1).
 - tests: quotes from guvnah/COMPAT.md + gov-webui/COMPAT.md + AG pyproject version, each with path.
 - refusal mode: n/a.
 - receipt shape: one commit citing both COMPAT.md files.
-- stop condition: temptation to bump a pin — that is guvnah/phosphor roadmap work gated on the disposition ruling.
+- stop condition: temptation to bump a pin — forbidden outright for guvnah (ruling) and gated on R-PHOS-1 for phosphor.
 
 ### C1 — consolidation evidence assembly
 tier: mechanical · executor: codex · prereq: []
-- purpose: per CONSOLIDATION.md candidate (9 rows), gather usage/import/staleness evidence — no judgments.
-- files: read-only across ~/git; output evidence table per candidate → INVENTORY.md §6 appendix (RPC coverage counts, import graphs, HEAD dates, duplicate-HEAD verification for gov-webui, both wlp READMEs quoted).
-- tests: every evidence cell carries a path or command output; `git -C ~/git/backburner/gov-webui rev-parse HEAD` vs `git -C ~/git/gov-webui rev-parse HEAD` recorded.
+- purpose: per **OPEN** CONSOLIDATION.md candidate (as of 2026-07-02 evening: #2 wicket-guard, #5 read-plane trio — operator rulings closed #1/#3/#4/#6/#7/#8 same day), gather usage/import/staleness evidence — no judgments.
+- files: read-only across ~/git (UI shells now under ~/git/agent_gov_ui/); output evidence table per open candidate → INVENTORY.md §6 appendix (RPC coverage counts, import graphs, HEAD dates, maintenance cost signals).
+- tests: every evidence cell carries a path or command output; membership fence respected (constellation members only).
 - refusal mode: n/a.
 - receipt shape: appendix, one commit.
 - stop condition: evidence requiring a repo not on disk — record `unverifiable`, move on.

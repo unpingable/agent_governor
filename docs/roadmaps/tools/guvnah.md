@@ -1,49 +1,45 @@
 # Roadmap — guvnah × AG
 
-**Status:** DRAFT (2026-07-02; §4 build slices blocked on Q-A7)
-Repo: `~/git/guvnah` (HEAD `f58fd49`, 2026-02-24; v2.3.2 Electron cockpit) ·
-Docket: governor-atlas constellation case
+**Status:** RATIFIED (2026-07-02 — Q-A7 RULED: **RETIRED**)
+Repo: `~/git/agent_gov_ui/guvnah` (HEAD `f58fd49`, 2026-02-24; v2.3.2 Electron
+cockpit) · Docket: governor-atlas constellation case · Ruling:
+`docs/campaigns/constellation-reconciliation/DECISIONS.md` Q-A7
 
-## 1. Contract snapshot — what AG assumes today
+## 1. Disposition (operator ruling, 2026-07-02)
 
-- Electron 33 / Svelte 5 cockpit over the daemon as a **stdio child**
-  (Content-Length framed JSON-RPC 2.0); untrusted-cockpit doctrine (governor is
-  sole authority; IPC shape-adapters are the single compat seam; per-panel error
-  isolation).
-- 39/88 RPC methods wired (chain/claims/commit/correlator/governor/intent/
-  operator/receipts/receipts_v1/scars/sessions/trace); 16 documented NOT wired
-  (scope, stability, lanes, policy, chat — chat intentionally: observe-only).
-- COMPAT.md pin: **`>=2.3.2 <2.4.0`** — refuses newer daemons by design.
-- 123 unit tests + 2 Playwright E2E.
+**Retired as the generic Governor cockpit.** guvnah solved a coordination
+problem the local Governor tool did not yet have; a dashboard over a local,
+single-operator daemon creates surface area before multi-case, multi-system
+operational pressure justifies it. Archive or make private (operator-side);
+retained as **lineage/specimen material only** — code, tests, RPC framing, and
+UI patterns may be borrowed later, but guvnah is not the active UI shell and
+**not the lineage authority for any successor**.
 
-## 2. Observed drift (dated)
+Successor direction, if needed: greenfield **`nq-operator`** — an operations
+admissibility cockpit over NQ, Nightshift, AG, ticketing, and related casework
+surfaces. A new product boundary, not a revival. No repo, no slices, until its
+own forcing case.
 
-| claim | evidence | severity |
-|---|---|---|
-| Hard pin `<2.4.0` vs AG 2.8.1 = **breaking**: guvnah cannot start against the current daemon | guvnah COMPAT.md; AG pyproject 2.8.1 | BREAKING |
-| Exploration produced conflicting dispositions: "deprecated/superseded" vs "stale but doctrinally-correct cockpit" — the boundary is undocumented | agents 4 vs 5, 2026-07-02 sweep | evidence for Q-A7 |
+## 2. Specimen record (what it was — for future borrowing)
 
-## 3. Named gaps (non-binding)
+- Electron 33 / Svelte 5 over the daemon as a stdio child (Content-Length framed
+  JSON-RPC 2.0); untrusted-cockpit doctrine (governor sole authority; IPC
+  shape-adapters as the single compat seam; per-panel error isolation) — the
+  doctrine was correct even where the product wasn't needed.
+- 39/88 RPC methods wired; 16 documented not-wired; 123 unit tests + 2 E2E.
+- Hard pin `>=2.3.2 <2.4.0` (breaks vs AG 2.8.1) — left as-is by ruling.
 
-- `GUVNAH_DISPOSITION_UNRECORDED` — nothing in either repo says whether guvnah
-  is alive. Whatever Q-A7 rules, the ruling gets written down in both.
+## 3. Slices
 
-## 4. Slices
+None. Retired.
 
-All build slices **blocked on Q-A7** (reconciliation DECISIONS.md; recommendation:
-defer to the UI-shell family verdict, C2). On a revive ruling, the first slices
-would be: re-pin to `>=2.8`, run the 123-test suite against the live daemon
-(record real exit codes), then wire-or-gap the 16 deferred namespaces. On a
-retire ruling: a supersession README pointing at the surviving shell, and PARKED
-or graveyard placement with LINEAGE note.
+## 4. Do-not-build
 
-## 5. Do-not-build
+- No pin bump, no daemon compat restoration, no RPC expansion, no feature work
+  (ruling, verbatim).
+- No `nq-operator` work smuggled in under this file — that is a new product
+  boundary with its own future record.
 
-- Nothing — literally no guvnah work — before the disposition ruling. The pin
-  break is *evidence*, not an emergency: nothing operational depends on guvnah
-  today.
+## 5. Operator questions
 
-## 6. Operator questions
-
-- **Q-A7** (reconciliation DECISIONS.md): revive / retire / defer-to-C2.
-  Recommendation on file: defer to the family verdict.
+None. Q-A7 ruled.

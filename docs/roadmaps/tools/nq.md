@@ -1,7 +1,7 @@
 # Roadmap — nq × AG
 
 **Status:** DRAFT (2026-07-02; ratifies after reconciliation slice A8)
-Repo: `~/git/nq-root/nq` (HEAD `c1dd7d3`, 2026-07-02) · Docket: governor-atlas
+Repo: `~/git/nq-root/nq` (HEAD `59616dc`, 2026-07-02) · Docket: governor-atlas
 constellation case (NQ edge) · Consumer seam: `src/governor/nightshift_adapter.py`
 + `src/governor/drill_runner.py` (FindingSnapshot consumers)
 

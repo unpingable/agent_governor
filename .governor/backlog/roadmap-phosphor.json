@@ -7,5 +7,5 @@
   "priority_tier": 2,
   "status": "filed",
   "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/phosphor.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "R-PHOS-1 compat audit (record only); R-PHOS-2 blocked on UI-shell verdict"
+  "note": "Q-C2-1 ruled: audit (R-PHOS-1), then retire or NARROW to read/status (R-PHOS-2). No growth path."
 }

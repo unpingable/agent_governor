@@ -1,10 +1,35 @@
 # Roadmap — maude × AG
 
-**Status:** DRAFT (2026-07-02; ratifiable from exploration evidence)
-Repo: `~/git/agent_gov_ui/maude` (HEAD `99fb093`, 2026-04-07 — most-stale core surface) ·
-Docket: governor-atlas constellation case · Doctrine: maude is the governor's
-operator TUI (memory: maude_dogfood_gap); Continuity=rely, **Maude=decide**,
-Spine=find
+**Status:** DRAFT (2026-07-02; role reframed per Q-C2-1 amendment, same day)
+Repo: `~/git/agent_gov_ui/maude` (HEAD `99fb093`, 2026-04-07) · Docket:
+governor-atlas constellation case
+
+## 0. Role (operator reframe, 2026-07-02 — supersedes "governor's operator TUI")
+
+Maude is the **terminal-native operator shell for supervised agent runtimes and
+cross-tool decision workflows** (OpenClaw/Hermes-shaped). AG is **one authority
+substrate Maude can invoke** — not Maude's whole product boundary.
+
+> Maude runs the room. AG decides what the room is allowed to claim.
+
+- **Maude owns:** operator interaction; session DAG / branch/fork/promotion UX;
+  model/runtime adapters (Claude Code, Codex, Gemini, local Qwen, …); tool-call
+  supervision surfaces; memory/tool/MCP-ish surfaces; sandbox/process
+  boundaries; transcript/event rendering; the "what needs a human decision?"
+  queue.
+- **AG owns:** authority semantics, refusal placement, receipts,
+  Standing/Wicket/LA/Nightshift/NQ integration — what may mint, spend, admit,
+  refuse, or escalate.
+- **Boundary rule:** Maude may orchestrate and render decisions; it must not
+  become the authority source. AG may refuse or authorize authority-bearing
+  transitions; it must not become the whole terminal runtime.
+
+Consolidation effect: maude **exits the generic "Governor UI shell" bucket**
+(CONSOLIDATION.md #1). The evaluation question is no longer "is Maude the
+winning Governor UI?" but "is Maude the terminal control plane for supervised
+agents, with AG as one governed substrate?" Deeper product work on that shape
+is a **deferred operator conversation** — this file records the boundary, not
+a build authorization.
 
 ## 1. Contract snapshot — what AG assumes today
 
@@ -12,7 +37,7 @@ Spine=find
   RPC boundary; never imports governor code). Supervised-session loop: launch →
   intercept → approve/deny → exit → review → promote/reject; 12 `supervised`
   commands + `snapshot`/`wtf` (per AG feature-history).
-- No version pin found (loose coupling) — degrades silently rather than breaking
+- No version pin (loose coupling) — degrades silently rather than breaking
   loudly.
 
 ## 2. Observed drift (dated)
@@ -20,12 +45,12 @@ Spine=find
 | claim | evidence | severity |
 |---|---|---|
 | Last substantive commit 2026-04-07; AG daemon has since grown/changed methods (88 total) — maude's called-set unverified against current daemon | maude git log; AG daemon.py | MED |
-| No maude↔AG contract doc exists; drift is silent by construction | exploration sweep | MED |
+| Roadmap/docs framed maude as "UI for Governor" — too small per the 2026-07-02 reframe | this file §0 | patched here |
 
 ## 3. Named gaps (non-binding)
 
 - `MAUDE_RPC_SURFACE_UNPINNED` — the set of RPC methods maude calls is not
-  recorded anywhere AG-visible; a daemon change can strand the operator TUI
+  recorded anywhere AG-visible; a daemon change can strand the operator shell
   without any signal.
 
 ## 4. Slices
@@ -41,21 +66,31 @@ tier: mechanical · executor: codex · prereq: []
 
 ### R-MAUDE-2 — resync to current daemon (unblocked by Q-C2-1)
 tier: mechanical · executor: codex · prereq: [R-MAUDE-1]
-- purpose: repair what R-MAUDE-1's table shows broken (renamed/gone methods, response-shape changes) so the ruled-canonical operator TUI works against AG 2.8.1.
+- purpose: repair what R-MAUDE-1's table shows broken (renamed/gone methods, response-shape changes) so the kept operator shell works against AG 2.8.1.
 - files: enumerated by R-MAUDE-1's findings (maude-side; cross in maude's idiom).
 - tests: maude's own suite bare (real exit code) + a live daemon smoke against `governor serve`.
 - refusal mode: n/a (client repair; the daemon's authority surface is untouched).
 - receipt shape: maude-side commits citing the R-MAUDE-1 table.
 - stop condition: a repair requiring a daemon-side change — obstruction note (that is an AG slice, sandwich rules apply).
 
+### R-MAUDE-3 — terminal control-plane product boundary (deferred, operator conversation first)
+tier: conceptual · executor: fable + operator · prereq: [operator conversation; R-MAUDE-2]
+- purpose: turn §0's reframe into a scoped product record (what of the runtime-supervisor surface moves toward maude, what stays AG) — a boundary paper, not code.
+- files: design note; possibly a maude-side charter doc.
+- tests: n/a (design).
+- refusal mode: the boundary rule in §0 is the constraint — any design where maude mints/refuses authority fails on arrival.
+- receipt shape: design-note commit.
+- stop condition: explicitly deferred — do not open before the operator conversation happens.
+
 ## 5. Do-not-build
 
-- No new maude features — resync repairs the existing surface only; growth needs
-  its own forcing case.
+- No maude feature growth before R-MAUDE-2 resync lands (repair before expand).
+- No authority semantics in maude, ever (§0 boundary rule).
 - No contract doc that duplicates the daemon's own registry — R-MAUDE-1's table
   cites, not copies.
 
 ## 6. Operator questions
 
-None open. **Q-C2-1 RULED 2026-07-02: maude is kept as the operator TUI unless
-explicitly superseded.**
+None open. Q-C2-1 (as amended 2026-07-02): maude kept, reframed as the
+terminal-native operator shell; product-boundary conversation deferred by the
+operator.

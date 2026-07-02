@@ -27,13 +27,30 @@ Effect on the register: guvnah leaves the open UI-shell verdict set; C2's
 family question continues for phosphor / clerk / maude / vscode-governor /
 thinkulator.
 
-## Q-C2-1 — UI-shell family  **(RULED 2026-07-02, operator)**
+## Q-C2-1 — UI-shell family  **(RULED 2026-07-02; AMENDED same day, operator)**
 
-guvnah: retire (see Q-A7) · maude: keep as operator TUI unless explicitly
-superseded · phosphor: audit, then possibly retire or narrow to read/status ·
-clerk: parked assistant shell · vscode-governor: parked IDE-specialized shell ·
-thinkulator: nonfiction lane, not a Governor shell. Full table in
-`docs/roadmaps/CONSOLIDATION.md` #1.
+Original ruling: guvnah retire (see Q-A7) · maude keep as operator TUI ·
+phosphor audit-then-retire-or-narrow · clerk/vscode-governor parked ·
+thinkulator nonfiction-lane.
+
+**Amendment (operator, 2026-07-02 evening):** maude and phosphor are reframed
+OUT of the "Governor UI shell" bucket entirely —
+
+- **maude** = terminal-native operator shell for supervised agent runtimes and
+  cross-tool decision workflows (OpenClaw/Hermes-shaped). AG is one authority
+  substrate maude invokes, not its product boundary. *"Maude runs the room; AG
+  decides what the room is allowed to claim."* Deeper product-boundary work is a
+  deferred operator conversation (R-MAUDE-3, do not open early).
+- **phosphor** = web-native lane host (the web equivalent of maude's role), NOT
+  retire-or-narrow. Candidate `ops-casework` lane over NQ/Nightshift/AG/
+  ticketing — design-only first (R-PHOS-2, Fable/operator-paired, names a
+  product boundary). Phosphor renders and routes; NQ testifies, Nightshift
+  classifies, AG governs authority/receipts, ticketing coordinates, the
+  operator decides.
+- `nq-operator` (Q-A7 successor direction) becomes a *future possibility* only
+  if the phosphor lane outgrows the shell — not a parallel build.
+
+Full table + product split in `docs/roadmaps/CONSOLIDATION.md` #1.
 
 ## Q-C2-* — remaining consolidation verdicts  **(OPEN: #2 wicket-guard, #5 read-plane trio)**
 

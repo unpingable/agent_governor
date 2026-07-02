@@ -36,18 +36,32 @@ more laundering risk than cleanup. Candidates below re-open only on new evidence
 Regrouped under **`~/git/agent_gov_ui/`** (clerk · gov-webui · guvnah · maude ·
 vscode-governor; thinkulator spec-only in backburner), then ruled per shell:
 
-| shell | disposition |
+| shell | disposition (as amended same day) |
 |---|---|
-| guvnah | **RETIRE** (Q-A7 — lineage/specimen only; successor direction is a greenfield `nq-operator`, a NEW product boundary, not a revival) |
-| maude | **KEEP as the operator TUI** unless explicitly superseded |
-| phosphor (gov-webui) | **AUDIT** (R-PHOS-1); then possibly retire, or **narrow to read/status** |
+| guvnah | **RETIRE** (Q-A7 — lineage/specimen only; was "dashboard for a local Governor" — premature surface area) |
+| maude | **KEEP + REFRAME**: terminal-native operator shell for supervised agent runtimes (OpenClaw/Hermes-shaped); AG = one authority substrate it invokes. **Exits the Governor-shell bucket** — see tools/maude.md §0 |
+| phosphor (gov-webui) | **KEEP + REFRAME**: web-native lane host (focused workflow lanes, not universal daemon control); candidate `ops-casework` lane over NQ/Nightshift/AG/ticketing. Audit (R-PHOS-1) → lane design (R-PHOS-2) → build. See tools/phosphor.md §0 |
 | clerk | parked assistant shell (kept, inactive) |
 | vscode-governor | parked IDE-specialized shell (kept, inactive) |
 | thinkulator | nonfiction-lane product spec — **not a Governor shell** (leaves this family) |
 
-Residual work: R-MAUDE-1 (surface diff) + maude resync now unblocked;
-R-PHOS-1 audit feeds the phosphor retire-vs-narrow call. No new shells; any
-future operator cockpit starts as its own product boundary with its own record.
+The resulting product split (operator + external review, 2026-07-02):
+
+```
+maude       = terminal-native agent/runtime operator shell (runs the room)
+phosphor    = web-native lane host (ops-casework lane = near-term ops cockpit)
+AG          = authority kernel + receipts + refusal semantics (decides what the
+              room is allowed to claim)
+nightshift  = operational policy / unsettled-claim layer
+NQ          = evidence/basis testimony
+nq-operator = possible FUTURE standalone ops cockpit, only if the phosphor lane
+              outgrows the shell (one of them at a time, not both)
+```
+
+Boundary rule (both shells): shells orchestrate and render; they must not become
+authority sources. AG refuses/authorizes authority-bearing transitions; it must
+not become the runtime. No new shells; any future operator cockpit starts as its
+own product boundary with its own record.
 
 ### 2. wicket-guard → wicket  **(OPEN, operator inclination recorded)**
 

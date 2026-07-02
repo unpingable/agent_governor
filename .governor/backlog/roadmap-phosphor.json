@@ -7,5 +7,5 @@
   "priority_tier": 2,
   "status": "filed",
   "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/phosphor.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "Q-C2-1 ruled: audit (R-PHOS-1), then retire or NARROW to read/status (R-PHOS-2). No growth path."
+  "note": "Q-C2-1 amended: phosphor = web-native lane host (not retire-or-narrow); candidate ops-casework lane over NQ/Nightshift/AG/ticketing. R-PHOS-0 done -> R-PHOS-1 audit -> R-PHOS-2 lane design (fable+operator) -> R-PHOS-3 build."
 }

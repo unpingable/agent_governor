@@ -54,8 +54,8 @@ the rest may ratify from exploration evidence alone.
 | claimc | ~/git/claimc | 2026-06-28 | NONE — slices 1–3 complete, consumer-pull | [tools/claimc.md](tools/claimc.md) |
 | nightshift | ~/git/nightshift | 2026-06-12 | MED — unsettled-claim kinds partially wired | [tools/nightshift.md](tools/nightshift.md) |
 | verifier | ~/git/verifier | 2026-06-11 | LOW — schema 0.3.0 tracked | [tools/verifier.md](tools/verifier.md) |
-| maude | ~/git/agent_gov_ui/maude | 2026-04-07 | MED — 3 months behind daemon, silent-drift risk | [tools/maude.md](tools/maude.md) |
-| phosphor (gov-webui) | ~/git/agent_gov_ui/gov-webui | 2026-03-28 | HIGH — pinned >=2.3.0 vs AG 2.8.1 | [tools/phosphor.md](tools/phosphor.md) |
+| maude | ~/git/agent_gov_ui/maude | 2026-04-07 | MED — resync pending; REFRAMED: terminal operator shell, AG = one substrate | [tools/maude.md](tools/maude.md) |
+| phosphor (gov-webui) | ~/git/agent_gov_ui/gov-webui | 2026-03-28 | HIGH — pin 2.3.x; REFRAMED: web lane host + ops-casework lane candidate | [tools/phosphor.md](tools/phosphor.md) |
 | guvnah | ~/git/agent_gov_ui/guvnah | 2026-02-24 | **RETIRED** (Q-A7 ruled 2026-07-02; specimen only) | [tools/guvnah.md](tools/guvnah.md) |
 | porter | ~/git/porter | design-only | n/a — no commits; no AG client yet | [tools/porter.md](tools/porter.md) |
 | transition-kernel | ~/git/transition-kernel | 2026-06-18 | MED — three worlds to reconcile (B0/B1) | [tools/transition-kernel.md](tools/transition-kernel.md) |
@@ -73,10 +73,11 @@ cadence · custody · dossier · nlai · receipt_kernel · resonance · sorry/py
 **Parked = focus/resource constraint only, never a worth judgment** (operator,
 2026-07-02). Every entry carries revive triggers; a live slice landing on a
 parked repo pulls it into drive. UI shells regrouped under `~/git/agent_gov_ui/`
-and **ruled 2026-07-02 (Q-C2-1)**: guvnah retired (specimen only) · maude kept as
-THE operator TUI · phosphor audit-then-retire-or-narrow · clerk and
-vscode-governor parked shells · thinkulator reclassified nonfiction-lane.
-witness-stack graveyarded 2026-07-02.
+and **ruled 2026-07-02 (Q-C2-1, as amended)**: guvnah retired (specimen only) ·
+maude reframed as the terminal-native operator shell (AG = one substrate it
+invokes) · phosphor reframed as web-native lane host (candidate ops-casework
+lane) · clerk and vscode-governor parked shells · thinkulator reclassified
+nonfiction-lane. witness-stack graveyarded 2026-07-02.
 
 ## Program dependency graph
 

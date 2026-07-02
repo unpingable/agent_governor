@@ -7,5 +7,5 @@
   "priority_tier": 2,
   "status": "filed",
   "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/maude.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "Q-C2-1 ruled: maude KEPT as operator TUI unless explicitly superseded. R-MAUDE-1 surface diff, then R-MAUDE-2 resync (unblocked)."
+  "note": "Q-C2-1 amended: maude = terminal-native operator shell (OpenClaw/Hermes-shaped), exits Governor-shell bucket; AG = one substrate it invokes. R-MAUDE-1 diff -> R-MAUDE-2 resync; R-MAUDE-3 product boundary DEFERRED to operator conversation."
 }

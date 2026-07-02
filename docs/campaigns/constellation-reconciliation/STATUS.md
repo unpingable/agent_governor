@@ -24,8 +24,16 @@ As of 2026-07-02.
 - **Q-A7 RULED: guvnah RETIRED** (specimen/lineage only; no pin bump, no compat
   work; successor direction = greenfield `nq-operator`, a new product boundary).
 - UI shells regrouped under `~/git/agent_gov_ui/`; backburner roster now 9.
-- R-MAUDE-2 (resync maude to current daemon) unblocked by the ruling; R-PHOS-2
-  reshaped to retire-or-narrow.
+- R-MAUDE-2 (resync maude to current daemon) unblocked by the ruling.
+- **Q-C2-1 AMENDED same evening:** maude reframed as terminal-native operator
+  shell (OpenClaw/Hermes-shaped; exits the Governor-shell bucket; R-MAUDE-3
+  product-boundary conversation deferred); phosphor reframed as web-native lane
+  host with candidate `ops-casework` lane (R-PHOS-0 executed / R-PHOS-1 audit /
+  R-PHOS-2 lane design, Fable+operator-paired / R-PHOS-3 build) — supersedes
+  the morning's retire-or-narrow. `nq-operator` demoted to future-possibility
+  (only if the lane outgrows the shell).
+- **Push checkpoint (operator):** everything pushes after step 5 of the
+  execution order (i.e. after B4 lands) — not before.
 - Nits from external review patched: C1 candidate cardinality, wlp.md numbering,
   nq.md HEAD (bumped to `59616dc` — NQ moved again since the sweep).
 

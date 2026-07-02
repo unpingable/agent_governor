@@ -49,6 +49,16 @@ program setup. Nothing below is authorized to build; the paired backlog item is
 - No scanner rewriting of roadmap docs (declared/observed custody split holds).
 - No `dependency_edge` in the first slice (see 3 above — separate gate).
 
+## Cross-branch note (2026-07-02)
+
+`state_index_export.py` (Slice 0) currently lives on
+`feat/playbooks-synthetic-conveyor`, not main; this program branch
+(`feat/roadmaps-constellation`) is off main. Verified compatible anyway: the
+conveyor-branch exporter run against this tree scans all 18 backlog stubs
+(`backlog_item`/declared) and both campaign capsules (`planned_slice` /
+`operator_decision` / `work_packet`), deterministically, 275 records. The build
+slice here becomes actionable only after both branches meet on main.
+
 ## Open questions
 
 - Should `tool_roadmap` records carry the drift-severity table row (structured)

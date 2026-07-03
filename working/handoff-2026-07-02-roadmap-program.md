@@ -4,7 +4,30 @@ Cold-start entry point for the NEXT session (any model tier; slices below are
 routed per `docs/roadmaps/ROUTING.md`). Everything stated here is backed by
 committed docs — when in doubt, the doc wins over this note.
 
-## Where things stand
+## 2026-07-03 update — Packets A, B(→B4), governed-shell GS-0/1/2a, and C landed on main (pushed thru 764997a); the whole roadmaps branch is merged
+
+- **Packet A (reconciliation): COMPLETE** — A1–A9 + C1/C2; prosecutor report
+  reviewed UNSOUND, adjudicated + amended. Stubs: capsule-authority-reverify,
+  admission-receipt-linearity, cli-reference-wording-pass.
+- **Packet B: through B4** — Slice 1b MERGED (3-round codex sandwich, 7 authority
+  findings fixed). B2 map (wicket→PASS REFUTED). B5 = 9 cases enumerated.
+- **governed-shell: GS-0/1/2a** — operator_decisions.py aggregator (15 tests).
+- **Packet C (corpus custody): COMPLETE, Q-B3 RESOLVED** —
+  `docs/campaigns/corpus-custody/`. AG `golden/corpus/` = admission source;
+  transition-kernel `vectors/legacy/` = byte-identical mirror. Guard:
+  `golden/corpus/MANIFEST.json` + `tests/test_corpus_custody.py`
+  (sandwich-reviewed MERGE-SAFE). **C4: B5 partially blocked but NOT on custody**
+  — corpus live-chain emits only 6 refusal kinds; B5 targets need drill
+  scenarios / a refusal-typing decision first.
+
+**Best next backlog (well-scoped):** B5 first scenario-build (dogfoods the new
+custody pipeline; scope_mismatch is hardest — it's on the activation path, not
+the run_drill gauntlet); GS-2b daemon wiring (exposure-only, safe); the
+cli-reference-wording-pass (mechanical, enumerated in reconciliation INVENTORY
+§2 A2); freshness-typing decision (operator); Q-C2-2 wicket-guard (operator).
+Open gates now: Q-C2-2, Q-C2-5, freshness-typing. Q-B1/Q-B3 RESOLVED.
+
+## Where things stand (as of the initial 2026-07-02 handoff, largely superseded above)
 
 - **Branch `feat/roadmaps-constellation`** (off main, **UNPUSHED**, 19 commits
   ending `5532df1`). Holds the whole roadmap program. **Push checkpoint

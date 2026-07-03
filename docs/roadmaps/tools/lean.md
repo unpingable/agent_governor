@@ -1,8 +1,10 @@
 # Roadmap — lean × AG (the catch-up lane)
 
 **Status:** DRAFT (2026-07-02; ratifies after reconciliation slice A8)
-Repo: `~/git/lean` (HEAD `ff4aadf`, 2026-07-02; **v6.0.0 tagged + DOI
-10.5281/zenodo.20369489; v7 gap spec CANDIDATE**) · Crosswalk:
+Repo: `~/git/lean` (HEAD `762967c`, 2026-07-02 — the repo moved TWICE today:
+**v7.0.0 TAGGED same day** (`b9860aa`, artifact authority profiles +
+next-surfaces register; was CANDIDATE at the morning sweep), post-v7 threads
+already open (pathverdict tier-1 extraction in scratch)) · Crosswalk:
 `~/git/lean/docs/AG-AUDIT-CHECKLIST.md`
 
 ## 1. Contract snapshot — what AG assumes today
@@ -23,7 +25,7 @@ Repo: `~/git/lean` (HEAD `ff4aadf`, 2026-07-02; **v6.0.0 tagged + DOI
 | Witnessed Derivation Calculus v1.4.0 (Mathlib-free; Lift, non-manufacture, ResourceCheckerExec) | [1.0-separate] | citable for bridge composition |
 | BoundedCalculi v3.0.0 (9 bounded judgments; `checkpoint_mints_nothing`, ticket-accepted≠executed…) | ANNEX | cite exact theorem only; cannot ratify |
 | v4/v5/v6 custody campaign — priced contraction, "normalization cannot forge payment", **v6 finite-support checker (typed CheckResult naming the offender; `firstDeficient_decides_check`; decidable screens)** | SCRATCH (v6.0.0 tagged) | pilot-only (slice B6); uncitable as authority until promoted |
-| v7 gap spec: artifact authority profiles; lane split — Lean owns profile laws, **AG owns JSON schemas / wire formats / runtime gates**; WLP = envelope only | CANDIDATE | design AG schemas against candidate fields (slice B7), promote nothing |
+| **v7.0.0 SHIPPED (tagged 2026-07-02 evening)**: artifact authority profiles; lane split — Lean owns profile laws, **AG owns JSON schemas / wire formats / runtime gates**; WLP = envelope only | **RELEASED** (verify per-theorem tier before citing) | **B7 lane assignment is LIVE** — AG's schema work proceeds against the released profile laws, no longer marked non-binding-until-ratification |
 | `docs/AG-AUDIT-CHECKLIST.md` — 8 items mapping theorem families to AG schema audits; `CLAIM-REGISTER.md` — what Lean DISPROVED | docs | A3a/A3b anchor |
 
 ## 3. Named gaps (non-binding)

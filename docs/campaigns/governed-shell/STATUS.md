@@ -22,6 +22,14 @@ environment; scribe extracts, fixes, verifies). governor verify-run receipt
 f00a7f11 [pass]. Remaining for GS-2: daemon registration + docket/
 admissibility read RPC + HELD-launch state (GS-2b). GS-3/4/5/6 unstarted.
 
+## 2026-07-03 — GS-2b core landed
+
+`operator.decisions.list` read-only RPC on main (`a28d727`): unified feed
+over supervised interventions + promotions + pending violation via the
+hardened aggregator (`build_feed_from_runtime`). Sandwich MERGE-SAFE.
+Deferred (need DaemonState plumbing): docket + admissibility sources +
+HELD-launch state = GS-2b remainder. GS-4/5/6/3 not started.
+
 ## Current next
 
 Daemon slices unblocked: **GS-2** (decisions.list + docket/admissibility

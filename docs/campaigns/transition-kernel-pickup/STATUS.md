@@ -2,6 +2,16 @@
 
 As of 2026-07-02 evening (B1 executed; prior snapshots preserved below).
 
+## 2026-07-03 — B5 quartet + freshness_subcase DONE (corpus 9->13)
+
+- B5 A-1..A-4 (scope_mismatch/token_revoked/token_expired/unknown_token) +
+  A-5 typed freshness_subcase + A-6 closure: golden/corpus grew 9->13, AG
+  sovereign + transition-kernel mirror byte-identical, both kernels
+  reproduce (differential 13/13). Sandwiched (2 codex BLOCKs resolved).
+  Freshness-granularity alignment gap filed. B5-work-order.md tracks the
+  4 remaining (blocked on operator/prior-gap). Mirror-side check shipped
+  (transition-kernel scripts/verify_mirror.py).
+
 ## 2026-07-02 evening — B1 done, Q-B1 resolved, B4 unblocked
 
 - **B1 executed** (INVENTORY §Three worlds): differential green 9/9 EXIT=0;

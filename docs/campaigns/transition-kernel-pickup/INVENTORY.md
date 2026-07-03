@@ -86,3 +86,56 @@ Where does spend-time scope-mismatch refusal live?
 This fork is the ratification question for D010 and decides Slice 1's shape (see NEXT.md).
 Recommendation: do not let scope-match be *implicit* either way — it must be an explicit,
 receipted refusal with a named locus.
+
+---
+
+## Three worlds (B1, executed 2026-07-02)
+
+### World 1 — AG parked branch `feat/transition-kernel-slice-1b`
+Two commits past main: `24acd8f` (Step A: `standing_grant_use.py`, 501 lines —
+GrantUsed/GrantRefused/NoVerifiedResult, ResolvedBinary ENV→PATH→cargo,
+injectable SubprocessRunner, SCHEMA_GRANT_USE_V1, 5 RECOGNIZED_REFUSAL_CLASSES,
+7 NO_VERIFIED_RESULT_REASONS) and `f003519` (Step B: activation.py Office 2
+consumes verified Standing; +453 test lines across test_standing_grant_use /
+test_activation). **Slice 1b (=B4) is IMPLEMENTED on this branch** — the
+capsule's "ACTIVE NEXT" understated it; B4 is now verify-and-adopt, not build.
+
+### World 2 — `~/git/transition-kernel` (HEAD `5cd7eb0`, 2026-06-18)
+Corpus = `vectors/legacy/` ×9: 01-valid-passes · 02-no-standing-refused ·
+03-standing-unverifiable-refused · 04-admission-denied-refused ·
+05-gap-accounted · 06-replay-refused · 07-synthetic-evidence-fenced ·
+08-temporal-lapse-refused · 09-temporal-lapse-twin-passes.
+**Differential run 2026-07-02: `python3 scripts/differential.py` → "[differential]
+9 cases; 0 unaccepted divergence(s)", EXIT=0.** Summit `stage3b2-first-effect`
+(`1a688eb`): "first replay-legible bounded effect through the live AG
+supervisor." Lean feedstock: Scratch/NoFreeContinuation.lean authored
+(docs/LEAN_OBLIGATIONS.md GAP-2, operational gate SHIPPED C1–C4; Lean is
+design evidence, not verified reduction).
+
+### World 3 — `~/git/standing` (HEAD `d1883c3`, 2026-06-25)
+**`1e62ba9` and `f101c55` are PUSHED — both contained in `origin/main`.**
+The "unpushed / custody hazard" record (STATUS 2026-06-23, echoed 2026-07-02
+morning) is stale. 1e62ba9: ScopeMismatch refusal non-consuming +
+`transition_scoped()` + grant-use `--action`/`--target` (+190 lines).
+f101c55: `grant use --json` → standing.grant_use.v1 packet, closed
+refusal_class set, unmapped errors stay prose (+191 lines).
+
+### Contract-surface correction (feeds B2)
+The packet's proposed verdict map (authorized→PASS, denied→BLOCK, gap→WARN,
+advisory_only→OBSERVE, unaccounted→ERROR) is **NOT the implemented shape**.
+Wicket SPEC §7 owns {authorized, advisory_only, denied, gap, unaccounted}
+(hard vs soft rejection states). The kernel does not emit wicket verdicts —
+it composes office outputs and mints outcomes {consumed, refused,
+gap_accounted, escalated} with the 12-kind S4-lite refusal enum
+(transition_core.rs, wire via as_str()) + 5 refusing seams (standing /
+standing_spendability / la / wicket / proposal_validator). The SHARED
+vocabulary across Lean/Rust/Python is the refusal enum + seam names; wicket
+verdicts remain wicket's. The corpus is the contract; the packet's map is
+recorded as a refuted assumption, not retrofitted.
+
+### Corpus coverage gaps (B5 enumeration seed)
+No corpus case exercises: **scope_mismatch** (kind exists in the enum; refusal
+now implemented in Standing 1e62ba9), **token_expired / token_revoked /
+unknown_token** (LA-side kinds), **standing_expired** distinct from
+temporal-lapse, stale-basis-as-live (NQ BASIS_STALE v0). Freshness IS covered
+(08/09 pair). → B5 slices, one case each, after Q-B3.

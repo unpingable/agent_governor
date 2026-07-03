@@ -62,7 +62,28 @@ contradiction 2 (HandoffPacket seal specified only in REENTRY prose).
 
 ## 3. Constellation doctrine mismatches (A3a/A3b, A4)
 
-*(A3b adjudication pending — against lean v7.0.0. A4 findings pending.)*
+### A3b — AG-AUDIT-CHECKLIST adjudication (executed 2026-07-02, against lean HEAD `762967c` / v7.0.0)
+
+Checklist: `~/git/lean/docs/AG-AUDIT-CHECKLIST.md` (itself CANDIDATE,
+documentation-only — findings are theorem-named smells, not convictions).
+Grades per its reporting discipline: **screen** (smell) vs **wall** (path
+should not exist). Evidence basis: §A3a tables.
+
+| # | checklist item | theorem | verdict |
+|---|---|---|---|
+| 1 | Universal evidence currency | `EvidenceCurrencyFree`, `UniversalStamp` [SCRATCH-resident v6] | **PASS.** No receipt kind funds every gate: each seam demands its own upstream kind (standing digest → wicket; admission receipt → LA request; grant receipt → consume). The shared GateReceipt FORMAT is not a currency (format ≠ funding). No confidence-like claim-blind signal accepted anywhere (confidence_sanity invariant + grounding audit refuse it). Judgment flag per the named false negative: `parent_receipt_ids` is broad linkage vocabulary — linkage, not funding; keep it that way. |
+| 2 | Universal crossroads | `MasterFree`, `UniversalCrossroads` | **PASS (screen-grade note).** No stage converts every artifact class. The gate-receipt STORE is an index hub, but payloads do not convert through it (the checklist's own benign-router false-positive caveat applies). cooked_context_orchestrator composes ONE lane, not every pair. |
+| 3 | Midpoint matching | `index_connectivity_does_not_imply_derivability` [1.0-adjacent v4] | **PASS at code level; one DOC-level firing.** Implemented hops match field-for-field (WicketVerdict.receipt_id → admission_receipt_id → LA eligibility_reference; §3a.2). The firing: the external packet's assumed wicket→kernel verdict map (authorized→PASS…) was an index-level diagram whose midpoints DON'T match the implemented shape — caught by B1 (pickup INVENTORY). The theorem's exact failure mode, at documentation altitude. |
+| 4 | Provenance rooting | `eentail_iff_read_rooted`, `Recall ⊬ Reliance` | **PASS.** Chains enumerate to marked roots (standing digest / NQ finding_id / closed origin_mode / EXPLICIT operator-fiat bootstrap — the discipline-compliant "explicit assumption" root). One evidence per hop via parent_receipt_ids; `governor why` walks it. No reliance rooted in confidence signals found. |
+| 5 | Refresh/renewal | `refresh_is_inexpressible` (F1) | **SCREEN-GRADE FINDING (F-A3b-1).** No receipt re-stamping found; TTL revalidation acquires NEW evidence (compliant); standing_spendability's two-clock gate IS the `use k ≤ r` freshness-ordering shape. BUT: session-continuity capsules "resume intent + constraints + AUTHORITY" across sessions — authority carried forward in a capsule is a copy-forward lane if consumed without re-verification at resume. Nothing in the extracted schema FORCES re-verification on capsule resume. Minimal change → §4. |
+| 6 | Burden shedding | `caveat_dropping_is_inexpressible` (F3) | **PASS.** Wicket's `gap` caveat survives as the typed `admission_gap_accounted` refusal kind (caveat-as-vocabulary, the strong form). Compaction drops leave per-item content-hash tombstones (§3a.5); pending violations live outside the compacted stream. Dual-emission (gate_receipt ∥ receipt_v1 bridge) preserves verdicts 1:1 by design — flag: any future divergence between the two emissions is a caveat-shedding lane; the bridge must stay lossless. |
+| 7 | Linearity | `one_receipt_cannot_license_two_discharges` (SEQ2/3) | **SCREEN-GRADE FINDING (F-A3b-2).** Spend-side linearity is solid (LA consumption_event_id exactly-once; durable-spend content-addressed key; Standing terminal Used). But REQUEST-side: nothing AG-side refuses ONE admission receipt funding TWO capacity requests (`eligibility_reference` reuse unfenced; request idempotency_key optional and LA-side, §3a.4). One receipt may currently license two discharges at the wicket→LA hop. Named-gap → §4; cross-repo (LA contract) so record-first, no unilateral fence. |
+| 8 | Checkpoint custody | `checkpoint_mints_nothing`, `settlement_preserves_live_multiplicity` | **PASS.** Compaction output contains nothing the input lacked (receipts ABOUT drops, not resolutions); DroppedItem is per-item so multiplicity survives; blob purge keeps hashes forever (hash_retention=-1) with BLOB_EXPIRE events; RecoveryStore cleanup leaves the tombstone. |
+
+**Adjudication summary:** no wall-grade findings; two screen-grade findings
+(F-A3b-1 capsule-authority refresh lane; F-A3b-2 admission-receipt request-side
+linearity); one doc-level midpoint firing already recorded via B1. Citation
+tiers honored: v6/SCRATCH screens used as SCREENS only.
 
 ### A3a appendix — schema extraction for the Lean checklist (executed 2026-07-02)
 

@@ -85,7 +85,7 @@ now parked in `~/git/backburner/receipt_kernel`. **In-tree `libs/receipt_kernel`
 is canonical.** Re-extraction FROM in-tree is the only future path if an external
 consumer appears.
 
-### 5. Read-plane trio: spine vs governor-atlas vs state_index_export  **(OPEN)**
+### 5. Read-plane trio: spine vs governor-atlas vs state_index_export  **(RESOLVED 2026-07-03: keep separate + boundary note)**
 
 Three index/legibility surfaces: spine (constellation read plane, "findability is
 not legitimacy"), governor-atlas (claim graph, specified-vs-wired docket),

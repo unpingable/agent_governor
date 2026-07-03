@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-claimc",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/claimc.md",
+  "forcing_case": "None yet \u2014 consumer-pull holds; playbook claim compilation is a watched candidate",
+  "priority_tier": 3,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/claimc.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "R-CLAIMC-1 blocked on first unsettleable-claim incident in the conveyor"
+}

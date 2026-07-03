@@ -1,5 +1,34 @@
 # Decisions — transition-kernel pickup
 
+## B-series sign-off questions (filed 2026-07-02, roadmap program resume)
+
+### Q-B1 — confirm + push Standing 1a/1a-bis  **(RESOLVED BY EVIDENCE 2026-07-02)**
+B1 verified both commits **already on `origin/main`** (`git branch -r
+--contains` → origin/main for `1e62ba9` and `f101c55`) — the push half was
+done before this question was filed (the 06-23 "unpushed" record had gone
+stale). The confirm half is satisfied by the existing capsule record: STATUS
+and NEXT already name these commits as the DONE implementations of ratified
+D010/D010a/D010c. **B4/Slice 1b is UNBLOCKED** — and B1 further found its
+implementation already committed on `feat/transition-kernel-slice-1b`
+(24acd8f + f003519), so B4 executes as verify-and-adopt.
+
+### Q-B3 — corpus custody home  **(OPEN — gates B5..Bn)**
+Recommendation: `~/git/transition-kernel` remains custodian of the shared
+differential corpus (it owns `scripts/differential.py` + the 9 conformant cases);
+wicket fixtures grow in wicket for wicket's own contract, cross-referenced not
+merged; AG contributes cases via its v7 JSON-schema lane. Alternative: charter a
+separate corpus home. One master, no forks.
+
+### Q-B4 — sequencing of the two mint-boundary efforts  **(OPEN, default named)**
+Recommendation: B4 (Python adapter Slice 1b) lands before Rust-kernel resume work
+— it is unblocked, fully specified, and its receipts become corpus feedstock.
+Default on silence: recommendation stands.
+
+### Q-B7 — v7 CANDIDATE exposure  **(OPEN, default named)**
+Recommendation: draft the AG JSON-schema lane against Lean v7's CANDIDATE fields
+now, explicitly non-binding until v7 ratifies. Default on silence: draft in
+`working/`, promote nothing.
+
 ## D010 — transition-kernel pickup boundary  **(RATIFIED 2026-06-23, Model X)**
 
 Status: **RATIFIED** (operator, 2026-06-23). The scope-locus fork was decided **Model X**:

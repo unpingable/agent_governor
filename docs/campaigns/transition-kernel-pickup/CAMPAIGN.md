@@ -1,11 +1,17 @@
 # Campaign — transition-kernel pickup (AG mint boundary)
 
-Status: **reduction mode** (2026-06-23). Inventory complete; no implementation. This is a
-distinct campaign from `ag-admit-self-build` — that built the transport/admission rails;
-this makes AG *depend* on transition-kernel authority at the mint boundary.
+Status: **resumed under the roadmap program** (2026-07-02; was reduction mode
+2026-06-23). Slices 1a/1a-bis DONE in Standing (unpushed); AG Slice 1b (=B4)
+unblocked. The 2026-07-02 resume adds the **B-series** (Rust-kernel lane): the
+standalone `~/git/transition-kernel` repo — Rust `Admit | Refuse(kind,reasons) |
+Escalate(required_authority)`, 9-case byte-conformance vs Python via
+`scripts/differential.py`, summit `stage3b2-first-effect` — was NOT in the
+2026-06-23 inventory and must be reconciled (B1) before Rust work resumes.
 
 Capsule: [INVENTORY.md](INVENTORY.md) (crosswalk + verdict) · [DECISIONS.md](DECISIONS.md)
-(proposed D010) · [NEXT.md](NEXT.md) (recommended Slice 1).
+(D010 ratified; B-series sign-off questions) · [NEXT.md](NEXT.md) (Slice 1b = B4;
+B-series slices). Routing per `docs/roadmaps/ROUTING.md`; program hub
+`docs/roadmaps/README.md`; tool view `docs/roadmaps/tools/transition-kernel.md`.
 
 ## Question
 
@@ -56,6 +62,26 @@ self-hosting-first; no global "AG consumes the kernel everywhere" — one mint b
 - `activation.py:450` — `standing_ok: bool` fiat; `external_standing_receipt` carried-not-parsed.
 - `supervisor.py:752` — AG-on-AG self-authorization in `observe` mode (`kernel_refuse_vs_governed_continue`).
 - `supervisor.py:433` — `fork_session` extends authority on prior *local* approval, no fresh standing.
+
+## Stop-lines — Rust-kernel lane (B-series, verbatim from the packet, 2026-07-02)
+
+- Do not build bounded autopilot; do not promote playbooks to operational authority.
+- Do not make AG self-bootstrap its own authority.
+- Do not treat Lean theorem names as implementation requirements without stating
+  the operational invariant they encode.
+- **Rust is not the truth mint** — it enforces declared contracts; it does not
+  create authority.
+- Do not delete or sideline Python AG: Python remains orchestration /
+  control-plane / reference / **explicit observable fallback**. No silent
+  Rust→Python fallback, ever.
+- Do not broaden the kernel beyond the smallest invariant-bearing core.
+- Do not turn Wicket into a second policy language unless the fixtures force it.
+- Do not make LA spend implicit.
+- Wicket verdict map is the stable contract surface: `authorized→PASS`,
+  `denied→BLOCK`, `gap→WARN`, `advisory_only→OBSERVE`, `unaccounted→ERROR`.
+- Separation holds: Standing decides authority/admissibility; LA decides
+  consumable capacity/spend; the kernel decides lawful transition; receipts
+  preserve what happened.
 
 ## Exit (reduction phase) — done
 

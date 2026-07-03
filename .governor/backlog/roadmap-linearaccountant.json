@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-linearaccountant",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/linearaccountant.md",
+  "forcing_case": "None \u2014 v0 frozen matches AG client exactly; unit-class fence hypothetical",
+  "priority_tier": 3,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/linearaccountant.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "Hands-off holds; Wall 2 fires only on multi-currency forcing case"
+}

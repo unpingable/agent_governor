@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-nq",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/nq.md",
+  "forcing_case": "BASIS_STALE_CONTRACT v0 ratified 2026-07-02; AG adapters lag the basis lifecycle (retirement, stale-as-live, witness clock)",
+  "priority_tier": 1,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/nq.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "Slices R-NQ-1..3; R-NQ-3 gated on first real retirement decision"
+}

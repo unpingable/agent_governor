@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-transition-kernel",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/transition-kernel.md",
+  "forcing_case": "Three worlds unreconciled: repo summit stage3b2 vs AG parked branch vs Standing unpushed",
+  "priority_tier": 1,
+  "status": "filed",
+  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/transition-kernel.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+  "note": "Tool-view index; slices B0-B7 in the pickup campaign"
+}

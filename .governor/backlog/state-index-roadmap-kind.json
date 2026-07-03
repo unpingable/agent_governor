@@ -1,0 +1,11 @@
+{
+  "id": "state-index-roadmap-kind",
+  "repo": "agent_gov",
+  "kind": "build_slice",
+  "spec_ref": "specs/gaps/GOV_GAP_ROADMAP_INDEX_LEGIBILITY_001.md",
+  "forcing_case": "docs/roadmaps/ tree is invisible to state_index_export.v0 (scan roots hard-enumerated); interim legibility rides on these backlog stubs",
+  "priority_tier": 3,
+  "status": "filed",
+  "acceptance": "state_index_export scans docs/roadmaps/ (tool_roadmap kind; optional dependency_edge later); deterministic output preserved; tests/test_state_index_export.py green (real exit code); existing kinds unchanged.",
+  "note": "Mechanical once the gap spec is accepted; blocks nothing (hub is human-legible meanwhile)."
+}

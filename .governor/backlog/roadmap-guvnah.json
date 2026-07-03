@@ -1,0 +1,11 @@
+{
+  "id": "roadmap-guvnah",
+  "repo": "agent_gov",
+  "kind": "integration_roadmap",
+  "spec_ref": "docs/roadmaps/tools/guvnah.md",
+  "forcing_case": "Q-A7 RULED 2026-07-02: RETIRED as generic Governor cockpit; specimen/lineage only",
+  "priority_tier": 2,
+  "status": "closed",
+  "acceptance": "Terminal: no pin bump, no compat restoration, no RPC expansion, no feature work. Successor direction (nq-operator) is a new product boundary with its own future record.",
+  "note": "Roadmap RATIFIED as a disposition record; see docs/roadmaps/tools/guvnah.md + reconciliation DECISIONS Q-A7."
+}

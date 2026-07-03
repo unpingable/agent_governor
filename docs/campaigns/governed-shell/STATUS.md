@@ -13,6 +13,15 @@ As of 2026-07-02.
   shell-contract-v0.md (CANDIDATE until GS-2/3 implement against it).
 - Operator ratifications D-GS-1..4 recorded; R-MAUDE-2 narrowed (D-GS-8).
 
+## 2026-07-02 night — GS-2a landed
+
+`src/governor/operator_decisions.py` + 15 tests on main (commit caaa036):
+the pure decision-feed aggregator per shell-contract §1-2. Authored by codex
+as generator (read-only scribe protocol — codex sandbox cannot write in this
+environment; scribe extracts, fixes, verifies). governor verify-run receipt
+f00a7f11 [pass]. Remaining for GS-2: daemon registration + docket/
+admissibility read RPC + HELD-launch state (GS-2b). GS-3/4/5/6 unstarted.
+
 ## Current next
 
 Daemon slices unblocked: **GS-2** (decisions.list + docket/admissibility

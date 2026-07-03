@@ -50,8 +50,57 @@ blurs. UI-pin drift rows from A7 land here.)*
 
 ## 3. Constellation doctrine mismatches (A3a/A3b, A4)
 
-*(pending — Lean AG-AUDIT-CHECKLIST adjudication over extracted schema tables;
-NQ BASIS_STALE_CONTRACT drift findings. Appendix: A3a mechanical tables.)*
+*(A3b adjudication pending — against lean v7.0.0. A4 findings pending.)*
+
+### A3a appendix — schema extraction for the Lean checklist (executed 2026-07-02)
+
+#### 3a.1 Receipt-kind × gate matrix
+
+| Gate | Emission site | Verdicts | Evidence multiuse |
+|-----------|---------------|----------------------|-------------------|
+| evidence_gate | evidence_gate.py:1020 | pass, warn, block | subject_hash reused by receipt_v1_bridge.py:1065; evidence_hash reused at receipt_v1_bridge.py:344 |
+| standing_seam | standing_client.py:244 (refusal) / :305 (pass) | block / pass | cited_standing_receipt_id consumed by wicket_client.py:169; side-channel `_last_verified_receipt_id` consumed at wicket_client.py:486 |
+| wicket_seam | wicket_client.py:328 (refusal) / :393 (pass) | block / pass | receipt_id consumed by linear_accountant_client.py:663; parent from standing verify wicket_client.py:492 |
+| la_seam | linear_accountant_client.py:474 / :540 / :595 | block / pass(grant) / pass(consume) | admission_receipt_id in evidence; consume cites prior grant :860 |
+| standing_spendability_seam | standing_spendability.py:296 | pass, block | parent_receipt_ids threaded :288 |
+
+#### 3a.2 Hop-chain midpoint fields
+
+| Field | Emitting | Consuming | Join identity |
+|------------|----------------|-----------------|----------------|
+| parent_receipt_ids | standing_client.py:236 (empty = origin) | wicket_client.py:312-314; la_client:468-469; spendability:288 | exact receipt_id string in list |
+| cited_standing_receipt_id | standing_client.py:239 | la_client:680; wicket_client:316 | exact string |
+| standing_receipt_id | wicket_client.py:170 (CookedContext) | standing_client.py:315; **LA does not consume it (no_surface)** | standing service receipt id |
+| admission_receipt_id | wicket_client.py:195 (WicketVerdict.receipt_id) | la_client:277 → LA `eligibility_reference` :728 | exact receipt_id → becomes LA field |
+| parent_grant_receipt_id | la_client:756 (GrantedResult) | consume() :797 → parent :860 | exact grant receipt_id |
+| finding_id | cooked_context_orchestrator (NQ FindingSnapshot) | standing_client:318; wicket_client:407 | exact string or None (origin if absent) |
+
+#### 3a.3 Evidence-chain roots
+
+| Root kind | File:line | Marking |
+|-----------|-----------|-------------------|
+| standing receipt (remote) | standing_client.py:350 (verify lookup) | StandingReceiptRef.digest (sha256) + kind |
+| NQ finding origin | cooked_context_orchestrator.py:407 | optional finding_id; absent → CLI/stub origin :154-155 |
+| origin_mode (AG-internal) | orchestrator :154-180 | CLOSED_ORIGIN_MODES membership, validated at construction :196 |
+| origin_mode (NQ-sourced) | orchestrator :160-163 | consumed VERBATIM from FindingSnapshot; no AG synthesis |
+| chain terminus | standing_client.py:236 | empty parent_receipt_ids = origin |
+
+#### 3a.4 Single-use consumption points
+
+| Mechanism | Key | File:line | Replay refusal |
+|-----------|-----------------|-----------|-------------------|
+| LA consumption_event_id | caller-supplied string | la_client:284 → :825 | AlreadyConsumed → :872 `already_consumed` |
+| LA idempotency_key (request) | optional caller string | la_client:280 → :731 | **no_surface AG-side** — LA responsibility |
+| DurableSpendLedger.consume | content-addressed authority-bound key | playbooks/durable_spend.py | refuses before LA call (conveyor branch) |
+| Standing activate exactly-once | **no_surface** in extracted set | — | (activation.py office lives on parked 1b branch) |
+
+#### 3a.5 Compaction/settlement jobs
+
+| Job | Preserves | Drops | Tombstone |
+|-----|-------------------|-----------------|--------------------------|
+| ContextCompactor.compact() | decisions/anchors/constraints/authority/intent + recent turns | older turns | CompactionReceipt + DroppedItem.content_hash per drop (context_compact.py:231-288) |
+| receipt_kernel purge_expired() | blob metadata (sha256, len, created_at) → EXPIRED_HASH_ONLY | blob bytes | BLOB_EXPIRE event per blob (retention.py:128-148); hashes forever if hash_retention=-1 |
+| RecoveryStore | content_hash → file mapping | originals after TTL | recovery_store_path in receipt; cleanup by mtime :479 |
 
 ## 4. Minimal changes recommended (A8)
 

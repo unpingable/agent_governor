@@ -1390,6 +1390,8 @@ class TestAllMethodsRegistered:
         "constraint.status",
         "constraint.check",
         "operator.decisions.list",
+        "runtime.adapters.list",
+        "why.chain",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -1413,7 +1415,8 @@ class TestAllMethodsRegistered:
         # +1 for operator.decisions.list (governed-shell GS-2b, the unified feed)
         # +1 for operator.watch (governed-shell GS-4, bounded feed stream)
         # +1 for runtime.session.send_input (governed-shell GS-5, operator input)
-        assert total == 94
+        # +2 for runtime.adapters.list + why.chain (governed-shell GS-6 exposure)
+        assert total == 96
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -2174,6 +2177,33 @@ class TestChatStream:
         assert result["ticks"] == 2
         assert result["updates_emitted"] == 1  # unchanged -> deduped
         assert len(notifications) == 1
+
+    @pytest.mark.asyncio
+    async def test_runtime_adapters_list_reports_capabilities(self, dispatcher_and_state):
+        """runtime.adapters.list reports each backend + its declared capabilities."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "runtime.adapters.list")
+        result = resp["result"]
+        kinds = {a["backend_kind"] for a in result["adapters"]}
+        assert {"claude_code", "gemini_cli"} <= kinds
+        cc = next(a for a in result["adapters"] if a["backend_kind"] == "claude_code")
+        # claude_code declares input injection support (truth, not aspiration).
+        assert cc["capabilities"]["supports_input_injection"] is True
+
+    @pytest.mark.asyncio
+    async def test_why_chain_unknown_receipt_is_not_found(self, dispatcher_and_state):
+        """why.chain on an unknown receipt returns found=False, never raises."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "why.chain", {"receipt_id": "sha256:deadbeef"})
+        assert resp["result"]["found"] is False
+        assert resp["result"]["links"] == []
+
+    @pytest.mark.asyncio
+    async def test_why_chain_missing_receipt_id_is_structured(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "why.chain", {})
+        assert resp["result"]["found"] is False
+        assert "receipt_id" in resp["result"]["error"]
 
     @pytest.mark.asyncio
     async def test_send_input_missing_session_id_is_structured_error(self, dispatcher_and_state):

@@ -3421,6 +3421,12 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         record = sup.get_session(session_id)
         if not record:
             return None
+        # Expose the declared backend capabilities so a shell knows which
+        # controls to offer (e.g. whether send_input is available) — GS-6.
+        import dataclasses as _dc
+
+        facet = sup._facets.get(session_id)
+        caps = facet.capabilities if facet else None
         return {
             "session_id": record.session_id,
             "backend_kind": record.backend_kind,
@@ -3432,6 +3438,8 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "updated_at": record.updated_at,
             "exit_code": record.exit_code,
             "pending_interventions": len(sup.get_pending_interventions(session_id)),
+            "capabilities": _dc.asdict(caps) if caps else None,
+            "input_capable": bool(caps and caps.supports_input_injection),
         }
 
     async def runtime_session_list(params: dict) -> list:
@@ -3504,6 +3512,70 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "delivered": True,
             "session_id": record.session_id,
             "status": record.status.value,
+        }
+
+    async def runtime_adapters_list(params: dict) -> dict:
+        """List available runtime backends + their declared capabilities (GS-6).
+
+        Read-only. Lets a shell show what can be launched and which controls
+        each backend honestly supports (truth, not aspiration — the same
+        capabilities a launched session reports). Adapters construct without
+        side effects; a construction failure is reported per-adapter, not raised.
+        """
+        import dataclasses as _dc
+
+        from .runtime.adapters.claude_code import ClaudeCodeAdapter
+        from .runtime.adapters.gemini_cli import GeminiCliAdapter
+
+        registry = {"claude_code": ClaudeCodeAdapter, "gemini_cli": GeminiCliAdapter}
+        adapters: list[dict] = []
+        for kind, cls in registry.items():
+            try:
+                caps = cls().capabilities()
+                adapters.append(
+                    {"backend_kind": kind, "capabilities": _dc.asdict(caps)}
+                )
+            except Exception as exc:  # noqa: BLE001 — report, don't fail the list
+                adapters.append({"backend_kind": kind, "error": str(exc)})
+        return {"adapters": adapters, "count": len(adapters)}
+
+    async def why_chain(params: dict) -> dict:
+        """Walk a gate receipt's parent chain back to its origin (GS-6).
+
+        Read-only exposure of governor.why over the daemon. walk_chain never
+        raises — an unknown receipt returns found=False; all other gaps
+        (dangling parent, missing evidence, cycle, depth overflow) are
+        represented inside the links, not as errors.
+        """
+        from .why import walk_chain
+
+        params = params or {}
+        receipt_id = params.get("receipt_id")
+        if not receipt_id:
+            return {"found": False, "requested_id": None, "links": [],
+                    "error": "receipt_id is required"}
+        try:
+            max_depth = int(params.get("max_depth", 64))
+        except (TypeError, ValueError):
+            max_depth = 64
+        max_depth = max(1, min(512, max_depth))
+
+        result = walk_chain(state.receipt_system, receipt_id, max_depth=max_depth)
+        return {
+            "requested_id": result.requested_id,
+            "found": result.found,
+            "depth": len(result.links),
+            "links": [
+                {
+                    "status": link.status,
+                    "cited_id": link.cited_id,
+                    "receipt_id": link.receipt.receipt_id if link.receipt else None,
+                    "kind": link.kind,
+                    "refusal_kind": link.refusal_kind,
+                    "warnings": list(link.warnings),
+                }
+                for link in result.links
+            ],
         }
 
     async def runtime_session_kill(params: dict) -> dict:
@@ -3580,6 +3652,8 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         }
 
     dispatcher.register("runtime.session.send_input", runtime_session_send_input, mutating=True)
+    dispatcher.register("runtime.adapters.list", runtime_adapters_list)
+    dispatcher.register("why.chain", why_chain)
     dispatcher.register("runtime.session.kill", runtime_session_kill, mutating=True)
     dispatcher.register("runtime.session.fork", runtime_session_fork, mutating=True)
     dispatcher.register("runtime.intervention.list", runtime_intervention_list)

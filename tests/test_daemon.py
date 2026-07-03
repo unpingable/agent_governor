@@ -1416,7 +1416,8 @@ class TestAllMethodsRegistered:
         # +1 for operator.watch (governed-shell GS-4, bounded feed stream)
         # +1 for runtime.session.send_input (governed-shell GS-5, operator input)
         # +2 for runtime.adapters.list + why.chain (governed-shell GS-6 exposure)
-        assert total == 96
+        # +1 for operator.decisions.resolve (governed-shell GS-3, the one door)
+        assert total == 97
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1465,6 +1466,7 @@ class TestMethodClassification:
         "runtime.session.resume",
         "runtime.session.send_input",
         "runtime.session.kill",
+        "operator.decisions.resolve",
         "runtime.intervention.resolve",
         "runtime.promotion.resolve",
         "runtime.session.fork",
@@ -2177,6 +2179,78 @@ class TestChatStream:
         assert result["ticks"] == 2
         assert result["updates_emitted"] == 1  # unchanged -> deduped
         assert len(notifications) == 1
+
+    @pytest.mark.asyncio
+    async def test_decisions_resolve_missing_params_stay_in_vocab(self, dispatcher_and_state):
+        # Door-level errors stay within the contract's closed set — a missing
+        # option_key is option_not_available, not an off-contract string.
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "operator.decisions.resolve", {"decision_id": "dec_x"})
+        assert resp["result"]["resolved"] is False
+        assert resp["result"]["error"] == "option_not_available"
+        resp2 = await roundtrip(d, "operator.decisions.resolve", {"option_key": "y"})
+        assert resp2["result"]["error"] == "decision_not_found"
+
+    @pytest.mark.asyncio
+    async def test_decisions_resolve_nondict_args_no_crash(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(
+            d, "operator.decisions.resolve",
+            {"decision_id": "dec_nope", "option_key": "y", "args": [1, 2, 3]},
+        )
+        # Non-dict args must not crash — decision_not_found is reached cleanly.
+        assert resp["result"]["resolved"] is False
+        assert resp["result"]["error"] == "decision_not_found"
+
+    @pytest.mark.asyncio
+    async def test_decisions_resolve_unknown_decision(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(
+            d, "operator.decisions.resolve",
+            {"decision_id": "dec_nope", "option_key": "y"},
+        )
+        assert resp["result"]["resolved"] is False
+        assert resp["result"]["error"] == "decision_not_found"
+
+    @pytest.mark.asyncio
+    async def test_decisions_resolve_bad_option_key(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        # Seed a pending violation so a real decision exists in the feed.
+        state.violation_resolver.create_pending(
+            violations=[{"type": "anchor", "description": "x"}],
+            blocked_response="blocked text",
+            run_id="run_1",
+        )
+        listed = await roundtrip(d, "operator.decisions.list")
+        dec_id = listed["result"]["items"][0]["decision_id"]
+        resp = await roundtrip(
+            d, "operator.decisions.resolve",
+            {"decision_id": dec_id, "option_key": "Z"},  # not an offered key
+        )
+        assert resp["result"]["resolved"] is False
+        assert resp["result"]["error"] == "option_not_available"
+
+    @pytest.mark.asyncio
+    async def test_decisions_resolve_routes_violation_proceed(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        state.violation_resolver.create_pending(
+            violations=[{"type": "anchor", "description": "x"}],
+            blocked_response="blocked text",
+            run_id="run_1",
+        )
+        listed = await roundtrip(d, "operator.decisions.list")
+        dec_id = listed["result"]["items"][0]["decision_id"]
+        # Route through the ONE door with the violation's "proceed" option (key p).
+        resp = await roundtrip(
+            d, "operator.decisions.resolve",
+            {"decision_id": dec_id, "option_key": "p",
+             "args": {"reason": "operator override"}},
+        )
+        # Forwarded to commit_proceed — its result is the receipt, door adds none.
+        assert resp["result"]["action"] == "proceed"
+        # The violation is now resolved — no longer in the feed (v0 idempotence).
+        after = await roundtrip(d, "operator.decisions.list")
+        assert all(i["decision_id"] != dec_id for i in after["result"]["items"])
 
     @pytest.mark.asyncio
     async def test_runtime_adapters_list_reports_capabilities(self, dispatcher_and_state):

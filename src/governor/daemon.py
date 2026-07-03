@@ -3720,6 +3720,86 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
     dispatcher.register("operator.decisions.list", operator_decisions_list)
 
+    async def operator_decisions_resolve(params: dict) -> dict:
+        """The ONE mutation door (governed-shell GS-3, shell-contract §3).
+
+        Resolve a decision from the feed by decision_id + option_key. Routes by
+        the item's kind + the chosen option's action to the backing subsystem;
+        the routed subsystem's receipt IS the receipt — the door emits none of
+        its own and adds NO refusal vocabulary (underlying refusals pass through
+        verbatim). Door-level errors only (shell-contract §1): decision_not_found,
+        option_not_available.
+
+        v0 boundary: an already-resolved decision is no longer pending, so it
+        returns decision_not_found; the contract's richer `already_resolved`
+        idempotence (echo the original outcome) needs a resolution ledger and is
+        deferred. Only the three v0-sourced kinds (intervention/violation/
+        promotion) can appear in the feed, so every reachable item is routable.
+        """
+        if not isinstance(params, dict):
+            params = {}
+        decision_id = params.get("decision_id")
+        option_key = params.get("option_key")
+        args = params.get("args")
+        if not isinstance(args, dict):
+            args = {}
+        # Keep the door's `error` field inside the contract's closed vocabulary
+        # (decision_not_found / option_not_available): a missing decision_id
+        # identifies no decision (not found); a missing option_key selects no
+        # available option.
+        if not decision_id:
+            return {"resolved": False, "error": "decision_not_found"}
+        if not option_key:
+            return {"resolved": False, "error": "option_not_available"}
+
+        # Re-derive the live feed and locate the decision. Mints nothing: the
+        # item must currently be pending (native-backed) to be routable.
+        items = _gather_operator_feed(None)
+        item = next((i for i in items if i["decision_id"] == decision_id), None)
+        if item is None:
+            return {"resolved": False, "error": "decision_not_found"}
+        option = next((o for o in item["options"] if o["key"] == option_key), None)
+        if option is None:
+            return {"resolved": False, "error": "option_not_available"}
+
+        kind = item["kind"]
+        action = option["action"]
+        detail = item.get("detail") or {}
+        session_ref = item.get("session_ref")
+
+        # Forward to the existing handler — its receipt is the receipt.
+        if kind == "intervention":
+            return await runtime_intervention_resolve({
+                "session_id": session_ref,
+                "tool_call_id": detail.get("tool_call_id"),
+                "decision": action,  # approve | deny
+                "reason": args.get("reason"),
+            })
+        if kind == "promotion":
+            return await runtime_promotion_resolve({
+                "session_id": session_ref,
+                "decision": action,  # approve | reject
+                "reason": args.get("reason"),
+            })
+        if kind == "violation":
+            if action == "fix":
+                return await commit_fix({"corrected_text": args.get("corrected_text")})
+            if action == "revise":
+                return await commit_revise({"new_anchor_text": args.get("new_anchor_text")})
+            if action == "proceed":
+                return await commit_proceed({
+                    "reason": args.get("reason", ""),
+                    "scope": args.get("scope"),
+                    "expiry": args.get("expiry"),
+                })
+        # Unreachable in v0: _gather_operator_feed only sources the three
+        # routable kinds. A present-but-unroutable item would be a feed/router
+        # mismatch bug — raise a mechanism error (structured by the dispatcher)
+        # rather than inventing a door-level refusal string.
+        raise ValueError(f"feed produced an unroutable decision kind: {kind}")
+
+    dispatcher.register("operator.decisions.resolve", operator_decisions_resolve, mutating=True)
+
     async def operator_watch(params: dict, notify: NotifyFn) -> dict:
         """Stream the operator decision feed (governed-shell GS-4).
 

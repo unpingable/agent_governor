@@ -478,6 +478,35 @@ class StandingGrantUseClient:
             )
 
         if result == "refused":
+            # Witness-integrity applies to REFUSALS too: a stale/confused
+            # refused packet for another grant or request must not be
+            # misattributed as Standing's verdict on THIS one. (It would not
+            # mint either way, but the record must not claim Standing refused
+            # this request when the witness is about something else.)
+            r_grant = packet.get("grant_id")
+            if r_grant is not None and r_grant != grant_id:
+                return NoVerifiedResult(
+                    reason=REASON_REQUEST_MISMATCH,
+                    detail=(
+                        f"refused packet grant_id={r_grant!r} does not match "
+                        f"requested grant_id={grant_id!r}"
+                    ),
+                    raw=packet,
+                )
+            r_attempted = packet.get("attempted")
+            if r_attempted is not None:
+                if not isinstance(r_attempted, dict) or (
+                    r_attempted.get("action") != action
+                    or r_attempted.get("target") != target
+                ):
+                    return NoVerifiedResult(
+                        reason=REASON_REQUEST_MISMATCH,
+                        detail=(
+                            f"refused packet attempted={r_attempted!r} does not "
+                            f"match request action={action!r} target={target!r}"
+                        ),
+                        raw=packet,
+                    )
             klass = packet.get("refusal_class")
             if isinstance(klass, str) and klass in RECOGNIZED_REFUSAL_CLASSES:
                 return GrantRefused(

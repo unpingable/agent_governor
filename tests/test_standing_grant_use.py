@@ -438,3 +438,33 @@ def test_resolve_binary_honors_injected_env_path(tmp_path):
     # Injected env with an EMPTY path universe must not fall back to the
     # ambient PATH (no HOME → no cargo fallback either).
     assert resolve_standing_binary({"PATH": str(tmp_path / "nowhere")}) is None
+
+
+def test_refused_packet_for_a_different_grant_is_not_attributed_to_standing():
+    # Re-review finding: a stale refused witness about ANOTHER grant must not
+    # be recorded as Standing's refusal of THIS request.
+    client, _ = _client(_ok(_refused_packet(grant_id="g-OTHER")))
+    result = _use(client)
+    assert isinstance(result, NoVerifiedResult)
+    assert result.reason == REASON_REQUEST_MISMATCH
+
+
+def test_refused_packet_with_mismatched_attempted_is_not_attributed_to_standing():
+    client, _ = _client(_ok(_refused_packet(action="deploy", target="prod")))
+    # We asked for deploy/staging; witness says it refused deploy/prod.
+    result = client.use(
+        grant_id="g-1",
+        action="deploy",
+        target="staging",
+        identity_path="/fake/id.json",
+        secret="s3cr3t",
+    )
+    assert isinstance(result, NoVerifiedResult)
+    assert result.reason == REASON_REQUEST_MISMATCH
+
+
+def test_refused_packet_matching_request_is_still_inherited_verbatim():
+    client, _ = _client(_ok(_refused_packet(refusal_class="expired", action="deploy", target="prod")))
+    result = _use(client, action="deploy", target="prod")
+    assert isinstance(result, GrantRefused)
+    assert result.refusal_class == "expired"

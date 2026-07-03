@@ -103,6 +103,67 @@ class DecisionItem:
         }
 
 
+def build_feed_from_runtime(
+    *,
+    interventions: Sequence[tuple[str, Any]] = (),
+    promotions: Sequence[Any] = (),
+    pending_violation: Any | None = None,
+    now_wall: float,
+) -> tuple[DecisionItem, ...]:
+    """Map live runtime objects (supervisor interventions/promotions +
+    violation_resolver's pending violation) into the decision feed.
+
+    ``interventions`` is a sequence of ``(session_id, Intervention)`` — the
+    supervisor tracks interventions per session, so the session id is threaded
+    here to fill the envelope's ``session_ref``.
+
+    Clock discipline: an Intervention's ``created_at`` is MONOTONIC (boot-relative),
+    which is not a wall time. The envelope's ``created_at`` is display-only, so we
+    render an honest APPROXIMATION — ``now_wall - elapsed`` (created ~elapsed ago).
+    The authority-relevant quantity (``remaining`` / timeout) stays monotonic-exact:
+    passing ``created_at = now_wall - elapsed`` with ``timeout_seconds`` and
+    ``now = now_wall`` makes the aggregator recompute ``remaining = timeout - elapsed``
+    (the true monotonic remaining), so urgency is correct even though the displayed
+    wall time is approximate. We never fabricate a wall gap for an authority check.
+    """
+    iv_dicts: list[dict[str, Any]] = []
+    for session_id, iv in interventions:
+        elapsed = _get(iv, "elapsed")
+        # Degrade, never crash: a malformed/non-numeric elapsed falls back to
+        # now_wall (created "just now"), so a bad source object cannot fail the
+        # whole feed.
+        try:
+            created_at = now_wall - float(elapsed) if elapsed is not None else now_wall
+        except (TypeError, ValueError):
+            created_at = now_wall
+        iv_dicts.append(
+            {
+                "intervention_id": _get(iv, "intervention_id"),
+                "tool_call_id": _get(iv, "tool_call_id"),
+                "tool_name": _get(iv, "tool_name"),
+                "tool_input": _get(iv, "tool_input"),
+                "event_id": _get(iv, "event_id"),
+                "session_id": session_id,
+                "created_at": created_at,
+                "timeout_seconds": _get(iv, "timeout_seconds"),
+            }
+        )
+    prom_dicts = [p.to_dict() if hasattr(p, "to_dict") else p for p in promotions]
+    violations: list[Any] = []
+    if pending_violation is not None:
+        violations.append(
+            pending_violation.to_dict()
+            if hasattr(pending_violation, "to_dict")
+            else pending_violation
+        )
+    return build_decision_feed(
+        interventions=iv_dicts,
+        promotions=prom_dicts,
+        violations=violations,
+        now=now_wall,
+    )
+
+
 def build_decision_feed(
     *,
     interventions: Sequence[Any] | None = None,

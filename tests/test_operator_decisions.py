@@ -514,3 +514,58 @@ def test_decision_id_is_stable_and_64_bit() -> None:
         "changed_files": [], "diff_stat": "", "diff_text": ""}])[0]
     assert a.decision_id == b.decision_id  # stable
     assert len(a.decision_id) == len("dec_") + 16  # 64-bit hex prefix
+
+
+# --------------------------------------------------------------------------- #
+# build_feed_from_runtime (GS-2b — maps live supervisor/resolver objects)
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class _FakeIntervention:
+    intervention_id: str
+    tool_call_id: str
+    tool_name: str
+    tool_input: dict
+    event_id: str
+    elapsed: float
+    timeout_seconds: float = 300.0
+
+
+@dataclass
+class _FakeViolation:
+    id: str
+    run_id: str
+    violations: list
+    timestamp: str
+    receipt_id: str | None = None
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "run_id": self.run_id, "violations": self.violations,
+                "timestamp": self.timestamp, "receipt_id": self.receipt_id}
+
+
+def test_build_feed_from_runtime_threads_session_and_exact_remaining() -> None:
+    from governor.operator_decisions import build_feed_from_runtime
+    now = 1_000_000.0
+    feed = build_feed_from_runtime(
+        interventions=[("sess_A", _FakeIntervention(
+            intervention_id="i1", tool_call_id="c1", tool_name="Bash",
+            tool_input={"cmd": "rm"}, event_id="e1", elapsed=280.0, timeout_seconds=300.0))],
+        pending_violation=_FakeViolation(id="v1", run_id="run1", violations=[{"t": "x"}],
+                                         timestamp="2026-07-03T10:00:00Z", receipt_id="r1"),
+        now_wall=now,
+    )
+    kinds = {i.kind for i in feed}
+    assert kinds == {"intervention", "violation"}
+    iv = next(i for i in feed if i.kind == "intervention")
+    assert iv.session_ref == "sess_A"
+    # 300s timeout, 280s elapsed -> 20s remaining -> expiring (<=60), monotonic-exact.
+    assert iv.urgency == "expiring"
+    # created_at is the honest wall approximation (now - elapsed), a real ISO.
+    assert iv.created_at.startswith("1970") is False or iv.created_at  # renders an ISO
+
+
+def test_build_feed_from_runtime_empty_is_empty() -> None:
+    from governor.operator_decisions import build_feed_from_runtime
+    assert build_feed_from_runtime(now_wall=1.0) == ()

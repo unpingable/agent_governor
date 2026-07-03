@@ -3554,6 +3554,53 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("runtime.intervention.list", runtime_intervention_list)
     dispatcher.register("runtime.intervention.resolve", runtime_intervention_resolve, mutating=True)
 
+    async def operator_decisions_list(params: dict) -> dict:
+        """The unified decision feed (governed-shell GS-2b, shell-contract §2).
+
+        Gathers the currently-wired pending-decision sources — supervised-session
+        interventions and promotions (across all sessions) + the pending
+        violation — and returns them as decision envelopes. Exposure-only: it
+        mints nothing; every item mirrors a real pending object (native_id
+        required). Optional ``kinds`` filters the closed kind set.
+
+        Not yet sourced here (need DaemonState plumbing): docket_case and
+        admissibility_question. When those accessors land, add them to the
+        gather below — the envelope already reserves both kinds.
+        """
+        import time as _time
+
+        from .operator_decisions import build_feed_from_runtime
+
+        params = params or {}
+        sup = state.runtime_supervisor
+        interventions: list = []
+        promotions: list = []
+        for record in sup.list_sessions():
+            sid = record.session_id
+            for iv in sup.get_pending_interventions(sid):
+                interventions.append((sid, iv))
+            promo = sup.get_pending_promotion(sid)
+            if promo is not None and getattr(promo, "status", None) == "pending":
+                promotions.append(promo)
+
+        pending_violation = state.violation_resolver.get_pending()
+
+        feed = build_feed_from_runtime(
+            interventions=interventions,
+            promotions=promotions,
+            pending_violation=pending_violation,
+            now_wall=_time.time(),
+        )
+        items = [item.to_dict() for item in feed]
+
+        wanted = params.get("kinds")
+        if wanted:
+            wanted_set = set(wanted)
+            items = [i for i in items if i["kind"] in wanted_set]
+        return {"items": items, "count": len(items)}
+
+    dispatcher.register("operator.decisions.list", operator_decisions_list)
+
     async def runtime_promotion_get(params: dict) -> dict | None:
         """Get pending promotion for a session."""
         session_id = params["session_id"]

@@ -64,6 +64,29 @@ SPENDABILITY_VERDICT_REFUSED = "block"
 LAPSE_WITHIN_HORIZON = "within_horizon"
 LAPSE_EXCEEDED_HORIZON = "exceeded_horizon"
 
+# Freshness subcase (operator ruling 2026-07-03, "keep single kind + typed
+# subcase"): the machine-readable DIAGNOSTIC riding the refusal block, giving the
+# Lean Freshness correspondence WITHOUT minting new AG refusal kinds. The refusal
+# kind stays `standing_before_spendability_not_bounded` (routing surface); this
+# field explains WHY (proof/diagnostic surface). Closed vocabulary mirrors Lean
+# Freshness. The current two-clock gate reaches exactly ONE of them — `expired`
+# (the standing observation lapsed past its horizon by exercise time). The other
+# three (not_yet_valid / divergence_excessive / incoherent_interval) need window
+# inputs this gate does not carry; producing them is the freshness-granularity
+# roadmap ALIGNMENT gap (docs/campaigns/transition-kernel-pickup), not a blocker.
+FRESHNESS_SUBCASE_EXPIRED = "expired"
+FRESHNESS_SUBCASE_NOT_YET_VALID = "not_yet_valid"
+FRESHNESS_SUBCASE_DIVERGENCE_EXCESSIVE = "divergence_excessive"
+FRESHNESS_SUBCASE_INCOHERENT_INTERVAL = "incoherent_interval"
+FRESHNESS_SUBCASES = frozenset(
+    {
+        FRESHNESS_SUBCASE_EXPIRED,
+        FRESHNESS_SUBCASE_NOT_YET_VALID,
+        FRESHNESS_SUBCASE_DIVERGENCE_EXCESSIVE,
+        FRESHNESS_SUBCASE_INCOHERENT_INTERVAL,
+    }
+)
+
 # The gate's closed refusal vocabulary (a single kind — it owns exactly one
 # refusal). The kind itself lives in the canonical S4-lite set in
 # linear_accountant_client; this is the per-seam closed subset the gate is
@@ -193,6 +216,18 @@ def build_spendability_block(window: StandingWindow) -> dict[str, Any]:
             LAPSE_EXCEEDED_HORIZON if exceeded else LAPSE_WITHIN_HORIZON
         ),
     }
+    if exceeded:
+        # Only the refusal (exceeded) path carries a freshness_subcase — it is the
+        # diagnostic for WHY spendability was not bounded. The current two-clock
+        # gate reaches exactly `expired` (the gap ran past the horizon). See
+        # FRESHNESS_SUBCASES for the Lean-aligned closed set + the alignment gap.
+        subcase = FRESHNESS_SUBCASE_EXPIRED
+        # Enforce the closed vocabulary at emission: a future branch that sets a
+        # non-member value fails loudly rather than laundering an unknown subcase
+        # into the receipt (the closed set is load-bearing, not advisory).
+        if subcase not in FRESHNESS_SUBCASES:
+            raise ValueError(f"freshness_subcase {subcase!r} not in {sorted(FRESHNESS_SUBCASES)}")
+        block["freshness_subcase"] = subcase
     if window.capacity_commit is not None:
         # Capacity-commit staleness at exercise, computed on the same basis.
         block["capacity_commit_model_age_ns"] = elapsed_ns(

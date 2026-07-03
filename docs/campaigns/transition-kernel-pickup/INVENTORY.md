@@ -154,11 +154,11 @@ pilot-only · post-v7 uncitable.
 |---|---|---|---|---|
 | authorized ⟺ every office green; one refusing office refuses the transition | `authorized_iff_all_green`, Authority [1.0] | office composition → outcome `consumed` only when standing+admission+capacity all pass | 01 + 02/04 | **covered** |
 | no-basis / advisory basis never authorizes | Authority [1.0] | wicket office input; `gap` → outcome `gap_accounted` (accounted, never authority) | 05 | **covered** |
-| revoked basis cannot be an authorized step | `revoked_basis_cannot_be_authorized_step`, Execution [1.0] | refusal kind `token_revoked` (la_seam) | **NONE** | **B5 case needed** |
-| freshness is metric-time on compatible witnesses; lapse refuses | Freshness [1.0] (expired / not_yet_valid / divergence_excessive / incoherent_interval) | `standing_before_spendability_not_bounded` (spendability seam; typed monotonic bases) | 08/09 (lapse pair) | **partial** — not_yet_valid / divergence / incoherent variants have no cases → B5 |
+| revoked basis cannot be an authorized step | `revoked_basis_cannot_be_authorized_step`, Execution [1.0] | refusal kind `token_revoked` (la_seam) | **case 11** | **DONE (B5 A-2, 2026-07-03)** |
+| freshness is metric-time on compatible witnesses; lapse refuses | Freshness [1.0] (expired / not_yet_valid / divergence_excessive / incoherent_interval) | `standing_before_spendability_not_bounded` + typed `freshness_subcase` (spendability seam) | 08/09 + subcase | **CLOSED (B5 A-5, covered_by_single_kind)** — ruling 2026-07-03 keeps the single refusal kind; the Lean variants ride a machine-readable `freshness_subcase` in the receipt block (case 08 = `expired`, asserted). The other 3 subcases are the **freshness-granularity alignment gap** below, not a corpus blocker. |
 | single-spend / replay refuses before effect | `one_receipt_cannot_license_two_discharges` SEQ2/3 [v4-resident]; BoundedCalculi ANNEX | `already_consumed`; durable-spend write-ahead | 06 | **covered (spend side)** |
 | request-side linearity: one admission receipt funds ONE capacity request | same theorem family | **UNFENCED** (reconciliation F-A3b-2: eligibility_reference reuse unrefused AG-side; idempotency_key optional) | **NONE** | **gap — code AND corpus**; cross-repo (LA contract), record-first |
-| spend-time scope mismatch refuses non-consuming | D010 Model X (ratified); Standing `1e62ba9` | refusal kind `scope_mismatch` | **NONE** | **B5 case needed (top priority — the ratified decision's own regression)** |
+| spend-time scope mismatch refuses non-consuming | D010 Model X (ratified); Standing `1e62ba9` | refusal kind `scope_mismatch` (la_seam variant) | **case 10** | **DONE (B5 A-1, 2026-07-03)** — the gauntlet LA-side scope_mismatch; the Standing-store variant (Slice 1b) is a separate surface |
 | synthetic/non-observed evidence cannot confer operational effect | WitnessInvariance-adjacent [1.0]; AG origin fence doctrine | origin_mode allowlist; `DemonstratedConsumed` type split | 07 | **covered** |
 | a successful act does not authorize the next breath | NoFreeContinuation (SCRATCH feedstock; GAP-2) | continuation grant burn (C1–C4 shipped; specimens/continuation-trajectory) | outside legacy corpus | **note** — consider promoting one trajectory specimen into the differential corpus |
 | corrective moves cannot widen authority | Corrective [1.0] | **no_surface** — kernel does not model corrective moves | — | honest no_surface; do not stretch |
@@ -176,3 +176,23 @@ specimen. Each = one work-order slice after Q-B3.
 differential.py + corpus; wicket fixtures cross-referenced; AG contributes via
 the v7 schema lane — now LIVE, v7.0.0 tagged) stands as filed in Q-B3; B5
 executes there once ruled.
+
+## Roadmap gap: Freshness refusal granularity (filed 2026-07-03, ruling #1)
+
+Current AG closure keeps `standing_before_spendability_not_bounded` as a single
+refusal kind, with the Lean Freshness variants preserved in structured receipt
+fields as `freshness_subcase ∈ {expired, not_yet_valid, divergence_excessive,
+incoherent_interval}`. This closes the corpus rows because the distinction is
+machine-readable and receipt-backed, not prose-only (the two-clock gate reaches
+`expired`; case 08 asserts it; `standing_spendability.py` + tests pin it).
+
+However, AG's closed refusal vocabulary remains coarser than the Lean Freshness
+model, and the current two-clock gate only PRODUCES `expired` — the other three
+subcases need window inputs (issued time / skew / max-divergence / an explicit
+interval) the gate does not carry. A future evidence-driven slice may (a) enrich
+the window model to produce the other subcases, and/or (b) split the single
+refusal kind into four typed kinds IF a consumer needs to route differently
+(expired→renewal, not_yet_valid→wait/retry, divergence_excessive→clock/witness
+repair, incoherent_interval→producer bug). Until a consumer needs it, this is an
+**alignment gap, not an implementation blocker**. Gap stub:
+`.governor/backlog/freshness-granularity.json`.

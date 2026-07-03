@@ -65,7 +65,7 @@
     {
       "id": "08-temporal-lapse-refused.json",
       "case": "temporal-lapse-refused",
-      "sha256": "8ad82afefb4d873d94d70577434eebcc5a30a355f66e3749a54f9d4058b32198",
+      "sha256": "9ee6639c121d27473ba4cf754ef46d2bc70f8221e7d55c7ab2ee102966702a13",
       "custody_class": "contract"
     },
     {

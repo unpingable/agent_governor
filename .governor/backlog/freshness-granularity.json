@@ -1,0 +1,11 @@
+{
+  "id": "freshness-granularity",
+  "repo": "agent_gov",
+  "kind": "gap",
+  "spec_ref": "docs/campaigns/transition-kernel-pickup/INVENTORY.md (Roadmap gap: Freshness refusal granularity)",
+  "forcing_case": "a consumer needs to ROUTE differently on freshness subcase (renewal vs wait/retry vs clock-repair vs producer-bug), OR the two-clock gate is enriched to produce not_yet_valid/divergence_excessive/incoherent_interval",
+  "priority_tier": 3,
+  "status": "filed",
+  "acceptance": "Evidence-driven: either enrich the standing window model to produce the other 3 freshness_subcases (+ corpus cases per subcase), or split standing_before_spendability_not_bounded into 4 typed refusal kinds. Not before a routing consumer exists.",
+  "note": "Ruling 2026-07-03: keep single kind + typed freshness_subcase now (Lean correspondence via receipt diagnostic, no new AG public kinds). AG vocab remains coarser than Lean Freshness [1.0] by design until a consumer forces the split."
+}

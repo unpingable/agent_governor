@@ -30,6 +30,13 @@ already open (pathverdict tier-1 extraction in scratch)) · Crosswalk:
 
 ## 3. Named gaps (non-binding)
 
+- `freshness-granularity` (filed 2026-07-03) — AG keeps a single refusal kind
+  `standing_before_spendability_not_bounded` with a typed `freshness_subcase`
+  receipt field mirroring Lean Freshness {expired, not_yet_valid,
+  divergence_excessive, incoherent_interval}; the two-clock gate produces only
+  `expired`. AG's public refusal vocab stays coarser than Lean Freshness [1.0]
+  by design until a routing consumer forces a split. Alignment gap, not a
+  blocker. (`.governor/backlog/freshness-granularity.json`; pickup INVENTORY.)
 - `LEAN_CITATION_TIER_AUDIT` — AG docs citing lean predate the tier explosion;
   each citation needs its tier marker verified (a [1.0] cite made when 1.0 was
   the whole repo may now accidentally reference moved/renamed annex content).

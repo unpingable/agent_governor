@@ -34,6 +34,7 @@
       "uncertainty_ms": null,
       "source": "system_clock_unsynced",
       "role": "display_only"
-    }
+    },
+    "freshness_subcase": "expired"
   }
 }

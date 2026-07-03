@@ -25,6 +25,8 @@ from governor.clock_witness import (
     WallWitness,
 )
 from governor.standing_spendability import (
+    FRESHNESS_SUBCASE_EXPIRED,
+    FRESHNESS_SUBCASES,
     LAPSE_EXCEEDED_HORIZON,
     LAPSE_WITHIN_HORIZON,
     REFUSAL_STANDING_BEFORE_SPENDABILITY_NOT_BOUNDED,
@@ -86,6 +88,12 @@ class TestRatifiedPins:
         assert b["bound_ns"] == 10 * _S
         assert b["overage_ns"] == 1 * _S  # one second past the horizon
         assert b["lapse_coverage"] == LAPSE_EXCEEDED_HORIZON
+        # Freshness subcase (ruling 2026-07-03): the refusal block carries the
+        # machine-readable Lean-aligned diagnostic. The current two-clock gate
+        # reaches exactly `expired`. Bound to the closed vocab (not a bare
+        # string): structured + tested, never prose-only.
+        assert b["freshness_subcase"] == FRESHNESS_SUBCASE_EXPIRED
+        assert b["freshness_subcase"] in FRESHNESS_SUBCASES
         gb = b["gap_basis"]
         assert gb["kind"] == "monotonic"
         assert gb["source"] == SOURCE
@@ -120,6 +128,9 @@ class TestRatifiedPins:
         assert out.reason is None
         assert out.block["lapse_coverage"] == LAPSE_WITHIN_HORIZON
         assert out.block["gap_ns"] == 5 * _S
+        # The pass path carries NO freshness_subcase — there is nothing to
+        # diagnose when spendability was bounded.
+        assert "freshness_subcase" not in out.block
         # The twin still emits a receipt (the witness exposes the hallway even
         # on the pass), verdict=pass, carrying the same block shape + basis.
         assert len(sink.emits) == 1

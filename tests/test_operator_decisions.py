@@ -297,6 +297,7 @@ def test_urgency_ordering_then_created_at_then_decision_id() -> None:
         operator_questions=[
             {
                 "id": "q_1",
+                "subsystem": "runtime.adapter",
                 "created_at": "2026-07-02T08:00:00Z",
                 "urgency": "info",
                 "summary": "FYI",
@@ -432,3 +433,84 @@ def test_duplicate_option_keys_refused() -> None:
             refs=(),
             source={"subsystem": "x", "native_id": "y"},
         )
+
+
+# --------------------------------------------------------------------------- #
+# Hardening (adversarial audit findings, 2026-07-03)
+# --------------------------------------------------------------------------- #
+
+
+def test_duplicate_decision_id_is_refused() -> None:
+    # Two backing objects that resolve to one routable identity are ambiguous.
+    with pytest.raises(ValueError, match="duplicate decision_id"):
+        build_decision_feed(
+            promotions=[
+                {"promotion_id": "p", "session_id": "s", "created_at": "2026-07-02T10:00:00Z",
+                 "status": "pending", "repo_path": "/r", "changed_files": [], "diff_stat": "", "diff_text": ""},
+                {"promotion_id": "p", "session_id": "s2", "created_at": "2026-07-02T10:00:01Z",
+                 "status": "pending", "repo_path": "/r2", "changed_files": [], "diff_stat": "", "diff_text": ""},
+            ]
+        )
+
+
+def test_operator_question_without_subsystem_is_refused() -> None:
+    # subsystem is half the source identity; a default would drift the id.
+    with pytest.raises(ValueError, match="subsystem"):
+        build_decision_feed(
+            operator_questions=[
+                {"id": "q", "created_at": "2026-07-02T10:00:00Z", "summary": "x",
+                 "options": [{"key": "a", "label": "a", "action": "a", "args_schema": None}]}
+            ]
+        )
+
+
+def test_operator_option_keys_must_be_single_char_and_unique() -> None:
+    base = {"id": "q", "subsystem": "sub", "created_at": "2026-07-02T10:00:00Z", "summary": "x"}
+    with pytest.raises(ValueError, match="single character"):
+        build_decision_feed(operator_questions=[{**base, "options": [
+            {"key": "ab", "label": "l", "action": "a", "args_schema": None}]}])
+    with pytest.raises(ValueError, match="duplicate option key"):
+        build_decision_feed(operator_questions=[{**base, "options": [
+            {"key": "x", "label": "l", "action": "a", "args_schema": None},
+            {"key": "x", "label": "m", "action": "b", "args_schema": None}]}])
+
+
+def test_operator_question_non_mapping_detail_is_refused() -> None:
+    with pytest.raises(ValueError, match="detail must be a mapping"):
+        build_decision_feed(operator_questions=[{
+            "id": "q", "subsystem": "sub", "created_at": "2026-07-02T10:00:00Z", "summary": "x",
+            "detail": ["not", "a", "map"],
+            "options": [{"key": "a", "label": "l", "action": "a", "args_schema": None}]}])
+
+
+def test_intervention_past_deadline_is_blocking_not_expiring() -> None:
+    # remaining <= 0 (auto-deny imminent/past) => blocking, not expiring.
+    feed = build_decision_feed(
+        interventions=[{"intervention_id": "i", "tool_call_id": "c", "tool_name": "t",
+                        "tool_input": {}, "created_at": 1_000.0, "timeout_seconds": 30.0}],
+        now=1_100.0,  # 70s past a 30s deadline
+    )
+    assert feed[0].urgency == "blocking"
+
+
+def test_intervention_created_at_as_datetime_does_not_raise() -> None:
+    # Time handling is consistent: a datetime created_at is coerced, not crashed.
+    dt = datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc)
+    feed = build_decision_feed(
+        interventions=[{"intervention_id": "i", "tool_call_id": "c", "tool_name": "t",
+                        "tool_input": {}, "created_at": dt, "timeout_seconds": 300.0}],
+        now=dt.timestamp() + 270,  # 30s remaining of a 300s window => expiring
+    )
+    assert feed[0].urgency == "expiring"
+    assert feed[0].timeout_at is not None  # datetime created_at was coerced, not crashed
+
+
+def test_decision_id_is_stable_and_64_bit() -> None:
+    a = build_decision_feed(promotions=[{"promotion_id": "p", "session_id": "s",
+        "created_at": "2026-07-02T10:00:00Z", "status": "pending", "repo_path": "/r",
+        "changed_files": [], "diff_stat": "", "diff_text": ""}])[0]
+    b = build_decision_feed(promotions=[{"promotion_id": "p", "session_id": "s",
+        "created_at": "2026-07-02T10:00:00Z", "status": "pending", "repo_path": "/r",
+        "changed_files": [], "diff_stat": "", "diff_text": ""}])[0]
+    assert a.decision_id == b.decision_id  # stable
+    assert len(a.decision_id) == len("dec_") + 16  # 64-bit hex prefix

@@ -125,6 +125,20 @@ def build_decision_feed(
     items.extend(_admissibility_question_item(item) for item in _items(admissibility_questions))
     items.extend(_operator_question_item(item) for item in _items(operator_questions))
 
+    # Feed-level uniqueness: two native objects that resolve to the same
+    # decision_id are ambiguous to route — refuse loudly rather than emit two
+    # key-routable cards for one backing decision (mints-nothing discipline).
+    seen: dict[str, str] = {}
+    for item in items:
+        prior = seen.get(item.decision_id)
+        if prior is not None:
+            raise ValueError(
+                f"duplicate decision_id {item.decision_id} for "
+                f"{prior} and {item.source['subsystem']}:{item.source['native_id']} "
+                f"— two backing objects claim one routable identity"
+            )
+        seen[item.decision_id] = f"{item.source['subsystem']}:{item.source['native_id']}"
+
     return tuple(
         sorted(
             items,
@@ -201,6 +215,19 @@ def _coerce_now(now: float | datetime | str | None) -> float | None:
     raise ValueError("now must be a float, datetime, or None")
 
 
+def _to_epoch(value: Any) -> float:
+    # created_at may arrive as an epoch number, an aware datetime, or an ISO
+    # string; timeout math needs one consistent basis. Accept all three so a
+    # datetime created_at does not raise here while _iso() accepts it elsewhere.
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, datetime):
+        return value.timestamp()
+    if isinstance(value, str):
+        return datetime.fromisoformat(value).timestamp()
+    raise ValueError(f"cannot interpret created_at as a time: {value!r}")
+
+
 def _timeout_from_intervention(item: Any, now: float | None) -> tuple[float | None, str | None]:
     timeout_seconds = _get(item, "timeout_seconds")
     created_at = _get(item, "created_at")
@@ -208,7 +235,7 @@ def _timeout_from_intervention(item: Any, now: float | None) -> tuple[float | No
     if timeout_seconds is None or created_at is None:
         return None, None
 
-    deadline = float(created_at) + float(timeout_seconds)
+    deadline = _to_epoch(created_at) + float(timeout_seconds)
     remaining = max(0.0, deadline - now) if now is not None else _get(item, "remaining")
     if remaining is None:
         return None, None
@@ -219,7 +246,9 @@ def _timeout_from_intervention(item: Any, now: float | None) -> tuple[float | No
 def _decision_id(kind: str, source_subsystem: str, native_id: str) -> str:
     if kind not in DECISION_KINDS:
         raise ValueError(f"unknown decision kind: {kind}")
-    digest = sha256(f"{kind}:{source_subsystem}:{native_id}".encode()).hexdigest()[:12]
+    # 64-bit prefix: a stable routing identifier that stays short on a card while
+    # being collision-resistant across a session's decisions.
+    digest = sha256(f"{kind}:{source_subsystem}:{native_id}".encode()).hexdigest()[:16]
     return f"dec_{digest}"
 
 
@@ -300,7 +329,10 @@ def _intervention_item(item: Any, now: float | None) -> DecisionItem:
     native_id = _native_id(item, "intervention_id", "tool_call_id")
     tool_name = str(_required(item, "tool_name"))
     remaining, timeout_at = _timeout_from_intervention(item, now)
-    urgency = "expiring" if remaining is not None and remaining <= 60.0 else "blocking"
+    # An intervention blocks the agent; it is `expiring` only in the near-timeout
+    # window. Past the deadline (remaining <= 0) it is `blocking`, not `expiring`
+    # — an expired auto-deny is imminent, act now.
+    urgency = "expiring" if remaining is not None and 0.0 < remaining <= 60.0 else "blocking"
     receipt_refs = (str(_get(item, "event_id")),) if _get(item, "event_id") else ()
 
     detail = _as_detail(
@@ -469,10 +501,17 @@ def _admissibility_question_item(item: Any) -> DecisionItem:
 
 def _operator_question_item(item: Any) -> DecisionItem:
     native_id = _native_id(item, "id", "question_id")
-    subsystem = str(_get(item, "subsystem", "operator_question"))
+    # subsystem is REQUIRED: it is half the source identity, so a default would
+    # let the same question's decision_id drift as the field appears/disappears,
+    # breaking resolve routing. Fail closed instead.
+    subsystem = str(_required(item, "subsystem"))
     urgency = str(_get(item, "urgency", "normal"))
     if urgency not in URGENCIES:
         raise ValueError(f"unknown decision urgency: {urgency}")
+
+    raw_detail = _get(item, "detail", {})
+    if not isinstance(raw_detail, Mapping):
+        raise ValueError(f"operator_question detail must be a mapping, got {type(raw_detail).__name__}")
 
     return _make_item(
         kind="operator_question",
@@ -483,7 +522,7 @@ def _operator_question_item(item: Any) -> DecisionItem:
         urgency=urgency,
         timeout_at=_get(item, "timeout_at"),
         summary=str(_get(item, "summary", _get(item, "question", "Operator question"))),
-        detail=dict(_get(item, "detail", {})),
+        detail=dict(raw_detail),
         options=_operator_options(_required(item, "options")),
         receipt_refs=tuple(str(ref) for ref in _get(item, "receipt_refs", ())),
         why_ref=_get(item, "why_ref"),
@@ -492,11 +531,22 @@ def _operator_question_item(item: Any) -> DecisionItem:
 
 
 def _operator_options(options: Sequence[Any]) -> tuple[DecisionOption, ...]:
+    # The card prints these keys and the shell keymap binds them, so structural
+    # validity is load-bearing: single-char keys, unique within the item, and a
+    # non-empty action. (operator_question is the passthrough kind — its actions
+    # are not allowlistable, but they must at least be well-formed.)
     normalized: list[DecisionOption] = []
+    seen_keys: set[str] = set()
     for option in options:
+        key = str(_required(option, "key"))
+        if len(key) != 1:
+            raise ValueError(f"option key must be a single character, got {key!r}")
+        if key in seen_keys:
+            raise ValueError(f"duplicate option key {key!r} within one decision")
+        seen_keys.add(key)
         normalized.append(
             DecisionOption(
-                key=str(_required(option, "key")),
+                key=key,
                 label=str(_required(option, "label")),
                 action=str(_required(option, "action")),
                 args_schema=_get(option, "args_schema"),

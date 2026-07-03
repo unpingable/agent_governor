@@ -12,12 +12,32 @@ D010/D010a/D010c. **B4/Slice 1b is UNBLOCKED** — and B1 further found its
 implementation already committed on `feat/transition-kernel-slice-1b`
 (24acd8f + f003519), so B4 executes as verify-and-adopt.
 
-### Q-B3 — corpus custody home  **(OPEN — gates B5..Bn)**
-Recommendation: `~/git/transition-kernel` remains custodian of the shared
-differential corpus (it owns `scripts/differential.py` + the 9 conformant cases);
-wicket fixtures grow in wicket for wicket's own contract, cross-referenced not
-merged; AG contributes cases via its v7 JSON-schema lane. Alternative: charter a
-separate corpus home. One master, no forks.
+### Q-B3 — corpus custody home  **(RESOLVED 2026-07-02, Packet C — recommendation OVERTURNED)**
+The earlier recommendation ("transition-kernel remains custodian") was too eager.
+Packet C (docs/campaigns/corpus-custody/) found the 9 cases already exist as AG
+golden corpus (`golden/corpus/*.json`, schema `agent_governor.corpus.v1`),
+**byte-identical** to transition-kernel `vectors/legacy/`, and that the LIVE
+cooked-context contract test lives in AG. Revised, evidence-driven model:
+- **AG `golden/corpus/` is the admission source** — admission is explicit only
+  there (closed-world coverage ceremony + live-chain verdict match).
+- **transition-kernel `vectors/legacy/` is a conformance mirror** — proves
+  byte-identity, may NOT mutate expected behavior locally.
+- **Sync/identity guard shipped:** `golden/corpus/MANIFEST.json` (admission
+  record: custody_class + sha256 per case) + `tests/test_corpus_custody.py`
+  (fences unadmitted files, verifies hashes, couples the verdict test to the
+  manifest funding set, checks the mirror byte-identity when present). Reviewed
+  via the sandwich (codex-exec BLOCK → structural fixes → re-review).
+Durable rule: **authority lives where admission is explicit; mirrors prove
+identity; implementations don't crown their fixtures.** Later migration to a
+neutral registry is allowed but is a custody EVENT. Full model + per-case B5
+adjudication: docs/campaigns/corpus-custody/{custody-model,C4-b5-unlock}.md.
+
+**B5 status (C4): PARTIALLY BLOCKED — not on custody.** None of B5's 9 target
+refusals are producible by the corpus live-chain yet (it emits 6 kinds; B5 needs
+scope_mismatch/token_*/freshness-variants which need drill scenarios or a
+refusal-typing decision first). B5 re-scopes to "build the scenario → freeze the
+verdict → admit," gated by the guard. The continuation specimen routes to the
+transition-kernel frontier corpus, not golden/corpus.
 
 ### Q-B4 — sequencing of the two mint-boundary efforts  **(OPEN, default named)**
 Recommendation: B4 (Python adapter Slice 1b) lands before Rust-kernel resume work

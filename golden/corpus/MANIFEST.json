@@ -1,0 +1,82 @@
+{
+  "schema": "agent_governor.corpus_manifest.v1",
+  "note": "Admission RECORD for the decision-kernel corpus. The admission SIGNAL is structural, not this text: a case funds verdicts iff it is listed here in a funding class AND its sha256 matches disk AND the live cooked-context chain produces its expected_verdict (test_corpus_contract.py, which now consumes only funding cases from this manifest) AND its scenario is in the closed-world SUPPORTED_SCENARIOS. The 'admitted_by' field below is a human breadcrumb, NOT the gate. Membership in the directory is not authority; a matching hash here is not authority; only passing the ceremony is.",
+  "admitted_by": "closed-world coverage ceremony (SUPPORTED_SCENARIOS + live cooked-context verdict match, tests/test_corpus_contract.py) + Packet C retrofit (docs/campaigns/corpus-custody/, 2026-07-02)",
+  "custody_classes": [
+    "contract",
+    "example",
+    "regression",
+    "retired",
+    "disputed",
+    "generated"
+  ],
+  "funding_classes": [
+    "contract",
+    "regression"
+  ],
+  "mirror": {
+    "repo": "transition-kernel",
+    "path": "vectors/legacy/",
+    "must_match": "byte-identity by sha256; mirror may not mutate expected behavior locally"
+  },
+  "cases": [
+    {
+      "id": "01-valid-passes.json",
+      "case": "valid-passes",
+      "sha256": "957d0cdf0a45178d455f1ffbbd1b3add3b399fdc43730434196b3be74e533edb",
+      "custody_class": "contract"
+    },
+    {
+      "id": "02-no-standing-refused.json",
+      "case": "no-standing-refused",
+      "sha256": "80fd32ab8ce8116f7bfb83a45bfab68bbad8653d17b30c3361831ec2d001a7fb",
+      "custody_class": "contract"
+    },
+    {
+      "id": "03-standing-unverifiable-refused.json",
+      "case": "standing-unverifiable-refused",
+      "sha256": "835853a5feb27d77b4d8a8ca827b9cf71764c243e31ddcd04a7d85f775c24062",
+      "custody_class": "contract"
+    },
+    {
+      "id": "04-admission-denied-refused.json",
+      "case": "admission-denied-refused",
+      "sha256": "b929e10951b4565c95251e50f86493145a137bdde33323658781a914243b29fe",
+      "custody_class": "contract"
+    },
+    {
+      "id": "05-gap-accounted.json",
+      "case": "gap-accounted",
+      "sha256": "7cdfc7429d757bffe39dae60e79369c093c198613286ba3a14b832e8caaba8b2",
+      "custody_class": "contract"
+    },
+    {
+      "id": "06-replay-refused.json",
+      "case": "replay-refused",
+      "sha256": "e6f68fab000e54d9b245045af6d733ee010fc824a0596daeef352c7e460c63d6",
+      "custody_class": "contract"
+    },
+    {
+      "id": "07-synthetic-evidence-fenced.json",
+      "case": "synthetic-evidence-fenced",
+      "sha256": "30d1bc78dd4ae72b14e9a597f774ee3edda7b795bd0aa0eb0f4163e3c155b40e",
+      "custody_class": "contract"
+    },
+    {
+      "id": "08-temporal-lapse-refused.json",
+      "case": "temporal-lapse-refused",
+      "sha256": "8ad82afefb4d873d94d70577434eebcc5a30a355f66e3749a54f9d4058b32198",
+      "custody_class": "contract"
+    },
+    {
+      "id": "09-temporal-lapse-twin-passes.json",
+      "case": "temporal-lapse-twin-passes",
+      "sha256": "8fbd696bc3623c9882828d591c332fc56a3149add6898cb4a1df50c04db6dc9c",
+      "custody_class": "contract"
+    }
+  ],
+  "known_boundaries": [
+    "A coordinated edit that changes an expected_verdict AND its hash here AND marks it contract passes THIS guard's hash check \u2014 but fails the live-chain match in test_corpus_contract.py unless the reference implementation actually produces the new verdict. Hashing stops SILENT drift; the live oracle stops verdict-laundering; reviewed+attributed mutation (C2) stops the rest. No hash alone can stop a coordinated edit; that is a review boundary, recorded not pretended-away.",
+    "Mirror byte-identity is checked only when the transition-kernel repo is on disk; bare AG unit-CI skips it WITH a recorded reason. Mirror-identity is a constellation-integration check (or a mirror-side check transition-kernel owns against this manifest), not an AG-isolated-CI guarantee."
+  ]
+}

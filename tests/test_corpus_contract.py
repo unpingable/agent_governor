@@ -52,9 +52,27 @@ VERDICT_FIELDS = (
 )
 
 
+# Packet C custody coupling: this test funds verdicts, so it must consume ONLY
+# the manifest-admitted funding cases — not "whatever the glob returns." A case
+# marked example/retired/disputed/generated is fenced out here at the point of
+# consumption, so the fence is executable, not a comment. (custody-model.md C2.)
+_MANIFEST_PATH = CORPUS_DIR / "MANIFEST.json"
+_MANIFEST = json.loads(_MANIFEST_PATH.read_text())
+_FUNDING_CLASSES = set(_MANIFEST.get("funding_classes", ("contract", "regression")))
+_ADMITTED_FUNDING = {
+    c["id"] for c in _MANIFEST["cases"] if c["custody_class"] in _FUNDING_CLASSES
+}
+
+
 def _load_corpus() -> list[tuple[str, dict[str, Any]]]:
     entries = []
     for path in sorted(CORPUS_DIR.glob("*.json")):
+        if path.name == "MANIFEST.json":
+            continue  # the admission record (Packet C), not a corpus case
+        if path.name not in _ADMITTED_FUNDING:
+            # Not manifest-admitted as a funding case: it does not fund verdicts
+            # here. Membership in the directory is not authority (Packet C).
+            continue
         entries.append((path.name, json.loads(path.read_text())))
     return entries
 

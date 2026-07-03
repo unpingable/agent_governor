@@ -26,6 +26,11 @@ committed docs — when in doubt, the doc wins over this note.
 
 ## Operator rulings already made (do NOT re-litigate)
 
+(This note is a SUMMARY, not the decision record — the rulings live in the
+three campaign DECISIONS.md files and bind from there; if this summary and a
+DECISIONS file disagree, the DECISIONS file wins. Same for the push rule
+below: operator utterance 2026-07-02, recorded in reconciliation STATUS.)
+
 Q-A7 guvnah RETIRED (specimen only) · Q-C2-1 amended: maude = terminal
 operator shell (adapters STAY AG), phosphor = web lane host (+ ops-casework
 lane candidate) · core repo separation ratified · two-wlp collision fixed

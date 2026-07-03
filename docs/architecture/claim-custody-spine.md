@@ -16,11 +16,11 @@ standing_seam      ── verifies standing receipt; emits verified_standing Gat
         │   parent_receipt_ids = [<finding_id>]
         ▼
 wicket_seam        ── admits the cooked context against precedence/revocation/scope;
-        │              emits authorized GateReceipt (or admission_denied / gap)
+        │              emits a GateReceipt RECORDING the admission verdict — authorized (or admission_denied / gap). The receipt is evidence that admission occurred; it is not itself the authority
         │   parent_receipt_ids = [<standing receipt id>]
         ▼
-la_seam (request)  ── Linear Accountant CapacityRequest; emits granted GateReceipt
-        │              (la_outcome=Granted) or capacity_refused
+la_seam (request)  ── Linear Accountant CapacityRequest; emits a GateReceipt recording LA's decision
+        │              (la_outcome=Granted) or capacity_refused. Spendable capability is the LA TOKEN, custodied by LA — the AG receipt records the grant, it is not the capability
         │   parent_receipt_ids = [<wicket admission receipt id>]
         ▼
 la_seam (consume)  ── Linear Accountant ConsumeRequest; emits consumed GateReceipt
@@ -158,3 +158,25 @@ glossary at `docs/reference/internal-ops-glossary.md` carries the
 mapping. PROPOSED rows there are not yet binding on consumer-facing
 surfaces; do not rename code or internal-doctrine documents from this
 side.
+
+## NQ basis lifecycle (BASIS_STALE_CONTRACT v0, ratified NQ-side 2026-07-02)
+
+The NQ leg above consumes `nq.finding_snapshot.v1`, whose `basis` block now
+carries a three-state lifecycle: `basis_state ∈ {unknown, stale, retired}` —
+never fabricated, with `stale` a LIVE condition distinct from both fresh and
+retired (silence is a witnessed event; stale is a state summary; retirement is
+an operator act). Two consumption disciplines bind AG-side (named gaps
+NQ_STALE_BASIS_LIVE_CONDITION and NQ_WITNESS_CLOCK_ADMISSIBILITY in
+`docs/roadmaps/tools/nq.md` §3, build slices R-NQ-1/2):
+
+- **Stale is not pass/fail.** A finding whose `basis.state == "stale"` is
+  neither dismissible nor fresh; until R-NQ-1 lands its handling design, any
+  consumer treating basis as boolean is misreading the contract.
+- **The admissibility clock is the witness clock.** Freshness comparisons bind
+  to `basis.state_at` / `witness_collected_at` (authority observation time),
+  never ingest time — a gap needs compatible clock witnesses (clock_witness
+  discipline; NQ clause-7).
+
+Retirement (`retire_source()` / EVIDENCE_RETIREMENT) is an explicit NQ-side
+operator act; AG has no trigger wiring yet (gap NQ_RETIREMENT_TRIGGER_UNWIRED,
+build slice R-NQ-3, gated on its forcing case).

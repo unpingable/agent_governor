@@ -20,43 +20,73 @@ Sandwiches: B5 quartet — codex BLOCK on suspected Rust decision-order bug,
 tests. A-5 — codex BLOCK "closed vocab declared not enforced" → enforced at
 emission + membership-tested → MERGE-SAFE.
 
-## LANE D — closure (partial) ✅ D-2, D-3 pushed
+## LANE D — closure ✅ D-1/D-2/D-3/D-6 pushed
 
 | slice | what | verdict | commit |
 |---|---|---|---|
-| D-2 | mirror-side identity check in transition-kernel (`scripts/verify_mirror.py`) vs AG's admission manifest — closes the isolated-CI mirror-skip boundary from the mirror side | 13/13 identical; negative control bites on 1-byte tamper | tk `543dfc5` |
+| D-1 | docs completeness for shipped slices — feature-history Governed Shell entry + campaign STATUS overnight ledger | — | ag `67ef285` |
+| D-2 | mirror-side identity check in transition-kernel (`scripts/verify_mirror.py`) vs AG's admission manifest — closes the isolated-CI mirror-skip boundary | 13/13 identical; bites on 1-byte tamper | tk `543dfc5` |
 | D-3 | read-plane boundary note (spine/governor-atlas/state_index_export); resolves Q-C2-5 + consolidation #5 | — | ag `6c49ad9` |
+| D-6 | **wicket-guard absorbed into wicket** — cook/diff/surfaces → `wicket/examples/cook_from_diff/`, founding regression → `wicket/tests/` (runnable via `#[path]`, kernel API untouched); wicket-guard reduced to a LINEAGE husk | full `cargo test` green (4 cook + existing); sandwich MERGE-SAFE | wicket `939dbb9`, wicket-guard `a68cc20` |
 
-Remaining Lane D (morning): D-1 cli-wording-pass (enumerated, docs), D-4 v7
-wire-format draft, D-5 packet-schema-custody (G3), D-6 wicket-guard absorption
-(ruled EXECUTE — cross-repo compile risk, needs care), D-7 v6 checker pilot.
+Deferred (not blocking, lower value): D-4 v7 wire-format draft, D-5
+packet-schema-custody (G3), D-7 v6 checker pilot.
 
-## LANE B — governed-shell daemon ✅ GS-2b core pushed
+## LANE B — governed-shell daemon ✅ COMPLETE (GS-2b/4/5/6/3, all pushed)
+
+Daemon method count **91 → 97**. Every mutation/authority slice codex-exec
+sandwiched to MERGE-SAFE; each verify-run-gated before commit.
+
+| slice | what | sandwich | commit |
+|---|---|---|---|
+| GS-2b | `operator.decisions.list` — unified feed (interventions + promotions + pending violation) via the hardened aggregator | MERGE-SAFE +2 nits | ag `a28d727` |
+| GS-4 | `operator.watch` — bounded streaming feed; stable-projection digest (excludes display-clock fields), notify-timeout so a stalled client can't outlive the loop bound | BLOCK→MERGE-SAFE (kinds validation, notify bound, digest churn) | ag `3fe0acb` |
+| GS-5 | `runtime.session.send_input` + `OPERATOR_INPUT` event — fail-closed operator input into a running backend; never a silent drop | BLOCK×2→MERGE-SAFE (structured errors, no KeyError/AttributeError leak) | ag `a698abd` |
+| GS-6 | exposure batch — `runtime.adapters.list`, `why.chain`, `session.get` capabilities/input_capable | read-only (test-gated) | ag `f3294e4` |
+| GS-3 | `operator.decisions.resolve` — THE one mutation door; routes by trusted-feed kind+action to the backing handler, forwards its receipt, mints nothing, adds no refusal vocabulary | FULL BLOCK→MERGE-SAFE (codex confirmed no privilege escalation via forged args) | ag `cd11091` |
+
+**Deferred (documented):** GS-2b remainder (docket + admissibility sources +
+HELD-launch state, need DaemonState plumbing — envelope reserves both kinds);
+GS-7 (autopilot RPC); GS-9 (maude consumes the client — separate-repo UX). v0
+boundary on GS-3: already-resolved → decision_not_found (richer replay needs a
+resolution ledger).
+
+## LANE C — ag_shell_client ✅ COMPLETE (pushed)
 
 | slice | what | verdict | commit |
 |---|---|---|---|
-| GS-2b | `operator.decisions.list` read-only RPC — unified decision feed over supervised interventions + promotions + pending violation via the hardened aggregator; `build_feed_from_runtime` maps live shapes (remaining monotonic-exact, created_at honest wall-approx) | RPC + aggregator + daemon suite [pass] | ag `7eb577a` + fix `a28d727` |
+| GS-8 | `libs/ag_shell_client/` — de-triplicated wire protocol (socket path proven **byte-identical** to `governor.daemon.default_socket_path`) + typed `DecisionItem` models with safe-defaults idiom (missing-identity refused, unknown-kind preserved+flagged, malformed-payload tolerated) | tests [pass] | ag `76397d6` |
 
-Sandwich: codex MERGE-SAFE + 2 robustness nits applied (elapsed
-degrade-not-crash; defensive params). **Deliberately NOT sourced yet**: docket
-+ admissibility + HELD-launch state (need DaemonState plumbing — the envelope
-reserves both kinds). GS-4/5/6/3 remaining (morning).
-
-**Scar (recorded):** the GS-2b commit shipped with two stale daemon pins red
-because the `governor verify-run` in that step was NOT gated before the `git
-commit` (they were newline-separated statements, not `&&`), and the message was
-backtick-mangled. Fixed forward (`a28d727`). Rule reinforced: gate the
-verify-run EXIT CODE before committing; never chain a commit past a bare
-newline after a test run.
-
-## LANE C — ag_shell_client (NOT started)
-
-Morning item. Isolated `libs/ag_shell_client/` extraction (de-triplicate
-framing/socket-path/JSON-RPC from maude+phosphor); unblocks both shells.
+Sandwich: MERGE-SAFE + 1 finding (harden dict-typed fields / non-object error
+against a malformed daemon payload) applied.
 
 ## Gate
 
 Every slice green via `governor verify-run` (receipts in
-`.governor/verify_receipts/`). Full-suite end-of-run gate: pending (morning,
-before final sign-off). transition-kernel: differential 13/13 + cargo test
-green after each mirror sync.
+`.governor/verify_receipts/`; the exit code was gated before each commit — the
+GS-2b scar is not repeated). transition-kernel: differential 13/13 + cargo test
+green after each mirror sync. wicket: full `cargo test` green.
+
+**Full AG suite end-of-run gate (sign-off):** `python3 -m pytest tests/` via
+verify-run (receipt `56b82dee`) — **16219 passed, 66 skipped, 1 failed** in
+289s. The single failure is `test_qa_self_governance.py::
+test_pyproject_version_matches_latest_git_tag` — a **pre-existing, unrelated**
+red: `git describe --tags --abbrev=0` returns the stray working tag
+`stage3b2-first-effect` (ahead of `v2.8.1` in ancestry) instead of a release
+tag, so it ≠ pyproject `2.8.1`. It fails **identically at the run-start commit
+`11a9db6`** — tonight's work touched no `pyproject.toml` and minted no tag.
+**Every test in the surface I touched (daemon/corpus/supervisor/client/wicket)
+is green.** Recommend (operator, not done unattended): delete the stray
+`stage3b2-first-effect` working tag, or narrow the gate to `v*`-pattern tags —
+tag surgery on a self-governance gate is surfaced, not silently patched.
+
+## Scars / discipline notes
+
+- **GS-2b commit slip (recorded, fixed forward):** the GS-2b commit shipped with
+  stale daemon pins red because the verify-run exit code wasn't gated before the
+  `git commit` (newline-separated, not `&&`) and the `-m` was backtick-mangled.
+  Fixed forward (`a28d727`). Every subsequent slice gated the exit code first.
+- Codex `read-only` sandbox can't read the repo here (nested-bwrap); all reviews
+  ran with inlined diffs + "review ONLY the paste". Two codex BLOCKs were
+  **disproven+pinned** rather than blindly fixed (Rust decision-order; GS-4/GS-3
+  non-dict-params were dispatcher-guarded); the rest were fixed and re-reviewed.

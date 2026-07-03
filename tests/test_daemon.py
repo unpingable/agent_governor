@@ -1412,7 +1412,8 @@ class TestAllMethodsRegistered:
         #    (GOV_GAP_NIGHTSHIFT_ADAPTER_001)
         # +1 for operator.decisions.list (governed-shell GS-2b, the unified feed)
         # +1 for operator.watch (governed-shell GS-4, bounded feed stream)
-        assert total == 93
+        # +1 for runtime.session.send_input (governed-shell GS-5, operator input)
+        assert total == 94
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1459,6 +1460,7 @@ class TestMethodClassification:
         "runtime.session.launch",
         "runtime.session.pause",
         "runtime.session.resume",
+        "runtime.session.send_input",
         "runtime.session.kill",
         "runtime.intervention.resolve",
         "runtime.promotion.resolve",
@@ -2172,6 +2174,36 @@ class TestChatStream:
         assert result["ticks"] == 2
         assert result["updates_emitted"] == 1  # unchanged -> deduped
         assert len(notifications) == 1
+
+    @pytest.mark.asyncio
+    async def test_send_input_missing_session_id_is_structured_error(self, dispatcher_and_state):
+        """runtime.session.send_input with no session_id returns a clean
+        structured error, never an unhandled KeyError."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(d, "runtime.session.send_input", {"text": "hi"})
+        assert "result" in resp
+        assert resp["result"]["delivered"] is False
+        assert "session_id" in resp["result"]["error"]
+
+    @pytest.mark.asyncio
+    async def test_send_input_nondict_params_does_not_crash(self, dispatcher_and_state):
+        """A non-dict params (dispatcher coerces to {}) yields a structured
+        error, never an AttributeError."""
+        d, _ = dispatcher_and_state
+        resp = await d.dispatch(rpc_request("runtime.session.send_input", [1, 2, 3], id=1))
+        assert "result" in resp
+        assert resp["result"]["delivered"] is False
+
+    @pytest.mark.asyncio
+    async def test_send_input_unknown_session_is_structured_error(self, dispatcher_and_state):
+        """An unknown session surfaces as delivered=False, not a raw KeyError."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(
+            d, "runtime.session.send_input", {"session_id": "sess_nope", "text": "hi"}
+        )
+        assert "result" in resp
+        assert resp["result"]["delivered"] is False
+        assert "no such session" in resp["result"]["error"]
 
     @pytest.mark.asyncio
     async def test_operator_watch_stops_on_stalled_client(self, dispatcher_and_state):

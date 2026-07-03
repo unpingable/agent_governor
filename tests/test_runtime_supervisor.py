@@ -16,6 +16,7 @@ from governor.runtime.adapter import (
 )
 from governor.runtime.events import EventKind, SourceLayer
 from governor.runtime.supervisor import (
+    InputInjectionError,
     Intervention,
     SessionStatus,
     SessionSupervisor,
@@ -395,3 +396,66 @@ class TestOnEventCallback:
         # Session should still complete despite callback errors
         record = supervisor.get_session(record.session_id)
         assert record.status in (SessionStatus.EXITED, SessionStatus.FAILED)
+
+
+class TestSendInput:
+    """Operator input injection (GS-5) — fail-closed at every gate."""
+
+    def _running_input_session(self, supervisor, *, input_capable: bool):
+        """Create a session and force it into a RUNNING, handle-attached state
+        without spinning the real event loop (which exits immediately)."""
+        adapter = MockAdapter()
+        record = supervisor.create_session(adapter, "mock", "/tmp/proj")
+        facet = supervisor._get_facet(record.session_id)
+        facet.handle = MockHandle(pid=999)
+        facet.capabilities = AdapterCapabilities(
+            supports_input_injection=input_capable,
+        )
+        record.status = SessionStatus.RUNNING  # bypass FSM for the gate under test
+        return adapter, record
+
+    def test_empty_text_refused_before_lookup(self, supervisor):
+        # The text gate fires first — no session needs to exist.
+        with pytest.raises(InputInjectionError):
+            supervisor.send_input("sess_nonexistent", "   ")
+
+    def test_no_such_session_is_input_error_not_keyerror(self, supervisor):
+        # Contract: a missing session surfaces as InputInjectionError (which the
+        # daemon catches), never a raw KeyError.
+        with pytest.raises(InputInjectionError, match="no such session"):
+            supervisor.send_input("sess_does_not_exist", "hello")
+
+    def test_no_handle_refused(self, supervisor):
+        adapter = MockAdapter()
+        record = supervisor.create_session(adapter, "mock", "/tmp")
+        # Created, never launched -> no live handle.
+        with pytest.raises(InputInjectionError, match="no live backend handle"):
+            supervisor.send_input(record.session_id, "hello")
+
+    def test_not_running_refused(self, supervisor):
+        adapter, record = self._running_input_session(supervisor, input_capable=True)
+        record.status = SessionStatus.PAUSED
+        with pytest.raises(InputInjectionError, match="not running"):
+            supervisor.send_input(record.session_id, "hello")
+
+    def test_unsupported_backend_refused(self, supervisor):
+        adapter, record = self._running_input_session(supervisor, input_capable=False)
+        with pytest.raises(InputInjectionError, match="does not support input injection"):
+            supervisor.send_input(record.session_id, "hello")
+        # Fail-closed: nothing was sent to the backend.
+        assert not any(a.kind == "send_input" for a in adapter._control_actions)
+
+    def test_success_sends_control_and_emits_event(self, supervisor):
+        adapter, record = self._running_input_session(supervisor, input_capable=True)
+        supervisor.send_input(record.session_id, "run the tests")
+
+        sends = [a for a in adapter._control_actions if a.kind == "send_input"]
+        assert len(sends) == 1
+        assert sends[0].payload["text"] == "run the tests"
+
+        events = supervisor.get_events(record.session_id)
+        inputs = [e for e in events if e.kind == EventKind.OPERATOR_INPUT]
+        assert len(inputs) == 1
+        assert inputs[0].source_layer == SourceLayer.OPERATOR
+        assert inputs[0].payload["text"] == "run the tests"
+        assert inputs[0].payload["chars"] == len("run the tests")

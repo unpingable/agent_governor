@@ -3476,6 +3476,36 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         record = sup.resume_session(session_id)
         return {"session_id": record.session_id, "status": record.status.value}
 
+    async def runtime_session_send_input(params: dict) -> dict:
+        """Deliver operator text into a running session (governed-shell GS-5).
+
+        Fail-closed: the supervisor raises InputInjectionError if the backend
+        can't accept input, the session isn't running, or the text is empty —
+        surfaced as a structured error result rather than a silent drop.
+        """
+        from .runtime.supervisor import InputInjectionError
+
+        # The dispatcher already coerces non-dict params to {} before calling a
+        # handler (see Dispatcher.dispatch); this guard makes the handler robust
+        # even if invoked directly, so params.get can never raise.
+        if not isinstance(params, dict):
+            params = {}
+        session_id = params.get("session_id")
+        text = params.get("text")
+        if not session_id:
+            return {"delivered": False, "session_id": session_id,
+                    "error": "session_id is required"}
+        sup = state.runtime_supervisor
+        try:
+            record = sup.send_input(session_id, text)
+        except InputInjectionError as exc:
+            return {"delivered": False, "session_id": session_id, "error": str(exc)}
+        return {
+            "delivered": True,
+            "session_id": record.session_id,
+            "status": record.status.value,
+        }
+
     async def runtime_session_kill(params: dict) -> dict:
         """Kill a session."""
         session_id = params["session_id"]
@@ -3549,6 +3579,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "task": record.task,
         }
 
+    dispatcher.register("runtime.session.send_input", runtime_session_send_input, mutating=True)
     dispatcher.register("runtime.session.kill", runtime_session_kill, mutating=True)
     dispatcher.register("runtime.session.fork", runtime_session_fork, mutating=True)
     dispatcher.register("runtime.intervention.list", runtime_intervention_list)

@@ -49,6 +49,7 @@ class EventKind(str, Enum):
     # Operator
     OPERATOR_PROMPTED = "operator_prompted"
     OPERATOR_DECISION = "operator_decision"
+    OPERATOR_INPUT = "operator_input"
 
     # Intervention
     INTERVENTION_TIMEOUT = "intervention_timeout"

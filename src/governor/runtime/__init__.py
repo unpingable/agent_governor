@@ -12,6 +12,7 @@ from governor.runtime.adapter import (
 from governor.runtime.events import CanonicalEvent, EventBus, EventKind, SourceLayer
 from governor.runtime.supervisor import (
     ActionClass,
+    InputInjectionError,
     Intervention,
     RuntimeFacet,
     SessionRecord,
@@ -28,6 +29,7 @@ __all__ = [
     "ControlAction",
     "EventBus",
     "EventKind",
+    "InputInjectionError",
     "Intervention",
     "LaunchConfig",
     "NativeEvent",

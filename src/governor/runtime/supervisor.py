@@ -25,6 +25,14 @@ from governor.runtime.adapter import (
 from governor.runtime.events import CanonicalEvent, EventBus, EventKind, SourceLayer
 
 
+class InputInjectionError(Exception):
+    """Operator input could not be delivered to a session.
+
+    Fail-closed: raised when the backend does not declare
+    ``supports_input_injection``, the session is not RUNNING, has no live
+    handle, or the text is empty — rather than silently dropping the input."""
+
+
 class SessionStatus(str, Enum):
     """Supervised session lifecycle states."""
 
@@ -1262,6 +1270,60 @@ class SessionSupervisor:
         bus = self._get_bus(session_id)
         self._transition(record, SessionStatus.RUNNING)
         bus.emit(EventKind.SESSION_RESUMED, SourceLayer.OPERATOR, record.backend_kind)
+        return record
+
+    def send_input(self, session_id: str, text: str) -> SessionRecord:
+        """Deliver operator text into a running session's backend (GS-5).
+
+        Fail-closed at every gate: the backend must declare
+        ``supports_input_injection``, the session must be RUNNING with a live
+        handle, and the text must be a non-empty string. On success the input is
+        sent via a ``send_input`` ControlAction and an OPERATOR_INPUT event is
+        recorded on the bus (the audit trail of what the operator said). Raises
+        :class:`InputInjectionError` on any unmet precondition — the input is
+        never silently dropped.
+        """
+        if not isinstance(text, str) or not text.strip():
+            raise InputInjectionError("input text must be a non-empty string")
+
+        # Contract: "no such session" surfaces as InputInjectionError for every
+        # caller, not a raw KeyError from the internal getters.
+        try:
+            record = self._get_record(session_id)
+            facet = self._get_facet(session_id)
+            bus = self._get_bus(session_id)
+        except KeyError as exc:
+            raise InputInjectionError(f"no such session: {session_id}") from exc
+        adapter = self._adapters.get(session_id)
+
+        if adapter is None or not facet.handle:
+            raise InputInjectionError(f"session {session_id} has no live backend handle")
+        if record.status != SessionStatus.RUNNING:
+            raise InputInjectionError(
+                f"session {session_id} is {record.status.value}, not running"
+            )
+        if not facet.capabilities.supports_input_injection:
+            raise InputInjectionError(
+                f"backend {record.backend_kind} does not support input injection"
+            )
+
+        # A backend that rejects the send is a delivery failure, surfaced
+        # structurally — never a silent drop or an unhandled adapter exception.
+        try:
+            adapter.send_control(
+                facet.handle,
+                ControlAction(kind="send_input", payload={"text": text}),
+            )
+        except InputInjectionError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — normalize any adapter failure
+            raise InputInjectionError(f"backend rejected input: {exc}") from exc
+        bus.emit(
+            EventKind.OPERATOR_INPUT,
+            SourceLayer.OPERATOR,
+            record.backend_kind,
+            payload={"text": text, "chars": len(text)},
+        )
         return record
 
     def kill_session(self, session_id: str) -> SessionRecord:

@@ -204,7 +204,10 @@ def resolve_standing_binary(
         # unresolved (not silently falling through to PATH, which would mask it).
         return None
 
-    on_path = shutil.which(command)
+    # Honor the INJECTED env's PATH (a sanitized env must not fall back to the
+    # ambient process PATH — that would resolve a binary the caller explicitly
+    # fenced out).
+    on_path = shutil.which(command, path=env.get("PATH", os.defpath))
     if on_path:
         return ResolvedBinary(path=on_path, source="path")
 
@@ -435,6 +438,14 @@ class StandingGrantUseClient:
             # THIS request. Standing already decided scope; this only confirms the
             # witness corresponds to what we asked, defeating stale/confused packets.
             attempted = packet.get("attempted") or {}
+            if not isinstance(attempted, dict):
+                # A malformed `attempted` is an unparseable witness, never an
+                # exception path (schema failure degrades to no-verified-result).
+                return NoVerifiedResult(
+                    reason=REASON_OUTPUT_UNPARSEABLE,
+                    detail=f"used packet attempted is not an object: {attempted!r}",
+                    raw=packet,
+                )
             if attempted.get("action") != action or attempted.get("target") != target:
                 return NoVerifiedResult(
                     reason=REASON_REQUEST_MISMATCH,
@@ -444,8 +455,21 @@ class StandingGrantUseClient:
                     ),
                     raw=packet,
                 )
+            # The witness must name THIS grant. A used packet for a different
+            # (or unstated) grant with coincidentally matching action/target is
+            # not a mintable basis — never paper over with the requested id.
+            witness_grant = packet.get("grant_id")
+            if witness_grant != grant_id:
+                return NoVerifiedResult(
+                    reason=REASON_REQUEST_MISMATCH,
+                    detail=(
+                        f"used packet grant_id={witness_grant!r} does not match "
+                        f"requested grant_id={grant_id!r}"
+                    ),
+                    raw=packet,
+                )
             return GrantUsed(
-                grant_id=str(packet.get("grant_id") or grant_id),
+                grant_id=grant_id,
                 receipt_digest=digest,
                 action=action,
                 target=target,

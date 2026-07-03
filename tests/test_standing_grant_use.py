@@ -381,3 +381,60 @@ def test_resolve_cargo_lab_fallback(tmp_path):
 def test_resolve_unresolved_returns_none():
     rb = resolve_standing_binary(env={"PATH": "/nonexistent-dir-xyz", "HOME": "/nonexistent-home-xyz"})
     assert rb is None
+
+
+# --------------------------------------------------------------------------
+# Step C — witness-integrity hardening (codex-exec review findings, 2026-07-02)
+# --------------------------------------------------------------------------
+
+
+def test_used_packet_for_a_different_grant_is_request_mismatch():
+    # A used witness for ANOTHER grant with coincidentally matching action/
+    # target must never mint — and must never be papered over with the
+    # requested grant_id.
+    client, _ = _client(_ok(_used_packet(grant_id="g-OTHER")))
+    result = _use(client)
+    assert isinstance(result, NoVerifiedResult)
+    assert result.reason == REASON_REQUEST_MISMATCH
+    assert "g-OTHER" in (result.detail or "")
+
+
+def test_used_packet_without_grant_id_is_request_mismatch():
+    packet = _used_packet()
+    del packet["grant_id"]
+    client, _ = _client(_ok(packet))
+    result = _use(client)
+    assert isinstance(result, NoVerifiedResult)
+    assert result.reason == REASON_REQUEST_MISMATCH
+
+
+def test_used_packet_with_non_object_attempted_is_unparseable_not_exception():
+    packet = _used_packet()
+    packet["attempted"] = "deploy/prod"  # malformed: string, not object
+    client, _ = _client(_ok(packet))
+    result = _use(client)  # must NOT raise
+    assert isinstance(result, NoVerifiedResult)
+    assert result.reason == REASON_OUTPUT_UNPARSEABLE
+
+
+def test_resolve_binary_honors_injected_env_path(tmp_path):
+    import stat
+
+    from governor.standing_grant_use import resolve_standing_binary
+
+    fenced = tmp_path / "fenced-bin"
+    fenced.mkdir()
+    fake = fenced / "standing"
+    fake.write_text("#!/bin/sh\nexit 0\n")
+    fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+
+    # Injected env whose PATH contains ONLY the fenced dir: must resolve there,
+    # regardless of what the ambient process PATH contains.
+    resolved = resolve_standing_binary({"PATH": str(fenced)})
+    assert resolved is not None
+    assert resolved.source == "path"
+    assert resolved.path == str(fake)
+
+    # Injected env with an EMPTY path universe must not fall back to the
+    # ambient PATH (no HOME → no cargo fallback either).
+    assert resolve_standing_binary({"PATH": str(tmp_path / "nowhere")}) is None

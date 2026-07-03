@@ -47,6 +47,7 @@ from .gate_receipt import canonical_json, content_hash
 from .standing_grant_use import (
     GrantRefused,
     GrantUsed,
+    RECOGNIZED_REFUSAL_CLASSES,
     GrantUseResult,
     NoVerifiedResult,
 )
@@ -483,7 +484,17 @@ def activate(
                 "not a bootstrap fiat",
             )
         if isinstance(standing, GrantRefused):
-            # Standing's own typed refusal, inherited verbatim (never synthesized).
+            # Standing's own typed refusal, inherited verbatim (never synthesized)
+            # — but only a class from the CLOSED set may be recorded as a Standing
+            # refusal. The client parser enforces this for subprocess-verified
+            # results; re-checking here fences in-process construction (shape
+            # fence, consumption side). Unrecognized text is "cannot verify",
+            # never a claim that Standing refused for that reason.
+            if standing.refusal_class not in RECOGNIZED_REFUSAL_CLASSES:
+                return ActivationRefusal(
+                    REFUSED_NO_STANDING,
+                    "no_verified_result:unrecognized_refusal_class",
+                )
             return ActivationRefusal(
                 REFUSED_NO_STANDING, f"standing_refused:{standing.refusal_class}"
             )
@@ -491,6 +502,20 @@ def activate(
             # Could not verify Standing — NOT a claim that Standing refused.
             return ActivationRefusal(
                 REFUSED_NO_STANDING, f"no_verified_result:{standing.reason}"
+            )
+        # POSITIVE type check — the mint branch admits GrantUsed and nothing
+        # else. A duck-typed object carrying `receipt_digest` is not a verified
+        # Standing result. (Known bootstrap limit: in-process construction of a
+        # real GrantUsed remains possible — these fences fence SHAPE, not
+        # provenance; provenance fencing is the documented future custody work.)
+        if not isinstance(standing, GrantUsed):
+            return ActivationRefusal(
+                REFUSED_NO_STANDING,
+                "no_verified_result:unrecognized_standing_result_type",
+            )
+        if not (isinstance(standing.receipt_digest, str) and standing.receipt_digest):
+            return ActivationRefusal(
+                REFUSED_NO_STANDING, "no_verified_result:missing_receipt_digest"
             )
         # GrantUsed: constellation also requires the LA + NQ office receipts.
         if not (external_la_spend_ref and external_nq_custody_ref):

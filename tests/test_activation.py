@@ -419,3 +419,60 @@ class TestRollback:
         assert store.get("decomposition_size", "max_slices") is None
         raw = json.loads((tmp_path / "active_tunables" / "values.json").read_text())
         assert _KEY not in raw
+
+
+# --------------------------------------------------------------------------- #
+# Step C — consumption-side shape fences (codex-exec review findings, 2026-07-02)
+# --------------------------------------------------------------------------- #
+
+
+class TestOfficeTwoShapeFences:
+    """Office 2 admits GrantUsed and nothing else; refusal classes revalidated
+    at consumption. Shape fences, not provenance fences (documented limit)."""
+
+    def test_duck_typed_result_with_receipt_digest_cannot_mint(self, tmp_path) -> None:
+        from dataclasses import dataclass
+
+        @dataclass(frozen=True)
+        class NotAGrantUsed:
+            receipt_digest: str = "forged_digest"
+
+        res, *_ = _activate(
+            tmp_path,
+            mode=MODE_CONSTELLATION,
+            standing=NotAGrantUsed(),
+            external_la_spend_ref="la",
+            external_nq_custody_ref="nq",
+        )
+        assert isinstance(res, ActivationRefusal)
+        assert res.code == REFUSED_NO_STANDING
+        assert "unrecognized_standing_result_type" in res.detail
+
+    def test_unrecognized_refusal_class_is_not_recorded_as_standing_refusal(
+        self, tmp_path
+    ) -> None:
+        res, *_ = _activate(
+            tmp_path,
+            mode=MODE_CONSTELLATION,
+            standing=GrantRefused(
+                grant_id="g-1", refusal_class="totally_invented", detail=None, raw={}
+            ),
+            external_la_spend_ref="la",
+            external_nq_custody_ref="nq",
+        )
+        assert isinstance(res, ActivationRefusal)
+        assert res.code == REFUSED_NO_STANDING
+        assert res.detail.startswith("no_verified_result:")
+        assert "standing_refused" not in res.detail
+
+    def test_grant_used_with_empty_digest_cannot_mint(self, tmp_path) -> None:
+        res, *_ = _activate(
+            tmp_path,
+            mode=MODE_CONSTELLATION,
+            standing=_used(digest=""),
+            external_la_spend_ref="la",
+            external_nq_custody_ref="nq",
+        )
+        assert isinstance(res, ActivationRefusal)
+        assert res.code == REFUSED_NO_STANDING
+        assert "missing_receipt_digest" in res.detail

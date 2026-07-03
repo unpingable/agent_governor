@@ -67,3 +67,15 @@ A2, A3b, C2, A8, A9 (blocked per prereq graph).
   branch-visibility confusion. A1 records the hash.
 - Memory-side edits in A5 (files under `~/.claude/projects/.../memory/`) are
   outside the repo; record their completion here when done.
+
+## A9 verdict (codex-exec adversarial, 2026-07-02 night): UNSOUND — adjudicated, report AMENDED
+
+Six findings; adjudication: ACCEPT ×4 (cli.md disposition upgraded to named
+slice `cli-reference-wording-pass`; A5/A7 wordings tightened; spine refusal.py
+correctly demoted to "lexical guard"), PARTIAL ×2 (capsule-authority grade
+stays screen per the checklist's own discipline, but the AUTHORITY vocabulary
+is now named as the conflation itself; backlog stubs explicitly marked
+non-authoritative name-records — they ARE the campaign's named-gap form, but
+the report now says so instead of implying execution). The review's thesis —
+"don't close your own laundering risks by narration" — accepted in full; the
+amendments are in the INVENTORY diff of this commit.

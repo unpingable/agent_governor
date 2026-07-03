@@ -55,7 +55,7 @@ findings + 3 unclassified; dispositions:
 |---|---|---|
 | spine doc "emits authorized GateReceipt" / "emits granted GateReceipt (la_outcome=Granted)" | 2, 5 | **FIXED** (A4/A2 patch commit): receipts now RECORD verdicts; capability named as the LA token |
 | handoff note styled as the decision record; push rule as prose | 3 | **FIXED**: note names itself summary-not-record; DECISIONS files win |
-| cli.md: "Apply verified proposal" (1) · resolve/rule/except wording as if CLI = ruling (3, ×3) · override creation without named authority (1) · anchor `--type canon` (6) · `autonomous run` blurs consumer/actor (4 — sweep's WORST) · `tune --apply` (1) · glossary PROPOSED-name-in-copy (1) | 1,3,4,6 | **RECORDED, fix-on-touch**: reference prose describes commands whose gates live BEHIND them (the FSM still requires approval; docket rulings still require the adjudicator); mass-rewording risks drift. Standing rule adopted for future cli.md edits: imperative labels must not name authority outcomes. `autonomous run` + `anchor --type canon` flagged to the governed-shell campaign (maude v3 kills the ambient paths). |
+| cli.md: "Apply verified proposal" (1) · resolve/rule/except wording as if CLI = ruling (3, ×3) · override creation without named authority (1) · anchor `--type canon` (6) · `autonomous run` blurs consumer/actor (4 — sweep's WORST) · `tune --apply` (1) · glossary PROPOSED-name-in-copy (1) | 1,3,4,6 | **UPGRADED per A9**: user-facing prose is itself a laundering surface regardless of the gates behind it. Disposition raised from fix-on-touch to a NAMED mechanical slice (backlog `cli-reference-wording-pass` — local-qwen-eligible work order: reword the 9 quoted labels per the standing rule, no semantic changes). `autonomous run` + `anchor --type canon` additionally flagged to the governed-shell campaign. |
 | unclassified: loop-protocol "explanatory…wins" self-contradiction; RECEIPT_SNAPSHOT status contradiction; cli.md "everything is a command" flatten | — | recorded; loop-protocol wording fix-on-touch |
 
 ### A7 — UI/client drift record (executed 2026-07-02; record only, no fixes)
@@ -67,8 +67,11 @@ findings + 3 unclassified; dispositions:
 | maude RPC client | 43 methods assumed live | **R-MAUDE-1: 30/31 present; `proposals.json` GONE** (maude client/rpc.py:574 calls it inside operator_snapshot; daemon registry lacks it) | silent-drift specimen — exactly the failure class ag_shell_client (GS-8/9) kills by construction; no repair (client is replaced by GS-9) |
 | maude COMPAT | requires `>=2.3.1 <2.4.0` | not re-tested (superseded by GS-9 path) | record only |
 
-Distinguish-pair note: none of these blur authority pairs — they are liveness
-drift, not laundering. The laundering-relevant finding in this section is §1's
+Distinguish-pair note (amended per A9): the pin rows are liveness drift; the
+dead `proposals.json` sits inside maude's operator_snapshot RENDERING — the
+snapshot is testimony for the operator's eyes, and nothing consumes it as
+operator authority (daemon-side operator.snapshot is a separate, live method),
+but the report should not have called the category closed without saying so. The laundering-relevant finding in this section is §1's
 contradiction 2 (HandoffPacket seal specified only in REENTRY prose).
 
 ## 3. Constellation doctrine mismatches (A3a/A3b, A4)
@@ -155,8 +158,9 @@ Executed during the campaign (each separately committed):
    witness clock, retirement gap — the three named NQ gaps now doc-visible at
    the consuming seam).
 4. ✅ ROADMAP.md supersession (A6, program setup).
-5. ✅ Memory-index relocation corrections (A5; repo grep clean, standing
-   "check backburner + agent_gov_ui first" rule added to session memory).
+5. ✅ Memory-index relocation corrections (A5 — closes the PATH corrections
+   only; session memory is context, not canon, and no authority question was
+   open in this item's scope).
 
 Recommended, NOT executed (each is a named record; build gates apply):
 6. **HandoffPacket seal spec** (§1 contradiction 2): promote the seal contract
@@ -164,10 +168,10 @@ Recommended, NOT executed (each is a named record; build gates apply):
    branch beside handoff_renderer.py; one page, no behavior change.
 7. **F-A3b-1** — session-continuity resume must state (doc-level first) that
    capsule-carried AUTHORITY is context, not admission: re-verification at
-   resume is the rule. Backlog stub filed → `capsule-authority-reverify`.
+   resume is the rule. Named-gap record filed as backlog stub `capsule-authority-reverify` (declared_state, NON-authoritative — a stub is a name, not a work authorization). Per A9: the capsule docs' own use of the word AUTHORITY for carried state is itself the conflation; the stub's acceptance criteria lead with renaming/reframing that vocabulary.
 8. **F-A3b-2** — admission-receipt request-side linearity (one wicket pass
    funding N LA capacity requests): cross-repo contract question (LA frozen
-   v0); record-first. Backlog stub filed → `admission-receipt-linearity`.
+   v0); record-first. Named-gap record filed as backlog stub `admission-receipt-linearity` (declared_state, NON-authoritative).
 9. **cli.md standing rule** (A2): imperative labels never name authority
    outcomes; apply on next touch of each section, not as a sweep.
 10. **loop-protocol.md** self-contradiction ("explanatory…wins") fix-on-touch.
@@ -222,7 +226,8 @@ Q-C2-2.
 **#5 read-plane trio → RECOMMEND: keep all three separate; write the boundary
 note** (R-SPINE-1). Criteria check: three genuinely distinct scopes
 (constellation reading / AG-architecture claims / AG-repo state), zero
-overlap TODAY, disclaimers already enforced in code (spine's refusal.py is a
-wall, not prose). The one real risk is convergent growth — the boundary note
+overlap TODAY, disclaimers enforced as a lexical guard in code (spine's refusal.py blocks
+legitimacy VERBS — real enforcement, but lexical: it is not a proof of
+semantic authority separation, per A9). The one real risk is convergent growth — the boundary note
 names what each may never index and the citation direction between them.
 → DECISIONS Q-C2-5.

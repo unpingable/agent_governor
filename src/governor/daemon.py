@@ -3554,24 +3554,23 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("runtime.intervention.list", runtime_intervention_list)
     dispatcher.register("runtime.intervention.resolve", runtime_intervention_resolve, mutating=True)
 
-    async def operator_decisions_list(params: dict) -> dict:
-        """The unified decision feed (governed-shell GS-2b, shell-contract §2).
+    def _gather_operator_feed(kinds: Any = None) -> list[dict]:
+        """The unified decision feed as a list of envelope dicts.
 
-        Gathers the currently-wired pending-decision sources — supervised-session
-        interventions and promotions (across all sessions) + the pending
-        violation — and returns them as decision envelopes. Exposure-only: it
-        mints nothing; every item mirrors a real pending object (native_id
-        required). Optional ``kinds`` filters the closed kind set.
+        Shared by ``operator.decisions.list`` and ``operator.watch`` so the two
+        surfaces cannot drift. Gathers the currently-wired pending-decision
+        sources — supervised-session interventions and promotions (across all
+        sessions) + the pending violation. Exposure-only: mints nothing; every
+        item mirrors a real pending object. Optional ``kinds`` filters the
+        closed kind set.
 
         Not yet sourced here (need DaemonState plumbing): docket_case and
-        admissibility_question. When those accessors land, add them to the
-        gather below — the envelope already reserves both kinds.
+        admissibility_question — the envelope already reserves both kinds.
         """
         import time as _time
 
         from .operator_decisions import build_feed_from_runtime
 
-        params = params or {}
         sup = state.runtime_supervisor
         interventions: list = []
         promotions: list = []
@@ -3593,13 +3592,113 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         )
         items = [item.to_dict() for item in feed]
 
-        wanted = params.get("kinds")
-        if wanted:
-            wanted_set = set(wanted)
-            items = [i for i in items if i["kind"] in wanted_set]
+        if kinds:
+            # Validate the filter defensively: a bare kind string is a single
+            # filter; a list/tuple/set keeps its string members; anything else
+            # (e.g. an int) is not a usable filter, so fall through unfiltered
+            # rather than crash or silently misfilter on set(str) char expansion.
+            if isinstance(kinds, str):
+                wanted_set = {kinds}
+            elif isinstance(kinds, (list, tuple, set)):
+                wanted_set = {k for k in kinds if isinstance(k, str)}
+            else:
+                wanted_set = None
+            if wanted_set:
+                items = [i for i in items if i["kind"] in wanted_set]
+        return items
+
+    async def operator_decisions_list(params: dict) -> dict:
+        """The unified decision feed (governed-shell GS-2b, shell-contract §2)."""
+        params = params or {}
+        items = _gather_operator_feed(params.get("kinds"))
         return {"items": items, "count": len(items)}
 
     dispatcher.register("operator.decisions.list", operator_decisions_list)
+
+    async def operator_watch(params: dict, notify: NotifyFn) -> dict:
+        """Stream the operator decision feed (governed-shell GS-4).
+
+        A bounded poll loop: emits an ``operator.watch.update`` notification on
+        the first tick (the opening snapshot) and on every later tick whose feed
+        content changed, then returns a summary. Bounded by ``max_ticks`` and
+        ``interval_ms`` so the daemon never holds an unbounded stream — the shell
+        re-subscribes. Read-only: it only ever reports the shared feed; the one
+        mutation door stays ``operator.decisions.resolve``.
+
+        Params (all optional): ``interval_ms`` (poll cadence, clamped
+        [200, 10000], default 1000), ``max_ticks`` (clamped [1, 600], default
+        30), ``kinds`` (filter). Notification params: ``items``, ``count``,
+        ``tick``, ``changed`` (always True for the ones emitted).
+        """
+        import hashlib as _hashlib
+        import json as _json
+
+        params = params or {}
+        kinds = params.get("kinds")
+
+        def _clamp(value: Any, lo: int, hi: int, default: int) -> int:
+            try:
+                n = int(value)
+            except (TypeError, ValueError):
+                return default
+            return max(lo, min(hi, n))
+
+        interval_ms = _clamp(params.get("interval_ms"), 200, 10000, 1000)
+        max_ticks = _clamp(params.get("max_ticks"), 1, 600, 30)
+        # Bound the notify itself: if a client stops draining the socket, a
+        # backpressured write must not let the watch outlive max_ticks*interval.
+        notify_timeout_s = _clamp(params.get("notify_timeout_ms"), 100, 30000, 5000) / 1000.0
+
+        # Change-detection over a STABLE projection: exclude the display-only
+        # clock fields (created_at is a per-poll `now_wall - elapsed` float, so
+        # digesting it would defeat dedup and emit every tick). Urgency stays in
+        # the digest, so a deadline-driven urgency flip still surfaces. Sort by
+        # identity so nondeterministic feed order can't fake a change.
+        _VOLATILE = ("created_at", "timeout_at")
+
+        def _digest(items: list[dict]) -> str:
+            stable = sorted(
+                ({k: v for k, v in i.items() if k not in _VOLATILE} for i in items),
+                key=lambda i: (i.get("kind", ""), i.get("decision_id", "")),
+            )
+            return _hashlib.sha256(
+                _json.dumps(stable, sort_keys=True, default=str).encode()
+            ).hexdigest()
+
+        last_digest: str | None = None
+        updates_emitted = 0
+        final_count = 0
+        stopped_early = False
+        for tick in range(max_ticks):
+            items = _gather_operator_feed(kinds)
+            final_count = len(items)
+            digest = _digest(items)
+            if digest != last_digest:
+                last_digest = digest
+                try:
+                    await asyncio.wait_for(
+                        notify(
+                            "operator.watch.update",
+                            {"items": items, "count": final_count,
+                             "tick": tick, "changed": True},
+                        ),
+                        timeout=notify_timeout_s,
+                    )
+                except (TimeoutError, asyncio.TimeoutError):
+                    # Client is not reading — stop the watch, don't hold the loop.
+                    stopped_early = True
+                    break
+                updates_emitted += 1
+            if tick + 1 < max_ticks:
+                await asyncio.sleep(interval_ms / 1000.0)
+        return {
+            "ticks": max_ticks,
+            "updates_emitted": updates_emitted,
+            "final_count": final_count,
+            "stopped_early": stopped_early,
+        }
+
+    dispatcher.register_streaming("operator.watch", operator_watch)
 
     async def runtime_promotion_get(params: dict) -> dict | None:
         """Get pending promotion for a session."""

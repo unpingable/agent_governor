@@ -1389,10 +1389,12 @@ class TestAllMethodsRegistered:
         "signals.preflight",
         "constraint.status",
         "constraint.check",
+        "operator.decisions.list",
     ]
 
     EXPECTED_STREAMING_METHODS = [
         "chat.stream",
+        "operator.watch",
     ]
 
     def test_all_registered(self, dispatcher_and_state):
@@ -1409,7 +1411,8 @@ class TestAllMethodsRegistered:
         # +3 for nightshift.{check_policy,record_receipt,authorize_transition}
         #    (GOV_GAP_NIGHTSHIFT_ADAPTER_001)
         # +1 for operator.decisions.list (governed-shell GS-2b, the unified feed)
-        assert total == 92
+        # +1 for operator.watch (governed-shell GS-4, bounded feed stream)
+        assert total == 93
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -2131,6 +2134,64 @@ class TestChatStream:
         for n in notifications:
             assert n["method"] == "chat.delta"
             assert "content" in n["params"]
+
+    @pytest.mark.asyncio
+    async def test_operator_watch_emits_opening_snapshot(self, dispatcher_and_state):
+        """operator.watch emits one update on the first tick (the snapshot)."""
+        d, _ = dispatcher_and_state
+        notifications: list[dict] = []
+
+        async def mock_notify(method: str, params: dict) -> None:
+            notifications.append({"method": method, "params": params})
+
+        handler = d._streaming_handlers["operator.watch"]
+        result = await handler({"max_ticks": 1}, mock_notify)
+
+        assert result == {"ticks": 1, "updates_emitted": 1, "final_count": 0,
+                          "stopped_early": False}
+        assert len(notifications) == 1
+        n = notifications[0]
+        assert n["method"] == "operator.watch.update"
+        assert n["params"]["tick"] == 0 and n["params"]["changed"] is True
+        assert n["params"]["items"] == [] and n["params"]["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_operator_watch_dedups_unchanged_feed(self, dispatcher_and_state):
+        """An unchanged feed across ticks emits exactly one update, not one per tick."""
+        d, _ = dispatcher_and_state
+        notifications: list[dict] = []
+
+        async def mock_notify(method: str, params: dict) -> None:
+            notifications.append({"method": method, "params": params})
+
+        handler = d._streaming_handlers["operator.watch"]
+        # interval_ms below the 200ms floor clamps up; keep max_ticks small so the
+        # test stays sub-second (2 ticks -> one 0.2s sleep).
+        result = await handler({"max_ticks": 2, "interval_ms": 1}, mock_notify)
+
+        assert result["ticks"] == 2
+        assert result["updates_emitted"] == 1  # unchanged -> deduped
+        assert len(notifications) == 1
+
+    @pytest.mark.asyncio
+    async def test_operator_watch_stops_on_stalled_client(self, dispatcher_and_state):
+        """A client that stalls on the notify write stops the watch early — the
+        backpressured send must not outlive the loop bound."""
+        import asyncio as _asyncio
+
+        d, _ = dispatcher_and_state
+
+        async def stalling_notify(method: str, params: dict) -> None:
+            await _asyncio.sleep(0.3)  # never returns within the 0.1s timeout
+
+        handler = d._streaming_handlers["operator.watch"]
+        result = await handler(
+            {"max_ticks": 5, "interval_ms": 1, "notify_timeout_ms": 100},
+            stalling_notify,
+        )
+
+        assert result["stopped_early"] is True
+        assert result["updates_emitted"] == 0  # the snapshot write timed out
 
     @pytest.mark.asyncio
     async def test_stream_final_response(self, dispatcher_with_chat):

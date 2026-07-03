@@ -1,6 +1,6 @@
 # Roadmap — lean × AG (the catch-up lane)
 
-**Status:** DRAFT (2026-07-02; ratifies after reconciliation slice A8)
+**Status:** RATIFIED (2026-07-02, A8 — snapshot + drift confirmed by executed evidence slices)
 Repo: `~/git/lean` (HEAD `762967c`, 2026-07-02 — the repo moved TWICE today:
 **v7.0.0 TAGGED same day** (`b9860aa`, artifact authority profiles +
 next-surfaces register; was CANDIDATE at the morning sweep), post-v7 threads

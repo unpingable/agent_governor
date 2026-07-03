@@ -45,7 +45,18 @@ docs/reference/internal-ops-glossary.md — swept by A2.
 
 ## 2. Stale or misleading language (A2, A7)
 
-*(A2 sweep pending.)*
+### A2 — distinguish-pairs sweep (executed 2026-07-02, codex-exec adversarial, 9 docs inlined; zoning deferred)
+
+Sweep verdict: **"Most doctrine docs are disciplined; the CLI reference is the
+main laundering surface."** Cleanest doc: linear-accountant-handoff.md. 13
+findings + 3 unclassified; dispositions:
+
+| finding (condensed) | pair | disposition |
+|---|---|---|
+| spine doc "emits authorized GateReceipt" / "emits granted GateReceipt (la_outcome=Granted)" | 2, 5 | **FIXED** (A4/A2 patch commit): receipts now RECORD verdicts; capability named as the LA token |
+| handoff note styled as the decision record; push rule as prose | 3 | **FIXED**: note names itself summary-not-record; DECISIONS files win |
+| cli.md: "Apply verified proposal" (1) · resolve/rule/except wording as if CLI = ruling (3, ×3) · override creation without named authority (1) · anchor `--type canon` (6) · `autonomous run` blurs consumer/actor (4 — sweep's WORST) · `tune --apply` (1) · glossary PROPOSED-name-in-copy (1) | 1,3,4,6 | **RECORDED, fix-on-touch**: reference prose describes commands whose gates live BEHIND them (the FSM still requires approval; docket rulings still require the adjudicator); mass-rewording risks drift. Standing rule adopted for future cli.md edits: imperative labels must not name authority outcomes. `autonomous run` + `anchor --type canon` flagged to the governed-shell campaign (maude v3 kills the ambient paths). |
+| unclassified: loop-protocol "explanatory…wins" self-contradiction; RECEIPT_SNAPSHOT status contradiction; cli.md "everything is a command" flatten | — | recorded; loop-protocol wording fix-on-touch |
 
 ### A7 — UI/client drift record (executed 2026-07-02; record only, no fixes)
 
@@ -135,9 +146,31 @@ tiers honored: v6/SCRATCH screens used as SCREENS only.
 | receipt_kernel purge_expired() | blob metadata (sha256, len, created_at) → EXPIRED_HASH_ONLY | blob bytes | BLOB_EXPIRE event per blob (retention.py:128-148); hashes forever if hash_retention=-1 |
 | RecoveryStore | content_hash → file mapping | originals after TTL | recovery_store_path in receipt; cleanup by mtime :479 |
 
-## 4. Minimal changes recommended (A8)
+## 4. Minimal changes recommended (A8 — assembled 2026-07-02)
 
-*(pending — each entry separately committable, cited.)*
+Executed during the campaign (each separately committed):
+1. ✅ Spine-doc receipt wording + LA-token custody line (A2 findings 1-2).
+2. ✅ Handoff note summary-not-record header (A2 findings 3-4).
+3. ✅ claim-custody-spine NQ basis-lifecycle section (A4: stale-as-live,
+   witness clock, retirement gap — the three named NQ gaps now doc-visible at
+   the consuming seam).
+4. ✅ ROADMAP.md supersession (A6, program setup).
+5. ✅ Memory-index relocation corrections (A5; repo grep clean, standing
+   "check backburner + agent_gov_ui first" rule added to session memory).
+
+Recommended, NOT executed (each is a named record; build gates apply):
+6. **HandoffPacket seal spec** (§1 contradiction 2): promote the seal contract
+   from REENTRY prose to a short ratifiable spec — belongs on the CONVEYOR
+   branch beside handoff_renderer.py; one page, no behavior change.
+7. **F-A3b-1** — session-continuity resume must state (doc-level first) that
+   capsule-carried AUTHORITY is context, not admission: re-verification at
+   resume is the rule. Backlog stub filed → `capsule-authority-reverify`.
+8. **F-A3b-2** — admission-receipt request-side linearity (one wicket pass
+   funding N LA capacity requests): cross-repo contract question (LA frozen
+   v0); record-first. Backlog stub filed → `admission-receipt-linearity`.
+9. **cli.md standing rule** (A2): imperative labels never name authority
+   outcomes; apply on next touch of each section, not as a sweep.
+10. **loop-protocol.md** self-contradiction ("explanatory…wins") fix-on-touch.
 
 ## 5. Do-not-build-yet list (A8)
 

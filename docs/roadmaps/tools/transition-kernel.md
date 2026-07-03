@@ -1,6 +1,6 @@
 # Roadmap — transition-kernel × AG
 
-**Status:** DRAFT (2026-07-02; ratifies after reconciliation slice A8)
+**Status:** RATIFIED (2026-07-02, A8 — snapshot + drift confirmed by executed evidence slices)
 Repo: `~/git/transition-kernel` (HEAD 2026-06-18, summit `stage3b2-first-effect`)
 · Campaign: **`docs/campaigns/transition-kernel-pickup/` is the build lane** —
 this file is the tool-view index; it does not duplicate the capsule.

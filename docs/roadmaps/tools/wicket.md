@@ -1,6 +1,6 @@
 # Roadmap — wicket × AG
 
-**Status:** DRAFT (2026-07-02; ratifies after reconciliation slice A8)
+**Status:** RATIFIED (2026-07-02, A8 — snapshot + drift confirmed by executed evidence slices)
 Repo: `~/git/wicket` (HEAD `468883c`, 2026-06-25; SPEC v0.3) · Docket:
 governor-atlas constellation case (Wicket edge)
 

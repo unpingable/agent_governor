@@ -1,6 +1,6 @@
 # Roadmap — standing × AG
 
-**Status:** DRAFT (2026-07-02; ratifies after reconciliation slice A8)
+**Status:** RATIFIED (2026-07-02, A8 — snapshot + drift confirmed by executed evidence slices)
 Repo: `~/git/standing` (HEAD `d1883c3`, 2026-06-25; +2 unpushed commits) · Docket:
 governor-atlas constellation case (Standing edge) · Campaign: this tool's build
 lane IS `docs/campaigns/transition-kernel-pickup/` — this file does not duplicate it.

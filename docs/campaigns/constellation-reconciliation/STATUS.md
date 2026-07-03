@@ -37,6 +37,20 @@ As of 2026-07-02.
 - Nits from external review patched: C1 candidate cardinality, wlp.md numbering,
   nq.md HEAD (bumped to `59616dc` — NQ moved again since the sweep).
 
+## 2026-07-02 night — CAMPAIGN EXECUTED (A8 assembled; A9 pending)
+
+All slices executed in one governed run: A1 (surfaces verified+hashed; the
+branch-visibility finding), A2 (codex-exec sweep: doctrine disciplined, cli.md
+the laundering surface; 2 fixes committed, rest fix-on-touch), A3a (schema
+tables), A3b (Lean v7.0.0-HEAD adjudication: 0 wall, 2 screen findings →
+backlog stubs capsule-authority-reverify + admission-receipt-linearity), A4
+(NQ basis-lifecycle section in the spine doc), A5 (repo grep clean; memory
+rule added), A6 (done at setup), A7 (drift record incl. R-PHOS-1's 481/481
+GREEN — the compat fear was pessimism — and R-MAUDE-1's dead proposals.json),
+C1+C2 (recommendations filed: absorb wicket-guard; keep read-plane trio +
+boundary note). Five audited tool roadmaps flipped RATIFIED. A9 adversarial
+review of this inventory: launched, verdict appended below when in.
+
 ## Current next
 
 A1 (surface-inventory verification) and the independent slices A3a/A4/A5/A7/C1

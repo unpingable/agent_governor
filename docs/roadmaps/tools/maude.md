@@ -13,7 +13,10 @@ substrate Maude can invoke** — not Maude's whole product boundary.
 > Maude runs the room. AG decides what the room is allowed to claim.
 
 - **Maude owns:** operator interaction; session DAG / branch/fork/promotion UX;
-  model/runtime adapters (Claude Code, Codex, Gemini, local Qwen, …); tool-call
+  adapter *selection* via `runtime.adapters.list` introspection (the adapters
+  themselves stay AG, below the authority gate — settled by maude-boundary.md
+  / D-GS-5, which supersedes this line's earlier "maude owns model/runtime
+  adapters" claim); tool-call
   supervision surfaces; memory/tool/MCP-ish surfaces; sandbox/process
   boundaries; transcript/event rendering; the "what needs a human decision?"
   queue.

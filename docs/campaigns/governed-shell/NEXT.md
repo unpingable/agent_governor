@@ -1,7 +1,7 @@
 # Next — governed-shell slices (GS-series)
 
 Order: GS-0 → GS-1 → daemon {GS-2→GS-3, GS-4, GS-5, GS-6 anytime, GS-7 deferred}
-→ GS-8 → maude track (GS-9→GS-10→GS-11/12/13/14→GS-15) ∥ phosphor track
+→ GS-8 → GS-8b → maude track (GS-9→GS-10→GS-11/12/13/14→GS-15) ∥ phosphor track
 (GS-16→GS-17). Six-field shape per `docs/roadmaps/ROUTING.md`; sandwich slices
 marked. Small-model eligible: parts of GS-6, GS-14.
 
@@ -83,8 +83,16 @@ tier: mechanical · executor: codex · prereq: [GS-0, GS-1]
 - refusal mode: n/a. · receipt shape: commit; contract version pinned in package.
 - stop condition: scope creep toward UI/retry-policy/rendering — NOT in the library.
 
-### GS-9 — maude consumes ag_shell_client; deletes duplicated transport/client
+### GS-8b — ag_shell_client live-socket client class  **(filed 2026-07-03, maude repositioning pass)**
 tier: mechanical · executor: codex · prereq: [GS-8]
+- purpose: the library today is codec + envelope models + injected-read-fn reader only — no connect/call/stream client class, so GS-9 has nothing to consume. Add the async Unix-socket client (connect, close, `call(method, params)`, streaming iterator, -32001 → DaemonAuthError) wrapping the existing codec. Zero consumers exist yet, so no compat burden.
+- files: libs/ag_shell_client/src/ag_shell_client/ (new client module + __init__ export), libs/ag_shell_client/tests/.
+- tests: `python3 -m pytest libs/ag_shell_client/tests -v` exit 0; live-daemon integration smoke per the GS-8 pattern (call `governor.hello` round-trip; streaming method yields deltas then final result).
+- refusal mode: n/a (transport). · receipt shape: commit citing GS-8 + this filing.
+- stop condition: UI/retry-policy/rendering creep — GS-8's own stop condition applies; the client class is framing + dispatch, nothing more.
+
+### GS-9 — maude consumes ag_shell_client; deletes duplicated transport/client
+tier: mechanical · executor: codex · prereq: [GS-8b]
 - purpose: maude's client/ dir replaced by the package; **narrows R-MAUDE-2** (old-client resync is dead work).
 - files: maude repo (delete src/maude/client/, add dependency, adapt imports).
 - tests: maude suite bare exit 0; live daemon smoke.

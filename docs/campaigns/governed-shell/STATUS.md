@@ -80,6 +80,22 @@ derived predicate, not a queue object) and **HELD-launch state** (needs a new
 `SessionStatus.HELD` + admission consultation on launch = authority-semantics
 work, re-tiered out of exposure-only plumbing).
 
+## 2026-07-03 — maude repositioning pass (maude repo) + GS-8b filed
+
+Operator ruling executed in the maude repo (commits 9e20d4b..ae17ffd): maude
+reframed as the plan-only executor — docs Phase 0 landed (README/pyproject/
+architecture/commands/COMPAT reframe, chat marked unsupported legacy per
+D-GS-2, chat-era docs archived, dead http.py deleted, roadmap rewritten with
+the plan-executor spine M-1..M-5 and the two-ingress tail M-6/M-7). New
+operator law recorded there: synthetic agent-led maude is a first-class
+**submitter** path, not a separate authority path (maude
+docs/REPOSITIONING.md).
+
+**GS-8b filed** (this file's NEXT.md): ag_shell_client needs a live-socket
+client class (lib is codec + models only) before GS-9 can consume it; GS-9
+prereq updated to [GS-8b]. Also: roadmaps/tools/maude.md §0 adapter-ownership
+line corrected to match the ratified boundary (D-GS-5).
+
 ## Current next
 
 Daemon slices unblocked: **GS-2** (decisions.list + docket/admissibility

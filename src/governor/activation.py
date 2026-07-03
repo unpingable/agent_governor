@@ -19,10 +19,12 @@ Invariants this slice holds (each was a current-rung blocker Codex caught):
   full live claim content (deferral is cargo; re-verification is standing).
 - Spend is exactly-once (local ledger replay guard in both modes); replay refuses
   before any write.
-- Mode honesty: ``standalone_degraded`` uses local substitutes and may NOT claim
-  external Standing/LA/NQ backing; ``constellation`` requires all three external
-  office receipts (Standing, LA, NQ) — no faking rich. The LA ref is carried,
-  never parsed.
+- Mode honesty: ``standalone_degraded`` uses local substitutes (an explicit
+  ``BootstrapStanding`` operator-fiat) and may NOT claim external Standing/LA/NQ
+  backing; ``constellation`` consumes a VERIFIED Standing grant-use result
+  (``GrantUsed``, D010 Model X — AG inherits Standing's verdict, never adjudicates)
+  and requires external LA + NQ office receipts — no faking rich. The LA/NQ refs
+  are carried, never parsed; the Standing basis is the verified receipt digest.
 - Custody is durable: activation and rollback receipts are persisted; rollback
   restores topology (deletes a previously-absent key), never erases the
   activation receipt.
@@ -42,6 +44,13 @@ from .activation_preflight import RungDebt, check_activation_eligibility
 from .annealing import AnnealingDelta
 from .debt_ledger import DebtLedger
 from .gate_receipt import canonical_json, content_hash
+from .standing_grant_use import (
+    GrantRefused,
+    GrantUsed,
+    RECOGNIZED_REFUSAL_CLASSES,
+    GrantUseResult,
+    NoVerifiedResult,
+)
 
 # The single lowest-stakes tunable P3.1 may touch. Anything else refuses.
 P31_SURFACE = "decomposition_size"
@@ -51,6 +60,21 @@ P31_RUNG = "self_governance"
 MODE_CONSTELLATION = "constellation"
 MODE_STANDALONE_DEGRADED = "standalone_degraded"
 CLOSED_MODES = frozenset({MODE_CONSTELLATION, MODE_STANDALONE_DEGRADED})
+
+
+@dataclass(frozen=True)
+class BootstrapStanding:
+    """Operator-fiat standing for ``standalone_degraded`` (BOOTSTRAP grade).
+
+    Explicit, not a bare bool: it makes the bootstrap substitute a *named* input
+    that Office 2 can reject in constellation mode (presenting a fiat where a
+    verified Standing grant-use is required = faking rich). ``granted=False`` is
+    the honest "even the bootstrap stub denies standing" path. The real-Standing
+    path uses a verified ``GrantUseResult`` instead (D010 Model X — AG inherits
+    Standing's verdict, never adjudicates).
+    """
+
+    granted: bool
 
 REFUSED_NOT_P31_TUNABLE = "refused_not_p31_tunable"
 REFUSED_INELIGIBLE = "refused_ineligible"
@@ -397,9 +421,8 @@ def activate(
     tunable_store: ActiveTunableStore,
     receipt_store: ActivationReceiptStore,
     debt_ledger: DebtLedger,
-    standing_ok: bool,
+    standing: GrantUseResult | BootstrapStanding,
     presented_claim_digest: str,
-    external_standing_receipt: str | None = None,
     external_la_spend_ref: str | None = None,
     external_nq_custody_ref: str | None = None,
 ) -> ActivationReceipt | ActivationRefusal:
@@ -446,28 +469,81 @@ def activate(
             REFUSED_INELIGIBLE, f"P3.0 gate refused: {elig.verdict}", elig.offending
         )
 
-    # Office 2 — standing (act-standing or bootstrap substitute), mode-honest.
-    if not standing_ok:
-        return ActivationRefusal(
-            REFUSED_NO_STANDING, "act-standing not granted for activate_rung"
-        )
-    external_refs = (
-        external_standing_receipt,
-        external_la_spend_ref,
-        external_nq_custody_ref,
-    )
-    if mode == MODE_STANDALONE_DEGRADED and any(external_refs):
-        return ActivationRefusal(
-            REFUSED_DEGRADED_CLAIMS_BACKING,
-            "standalone_degraded may not claim external Standing/LA/NQ backing "
-            "(run poor, don't fake rich)",
-        )
-    if mode == MODE_CONSTELLATION and not all(external_refs):
-        return ActivationRefusal(
-            REFUSED_NO_STANDING,
-            "constellation mode requires external Standing + LA + NQ receipts; "
-            "absent any, declare standalone_degraded instead of faking rich",
-        )
+    # Office 2 — standing, mode-honest. D010 Model X: AG INHERITS Standing's
+    # grant-use verdict; it never adjudicates scope/expiry/spend/replay/subject.
+    # Constellation consumes a VERIFIED ``GrantUseResult`` (the carried-not-parsed
+    # receipt is gone); standalone_degraded carries an explicit operator-fiat
+    # ``BootstrapStanding`` ("run poor, don't fake rich"). ``standing_basis`` is
+    # the verified receipt digest (constellation) or "bootstrap_substitute".
+    standing_basis: str
+    if mode == MODE_CONSTELLATION:
+        if isinstance(standing, BootstrapStanding):
+            return ActivationRefusal(
+                REFUSED_DEGRADED_CLAIMS_BACKING,
+                "constellation mode requires a verified Standing grant-use result, "
+                "not a bootstrap fiat",
+            )
+        if isinstance(standing, GrantRefused):
+            # Standing's own typed refusal, inherited verbatim (never synthesized)
+            # — but only a class from the CLOSED set may be recorded as a Standing
+            # refusal. The client parser enforces this for subprocess-verified
+            # results; re-checking here fences in-process construction (shape
+            # fence, consumption side). Unrecognized text is "cannot verify",
+            # never a claim that Standing refused for that reason.
+            if standing.refusal_class not in RECOGNIZED_REFUSAL_CLASSES:
+                return ActivationRefusal(
+                    REFUSED_NO_STANDING,
+                    "no_verified_result:unrecognized_refusal_class",
+                )
+            return ActivationRefusal(
+                REFUSED_NO_STANDING, f"standing_refused:{standing.refusal_class}"
+            )
+        if isinstance(standing, NoVerifiedResult):
+            # Could not verify Standing — NOT a claim that Standing refused.
+            return ActivationRefusal(
+                REFUSED_NO_STANDING, f"no_verified_result:{standing.reason}"
+            )
+        # POSITIVE type check — the mint branch admits GrantUsed and nothing
+        # else. A duck-typed object carrying `receipt_digest` is not a verified
+        # Standing result. (Known bootstrap limit: in-process construction of a
+        # real GrantUsed remains possible — these fences fence SHAPE, not
+        # provenance; provenance fencing is the documented future custody work.)
+        if not isinstance(standing, GrantUsed):
+            return ActivationRefusal(
+                REFUSED_NO_STANDING,
+                "no_verified_result:unrecognized_standing_result_type",
+            )
+        if not (isinstance(standing.receipt_digest, str) and standing.receipt_digest):
+            return ActivationRefusal(
+                REFUSED_NO_STANDING, "no_verified_result:missing_receipt_digest"
+            )
+        # GrantUsed: constellation also requires the LA + NQ office receipts.
+        if not (external_la_spend_ref and external_nq_custody_ref):
+            return ActivationRefusal(
+                REFUSED_NO_STANDING,
+                "constellation mode requires external LA + NQ receipts alongside "
+                "the verified Standing grant-use; absent any, declare "
+                "standalone_degraded instead of faking rich",
+            )
+        standing_basis = standing.receipt_digest
+    else:  # MODE_STANDALONE_DEGRADED
+        if not isinstance(standing, BootstrapStanding):
+            return ActivationRefusal(
+                REFUSED_DEGRADED_CLAIMS_BACKING,
+                "standalone_degraded may not present a constellation Standing "
+                "result (run poor, don't fake rich)",
+            )
+        if external_la_spend_ref or external_nq_custody_ref:
+            return ActivationRefusal(
+                REFUSED_DEGRADED_CLAIMS_BACKING,
+                "standalone_degraded may not claim external LA/NQ backing "
+                "(run poor, don't fake rich)",
+            )
+        if not standing.granted:
+            return ActivationRefusal(
+                REFUSED_NO_STANDING, "act-standing not granted for activate_rung"
+            )
+        standing_basis = "bootstrap_substitute"
 
     # Office 3 — spend: exactly-once. Replay refuses BEFORE any write, so a
     # replayed activation cannot re-mutate the tunable.
@@ -493,7 +569,7 @@ def activate(
         eligibility_verdict=elig.verdict,
         live_claim_set_digest=real_digest,
         mode=mode,
-        standing_basis=external_standing_receipt or "bootstrap_substitute",
+        standing_basis=standing_basis,
         spend_ref=external_la_spend_ref if mode == MODE_CONSTELLATION else spend_key,
         la_spend_ref=external_la_spend_ref,
         nq_custody_ref=external_nq_custody_ref,

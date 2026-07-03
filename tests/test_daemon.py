@@ -1408,7 +1408,8 @@ class TestAllMethodsRegistered:
         # +1 for receipts.horizon_expiring_soon (GOV_GAP_TOLERABILITY_HORIZON_001)
         # +3 for nightshift.{check_policy,record_receipt,authorize_transition}
         #    (GOV_GAP_NIGHTSHIFT_ADAPTER_001)
-        assert total == 91
+        # +1 for operator.decisions.list (governed-shell GS-2b, the unified feed)
+        assert total == 92
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):

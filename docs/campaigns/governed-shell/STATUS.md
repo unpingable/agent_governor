@@ -30,6 +30,39 @@ hardened aggregator (`build_feed_from_runtime`). Sandwich MERGE-SAFE.
 Deferred (need DaemonState plumbing): docket + admissibility sources +
 HELD-launch state = GS-2b remainder. GS-4/5/6/3 not started.
 
+## 2026-07-03 overnight — GS-4/5/6/3 + GS-8 landed
+
+The daemon shell surface is now built out and the client library extracted.
+All on main, each slice verify-run-gated + (for mutation/authority surfaces)
+codex-exec sandwiched to MERGE-SAFE.
+
+- **GS-4** `operator.watch` (`3fe0acb`) — bounded streaming decision feed;
+  emits `operator.watch.update` on the opening snapshot + on content change
+  (stable-projection digest excluding display-clock fields); `notify` wrapped
+  in a timeout so a stalled client can't outlive the loop bound. Sandwich
+  BLOCK→MERGE-SAFE (kinds validation, notify bound, digest churn).
+- **GS-5** `runtime.session.send_input` + `OPERATOR_INPUT` event (`a698abd`) —
+  operator text into a running session; fail-closed at every gate
+  (empty/no-session/no-handle/not-running/no-capability/backend-reject), never
+  a silent drop. Sandwich BLOCK×2→MERGE-SAFE.
+- **GS-6** exposure batch (`f3294e4`) — `runtime.adapters.list` (declared
+  capabilities), `why.chain` (receipt chain-walk over the daemon),
+  `session.get` now carries `capabilities`/`input_capable`. Read-only.
+- **GS-3** `operator.decisions.resolve` (`cd11091`) — THE one mutation door;
+  routes by trusted-feed item kind + option action to the backing handler
+  (intervention/promotion/violation); forwards (routed receipt IS the receipt),
+  mints nothing, adds no refusal vocabulary. FULL sandwich BLOCK→MERGE-SAFE
+  (codex confirmed no privilege escalation via forged args). v0 boundary:
+  already-resolved → decision_not_found (richer replay needs a resolution
+  ledger, deferred).
+- **GS-8** `libs/ag_shell_client/` (`76397d6`) — de-triplicated wire protocol
+  (socket path proven byte-identical to the daemon) + typed decision models
+  with the safe-defaults idiom. Sandwich MERGE-SAFE.
+
+Daemon method count 91→97. GS-2b remainder (docket + admissibility sources +
+HELD-launch state) still deferred on DaemonState plumbing. GS-7 (autopilot RPC)
+and GS-9 (maude consumes ag_shell_client — separate-repo UX) not overnight.
+
 ## Current next
 
 Daemon slices unblocked: **GS-2** (decisions.list + docket/admissibility

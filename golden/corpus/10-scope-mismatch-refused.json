@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "scope-mismatch-refused",
+  "demo_role": "la_token_refusal",
+  "description": "A valid grant is presented for the wrong (action,target): standing and wicket pass, LA grants, but the LA consume returns ScopeMismatch. The la_seam refuses with scope_mismatch before any effect is spent. This is the gauntlet-side (LA ConsumptionDecision) scope refusal, distinct from the Standing-store scope_mismatch of Slice 1b.",
+  "input": {
+    "scenario": "scope-mismatch",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "refused",
+    "refusal_kind": "scope_mismatch",
+    "refusing_seam": "la_seam",
+    "effect_count": 0,
+    "consumed": false,
+    "operational": false,
+    "proposal_packet_present": false
+  }
+}

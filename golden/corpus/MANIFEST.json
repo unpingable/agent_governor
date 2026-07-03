@@ -73,6 +73,30 @@
       "case": "temporal-lapse-twin-passes",
       "sha256": "8fbd696bc3623c9882828d591c332fc56a3149add6898cb4a1df50c04db6dc9c",
       "custody_class": "contract"
+    },
+    {
+      "id": "10-scope-mismatch-refused.json",
+      "case": "scope-mismatch-refused",
+      "sha256": "da392611747df4faa99b3033273c3b67da961a5cbd1b18aced3fe29764a4b6c7",
+      "custody_class": "contract"
+    },
+    {
+      "id": "11-token-revoked-refused.json",
+      "case": "token-revoked-refused",
+      "sha256": "771123a687f72121150101eae5b9611d8f08deb52336b33371acffe5a5e5a062",
+      "custody_class": "contract"
+    },
+    {
+      "id": "12-token-expired-refused.json",
+      "case": "token-expired-refused",
+      "sha256": "2c480afa33953cee92a7259eb163f7690c0cd10bf2a118ab7ed5b4ef4683d403",
+      "custody_class": "contract"
+    },
+    {
+      "id": "13-unknown-token-refused.json",
+      "case": "unknown-token-refused",
+      "sha256": "a83d1f721cecf1c54a761f1337621ec03918dd659b6f0cb8685806e1d74d147f",
+      "custody_class": "contract"
     }
   ],
   "known_boundaries": [

@@ -169,6 +169,24 @@ SCENARIO_ALIAS_ALREADY_CONSUMED = "already-consumed"
 #                           the chain consumes (the legitimate twin).
 SCENARIO_TEMPORAL_LAPSE = "temporal-lapse"
 SCENARIO_TEMPORAL_LAPSE_TWIN = "temporal-lapse-twin"
+# B5 LA-token quartet (2026-07-03, pickup campaign B5-work-order): the LA seam
+# already maps these ConsumptionDecisions to their S4-lite refusal kinds
+# (linear_accountant_client._LA_TO_REFUSAL); these scenarios drive the drill's
+# LA stub to return each decision on the FIRST consume, so the corpus can
+# freeze the verdicts. Standing + wicket + LA grant all pass; consume refuses
+# BEFORE any effect (effect_count stays 0).
+SCENARIO_SCOPE_MISMATCH = "scope-mismatch"
+SCENARIO_TOKEN_REVOKED = "token-revoked"
+SCENARIO_TOKEN_EXPIRED = "token-expired"
+SCENARIO_UNKNOWN_TOKEN = "unknown-token"
+
+# scenario -> (LA ConsumptionDecision, refusal kind surfaced by the LA client).
+_LA_CONSUME_REFUSAL_SCENARIOS = {
+    SCENARIO_SCOPE_MISMATCH: ("ScopeMismatch", "scope_mismatch"),
+    SCENARIO_TOKEN_REVOKED: ("Revoked", "token_revoked"),
+    SCENARIO_TOKEN_EXPIRED: ("Expired", "token_expired"),
+    SCENARIO_UNKNOWN_TOKEN: ("UnknownToken", "unknown_token"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -251,9 +269,11 @@ class InvalidConfabulationRoleError(ValueError):
     substitute (mirrors the ``UnsupportedScenarioError`` pattern).
     """
 
-# Closed canonical scenario set — exactly six values. CLI gate at both
-# the Night Shift and AG entry points refuses anything else (including
-# the D0d-a era scenario names like ``1_no_standing`` / ``6_all_green``).
+# Closed canonical scenario set. CLI gate at both the Night Shift and AG entry
+# points refuses anything else (including the D0d-a era scenario names like
+# ``1_no_standing`` / ``6_all_green``). Growing this set is a corpus event:
+# the closed-world coverage test (tests/test_corpus_contract.py) requires a
+# frozen golden per scenario, admitted via golden/corpus/MANIFEST.json.
 SUPPORTED_SCENARIOS = frozenset(
     {
         SCENARIO_NO_STANDING,
@@ -264,6 +284,10 @@ SUPPORTED_SCENARIOS = frozenset(
         SCENARIO_ALL_GREEN,
         SCENARIO_TEMPORAL_LAPSE,
         SCENARIO_TEMPORAL_LAPSE_TWIN,
+        SCENARIO_SCOPE_MISMATCH,
+        SCENARIO_TOKEN_REVOKED,
+        SCENARIO_TOKEN_EXPIRED,
+        SCENARIO_UNKNOWN_TOKEN,
     }
 )
 
@@ -1109,6 +1133,16 @@ def _build_clients_for_scenario(
                 "token_id": la_request["token_id"],
                 "receipt": {"la_receipt_id": "la_already_consumed_replay"},
             }
+        # B5 LA-token quartet: consume refuses on the FIRST call with the
+        # scenario's ConsumptionDecision. No effect counter bump — the token
+        # state failed, nothing was spent (the LA client refuses, not consumes).
+        if scenario in _LA_CONSUME_REFUSAL_SCENARIOS:
+            decision, _ = _LA_CONSUME_REFUSAL_SCENARIOS[scenario]
+            return {
+                "decision": decision,
+                "token_id": la_request["token_id"],
+                "receipt": {"la_receipt_id": f"la_{decision.lower()}_b5"},
+            }
         seen_event_ids.add(event_id)
         effect_counter.increment()
         return _consumed_response(la_request, now)
@@ -1245,6 +1279,11 @@ def _classify_chain_outcome(
             # the runner forgot to invoke the replay step.
             return "consumed", None, None
         return "refused", "already_consumed", "la_seam"
+    if scenario in _LA_CONSUME_REFUSAL_SCENARIOS:
+        # LA-token quartet: the LA seam refused the consume with the token-state
+        # kind. No effect was spent; the chain did not consume.
+        _, kind = _LA_CONSUME_REFUSAL_SCENARIOS[scenario]
+        return "refused", kind, "la_seam"
     # all-green
     return "consumed", None, None
 

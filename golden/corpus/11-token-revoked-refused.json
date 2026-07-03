@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "token-revoked-refused",
+  "demo_role": "la_token_refusal",
+  "description": "LA grants a token, then the consume returns Revoked: the token was revoked between grant and spend. la_seam refuses with token_revoked; zero effect.",
+  "input": {
+    "scenario": "token-revoked",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "refused",
+    "refusal_kind": "token_revoked",
+    "refusing_seam": "la_seam",
+    "effect_count": 0,
+    "consumed": false,
+    "operational": false,
+    "proposal_packet_present": false
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "token-expired-refused",
+  "demo_role": "la_token_refusal",
+  "description": "LA grants a token whose TTL elapses before consume; the consume returns Expired. la_seam refuses with token_expired (distinct from standing_expired, which is an unverifiable standing digest). Zero effect.",
+  "input": {
+    "scenario": "token-expired",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "refused",
+    "refusal_kind": "token_expired",
+    "refusing_seam": "la_seam",
+    "effect_count": 0,
+    "consumed": false,
+    "operational": false,
+    "proposal_packet_present": false
+  }
+}

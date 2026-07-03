@@ -213,7 +213,9 @@ def test_only_all_green_is_supported(tmp_path: Path):
 
     The D0d-a single-scenario contract is superseded; this test pins the
     closed set. Legacy D0d-a era names (e.g. ``1_no_standing``) remain
-    refused at construction time.
+    refused at construction time. B5 (2026-07-03) extended it to twelve via
+    the closed-world extension ceremony (the LA-token quartet — each admitted
+    to golden/corpus + MANIFEST + the transition-kernel mirror).
     """
     assert SUPPORTED_SCENARIOS == frozenset(
         {
@@ -225,6 +227,10 @@ def test_only_all_green_is_supported(tmp_path: Path):
             "all-green",
             "temporal-lapse",
             "temporal-lapse-twin",
+            "scope-mismatch",
+            "token-revoked",
+            "token-expired",
+            "unknown-token",
         }
     )
 

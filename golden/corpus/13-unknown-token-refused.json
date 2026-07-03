@@ -1,0 +1,20 @@
+{
+  "schema": "agent_governor.corpus.v1",
+  "case": "unknown-token-refused",
+  "demo_role": "la_token_refusal",
+  "description": "The consume presents a token LA does not recognize; the consume returns UnknownToken. la_seam refuses with unknown_token (distinct from a dangling receipt reference). Zero effect.",
+  "input": {
+    "scenario": "unknown-token",
+    "origin_mode": "drill",
+    "confabulate_citation": null
+  },
+  "expected_verdict": {
+    "outcome": "refused",
+    "refusal_kind": "unknown_token",
+    "refusing_seam": "la_seam",
+    "effect_count": 0,
+    "consumed": false,
+    "operational": false,
+    "proposal_packet_present": false
+  }
+}

@@ -2,12 +2,15 @@
 
 ## B-series sign-off questions (filed 2026-07-02, roadmap program resume)
 
-### Q-B1 — confirm + push Standing 1a/1a-bis  **(OPEN — gates B4/Slice 1b)**
-Standing commits `1e62ba9` (scope-mismatch refusal, non-consuming) and `f101c55`
-(`standing.grant_use.v1` witness packet) implement ratified D010 Model X but are
-**local-only** — a custody hazard (the ratified implementation exists nowhere
-durable). Ask: confirm these as the D010 implementation and push. B4 starts on
-confirmation.
+### Q-B1 — confirm + push Standing 1a/1a-bis  **(RESOLVED BY EVIDENCE 2026-07-02)**
+B1 verified both commits **already on `origin/main`** (`git branch -r
+--contains` → origin/main for `1e62ba9` and `f101c55`) — the push half was
+done before this question was filed (the 06-23 "unpushed" record had gone
+stale). The confirm half is satisfied by the existing capsule record: STATUS
+and NEXT already name these commits as the DONE implementations of ratified
+D010/D010a/D010c. **B4/Slice 1b is UNBLOCKED** — and B1 further found its
+implementation already committed on `feat/transition-kernel-slice-1b`
+(24acd8f + f003519), so B4 executes as verify-and-adopt.
 
 ### Q-B3 — corpus custody home  **(OPEN — gates B5..Bn)**
 Recommendation: `~/git/transition-kernel` remains custodian of the shared

@@ -1,7 +1,20 @@
 # Status — transition-kernel pickup
 
-As of 2026-07-02 (resumed under the roadmap program; prior snapshot 2026-06-23
-preserved below).
+As of 2026-07-02 evening (B1 executed; prior snapshots preserved below).
+
+## 2026-07-02 evening — B1 done, Q-B1 resolved, B4 unblocked
+
+- **B1 executed** (INVENTORY §Three worlds): differential green 9/9 EXIT=0;
+  corpus enumerated; packet's wicket-verdict map REFUTED (shared vocabulary =
+  12-kind refusal enum + 5 seams; corpus is the contract); B5 seed named
+  (scope_mismatch, LA token kinds, stale-basis have no cases).
+- **Q-B1 RESOLVED BY EVIDENCE**: Standing 1e62ba9/f101c55 already on
+  origin/main; the "unpushed" record was stale.
+- **B4 = verify-and-adopt**: Slice 1b Steps A+B already committed on
+  `feat/transition-kernel-slice-1b` (24acd8f, f003519; 501-line client +
+  Office 2 rewire + 453 test lines). Next: run its tests via
+  `governor verify-run` (receipted), review, adopt.
+- **B2 next** (invariant survival map) — ground truth updated by B1.
 
 ## 2026-07-02 — resume (B0 executed)
 

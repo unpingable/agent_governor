@@ -52,12 +52,22 @@ OUT of the "Governor UI shell" bucket entirely —
 
 Full table + product split in `docs/roadmaps/CONSOLIDATION.md` #1.
 
-## Q-C2-* — remaining consolidation verdicts  **(OPEN: #2 wicket-guard, #5 read-plane trio)**
+## Q-C2-2 — wicket-guard absorption  **(OPEN — recommendation filed 2026-07-02)**
 
-Created by slice C2 with recommendation and evidence. Custody-affecting (repo
-boundaries are authority surfaces): operator fiat required per candidate; no
-default action on silence. Operator pre-resolutions 2026-07-02 closed #1, #3,
-#4, #6, #7, #8.
+C2 recommendation: **absorb into wicket** (harvest cook/diff/surfaces into
+`wicket/examples/` + port the founding regression; LINEAGE note or graveyard
+for the husk). Evidence (INVENTORY §6): 1 commit, 500 LOC, zero code
+consumers, cooks into wicket's own types. Matches the operator's recorded
+inclination. Custody-affecting (touches wicket's repo): operator fiat
+required; no action on silence.
+
+## Q-C2-5 — read-plane trio  **(OPEN — recommendation filed 2026-07-02)**
+
+C2 recommendation: **keep spine / governor-atlas / state_index_export
+separate; write the boundary note** (R-SPINE-1 in tools/spine.md). Evidence
+(INVENTORY §6): zero indexing overlap today; anti-laundering disclaimers
+enforced in code on all three; the only risk is convergent growth, which the
+boundary note fences. Low-stakes: default on silence = write the note.
 
 ## Q-A5 — memory custody of relocation records  **(OPEN, low stakes)**
 

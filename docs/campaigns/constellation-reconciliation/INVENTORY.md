@@ -118,7 +118,45 @@ Seeded from the campaign Forbidden section; grows only by evidence:
 - UI pin bumps / shell revivals ahead of the Q-A7 / Q-C2 rulings.
 - Any new refusal vocabulary not forced by a named mismatch.
 
-## 6. Consolidation memo (C1 evidence, C2 adjudication)
+## 6. Consolidation memo (C1 evidence + C2 adjudication)
 
-*(pending — per-candidate evidence appendix + recommendations. Verdicts are
-operator-only, recorded in DECISIONS.md.)*
+### C1 evidence (executed 2026-07-02)
+
+**Candidate #2 — wicket-guard → wicket:** wicket-guard: 500 source LOC across
+5 files (lib/main/diff/surfaces/cook), **1 commit** (2026-05-13, v0.0.1),
+1 test file. Its cook.rs imports wicket's model types directly; wicket already
+has its own cook.rs (12KB) + examples/grants/. **Consumers: 13 references,
+ALL documentation/citation — ZERO code imports** (no Cargo.toml dep, no `use
+wicket_guard` anywhere). Absorption site exists: `wicket/examples/` (e.g.
+`cook_from_diff/`), with diff.rs/surfaces.rs as harvestable utilities.
+
+**Candidate #5 — read-plane trio:** spine (DeclarationSource→DeclaredManifest,
+YAML manifests, closed status vocab, `refusal.py` FORBIDS legitimacy verbs
+{ratified, governed, valid, admitted, authorized, witnessed, certified,
+approved, supported, promoted}); governor-atlas (claimdocs case repo: 2 cases,
+19 receipts, wired/specified/derived/candidate modes — AG internals only);
+state_index_export.v0 (AG prose/declared scanner, "a record is not proof; a
+status is not authority"). **Pairwise overlap: NONE found — no artifact type
+indexed by more than one system; all three carry explicit anti-laundering
+disclaimers.** Ingress points cleanly separated; all three will grow toward
+each other (the risk is future, not present).
+
+### C2 adjudication (2026-07-02 — recommendations only; operator rules)
+
+**#2 wicket-guard → RECOMMEND: absorb into wicket** (harvest-then-retire
+variant). Criteria check: no distinct authority surface (it cooks INTO
+wicket's own types), no distinct implementation surface (same language, same
+kernel, one commit of life), no contamination surface (zero independent
+consumers). Default-shared applies; operator inclination (2026-07-02) already
+pointed here. Execution shape when ruled: move cook/diff/surfaces into
+`wicket/examples/` or a wicket module, port the founding regression test,
+LINEAGE note in the emptied repo (or graveyard w/ LINEAGE). → DECISIONS
+Q-C2-2.
+
+**#5 read-plane trio → RECOMMEND: keep all three separate; write the boundary
+note** (R-SPINE-1). Criteria check: three genuinely distinct scopes
+(constellation reading / AG-architecture claims / AG-repo state), zero
+overlap TODAY, disclaimers already enforced in code (spine's refusal.py is a
+wall, not prose). The one real risk is convergent growth — the boundary note
+names what each may never index and the citation direction between them.
+→ DECISIONS Q-C2-5.

@@ -1,0 +1,11 @@
+{
+  "id": "corpus-custody",
+  "repo": "agent_gov",
+  "kind": "campaign",
+  "spec_ref": "docs/campaigns/corpus-custody/CAMPAIGN.md",
+  "forcing_case": "B2 ruled 'the corpus is the contract'; custody had to stop being implied before B5 cases could be added",
+  "priority_tier": 1,
+  "status": "done",
+  "acceptance": "DONE 2026-07-02: custody model + MANIFEST admission record + test_corpus_custody guard (sandwich-reviewed MERGE-SAFE); Q-B3 resolved (AG-sovereign+mirror); C4 = B5 partially-blocked-not-on-custody.",
+  "note": "Durable rule: authority lives where admission is explicit; mirrors prove identity; implementations don't crown fixtures. Follow-ups: B5 scenario-building, packet-schema-custody (G3), mirror-side check in transition-kernel."
+}

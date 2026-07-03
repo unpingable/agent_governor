@@ -139,3 +139,40 @@ now implemented in Standing 1e62ba9), **token_expired / token_revoked /
 unknown_token** (LA-side kinds), **standing_expired** distinct from
 temporal-lapse, stale-basis-as-live (NQ BASIS_STALE v0). Freshness IS covered
 (08/09 pair). → B5 slices, one case each, after Q-B3.
+
+---
+
+## Invariant survival map (B2, executed 2026-07-02)
+
+Ground truth: B1 (above). The shared Lean/Rust/Python vocabulary is the
+**12-kind refusal enum + 5 refusing seams + 4 outcomes**; wicket verdicts stay
+wicket's; **the corpus is the contract**. Citation tiers per
+`docs/roadmaps/tools/lean.md`: [1.0] citable · ANNEX exact-theorem · SCRATCH
+pilot-only · post-v7 uncitable.
+
+| invariant (operational statement) | Lean source (tier) | Rust surface | corpus case | status |
+|---|---|---|---|---|
+| authorized ⟺ every office green; one refusing office refuses the transition | `authorized_iff_all_green`, Authority [1.0] | office composition → outcome `consumed` only when standing+admission+capacity all pass | 01 + 02/04 | **covered** |
+| no-basis / advisory basis never authorizes | Authority [1.0] | wicket office input; `gap` → outcome `gap_accounted` (accounted, never authority) | 05 | **covered** |
+| revoked basis cannot be an authorized step | `revoked_basis_cannot_be_authorized_step`, Execution [1.0] | refusal kind `token_revoked` (la_seam) | **NONE** | **B5 case needed** |
+| freshness is metric-time on compatible witnesses; lapse refuses | Freshness [1.0] (expired / not_yet_valid / divergence_excessive / incoherent_interval) | `standing_before_spendability_not_bounded` (spendability seam; typed monotonic bases) | 08/09 (lapse pair) | **partial** — not_yet_valid / divergence / incoherent variants have no cases → B5 |
+| single-spend / replay refuses before effect | `one_receipt_cannot_license_two_discharges` SEQ2/3 [v4-resident]; BoundedCalculi ANNEX | `already_consumed`; durable-spend write-ahead | 06 | **covered (spend side)** |
+| request-side linearity: one admission receipt funds ONE capacity request | same theorem family | **UNFENCED** (reconciliation F-A3b-2: eligibility_reference reuse unrefused AG-side; idempotency_key optional) | **NONE** | **gap — code AND corpus**; cross-repo (LA contract), record-first |
+| spend-time scope mismatch refuses non-consuming | D010 Model X (ratified); Standing `1e62ba9` | refusal kind `scope_mismatch` | **NONE** | **B5 case needed (top priority — the ratified decision's own regression)** |
+| synthetic/non-observed evidence cannot confer operational effect | WitnessInvariance-adjacent [1.0]; AG origin fence doctrine | origin_mode allowlist; `DemonstratedConsumed` type split | 07 | **covered** |
+| a successful act does not authorize the next breath | NoFreeContinuation (SCRATCH feedstock; GAP-2) | continuation grant burn (C1–C4 shipped; specimens/continuation-trajectory) | outside legacy corpus | **note** — consider promoting one trajectory specimen into the differential corpus |
+| corrective moves cannot widen authority | Corrective [1.0] | **no_surface** — kernel does not model corrective moves | — | honest no_surface; do not stretch |
+| checkpoint/compaction mints nothing | `checkpoint_mints_nothing` ANNEX | AG-side concern (reconciliation A3b item 8: PASS); kernel receipts are append-only | — | covered outside kernel |
+| stale basis is live-but-distinct (NQ BASIS_STALE v0, post-corpus) | — (NQ contract, not Lean) | **no mapping yet** — open question: stale-basis at cook time maps to `admission_gap_accounted`? or refuses upstream of the kernel? | **NONE** | **B5 design question first, then case** — do NOT mint a 13th refusal kind without operator |
+| refusals name the offender | v5/v6 typed CheckResult (SCRATCH — pilot only) | refusal carries kind + refusing_seam + verbatim offending values | throughout | pilot-grade check via B6; not a wall claim |
+
+**B5 enumeration (final):** (1) scope_mismatch non-consuming; (2) token_revoked;
+(3) token_expired; (4) unknown_token; (5) freshness not_yet_valid; (6) freshness
+incoherent_interval; (7) request-side linearity (pending its design/fence);
+(8) stale-basis (pending its mapping design); (9) promote one continuation
+specimen. Each = one work-order slice after Q-B3.
+
+**B3 note:** the custodian recommendation (transition-kernel repo owns
+differential.py + corpus; wicket fixtures cross-referenced; AG contributes via
+the v7 schema lane — now LIVE, v7.0.0 tagged) stands as filed in Q-B3; B5
+executes there once ruled.

@@ -45,8 +45,20 @@ docs/reference/internal-ops-glossary.md — swept by A2.
 
 ## 2. Stale or misleading language (A2, A7)
 
-*(pending — findings table: file:line · quoted text · which distinguish-pair it
-blurs. UI-pin drift rows from A7 land here.)*
+*(A2 sweep pending.)*
+
+### A7 — UI/client drift record (executed 2026-07-02; record only, no fixes)
+
+| surface | claim on record | measured 2026-07-02 | disposition |
+|---|---|---|---|
+| guvnah COMPAT.md | requires `>=2.3.2 <2.4.0` | AG at 2.8.1 → hard-refuses | moot: **RETIRED** (Q-A7); pin stays broken by ruling |
+| phosphor COMPAT.md | "tested against Governor >=2.3.0" | **R-PHOS-1: 481/481 tests green vs 2.8.1** incl. all 10 parity tripwires; zero install/collection failures | COMPAT.md text is stale-pessimistic; effective pyproject floor is vacuous `>=0.1.0` — the real pin is whatever sync-deps.sh copies at Docker build. Evidence now exists for a pin decision at R-PHOS-2; no bump performed |
+| maude RPC client | 43 methods assumed live | **R-MAUDE-1: 30/31 present; `proposals.json` GONE** (maude client/rpc.py:574 calls it inside operator_snapshot; daemon registry lacks it) | silent-drift specimen — exactly the failure class ag_shell_client (GS-8/9) kills by construction; no repair (client is replaced by GS-9) |
+| maude COMPAT | requires `>=2.3.1 <2.4.0` | not re-tested (superseded by GS-9 path) | record only |
+
+Distinguish-pair note: none of these blur authority pairs — they are liveness
+drift, not laundering. The laundering-relevant finding in this section is §1's
+contradiction 2 (HandoffPacket seal specified only in REENTRY prose).
 
 ## 3. Constellation doctrine mismatches (A3a/A3b, A4)
 

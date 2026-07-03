@@ -108,14 +108,21 @@ def build_feed_from_runtime(
     interventions: Sequence[tuple[str, Any]] = (),
     promotions: Sequence[Any] = (),
     pending_violation: Any | None = None,
+    docket_cases: Sequence[Any] = (),
     now_wall: float,
 ) -> tuple[DecisionItem, ...]:
     """Map live runtime objects (supervisor interventions/promotions +
-    violation_resolver's pending violation) into the decision feed.
+    violation_resolver's pending violation + docket cases) into the decision
+    feed.
 
     ``interventions`` is a sequence of ``(session_id, Intervention)`` — the
     supervisor tracks interventions per session, so the session id is threaded
     here to fill the envelope's ``session_ref``.
+
+    ``docket_cases`` is a sequence of native ``DocketCase`` objects (or their
+    ``to_dict()`` mappings). The daemon's docket source binds no violation
+    resolver, so a live contested violation surfaces ONCE (as a ``violation``
+    item); the docket contributes only stale/persisted cases (``docket_case``).
 
     Clock discipline: an Intervention's ``created_at`` is MONOTONIC (boot-relative),
     which is not a wall time. The envelope's ``created_at`` is display-only, so we
@@ -156,10 +163,14 @@ def build_feed_from_runtime(
             if hasattr(pending_violation, "to_dict")
             else pending_violation
         )
+    docket_dicts = [
+        c.to_dict() if hasattr(c, "to_dict") else c for c in docket_cases
+    ]
     return build_decision_feed(
         interventions=iv_dicts,
         promotions=prom_dicts,
         violations=violations,
+        docket_cases=docket_dicts,
         now=now_wall,
     )
 

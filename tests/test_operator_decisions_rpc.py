@@ -107,3 +107,92 @@ async def test_operator_decisions_list_gathers_interventions(dispatcher, monkeyp
     # kinds filter
     resp2 = await _call(d, "operator.decisions.list", {"kinds": ["violation"]})
     assert resp2["result"]["count"] == 0
+
+
+# --- GS-2b remainder: docket_case source via the real disk load path -------- #
+
+
+def _seed_docket_case(gov_dir, *, case_number=7, case_type="stale"):
+    """Write a pending DocketCase to docket_cases.json — the on-disk source
+    DaemonState.docket_manager loads (mirrors the CLI docket wiring)."""
+    case = {
+        "case_number": case_number,
+        "case_type": case_type,
+        "claim_id": "clm_1",
+        "anchor_id": None,
+        "status": "pending",
+        "description": "confidence decayed",
+        "evidence": [],
+        "created_at": "2026-07-03T10:00:00+00:00",
+        "blocked_content": None,
+        "freshness_info": {"age_days": 42},
+    }
+    (gov_dir / "docket_cases.json").write_text(
+        json.dumps({"cases": {str(case_number): case}, "next_case_number": case_number + 1})
+    )
+
+
+@pytest.mark.asyncio
+async def test_operator_decisions_list_gathers_docket_case(dispatcher, gov_dir):
+    """The persisted docket case surfaces through the REAL load path — no stub;
+    DaemonState.docket_manager reads docket_cases.json under governor_dir."""
+    d, _ = dispatcher
+    _seed_docket_case(gov_dir)
+    resp = await _call(d, "operator.decisions.list")
+    items = resp["result"]["items"]
+    assert resp["result"]["count"] == 1
+    it = items[0]
+    assert it["kind"] == "docket_case"
+    assert it["source"] == {"subsystem": "docket", "native_id": "7"}
+    assert [o["key"] for o in it["options"]] == ["s", "a", "g", "v", "d"]
+    assert it["detail"]["freshness_info"] == {"age_days": 42}
+    # kinds filter honors the new kind.
+    resp2 = await _call(d, "operator.decisions.list", {"kinds": ["docket_case"]})
+    assert resp2["result"]["count"] == 1
+    resp3 = await _call(d, "operator.decisions.list", {"kinds": ["intervention"]})
+    assert resp3["result"]["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_operator_decisions_list_empty_docket_unchanged(dispatcher):
+    """No docket_cases.json -> docket source contributes nothing; the existing
+    green empty-feed path is unchanged."""
+    d, _ = dispatcher
+    resp = await _call(d, "operator.decisions.list")
+    assert resp["result"] == {"items": [], "count": 0}
+
+
+@pytest.mark.asyncio
+async def test_docket_and_intervention_coexist_as_distinct_items(dispatcher, gov_dir, monkeypatch):
+    """A live intervention and a persisted docket case surface as two distinct
+    items — the docket binds no resolver, so nothing is double-carded."""
+    d, state = dispatcher
+    _seed_docket_case(gov_dir, case_number=5)
+    fake = _FakeSupervisor(interventions={
+        "sess_A": [_FakeIntervention("i1", "c1", "Bash", {"cmd": "rm"}, "e1", elapsed=10.0)],
+    })
+    monkeypatch.setattr(type(state), "runtime_supervisor", property(lambda self: fake))
+    monkeypatch.setattr(type(state), "violation_resolver",
+                        property(lambda self: type("V", (), {"get_pending": lambda s: None})()))
+    resp = await _call(d, "operator.decisions.list")
+    items = resp["result"]["items"]
+    assert resp["result"]["count"] == 2
+    assert sorted(i["kind"] for i in items) == ["docket_case", "intervention"]
+    assert len({i["decision_id"] for i in items}) == 2
+
+
+@pytest.mark.asyncio
+async def test_resolve_fails_closed_on_docket_case(dispatcher, gov_dir):
+    """docket_case is listable but its resolve route (DocketManager.rule_*) is
+    GS-3-remainder. The one door fails closed: a structured error, nothing
+    mutates. (See OBSTRUCTION-gs2b-admissibility-held.md § Resolve interaction.)"""
+    d, _ = dispatcher
+    _seed_docket_case(gov_dir, case_number=9)
+    listed = await _call(d, "operator.decisions.list")
+    item = listed["result"]["items"][0]
+    assert item["kind"] == "docket_case"
+    resp = await _call(d, "operator.decisions.resolve",
+                       {"decision_id": item["decision_id"], "option_key": "s"})
+    # Fail-closed: structured JSON-RPC error, not a resolved:true, not a crash.
+    assert "error" in resp
+    assert "not routable through the door yet" in resp["error"]["message"]

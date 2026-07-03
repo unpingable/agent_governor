@@ -63,6 +63,23 @@ Daemon method count 91→97. GS-2b remainder (docket + admissibility sources +
 HELD-launch state) still deferred on DaemonState plumbing. GS-7 (autopilot RPC)
 and GS-9 (maude consumes ag_shell_client — separate-repo UX) not overnight.
 
+## 2026-07-03 — GS-2b docket source landed (remainder partially closed)
+
+`operator.decisions.list` / `operator.watch` now source **docket cases** via
+`DaemonState.docket_manager` (mirrors the CLI docket wiring: staleness + on-disk
+state, NO violation resolver → a contested violation is not double-surfaced).
+`build_feed_from_runtime` gained a `docket_cases` passthrough. Docket items are
+listable; their resolve route (`DocketManager.rule_*`) is GS-3-remainder, so the
+one door **fails closed** on `docket_case` (structured error, nothing mutates) —
+pinned. verify-run receipt `b9cbbebb` [pass], 33 slice tests + 616 in the
+operator/docket/watch band green.
+
+Still deferred — filed as an obstruction (`OBSTRUCTION-gs2b-admissibility-held.md`):
+**admissibility_question** (no native pending-question accessor — "pending" is a
+derived predicate, not a queue object) and **HELD-launch state** (needs a new
+`SessionStatus.HELD` + admission consultation on launch = authority-semantics
+work, re-tiered out of exposure-only plumbing).
+
 ## Current next
 
 Daemon slices unblocked: **GS-2** (decisions.list + docket/admissibility

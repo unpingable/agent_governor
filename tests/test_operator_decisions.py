@@ -569,3 +569,65 @@ def test_build_feed_from_runtime_threads_session_and_exact_remaining() -> None:
 def test_build_feed_from_runtime_empty_is_empty() -> None:
     from governor.operator_decisions import build_feed_from_runtime
     assert build_feed_from_runtime(now_wall=1.0) == ()
+
+
+@dataclass
+class _FakeDocketCase:
+    """Shape-parity stand-in for docket.DocketCase (to_dict path)."""
+    case_number: int
+    case_type: str
+    claim_id: str
+    status: str
+    description: str
+    created_at: str
+    anchor_id: str | None = None
+    evidence: list | None = None
+    blocked_content: str | None = None
+    freshness_info: dict | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "case_number": self.case_number, "case_type": self.case_type,
+            "claim_id": self.claim_id, "anchor_id": self.anchor_id,
+            "status": self.status, "description": self.description,
+            "evidence": self.evidence or [], "created_at": self.created_at,
+            "blocked_content": self.blocked_content,
+            "freshness_info": self.freshness_info,
+        }
+
+
+def test_build_feed_from_runtime_threads_docket_cases() -> None:
+    from governor.operator_decisions import build_feed_from_runtime
+    feed = build_feed_from_runtime(
+        docket_cases=[_FakeDocketCase(
+            case_number=7, case_type="stale", claim_id="clm_1", status="pending",
+            description="confidence decayed", created_at="2026-07-03T10:00:00Z",
+            freshness_info={"age_days": 42})],
+        now_wall=1_000_000.0,
+    )
+    assert len(feed) == 1
+    item = feed[0]
+    assert item.kind == "docket_case"
+    assert item.source == {"subsystem": "docket", "native_id": "7"}
+    assert [o.key for o in item.options] == ["s", "a", "g", "v", "d"]
+    assert item.detail["freshness_info"] == {"age_days": 42}
+
+
+def test_build_feed_from_runtime_docket_and_violation_are_distinct_items() -> None:
+    """A contested violation and a docket case are two backing objects -> two
+    distinct items (violation kind + docket_case kind), never one double-carded.
+    The daemon binds no resolver to the docket for exactly this reason."""
+    from governor.operator_decisions import build_feed_from_runtime
+    feed = build_feed_from_runtime(
+        pending_violation=_FakeViolation(
+            id="v1", run_id="run1", violations=[{"t": "x"}],
+            timestamp="2026-07-03T10:00:00Z", receipt_id="r1"),
+        docket_cases=[_FakeDocketCase(
+            case_number=3, case_type="stale", claim_id="clm_9", status="pending",
+            description="stale", created_at="2026-07-03T09:00:00Z")],
+        now_wall=1_000_000.0,
+    )
+    kinds = sorted(i.kind for i in feed)
+    assert kinds == ["docket_case", "violation"]
+    # Distinct decision_ids -> distinct routable identities.
+    assert len({i.decision_id for i in feed}) == 2

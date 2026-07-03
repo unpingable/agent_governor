@@ -410,6 +410,7 @@ class DaemonState:
         self._runtime_supervisor = None
         self._storage = None
         self._permission_manager = None
+        self._docket_manager = None
 
     @property
     def storage(self):
@@ -426,6 +427,28 @@ class DaemonState:
             from .permissions import PermissionManager
             self._permission_manager = PermissionManager(self.governor_dir)
         return self._permission_manager
+
+    @property
+    def docket_manager(self):
+        """Lazy DocketManager for the operator decision feed (GS-2b).
+
+        Mirrors the CLI docket wiring (``cli.py`` docket_list): a staleness
+        detector over an epistemic ledger plus the on-disk docket state under
+        ``governor_dir``. Bound WITHOUT a violation resolver by design — a live
+        contested violation is already surfaced as a ``violation`` decision, so
+        binding the resolver here would double-surface one backing object. The
+        docket therefore contributes only stale/persisted cases (``docket_case``
+        kind), keeping the mints-nothing / one-card-per-native-object discipline.
+        """
+        if self._docket_manager is None:
+            from .docket import create_docket_manager
+            from .staleness import create_staleness_detector
+            from .epistemic import EpistemicLedger
+            staleness = create_staleness_detector(EpistemicLedger())
+            self._docket_manager = create_docket_manager(
+                staleness=staleness, governor_dir=self.governor_dir
+            )
+        return self._docket_manager
 
     @property
     def chain_mode(self) -> str:
@@ -3665,12 +3688,14 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         Shared by ``operator.decisions.list`` and ``operator.watch`` so the two
         surfaces cannot drift. Gathers the currently-wired pending-decision
         sources — supervised-session interventions and promotions (across all
-        sessions) + the pending violation. Exposure-only: mints nothing; every
-        item mirrors a real pending object. Optional ``kinds`` filters the
-        closed kind set.
+        sessions) + the pending violation + docket cases. Exposure-only: mints
+        nothing; every item mirrors a real pending object. Optional ``kinds``
+        filters the closed kind set.
 
-        Not yet sourced here (need DaemonState plumbing): docket_case and
-        admissibility_question — the envelope already reserves both kinds.
+        Still deferred (see docs/campaigns/governed-shell/OBSTRUCTION-gs2b-
+        admissibility-held.md): admissibility_question and HELD-launch state.
+        Neither has a native pending-queue object, and HELD-launch would change
+        an admission decision — out of scope for exposure-only plumbing.
         """
         import time as _time
 
@@ -3689,10 +3714,16 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
         pending_violation = state.violation_resolver.get_pending()
 
+        # Docket cases (stale/persisted; the resolver is intentionally unbound —
+        # see DaemonState.docket_manager — so a contested violation is not
+        # double-surfaced).
+        docket_cases = list(state.docket_manager.get_docket())
+
         feed = build_feed_from_runtime(
             interventions=interventions,
             promotions=promotions,
             pending_violation=pending_violation,
+            docket_cases=docket_cases,
             now_wall=_time.time(),
         )
         items = [item.to_dict() for item in feed]
@@ -3733,8 +3764,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         v0 boundary: an already-resolved decision is no longer pending, so it
         returns decision_not_found; the contract's richer `already_resolved`
         idempotence (echo the original outcome) needs a resolution ledger and is
-        deferred. Only the three v0-sourced kinds (intervention/violation/
-        promotion) can appear in the feed, so every reachable item is routable.
+        deferred. Three kinds route here (intervention/violation/promotion).
+        docket_case is now sourced into the feed (GS-2b list) but its route
+        (DocketManager.rule_*) is GS-3-remainder — a mutation/authority sandwich
+        deliberately not wired here; the door fails closed on it (below).
         """
         if not isinstance(params, dict):
             params = {}
@@ -3792,11 +3825,16 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "scope": args.get("scope"),
                     "expiry": args.get("expiry"),
                 })
-        # Unreachable in v0: _gather_operator_feed only sources the three
-        # routable kinds. A present-but-unroutable item would be a feed/router
-        # mismatch bug — raise a mechanism error (structured by the dispatcher)
-        # rather than inventing a door-level refusal string.
-        raise ValueError(f"feed produced an unroutable decision kind: {kind}")
+        # docket_case is sourced into the feed (GS-2b) but its resolve route
+        # (DocketManager.rule_*) is GS-3-remainder — a mutation/authority
+        # sandwich, deliberately not wired here. The door fails closed: nothing
+        # mutates and a structured error is returned. Docket rulings currently
+        # go through `governor rule` / the docket surface until GS-3 opens the
+        # route. (See docs/campaigns/governed-shell/OBSTRUCTION-gs2b-
+        # admissibility-held.md § Resolve interaction.) A truly-unknown kind
+        # hits the same guard — either way, raise rather than invent a
+        # door-level refusal string outside the closed resolve-error vocabulary.
+        raise ValueError(f"decision kind not routable through the door yet: {kind}")
 
     dispatcher.register("operator.decisions.resolve", operator_decisions_resolve, mutating=True)
 

@@ -7,7 +7,7 @@ Complete command reference for all governor CLIs.
 governor init                    # Initialize .governor/ directory
 governor propose --claim "..."   # Create proposal with claims
 governor verify <id>             # Verify proposal, produce receipts
-governor apply <id>              # Apply verified proposal
+governor apply <id>              # Apply a verified proposal (FSM gate enforces; apply executes, not authorizes)
 
 # Query state
 governor facts                   # List recorded facts (--json)
@@ -341,7 +341,7 @@ governor semvar config                # Show semantic variety configuration
 # Auto-Tuning (threshold learning, reset tracking, calibration, sweep)
 governor tune status                           # Show tuning state
 governor tune thresholds --analyze             # Report threshold suggestions
-governor tune thresholds --apply               # Apply confident suggestions
+governor tune thresholds --apply               # Write confident threshold suggestions to config
 governor tune resets --report                  # Reset effectiveness stats
 governor tune resets --pending                 # Show pending reset tracking
 governor tune calibrate --begin-baseline       # Start baseline collection
@@ -402,7 +402,7 @@ governor autonomous list [--active]     # List execution sessions (--json)
 governor autonomous show <id>           # Show session details
 governor autonomous delete <id> --confirm  # Delete a session
 governor autonomous handoff <id>        # Show handoff summary for human review
-governor autonomous run --task "..."    # Run execution session (noop step, --budget, --spine-id, --dry-run)
+governor autonomous run --task "..."    # Drive a governed execution session — spine+invariants enforce (noop step, --budget, --spine-id, --dry-run)
 
 # Structured Telemetry (Deferred 4, B2)
 governor telemetry enable              # Enable telemetry, create config + logs dir (--logging/--no-logging, --retention-days, --redact-prompts, --redact-contents)
@@ -533,9 +533,9 @@ governor preflight     # Prove governor enforcement is live before an agent sess
 
 # Adjudication / docket
 governor docket        # View/manage pending violation-resolution cases (list|show)
-governor rule          # Issue rulings on docket cases (amend|dismiss|except|reverify|sustain)
+governor rule          # Record operator rulings on docket cases (amend|dismiss|except|reverify|sustain)
 governor precedent     # View past rulings (list|search)
-governor resolve       # Resolve pending violations (allow|change|fix)
+governor resolve       # Apply operator's resolution to pending violations (allow|change|fix)
 
 # Documentation governance
 governor doc           # Docs as governed artifacts (check|demote|export|list|promote|register|stale|status|unregister|verify)

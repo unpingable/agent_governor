@@ -61,7 +61,7 @@ When Governor catches something:
 ```bash
 governor resolve fix      # Regenerate compliant output
 governor resolve change   # Update the rule
-governor resolve allow    # Allow this instance (logs exception)
+governor resolve allow    # Record operator's allow decision for this instance (logs exception)
 ```
 
 ---
@@ -87,7 +87,7 @@ governor propose --claim "FILE_EXISTS:src/api.py"
 # Verify proposal (produces receipts)
 governor verify <proposal-id>
 
-# Apply verified proposal
+# Apply a verified proposal (the FSM gate enforces; apply executes, it does not authorize)
 governor apply <proposal-id>
 ```
 
@@ -123,7 +123,7 @@ governor state --json --schema v2  # Canonical ViewModel
 |---------|-------------|
 | `governor propose --claim <claim>` | Create proposal with typed claim |
 | `governor verify <id>` | Verify proposal, produce receipts |
-| `governor apply <id>` | Apply verified proposal |
+| `governor apply <id>` | Execute a verified proposal (FSM gate enforces) |
 | `governor status` | Operator dashboard (one-pager) |
 | `governor status --proposals` | Show proposal list |
 | `governor status --claims` | Claim health weather report |
@@ -179,11 +179,12 @@ governor code --status  # Show current autopilot state
 
 ### Override (Scoped Exceptions)
 
-Create time-limited exceptions for invariant constraints.
+Record operator-authorized, time-limited exceptions for invariant constraints
+(each override carries a receipt naming its authority and reason).
 
 | Command | Description |
 |---------|-------------|
-| `governor override create` | Create scoped override |
+| `governor override create` | Record operator-authorized scoped override |
 | `governor override list` | List active overrides |
 | `governor override list --json` | JSON output |
 | `governor override show <id>` | Show override details |
@@ -225,6 +226,11 @@ governor continuity anchor add \
   --class <invariant|preference>  # Optional: constraint class
 ```
 
+> `--type canon` names the anchor's *category*; adding an anchor records a
+> constraint to check text against — it does not ratify the described content
+> as canon (canon lives in the fiction bible/canon ledgers, not in anchor
+> registration).
+
 **Constraint classes:**
 - `invariant` — Cannot be disabled by profile (e.g., security rules)
 - `preference` — Profile can relax enforcement (default)
@@ -257,8 +263,8 @@ governor continuity anchor upgrade <id> --class invariant
 | `governor docket list` | View pending cases on the docket |
 | `governor docket show <case>` | Show details of a specific case |
 | `governor rule sustain <case>` | Sustain constraint, regenerate compliant |
-| `governor rule amend <case>` | Amend anchor to permit output |
-| `governor rule except <case>` | Grant exception, log as precedent |
+| `governor rule amend <case>` | Record operator's anchor amendment (output re-checked under it) |
+| `governor rule except <case>` | Record operator-granted exception, log as precedent |
 | `governor rule reverify <case>` | Re-verify stale claim |
 | `governor rule dismiss <case>` | Dismiss stale claim |
 | `governor precedent list` | View past rulings (precedent record) |
@@ -390,7 +396,7 @@ These read-only commands collapse subsystem state into obvious workflows.
 | `governor invariant check` | Run invariant checks |
 | `governor autonomous list` | List sessions |
 | `governor autonomous show <id>` | Show session |
-| `governor autonomous run --task "..."` | Run execution |
+| `governor autonomous run --task "..."` | Drive a governed execution session (spine + invariants enforce) |
 | `governor autonomous handoff <id>` | Show handoff summary |
 
 ### Puppet Mode
@@ -437,7 +443,7 @@ These read-only commands collapse subsystem state into obvious workflows.
 |---------|-------------|
 | `governor tune status` | Tuning state |
 | `governor tune thresholds --analyze` | Threshold suggestions |
-| `governor tune thresholds --apply` | Apply suggestions |
+| `governor tune thresholds --apply` | Write confident threshold suggestions to config |
 | `governor tune convergence status` | Convergence tuning state |
 | `governor tune convergence propose` | Generate proposals |
 | `governor tune convergence apply <id>` | Apply proposal |
@@ -503,7 +509,7 @@ These read-only commands collapse subsystem state into obvious workflows.
 |---------|-------------|
 | `governor resolve fix` | Regenerate compliant response |
 | `governor resolve change` | Update the rule/anchor |
-| `governor resolve allow` | Allow this instance (logs exception) |
+| `governor resolve allow` | Record operator's allow decision (logs exception) |
 
 ---
 

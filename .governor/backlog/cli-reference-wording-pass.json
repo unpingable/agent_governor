@@ -5,7 +5,7 @@
   "spec_ref": "docs/campaigns/constellation-reconciliation/INVENTORY.md \u00a72 A2 (A9-upgraded)",
   "forcing_case": "A2 sweep verdict: cli.md is the main laundering surface; A9 refused the fix-on-touch downgrade",
   "priority_tier": 2,
-  "status": "filed",
+  "status": "executed_partial",
   "acceptance": "Reword the 9 quoted cli.md labels so imperative labels never name authority outcomes ('apply' describes; 'authorize/permit/rule' reserved for the gate's own vocabulary); zero semantic/flag changes; diff confined to docs/interfaces/cli.md + .claude/rules/cli-reference.md mirrors.",
-  "note": "Mechanical, local-qwen eligible \u2014 fully enumerated targets in INVENTORY \u00a72 A2 table."
+  "note": "Executed 2026-07-04 (Fable): 8/9 targets reworded across docs/interfaces/cli.md + .claude/rules/cli-reference.md per the standing rule (imperative labels never name authority outcomes; decisions attributed to the operator; 'apply' describes mechanics). anchor --type canon handled as a clarifying note (flag value unchanged \u2014 zero flag changes). 9th finding ('glossary PROPOSED-name-in-copy', pair 1) NOT executed: its verbatim quote did not survive the A2 record's condensation (A2's own acceptance said zero findings without quotes; the committed table condensed them away \u2014 a completeness debt of the A2 record). No match found for internal-ops-glossary PROPOSED terms or FSM-state wording in cli.md; refusing to guess the target. Recoverable only by re-running the A2 sweep over cli.md."
 }

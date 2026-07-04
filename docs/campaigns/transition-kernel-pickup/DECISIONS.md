@@ -39,10 +39,14 @@ refusal-typing decision first). B5 re-scopes to "build the scenario → freeze t
 verdict → admit," gated by the guard. The continuation specimen routes to the
 transition-kernel frontier corpus, not golden/corpus.
 
-### Q-B4 — sequencing of the two mint-boundary efforts  **(OPEN, default named)**
+### Q-B4 — sequencing of the two mint-boundary efforts  **(MOOT 2026-07-04)**
 Recommendation: B4 (Python adapter Slice 1b) lands before Rust-kernel resume work
 — it is unblocked, fully specified, and its receipts become corpus feedstock.
 Default on silence: recommendation stands.
+
+**2026-07-04:** moot — events followed the default exactly. B4 closed
+2026-07-03 (Slice 1b adopted+verified on main, receipt `59cf2553`); no
+Rust-kernel resume work started before it. Nothing left to rule.
 
 ### Q-B7 — v7 CANDIDATE exposure  **(HALF-EXECUTED under the default, 2026-07-04; promotion half OPEN)**
 Recommendation: draft the AG JSON-schema lane against Lean v7's CANDIDATE fields

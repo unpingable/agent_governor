@@ -8,7 +8,7 @@ requires byte-identity — **each new golden case must land in BOTH
 identical bytes.** That cross-repo, constitutional-corpus growth is why B5 is an
 attended build, not an overnight loop.
 
-## Buildable now (4 cases — identical mechanical pattern)
+## Buildable now (4 cases — identical mechanical pattern)  **[SHIPPED 2026-07-03 as B5 A-1..A-4 — corpus cases 10–13; table kept for the build-pattern record]**
 
 The LA client already MAPS these ConsumptionDecisions to refusal kinds
 (`linear_accountant_client.py:922-937`); the drill just needs scenarios that

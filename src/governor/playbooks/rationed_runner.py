@@ -12,9 +12,12 @@ receipt. The two compose later; this slice builds only the execution contract.
 
 SCOPE FENCE — enforced by type, not by comment:
 
-- **stub origin only** (``origin_kind == "stub"``). A non-stub origin is refused at
-  construction-of-receipt and at ``run()``. The live Claude Code / Gemini binding
-  is a *future* slice; this one cannot mint a live-origin receipt.
+- **no-process origins only** (``origin_kind`` ∈ ``{stub, synthetic}``). A live
+  origin is refused at receipt construction and at ``run()`` — it needs a
+  confirmed-safe cage (see ``sandbox_cage.admit_origin_under_cage``), a future
+  separately-gated slice. ``Synthetic safe ≠ live safe``: a synthetic origin
+  exercises the positive admission path with fake inputs and confers no live
+  effect, so the overnight conveyor can produce reviewable evidence — never facts.
 - git / doctrine / network authority is locked **False** on every receipt; a
   receipt that tries to carry it is refused by type.
 - timeout and kill are modelled through an **injected** ``ExecutionOrigin`` +
@@ -40,7 +43,15 @@ from .ration_card import DispatchRequest, RationCard, match_ration_card
 # Vocabulary (closed).
 # --------------------------------------------------------------------------- #
 
-ORIGIN_STUB = "stub"  # the ONLY origin this slice will mint a receipt for
+ORIGIN_STUB = "stub"  # a test-double origin: no real process, no safety claim
+ORIGIN_SYNTHETIC = "synthetic"  # first-class fixture/overnight origin: fake inputs,
+# positive-path exercise; no real process / network / secrets / live repo authority
+
+# Origins that execute NO real OS process, and so are runnable WITHOUT a real cage.
+# Any other kind (e.g. a live adapter) requires a confirmed-safe cage — a future,
+# separately-gated slice. ``Synthetic safe ≠ live safe``: a synthetic run exercises
+# the positive admission path and produces reviewable evidence, never live effect.
+NO_PROCESS_ORIGINS = frozenset({ORIGIN_STUB, ORIGIN_SYNTHETIC})
 
 RUNNER_RECEIPT_VERSION = "rationed_run.v0"
 
@@ -181,10 +192,11 @@ class RationedRunReceipt:
             raise ValueError(
                 f"result_status {self.result_status!r} not in {sorted(RUN_RESULT_STATUSES)}"
             )
-        if self.origin_kind != ORIGIN_STUB:
+        if self.origin_kind not in NO_PROCESS_ORIGINS:
             raise ValueError(
-                f"origin_kind {self.origin_kind!r}: only {ORIGIN_STUB!r} is permitted "
-                "in the stub-origin slice (live origin is a future, separately-gated slice)"
+                f"origin_kind {self.origin_kind!r}: only no-process origins "
+                f"{sorted(NO_PROCESS_ORIGINS)} may mint a run receipt; a live origin "
+                "requires a confirmed-safe cage (future, separately-gated slice)"
             )
         if self.git_allowed or self.doctrine_allowed or self.network_allowed:
             raise ValueError(
@@ -243,12 +255,14 @@ def dispatch_request_hash(request: DispatchRequest) -> str:
 
 @dataclass
 class RationedRunner:
-    """Executes ONE rationed run against an injected stub origin, bounded by a
-    timeout and a kill switch, and reduces it to a non-authoritative receipt.
+    """Executes ONE rationed run against an injected no-process origin (stub or
+    synthetic), bounded by a timeout and a kill switch, and reduces it to a
+    non-authoritative receipt.
 
     The order encodes the guarantees:
 
-    1. **stub-origin only** — a non-stub origin is refused before anything runs.
+    1. **no-process origins only** — a live origin is refused before anything runs
+       (it requires a confirmed-safe cage, a future separately-gated slice).
     2. **forbidden authority / out-of-card** — refused *before execution* (smoke
        of the card's authority locks; the dispatch gate owns the full ⊆-card
        fence, not duplicated here).
@@ -269,12 +283,13 @@ class RationedRunner:
     receipt_sink: Any | None = None
 
     def run(self, request: DispatchRequest, *, run_id: str) -> RationedRunReceipt:
-        # 1. stub-origin only — this slice cannot run a live origin.
+        # 1. no-process origins only — the runner cannot run a live origin (that
+        #    requires a confirmed-safe cage; see sandbox_cage.admit_origin_under_cage).
         origin_kind = getattr(self.origin, "origin_kind", None)
-        if origin_kind != ORIGIN_STUB:
+        if origin_kind not in NO_PROCESS_ORIGINS:
             raise ValueError(
-                f"origin_kind {origin_kind!r}: the stub-origin slice runs only "
-                f"{ORIGIN_STUB!r} origins"
+                f"origin_kind {origin_kind!r}: the runner runs only no-process origins "
+                f"{sorted(NO_PROCESS_ORIGINS)}; a live origin requires a confirmed-safe cage"
             )
 
         started = self.clock()
@@ -348,7 +363,7 @@ class RationedRunner:
 
         receipt = RationedRunReceipt(
             run_id=run_id,
-            origin_kind=ORIGIN_STUB,
+            origin_kind=self.origin.origin_kind,
             agent_id=request.agent_id,
             adapter_id=self.adapter_id,
             ration_card_hash=ration_card_hash(self.card),
@@ -387,14 +402,16 @@ class RationedRunner:
             evidence_bundle=bundle,
             gate_config={
                 "seam": "rationed_runner",
-                "origin_kind": ORIGIN_STUB,
-                "slice": "B9_10_stub_origin",
+                "origin_kind": receipt.origin_kind,
+                "slice": "B11_S1_no_process_origins",
             },
         )
 
 
 __all__ = [
     "ORIGIN_STUB",
+    "ORIGIN_SYNTHETIC",
+    "NO_PROCESS_ORIGINS",
     "RUNNER_RECEIPT_VERSION",
     "GOVERNED_RATIONED_RUN_GATE",
     "GOVERNED_RATIONED_RUN_VERDICT",

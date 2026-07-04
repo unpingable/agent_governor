@@ -1,0 +1,11 @@
+{
+  "id": "state-registry-slice-1",
+  "repo": "agent_gov",
+  "kind": "build_slice",
+  "spec_ref": "specs/gaps/GOV_GAP_STATE_REGISTRY_001.md §Later slices (Slice 1)",
+  "forcing_case": "Slice 0 (state_index_export.v0) landed 8b81179 on feat/playbooks-synthetic-conveyor. Slice 1 is RECORDED, NOT AUTHORIZED — do not start without a forcing case (a playbook that actually needs to query the projection, not just the export JSON).",
+  "priority_tier": 3,
+  "status": "filed",
+  "acceptance": "Ingest .governor/exports/state_index_export.v0.json into a disposable, rebuildable .governor/state.sqlite (append-only state_events + current-state state_items projection). Carry source_namespace and BOTH lifecycle planes (project vs governor_execution) in the schema from this slice, even if the execution plane stays empty. Rebuildable-from-export invariant holds. NO authority migration, NO playbook consumption yet (that is Slice 2).",
+  "note": "DO NOT START YET. Boundaries from the spec are load-bearing: registry status != authority, declared != observed != execution, .governor/ is projection cache not doctrine. Building a records office because the word 'registry' was said is the quarry calling (cf. loop-as-governed-workflow.json)."
+}

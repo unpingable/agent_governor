@@ -20360,6 +20360,38 @@ def runtime_reject(ctx: click.Context, session_id: str, reason: str | None):
         raise SystemExit(1)
 
 
+@cli.group("state-index")
+def state_index_group() -> None:
+    """State index export — read-only projection of planning state (Slice 0).
+
+    The export makes state legible; it does not make state true. See
+    specs/gaps/GOV_GAP_STATE_REGISTRY_001.md.
+    """
+
+
+@state_index_group.command("export")
+@click.option("--out", "out_path", type=click.Path(), default=None,
+              help="Output path (default .governor/exports/state_index_export.v0.json)")
+@click.option("--json", "as_json", is_flag=True, help="Print records to stdout instead of writing")
+@click.pass_context
+def state_index_export_cmd(ctx: click.Context, out_path: str | None, as_json: bool) -> None:
+    """Scan the planning-doc corpus and emit a deterministic JSON state index."""
+    from .state_index_export import export_records, write_export
+
+    root = ctx.obj["root"]
+    records = export_records(root)
+    if as_json:
+        click.echo(json.dumps(records, indent=2, ensure_ascii=False))
+        return
+    dest = write_export(root, out_path)
+    n_warn = sum(1 for r in records if r["warnings"])
+    by_class: dict[str, int] = {}
+    for r in records:
+        by_class[r["provenance_class"]] = by_class.get(r["provenance_class"], 0) + 1
+    summary = ", ".join(f"{k}={v}" for k, v in sorted(by_class.items()))
+    click.echo(f"Wrote {len(records)} records ({summary}; {n_warn} with warnings) to {dest}")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()

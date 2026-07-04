@@ -1,5 +1,23 @@
 # Live-Adapter Allowlist Review — GATE before any live external-agent code
 
+> ## ⛔ SUPERSEDED 2026-06-30 — FOSSIL. Do not act on this gate.
+>
+> **Operator ratified path (B) on 2026-06-30.** This gate reviewed an **in-AG** live
+> adapter (`runtime.adapters.claude_code`, B-9..B-12). The architecture moved: H1
+> established that live/offline actor execution belongs **outside AG**, in the H-series
+> harness, and AG ingests only the inert `actor_output.v0` artifact. A passed-but-stale
+> in-AG gate must not authorize the moved experiment.
+>
+> **This document is preserved as historical evidence only.** Its 11 ration-card terms
+> are carried forward as *inherited constraints* by the successor gate. Do not build
+> B-9..B-12; do not build an in-AG live adapter.
+>
+> **Successor gate (the real next one):** `docs/playbooks/harness-cage-review.md` —
+> the H-series harness-cage review. Read that, not this, for any live-actor question.
+>
+> *(The full fresh-eyes reconciliation that produced this decision is the dated section
+> "Fresh-eyes re-review (2026-06-30)" near the end of this file.)*
+
 > **Ration card exists. No one has eaten with it yet.**
 >
 > **Passing this review authorizes a SANDBOX EXPERIMENT, not operational
@@ -214,3 +232,118 @@ ratified terms unlock the following sequence, each its own commit and its own st
 **Bounded autopilot is NOT in this sequence.** It is a separate, later, separately-
 ratified gate. The conveyor is `decision → spec test → implementation → receipt →
 next gate` — no "continue," no "improve," no border-moving between slices.
+
+---
+
+## Fresh-eyes re-review (2026-06-30) — the subject of this gate moved
+
+> A review can pass and still go stale if the thing it authorized is no longer the
+> thing you would build. This is additive: the 2026-06-29 record stands; this section
+> reconciles it with what landed afterward. Review only — no code was written.
+
+### A. The 11 terms are sound, and the locks are now CODE-VERIFIED (not just asserted)
+
+The 2026-06-29 table is ratified and carries forward unchanged. Fresh-eyes added one
+thing the original lacked: a read of the enforcing code. The dangerous axes are locked
+closed by **three independent walls**, defense-in-depth, not one guard:
+
+1. **Card construction** — `RationCard.__post_init__` (`ration_card.py`) *raises* on
+   `git_allowed` / `doctrine_writes_allowed` / `network_allowed` / non-observe output.
+   A card that opens them cannot be constructed.
+2. **Request match** — `match_ration_card()` refuses `requested_git` / `requested_network`
+   and any write/shell ⊄ card. The card is the allowlist at request time too.
+3. **Origin admission** — `RationedAgentRunner.run()` refuses any `origin_kind ∉
+   {stub, synthetic}` *before anything runs*; `admit_origin_under_cage()`
+   (`sandbox_cage.py`) admits a live origin **only** under attested live isolation, and
+   the only shipped cages (`NullCage`, `SyntheticCage`) attest **nothing** —
+   `live_admission_permitted` is unconstructable for synthetic scope by
+   `CageSafetyVerdict.__post_init__`.
+
+Precise wording for the operator's "locked false by type" check: it is locked false by
+**construction invariant + defense in depth** (the fields are `bool`, but no admissible
+`RationCard` instance can hold `True`, and two further walls refuse it downstream). That
+is *stronger* than the casual "by type" phrasing, and it is exercised by tests
+(`tests/test_ration_card_dispatch.py`, `rationed_runner` / `sandbox_cage` suites).
+**Confirmed: git / doctrine / network remain locked false.**
+
+### B. The material change: live execution left AG
+
+This review was passed for an **in-AG** live adapter — "a `RationedAgentRunner` backed
+by a real Claude Code / Gemini runtime" (B-9..B-12), `allowed agent =
+runtime.adapters.claude_code`, B-12 = "live adapter sandbox experiment ... one adapter
+invocation." Since 2026-06-29:
+
+- **The synthetic overnight conveyor (S1–S7) + H1 landed.** Doctrine: *the overnight
+  system may create EVIDENCE, never FACTS.* The actor that actually runs now lives in
+  the **external H-series harness, OUTSIDE AG** (`harness/`, H1 = `aa147c8`). AG never
+  runs the actor; it ingests an inert `actor_output.v0` artifact (S7 → S5), and an
+  actor-claimed passing test is still refused.
+- **The in-AG runner structurally refuses live origins** (Wall 3 above). `rationed_runner.py`
+  will never run a live actor — by construction, a live origin "requires a confirmed-safe
+  cage, a future separately-gated slice" that does not exist.
+- **B-12 was reframed as a decoy gate** (operator, 2026-06-29; `docs/REENTRY.md`):
+  radioactive, operator-manual, blocked on a real cage backend, *not next*.
+- **The current task constraints forbid the in-AG path outright**: no
+  `runtime.adapters.claude_code`, no subprocess runner, no Claude Code run from inside
+  AG, no live adapter.
+
+So the experiment this review authorizes (in-AG, B-12) is no longer the experiment the
+architecture points at. The terms are fine; the **home** changed.
+
+### C. The four gate questions, re-answered
+
+- **Q1 — What is the sandbox cage?** *Answer relocates.* The 2026-06-29 answer (OS/
+  container cage wrapping an AG-internal subprocess; "Python is not the cage") is still
+  the right *shape* — but the subprocess it would cage now lives in the **external
+  harness**, not AG. AG's side has no live runner to cage. So Q1 is no longer AG's
+  question to answer here; it becomes the **harness's** cage review (a future doc). The
+  shipped `SyntheticCage`/`NullCage` honestly confirm nothing and admit no live origin —
+  correct for AG's inert side.
+- **Q2 — Downstream transcript discipline?** *Unchanged and already enforced.* H1's
+  `actor_output.v0` carries `captured_text` as advisory only; S7 routes it to
+  `design_notes`/`risks`, never to a passing test or authority; the structured
+  ReviewPacket/receipt is the only authoritative artifact. Tainted-audit discipline holds.
+- **Q3 — One-shot completion / hung-runner timeout?** *Unchanged as a term; lives where
+  the runner lives.* The one-shot + low-timeout (30–60 s) + TERM-then-KILL + failed
+  receipt rule is correct. Today the only in-AG runner (`rationed_runner`) already honors
+  timeout/kill against no-process origins; a live timeout belongs to the harness when/if
+  a live slice is authorized there.
+- **Q4 — Does the first live slice stay `stub_origin` / `DemonstratedConsumed` /
+  non-operational?** **Yes — firmly, and now over-determined.** AG cannot mint a live
+  (`observed`) consumption on this path: the runner refuses live origins, and the H1
+  ingest path is observe-only. `confer_operational_effect` (Wall 1) still requires
+  `OperationalConsumed` (`observed` origin), which nothing on either side produces. The
+  first slice is non-operational by construction, not by promise.
+
+### D. The one unresolved decision (operator's to make)
+
+Everything above is ratified or confirmed except **where a future live experiment
+runs**. This is the only thing blocking a clean "authorize/refuse," and it is custody-
+affecting (it changes a ratified gate's conclusion), so it is not mine to decide:
+
+> **Decision needed:** Is the first live experiment (A) **in-AG**, behind a future
+> confirmed cage + a live-origin runner — the original B-12 path, now *contradicted* by
+> the current constraints and the H-series — or (B) **in the external H-series harness**,
+> consistent with H1, in which case *this* in-AG review is **superseded** and the next
+> gate is a **harness-cage review** (Q1 re-asked about the harness, not AG)?
+
+The 11 ration-card terms apply unchanged to whichever home is chosen — they are the
+contract AG enforces on what it dispatches or ingests, regardless of where the actor
+runs. Only the cage/runner location is open.
+
+### E. Recommendation
+
+**NEEDS OPERATOR DECISION — do not authorize an in-AG sandbox live-adapter experiment
+as written.** Not a refusal of the terms (they are sound and code-verified) — a refusal
+to let a passed-but-stale gate green an experiment the architecture has moved.
+
+Fresh-eyes lean: **(B).** The operator's own H-series design runs the live actor outside
+AG; the in-AG runner refuses live origins by construction; the current constraints forbid
+an in-AG live adapter. The coherent path is to mark the **in-AG** live experiment
+(B-9..B-12) **superseded by the H-series**, keep these terms as the carried-forward
+contract, and open a **separate harness-cage review** as the real next gate before any
+live actor runs anywhere. Until the operator ratifies (A) or (B), no live-adapter slice —
+in-AG or in-harness — is authorized.
+
+This buys nothing new today: H1 stays parked, H2+ stays gated, no live adapter, no
+autopilot, no in-AG Claude Code. The gate stays shut; it just now names the right door.

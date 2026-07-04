@@ -48,6 +48,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional
 
+from governor.playbooks.admission_evidence import (
+    PlaybookAdmissionEvidence,
+    verify_admission_evidence,
+)
 from governor.standing_client import (
     REFUSAL_KIND_DANGLING_RECEIPT_REFERENCE,
     REFUSAL_KIND_STANDING_REQUIRED,
@@ -64,18 +68,43 @@ from governor.standing_client import (
 REFUSAL_KIND_STANDING_REQUIRED_LOCAL = REFUSAL_KIND_STANDING_REQUIRED
 REFUSAL_KIND_DANGLING_RECEIPT_REFERENCE_LOCAL = REFUSAL_KIND_DANGLING_RECEIPT_REFERENCE
 
+# Slice 3: the playbook admission-evidence refusal. Emitted *before* the
+# Standing seam is consulted, when a presented playbook-evidence packet is
+# not internally coherent. The specific incoherence (one of
+# ``playbooks.admission_evidence.BINDING_REASONS``) rides in the detail and
+# evidence bundle; this is the single seam-level refusal kind that wraps them
+# all. It is an evidence-precondition refusal, NOT an authority verdict —
+# coherent evidence still has to clear Standing to admit anything.
+REFUSAL_KIND_PLAYBOOK_EVIDENCE_UNBOUND = "playbook_evidence_unbound"
+
 # Closed-vocab set this seam may emit. Runtime invariant on
-# `_emit_refusal_receipt`. The wicket seam emits only the two
-# standing-shaped refusals it produces pre-call; downstream admission
-# verdicts (authorized/denied/gap/etc.) come from the wicket-check
-# callable and are NOT minted by this client.
+# `_emit_refusal_receipt`. The wicket seam emits the two standing-shaped
+# refusals it produces pre-call, plus the playbook-evidence-precondition
+# refusal; downstream admission verdicts (authorized/denied/gap/etc.) come
+# from the wicket-check callable and are NOT minted by this client.
 _WICKET_SEAM_REFUSAL_KINDS = frozenset({
     REFUSAL_KIND_STANDING_REQUIRED,
     REFUSAL_KIND_DANGLING_RECEIPT_REFERENCE,
+    REFUSAL_KIND_PLAYBOOK_EVIDENCE_UNBOUND,
 })
 
 # Gate name this seam emits under.
 WICKET_SEAM_GATE = "wicket_seam"
+
+# Slice 3: gate name for the *evidence-record* receipt minted on a successful
+# playbook-governed admission. Distinct from ``WICKET_SEAM_GATE`` (the
+# authority decision) on purpose — the evidence record is observational and
+# decides nothing. Authority gets verdict="pass" under ``wicket_seam``;
+# evidence gets verdict="observe" under this gate. The split is the doctrine
+# made mechanical: nothing can promote an "observe" evidence record into a
+# "pass" admission.
+WICKET_PLAYBOOK_EVIDENCE_GATE = "wicket_playbook_evidence"
+
+# Verdict for the evidence-record receipt. Drawn from the GateReceipt closed
+# verdict vocabulary (VALID_VERDICTS in ``gate_receipt.py``). "observe" is the
+# non-deciding verdict — exactly right for "this evidence was presented and
+# cohered", which authorizes nothing.
+WICKET_PLAYBOOK_EVIDENCE_VERDICT = "observe"
 
 # D0c-a: positive verdict used for authorized-admission receipts. Drawn
 # from the GateReceipt closed verdict vocabulary (VALID_VERDICTS in
@@ -285,6 +314,7 @@ class WicketClient:
         detail: str,
         cooked_context: CookedContext,
         parent_receipt_id: Optional[str],
+        extra: Optional[Mapping[str, Any]] = None,
     ) -> Optional[str]:
         """Emit a wicket-seam refusal-time GateReceipt; return its id.
 
@@ -293,6 +323,9 @@ class WicketClient:
         wired. When ``parent_receipt_id`` is set (the standing-side
         receipt that caused this refusal), it is cited as the parent so
         ``governor why`` walks wicket → standing.
+
+        ``extra`` carries refusal-kind-specific structured fields merged
+        into the evidence bundle (e.g. the Slice 3 ``binding_reason``).
         """
         if refusal_kind not in _WICKET_SEAM_REFUSAL_KINDS:
             raise AssertionError(
@@ -313,6 +346,8 @@ class WicketClient:
                 [parent_receipt_id] if parent_receipt_id else []
             ),
         }
+        if extra:
+            evidence_bundle.update(extra)
         if cooked_context.standing_receipt_id is not None:
             evidence_bundle["cited_standing_receipt_id"] = (
                 cooked_context.standing_receipt_id
@@ -399,6 +434,142 @@ class WicketClient:
             gate_config={"seam": "S1_wicket", "refusal_vocabulary": "S4_lite_v1"},
         )
         return receipt.receipt_id
+
+    def _emit_evidence_record_receipt(
+        self,
+        *,
+        cooked_context: CookedContext,
+        binding,
+        parent_receipt_id: Optional[str],
+    ) -> Optional[str]:
+        """Emit the playbook admission-evidence record (verdict="observe").
+
+        Slice 3. Minted on a *successful* playbook-governed admission, AFTER
+        the authority decision, citing the admission receipt as parent. It
+        records that coherent playbook evidence was presented — and records
+        nothing else. The verdict is "observe": it decides nothing, so no
+        chain walk can mistake this evidence for the authority that admitted.
+
+        ``binding`` is the ``EvidenceBindingResult`` (ok=True); its re-derived
+        (trusted) digests go into the bundle, never the caller's claimed
+        strings. Returns None when no sink is wired.
+        """
+        if self._receipt_sink is None:
+            return None
+        evidence_bundle: dict[str, Any] = {
+            # Explicit, machine-readable statement of the doctrine: this
+            # record is evidence, not authority.
+            "record_kind": "playbook_admission_evidence",
+            "evidence_not_authority": True,
+            # The trusted, re-derived measurement digests (NOT the caller's
+            # claimed strings — those were verified equal and discarded).
+            "playbook_spec_digest": binding.spec_digest,
+            "certified_kind_measurement_digest": binding.certified_kind_digest,
+            "dependency_closure_digest": binding.closure_digest,
+            "certified_kind": binding.certified_kind,
+            "actor": cooked_context.actor,
+            "intended_action": cooked_context.intended_action,
+            "target": cooked_context.target,
+            "call_timestamp": cooked_context.call_timestamp,
+            # The admission receipt this evidence accompanied. The evidence
+            # record is downstream of (cites) the authority decision, never
+            # the other way round.
+            "parent_receipt_ids": (
+                [parent_receipt_id] if parent_receipt_id else []
+            ),
+        }
+        subject_bytes = (
+            f"{cooked_context.actor}|{cooked_context.intended_action}|"
+            f"{cooked_context.target}|{binding.spec_digest}|"
+            f"{binding.closure_digest}"
+        ).encode("utf-8")
+        receipt = self._receipt_sink.emit(
+            gate=WICKET_PLAYBOOK_EVIDENCE_GATE,
+            verdict=WICKET_PLAYBOOK_EVIDENCE_VERDICT,
+            subject_kind="playbook_admission_evidence",
+            subject_bytes=subject_bytes,
+            evidence_bundle=evidence_bundle,
+            gate_config={
+                "seam": "S3_playbook_evidence",
+                "basis": "playbook-admission-evidence.v0",
+            },
+        )
+        return receipt.receipt_id
+
+    def check_playbook_admission(
+        self,
+        cooked_context: CookedContext,
+        playbook_evidence: PlaybookAdmissionEvidence,
+        *,
+        finding_id: Optional[str] = None,
+    ):
+        """Admit a **playbook-governed** action: evidence precondition, then authority.
+
+        > **Certification is admissible evidence for Wicket, not authority.**
+
+        Two gates, conjunctive, in this order — and the order encodes the
+        doctrine:
+
+        1. **Evidence coherence** (``verify_admission_evidence``, pure). The
+           presented playbook-evidence packet must be complete and internally
+           coherent (re-derived digests match, cross-bindings hold). If not,
+           this returns a ``WicketRefusal`` with refusal_kind
+           ``playbook_evidence_unbound`` — and **the Standing seam is never
+           consulted and the wicket-check callable is never invoked**. Coherent
+           evidence is a *necessary* precondition.
+
+        2. **Authority** (delegates verbatim to ``self.check``). The Standing
+           receipt decides admission, exactly as for a non-playbook check. A
+           valid evidence packet does **not** authorize anything — if Standing
+           refuses, the whole admission refuses. This is the laundering wall:
+           certification did not become permission.
+
+        Only when *both* clear is the action admitted. On success the admission
+        receipt (verdict="pass", the authority decision) is what ``check``
+        already emitted; this method additionally emits a separate
+        evidence-record receipt (verdict="observe") citing the admission as
+        parent — so ``governor why`` can see the evidence that accompanied the
+        decision without ever mistaking it for the decision.
+
+        Returns the same ``WicketRefusal`` / ``WicketVerdict`` union as
+        ``check``. The generic ``check`` path is untouched: callers with no
+        playbook evidence keep calling ``check`` directly.
+        """
+        # Gate 1 — evidence coherence. Pure, no I/O, mints nothing on the
+        # refusal-decision itself (only the receipt, if a sink is wired).
+        binding = verify_admission_evidence(playbook_evidence)
+        if not binding.ok:
+            detail = f"playbook evidence unbound ({binding.reason}): {binding.detail}"
+            wicket_rid = self._emit_refusal_receipt(
+                refusal_kind=REFUSAL_KIND_PLAYBOOK_EVIDENCE_UNBOUND,
+                detail=detail,
+                cooked_context=cooked_context,
+                parent_receipt_id=None,
+                extra={"binding_reason": binding.reason},
+            )
+            return WicketRefusal(
+                refusal_kind=REFUSAL_KIND_PLAYBOOK_EVIDENCE_UNBOUND,
+                detail=detail,
+                standing_receipt_id=None,
+                receipt_id=wicket_rid,
+                parent_receipt_id=None,
+            )
+
+        # Gate 2 — authority. Verbatim delegation; Standing decides. A refusal
+        # here (or a passing verdict) is returned as-is. Coherent evidence
+        # bought no authority.
+        result = self.check(cooked_context, finding_id=finding_id)
+        if isinstance(result, WicketRefusal):
+            return result
+
+        # Admitted by authority — record the accompanying evidence as a
+        # separate observe-verdict receipt citing the admission decision.
+        self._emit_evidence_record_receipt(
+            cooked_context=cooked_context,
+            binding=binding,
+            parent_receipt_id=result.receipt_id,
+        )
+        return result
 
     def check(
         self,

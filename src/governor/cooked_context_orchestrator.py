@@ -101,7 +101,16 @@ from governor.standing_spendability import (
     StandingSpendabilityGate,
     StandingWindow,
 )
+from governor.playbooks.admission_evidence import PlaybookAdmissionEvidence
+from governor.playbooks.durable_spend import (
+    DurablePlaybookSpendGate,
+    DurableSpendRefusal,
+    PlaybookSpendBasis,
+    PlaybookSpendIntent,
+)
 from governor.wicket_client import (
+    WICKET_SEAM_ADMIT_VERDICT,
+    WICKET_SEAM_GATE,
     CookedContext,
     WicketClient,
     WicketRefusal,
@@ -407,12 +416,69 @@ def wrap_receipt_sink_with_origin_mode(
 # Seam tags — stable; mirror the gate names the clients emit under.
 SEAM_WICKET = "wicket_seam"
 SEAM_STANDING_SPENDABILITY = "standing_spendability_seam"
+# Slice 5: durable, exactly-once playbook spend gate (post-admission, pre-LA).
+SEAM_DURABLE_SPEND = "playbook_durable_spend_seam"
 SEAM_LA_REQUEST = "la_seam_request"
 SEAM_LA_CONSUME = "la_seam_consume"
 # Recomposition is not a chain seam (no client, no spend). It is the
 # post-chain legitimacy gate: it may refuse a would-be-admissible chain whose
 # recomposition launders a dropped boundary. Its only verb is "refuse".
 SEAM_RECOMPOSITION = "recomposition_seam"
+
+
+# ---------------------------------------------------------------------------
+# Authority-admission-basis wall (Slice 4 — playbook-governed spend).
+#
+# The LA spend's basis MUST be an *authority* receipt — the wicket-seam
+# admission (verdict="pass") that Standing authorized — NEVER the
+# playbook-evidence record (gate="wicket_playbook_evidence", verdict="observe")
+# that merely recorded the certification. Both resolve in the receipt store, so
+# "does the cited id resolve?" is not enough: a caller could cite the observe
+# record and a resolve-only verifier would wave it through. That is the Slice 4
+# laundering vector — certification masquerading as a spend basis.
+#
+# This wall makes the distinction mechanical: a cited admission id is a valid
+# spend basis IFF it resolves to a wicket-seam pass admission. The orchestrator
+# never offers the observe id to LA (it threads the WicketVerdict's receipt_id,
+# which is always the pass admission), so the happy path is correct by
+# construction; this verifier is the defense-in-depth that refuses a *manual*
+# attempt to spend against an evidence record.
+# ---------------------------------------------------------------------------
+
+
+def is_authority_admission_receipt(receipt: object) -> bool:
+    """True iff ``receipt`` is a wicket-seam authority admission (verdict=pass).
+
+    The observe-verdict playbook-evidence record (gate
+    ``wicket_playbook_evidence``) returns False: evidence is not authority, so
+    it is not a spend basis. Defensive against None / receipts missing the
+    attributes.
+    """
+    return (
+        receipt is not None
+        and getattr(receipt, "gate", None) == WICKET_SEAM_GATE
+        and getattr(receipt, "verdict", None) == WICKET_SEAM_ADMIT_VERDICT
+    )
+
+
+def build_authority_admission_verifier(sink: Any) -> Callable[[str], bool]:
+    """An LA ``admission_verifier`` that admits ONLY authority receipts.
+
+    Pass the result as ``LinearAccountantClient(admission_verifier=...)`` for a
+    playbook-governed spend chain. It resolves the cited id through the sink's
+    receipt store and accepts it only when it is a wicket-seam pass admission —
+    so an observe-verdict evidence record cited as a spend basis is refused
+    (LA returns ``dangling_receipt_reference``: there is no *admission* at that
+    id, even though some receipt resolves there).
+
+    ``sink`` must expose ``receipt_store.get_by_id``; this is the unwrapped
+    ``GateReceiptSystem`` (not the origin-mode wrapper, which has no store).
+    """
+    def verify(admission_receipt_id: str) -> bool:
+        receipt = sink.receipt_store.get_by_id(admission_receipt_id)
+        return is_authority_admission_receipt(receipt)
+
+    return verify
 
 
 # ---------------------------------------------------------------------------
@@ -594,6 +660,7 @@ class ChainResult:
     outcome: (
         WicketRefusal
         | SpendabilityRefusal
+        | DurableSpendRefusal
         | RefusalResult
         | RecompositionRefusal
         | OperationalConsumed
@@ -608,6 +675,7 @@ class ChainResult:
             (
                 WicketRefusal,
                 SpendabilityRefusal,
+                DurableSpendRefusal,
                 RefusalResult,
                 RecompositionRefusal,
             ),
@@ -660,8 +728,16 @@ RecompositionSink = Callable[[RecompositionReceipt], None]
 _CHAIN_SEAM_ORDER: tuple[str, ...] = (
     SEAM_WICKET,
     SEAM_STANDING_SPENDABILITY,
+    SEAM_DURABLE_SPEND,
     SEAM_LA_REQUEST,
     SEAM_LA_CONSUME,
+)
+
+# Optional gates: present in the order for accounting, but only asserted as a
+# traversed boundary when they ARE the firing seam (we cannot prove an optional
+# gate ran otherwise, so the shadow accounting never fabricates one).
+_OPTIONAL_SEAMS: frozenset[str] = frozenset(
+    {SEAM_STANDING_SPENDABILITY, SEAM_DURABLE_SPEND}
 )
 
 _RECOMPOSITION_KERNEL = "workflow:cooked_context (provisional)"
@@ -700,10 +776,7 @@ def _chain_traversal(chain_result: ChainResult) -> tuple[list[str], dict[str, st
     seam = chain_result.seam
     admitted: list[str] = []
     for boundary in _CHAIN_SEAM_ORDER:
-        if (
-            boundary == SEAM_STANDING_SPENDABILITY
-            and seam != SEAM_STANDING_SPENDABILITY
-        ):
+        if boundary in _OPTIONAL_SEAMS and boundary != seam:
             continue
         admitted.append(boundary)
         if boundary == seam:
@@ -862,6 +935,7 @@ class CookedContextOrchestrator:
         origin_mode: str,
         *,
         standing_spendability_gate: Optional[StandingSpendabilityGate] = None,
+        durable_spend_gate: Optional[DurablePlaybookSpendGate] = None,
     ):
         if origin_mode not in CLOSED_ORIGIN_MODES:
             raise InvalidOriginModeError(
@@ -886,6 +960,7 @@ class CookedContextOrchestrator:
         self._la = la_client
         self._origin_mode = origin_mode
         self._spendability_gate = standing_spendability_gate
+        self._durable_spend_gate = durable_spend_gate
 
     @property
     def origin_mode(self) -> str:
@@ -901,10 +976,21 @@ class CookedContextOrchestrator:
         *,
         finding_id: Optional[str] = None,
         standing_window: Optional[StandingWindow] = None,
+        playbook_evidence: Optional[PlaybookAdmissionEvidence] = None,
+        playbook_spend_intent: Optional[PlaybookSpendIntent] = None,
         recomposition_sink: Optional[RecompositionSink] = None,
         recomposition_plan: Optional[Sequence[str]] = None,
     ) -> ChainResult:
         """Drive the cooked-context chain; see :meth:`_run_chain` for the steps.
+
+        ``playbook_evidence`` (Slice 4) opts the chain into playbook-governed
+        admission: when supplied, step 1 routes through
+        ``WicketClient.check_playbook_admission`` (evidence coherence → Standing
+        authority) instead of the bare ``check``. Evidence coherence is a
+        necessary precondition that refuses *before* Standing; it never becomes
+        the spend basis — the LA request is still threaded the authority (pass)
+        admission receipt, never the observe evidence record. When ``None`` (the
+        default) the chain is byte-identical to the pre-Slice-4 path.
 
         Two recomposition modes layer on top of the chain, both opt-in:
 
@@ -944,6 +1030,8 @@ class CookedContextOrchestrator:
             now,
             finding_id=finding_id,
             standing_window=standing_window,
+            playbook_evidence=playbook_evidence,
+            playbook_spend_intent=playbook_spend_intent,
         )
 
         if recomposition_plan is None:
@@ -1011,8 +1099,10 @@ class CookedContextOrchestrator:
         *,
         finding_id: Optional[str] = None,
         standing_window: Optional[StandingWindow] = None,
+        playbook_evidence: Optional[PlaybookAdmissionEvidence] = None,
+        playbook_spend_intent: Optional[PlaybookSpendIntent] = None,
     ) -> ChainResult:
-        """Drive standing → wicket → [standing-spendability] → LA-request → LA-consume.
+        """Drive standing → wicket → [standing-spendability] → [durable-spend] → LA-request → LA-consume.
 
         Refusal at any seam short-circuits — the next stage is NEVER
         invoked. The returned ``ChainResult.outcome`` is the verbatim
@@ -1038,9 +1128,23 @@ class CookedContextOrchestrator:
         # parent and the admission receipt cites the standing receipt
         # as parent (wicket reads the standing-side last-verified id
         # off the standing client's side channel).
-        wicket_result = self._wicket.check(
-            cooked_context, finding_id=finding_id
-        )
+        #
+        # Slice 4: when playbook evidence is supplied, route through the
+        # two-gate playbook admission (evidence coherence → authority).
+        # Both paths return the same WicketRefusal | WicketVerdict union, so
+        # a playbook_evidence_unbound refusal lands at SEAM_WICKET exactly
+        # like a standing refusal, and a verdict threads its pass-admission
+        # receipt id downstream exactly the same. The evidence record is a
+        # side receipt (verdict=observe); it is never on the WicketVerdict, so
+        # it cannot become the spend basis through this path.
+        if playbook_evidence is not None:
+            wicket_result = self._wicket.check_playbook_admission(
+                cooked_context, playbook_evidence, finding_id=finding_id
+            )
+        else:
+            wicket_result = self._wicket.check(
+                cooked_context, finding_id=finding_id
+            )
         if isinstance(wicket_result, WicketRefusal):
             return ChainResult(outcome=wicket_result, seam=SEAM_WICKET)
 
@@ -1067,6 +1171,31 @@ class CookedContextOrchestrator:
             if isinstance(spend_check, SpendabilityRefusal):
                 return ChainResult(
                     outcome=spend_check, seam=SEAM_STANDING_SPENDABILITY
+                )
+
+        # Step 1.6 (optional, Slice 5): durable, exactly-once spend gate. The
+        # standing was admissible and fresh; is THIS exact spend (bound to the
+        # authority admission + step/effect/resource/principal) being made for
+        # the first time, or is it a crash/replay of an already-consumed spend?
+        # The write-ahead claim refuses a replay BEFORE any LA call, so a
+        # retried activation cannot double-spend ("replay is boring"). Only runs
+        # when a gate is composed AND a spend intent is supplied; otherwise the
+        # chain is byte-identical. The spend is bound to the authority admission
+        # receipt id (the wicket pass), never the observe evidence record.
+        if (
+            self._durable_spend_gate is not None
+            and playbook_spend_intent is not None
+        ):
+            spend_basis = PlaybookSpendBasis.from_intent(
+                playbook_spend_intent,
+                authority_admission_receipt_id=admission_receipt_id or "",
+            )
+            durable_check = self._durable_spend_gate.check(
+                spend_basis, parent_receipt_ids=(admission_receipt_id,)
+            )
+            if isinstance(durable_check, DurableSpendRefusal):
+                return ChainResult(
+                    outcome=durable_check, seam=SEAM_DURABLE_SPEND
                 )
 
         capacity_request = _replace_admission_receipt_id(

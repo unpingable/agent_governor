@@ -92,7 +92,7 @@ tier: mechanical · executor: codex · prereq: [GS-8]
 - refusal mode: n/a (transport). · receipt shape: commit citing GS-8 + this filing.
 - stop condition: UI/retry-policy/rendering creep — GS-8's own stop condition applies; the client class is framing + dispatch, nothing more.
 
-### GS-9 — maude consumes ag_shell_client; deletes duplicated transport/client
+### GS-9 — maude consumes ag_shell_client; deletes duplicated transport/client  **(EXECUTED 2026-07-03, maude repo f143efc)**
 tier: mechanical · executor: codex · prereq: [GS-8b]
 - purpose: maude's client/ dir replaced by the package; **narrows R-MAUDE-2** (old-client resync is dead work).
 - files: maude repo (delete src/maude/client/, add dependency, adapt imports).

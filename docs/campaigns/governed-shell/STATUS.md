@@ -181,6 +181,30 @@ GS-8 (ag_shell_client extraction) after GS-1 → unlocks both shell tracks.
   A7-adjacent) in addition to their GS prereqs.
 - D-GS-7 (reattach) needs its verify-first probe before anything depends on it.
 
+## 2026-07-03 — GS-9 landed (maude repo; GS-10 unblocked)
+
+Maude now consumes `ag_shell_client` (maude `f143efc`). Deleted maude's
+duplicated `client/transport.py` (Content-Length framing + socket-path
+derivation); rewrote `client/rpc.py` as a thin typed surface over
+`AsyncDaemonClient`. Kept maude's Pydantic rendering models + the typed
+method surface (one module naming every RPC method maude calls — the record
+R-MAUDE-1 wants; not scattered into the untested app.py monolith). Handles
+the one-in-flight contract: unary calls lock-serialized on one connection so
+the 5s poll can't trip the busy guard; `chat.stream` on a dedicated
+connection; poisoned connection dropped + reconnected. Verify: bare pytest
+156 passed / 24 skipped exit 0; ruff clean; live degraded-daemon smoke 22/24.
+
+The 2 non-passes are NOT transport regressions: 1 pre-existing chat-stream
+skip; 1 **daemon-behavior drift** — `intent.compile` returns
+`escape_classification=None` where maude's integration test expects
+`waiver_candidate` (the full result deserializes; only a daemon-side field
+value differs). Filed to **R-MAUDE-1** (RPC surface-diff): decide whether the
+daemon regressed or the test expectation is stale. Left failing under
+`test-with-governor.sh`, not silently re-asserted.
+
+Maude track now at GS-10 (ScreenManager + CommandRegistry; chat/PLAN/BUILD
+quarantine to `commands/legacy.py`).
+
 ## Not touched (deferred, named)
 
 AG-minted widening offers (D-GS-4, successor campaign). Existing phosphor mode

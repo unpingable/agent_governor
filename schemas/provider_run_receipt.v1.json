@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpingable.com/agent_gov/schemas/provider_run_receipt.v1.json",
+  "title": "ProviderRunReceipt v1 (DRAFT / CANDIDATE)",
+  "$comment": "STATUS: DRAFT/CANDIDATE — non-binding until ratified. This schema exports names for existing AG law; it does not create a new authority surface. A provider run receipt is TESTIMONY: what the provider observed it did. It is NOT an AG verdict and NEVER carries one (see ag_review). AG's admission is a separate gate_receipt. Reuses receipt_v1 execution vocabulary; introduces no parallel verdict enum. See docs/api/provider-integration.md.",
+  "type": "object",
+  "$defs": {
+    "sha256Ref": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "work_container_ref",
+    "provider_id",
+    "provider_status",
+    "ag_review"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "provider_run_receipt.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "work_container_ref": {
+      "$ref": "#/$defs/sha256Ref",
+      "$comment": "projects from: work_container.v1 custody.digest — the parent this run performed."
+    },
+    "provider_id": { "type": "string", "minLength": 1 },
+    "provider_kind": {
+      "type": "string",
+      "enum": ["execution_harness", "agent_runtime", "transform_provider", "substrate_courier", "external_witness", "communication_adapter", "artifact_store"]
+    },
+    "provider_status": {
+      "type": "string",
+      "$comment": "The PROVIDER's own observed state. Mapped by AG to admitted|held|refused|inadmissible; never aliased. provider.completed_observed != AG.admitted; provider.blocked != AG.refused; provider.success != reliance.",
+      "enum": [
+        "not_supported",
+        "available",
+        "held",
+        "running",
+        "completed_observed",
+        "completed_inadmissible",
+        "blocked",
+        "refused",
+        "cancelled",
+        "timed_out"
+      ]
+    },
+    "execution": {
+      "type": "object",
+      "$comment": "projects from: libs/receipt_v1/schema/receipt.schema.json execution.status (reused verbatim) + receipt_kernel CmdRun (exit + digests).",
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["success", "failure", "timeout", "skipped"] },
+        "exit_status": { "type": "integer" },
+        "attempt": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "outer_cage": {
+      "type": "object",
+      "$comment": "Enforcement is the OUTER cage (AG/bwrap/docker/porter), not the provider's promise. Recorded as testimony about how the run was fenced.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["bwrap", "docker", "porter", "none"] },
+        "network": { "type": "string", "enum": ["denied", "allowed"] },
+        "write_paths": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "digests": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workspace_snapshot_digest": { "$ref": "#/$defs/sha256Ref" },
+        "prompt_digest": { "$ref": "#/$defs/sha256Ref" },
+        "stdout_digest": { "$ref": "#/$defs/sha256Ref" },
+        "stderr_digest": { "$ref": "#/$defs/sha256Ref" },
+        "filesystem_delta_ref": { "$ref": "#/$defs/sha256Ref" },
+        "transcript_ref": { "$ref": "#/$defs/sha256Ref" }
+      }
+    },
+    "declared_artifacts": {
+      "type": "array",
+      "$comment": "projects from: ReviewPacket.ReviewArtifact — references only, no content. Declared by the provider; verified by AG.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "type": "string" },
+          "path": { "type": "string" },
+          "sha256": { "$ref": "#/$defs/sha256Ref" },
+          "description": { "type": "string" }
+        },
+        "required": ["kind", "sha256"]
+      }
+    },
+    "obstruction_ref": {
+      "$ref": "#/$defs/sha256Ref",
+      "$comment": "Present when provider_status is blocked/refused; points to a provider_obstruction.v1."
+    },
+    "ag_review": {
+      "type": "null",
+      "$comment": "does not mint: authority. ALWAYS null in a provider receipt. AG's admission verdict is a SEPARATE gate_receipt (verdict pass|warn|block|observe|proceed, role authority), never written by the provider. Fail-closed: a provider cannot supply its own admission."
+    }
+  }
+}

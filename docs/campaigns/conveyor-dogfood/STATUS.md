@@ -67,6 +67,49 @@ now safe).
   plan would still have refused `governance_approval_unverified`; fail-closed
   preserved. maude suite 276 green + ruff clean.
 
+- **CD-4-pre DONE (2026-07-04) — maude legibility pass (V1 vocab + V2 law
+  view + bounded polish).** Surfaced because CD-4 partly measures operator
+  legibility; old ontology labels would contaminate that signal. maude
+  `f094571` (3 commits, pushed: `9f93d3e` V1 core, `a05a2e1` supervised flow,
+  `f094571` polish).
+
+  **Cargo verdict:** new `src/maude/labels.py` presentation layer (three-layer
+  disclosure — surface / detail / law) keyed on the CONTRACT codes, which are
+  only rendered, never renamed. Plain-ops rewrite across the whole live-run
+  path: plan runner (`Plan refused→Blocked`, `admitted→OK — starting run`,
+  `witnessed citations→verified references`, `projected→limit enforced from`,
+  `ungoverned→plain run`), status bar (`MODE=/SPEC=/GOV=→mode:/spec:/policy:`),
+  supervised flow (`promotion→changes`, `promote/reject→keep/discard` w/ new
+  aliases incl. `supervised keep|discard <id>`; `Session created/exited→Run
+  started/finished`; `Pending Violation→Blocked — needs your call`;
+  `Anchor:→Rule:`; `COMMUNICATE→External send`), headers (`Governor
+  Status→Status`, `violations→blocked`, `Session Lineage→Where am I`, `Session
+  Tree→Run tree`, `Operator Snapshot→Now — what's happening`). **V2 law view:**
+  raw cybernetics off the surface, one `why` away (plan-block drilldown wired +
+  tested). RPC method names + wire contract untouched. **281 passed, 24
+  skipped; ruff clean** (+6 tests: law-view disclosure, keep/discard aliases).
+
+  **Dogfood verdict (feeds M-4):** the three-layer disclosure holds — a human
+  reads plain ops first, drills to the law only on `why`. Two findings banked:
+  (1) the **queue-desk decision cards** render AG *daemon* vocab verbatim by
+  design ("the daemon's vocabulary IS the keymap"), so plainer wording there is
+  an AG-side change to `operator.decisions`, NOT a maude rename — left as-is so
+  CD-4 can measure whether it actually bites; (2) **External send** is
+  channel-generic (email = current specimen) → recorded, not stubbed:
+  `docs/candidates/COMMUNICATION_ADAPTERS.md`. Deferred (non-blocking):
+  queue-desk law-view expand, full run/session vocabulary split, the
+  CommunicationIntent object, lower-priority maude surfaces (session-mgmt /
+  history). Backlog: none opened.
+
+  **CD-4 is now teed up on the plainer surface.** Backend reality: the two
+  supervised adapters are `claude_code` and `gemini_cli`, but **gemini is
+  defunct** (2026-07-04), so `claude_code` is the only live supervised backend.
+  The run therefore spends from the general Claude pool — bounded by the
+  specimen's 150k token budget. Operator call: spend it now, or defer the live
+  run to the weekly reset. (A local/ollama supervised adapter does not exist —
+  ollama is a chat backend only — so "run CD-4 on qwen" would be net-new
+  adapter work, out of this slice's scope.)
+
 ## Staged (awaiting operator acts + live daemon)
 
 - **CD-4 STAGED (2026-07-04):** `specimens/cd4-docs-normalize/` — playbook
@@ -102,13 +145,22 @@ now safe).
 3. **GS-13** — why/help/command-palette overlays; retires maude's nav-key
    sprawl (flagged at GS-10b leg 3c) once there's a real report to navigate.
 
-**Bigger AG planning item, named not started — "make the law portable":** a
-stable EXPORTED conveyor projection (QueuedPlaybookRef / RationCardRef /
-ReviewPacket / ApprovalWitness / ConstraintProjection / GovernedPlanBinding +
-refusal classes + digest/citation rules + authority axes) so maude / Night
-Shift / NQ consume a serialized surface, never AG internals. This is the
-CD-1a "no import coupling" rule graduating from prose to a real artifact;
-gate it after CD-4 proves the shape. Do NOT start before the live run.
+**"Make the law portable" — CONTRACT ARTIFACT STARTED (2026-07-04); live
+wiring still gated on CD-4.** A stable EXPORTED conveyor projection
+(QueuedPlaybookRef / RationCardRef / ReviewPacket / ApprovalWitness /
+ConstraintProjection / GovernedPlanBinding + refusal classes + digest/citation
+rules + authority axes) so maude / Night Shift / NQ / Antigravity consume a
+serialized surface, never AG internals. Forced forward by gemini's death (the
+`gemini_cli` adapter is defunct) + the intent to be usable by others: AG talks
+to a **provider/agent contract**, not to Maude directly. **Landed this slice
+(contract artifacts only, mints nothing):** `docs/api/work-container-contract.md`
+(deepest) + `agent-integration.md` + `provider-integration.md`, and
+`schemas/{work_container,provider_descriptor,provider_run_receipt,provider_obstruction}.v1.json`
+(DRAFT). Build vector: Slice 2 ProviderRegistry primitive (gated on contract
+review) → Slice 3 conforming descriptors → **Slice 4 live governed_dispatch
+wiring (gated on CD-4)** → Slice 5 Antigravity spike. Playbooks demoted to one
+origin format (compiles into WorkContainer), not the spine. Plan:
+`~/.claude/plans/okay-two-things-1-luminous-bee.md`.
 
 **Parked operator rulings (from the morning, dependency-ordered for later):**
 C2 read-plane trio → C2 wicket-guard absorption → GS-2b admissibility/HELD →

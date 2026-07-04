@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpingable.com/agent_gov/schemas/provider_obstruction.v1.json",
+  "title": "ProviderObstruction v1 (DRAFT / CANDIDATE)",
+  "$comment": "STATUS: DRAFT/CANDIDATE — non-binding until ratified. This schema exports names for existing AG law; it does not create a new authority surface. An obstruction is honest reporting that a provider could not proceed. It is NOT a downgrade path and NOT an AG verdict. Shape reserved by plan-envelope-v0 §5. See docs/api/provider-integration.md.",
+  "type": "object",
+  "$defs": {
+    "sha256Ref": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "obstruction_id",
+    "work_container_ref",
+    "provider_id",
+    "refusal_verbatim"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "provider_obstruction.v1" },
+    "obstruction_id": { "type": "string", "minLength": 1 },
+    "work_container_ref": {
+      "$ref": "#/$defs/sha256Ref",
+      "$comment": "projects from: work_container.v1 custody.digest."
+    },
+    "provider_id": { "type": "string", "minLength": 1 },
+    "blocked_step": {
+      "type": "string",
+      "$comment": "projects from: plan-envelope-v0 steps — which advisory step could not proceed."
+    },
+    "refusal_class": {
+      "type": "string",
+      "$comment": "Reuse an EXISTING closed refusal vocabulary where applicable (e.g. plan-envelope-v0: invalid_plan_envelope, submitter_limits_missing, governance_not_approved, governance_ref_mismatch, governance_approval_unverified). Do not invent per-call strings."
+    },
+    "refusal_verbatim": {
+      "type": "string",
+      "minLength": 1,
+      "$comment": "The refusal, carried verbatim. AG's own refusals pass through unchanged; a provider never rewrites them into something softer."
+    },
+    "what_must_change": {
+      "type": "string",
+      "description": "What upstream must change for the work to become admissible. Advisory; not a demand, not authority."
+    },
+    "suggested_next": {
+      "type": "object",
+      "$comment": "Advisory routing only. AG decides; a suggestion is never a dispatch.",
+      "additionalProperties": false,
+      "properties": {
+        "provider_id": { "type": "string" },
+        "gate": { "type": "string" }
+      }
+    }
+  }
+}

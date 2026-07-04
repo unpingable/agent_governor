@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpingable.com/agent_gov/schemas/work_container.v1.json",
+  "title": "WorkContainer v1 (DRAFT / CANDIDATE)",
+  "$comment": "STATUS: DRAFT/CANDIDATE — non-binding until ratified and a first conforming implementation exists. This schema exports names for existing AG law; it does not create a new authority surface. WorkContainer carries admitted work across provider boundaries. It does NOT admit work, grant standing, or replace RationCard/ReviewPacket/governed_dispatch. Every field projects a shipped AG object; no field mints authority. See docs/api/work-container-contract.md.",
+  "type": "object",
+  "$defs": {
+    "sha256Ref": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Content-addressed reference. Discipline reused from gate_receipt.canonical_json + sha256 hex."
+    },
+    "capabilityClass": {
+      "type": "string",
+      "$comment": "projects from: chain_gate.CapabilityClass — reused verbatim, not a new enum.",
+      "enum": [
+        "file_read",
+        "file_write",
+        "network_egress",
+        "network_ingress",
+        "shell_exec",
+        "code_exec",
+        "model_call",
+        "unknown"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "work_id",
+    "origin",
+    "intent",
+    "scope",
+    "ration",
+    "custody"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "work_container.v1"
+    },
+    "work_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable id for this container."
+    },
+    "origin": {
+      "type": "object",
+      "$comment": "projects from: plan_review.Proposal (proposal_ref) / playbooks PlaybookSpec|QueuedPlaybook digest (playbook_ref) / standing_client (standing_basis_ref). does not mint: standing.",
+      "additionalProperties": false,
+      "properties": {
+        "proposal_ref": { "$ref": "#/$defs/sha256Ref" },
+        "playbook_ref": { "$ref": "#/$defs/sha256Ref" },
+        "submitted_by": {
+          "type": "string",
+          "description": "Actor label, e.g. 'agent:claude-code'. Label only, not standing."
+        },
+        "standing_basis_ref": {
+          "$ref": "#/$defs/sha256Ref",
+          "description": "Reference to the standing verification receipt. Not a grant; a citation."
+        }
+      },
+      "required": ["submitted_by"]
+    },
+    "intent": {
+      "type": "string",
+      "minLength": 1,
+      "$comment": "projects from: plan-envelope-v0 goal (one-sentence outcome).",
+      "description": "One-sentence outcome. Advisory prose, not a permission."
+    },
+    "scope": {
+      "type": "object",
+      "$comment": "projects from: playbooks.RationCard allowed_write_paths + QueuedPlaybook allowed_paths/forbidden_paths. Read-only copy; never re-derived, never expanded.",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_paths": { "type": "array", "items": { "type": "string" } },
+        "forbidden_paths": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["allowed_paths", "forbidden_paths"]
+    },
+    "ration": {
+      "type": "object",
+      "$comment": "projects from: playbooks.RationCard (ration_card.py) locked axes. does not replace RationCard; carries a read-only projection of it. does not grant permission.",
+      "additionalProperties": false,
+      "properties": {
+        "network": { "type": "boolean" },
+        "external_send": { "type": "boolean" },
+        "git": { "type": "boolean" },
+        "doctrine_writes": { "type": "boolean" },
+        "observe_only": { "type": "boolean" },
+        "max_wallclock_seconds": { "type": "integer", "minimum": 1 },
+        "max_artifact_bytes": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["network", "external_send", "git", "doctrine_writes", "observe_only"]
+    },
+    "capability_requirements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/capabilityClass" },
+      "description": "CapabilityClass values a provider must support to accept this container."
+    },
+    "acceptance": {
+      "type": "object",
+      "$comment": "projects from: plan-envelope-v0 acceptance_criteria + required outputs.",
+      "additionalProperties": false,
+      "properties": {
+        "required_checks": { "type": "array", "items": { "type": "string" } },
+        "required_artifacts": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "stop_conditions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "$comment": "projects from: plan-envelope-v0 stop_conditions (halt_if / forbidden_paths / budget)."
+    },
+    "receipt_expectations": {
+      "type": "object",
+      "$comment": "projects from: gate_receipt.GateReceipt + ReviewPacket. Declares what testimony the provider must return; does not itself certify anything.",
+      "additionalProperties": false,
+      "properties": {
+        "run_receipt": { "type": "boolean" },
+        "obstruction_on_block": { "type": "boolean" }
+      }
+    },
+    "custody": {
+      "type": "object",
+      "$comment": "projects from: gate_receipt.canonical_json seal + RecompositionReceipt lineage. does not mint: authority. decomposition_lineage records custody; recomposition can only refuse (RecompositionRefusal).",
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/sha256Ref",
+          "description": "Seal over the canonical container body."
+        },
+        "parent_container_ref": { "$ref": "#/$defs/sha256Ref" },
+        "decomposition_lineage": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sha256Ref" }
+        }
+      },
+      "required": ["digest"]
+    }
+  }
+}

@@ -96,6 +96,35 @@ client class (lib is codec + models only) before GS-9 can consume it; GS-9
 prereq updated to [GS-8b]. Also: roadmaps/tools/maude.md §0 adapter-ownership
 line corrected to match the ratified boundary (D-GS-5).
 
+## 2026-07-03 — GS-7 landed (autopilot RPC; daemon shell surface complete)
+
+`runtime.autopilot.get` (read-only envelope strip) + `runtime.autopilot.set`
+(workspace-default profile switch) on main. `get` mirrors `governor intent show`
+truth; `set` reuses the existing `set_intent` + `apply_autopilot_profile`
+machinery (same operation as `governor code --profile`), emits a profile-change
+gate receipt (`gate="autopilot"`) citing the operator via the canonical
+`resolve_principal` path, and refuses an unknown profile with the closed
+`unknown_profile` vocab. Method count 99.
+
+Stop condition (no per-RUNNING-session envelope mutation) proven, not asserted:
+grep confirmed the runtime supervisor never reads the autopilot/intent/envelope
+files, pinned by a booby-trap test that raises on any supervisor access. `set`
+is workspace-scoped only — a `session_id` key (any value) is rejected at the
+mechanism layer.
+
+FULL SANDWICH: codex-exec BLOCK (receipt swallowed after write → a change could
+succeed unreceipted) → fixed (emission no longer swallowed; success requires the
+receipt; workspace write is idempotent so a receipt failure is loud + retryable)
+→ WARNs folded (key-presence session_id guard; `changed` reflects the actual
+delta; fail-closed-when-standing-required test proving the operator isn't
+forgeable) → MERGE-SAFE. verify-run receipt `8316dec3` [pass]; 10 slice tests +
+324 in the daemon band green.
+
+GS-7 was the last buildable AG-daemon governed-shell slice. Remaining AG-side:
+GS-2b re-tiered items (admissibility/HELD — authority-semantics) and GS-3 docket
+resolve route (mutation sandwich). Maude track (GS-8b→GS-9..15) is the sibling
+session's; phosphor (GS-16/17) waits on R-PHOS-1.
+
 ## Current next
 
 Daemon slices unblocked: **GS-2** (decisions.list + docket/admissibility

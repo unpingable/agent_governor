@@ -1392,6 +1392,8 @@ class TestAllMethodsRegistered:
         "operator.decisions.list",
         "runtime.adapters.list",
         "why.chain",
+        "runtime.autopilot.get",
+        "runtime.autopilot.set",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -1417,7 +1419,8 @@ class TestAllMethodsRegistered:
         # +1 for runtime.session.send_input (governed-shell GS-5, operator input)
         # +2 for runtime.adapters.list + why.chain (governed-shell GS-6 exposure)
         # +1 for operator.decisions.resolve (governed-shell GS-3, the one door)
-        assert total == 97
+        # +2 for runtime.autopilot.get/set (governed-shell GS-7, envelope strip)
+        assert total == 99
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1470,6 +1473,7 @@ class TestMethodClassification:
         "runtime.intervention.resolve",
         "runtime.promotion.resolve",
         "runtime.session.fork",
+        "runtime.autopilot.set",
         "nightshift.record_receipt",
         "nightshift.authorize_transition",
     }

@@ -66,7 +66,7 @@ tier: mechanical · executor: codex (adapters.list: local-qwen eligible) · prer
 - refusal mode: n/a. · receipt shape: commit only.
 - stop condition: none — pure read.
 
-### GS-7 — daemon: `runtime.autopilot.get/set`  **(FULL SANDWICH; P1, deferrable)**
+### GS-7 — daemon: `runtime.autopilot.get/set`  **(EXECUTED 2026-07-03; FULL SANDWICH → MERGE-SAFE)**
 tier: conceptual → mechanical → review · prereq: [GS-1]
 - purpose: envelope strip truth + profile switch (workspace default and at-create); set changes violation defaults/approval paths = refusal-placement config.
 - files: daemon.py, autopilot.py, tests.

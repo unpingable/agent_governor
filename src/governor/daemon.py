@@ -3682,6 +3682,190 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("runtime.intervention.list", runtime_intervention_list)
     dispatcher.register("runtime.intervention.resolve", runtime_intervention_resolve, mutating=True)
 
+    def _autopilot_view() -> dict:
+        """The envelope-strip truth (governed-shell GS-7).
+
+        The resolved WORKSPACE autopilot profile + its governance-envelope
+        settings + resolution provenance + the available profile names. Pure
+        read: `resolve_intent` reads the workspace intent/config layers; it
+        never touches a running supervised session (the supervisor does not
+        consult the autopilot/intent files — see runtime.autopilot.set).
+        """
+        from .intent import resolve_intent
+        from .autopilot import (
+            AnchorStrictness,
+            get_autopilot_profile,
+            list_autopilot_profiles,
+        )
+
+        intent, provenance = resolve_intent(state.governor_dir)
+        profile_name = intent.profile
+        config = get_autopilot_profile(profile_name)
+
+        settings: dict[str, Any] | None = None
+        if config is not None:
+            settings = {
+                "violation_default": config.violation_default.value,
+                "approval_path": config.approval_path.value,
+                "anchor_strictness": config.anchor_strictness.value,
+                "evidence_required": config.evidence_required.value,
+                "scope_enforcement": config.scope_enforcement.value,
+                "change_ceiling": (
+                    config.change_ceiling.to_dict()
+                    if config.change_ceiling
+                    else None
+                ),
+                "boil_level": config.boil_level,
+                # Envelope mode derived exactly as apply_autopilot_profile does.
+                "envelope": (
+                    "strict"
+                    if config.anchor_strictness == AnchorStrictness.HARD
+                    else "exploratory"
+                ),
+            }
+
+        return {
+            "profile": profile_name,
+            # A resolved profile name with no backing config (e.g. an env/config
+            # layer named an unknown profile) is surfaced honestly, not hidden.
+            "known_profile": config is not None,
+            "resolved_from": intent.source,
+            "reason": intent.reason,
+            "operator": intent.operator,
+            "expires_at": intent.expires_at,
+            "settings": settings,
+            "available": sorted(list_autopilot_profiles().keys()),
+            "provenance": [p.to_dict() for p in provenance],
+            # Load-bearing boundary statement (GS-7 stop condition): this surface
+            # is the workspace default, not any one running session's envelope.
+            "scope": "workspace_default",
+        }
+
+    async def runtime_autopilot_get(params: dict) -> dict:
+        """Read the workspace autopilot profile / envelope strip (GS-7).
+
+        Read-only. Mirrors `governor intent show` / the viewmodel active
+        profile so a shell renders the same governance truth the CLI does.
+        """
+        return _autopilot_view()
+
+    async def runtime_autopilot_set(params: dict) -> dict:
+        """Switch the WORKSPACE-DEFAULT autopilot profile (governed-shell GS-7).
+
+        Sets the profile that future sessions inherit at create-time (the same
+        operation as `governor code --profile`: writes the workspace intent +
+        applies the profile's envelope/boil/strict/jurisdiction files). Emits a
+        profile-change gate receipt citing the operator; the receipt IS the
+        record.
+
+        Scope is workspace-default ONLY (GS-7 stop condition: no per-RUNNING-
+        session mutation — that would be a forbidden mid-session envelope
+        change). A ``session_id`` in params is therefore rejected at the
+        mechanism layer, not silently ignored: the supervised runtime never
+        reads these files, so there is no per-session profile to set here.
+
+        Refusal (contract §1 closed vocab): an unknown profile returns
+        ``{"changed": False, "error": "unknown_profile", ...}`` — nothing is
+        written.
+        """
+        params = params or {}
+        if not isinstance(params, dict):
+            params = {}
+
+        # STOP-condition guard: this door is workspace-scoped. A per-session
+        # target is not a governed-shell refusal (no such kind) — it is a
+        # malformed call for this method. Fail closed at the mechanism layer.
+        # Key-PRESENCE, not truthiness: `{"session_id": ""}` / null / 0 still
+        # signals per-session intent and must be rejected, not slipped through.
+        if "session_id" in params:
+            raise ValueError(
+                "runtime.autopilot.set is workspace-scoped; per-session envelope "
+                "mutation is not supported (mid-session envelope change is forbidden)"
+            )
+
+        from .autopilot import (
+            apply_autopilot_profile,
+            get_autopilot_profile,
+            list_autopilot_profiles,
+        )
+        from .intent import Intent, resolve_intent, set_intent
+
+        available = sorted(list_autopilot_profiles().keys())
+        profile = params.get("profile")
+        config = (
+            get_autopilot_profile(profile) if isinstance(profile, str) else None
+        )
+        if config is None:
+            # Typed refusal — closed vocab, nothing written.
+            return {
+                "changed": False,
+                "error": "unknown_profile",
+                "profile": profile,
+                "available": available,
+            }
+
+        # Resolve the operator for the receipt (fails closed if standing is
+        # required and no verifiable token was supplied — same door discipline
+        # as the other mutating RPCs).
+        principal_id, auth_method, principal_ref = state.resolve_principal(
+            params.get("principal_id"),
+            standing_token=params.get("standing_token"),
+        )
+
+        reason = params.get("reason")
+        prior, _ = resolve_intent(state.governor_dir)  # effective resolution BEFORE
+
+        # Write-ahead: emit the profile-change receipt (the record) BEFORE
+        # effecting the change, so NO applied change can exist without a
+        # receipt. If the receipt cannot be produced, it raises and nothing is
+        # written (mechanism error, loud). The receipt records the AUTHORIZED
+        # switch — subject = the set profile; the envelope files it implies are
+        # deterministic from that profile, so no post-write `applied` echo is
+        # needed. (apply_autopilot_profile's own internal write atomicity is the
+        # existing CLI-shared behavior, not this RPC's concern.)
+        receipt = state.receipt_system.emit(
+            gate="autopilot",
+            verdict="pass",
+            subject_kind="autopilot_profile",
+            subject_bytes=profile.encode("utf-8"),
+            evidence_bundle={
+                "profile": profile,
+                "previous_profile": prior.profile,
+                "reason": reason,
+                "scope": "workspace_default",
+            },
+            gate_config={"mode": state.mode},
+            principal_id=principal_id,
+            auth_method=auth_method,
+            principal_ref=principal_ref,
+        )
+
+        # Apply the workspace default: session-layer intent + envelope files.
+        intent = Intent(
+            profile=profile,
+            reason=reason,
+            operator=principal_id,
+            source="daemon",
+        )
+        set_intent(state.governor_dir, intent)
+        apply_autopilot_profile(state.governor_dir, config)
+
+        # The returned view is the EFFECTIVE resolution after the write. A
+        # higher-priority intent layer (CLI override / GOV_PROFILE env) outranks
+        # the workspace default we just wrote, so `profile` (effective) can
+        # differ from what we set — that divergence is surfaced honestly:
+        # `requested_profile` is always the profile we wrote = the receipt
+        # subject, never silently mismatched with the effective `profile`.
+        result = _autopilot_view()
+        result["changed"] = result["profile"] != prior.profile
+        result["requested_profile"] = profile
+        result["previous_profile"] = prior.profile
+        result["receipt_id"] = receipt.receipt_id
+        return result
+
+    dispatcher.register("runtime.autopilot.get", runtime_autopilot_get)
+    dispatcher.register("runtime.autopilot.set", runtime_autopilot_set, mutating=True)
+
     def _gather_operator_feed(kinds: Any = None) -> list[dict]:
         """The unified decision feed as a list of envelope dicts.
 

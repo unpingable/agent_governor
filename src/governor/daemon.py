@@ -1295,6 +1295,12 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         response = IntentFormResponse(
             schema_id=schema.schema_id,
             values=values,
+            # Thread the escape hatch through: without it the compiler's
+            # escape_classification can never fire over RPC (it keys on
+            # response.escape_text), so a shell that sends an "Other" answer
+            # always got escape_classification=None. (Fixes the intent.compile
+            # None-vs-waiver_candidate drift maude flagged to R-MAUDE-1.)
+            escape_text=params.get("escape_text"),
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
         result = compile_intent(response, schema, governor_dir=state.governor_dir)

@@ -620,6 +620,34 @@ class TestIntent:
         assert "intent_profile" in result
         assert "receipt_hash" in result
 
+    @pytest.mark.asyncio
+    async def test_compile_threads_escape_text_and_classifies(self, dispatcher_and_state):
+        """The intent.compile RPC threads escape_text so escape_classification
+        fires over the wire (regression: it was dropped → always None, the drift
+        maude flagged to R-MAUDE-1). An 'Other' answer that reads as a waiver
+        classifies as waiver_candidate, not None."""
+        d, _ = dispatcher_and_state
+        schema = (await roundtrip(d, "intent.schema",
+                                  {"template_name": "session_start"}))["result"]
+        values = {}
+        for field in schema.get("fields", []):
+            if field.get("default") is not None:
+                values[field["field_id"]] = field["default"]
+            elif field.get("options"):
+                values[field["field_id"]] = field["options"][0]["value"]
+
+        resp = await roundtrip(d, "intent.compile",
+                               {"schema_id": schema["schema_id"], "values": values,
+                                "template_name": "session_start",
+                                "escape_text": "please waive the tests requirement"}, id=3)
+        assert resp["result"]["escape_classification"] == "waiver_candidate"
+
+        # No escape_text → None (unchanged, honest absence).
+        resp2 = await roundtrip(d, "intent.compile",
+                                {"schema_id": schema["schema_id"], "values": values,
+                                 "template_name": "session_start"}, id=4)
+        assert resp2["result"]["escape_classification"] is None
+
 
 # =============================================================================
 # Handler: receipts.*

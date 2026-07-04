@@ -53,7 +53,16 @@ As of 2026-07-04 (campaign filed; CD-0 landing in progress).
   Commit authority was session-lane (operator direct), not conveyor-granted
   — recorded in approval.md.
 
+- **CD-3 DONE (2026-07-04):** maude M-2 landed (`dc71045`, maude repo —
+  local-only by remote config). `src/maude/plan/` — M-1 parser with all five
+  refusal classes; three-valued strict admission (governed plans fail CLOSED
+  with no witness resolver — CD-4 wires the conveyor projection);
+  `run <plan.md>` maps to the existing daemon surface, zero contract changes.
+  maude suite 272 green + ruff clean; ROADMAP M-2 checked. Live-daemon smoke
+  owed at next daemon-up.
+
 ## Not started
 
-- CD-3 (maude M-2 plan ingestion), CD-4 (specimen 2: playbook docs
-  normalization via maude + conveyor, two receipt surfaces).
+- CD-4 (specimen 2: playbook docs normalization via maude M-2 + conveyor,
+  two receipt surfaces — includes wiring the v0 witness resolver to the
+  conveyor artifacts).

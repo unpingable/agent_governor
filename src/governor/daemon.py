@@ -3948,10 +3948,9 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         v0 boundary: an already-resolved decision is no longer pending, so it
         returns decision_not_found; the contract's richer `already_resolved`
         idempotence (echo the original outcome) needs a resolution ledger and is
-        deferred. Three kinds route here (intervention/violation/promotion).
-        docket_case is now sourced into the feed (GS-2b list) but its route
-        (DocketManager.rule_*) is GS-3-remainder — a mutation/authority sandwich
-        deliberately not wired here; the door fails closed on it (below).
+        deferred. Four kinds route here: intervention / violation / promotion /
+        docket_case (the last routes to DocketManager.rule_* — GS-3 docket route;
+        the returned precedent is the record, the door mints nothing).
         """
         if not isinstance(params, dict):
             params = {}
@@ -4009,16 +4008,60 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "scope": args.get("scope"),
                     "expiry": args.get("expiry"),
                 })
-        # docket_case is sourced into the feed (GS-2b) but its resolve route
-        # (DocketManager.rule_*) is GS-3-remainder — a mutation/authority
-        # sandwich, deliberately not wired here. The door fails closed: nothing
-        # mutates and a structured error is returned. Docket rulings currently
-        # go through `governor rule` / the docket surface until GS-3 opens the
-        # route. (See docs/campaigns/governed-shell/OBSTRUCTION-gs2b-
-        # admissibility-held.md § Resolve interaction.) A truly-unknown kind
-        # hits the same guard — either way, raise rather than invent a
-        # door-level refusal string outside the closed resolve-error vocabulary.
-        raise ValueError(f"decision kind not routable through the door yet: {kind}")
+        if kind == "docket_case":
+            # Route to the docket adjudicator (GS-3 docket route). The ruling
+            # method is chosen by the option action (gated to the case type by
+            # the aggregator, so no ruling the case rejects is ever offered); the
+            # case is identified by its number. The returned PrecedentRecord IS
+            # the record — the door mints nothing. Underlying refusals (case not
+            # pending / wrong type) pass through verbatim as the subsystem raises.
+            #
+            # Atomicity: the feed lookup above and the rule_* call below run with
+            # no `await` between them, so on the single-threaded daemon they are
+            # one critical section (no task interleave); and rule_* fails closed
+            # on an already-ruled case, so even a cross-process race (CLI ruling
+            # the same case) cannot double-rule — the loser raises verbatim.
+            #
+            # The case number is the source native_id (the routing identity,
+            # always present), NOT a caller field.
+            try:
+                case_number = int(item["source"]["native_id"])
+            except (TypeError, ValueError, KeyError):
+                return {"resolved": False, "error": "decision_not_found"}
+            mgr = state.docket_manager
+            # Reason is a benign annotation forwarded from args. Exception SCOPE
+            # is NOT caller-controlled: the offered option declares no scope
+            # (args_schema=None), so the door grants only the narrowest
+            # `single_instance` — forged args cannot broaden the exception
+            # (no privilege escalation via args). A wider scope needs a future
+            # option that declares the choice in its args_schema.
+            rationale = args.get("reason") or args.get("rationale") or ""
+            if action == "sustain":
+                precedent = mgr.rule_sustain(case_number, rationale)
+            elif action == "amend":
+                precedent = mgr.rule_amend(case_number, rationale)
+            elif action == "grant_exception":
+                precedent = mgr.rule_grant_exception(
+                    case_number, scope="single_instance", rationale=rationale
+                )
+            elif action == "reverify":
+                precedent = mgr.rule_reverify(case_number, rationale)
+            elif action == "dismiss":
+                precedent = mgr.rule_dismiss(case_number, rationale)
+            else:
+                return {"resolved": False, "error": "option_not_available"}
+            return {
+                "resolved": True,
+                "kind": "docket_case",
+                "ruling": action,
+                "precedent": precedent.to_dict(),
+            }
+        # Unreachable defensively: the feed sources only the four routable kinds
+        # above (intervention/violation/promotion/docket_case). A present-but-
+        # unroutable kind would be a feed/router mismatch bug — raise a mechanism
+        # error rather than invent a door-level refusal string outside the closed
+        # resolve-error vocabulary.
+        raise ValueError(f"decision kind not routable through the door: {kind}")
 
     dispatcher.register("operator.decisions.resolve", operator_decisions_resolve, mutating=True)
 

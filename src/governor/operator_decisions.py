@@ -383,14 +383,30 @@ def _promotion_options() -> tuple[DecisionOption, ...]:
     )
 
 
-def _docket_options() -> tuple[DecisionOption, ...]:
-    return (
-        DecisionOption("s", "sustain", "sustain", None),
-        DecisionOption("a", "amend", "amend", None),
-        DecisionOption("g", "grant_exception", "grant_exception", None),
-        DecisionOption("v", "reverify", "reverify", None),
-        DecisionOption("d", "dismiss", "dismiss", None),
-    )
+# Rulings are case-type-specific: DocketManager.rule_sustain/amend/grant_exception
+# accept only CONTESTED cases; rule_reverify/dismiss only STALE ones. Offering a
+# ruling the case type rejects would print a card key that can only error, so the
+# option set is gated on case_type (the card prints only actionable rulings).
+_CONTESTED_DOCKET_OPTIONS = (
+    DecisionOption("s", "sustain", "sustain", None),
+    DecisionOption("a", "amend", "amend", None),
+    DecisionOption("g", "grant_exception", "grant_exception", None),
+)
+_STALE_DOCKET_OPTIONS = (
+    DecisionOption("v", "reverify", "reverify", None),
+    DecisionOption("d", "dismiss", "dismiss", None),
+)
+
+
+def _docket_options(case_type: Any) -> tuple[DecisionOption, ...]:
+    ct = _value(case_type)
+    if ct == "contested":
+        return _CONTESTED_DOCKET_OPTIONS
+    if ct == "stale":
+        return _STALE_DOCKET_OPTIONS
+    # Unknown/absent case_type: offer nothing actionable rather than guess a
+    # ruling the backing case would reject (the card renders with no options).
+    return ()
 
 
 def _admissibility_options() -> tuple[DecisionOption, ...]:
@@ -538,7 +554,7 @@ def _docket_case_item(item: Any) -> DecisionItem:
                 "freshness_info",
             ),
         ),
-        options=_docket_options(),
+        options=_docket_options(case_type),
     )
 
 

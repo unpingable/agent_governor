@@ -150,6 +150,24 @@ release, optional stream read-timeout, verbatim params) → MERGE-SAFE. verify-r
 **This unblocks GS-9** (maude replaces its hand-rolled client with the package)
 for the sibling maude session.
 
+## 2026-07-03 — GS-3 docket resolve route landed (the one door now covers docket)
+
+Closed the completeness gap GS-2b opened: docket cases were listable but the one
+mutation door failed closed on them. Now `operator.decisions.resolve` routes a
+`docket_case` to `DocketManager.rule_*` — the returned precedent IS the record,
+the door mints nothing. Options are gated on case_type in the aggregator
+(CONTESTED → sustain/amend/grant_exception; STALE → reverify/dismiss; unknown →
+none), so the door never receives a ruling the case type would reject — that
+pairing is unrepresentable in the feed, not merely guarded. Idempotence (v0): a
+ruled case drops from the re-derived feed → re-resolve is `decision_not_found`.
+No privilege escalation: the case number is the source native_id (not a caller
+field), and `grant_exception` scope is fixed at the narrowest `single_instance`
+(forged `args.scope` cannot broaden the exception). FULL SANDWICH (mutation
+door): codex BLOCK (caller-controlled scope) + WARN + NIT → all RESOLVED →
+MERGE-SAFE. verify-run `cdd283ce` [pass]; 386 in the operator/docket/daemon band
+green. The one door now covers all four sourced kinds (intervention/violation/
+promotion/docket_case); only GS-2b's re-tiered admissibility/HELD remain AG-side.
+
 ## Current next
 
 Daemon slices unblocked: **GS-2** (decisions.list + docket/admissibility

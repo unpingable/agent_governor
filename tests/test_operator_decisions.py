@@ -144,7 +144,25 @@ def test_docket_case_normalizes_with_contract_options() -> None:
     assert item.kind == "docket_case"
     assert item.source["native_id"] == "7"
     assert item.created_at == "2026-07-02T10:00:00+00:00"
-    assert option_keys(item) == ("s", "a", "g", "v", "d")
+    # A CONTESTED case offers only the contested rulings (sustain/amend/grant).
+    assert option_keys(item) == ("s", "a", "g")
+
+
+def test_docket_options_are_gated_on_case_type() -> None:
+    def opts(case_type):
+        feed = build_decision_feed(docket_cases=[{
+            "case_number": 1, "case_type": case_type, "claim_id": "c",
+            "anchor_id": None, "status": "pending", "description": "x",
+            "evidence": [], "created_at": datetime(2026, 7, 2, tzinfo=timezone.utc),
+        }])
+        return option_keys(feed[0])
+
+    # Contested rulings vs stale rulings never mix — the card can only print an
+    # action the backing case will accept.
+    assert opts("contested") == ("s", "a", "g")
+    assert opts("stale") == ("v", "d")
+    # An unknown case_type offers nothing actionable rather than guess a ruling.
+    assert opts("mystery") == ()
 
 
 def test_admissibility_question_normalizes_with_answer_schema() -> None:
@@ -609,7 +627,8 @@ def test_build_feed_from_runtime_threads_docket_cases() -> None:
     item = feed[0]
     assert item.kind == "docket_case"
     assert item.source == {"subsystem": "docket", "native_id": "7"}
-    assert [o.key for o in item.options] == ["s", "a", "g", "v", "d"]
+    # A STALE case offers only the stale rulings (reverify/dismiss).
+    assert [o.key for o in item.options] == ["v", "d"]
     assert item.detail["freshness_info"] == {"age_days": 42}
 
 

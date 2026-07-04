@@ -144,7 +144,8 @@ async def test_operator_decisions_list_gathers_docket_case(dispatcher, gov_dir):
     it = items[0]
     assert it["kind"] == "docket_case"
     assert it["source"] == {"subsystem": "docket", "native_id": "7"}
-    assert [o["key"] for o in it["options"]] == ["s", "a", "g", "v", "d"]
+    # STALE case → stale rulings only (reverify/dismiss).
+    assert [o["key"] for o in it["options"]] == ["v", "d"]
     assert it["detail"]["freshness_info"] == {"age_days": 42}
     # kinds filter honors the new kind.
     resp2 = await _call(d, "operator.decisions.list", {"kinds": ["docket_case"]})
@@ -182,17 +183,64 @@ async def test_docket_and_intervention_coexist_as_distinct_items(dispatcher, gov
 
 
 @pytest.mark.asyncio
-async def test_resolve_fails_closed_on_docket_case(dispatcher, gov_dir):
-    """docket_case is listable but its resolve route (DocketManager.rule_*) is
-    GS-3-remainder. The one door fails closed: a structured error, nothing
-    mutates. (See OBSTRUCTION-gs2b-admissibility-held.md § Resolve interaction.)"""
+async def test_resolve_routes_docket_stale_dismiss(dispatcher, gov_dir):
+    """GS-3 docket route: a STALE docket case resolves through the ONE door to
+    DocketManager.rule_dismiss; the returned precedent IS the record, and the
+    ruled case drops from the feed (idempotence → decision_not_found on retry)."""
     d, _ = dispatcher
-    _seed_docket_case(gov_dir, case_number=9)
+    _seed_docket_case(gov_dir, case_number=9)  # case_type="stale"
     listed = await _call(d, "operator.decisions.list")
     item = listed["result"]["items"][0]
     assert item["kind"] == "docket_case"
+    assert [o["key"] for o in item["options"]] == ["v", "d"]
+
+    resp = await _call(d, "operator.decisions.resolve",
+                       {"decision_id": item["decision_id"], "option_key": "d",
+                        "args": {"reason": "accepted"}})
+    res = resp["result"]
+    assert res["resolved"] is True
+    assert res["kind"] == "docket_case"
+    assert res["ruling"] == "dismiss"
+    assert res["precedent"]["ruling"] == "dismiss"
+    assert res["precedent"]["case_number"] == 9
+
+    # Ruled → no longer pending → gone from the feed; re-resolve is not-found.
+    after = await _call(d, "operator.decisions.list")
+    assert after["result"]["count"] == 0
+    again = await _call(d, "operator.decisions.resolve",
+                        {"decision_id": item["decision_id"], "option_key": "d"})
+    assert again["result"] == {"resolved": False, "error": "decision_not_found"}
+
+
+@pytest.mark.asyncio
+async def test_resolve_routes_docket_contested_sustain(dispatcher, gov_dir):
+    """A CONTESTED docket case routes to rule_sustain and offers only the
+    contested rulings (no reverify/dismiss the case type would reject)."""
+    d, _ = dispatcher
+    _seed_docket_case(gov_dir, case_number=4, case_type="contested")
+    listed = await _call(d, "operator.decisions.list")
+    item = listed["result"]["items"][0]
+    assert [o["key"] for o in item["options"]] == ["s", "a", "g"]
     resp = await _call(d, "operator.decisions.resolve",
                        {"decision_id": item["decision_id"], "option_key": "s"})
-    # Fail-closed: structured JSON-RPC error, not a resolved:true, not a crash.
-    assert "error" in resp
-    assert "not routable through the door yet" in resp["error"]["message"]
+    res = resp["result"]
+    assert res["resolved"] is True and res["ruling"] == "sustain"
+    assert res["precedent"]["case_number"] == 4
+
+
+@pytest.mark.asyncio
+async def test_resolve_grant_exception_scope_not_forgeable(dispatcher, gov_dir):
+    """No privilege escalation via forged args: the grant_exception option
+    declares no scope, so a caller-supplied args.scope='project' cannot broaden
+    the exception — the door grants only the narrowest single_instance."""
+    d, _ = dispatcher
+    _seed_docket_case(gov_dir, case_number=6, case_type="contested")
+    listed = await _call(d, "operator.decisions.list")
+    item = listed["result"]["items"][0]
+    resp = await _call(d, "operator.decisions.resolve",
+                       {"decision_id": item["decision_id"], "option_key": "g",
+                        "args": {"scope": "project", "reason": "try to widen"}})
+    res = resp["result"]
+    assert res["resolved"] is True and res["ruling"] == "grant_exception"
+    # Forged wider scope ignored — narrowest scope granted.
+    assert res["precedent"]["scope"] == "single_instance"

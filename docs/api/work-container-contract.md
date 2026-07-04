@@ -24,9 +24,10 @@ Read this one first.
 ## 1. What a WorkContainer is
 
 A **WorkContainer** is a sealed, bounded, serialized unit of *already-admitted*
-work that can move across provider boundaries — Maude, Hermes, Porter, Polytoken,
-NQ, Antigravity — without losing custody or letting the transit system pretend to
-be the cargo.
+work that can move across provider boundaries — Hermes, Porter, Polytoken, NQ,
+Antigravity — without losing custody or letting the transit system pretend to be
+the cargo. (Maude is not in this list: it is an operator/ingress *consumer*, not a
+dispatch target — see provider-integration.md §1.)
 
 It is a **bill of lading, not a second Governor wearing a fake mustache.**
 

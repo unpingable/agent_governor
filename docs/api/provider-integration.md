@@ -15,8 +15,10 @@ This is a projection of the shared law in
 provider** direction. Read that document first.
 
 A *provider* is an external system that **performs, transforms, transports, or
-witnesses** work — Maude, Hermes, Porter, Polytoken, NQ, Antigravity. Contrast an
-*agent* (`agent-integration.md`), which *asks and proposes*.
+witnesses** work — Claude Code, Hermes, Porter, Polytoken, NQ, Antigravity.
+Contrast an *agent* (`agent-integration.md`), which *asks and proposes*, and an
+*operator/ingress consumer* (e.g. Maude), which submits plans and reads decisions
+but is never a dispatch target (§1).
 
 ---
 
@@ -28,7 +30,7 @@ instead of a fake execution one):
 
 | provider_kind          | Examples                        | Primary verb        |
 | ---------------------- | ------------------------------- | ------------------- |
-| `execution_harness`    | Maude, Hermes, Antigravity CLI  | run                 |
+| `execution_harness`    | Hermes, Antigravity CLI         | run                 |
 | `agent_runtime`        | Claude Code, Codex, Antigravity | run (agentic)       |
 | `transform_provider`   | Polytoken                       | transform           |
 | `substrate_courier`    | Porter                          | transport           |
@@ -43,6 +45,19 @@ Descriptor shape is normative in
 **always empty: a provider descriptor never declares authority.** (An external
 provider is never an AG component; AG's own components are not described by this
 schema. The schema enforces this with `maxItems: 0`.)
+
+### 1.1 Maude is NOT a provider (deliberate non-example)
+
+A provider is something AG can dispatch a WorkContainer *toward* and later receive
+testimony *from*. The **Maude** operator surface does not fit that: it is an
+operator/ingress **consumer** — it submits plans and reads AG decisions /
+supervised-run state, but AG does not send it WorkContainers. It talks to the
+clerk; it is not a bailiff. Modeling the operator desk as a provider now would be a
+category error that teaches later integrations the wrong shape. If Maude later
+exposes a *provider-facing execution service* (e.g. `maude-supervisor-provider`),
+**that service** may register as its own descriptor — but the operator surface
+itself is not a provider. The first honest provider descriptor is Claude Code
+(`agent_runtime`, `src/governor/provider_descriptors.py`).
 
 ## 2. Provider verbs
 
@@ -87,7 +102,7 @@ provider.success              ≠  reliance
 Less churchy:
 
 ```
-Maude success       ≠ admitted success
+Claude Code success ≠ admitted success
 Hermes capability   ≠ standing
 Polytoken transform ≠ semantic preservation
 Porter receipt      ≠ policy permission
@@ -166,23 +181,24 @@ to Slice 3 (needs a live provider): the runtime-conformance **test suite**.
 ## 7. Pass / fail criteria for any future provider work
 
 **PASS:** reuses `RuntimeAdapter` / `governed_dispatch`; treats the WorkContainer
-as a projection; keeps Maude as *one* provider (not the privileged spine); gives
+as a projection; keeps **no single provider as the privileged spine** (Claude Code
+is one provider among future many; Maude is a consumer, not a provider); gives
 Polytoken a transform lane; treats Antigravity as a *test case*; adds conformance
 tests before any live integration.
 
 **FAIL:** a new HTTP API first; a registry that *implies* provider trust; a
 duplicate verdict enum; a WorkContainer that grants permissions; provider
-"success" entering receipt/reliance without AG review; Maude becoming the
-mandatory gateway for all harnesses; Antigravity-specific permissions leaking into
-the generic contract.
+"success" entering receipt/reliance without AG review; **any one surface (e.g.
+Maude) becoming the mandatory gateway** for all harnesses; Antigravity-specific
+permissions leaking into the generic contract.
 
-## 8. Not in this slice (gated follow-ons)
+## 8. Build-vector status
 
-- No `ProviderRegistry` / `ProviderDescriptor` Python (Slice 2 — gated on this
-  contract being reviewed: it must first establish what a descriptor *means*, what
-  conformance does/doesn't imply, how provider status is kept from becoming an AG
-  verdict, and how a WorkContainer projects the existing machinery).
-- No conforming-provider declaration; no Maude/Claude-Code registration (Slice 3).
-- No live `governed_dispatch` emission/consumption of a WorkContainer (Slice 4,
-  **gated on CD-4**).
-- No Antigravity adapter or probe (Slice 5).
+- Slice 1 (this contract) — landed + adversarially reviewed + hardened.
+- **Slice 2** `ProviderRegistry` primitive — landed (`src/governor/provider_registry.py`).
+- **Slice 3** first structural descriptor — landed: Claude Code (`agent_runtime`),
+  `runtime_capabilities` projected live from `ClaudeCodeAdapter`, STRUCTURAL only
+  (`src/governor/provider_descriptors.py`). Maude deliberately excluded (§1.1).
+- Still gated: the runtime-conformance **test suite** (needs a live provider);
+  **live `governed_dispatch` emission/consumption of a WorkContainer (Slice 4,
+  gated on CD-4)**; the Antigravity spike (Slice 5).

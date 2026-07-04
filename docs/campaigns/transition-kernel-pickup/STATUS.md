@@ -2,6 +2,27 @@
 
 As of 2026-07-02 evening (B1 executed; prior snapshots preserved below).
 
+## 2026-07-03 — B4 verify-and-adopt CLOSED (Slice 1b fully on main)
+
+Slice 1b (AG standing grant-use adapter, `activation.py` Office 2 +
+`standing_grant_use.py`) is confirmed ADOPTED and VERIFIED on main:
+- **Adoption:** `git merge-base main feat/transition-kernel-slice-1b` == the
+  branch tip `ae05353` (Step C2, witness-integrity on the REFUSED path), i.e.
+  the branch is entirely contained in main — zero unadopted commits. Steps A/B
+  (`24acd8f`, `f003519`) and C2 (`ae05353`) all reachable from main. The branch
+  is a stale pointer (safe to `git branch -d`; remote deletion is operator's
+  call).
+- **Verification:** the Slice 1b band (standing_grant_use, activation[+drill/
+  preflight], transition_enforce_3b1/3b2/3c, runtime_transition_probe[+enforce/
+  supervisor/gap3b], standing_envelope_corpus, corpus_contract, drill_temporal_
+  lapse) passes on main. verify-run receipt `59cf2553` [pass]
+  exit_source=child_exit.
+
+B4 was "verify-and-adopt", not "build" — the work landed overnight; this closes
+the confirmation. Next transition-kernel work: **B2** (invariant survival map)
+per NEXT.md; B6/B7 and the 4 remaining B5 drills (blocked on operator/prior-gap,
+`B5-work-order.md`) after.
+
 ## 2026-07-03 — B5 quartet + freshness_subcase DONE (corpus 9->13)
 
 - B5 A-1..A-4 (scope_mismatch/token_revoked/token_expired/unknown_token) +

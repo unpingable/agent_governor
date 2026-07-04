@@ -21,7 +21,7 @@ already open (pathverdict tier-1 extraction in scratch)) · Crosswalk:
 
 | what's new | tier | AG impact |
 |---|---|---|
-| Admissibility Kernels 1.0 (9 modules: Authority, StateTransition, Derivation, Execution, Corrective, Freshness, SurfaceAuthorization, WitnessInvariance + aggregator) | [1.0] | citable NOW; A3b adjudicates against AG schemas |
+| Admissibility Kernels 1.0 (8 public modules: Authority, StateTransition, Derivation, Execution, Corrective, Freshness, SurfaceAuthorization, WitnessInvariance; + the aggregator — count corrected per R-LEAN-2) | [1.0] | citable NOW; A3b adjudicates against AG schemas |
 | Witnessed Derivation Calculus v1.4.0 (Mathlib-free; Lift, non-manufacture, ResourceCheckerExec) | [1.0-separate] | citable for bridge composition |
 | BoundedCalculi v3.0.0 (9 bounded judgments; `checkpoint_mints_nothing`, ticket-accepted≠executed…) | ANNEX | cite exact theorem only; cannot ratify |
 | v4/v5/v6 custody campaign — priced contraction, "normalization cannot forge payment", **v6 finite-support checker (typed CheckResult naming the offender; `firstDeficient_decides_check`; decidable screens)** | SCRATCH (v6.0.0 tagged) | pilot-only (slice B6); uncitable as authority until promoted |
@@ -37,16 +37,18 @@ already open (pathverdict tier-1 extraction in scratch)) · Crosswalk:
   `expired`. AG's public refusal vocab stays coarser than Lean Freshness [1.0]
   by design until a routing consumer forces a split. Alignment gap, not a
   blocker. (`.governor/backlog/freshness-granularity.json`; pickup INVENTORY.)
-- `LEAN_CITATION_TIER_AUDIT` — AG docs citing lean predate the tier explosion;
-  each citation needs its tier marker verified (a [1.0] cite made when 1.0 was
-  the whole repo may now accidentally reference moved/renamed annex content).
+- `LEAN_CITATION_TIER_AUDIT` — **DISCHARGED 2026-07-04 by R-LEAN-2** (table in
+  reconciliation INVENTORY §3): zero down-tier cites used as authority;
+  proof_seam.py line-accurate at HEAD `84d6d24`; residual debt is cosmetic
+  (retired "Calculus" name + missing tier markers in dated gap specs,
+  fix-on-touch).
 
 ## 4. Slices
 
 ### R-LEAN-1 — checklist adjudication
 = reconciliation slices **A3a/A3b** (campaign NEXT.md) — not duplicated here.
 
-### R-LEAN-2 — citation-tier audit of AG
+### R-LEAN-2 — citation-tier audit of AG  **(EXECUTED 2026-07-04 — agent sweep + Fable adjudication at lean HEAD `84d6d24` (the `ff4aadf` pin below was stale); table → reconciliation INVENTORY §3; zero authority-laundering cites; 1 live-doc fix + fix-on-touch flags)**
 tier: mechanical · executor: codex · prereq: [A3a]
 - purpose: every AG reference to a Lean module/theorem carries the correct current tier marker; moved/renamed targets flagged.
 - files: grep `Lean\|lean/LeanProofs\|expired_not_fresh\|CorrectiveBoundary` across docs/ src/ specs/; table → reconciliation INVENTORY §3.

@@ -99,6 +99,38 @@ should not exist). Evidence basis: §A3a tables.
 linearity); one doc-level midpoint firing already recorded via B1. Citation
 tiers honored: v6/SCRATCH screens used as SCREENS only.
 
+### R-LEAN-2 — citation-tier audit of AG (executed 2026-07-04, lean HEAD `84d6d24`)
+
+Roadmap slice `docs/roadmaps/tools/lean.md` §R-LEAN-2 (its receipt pin
+`ff4aadf` was stale — the audit cites the HEAD actually read). Sweep: full-repo
+citation inventory (agent-assembled, ~45 files); tiers verified against
+per-file `Custody-Class` headers + the `AdmissibilityKernels` aggregator scope
+fence, not assumed from directory. **Refusal-mode result: ZERO
+down-tier-citations-used-as-authority.** Findings:
+
+| AG cite (file) | cited name | found-in-lean-at | tier | verdict |
+|---|---|---|---|---|
+| `src/governor/proof_seam.py:114/138/150` | `expired_not_fresh` / `no_standing_never_authorized` / `no_basis_never_authorized` | `Freshness.lean:179` / `Authority.lean:109` / `Authority.lean:89` | [1.0] | **CORRECT — line-accurate at HEAD** (all three verified) |
+| `docs/roadmaps/tools/lean.md:24` | "Admissibility Kernels 1.0 (9 modules…)" | aggregator declares **8 public modules** (+ the aggregator itself) | [1.0] | **count-stale → FIXED this pass** |
+| `specs/gaps/GOV_GAP_BASIS_FOR_BINDING_SEMANTICS_001.md` | "four-module Admissibility kernel"; "Admissibility Calculus 1.0" | 1.0 surface is 8 modules; **"Calculus" retired as doctrine** (aggregator renamed `CalculusOne`→`Kernels`: "calculus overclaimed") | [1.0] | `renamed_target` + count-stale — **fix-on-touch** (dated record; content sound) |
+| `specs/gaps/GOV_GAP_CORRECTIVE_TRANSITION_BOUNDARY_001.md` | Corrective [1.0] / CorrectiveBoundary annex | confirmed: Corrective in the 8; CorrectiveBoundary in kernel-adjacent ANNEX | mixed | **CORRECT** tiers; uses retired "Calculus" name — fix-on-touch |
+| `specs/gaps/GOV_GAP_PUBLIC_GATE_CONFORMANCE_001.md` | "Admissibility Calculus 1.0" | renamed | — | `renamed_target` — fix-on-touch |
+| `specs/gaps/GOV_GAP_RETROACTIVE_LEGITIMATION_BOUNDARY_001.md` | AmendmentFragment · ContractionHinge · RetroactiveLegitimation | all three: `Custody-Class: UNRATIFIED-CANDIDATE` (headers verified) | CANDIDATE | name-early recording (legitimate) but **no tier markers** — annotate on touch; NOT used as authority |
+| `specs/gaps/GOV_GAP_WITNESS_INVARIANCE_QUALIFICATION_001.md` | WitnessInvariance, `moves_implies_not_encapsulated` | module in the 8; theorem exists | [1.0] | **CORRECT** |
+| `specs/gaps/GOV_GAP_AUTHORIZATION_SAFETY_BRIDGE_001.md` | SafetyBridge/AuthorizedStepNotSafe family (8 modules) | now classified **ANNEX consumer specimens** | ANNEX | used as gap-naming smell, not authority — acceptable; tier markers absent, annotate on touch |
+| `working/GOV_GAP_AUTHORIZATION_SHELF_LIFE_001.md` | Freshness "four failure modes / four negative theorems" (lists 5 names) | five negative theorems (opaque `Time.le` splits the incoherence directions) | [1.0] | **PASS with note** — 4 modes / 5 theorems is coherent (matches the B2 5-vs-4 refinement + freshness-granularity gap); citation explicitly non-load-bearing per its own custody note |
+| `working/GOV_GAP_OUT_OF_SCOPE_RUNTIME_LAUNDERING_001.md` | LocalBoundary | `Custody-Class: ANNEX` (verified) | ANNEX | file is an honest failed-grounding record — no action |
+| `docs/doctrine/verifier-classes-and-calibration-boundary.md` | Witnessed (ANNEX), Scratch.WitnessedResourceSequent (SCRATCH) | as labeled | mixed | **CORRECT — tiers labeled in-line** |
+| `docs/constellation-wire-plan.md:204` | `expired_not_fresh` mapping to `standing_before_spendability_not_bounded` | [1.0]; the *licensing* question (wall-validity-shaped theorem vs monotonic-gap refusal) | [1.0] | already tracked — backlog `proof-seam-citation-reconciliation`; no new finding |
+| campaign records (pickup + reconciliation) | SEQ2/3, checkpoint_mints_nothing, firstDeficient, etc. | tiers corrected by B2 (2026-07-04) / honored by A3b's own summary | mixed | **CURRENT** |
+
+**Summary:** the load-bearing code citation (proof_seam.py) is line-accurate;
+no SCRATCH/CANDIDATE cite is used as authority anywhere; the debt is
+*cosmetic-tier* — the retired "Calculus" name and missing tier markers in
+dated gap specs (fix-on-touch, mass-editing frozen records not warranted) and
+one live-doc count error (fixed). The `LEAN_CITATION_TIER_AUDIT` named gap in
+lean.md §3 is discharged by this table.
+
 ### A3a appendix — schema extraction for the Lean checklist (executed 2026-07-02)
 
 #### 3a.1 Receipt-kind × gate matrix

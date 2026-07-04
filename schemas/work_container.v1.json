@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpingable.com/agent_gov/schemas/work_container.v1.json",
   "title": "WorkContainer v1 (DRAFT / CANDIDATE)",
-  "$comment": "STATUS: DRAFT/CANDIDATE — non-binding until ratified and a first conforming implementation exists. This schema exports names for existing AG law; it does not create a new authority surface. WorkContainer carries admitted work across provider boundaries. It does NOT admit work, grant standing, or replace RationCard/ReviewPacket/governed_dispatch. Every field projects a shipped AG object; no field mints authority. See docs/api/work-container-contract.md.",
+  "$comment": "STATUS: DRAFT/CANDIDATE — non-binding until ratified and a first conforming implementation exists. This schema exports names for existing AG law; it does not create a new authority surface. A schema-valid WorkContainer is NEVER admission: possession/validity is not sufficient to invoke or rely — the admission_ref points to the AG gate receipt that admitted the work, and reliance requires re-verifying that receipt, not trusting the container. WorkContainer carries admitted work across provider boundaries; it does NOT admit work, grant standing, or replace RationCard/ReviewPacket/governed_dispatch. No law-bearing field is invented; scope/ration are read-only PROJECTIONS of a RationCard (a provider may only further restrict them, never treat them as the grant). See docs/api/work-container-contract.md.",
   "type": "object",
   "$defs": {
     "sha256Ref": {
@@ -12,7 +12,7 @@
     },
     "capabilityClass": {
       "type": "string",
-      "$comment": "projects from: chain_gate.CapabilityClass — reused verbatim, not a new enum.",
+      "$comment": "vocabulary reused verbatim from chain_gate.CapabilityClass — not a new enum.",
       "enum": [
         "file_read",
         "file_write",
@@ -28,10 +28,11 @@
   "required": [
     "schema_version",
     "work_id",
+    "admission_ref",
     "origin",
     "intent",
-    "scope",
-    "ration",
+    "scope_projection",
+    "ration_projection",
     "custody"
   ],
   "additionalProperties": false,
@@ -42,11 +43,16 @@
     "work_id": {
       "type": "string",
       "minLength": 1,
+      "$comment": "Fresh container identifier. NOT projected from a shipped object; it is envelope metadata, not a law-bearing field.",
       "description": "Stable id for this container."
+    },
+    "admission_ref": {
+      "$ref": "#/$defs/sha256Ref",
+      "$comment": "projects from: gate_receipt.GateReceipt (the AG admission/dispatch decision that admitted this work). REQUIRED — a container without it is not admitted work. This ref is a citation to be RE-VERIFIED, never a substitute for verifying it. does not mint: authority."
     },
     "origin": {
       "type": "object",
-      "$comment": "projects from: plan_review.Proposal (proposal_ref) / playbooks PlaybookSpec|QueuedPlaybook digest (playbook_ref) / standing_client (standing_basis_ref). does not mint: standing.",
+      "$comment": "projects from: plan_review.Proposal (proposal_ref) / playbooks PlaybookSpec|QueuedPlaybook digest (playbook_ref) / standing verification receipt (standing_basis_ref). does not mint: standing.",
       "additionalProperties": false,
       "properties": {
         "proposal_ref": { "$ref": "#/$defs/sha256Ref" },
@@ -68,21 +74,40 @@
       "$comment": "projects from: plan-envelope-v0 goal (one-sentence outcome).",
       "description": "One-sentence outcome. Advisory prose, not a permission."
     },
-    "scope": {
+    "capability_requirements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/capabilityClass" },
+      "$comment": "A REQUIREMENT expressed in the chain_gate.CapabilityClass vocabulary (not projected from a shipped instance): the CapabilityClass values a provider must support to accept this container.",
+      "description": "CapabilityClass values a provider must support to accept this container."
+    },
+    "scope_projection": {
       "type": "object",
-      "$comment": "projects from: playbooks.RationCard allowed_write_paths + QueuedPlaybook allowed_paths/forbidden_paths. Read-only copy; never re-derived, never expanded.",
+      "$comment": "projects from: playbooks.RationCard allowed_write_paths + QueuedPlaybook allowed_paths/forbidden_paths. READ-ONLY snapshot of the cited RationCard (source_ref). NOT a grant: a provider MAY only further restrict; it may never treat this as permission. AG dispatch (governed_dispatch) remains the enforcement source. does not grant: permission.",
       "additionalProperties": false,
       "properties": {
-        "allowed_paths": { "type": "array", "items": { "type": "string" } },
+        "source_ref": {
+          "$ref": "#/$defs/sha256Ref",
+          "$comment": "Digest of the RationCard/QueuedPlaybook this scope projects from. Required so the projection is re-verifiable against its source."
+        },
+        "allowed_read_paths": { "type": "array", "items": { "type": "string" } },
+        "allowed_write_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "$comment": "projects from: RationCard.allowed_write_paths (write scope, kept distinct from read)."
+        },
         "forbidden_paths": { "type": "array", "items": { "type": "string" } }
       },
-      "required": ["allowed_paths", "forbidden_paths"]
+      "required": ["source_ref"]
     },
-    "ration": {
+    "ration_projection": {
       "type": "object",
-      "$comment": "projects from: playbooks.RationCard (ration_card.py) locked axes. does not replace RationCard; carries a read-only projection of it. does not grant permission.",
+      "$comment": "projects from: playbooks.RationCard (ration_card.py) locked axes. READ-ONLY snapshot of the cited RationCard (source_ref). does not replace RationCard; does not grant permission; a provider may only further restrict.",
       "additionalProperties": false,
       "properties": {
+        "source_ref": {
+          "$ref": "#/$defs/sha256Ref",
+          "$comment": "Digest of the RationCard this ration projects from."
+        },
         "network": { "type": "boolean" },
         "external_send": { "type": "boolean" },
         "git": { "type": "boolean" },
@@ -91,12 +116,7 @@
         "max_wallclock_seconds": { "type": "integer", "minimum": 1 },
         "max_artifact_bytes": { "type": "integer", "minimum": 1 }
       },
-      "required": ["network", "external_send", "git", "doctrine_writes", "observe_only"]
-    },
-    "capability_requirements": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/capabilityClass" },
-      "description": "CapabilityClass values a provider must support to accept this container."
+      "required": ["source_ref", "network", "external_send", "git", "doctrine_writes", "observe_only"]
     },
     "acceptance": {
       "type": "object",

@@ -32,7 +32,18 @@
     },
     "refusal_class": {
       "type": "string",
-      "$comment": "Reuse an EXISTING closed refusal vocabulary where applicable (e.g. plan-envelope-v0: invalid_plan_envelope, submitter_limits_missing, governance_not_approved, governance_ref_mismatch, governance_approval_unverified). Do not invent per-call strings."
+      "$comment": "CLOSED vocabulary (no per-provider taxonomies). First five REUSE plan-envelope-v0's refusal classes verbatim (a passed-through plan/governance refusal); the remaining four are a small closed provider-side obstruction set defined by this surface. Raw provider detail goes in refusal_verbatim, never here.",
+      "enum": [
+        "invalid_plan_envelope",
+        "submitter_limits_missing",
+        "governance_not_approved",
+        "governance_ref_mismatch",
+        "governance_approval_unverified",
+        "provider_capability_unsupported",
+        "outer_cage_denied",
+        "budget_exhausted",
+        "provider_timed_out"
+      ]
     },
     "refusal_verbatim": {
       "type": "string",

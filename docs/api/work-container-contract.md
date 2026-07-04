@@ -68,23 +68,36 @@ cannot change what was authorized just because it passed through a terminal.
 
 ## 3. WorkContainer is a PROJECTION, not a source of truth
 
-Every WorkContainer field is a **projection of an existing, shipped AG artifact**,
-serialized at the bonded origin (AG) and sealed by digest. The container invents
-nothing:
+**No law-bearing field is invented.** Every field that carries scope, ration,
+admission, or custody projects an existing, shipped AG artifact (below),
+serialized at the bonded origin (AG) and sealed by digest. The few fields that do
+*not* project a shipped instance carry no authority: `work_id` (a fresh id),
+`capability_requirements` (a *requirement* expressed in the existing
+`chain_gate.CapabilityClass` vocabulary), and `schema_version` (metadata).
 
-| WorkContainer element        | Projected from (shipped)                                   |
-| ---------------------------- | ---------------------------------------------------------- |
-| `origin.proposal_ref`        | `plan_review.Proposal` (content hash)                      |
-| `origin.playbook_ref`        | `playbooks` `PlaybookSpec`/`QueuedPlaybook` digest         |
-| `routing` (scope/perms)      | `playbooks.RationCard` (`ration_card.py`) — read-only copy |
-| `acceptance` / `stop`        | `plan-envelope-v0` acceptance_criteria / stop_conditions   |
-| `receipts` (expectations)    | `gate_receipt.GateReceipt`, `ReviewPacket`                 |
-| `custody.digest` (seal)      | `gate_receipt.canonical_json` + sha256 discipline          |
+| WorkContainer element              | Projected from (shipped)                                        |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `admission_ref`                    | `gate_receipt.GateReceipt` (the AG admission/dispatch decision)  |
+| `origin.proposal_ref`              | `plan_review.Proposal` (content hash)                           |
+| `origin.playbook_ref`              | `playbooks` `PlaybookSpec`/`QueuedPlaybook` digest              |
+| `scope_projection` (+ `source_ref`)| `playbooks.RationCard` (`ration_card.py`) — read-only snapshot   |
+| `ration_projection` (+ `source_ref`)| `playbooks.RationCard` locked axes — read-only snapshot          |
+| `acceptance` / `stop_conditions`   | `plan-envelope-v0` acceptance_criteria / stop_conditions        |
+| `receipt_expectations`             | `gate_receipt.GateReceipt`, `ReviewPacket`                      |
+| `custody.digest` (seal)            | `gate_receipt.canonical_json` + sha256 discipline               |
 
 The WorkContainer is the **single serialized wire record** that binds these — it
 does **not** re-implement any of them, and it is **not** a new law-bearing kernel
 object. AG internals stay `CertifiedPlaybook` / `RationCard` / `ReviewPacket` /
 `GovernedPlanBinding`; the WorkContainer is their *exported* projection.
+
+### 3.1 A valid container is NOT admission
+
+Schema validity and custody are **never** sufficient to invoke or rely. A
+WorkContainer carries `admission_ref` — a citation to the AG gate receipt that
+admitted the work — and **reliance requires re-verifying that receipt**, not
+trusting the container. Possession of a well-formed container proves only that
+someone serialized one.
 
 ## 4. Shared status vocabulary (reused verbatim — no parallel enums)
 
@@ -105,12 +118,16 @@ enums.**
 
 ### 4.1 Provider status is NOT an AG verdict
 
-A provider reports what *it* did. AG decides whether that testimony is admissible.
-The adapter must map, never alias:
+A provider reports what *it* did (its lifecycle). AG decides whether that
+testimony is admissible by emitting a **`gate_receipt`** — verdict ∈
+{`pass`, `warn`, `block`, `observe`, `proceed`}, role `authority` for a grant
+(`gate_receipt.py`, `plan_review.authorize_agenda`). **There is no separate
+AG-outcome enum; the existing verdict vocabulary is the outcome.** The adapter
+maps provider testimony into review *input*, never aliases it to a verdict:
 
 ```
-provider.completed_observed   →  AG review  →  admitted | held | refused | inadmissible
-provider.blocked              ≠  AG.refused
+provider.completed_observed   →  AG review  →  gate_receipt(verdict ∈ pass|warn|block|observe|proceed)
+provider status               =  INPUT to that review, never a substitute for it
 provider.success              ≠  reliance
 ```
 
@@ -160,18 +177,27 @@ Normative field definitions live in
 
 ```
 work_container.v1
-  work_id
+  work_id                     # fresh id (envelope metadata, not a projected field)
+  admission_ref               # REQUIRED: the AG gate_receipt that admitted this work — a citation to RE-VERIFY, not to trust
   origin:        { proposal_ref?, playbook_ref?, submitted_by, standing_basis_ref? }
-  intent         # one-sentence outcome (from plan-envelope goal)
-  scope:         { allowed_paths[], forbidden_paths[] }        # projected from RationCard
-  ration:        { network, external_send, git, doctrine_writes, observe_only,
-                   max_wallclock_seconds?, max_artifact_bytes? }  # projected from RationCard
-  capability_requirements[]   # CapabilityClass values the provider must support
+  intent                      # one-sentence outcome (from plan-envelope goal)
+  capability_requirements[]   # CapabilityClass values the provider must support (a requirement, not a projection)
+  scope_projection:   { source_ref, allowed_read_paths[], allowed_write_paths[], forbidden_paths[] }
+                              # read-only snapshot of the cited RationCard; a provider may only FURTHER RESTRICT
+  ration_projection:  { source_ref, network, external_send, git, doctrine_writes, observe_only,
+                        max_wallclock_seconds?, max_artifact_bytes? }   # read-only snapshot of the cited RationCard
   acceptance:    { required_checks[], required_artifacts[] }
   stop_conditions[]
   receipt_expectations:  { run_receipt: true, obstruction_on_block: true }
   custody:       { digest, parent_container_ref?, decomposition_lineage[] }
 ```
+
+`scope_projection` / `ration_projection` are **read-only snapshots** of a
+RationCard (each carries the `source_ref` digest it projects). They are **not a
+grant**: a provider may only *further restrict* them, and AG dispatch
+(`governed_dispatch`) — never the container — is the enforcement source. Naming
+them `*_projection` is deliberate: the raw booleans/paths are a temptation to
+enforce-as-permission, and the contract forbids that reading.
 
 Serialization discipline (reuse, do not re-derive): canonical JSON (sorted keys,
 compact separators, ASCII-safe) per `gate_receipt.canonical_json`;
@@ -179,11 +205,16 @@ compact separators, ASCII-safe) per `gate_receipt.canonical_json`;
 
 ## 7. What a reviewer must be able to confirm (the real gate)
 
-- Every field traces to a shipped AG object (§3) — no invented authority fields.
-- The container **grants no permission** and **mints no standing** — it *carries*
-  a RationCard projection; it does not become one.
-- No parallel verdict enum (§4).
-- The status≠verdict mapping (§4.1) is present and one-directional.
+- **No law-bearing field is invented** (§3): every scope/ration/admission/custody
+  field projects a shipped AG object; the non-projected fields (`work_id`,
+  `capability_requirements`, `schema_version`) carry no authority.
+- **A valid container is never admission** (§3.1): `admission_ref` cites a
+  re-verifiable AG gate receipt; validity/custody is not reliance.
+- The container **grants no permission** and **mints no standing** — it carries a
+  read-only `*_projection` of a RationCard (with `source_ref`); a provider may
+  only further restrict it, and AG dispatch is the enforcement source.
+- No parallel verdict enum (§4); the AG-review outcome is an existing
+  `gate_receipt` verdict, not a new word set (§4.1).
 
 ## 8. Not in this slice (gated follow-ons)
 

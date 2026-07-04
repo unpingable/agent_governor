@@ -33,16 +33,13 @@
     },
     "provider_status": {
       "type": "string",
-      "$comment": "The PROVIDER's own observed state. Mapped by AG to admitted|held|refused|inadmissible; never aliased. provider.completed_observed != AG.admitted; provider.blocked != AG.refused; provider.success != reliance.",
+      "$comment": "The PROVIDER's own observable LIFECYCLE state only — NOT an AG judgment. A provider never reports 'refused'/'inadmissible' (those are AG verdicts, emitted as a gate_receipt after review). 'blocked' means the provider itself could not proceed and MUST emit a provider_obstruction. provider.completed_observed != AG.admitted; provider.success != reliance.",
       "enum": [
         "not_supported",
         "available",
-        "held",
         "running",
         "completed_observed",
-        "completed_inadmissible",
         "blocked",
-        "refused",
         "cancelled",
         "timed_out"
       ]

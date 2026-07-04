@@ -118,7 +118,7 @@ tier: mechanical · executor: codex · prereq: [B0]
 - stop condition: differential fails or corpus ≠ 9 cases — record verbatim, STOP
   (that changes B2's ground truth; do not reinterpret).
 
-### B2 — invariant survival map (packet core)
+### B2 — invariant survival map (packet core)  **(TEED UP 2026-07-03 → `B2-coldstart.md`; prereqs met, resume cold; Fable)**
 tier: conceptual · executor: fable · prereq: [B1]
 - purpose: the table of Lean-backed distinctions that must survive in Rust types/
   verdicts/receipts/refusals: typed refusals **naming the offender** (v5/v6);

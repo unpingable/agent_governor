@@ -61,6 +61,60 @@ The loop:
    First runs must not touch: v7 promotion, C2 rulings, LA fence, GS-2b
    admissibility, daemon contract changes, app.py surgery, doctrinal judgment.
 
+## Architecture framing (operator, 2026-07-04 — strategy context, NOT a fence change)
+
+**Maude is the DevOps frontend for governed infrastructure work.** Not an
+agent harness, not Night Shift, not NQ, not AG — the operator/execution desk
+where bounded infrastructure work becomes visible, approvable, executable,
+and receipted.
+
+Layer split (the eventual product shape):
+
+| organ | answers |
+|---|---|
+| **AG** | is this work admissibly bounded? (playbooks, ration cards, review packets, authority boundaries) |
+| **maude** | execute this approved bounded work instance (envelopes, runs, receipts, obstructions, operator decisions) |
+| **NQ** | did the world actually change/recover? (pre/post witnesses) |
+| **Night Shift** | is this eligible to run unattended? |
+| **Porter** (later) | what ran where, with what transcript/artifact custody? |
+| **Human** | promote / rule / approve where authority is needed |
+
+Existing ops tools (Ansible/Salt/systemd/docker/ssh) remain execution
+**backends** — maude manages approved infrastructure work; it does not
+generally manage servers. Eventual workflow targets: release deploys, server
+updates, restarts, config refreshes, certificate rotation, drift repair,
+rollback/verification, chaos experiments under declared blast radius — each
+with NQ pre/post witnesses and known-rollback fences.
+
+**Promotion ladder (each rung explicit; clearing a rung promotes the PATTERN,
+never grants general execution authority):**
+1. CD-2 — one tiny self-maintenance mutation through the conveyor (this
+   campaign's specimen 1);
+2. CD-4-class — second AG chore (docs normalization);
+3. maude M-2 compiles/loads envelopes citing AG conveyor objects;
+4. maude executes only approved conveyor-backed envelopes;
+5. cross-repo dogfood (AG queue item with a target_repo ≠ AG);
+6. NQ-backed service specimen (remediation with pre/post witnesses);
+7. Night Shift consumes the same approved-envelope machinery unattended;
+8. real ops (deploys/updates/restarts/rollbacks/drift repair).
+
+What clearing CD-2 means, verbatim intent: *"this queue/fence/approval/review
+shape is admissible enough to reuse for the next bounded specimen"* — never
+"the system may now decide and execute work." Work intake shifts from
+"Claude, please clean this up" to "Queue `chore.foo` under playbook X with
+these paths/tests/stops, output ReviewPacket only."
+
+**End-state legibility (operator, 2026-07-04):** the mature loop is
+Claude-as-middle-manager driving maude with good plans (the M-1
+`synthetic_agent` contract: compile, propose, zero-resolve — writes the memos,
+cannot sign the checks), and then **humans driving the same machinery without
+the custom vocabulary**. The internal law keeps its precise names
+(QueuedPlaybook, ReviewPacket, ration card); the DESK must translate them
+into ordinary work language — "approve this bounded task," "review what came
+back," a plan as plain markdown. Vocabulary opacity at the operator surface
+is a defect, not a mystique. This is an acceptance criterion for maude's
+screens and M-4's run report, not a new slice here.
+
 ## Stop-lines (campaign-wide)
 
 - Maude plan selection counting as authorization → STOP.

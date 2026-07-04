@@ -52,6 +52,16 @@ def repo(tmp_path: Path) -> Path:
     (camp / "DECISIONS.md").write_text("# Decisions — demo\n")
     (camp / "GRANTS.yaml").write_text("campaign: demo-campaign\ngrants: []\n")
 
+    # docs/roadmaps (hub files + per-tool roadmaps)
+    roadmaps = r / "docs" / "roadmaps"
+    (roadmaps / "tools").mkdir(parents=True)
+    (roadmaps / "README.md").write_text("# Roadmap of Roadmaps\n\nhub index\n")
+    (roadmaps / "ROUTING.md").write_text("# Routing\n\ntiers and slice shape\n")
+    (roadmaps / "tools" / "lean.md").write_text(
+        "# Roadmap — lean × AG\n\n**Status:** RATIFIED\n"
+    )
+    (roadmaps / "tools" / "maude.md").write_text("# Roadmap — maude\n\nslices\n")
+
     # working
     (r / "working").mkdir()
     (r / "working" / "P4_PARKED_2026-06-16.md").write_text("# P4 parked\n")
@@ -127,6 +137,28 @@ def test_campaign_file_classification(repo: Path) -> None:
     assert grants["kind"] == "waiver"
     # GRANTS lives under docs/ → observed, NOT declared
     assert grants["provenance_class"] == "observed"
+
+
+def test_tool_roadmap_classification(repo: Path) -> None:
+    """docs/roadmaps/tools/*.md → the ONE new kind (CD-2 fence): tool_roadmap."""
+    recs = _by_path(export_records(repo))
+    lean = recs["docs/roadmaps/tools/lean.md"]
+    assert lean["kind"] == "tool_roadmap"
+    assert lean["provenance_class"] == "observed"
+    assert not [w for w in lean["warnings"] if w.startswith("kind_ambiguous")]
+    assert recs["docs/roadmaps/tools/maude.md"]["kind"] == "tool_roadmap"
+
+
+def test_roadmap_hub_files_scanned_with_honest_fallback(repo: Path) -> None:
+    """Hub files (README/ROUTING/...) are scanned but get NO kind of their own —
+    they fall through as 'other' with an explicit ambiguity warning, never
+    silently classified."""
+    recs = _by_path(export_records(repo))
+    for hub in ("docs/roadmaps/README.md", "docs/roadmaps/ROUTING.md"):
+        rec = recs[hub]
+        assert rec["kind"] == "other"
+        assert any("roadmap hub file" in w for w in rec["warnings"])
+        assert rec["provenance_class"] == "observed"
 
 
 def test_working_classification(repo: Path) -> None:

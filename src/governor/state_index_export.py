@@ -216,6 +216,14 @@ def _classify_md_kind(rel: str, name: str) -> tuple[str, list[str]]:
             return "work_packet", warnings
         warnings.append("kind_ambiguous: unrecognised campaign file, fell back to 'other'")
         return "other", warnings
+    if rel.startswith("docs/roadmaps/tools/"):
+        return "tool_roadmap", warnings
+    if rel.startswith("docs/roadmaps/"):
+        # Hub files (README/ROUTING/PARKED/CONSOLIDATION) are scanned for
+        # legibility but deliberately NOT given kinds of their own — one new
+        # kind per the CD-2 fence; a hub taxonomy is a later, separate call.
+        warnings.append("kind_ambiguous: roadmap hub file, fell back to 'other'")
+        return "other", warnings
     if rel.startswith("working/"):
         if "parked" in low or low.startswith("candidate-") or "_parked" in low:
             return "parked_candidate", warnings
@@ -353,6 +361,15 @@ def _scan_targets(root: Path) -> list[tuple[Path, str, str]]:
     if playbooks.is_dir():
         for p in sorted(playbooks.glob("*.md")):
             out.append((p, "observed", "md"))
+
+    roadmaps = root / "docs" / "roadmaps"
+    if roadmaps.is_dir():
+        for p in sorted(roadmaps.glob("*.md")):
+            out.append((p, "observed", "md"))
+        tools = roadmaps / "tools"
+        if tools.is_dir():
+            for p in sorted(tools.glob("*.md")):
+                out.append((p, "observed", "md"))
 
     campaigns = root / "docs" / "campaigns"
     if campaigns.is_dir():

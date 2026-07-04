@@ -24,7 +24,36 @@ As of 2026-07-04 (campaign filed; CD-0 landing in progress).
   citation VERIFIED); re-review PASS. Projection made exhaustive;
   review_packet_ref back-fill report-side only.
 
+- **CD-2 DONE (2026-07-04) — the first governed conveyor run.** Specimen
+  artifacts: `specimens/cd2-state-index-roadmap-kind/` (queue.json,
+  approval.md, review_packet.json, validation.json, required_test_receipt
+  `33805137` [pass], fullsuite_receipt `ad422772` [pass]).
+  Work: state_index_export scans docs/roadmaps/ — tools/*.md → the ONE new
+  kind `tool_roadmap` (17 live records); hub files fall through
+  kind_ambiguous honestly; determinism + existing kinds pinned unchanged;
+  backlog stub → done.
+
+  **What the run PROVED about the conveyor:** the queue parser refuses
+  invented source vocabulary (`unknown_source_kind` caught `backlog_item`)
+  and refuses to even construct an unapproved item
+  (`not_operator_approved` — "provenance does not grant approval"), so a
+  queue file is definitionally a record of approved work and candidate
+  staging belongs to the M-1 envelope lane; the fence is write-only
+  (validator checks `files_changed`), verified before execution per the
+  operator's approval condition; `validate_review_packet_for_queue_item`
+  passed the packet (valid + ready_for_operator_apply, zero issues)
+  including the used≤granted authority accounting with the test run
+  attributed to the harness lane via the independent verify-run receipt.
+
+  **What the run did NOT prove:** nothing about maude (no envelope, no M-2 —
+  receipt-separation clause unexercised); nothing about the sealed-handoff /
+  actor-normalizer path (the actor was this session, not an external sealed
+  actor — HandoffRenderer/ActorOutputNormalizer remain exercised only by
+  their tests); nothing about live cage execution (inert per LANDING).
+  Commit authority was session-lane (operator direct), not conveyor-granted
+  — recorded in approval.md.
+
 ## Not started
 
-- CD-2 (specimen 1: state-index-roadmap-kind via conveyor), CD-3 (maude M-2),
-  CD-4 (specimen 2).
+- CD-3 (maude M-2 plan ingestion), CD-4 (specimen 2: playbook docs
+  normalization via maude + conveyor, two receipt surfaces).

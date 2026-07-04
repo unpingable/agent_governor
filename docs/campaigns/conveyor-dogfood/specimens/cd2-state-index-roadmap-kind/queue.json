@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "queue_id": "conveyor-dogfood-cd2",
+  "repo": "agent_gov",
+  "base_branch": "main",
+  "base_sha": "a904f5b69fad385133c31f685b7e116bb344787b",
+  "mode": "synthetic_conveyor",
+  "items": [
+    {
+      "playbook_id": "chore.state-index-roadmap-kind",
+      "title": "state_index_export: scan docs/roadmaps/ as tool_roadmap kind",
+      "objective": "Extend state_index_export.v0 to scan docs/roadmaps/ (recursive: hub files + tools/*.md); tools/*.md classify as the ONE new kind 'tool_roadmap'; non-tool hub files fall through the existing kind_ambiguous discipline; deterministic output preserved; existing kinds unchanged. Objective source: .governor/backlog/state-index-roadmap-kind.json (acceptance verbatim); gap spec specs/gaps/GOV_GAP_ROADMAP_INDEX_LEGIBILITY_001.md.",
+      "output_kind": "review_packet",
+      "allowed_paths": [
+        "src/governor/state_index_export.py",
+        "tests/test_state_index_export.py",
+        ".governor/backlog/state-index-roadmap-kind.json",
+        "docs/campaigns/conveyor-dogfood/*",
+        "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/*"
+      ],
+      "forbidden_paths": [
+        "docs/roadmaps/*",
+        "specs/*",
+        "src/governor/cli.py"
+      ],
+      "stop_conditions": [
+        "a roadmap taxonomy redesign becomes necessary (kinds beyond tool_roadmap)",
+        "deterministic ordering or any existing kind's classification would change",
+        "the change needs CLI surface changes beyond the existing state-index group"
+      ],
+      "required_tests": [
+        "python3 -m pytest tests/test_state_index_export.py -q"
+      ],
+      "operator_approved": true,
+      "authority": {
+        "commit": false,
+        "push": false,
+        "network": false,
+        "subprocess": false,
+        "live_origin": false,
+        "real_cage_backend": false,
+        "doctrine_write": false,
+        "constellation_write": false
+      },
+      "lane": "conveyor-dogfood",
+      "base_branch": "main",
+      "base_sha": "a904f5b69fad385133c31f685b7e116bb344787b",
+      "source": {
+        "kind": "operator_seeded",
+        "packet_id": "state-index-roadmap-kind"
+      }
+    }
+  ]
+}

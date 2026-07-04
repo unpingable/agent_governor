@@ -1,0 +1,100 @@
+{
+  "allowed_paths": [
+    "src/governor/state_index_export.py",
+    "tests/test_state_index_export.py",
+    ".governor/backlog/state-index-roadmap-kind.json",
+    "docs/campaigns/conveyor-dogfood/*",
+    "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/*"
+  ],
+  "artifacts": [
+    {
+      "description": "governor verify-run receipt for the required test",
+      "kind": "verifier_receipt",
+      "path": "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/required_test_receipt.json",
+      "sha256": null
+    },
+    {
+      "description": "operator approval act + latch/fence semantics findings",
+      "kind": "approval_record",
+      "path": "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/approval.md",
+      "sha256": null
+    }
+  ],
+  "authority": {
+    "granted": {
+      "commit": false,
+      "constellation_write": false,
+      "doctrine_write": false,
+      "live_origin": false,
+      "network": false,
+      "push": false,
+      "subprocess": false
+    },
+    "requested": {
+      "commit": false,
+      "constellation_write": false,
+      "doctrine_write": false,
+      "live_origin": false,
+      "network": false,
+      "push": false,
+      "subprocess": false
+    },
+    "used": {
+      "commit": false,
+      "constellation_write": false,
+      "doctrine_write": false,
+      "live_origin": false,
+      "network": false,
+      "push": false,
+      "subprocess": false
+    }
+  },
+  "base_branch": "main",
+  "base_sha": "a904f5b69fad385133c31f685b7e116bb344787b",
+  "branch": "main",
+  "design_notes": [
+    "one new kind only (tool_roadmap) per the CD-2 fence; hub files deliberately fall through the existing kind_ambiguous discipline",
+    "dual-role session: file edits are actor-lane (within allowed_paths, all authority axes False); test execution is harness-lane, witnessed by the independent verify-run receipt \u2014 used<=granted holds without laundering the test run into actor authority",
+    "docs/roadmaps/* fence verified WRITE-only before execution (validator applies fences to files_changed; reads unrestricted) per the operator's approval condition"
+  ],
+  "explicit_non_actions": [
+    "no commit/push performed by the conveyor run (authority.commit=false); the session-lane commit follows operator review of this packet and cites the specimen",
+    "no edits to docs/roadmaps/*, specs/*, or cli.py",
+    "no second kind minted; no roadmap taxonomy redesign",
+    "no CLI surface changes (the existing state-index group is untouched)"
+  ],
+  "files_changed": [
+    "src/governor/state_index_export.py",
+    "tests/test_state_index_export.py",
+    ".governor/backlog/state-index-roadmap-kind.json",
+    "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/queue.json",
+    "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/approval.md",
+    "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/review_packet.json",
+    "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/required_test_receipt.json"
+  ],
+  "followups": [],
+  "forbidden_paths": [
+    "docs/roadmaps/*",
+    "specs/*",
+    "src/governor/cli.py"
+  ],
+  "lane": "conveyor-dogfood",
+  "operator_review_required": true,
+  "packet_id": "cd2-state-index-roadmap-kind-r1",
+  "playbook_id": "chore.state-index-roadmap-kind",
+  "proposed_head_sha": null,
+  "repo": "agent_gov",
+  "risks": [
+    "live corpus gains 21 records (17 tool_roadmap + 4 hub 'other' with warnings); consumers of the export that assume a closed kind set must tolerate the new kind"
+  ],
+  "schema_version": "review_packet.v0",
+  "status": "proposed_patch",
+  "tests": [
+    {
+      "command": "python3 -m pytest tests/test_state_index_export.py -q",
+      "exit_code": 0,
+      "status": "passed",
+      "summary": "required test; verify-run receipt 33805137 [pass] exit_source=child_exit (independent harness-lane verification)"
+    }
+  ]
+}

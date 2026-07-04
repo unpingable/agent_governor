@@ -9,11 +9,25 @@
 > hand-maintained table is a map that eventually lies, which is the exact remembered-approval
 > failure the rest of this repo exists to refuse.
 >
-> Updated 2026-06-29. `.governor/loop.json` is **stale** (tracks the completed AG-on-AG thread) — use this.
+> Updated 2026-07-04. `.governor/loop.json` is **stale** (tracks the completed AG-on-AG thread) — use this.
+
+## LANDED 2026-07-04 — both playbook lanes are on main
+
+**Track B (`feat/playbooks-gov-loop`, slices 0–7) and the synthetic conveyor
+(`feat/playbooks-synthetic-conveyor`, S1–S7 + H1 + bwrap substrate) merged to
+main** (`a803b7b` + `57b383e`; tips preserved as `refs/preserve/playbooks-*`).
+Landing ≠ operational promotion — surface classification, receipts, and the
+tag-namespace lesson live in
+`docs/campaigns/conveyor-dogfood/LANDING.md`. C11/seccomp and H2 remain
+unarmed gates; doctrine unchanged (*evidence, never facts; no bounded
+autopilot*). The dogfood program consuming the landed law:
+`docs/campaigns/conveyor-dogfood/`. The two lane descriptions below are
+retained as HISTORY of what the branches carried; the branches are no longer
+the canonical residence.
 
 ## Canonical lanes (hand-authored: meaning, not state)
 
-- **Track B — governed playbooks** · `feat/playbooks-gov-loop`  *(active lane)*
+- **Track B — governed playbooks** · `feat/playbooks-gov-loop`  *(LANDED on main 2026-07-04 — see above; description retained as history)*
   - Slices 0–7 complete: measurement digests → Wicket admission-as-evidence → governed
     spend → durable/replay-safe spend → self-hosted chore → one-shot ration-card dispatch.
   - **Live-adapter allowlist review gate PASSED (2026-06-29)** — `docs/playbooks/live-adapter-allowlist-review.md`:
@@ -33,7 +47,7 @@
     stays radioactive: operator-manual, blocked on a real cage backend, not next.
   - **Push state: PUSHED to `515afb0`** (B-8/9-10/11 now on remote, off the disk-SPOF).
 
-- **Synthetic overnight conveyor** · `feat/playbooks-synthetic-conveyor`  *(ACTIVE lane, 2026-06-29)*
+- **Synthetic overnight conveyor** · `feat/playbooks-synthetic-conveyor`  *(LANDED on main 2026-07-04 — see top; description retained as history)*
   - Branched off `feat/playbooks-gov-loop` @ `515afb0`. Doctrine: *the overnight system may
     create EVIDENCE, never FACTS* — synthetic/offline work + operator-delayed review, with
     `Synthetic safe ≠ live safe` and live execution kept structurally out of reach.

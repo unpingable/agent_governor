@@ -1,0 +1,7 @@
+schema: governed-playbook.v0
+kind: procedure
+name: docs-playbooks-normalize
+steps:
+  - id: step1
+    action: normalize_terminology
+    target: docs/playbooks/

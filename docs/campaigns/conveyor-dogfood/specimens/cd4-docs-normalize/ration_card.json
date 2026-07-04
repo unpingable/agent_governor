@@ -1,0 +1,13 @@
+{
+  "agent_id": "maude-m2-supervised",
+  "allowed_shell_commands": [],
+  "allowed_write_paths": [
+    "docs/campaigns/conveyor-dogfood/specimens/cd4-docs-normalize/*",
+    "docs/playbooks/*"
+  ],
+  "doctrine_writes_allowed": false,
+  "git_allowed": false,
+  "network_allowed": false,
+  "output_is_observe_only": true,
+  "task_kind": "docs_normalize"
+}

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "queue_id": "conveyor-dogfood-cd4",
+  "repo": "agent_gov",
+  "base_branch": "main",
+  "base_sha": "ad9d932b6b23faee39cba9c8318813f2b9ca0f93",
+  "mode": "synthetic_conveyor",
+  "items": [
+    {
+      "playbook_id": "chore.docs-playbooks-normalize",
+      "title": "Normalize terminology/help wording across docs/playbooks/*",
+      "objective": "Boring, bounded wording pass: normalize playbook terminology per docs/playbooks/glossary.md (PlaybookSpec/CertifiedPlaybook/RunRequest/etc. used consistently; duplicate live-adapter-allowlist-review content from the two branch lineages reconciled); ZERO semantic changes to any contract; specimen 2 of the conveyor-dogfood campaign \u2014 the TWO-RECEIPT-SURFACE run (AG conveyor exercise \u2225 maude M-2 envelope enforcement).",
+      "output_kind": "review_packet",
+      "allowed_paths": [
+        "docs/playbooks/*",
+        "docs/campaigns/conveyor-dogfood/*",
+        "docs/campaigns/conveyor-dogfood/specimens/cd4-docs-normalize/*"
+      ],
+      "forbidden_paths": [
+        "src/*",
+        "tests/*",
+        "specs/*",
+        ".governor/*",
+        "docs/roadmaps/*"
+      ],
+      "stop_conditions": [
+        "a wording change would alter a contract's meaning",
+        "any edit outside docs/playbooks/* would be needed to finish",
+        "the glossary itself turns out to need semantic amendment (that is doctrine work, not a wording pass)"
+      ],
+      "required_tests": [
+        "python3 -m pytest tests/playbooks -q"
+      ],
+      "operator_approved": false,
+      "authority": {
+        "commit": false,
+        "push": false,
+        "network": false,
+        "subprocess": false,
+        "live_origin": false,
+        "real_cage_backend": false,
+        "doctrine_write": false,
+        "constellation_write": false
+      },
+      "lane": "conveyor-dogfood",
+      "base_branch": "main",
+      "base_sha": "ad9d932b6b23faee39cba9c8318813f2b9ca0f93",
+      "source": {
+        "kind": "operator_seeded",
+        "packet_id": "cd4-docs-normalize"
+      }
+    }
+  ]
+}

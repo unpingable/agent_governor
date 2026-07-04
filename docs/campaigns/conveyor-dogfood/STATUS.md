@@ -61,8 +61,16 @@ As of 2026-07-04 (campaign filed; CD-0 landing in progress).
   maude suite 272 green + ruff clean; ROADMAP M-2 checked. Live-daemon smoke
   owed at next daemon-up.
 
-## Not started
+## Staged (awaiting operator acts + live daemon)
 
-- CD-4 (specimen 2: playbook docs normalization via maude M-2 + conveyor,
-  two receipt surfaces — includes wiring the v0 witness resolver to the
-  conveyor artifacts).
+- **CD-4 STAGED (2026-07-04):** `specimens/cd4-docs-normalize/` — playbook
+  spec (parses via landed parser) + ration card (landed class, locked axes) +
+  unapproved queue item + **born-candidate** governed plan envelope. Witness
+  resolver landed in maude (`plan/witness.py`: content-addressed digest
+  lookup — filenames carry no authority; missing dir fails closed).
+  End-to-end verified: the real plan parses in maude M-2; admission refuses
+  `governance_not_approved` even WITH witnesses present; both digest
+  citations resolve against the real artifacts. Remaining: the operator's
+  two acts (queue latch + plan promotion w/ approval witness) and a live
+  daemon for the supervised run — which doubles as the owed M-2 + desk-screen
+  live smoke. Flip procedure: specimen README.md.

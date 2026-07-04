@@ -160,7 +160,7 @@ tier: mechanical · executor: local-qwen or codex · prereq: [B2, B3 ruled]
 - stop condition: a case needs kernel behavior change to pass — STOP; that is a
   kernel slice, not a corpus slice.
 
-### B6 — Lean v6 proof-of-payment checker pilot
+### B6 — Lean v6 proof-of-payment checker pilot  **(EXECUTED 2026-07-04 — INVENTORY §"Pilot: v6 finite-support checker": firstDeficient over all 13 cases via lake env eval, EXIT=0; 8 agreements / 4 expected divergences / case 13 encoding-dependent (both exhibited) / 0 unexpected; sandwiched — codex BLOCK on case-13 encoding resolved by exhibiting both models, re-review PASS. Checker stays non-binding; no kernel changes.)**
 tier: review · executor: codex-exec (framing by fable) · prereq: [B2]
 - purpose: run the v6 finite-support checker (typed `CheckResult`, offender-naming
   refusals, `firstDeficient_decides_check`) as a **non-binding oracle** over the

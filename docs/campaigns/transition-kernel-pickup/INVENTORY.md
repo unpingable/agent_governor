@@ -199,6 +199,98 @@ differential.py + corpus; wicket fixtures cross-referenced; AG contributes via
 the v7 schema lane — now LIVE, v7.0.0 tagged) stands as filed in Q-B3; B5
 executes there once ruled.
 
+## Pilot: v6 finite-support checker over the corpus (B6, executed 2026-07-04)
+
+**Non-binding oracle run — SCRATCH tier, uncitable as authority** (lean
+`v6.0.0`, `Scratch/FiniteSupportChecker.lean`, `Custody-Class: SCRATCH`;
+read at HEAD `84d6d24`). Per the checker's own scope fence it judges ONE
+thing: finite-support resource counting over the resident liberal/linear
+normalization skeleton. The pilot asks where that face binds against the
+13-case corpus and where it is blind — divergences on excluded axes are the
+fence working, not bugs.
+
+**Method.** The counts-only decider `firstDeficient (reads supply : List J)`
+was evaluated over each case's resource skeleton;
+`firstDeficient_decides_check` licenses the counts-only verdict as the
+checker's verdict (offender identity across the two reporters is NOT
+claimed, per the module's honesty note). Invocation (verbatim):
+`lake build LeanProofs.Scratch.FiniteSupportChecker` → "Build completed
+successfully (23 jobs)", exit 0; `lake env lean <harness>.lean` → 13 `#eval`
+lines, EXIT=0.
+
+**Mapping convention (declared, load-bearing).** Labels = AUTHORITY
+artifacts the scenario *semantically mints* (issuance-convention): supply
+iff an issuance record exists; adjudication state (expired / revoked /
+mis-scoped) does NOT remove a minted artifact — filtering supply by
+adjudication would smuggle the kernel's own judgment into the oracle.
+Reads = the gauntlet chain's demands `[standing_grant, admission_receipt,
+capacity_token]` (+ a second `capacity_token` in the replay case). Refusal
+upstream ⇒ downstream never minted (chain order verified in
+`cooked_context_orchestrator._run_chain`: standing → wicket → spendability
+gate at step 1.5 **pre-grant** → LA request → LA consume). Disclosed
+sensitivities: case 03's cited-but-unverifiable digest and case 13's
+LA-unknown token have NO issuance record (absent), though 13's drill *stub*
+mechanically grants-then-disclaims; case 05's gap record is not authority,
+so it is not supply; a scoped-label alternative encoding (labels carrying
+`(action,target)`) was rejected as mapping-massage — it would force
+agreement on case 10 by encoding the adjudication into the alphabet.
+
+**Results (verbatim `firstDeficient` output vs frozen corpus verdicts):**
+
+| case | firstDeficient | kernel expected | verdict |
+|---|---|---|---|
+| 01 valid | `none` | consumed | **agree** |
+| 02 no-standing | `some "standing_grant"` | refused `standing_required` | **agree** (offender = refused artifact) |
+| 03 standing-unverifiable | `some "standing_grant"` | refused `standing_expired` | **agree** — but counts collapse 02/03: the typed distinction (never-cited vs cited-but-unverifiable) is invisible to counting |
+| 04 wicket-denied | `some "admission_receipt"` | refused `admission_denied` | **agree** (denial ⇒ never minted) |
+| 05 gap-accounted | `some "admission_receipt"` | `gap_accounted`, consumed=true | **DIVERGE (expected)** — the checker's binary vocabulary cannot express "proceed with accounted debt"; it refuses what the kernel deliberately admits as accounted gap |
+| 06 replay | `some "capacity_token"` | refused `already_consumed` | **agree** (linearity home turf) |
+| 07 synthetic-fenced | `none` | consumed (Demonstrated) | **agree** on outcome; the operational/demonstrated type split is outside checker vocabulary |
+| 08 temporal-lapse | `some "capacity_token"` | refused `standing_before_spendability_not_bounded` | **agree on verdict, DERIVATIVE locus** — the kernel names the cause (lapsed standing observation, spendability seam); the checker names the downstream absence it produced (token never granted) |
+| 09 lapse-twin | `none` | consumed | **agree** |
+| 10 scope-mismatch | `none` | refused `scope_mismatch` | **DIVERGE (expected)** — scope adjudication of a minted token is not a count |
+| 11 token-revoked | `none` | refused `token_revoked` | **DIVERGE (expected)** — revocation is state, not absence |
+| 12 token-expired | `none` | refused `token_expired` | **DIVERGE (expected)** — temporal adjudication, not a count |
+| 13 unknown-token | encoding-dependent — `some "capacity_token"` (semantic-ledger) / `none` (stub-mechanics; both run, EXIT=0) | refused `unknown_token` | **encoding-dependent (both exhibited, per codex review)** — under production semantics `unknown_token` is an LA ledger lookup-miss (no issuance record for the *presented* token → absence → agree); under the drill's stub mechanics the request step DID grant before consume disclaimed (→ minted → diverge). The stub cannot witness the distinction; the corpus case description ("a token LA does not recognize") is the semantic ground truth, but the counts-face membership of `unknown_token` is claimed only conditional on that reading. |
+
+**Findings.**
+1. **8 unconditional verdict agreements, 4 expected divergences
+   {05, 10, 11, 12}, 1 encoding-dependent case (13), 0 unexpected under
+   either encoding.** The divergences fall exactly on the axes the v6
+   scope fence excludes: outcome vocabulary beyond ok/refuse
+   (gap-accounting) and adjudication of minted artifacts (scope /
+   revocation / expiry). The refusal enum splits into a **counts-shaped
+   face** (`standing_required`, `admission_denied`, `already_consumed`,
+   absence-surfaced `standing_expired`; `unknown_token` conditional on the
+   semantic-ledger reading) and an **adjudication-shaped face**
+   (`scope_mismatch`, `token_revoked`, `token_expired`,
+   `standing_before_spendability_not_bounded`, `admission_gap_accounted`).
+   The split is at the VERDICT level and is *consistent with* the B2 map's
+   axis assignments — counts cannot see causes, so this is compatibility
+   evidence, not empirical confirmation of the typed-cause decomposition.
+2. **Typed refusals carry information counting cannot** (02 vs 03 collapse
+   to the same offender) — corroborates the B2 "refusals name the offender"
+   row from the other direction: the kernel's vocabulary is strictly finer
+   than resource accounting.
+3. **Offender-naming degrades under cascades** (case 08): a counts-only
+   oracle structurally names the *downstream absence*, not the *upstream
+   cause*. Offender fidelity is a kernel property, not a checker property.
+4. **Not load-bearing, and no temptation recorded**: SCRATCH tier, one
+   policy pair, non-binding. If Lean later promotes the checker family, the
+   counts-shaped face above is the candidate oracle surface; the
+   adjudication face can never be, at any tier.
+
+**Review trail (sandwich).** codex-exec adversarial pass #1: environmental
+BLOCK (broken bwrap sandbox — no file access; retried with inlined
+material). Pass #2: substantive **BLOCK** — case 13's encoding contradicted
+the declared issuance convention under the drill's stub mechanics, and the
+counts/adjudication decomposition was overclaimed as empirical. Resolved by
+exhibiting BOTH case-13 encodings with verbatim runs (CorrectiveBoundary
+methodological move: model-dependence exhibited, not axiomatized) and
+downgrading finding 1 to verdict-level compatibility evidence. Codex also
+confirmed the remaining arithmetic consistent ("the blocker is not Lean
+arithmetic").
+
 ## Roadmap gap: Freshness refusal granularity (filed 2026-07-03, ruling #1)
 
 Current AG closure keeps `standing_before_spendability_not_bounded` as a single

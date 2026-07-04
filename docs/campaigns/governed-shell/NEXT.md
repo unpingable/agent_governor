@@ -83,8 +83,9 @@ tier: mechanical · executor: codex · prereq: [GS-0, GS-1]
 - refusal mode: n/a. · receipt shape: commit; contract version pinned in package.
 - stop condition: scope creep toward UI/retry-policy/rendering — NOT in the library.
 
-### GS-8b — ag_shell_client live-socket client class  **(filed 2026-07-03, maude repositioning pass)**
+### GS-8b — ag_shell_client live-socket client class  **(EXECUTED 2026-07-03 — GS-9 unblocked)**
 tier: mechanical · executor: codex · prereq: [GS-8]
+- landed: `AsyncDaemonClient` (`libs/ag_shell_client/src/ag_shell_client/client.py`) — `connect`/`call`/`stream`/`aclose`, `async with`, one-in-flight-per-connection busy guard, `StreamItem` (notification|result), `-32001 → DaemonAuthError` via the codec. 31 tests (fake-reader unit + live `serve_unix` smoke: `governor.hello` round-trip + `operator.watch` stream). Bare `pytest libs/ag_shell_client/tests` now self-contained (pyproject `pythonpath=["src"]`). Codex wire-review 3 passes (BLOCK+5 WARN → MERGE-SAFE); verify-run `29620c95` [pass].
 - purpose: the library today is codec + envelope models + injected-read-fn reader only — no connect/call/stream client class, so GS-9 has nothing to consume. Add the async Unix-socket client (connect, close, `call(method, params)`, streaming iterator, -32001 → DaemonAuthError) wrapping the existing codec. Zero consumers exist yet, so no compat burden.
 - files: libs/ag_shell_client/src/ag_shell_client/ (new client module + __init__ export), libs/ag_shell_client/tests/.
 - tests: `python3 -m pytest libs/ag_shell_client/tests -v` exit 0; live-daemon integration smoke per the GS-8 pattern (call `governor.hello` round-trip; streaming method yields deltas then final result).

@@ -16,3 +16,10 @@ dev = ["pytest>=7.0", "pytest-timeout>=2.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ag_shell_client"]
+
+[tool.pytest.ini_options]
+# src-layout: put the package on the path so `pytest libs/ag_shell_client/tests`
+# works without an editable install. `governor` is resolved from the main repo's
+# editable install (the live-daemon smoke tests import it).
+pythonpath = ["src"]
+testpaths = ["tests"]

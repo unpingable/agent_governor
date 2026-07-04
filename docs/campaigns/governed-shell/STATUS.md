@@ -125,6 +125,31 @@ GS-2b re-tiered items (admissibility/HELD — authority-semantics) and GS-3 dock
 resolve route (mutation sandwich). Maude track (GS-8b→GS-9..15) is the sibling
 session's; phosphor (GS-16/17) waits on R-PHOS-1.
 
+## 2026-07-03 — GS-8b landed (ag_shell_client live-socket client — GS-9 UNBLOCKED)
+
+`AsyncDaemonClient` (`libs/ag_shell_client/src/ag_shell_client/client.py`): the
+missing connection layer over the GS-8 codec. `connect`/`call`/`stream`/`aclose`
++ `async with`; `StreamItem` (notification|result terminal); one-in-flight-per-
+connection busy guard (a second concurrent request fails fast, never interleaves
+frames — matches the daemon's sequential-per-connection service and the
+contract's "dedicated second connection for watch"); `-32001 → DaemonAuthError`.
+Async (`asyncio.open_unix_connection`) — what maude (Textual) and phosphor
+(FastAPI) both need; the in-repo sync `cli_backend` still covers the CLI.
+
+Wire proven against the real daemon: 31 tests (fake-reader unit for id-match /
+notification-skip / typed-error mapping / stream / busy-guard / poisoning /
+verbatim-params, + live `serve_unix` smoke: `governor.hello` round-trip and
+`operator.watch` stream). Package tests made self-contained (`pyproject`
+`pythonpath=["src"]`) so the bare command runs from repo root. Codex wire-review
+(3 passes): BLOCK (id-less error frame skipped → hang) + 5 WARN → fixed
+(surface-not-skip errors, fail-closed desync, connection poisoning on
+timeout/cancel/foreign-error/early-stream-close, gen-guarded deterministic
+release, optional stream read-timeout, verbatim params) → MERGE-SAFE. verify-run
+`29620c95` [pass].
+
+**This unblocks GS-9** (maude replaces its hand-rolled client with the package)
+for the sibling maude session.
+
 ## Current next
 
 Daemon slices unblocked: **GS-2** (decisions.list + docket/admissibility

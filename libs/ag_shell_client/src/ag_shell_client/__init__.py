@@ -7,6 +7,7 @@ CI-tested in-repo against the daemon it speaks to, so the contract cannot drift
 silently. This is AG's mouth — not a shell's guts (per the boundary law).
 """
 
+from .client import AsyncDaemonClient, StreamItem
 from .models import (
     KNOWN_DECISION_KINDS,
     KNOWN_URGENCIES,
@@ -27,12 +28,14 @@ from .protocol import (
 
 __all__ = [
     "AUTH_ERROR_CODE",
+    "AsyncDaemonClient",
     "DaemonAuthError",
     "DecisionItem",
     "DecisionOption",
     "KNOWN_DECISION_KINDS",
     "KNOWN_URGENCIES",
     "RPCError",
+    "StreamItem",
     "decisions_from_response",
     "default_socket_path",
     "encode_message",

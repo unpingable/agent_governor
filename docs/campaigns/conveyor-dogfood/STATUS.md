@@ -1,6 +1,10 @@
 # Status — conveyor dogfood
 
-As of 2026-07-04 (campaign filed; CD-0 landing in progress).
+As of 2026-07-04 evening. **CD-0..CD-3 DONE; CD-4 STAGED at the execution
+seam** (one operator-driven live run from closing). Pushed heads: **AG
+`c3e95c0`**, **maude `015de38`** (both `origin/main`, clean). Maude remote
+fixed 2026-07-04 → github.com/unpingable/maude (was local-only; 22 commits
+now safe).
 
 ## Done
 
@@ -53,13 +57,15 @@ As of 2026-07-04 (campaign filed; CD-0 landing in progress).
   Commit authority was session-lane (operator direct), not conveyor-granted
   — recorded in approval.md.
 
-- **CD-3 DONE (2026-07-04):** maude M-2 landed (`dc71045`, maude repo —
-  local-only by remote config). `src/maude/plan/` — M-1 parser with all five
-  refusal classes; three-valued strict admission (governed plans fail CLOSED
-  with no witness resolver — CD-4 wires the conveyor projection);
+- **CD-3 DONE (2026-07-04):** maude M-2 landed (`dc71045`). `src/maude/plan/`
+  — M-1 parser with all five refusal classes; three-valued strict admission
+  (governed plans fail CLOSED without a resolved witness);
   `run <plan.md>` maps to the existing daemon surface, zero contract changes.
-  maude suite 272 green + ruff clean; ROADMAP M-2 checked. Live-daemon smoke
-  owed at next daemon-up.
+  ROADMAP M-2 checked. **Witness-default wired (`015de38`):** the
+  TUI-registered runner defaults its resolver to the plan file's own
+  directory (the CD-4 co-located layout) — without this a promoted governed
+  plan would still have refused `governance_approval_unverified`; fail-closed
+  preserved. maude suite 276 green + ruff clean.
 
 ## Staged (awaiting operator acts + live daemon)
 
@@ -74,3 +80,37 @@ As of 2026-07-04 (campaign filed; CD-0 landing in progress).
   two acts (queue latch + plan promotion w/ approval witness) and a live
   daemon for the supervised run — which doubles as the owed M-2 + desk-screen
   live smoke. Flip procedure: specimen README.md.
+
+## Next (ratified sequence, 2026-07-04)
+
+1. **CD-4 live run — the OPERATOR's seat, not an agent's.** The hypothesis
+   under test is "a human can drive governed infrastructure work without
+   speaking fluent internal AG vocabulary" — an agent puppeting the TUI would
+   skip exactly that. Steps: daemon up → open maude desk → latch the queue
+   item → promote the plan (approval witness file) → `run …/cd4-docs-normalize/plan.md`
+   → approve/refuse supervised tool calls from the queue screen → review the
+   packet. **Record where the UI was legible vs. ontology-heavy** — that log
+   is M-4 fuel. Stop-and-obstruct if: witness resolution still fails; approval/
+   promotion is ambiguous; any synthetic/generated actor appears able to
+   self-approve; a plan says "approved" with no independent latch; tool-call
+   approval feels like hidden execution; or the ReviewPacket is valid-but-
+   human-hostile.
+2. **M-4 — run report** against the real CD-4 packet: the card-plus-expandable-
+   law-view pattern (CAMPAIGN §UI pattern seed) becoming code — "precise law
+   underneath, ordinary work language on top." The first artifact rendered as
+   product, not substrate dump.
+3. **GS-13** — why/help/command-palette overlays; retires maude's nav-key
+   sprawl (flagged at GS-10b leg 3c) once there's a real report to navigate.
+
+**Bigger AG planning item, named not started — "make the law portable":** a
+stable EXPORTED conveyor projection (QueuedPlaybookRef / RationCardRef /
+ReviewPacket / ApprovalWitness / ConstraintProjection / GovernedPlanBinding +
+refusal classes + digest/citation rules + authority axes) so maude / Night
+Shift / NQ consume a serialized surface, never AG internals. This is the
+CD-1a "no import coupling" rule graduating from prose to a real artifact;
+gate it after CD-4 proves the shape. Do NOT start before the live run.
+
+**Parked operator rulings (from the morning, dependency-ordered for later):**
+C2 read-plane trio → C2 wicket-guard absorption → GS-2b admissibility/HELD →
+B5 stale-basis mapping → B5 request-side linearity / LA fence → Q-B7 v7
+profile promotion. None block CD-4.

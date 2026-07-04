@@ -154,10 +154,14 @@ Conformance means ONLY the above. It explicitly does **NOT** imply:
 - **Standing** — conformance is not identity or standing (verified separately,
   `standing_client`).
 
-**Deferred to the registry slice, named-not-resolved here (MUST be specified
-before Slice 2 ships):** how conformance is *proven* (a conformance test suite),
-how it is *revoked* / expires (freshness), and what a registry entry *does*
-(routing eligibility only — never a trust grant).
+**Resolved in Slice 2** (`src/governor/provider_registry.py`): a descriptor is a
+*declaration*, so registration verifies only STRUCTURAL conformance (fail-closed
+on any authority claim) and confers no trust; RUNTIME conformance needs live
+evidence (Slice 3+). Revocation drops routing eligibility (the entry is kept for
+audit); freshness is by descriptor `version` (a version change is a new
+descriptor that must be re-registered). A registry entry is **routing eligibility
+only** — the registry has no admit/authorize/trust/grant method. Still deferred
+to Slice 3 (needs a live provider): the runtime-conformance **test suite**.
 
 ## 7. Pass / fail criteria for any future provider work
 

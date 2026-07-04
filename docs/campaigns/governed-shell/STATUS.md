@@ -205,6 +205,33 @@ daemon regressed or the test expectation is stale. Left failing under
 Maude track now at GS-10 (ScreenManager + CommandRegistry; chat/PLAN/BUILD
 quarantine to `commands/legacy.py`).
 
+## 2026-07-04 — maude GS-10a + GS-11 data layer (maude repo)
+
+- **GS-10a** (maude `0a2953b`) — the desk skeleton, additive, app.py untouched:
+  `feed.py DecisionFeedController` (the one component that understands the
+  envelope — cache, interrupt/accumulate split, keymap-from-`options[].key`),
+  `commands/ CommandRegistry` keyed by `IntentKind` (replaces the if/elif),
+  `screens/` (queue/session/board/diff + reserved M-4 ReportScreen +
+  ScreenManager). 185 tests green; each screen isolation-mounts via Textual
+  pilot.
+- **GS-11 data layer** (maude `a5cce38`) — the operator client surface:
+  `operator.decisions.list/resolve`, `operator.watch` (consumed as full
+  snapshots via `DecisionFeedController.ingest_watch_update`),
+  `runtime.session.send_input`, `runtime.adapters.list`, `why.chain`. Verified
+  end-to-end against a throwaway daemon (decisions.list, adapters.list ×2, a
+  live watch snapshot into the feed). Remaining GS-11 is the queue screen,
+  which needs the GS-10b bootstrap.
+- **R-MAUDE-1 worked example:** the GS-9 live smoke caught `intent.compile`
+  dropping `escape_classification`. Diagnosed as a real daemon bug (escape_text
+  not threaded over RPC), not a transport regression — **fixed AG-side
+  `eb82f20`**; maude smoke re-run 23/24 (1 intentional chat skip). The
+  surface-diff discipline flushed out a live regression.
+
+Next maude: **GS-10b** — the behavior-changing bootstrap migration (app.py →
+ScreenManager + CommandRegistry, legacy quarantine). Flagged for care: app.py
+has zero tests and the change is UX-structural, so it's the one slice the suite
+can't fully guard.
+
 ## Not touched (deferred, named)
 
 AG-minted widening offers (D-GS-4, successor campaign). Existing phosphor mode

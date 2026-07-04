@@ -115,6 +115,18 @@ back," a plan as plain markdown. Vocabulary opacity at the operator surface
 is a defect, not a mystique. This is an acceptance criterion for maude's
 screens and M-4's run report, not a new slice here.
 
+**UI pattern seed (for M-4/GS-13 to consume):** plain operator card on top,
+expandable law view underneath — "Approve roadmap index update?" as the card;
+QueuedPlaybook / RationCard / authority axes / packet expectation behind an
+expand. Normal mode is human-readable; audit mode exposes the machinery.
+*Precise law underneath, ordinary work language on top.*
+
+**Campaign epigraph (post-CD-2/CD-4, 2026-07-04):** *the bureaucracy filed
+its own paperwork, but could not approve its own paperwork.* That sentence is
+the invariant every future slice must still satisfy — including the unattended
+Night Shift rungs, where "could not approve its own paperwork" is the entire
+safety case.
+
 ## Stop-lines (campaign-wide)
 
 - Maude plan selection counting as authorization → STOP.

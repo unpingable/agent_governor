@@ -206,7 +206,7 @@ ALLOWED_UNCATEGORIZED: set[str] = {
     "prometheus", "puppet", "quorum", "quorum-ext", "regime", "replay",
     "rejections", "resolve", "revise", "risk", "routing", "rule", "runtime",
     "scar", "scope", "security", "selfcheck", "semvar", "signals",
-    "slim", "spine", "stability", "state", "strict", "taint",
+    "slim", "spine", "stability", "state", "state-index", "strict", "taint",
     "task", "telemetry", "temporal", "transport", "tune", "unlock",
     "verify-run", "vitals", "watch",
 }

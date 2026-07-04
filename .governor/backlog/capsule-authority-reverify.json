@@ -5,7 +5,7 @@
   "spec_ref": "docs/campaigns/constellation-reconciliation/INVENTORY.md \u00a73 F-A3b-1",
   "forcing_case": "A3b screen finding vs refresh_is_inexpressible: session-continuity capsules carry AUTHORITY across sessions; nothing forces re-verification at resume (copy-forward refresh lane)",
   "priority_tier": 2,
-  "status": "filed",
+  "status": "doc_fence_landed",
   "acceptance": "Doc-level first: session-continuity docs state capsule authority = context requiring re-verification at resume, never admission. Code fence only on a real resume-consumption forcing case.",
-  "note": "Lean theorem family F1 refresh_is_inexpressible; screen-grade, not wall."
+  "note": "Lean theorem family F1 refresh_is_inexpressible; screen-grade, not wall. Doc-level half EXECUTED 2026-07-04: session_continuity.py module docstring + CLI group help + feature-history now state capsule authority = context requiring re-verification at resume, never admission. Code fence remains gated on a real resume-consumption forcing case."
 }

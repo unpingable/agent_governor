@@ -13811,6 +13811,8 @@ def session_group(ctx: click.Context) -> None:
     """Session continuity: capsule-based session management.
 
     Resume intent + constraints + authority, NOT chat replay.
+    Capsule-carried authority is context, not admission: consumers must
+    re-verify it at resume (see session_continuity module docstring).
 
     \b
     Usage:

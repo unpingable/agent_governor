@@ -7,6 +7,15 @@ Core distinction:
 - Chat replay: Resume conversation
 - Capsule resume: Resume intent + constraints + authority
 
+Authority discipline (F-A3b-1, refresh_is_inexpressible): the "authority"
+a capsule carries is CONTEXT — a record of what was authorized when the
+capsule was written. Resuming a capsule restores that record; it does NOT
+re-admit it. Any consumer treating capsule-carried authority as live
+admission must re-verify it at resume time (a capsule is a copy-forward
+lane, and copy-forward is not refresh). Doc-level fence per the
+capsule-authority-reverify gap; a code fence lands only on a real
+resume-consumption forcing case.
+
 Structure:
 - Ledger (small, durable): anchors, invariants, canon, decisions
 - Workspace (medium): current draft state, active threads, cursor

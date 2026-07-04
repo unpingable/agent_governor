@@ -1,0 +1,29 @@
+{
+  "_specimen_note": "HYPOTHETICAL paid crossing for the gap spec's forcing case: an NQ probe receipt offered as AG admission evidence. The bridge discharges every obligation the (specimen) profile named; with the receipt the crossing composes — the ONLY difference is the receipt. Exists to exercise the schema shape only.",
+  "schema": "agent_governor.profile_bridge_receipt.v0",
+  "bridge_id": "bridge.nq_probe__ag_admission_evidence.v0",
+  "from_profile": {
+    "producer": "nq",
+    "artifact_kind": "nq.probe_receipt.hypothetical"
+  },
+  "to_use": {
+    "consumer": "agent_governor",
+    "use": "admission_evidence"
+  },
+  "obligations_discharged": [
+    {
+      "obligation_id": "obl.origin_mode_is_observed",
+      "discharged_by": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "obligation_id": "obl.freshness_within_consumer_horizon",
+      "discharged_by": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "obligation_id": "obl.subject_scope_named_by_consumer",
+      "discharged_by": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  ],
+  "custodian": "agent_governor.operator",
+  "content_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+}

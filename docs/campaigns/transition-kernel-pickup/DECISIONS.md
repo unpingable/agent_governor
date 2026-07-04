@@ -44,10 +44,19 @@ Recommendation: B4 (Python adapter Slice 1b) lands before Rust-kernel resume wor
 — it is unblocked, fully specified, and its receipts become corpus feedstock.
 Default on silence: recommendation stands.
 
-### Q-B7 — v7 CANDIDATE exposure  **(OPEN, default named)**
+### Q-B7 — v7 CANDIDATE exposure  **(HALF-EXECUTED under the default, 2026-07-04; promotion half OPEN)**
 Recommendation: draft the AG JSON-schema lane against Lean v7's CANDIDATE fields
 now, explicitly non-binding until v7 ratifies. Default on silence: draft in
 `working/`, promote nothing.
+
+**2026-07-04:** B7 executed under the default — `working/v7-profile-lane/`
+(4 schemas + 3 specimens, all fields CANDIDATE, 5 refusal classes named not
+minted). Note the ground shifted since filing: v7.0.0 is RELEASED (tagged
+`b9860aa`, gap spec ratified 2026-07-02) but all v7 modules are
+`Custody-Class: SCRATCH`, so the citation-tier rule keeps the theorems
+provenance-only either way. The remaining operator question is narrower than
+filed: **promote `working/v7-profile-lane/` to `specs/`?** — a custody event,
+not a default. Until ruled: stays in working/, nothing citable.
 
 ## D010 — transition-kernel pickup boundary  **(RATIFIED 2026-06-23, Model X)**
 

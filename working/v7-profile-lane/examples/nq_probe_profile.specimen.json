@@ -1,0 +1,30 @@
+{
+  "_specimen_note": "HYPOTHETICAL specimen of the gap spec's forcing case. This is NOT NQ's declaration — NQ authors its own profile in its own idiom, or the crossing stays unbridged. Exists to exercise the schema shape only.",
+  "schema": "agent_governor.artifact_profile.v0",
+  "artifact_kind": "nq.probe_receipt.hypothetical",
+  "producer": "nq",
+  "wlp_receipt_kind": "wlp.receipt.v1",
+  "local_payload_schema": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "stage_survived": 2,
+  "allowed_local_uses": [
+    "nq.finding_evidence",
+    "nq.drill_feedstock"
+  ],
+  "forbidden_uses": [
+    "any.operational_authority_without_observed_origin"
+  ],
+  "residue_caveats": [
+    "lab-backed compatibility evidence, not live testimony",
+    "origin_mode carried verbatim; non-observed origins are fenced"
+  ],
+  "bridge_obligations_required": [
+    "obl.origin_mode_is_observed",
+    "obl.freshness_within_consumer_horizon",
+    "obl.subject_scope_named_by_consumer"
+  ],
+  "non_authorities": [
+    "ag.admission_evidence",
+    "ag.standing_basis",
+    "ag.capacity_grant_basis"
+  ]
+}

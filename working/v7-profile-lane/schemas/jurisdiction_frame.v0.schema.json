@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agent_governor.jurisdiction_frame.v0",
+  "title": "Jurisdiction frame (per-vocabulary, opt-in receipt scoping) — CANDIDATE, non-binding",
+  "description": "A LOCAL declaration scoping receipt species to the obligations they may fund, per vocabulary. No default fungibility: a species not scoped to an obligation cannot fund it (nothing in custody scoped to the demanded obligation => underivable, at any depth). SCREENING, NOT ENFORCEMENT: the frame is checked against presented material; frame quality (over-/under-declaration) is the declarant's visible burden. Only the TOTAL god-receipt form is screened (a species scoped to every obligation) — no graded 'too much coverage' policy, deliberately.",
+  "type": "object",
+  "required": ["schema", "frame_id", "declarant", "vocabulary", "scopes"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "agent_governor.jurisdiction_frame.v0"
+    },
+    "frame_id": { "type": "string", "minLength": 1 },
+    "declarant": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Who declares (and visibly carries the quality burden of) this frame."
+    },
+    "vocabulary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The vocabulary this frame is local to. Frames are per-vocabulary; there is no cross-vocabulary master frame."
+    },
+    "scopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["receipt_species", "funds_obligations"],
+        "additionalProperties": false,
+        "properties": {
+          "receipt_species": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The receipt species being scoped (e.g. 'profile_bridge_receipt', 'stage_ascent_receipt', a domain species). Species cross-use (bridge-as-rung, rung-as-bridge) satisfies custody shape and FAILS this screen."
+          },
+          "funds_obligations": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "The obligations this species may fund, enumerated. Coverage of k distinct obligations costs k distinct held receipts in single-scoped frames — no bulk discount; broad custody is legitimate when paid."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "_specimen_note": "The FORBIDDEN move, rendered as the refusal a future gate would emit. An artifact that PARSES (payload schema valid in its home project) is presented for an authority read its profile's non_authorities forbids, with no bridge receipt in custody. The refusal_class here is CANDIDATE vocabulary for the unbuilt gate — it is NOT a kernel refusal kind and mints nothing (the kernel's closed 12-kind enum is untouched).",
+  "schema": "agent_governor.profile_lane_refusal.v0.CANDIDATE",
+  "refusal_class": "profile_crossing_unbridged",
+  "attempted_read": {
+    "consumer": "agent_governor",
+    "use": "admission_evidence"
+  },
+  "presented_artifact": {
+    "producer": "nq",
+    "artifact_kind": "nq.probe_receipt.hypothetical",
+    "payload_schema_valid": true
+  },
+  "basis": {
+    "profile_non_authorities_hit": "ag.admission_evidence",
+    "bridge_receipts_in_custody": [],
+    "note": "parses != authorized; validity in the home project plus a clean parse confers nothing across the boundary without the declared bridge, paid"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agent_governor.artifact_profile.v0",
+  "title": "Artifact authority profile (AG-local declaration) — CANDIDATE, non-binding",
+  "description": "A producer's LOCAL declaration of what an artifact kind can testify to. AG-local vocabulary: field names shared with other projects' profiles carry no shared semantics (v7 no-unifier constitution). Every field CANDIDATE until this lane is promoted from working/.",
+  "type": "object",
+  "required": [
+    "schema",
+    "artifact_kind",
+    "producer",
+    "stage_survived",
+    "non_authorities"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "agent_governor.artifact_profile.v0"
+    },
+    "artifact_kind": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The declared artifact kind, in the PRODUCER's vocabulary (e.g. 'nq.finding_snapshot.v2'). Not a shared type."
+    },
+    "producer": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The home project/system that mints this artifact kind."
+    },
+    "wlp_receipt_kind": {
+      "type": "string",
+      "description": "The WLP envelope kind this artifact rides in, when it does. ENVELOPE ONLY — carrying a WLP kind here shares syntax, never authority semantics (gap spec §6). Omit if the artifact is not WLP-carried."
+    },
+    "local_payload_schema": {
+      "type": "string",
+      "description": "Reference (id or content hash) to the payload schema VALID IN THE HOME PROJECT. Parsing against it proves shape, never authority — the parse-implies-authority move is the forbidden specimen."
+    },
+    "stage_survived": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Custody-ladder position the artifact has survived to, in the producer's OWN ladder. Cross-ladder comparison is meaningless without a bridge; a stage-n profile never authorizes stage n+1 (rung receipts pay ascent, one per rung)."
+    },
+    "allowed_local_uses": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Uses the producer declares admissible IN THE HOME PROJECT. Absence of a use here is not a grant elsewhere."
+    },
+    "forbidden_uses": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Uses the producer explicitly forbids anywhere."
+    },
+    "residue_caveats": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Burdens/caveats the artifact carries (residue vocabulary, F3 lineage). Consumers inherit these; a bridge does not launder them."
+    },
+    "bridge_obligations_required": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Obligation ids that any cross-project or later-stage claim must discharge via a profile_bridge_receipt. Empty array = the producer declares no crossing is ever admissible from this profile alone... which still requires a bridge; this field names WHAT the bridge must pay."
+    },
+    "non_authorities": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "What this artifact must NEVER be read as (explicit negative surface). Load-bearing: the gate checks attempted reads against this before any bridge logic."
+    }
+  }
+}

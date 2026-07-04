@@ -1,6 +1,29 @@
 # Status — transition-kernel pickup
 
-As of 2026-07-04 (B2 executed; prior snapshots preserved below).
+As of 2026-07-04 (B2 + B6 + B7 executed; prior snapshots preserved below).
+
+## 2026-07-04 (later) — B6 + B7 executed; B-series buildable set EXHAUSTED
+
+- **B6** (v6 checker pilot): INVENTORY §"Pilot: v6 finite-support checker" —
+  firstDeficient over all 13 corpus cases (lake env eval, EXIT=0). 8
+  unconditional agreements / 4 expected divergences {05,10,11,12} on exactly
+  the scope-fence-excluded axes / case 13 encoding-dependent (both encodings
+  run and exhibited) / 0 unexpected. Sandwiched: codex BLOCK on the case-13
+  encoding resolved by exhibiting both models; re-review PASS. Checker stays
+  non-binding (SCRATCH); no kernel changes. Commit cites lean v6.0.0.
+- **B7** (v7 wire-format lane): `working/v7-profile-lane/` — README + 4
+  CANDIDATE schemas (artifact_profile, profile_bridge_receipt,
+  stage_ascent_receipt, jurisdiction_frame) + 3 specimens (incl. the
+  parse-implies-authority refusal specimen). All parse (json.tool 7/7);
+  structured specimens jsonschema-validate. 5 candidate refusal classes
+  NAMED, kernel enum untouched. No gate built (forcing event named: a
+  cross-project artifact actually presented as AG authority). Q-B7 narrowed
+  to the promotion question (DECISIONS).
+- **Remaining B-series is now entirely blocked-by-design or operator-gated:**
+  B5 request-side linearity (LA fence design), B5 stale-basis (mapping
+  design), freshness variants (granularity gap — consumer-forced), Q-B7
+  promotion, continuation specimen (transition-kernel frontier repo). Plus
+  housekeeping: B5-work-order stale table, stale branch pointer, Q-B4 moot.
 
 ## 2026-07-04 — B2 executed (fresh Fable pass, cold from receipts)
 

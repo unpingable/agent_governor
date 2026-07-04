@@ -172,7 +172,7 @@ tier: review · executor: codex-exec (framing by fable) · prereq: [B2]
 - stop condition: any temptation to make the checker load-bearing — v6 is
   SCRATCH-promoted; pilot only until Lean promotes.
 
-### B7 — v7 wire-format lane draft
+### B7 — v7 wire-format lane draft  **(EXECUTED 2026-07-04 — `working/v7-profile-lane/`: README + 4 CANDIDATE schemas (artifact_profile / profile_bridge_receipt / stage_ascent_receipt / jurisdiction_frame) + 3 specimens incl. the parse-implies-authority refusal; all validate; 5 candidate refusal classes NAMED not minted; no gate built. v7.0.0 released but SCRATCH-custody, so theorems cited as design provenance only; stays in working/ per Q-B7 default — promotion is the open operator half of Q-B7.)**
 tier: conceptual · executor: fable · prereq: [B2]
 - purpose: draft AG's v7-assigned lane (JSON schemas for artifact-authority
   profiles against the CANDIDATE fields), explicitly non-binding until v7

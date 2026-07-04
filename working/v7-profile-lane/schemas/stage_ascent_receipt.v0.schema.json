@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agent_governor.stage_ascent_receipt.v0",
+  "title": "Stage ascent receipt (ONE rung) — CANDIDATE, non-binding",
+  "description": "Pays exactly one rung of a producer's custody ladder for one artifact kind. A stage-n profile does not authorize stage n+1; an ascent j→k is a CONTIGUOUS CHAIN of these receipts, every intermediate rung in custody — no skipped rung, no bulk discount, no multi-rung receipt representable. The unit-step law (to_stage == from_stage + 1) and chain contiguity are gate-enforced invariants; JSON Schema cannot express the arithmetic.",
+  "type": "object",
+  "required": [
+    "schema",
+    "artifact_kind",
+    "producer",
+    "from_stage",
+    "to_stage",
+    "paid_by",
+    "content_digest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "agent_governor.stage_ascent_receipt.v0"
+    },
+    "artifact_kind": { "type": "string", "minLength": 1 },
+    "producer": { "type": "string", "minLength": 1 },
+    "from_stage": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "to_stage": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "MUST equal from_stage + 1 (gate-enforced; a receipt violating unit-step is refused, not reinterpreted)."
+    },
+    "paid_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Evidence reference for what earned this rung (the survival event: review passed, drill survived, ratification minted...). In the producer's idiom."
+    },
+    "content_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

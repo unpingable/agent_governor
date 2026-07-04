@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agent_governor.profile_bridge_receipt.v0",
+  "title": "Profile bridge receipt (pairwise, directional, paid) — CANDIDATE, non-binding",
+  "description": "The paid crossing: converts an artifact valid under one profile into a NAMED use under another, by discharging the declared bridge obligations. Pairwise and directional — no bridge mediates every pair (no master profile). A gate may VERIFY a presented bridge receipt; it must never synthesize one (bridges enter only by assumption).",
+  "type": "object",
+  "required": [
+    "schema",
+    "bridge_id",
+    "from_profile",
+    "to_use",
+    "obligations_discharged",
+    "custodian",
+    "content_digest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "agent_governor.profile_bridge_receipt.v0"
+    },
+    "bridge_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the DECLARED bridge this receipt pays. A receipt citing an undeclared bridge is not a bridge receipt."
+    },
+    "from_profile": {
+      "type": "object",
+      "required": ["producer", "artifact_kind"],
+      "additionalProperties": false,
+      "properties": {
+        "producer": { "type": "string", "minLength": 1 },
+        "artifact_kind": { "type": "string", "minLength": 1 }
+      },
+      "description": "The home-project profile the artifact is valid under."
+    },
+    "to_use": {
+      "type": "object",
+      "required": ["consumer", "use"],
+      "additionalProperties": false,
+      "properties": {
+        "consumer": { "type": "string", "minLength": 1 },
+        "use": { "type": "string", "minLength": 1 }
+      },
+      "description": "The SPECIFIC consumer-side use this crossing licenses (e.g. consumer 'agent_governor', use 'admission_evidence'). One use — not a blanket grant; receipts are scoped to obligations and are not fungible."
+    },
+    "obligations_discharged": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["obligation_id", "discharged_by"],
+        "additionalProperties": false,
+        "properties": {
+          "obligation_id": { "type": "string", "minLength": 1 },
+          "discharged_by": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Evidence reference (receipt id / content hash) for the discharge. A signature alone does not discharge a bridge obligation (WLP doctrine line)."
+          }
+        }
+      },
+      "description": "Each obligation from the from_profile's bridge_obligations_required, with its discharge evidence. The gate checks set-completeness against the profile; completeness is gate-enforced, not schema-expressible."
+    },
+    "custodian": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Who custodies the claim that this bridge exists and was paid. A bridge is a claim someone must custody."
+    },
+    "content_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Content digest of this receipt's canonical body."
+    }
+  }
+}

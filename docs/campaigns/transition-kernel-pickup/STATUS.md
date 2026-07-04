@@ -1,6 +1,42 @@
 # Status — transition-kernel pickup
 
-As of 2026-07-02 evening (B1 executed; prior snapshots preserved below).
+As of 2026-07-04 (B2 executed; prior snapshots preserved below).
+
+## 2026-07-04 — B2 executed (fresh Fable pass, cold from receipts)
+
+The invariant survival map was re-derived per `B2-coldstart.md` at lean HEAD
+`84d6d24`, superseding the 2026-07-02 draft in place (INVENTORY §"Invariant
+survival map"). What the fresh pass changed:
+
+- **3 missing enumerated rows added:** finitary exhaustively-matched verdict
+  enums ([1.0] typed-verdict API ↔ the closed Rust enums ↔ MANIFEST
+  closed-world admission); the Standing/LA/kernel/receipts separation (no
+  citable Lean warrant — `NoFreeStandingBridge` is UNRATIFIED-CANDIDATE;
+  authority is D010 Model X + seam-named refusals + the D010c misattribution
+  guard); citation tiers themselves (enforced by review, not type).
+- **2 tier corrections** (per-file `Custody-Class` headers verified, not
+  assumed): `one_receipt_cannot_license_two_discharges` is SCRATCH
+  (`Scratch/ExecutionObligationSequent.lean:219`), not "[v4-resident]" — the
+  single-spend row's authority is operational (Standing terminal `Used` +
+  durable-spend write-ahead + corpus 06), Lean warrant pilot-tier; and the
+  separation row must not lean on the CANDIDATE bridge module.
+- **Freshness refinement:** Lean [1.0] proves FIVE negative theorems (opaque
+  `Time.le` splits the two incoherence directions); AG's 4-value
+  `freshness_subcase` folds both into `incoherent_interval`. Recorded in the
+  granularity gap (+ stub note) — fold-by-argument, not oversight.
+- **Better warrant adopted:** `PredicateWitnessSeparation` (ANNEX, promoted
+  2026-06-27) cited on the synthetic-evidence row alongside
+  WitnessInvariance-adjacent [1.0].
+- **Refreshed ground truth:** corpus 13 (differential re-run this pass:
+  13 cases, 0 unaccepted divergences, EXIT=0); Slice 1b on main (receipt
+  `59cf2553`); B5 enumeration updated (A-1..A-4 done; freshness variants →
+  alignment gap; continuation specimen → frontier corpus).
+- **Stop condition not triggered** — no invariant needed new kernel
+  vocabulary; nothing filed in DECISIONS.
+
+B6/B7 prereq [B2] now satisfied. Remaining B5 drills stay blocked as recorded
+in `B5-work-order.md` (note: its "buildable now" table is stale — those 4
+shipped 2026-07-03).
 
 ## 2026-07-03 — B4 verify-and-adopt CLOSED (Slice 1b fully on main)
 

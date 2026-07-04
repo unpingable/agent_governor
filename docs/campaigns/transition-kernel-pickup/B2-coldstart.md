@@ -1,5 +1,11 @@
 # B2 cold-start — invariant survival map
 
+**EXECUTED 2026-07-04** (fresh Fable session, cold per this handle) — see
+STATUS.md §2026-07-04 and INVENTORY.md §"Invariant survival map". Note: the
+"new section" framing below was stale — a 2026-07-02 draft existed; the pass
+superseded it in place (3 rows added, 2 tier corrections, 5-vs-4 Freshness
+refinement).
+
 **Teed up 2026-07-03 (do NOT start warm at a session tail — this is the handle).**
 Executor: **Fable** (conceptual seam; per model-tier routing). Tier: conceptual.
 Resume COLD from the receipts below, not from a warm summary.

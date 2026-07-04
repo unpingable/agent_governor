@@ -142,35 +142,57 @@ temporal-lapse, stale-basis-as-live (NQ BASIS_STALE v0). Freshness IS covered
 
 ---
 
-## Invariant survival map (B2, executed 2026-07-02)
+## Invariant survival map (B2 — re-derived cold 2026-07-04, Fable pass)
 
-Ground truth: B1 (above). The shared Lean/Rust/Python vocabulary is the
-**12-kind refusal enum + 5 refusing seams + 4 outcomes**; wicket verdicts stay
-wicket's; **the corpus is the contract**. Citation tiers per
-`docs/roadmaps/tools/lean.md`: [1.0] citable · ANNEX exact-theorem · SCRATCH
-pilot-only · post-v7 uncitable.
+Supersedes the 2026-07-02 draft **in place** (the draft predated the B5 quartet,
+corpus 13, and B4 adoption, was missing three enumerated rows, and carried two
+tier errors — marked ⚠ below). Ground truth: B1 (above) + Packet C custody +
+B5 quartet (corpus 13) + B4 (Slice 1b on main, verify-run receipt `59cf2553`).
+The shared Lean/Rust/Python vocabulary is the **12-kind refusal enum + 5
+refusing seams + 4 outcomes** (`transition_core.rs:86-97`, `:124-128`); wicket
+verdicts stay wicket's; **the corpus is the contract** — differential re-run
+this pass: **13 cases, 0 unaccepted divergences, EXIT=0**.
+
+Lean read at HEAD **`84d6d24`** (2026-07-03; three scratch commits past the
+roadmap snapshot `762967c`). Tiers are the repo's own per-file `Custody-Class`
+headers — **verified per file this pass, not assumed from directory**:
+PUBLIC-SHIPPED [1.0] (8 public modules per the `AdmissibilityKernels`
+aggregator) · ANNEX (compiled support; cannot ratify) · SCRATCH (pilot-only) ·
+UNRATIFIED-CANDIDATE (uncitable).
 
 | invariant (operational statement) | Lean source (tier) | Rust surface | corpus case | status |
 |---|---|---|---|---|
-| authorized ⟺ every office green; one refusing office refuses the transition | `authorized_iff_all_green`, Authority [1.0] | office composition → outcome `consumed` only when standing+admission+capacity all pass | 01 + 02/04 | **covered** |
-| no-basis / advisory basis never authorizes | Authority [1.0] | wicket office input; `gap` → outcome `gap_accounted` (accounted, never authority) | 05 | **covered** |
-| revoked basis cannot be an authorized step | `revoked_basis_cannot_be_authorized_step`, Execution [1.0] | refusal kind `token_revoked` (la_seam) | **case 11** | **DONE (B5 A-2, 2026-07-03)** |
-| freshness is metric-time on compatible witnesses; lapse refuses | Freshness [1.0] (expired / not_yet_valid / divergence_excessive / incoherent_interval) | `standing_before_spendability_not_bounded` + typed `freshness_subcase` (spendability seam) | 08/09 + subcase | **CLOSED (B5 A-5, covered_by_single_kind)** — ruling 2026-07-03 keeps the single refusal kind; the Lean variants ride a machine-readable `freshness_subcase` in the receipt block (case 08 = `expired`, asserted). The other 3 subcases are the **freshness-granularity alignment gap** below, not a corpus blocker. |
-| single-spend / replay refuses before effect | `one_receipt_cannot_license_two_discharges` SEQ2/3 [v4-resident]; BoundedCalculi ANNEX | `already_consumed`; durable-spend write-ahead | 06 | **covered (spend side)** |
-| request-side linearity: one admission receipt funds ONE capacity request | same theorem family | **UNFENCED** (reconciliation F-A3b-2: eligibility_reference reuse unrefused AG-side; idempotency_key optional) | **NONE** | **gap — code AND corpus**; cross-repo (LA contract), record-first |
-| spend-time scope mismatch refuses non-consuming | D010 Model X (ratified); Standing `1e62ba9` | refusal kind `scope_mismatch` (la_seam variant) | **case 10** | **DONE (B5 A-1, 2026-07-03)** — the gauntlet LA-side scope_mismatch; the Standing-store variant (Slice 1b) is a separate surface |
-| synthetic/non-observed evidence cannot confer operational effect | WitnessInvariance-adjacent [1.0]; AG origin fence doctrine | origin_mode allowlist; `DemonstratedConsumed` type split | 07 | **covered** |
-| a successful act does not authorize the next breath | NoFreeContinuation (SCRATCH feedstock; GAP-2) | continuation grant burn (C1–C4 shipped; specimens/continuation-trajectory) | outside legacy corpus | **note** — consider promoting one trajectory specimen into the differential corpus |
-| corrective moves cannot widen authority | Corrective [1.0] | **no_surface** — kernel does not model corrective moves | — | honest no_surface; do not stretch |
-| checkpoint/compaction mints nothing | `checkpoint_mints_nothing` ANNEX | AG-side concern (reconciliation A3b item 8: PASS); kernel receipts are append-only | — | covered outside kernel |
+| authorized ⟺ every office green; one refusing office refuses the transition | `authorized_iff_all_green` (`Authority.lean:116`) [1.0] | office composition → outcome `consumed` only when standing+admission+capacity all pass | 01 + 02/04 | **covered** |
+| no-basis / advisory basis never authorizes | Authority verdict algebra [1.0] | wicket office input; `gap` → outcome `gap_accounted` (accounted, never authority) | 05 | **covered** |
+| revoked basis cannot be an authorized step | `revoked_basis_cannot_be_authorized_step` (`Execution.lean:133`) [1.0] | refusal kind `token_revoked` (la_seam) | **case 11** | **covered (B5 A-2)** |
+| freshness is metric-time on compatible witnesses; lapse refuses | Freshness [1.0] — **five** negative theorems: `expired_not_fresh` / `not_yet_valid_not_fresh` / `incoherent_not_fresh` / `not_precedes_not_fresh` / `divergence_excessive_not_fresh` (`Time.le` is opaque, so the two `TemporallyCoherent` failure directions are structurally distinct) | `standing_before_spendability_not_bounded` + typed `freshness_subcase` (spendability seam; `standing_spendability.py:77-86`) | 08/09 + subcase (08 = `expired`, asserted) | **CLOSED (B5 A-5, covered_by_single_kind)** — ruling 2026-07-03 keeps the single refusal kind; Lean variants ride the machine-readable `freshness_subcase`. Note: AG's 4-value subcase enum folds BOTH incoherence directions into `incoherent_interval` — recorded in the granularity gap below, not a corpus blocker. |
+| single-spend / replay refuses before effect | ⚠ tier corrected: `one_receipt_cannot_license_two_discharges` (`Scratch/ExecutionObligationSequent.lean:219`) is **Custody-Class: SCRATCH** — the draft's "[v4-resident]" overstated it; no ANNEX-or-better receipt-linearity wall exists (BoundedCalculi `ObligationResidue` covers residue persistence, not the two-discharge wall) | `already_consumed`; durable-spend write-ahead; Standing terminal `Used` FSM upstream | 06 | **covered (spend side) operationally** — corpus + implementation pins carry the authority; the Lean warrant is pilot-tier (promotion candidate, not a blocker) |
+| request-side linearity: one admission receipt funds ONE capacity request | same SCRATCH sequent family | **UNFENCED** (reconciliation F-A3b-2: eligibility_reference reuse unrefused AG-side; idempotency_key optional) | **NONE** | **gap — code AND corpus**; cross-repo (LA contract), record-first |
+| spend-time scope mismatch refuses non-consuming | D010 Model X (ratified); Standing `1e62ba9` | refusal kind `scope_mismatch` (la_seam variant); Standing-store variant now **on main** via Slice 1b (B4, receipt `59cf2553`) | **case 10** | **covered (B5 A-1)** — gauntlet LA-side variant; the Standing-store variant is a separate surface, adopted |
+| synthetic/non-observed evidence cannot confer operational effect | WitnessInvariance-adjacent [1.0]; **`PredicateWitnessSeparation` ANNEX** (promoted from Scratch 2026-06-27 — "predicate satisfaction ≠ witness" is the origin-fence doctrine's nearest compiled warrant); AG origin fence doctrine | origin_mode allowlist; `DemonstratedConsumed` type split | 07 | **covered** |
+| a successful act does not authorize the next breath | NoFreeContinuation (`Scratch/`, header: SCRATCH/CANDIDATE — informs a consumer, not public-surface) | continuation grant burn (C1–C4 shipped; specimens/continuation-trajectory) | outside golden corpus | **routed** — the trajectory specimen belongs to transition-kernel's FRONTIER corpus (different verdict shape), not golden/corpus (B5 work-order; resolves the draft's "consider promoting" note) |
+| corrective = down-edge; corrective moves cannot widen authority | Corrective [1.0]: `corrective_not_forward` / `corrective_not_neutral` (down-edge), `corrective_no_authority_laundering` + `corrective_monotone` (cannot widen) | **no_surface** — kernel does not model corrective moves | — | honest no_surface; do not stretch |
+| checkpoint/compaction mints nothing | `checkpoint_mints_nothing` (`BoundedCalculi/CheckpointSettlement.lean`) ANNEX | AG-side concern (reconciliation A3b item 8: PASS); kernel receipts are append-only | — | covered outside kernel |
 | stale basis is live-but-distinct (NQ BASIS_STALE v0, post-corpus) | — (NQ contract, not Lean) | **no mapping yet** — open question: stale-basis at cook time maps to `admission_gap_accounted`? or refuses upstream of the kernel? | **NONE** | **B5 design question first, then case** — do NOT mint a 13th refusal kind without operator |
-| refusals name the offender | v5/v6 typed CheckResult (SCRATCH — pilot only) | refusal carries kind + refusing_seam + verbatim offending values | throughout | pilot-grade check via B6; not a wall claim |
+| refusals name the offender | v5/v6 typed `CheckResult` (`Scratch/FiniteSupportChecker.lean`, header: SCRATCH — pilot only) | refusal carries kind + refusing_seam + verbatim offending values | throughout | pilot-grade check via B6; not a wall claim |
+| finitary exhaustively-matched verdict enums | the 1.0 load-bearing typed-verdict API [1.0]: `Authority.{Basis,Precedence,Standing,Authority}Verdict`, `SurfaceAuthorization.Verdict` — finitary inductives, refusal theorems per constructor; checker-side v6 `CheckResult` (SCRATCH, pilot) | `RefusalKind` (12) / `RefusingSeam` (5) / outcomes (4) as closed enums, exhaustive `match`, closed `as_str()` wire vocabulary | all 13 + `MANIFEST.json` closed-world admission (custody guard fences unadmitted files) | **covered** — a novel kind is unrepresentable in-type; a novel wire string is a typed error, never coerced (allowlist-authority doctrine) |
+| Standing / LA / kernel / receipts separation (no organ adjudicates another's seam) | **no citable Lean warrant** — `NoFreeStandingBridge` exists but is UNRATIFIED-CANDIDATE (⚠ uncitable per tier rule); authority is ratified constellation doctrine (D010 Model X: AG inherits, never adjudicates; LA never-mints; zoning) | every refusal names its `refusing_seam` (5 seams); Slice 1b type split `GrantUsed \| GrantRefused \| NoVerifiedResult` on main | seam attribution spans the corpus: 02/03 (standing) · 04 (wicket) · 10–13 (la) · 08/09 (spendability) | **covered operationally** — misattribution guard: `no_verified_result` never claims Standing refused (D010c three-way). Lean warrant = honest gap (candidate exists; do not lean on it) |
+| citation tiers themselves ([1.0] / ANNEX / SCRATCH / CANDIDATE; annex cannot ratify) | the lean repo's per-file `Custody-Class` header discipline + the `AdmissibilityKernels` aggregator scope fence; AG mirror: `docs/roadmaps/tools/lean.md` | **none** — a citation/review discipline, not a runtime type | n/a | **enforced by review, not by type** (honest) — refusal mode: down-tier cite used as authority → finding (R-LEAN-2); fired **twice in this very pass** (single-spend row; separation row) |
 
-**B5 enumeration (final):** (1) scope_mismatch non-consuming; (2) token_revoked;
-(3) token_expired; (4) unknown_token; (5) freshness not_yet_valid; (6) freshness
-incoherent_interval; (7) request-side linearity (pending its design/fence);
-(8) stale-basis (pending its mapping design); (9) promote one continuation
-specimen. Each = one work-order slice after Q-B3.
+**Stop condition: not triggered.** Every invariant above is statable in the
+existing kernel vocabulary (12 kinds + 5 seams + 4 outcomes + typed receipt
+diagnostics); no `requires_operator` filing needed. The two open design
+questions (request-side linearity fence; stale-basis mapping) were already
+filed and remain design-first, not vocabulary mints.
+
+**B5 enumeration (updated 2026-07-04):** (1)–(4) scope_mismatch /
+token_revoked / token_expired / unknown_token — **DONE** (A-1..A-4, corpus
+10–13); (5)/(6) freshness not_yet_valid / incoherent_interval — **closed as
+the granularity alignment gap** (ruling #1: single kind + subcase; new cases
+only if the window model is enriched); (7) request-side linearity — blocked on
+the LA fence design; (8) stale-basis — blocked on its mapping design; (9)
+continuation specimen — **routed to the transition-kernel frontier corpus**,
+out of golden/corpus scope.
 
 **B3 note:** the custodian recommendation (transition-kernel repo owns
 differential.py + corpus; wicket fixtures cross-referenced; AG contributes via
@@ -189,7 +211,17 @@ machine-readable and receipt-backed, not prose-only (the two-clock gate reaches
 However, AG's closed refusal vocabulary remains coarser than the Lean Freshness
 model, and the current two-clock gate only PRODUCES `expired` — the other three
 subcases need window inputs (issued time / skew / max-divergence / an explicit
-interval) the gate does not carry. A future evidence-driven slice may (a) enrich
+interval) the gate does not carry.
+
+**B2 refinement (2026-07-04, lean HEAD `84d6d24`):** the mismatch is 5-vs-4,
+not 4-vs-4 — Lean Freshness [1.0] proves **five** negative theorems, because
+`Time.le` is kept opaque (no order axioms) so the two `TemporallyCoherent`
+failure directions are structurally distinct: `incoherent_not_fresh`
+(`expires ≤ issued`) and `not_precedes_not_fresh` (`¬ (issued ≤ expires)`).
+AG's `incoherent_interval` subcase folds both. Any future subcase→kind split
+should decide explicitly whether the two directions stay folded (they collapse
+in a total order, which AG's monotonic readings satisfy) — fold-by-argument,
+not fold-by-oversight. A future evidence-driven slice may (a) enrich
 the window model to produce the other subcases, and/or (b) split the single
 refusal kind into four typed kinds IF a consumer needs to route differently
 (expired→renewal, not_yet_valid→wait/retry, divergence_excessive→clock/witness

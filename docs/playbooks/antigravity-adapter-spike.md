@@ -119,12 +119,33 @@ verdict logic: `refused` → `blocked` (unknown exit never coerced), `porter_fai
 `not_supported`, `run_failed` → `blocked` (nonzero captured, not laundered),
 `completed` → the probe verdict. Tested against synthetic `porter.record.v0`.
 
-**Still gated (the live drive):** a Porter recipe that provisions the docker/KVM
-substrate (network-denied, scope-fenced) with `agy` + auth, then the three live probes
-through it. This intersects existing deliberately-unarmed cage code (C11/seccomp in
-the substrate harness) and spends real model tokens, so it is operator-ratified, not
-rushed. When armed, the flow is: AG behavioral probe → `run_probe_via_porter` →
-Porter recipe (docker/KVM) → honest record → `BehaviorProbeReceipt`.
+**Docker cage PROVEN LIVE (2026-07-05).** `build_docker_argv` + `build_cage_argv`
+dispatch in `antigravity_runner.py`; `cage_preflight` now succeeds via docker where
+bwrap fails. Witnessed on this host (`docs/playbooks/antigravity-cage-docker.v0.json`,
+`evidence_kind: cage_attestation`, `authority: none`, no agy run):
+
+- **cage available** — `docker run --network none … /bin/true` exits 0 (bwrap here
+  dies on `apparmor_restrict_unprivileged_userns=1`).
+- **network denied** — `wget http://example.com` inside `--network none` → BLOCKED
+  (cage-level fact, not a model claim).
+- **write fenced** — `--read-only` root + one bound `/work`: a write to `/work`
+  surfaces on the host; a write to `/work/..` → *read-only file system* (NO-LEAK).
+- **isolated** — `~/.ssh` absent; host secrets never mounted (absence-restrictive).
+
+*(Snap-confined docker blocks `/tmp` host bind mounts — a `$HOME`-interface path is
+used for the writable scope. Recorded, not worked around.)*
+
+**Still gated (agy under the cage):** the three live *behavioral* probes need an
+auth-bearing `agy` image + a deliberately-widened network/auth ration + real model
+spend, and intersect the C11/seccomp substrate harness — operator-ratified, not
+rushed. The cage is proven; feeding agy to it is the next gate.
+
+**Porter courier (cleared to extend, daylight work):** Porter's transport is
+ssh/serial — and `--network none` has no interfaces for ssh, so the clean
+network-isolated courier is a **serial-socket qemu guest** (`/dev/kvm` present) or a
+new **docker-exec transport** in Porter. Both are Porter *kernel* changes; named, not
+rushed at 2am. The AG side already consumes `porter.record.v0` (`run_probe_via_porter`),
+so a recipe/transport is drop-in.
 
 ### AGY-1's cage design (for a cage-capable host)
 

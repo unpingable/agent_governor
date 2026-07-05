@@ -253,6 +253,17 @@ produced Porter-VM cage specimens. **Gated (live drive, operator-ratified):** a
 Porter docker/KVM recipe with agy+auth + the three live probes — intersects
 deliberately-unarmed C11/seccomp substrate code + real model spend.
 
+**S5 / AGY-2 DOCKER CAGE PROVEN LIVE (2026-07-05).** `build_docker_argv` +
+`build_cage_argv` dispatch; `cage_preflight` succeeds via docker where bwrap fails
+(AppArmor userns). Witnessed live, no agy run (`antigravity-cage-docker.v0.json`,
+`cage_attestation`, `authority=none`): cage available; network denied (`wget`→BLOCKED
+under `--network none`); write fenced (bound `/work` surfaces on host, `/work/..`→
+read-only NO-LEAK); isolated (`~/.ssh` absent). 30 runner tests, ruff clean. **Still
+gated:** agy under the cage (auth-bearing image + widened ration + model spend +
+C11); Porter courier = serial-socket qemu or a docker-exec transport (Porter kernel
+change, cleared to extend, daylight work). **The cage is proven; feeding agy to it is
+the next gate.**
+
 **S4 LANDED (2026-07-04) — the projection, not the wiring.**
 `src/governor/work_container.py`: the `WorkContainer` projection primitive +
 `project_cd4b_work_container()`, which projects the proven CD-4B live shape

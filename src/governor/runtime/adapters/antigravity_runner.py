@@ -148,6 +148,41 @@ def build_bwrap_argv(
     return argv
 
 
+DEFAULT_DOCKER_IMAGE = "alpine:latest"
+
+
+def build_docker_argv(
+    cage: OuterCage,
+    inner_argv: Sequence[str],
+    *,
+    image: str = DEFAULT_DOCKER_IMAGE,
+) -> list[str]:
+    """Construct a ``docker run`` cage. Enforcement is the container: ``--network
+    none`` denies network (no interfaces at all), ``--read-only`` root + a tmpfs makes
+    everything immutable except the one bound write scope; ``$HOME``/keys/``.git`` are
+    simply never mounted (absence-restrictive). Unlike bwrap, this needs no user
+    namespace, so it works where AppArmor restricts unprivileged userns."""
+    argv = ["docker", "run", "--rm", "--read-only", "--tmpfs", "/tmp:rw"]
+    if cage.network == "denied":
+        argv += ["--network", "none"]
+    for w in cage.write_scope:
+        argv += ["-v", f"{w}:{w}:rw"]
+    if cage.write_scope:
+        argv += ["-w", cage.write_scope[0]]
+    argv += ["--", image, *inner_argv]
+    return argv
+
+
+def build_cage_argv(cage: OuterCage, inner_argv: Sequence[str]) -> list[str]:
+    """Dispatch to the cage backend. ``porter`` is driven differently (via
+    :func:`run_probe_via_porter`), not by an argv here."""
+    if cage.kind == "bwrap":
+        return build_bwrap_argv(cage, inner_argv)
+    if cage.kind == "docker":
+        return build_docker_argv(cage, inner_argv)
+    raise ValueError(f"no direct argv for cage kind {cage.kind!r}")
+
+
 @dataclass(frozen=True)
 class CagePreflight:
     """Whether a working outer cage can be built on this host."""
@@ -161,7 +196,7 @@ def cage_preflight(runner: ProbeRunner, *, cage: Optional[OuterCage] = None) -> 
     available iff it exits 0. Fail-closed: any failure (absent bwrap, denied user
     namespace, netns error) → not available, with the reason captured verbatim."""
     cage = cage or OuterCage(kind="bwrap", network="denied", write_scope=())
-    argv = build_bwrap_argv(cage, ["/bin/true"])
+    argv = build_cage_argv(cage, ["/bin/true"])
     exec_ = runner(argv)
     if not exec_.ran:
         return CagePreflight(False, "bwrap binary absent or not executable")
@@ -311,7 +346,7 @@ def run_behavior_probe(
     ``observe_writes`` / ``observe_network`` are optional callables that supply
     cage-level facts (write delta, network reachability) — model claims are never
     authoritative for those."""
-    argv = build_bwrap_argv(cage, spec.inner_argv())
+    argv = build_cage_argv(cage, spec.inner_argv())
     exec_: ProbeExec = runner(argv)
     obs = ProbeObservation(
         ran=exec_.ran,
@@ -469,6 +504,9 @@ __all__ = [
     "DEFAULT_RO_BINDS",
     "OuterCage",
     "build_bwrap_argv",
+    "build_docker_argv",
+    "build_cage_argv",
+    "DEFAULT_DOCKER_IMAGE",
     "CagePreflight",
     "cage_preflight",
     "ProbeObservation",

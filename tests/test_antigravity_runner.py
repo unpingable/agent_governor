@@ -61,6 +61,41 @@ def test_bwrap_argv_allows_network_only_when_ration_says_so():
     assert "--unshare-net" not in build_bwrap_argv(open_cage, ["/bin/true"])
 
 
+# --- docker cage backend (works where bwrap can't) -------------------------- #
+def test_docker_argv_denies_network_and_read_only_root():
+    from governor.runtime.adapters.antigravity_runner import build_docker_argv
+
+    argv = build_docker_argv(OuterCage(kind="docker", network="denied", write_scope=("/work",)), ["agy", "-p", "x"])
+    assert "--network" in argv and argv[argv.index("--network") + 1] == "none"
+    assert "--read-only" in argv  # immutable root; only the bound scope is writable
+    assert "-v" in argv and "/work:/work:rw" in argv
+    # forbidden paths / $HOME are enforced by ABSENCE — never mounted.
+    assert not any(h in " ".join(argv) for h in ("/home", ".ssh", ".gemini"))
+    assert argv[-3:] == ["agy", "-p", "x"]
+
+
+def test_docker_argv_no_network_flag_when_allowed():
+    from governor.runtime.adapters.antigravity_runner import build_docker_argv
+
+    argv = build_docker_argv(OuterCage(kind="docker", network="allowed", write_scope=()), ["/bin/true"])
+    assert "--network" not in argv
+
+
+def test_build_cage_argv_dispatches_by_kind():
+    from governor.runtime.adapters.antigravity_runner import build_cage_argv
+
+    assert build_cage_argv(OuterCage(kind="bwrap", write_scope=()), ["/bin/true"])[0] == "bwrap"
+    assert build_cage_argv(OuterCage(kind="docker", write_scope=()), ["/bin/true"])[0] == "docker"
+    with pytest.raises(ValueError):
+        build_cage_argv(OuterCage(kind="porter", write_scope=()), ["/bin/true"])  # driven via porter
+
+
+def test_docker_cage_preflight_available_via_injected_runner():
+    docker_cage = OuterCage(kind="docker", network="denied", write_scope=())
+    r = cage_preflight(_fixed(ProbeExec(ran=True, exit_code=0)), cage=docker_cage)
+    assert r.available is True
+
+
 # --- cage preflight: prove the cage before feeding it work ------------------ #
 def test_preflight_unavailable_when_bwrap_cannot_namespace():
     r = cage_preflight(_fixed(ProbeExec(ran=True, exit_code=1, stderr="bwrap: setting up uid map: Permission denied")))
@@ -276,3 +311,14 @@ def test_persisted_behavior_artifact_is_the_caged_refusal():
     assert rec["authority"] == "none"
     assert rec["evidence_kind"] == "behavioral_probe"
     assert any("refused to run agy uncaged" in n for n in rec["notes"])
+
+
+def test_persisted_docker_cage_attestation_is_honest():
+    data = json.loads((_REPO / "docs/playbooks/antigravity-cage-docker.v0.json").read_text())
+    assert data["evidence_kind"] == "cage_attestation"
+    assert data["authority"] == "none"
+    assert "no agy was run" in data["not_live_testimony"]
+    facts = " ".join(data["witnessed_facts"])
+    assert "network_denied" in facts and "write_fenced" in facts and "cage_available" in facts
+    # agy behavior is explicitly NOT claimed — it stays gated.
+    assert any("agy behavioral probes" in g for g in data["unwitnessed_or_gated"])

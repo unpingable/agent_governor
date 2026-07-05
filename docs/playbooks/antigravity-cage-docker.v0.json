@@ -1,0 +1,56 @@
+{
+  "record_kind": "docker_cage_attestation.v0",
+  "evidence_kind": "cage_attestation",
+  "authority": "none",
+  "not_live_testimony": "Attests the OUTER CAGE works and holds. NOT testimony about agy behavior \u2014 no agy was run. agy behavioral probes remain gated on an auth-bearing image + network/auth ration + model spend.",
+  "cage": {
+    "kind": "docker",
+    "network": "denied",
+    "write_scope": [
+      "/work"
+    ],
+    "forbidden_paths": [
+      "~/.ssh",
+      "~/.gitconfig",
+      "~/.gemini",
+      "~/.config/gcloud",
+      ".git"
+    ]
+  },
+  "image": "alpine:latest",
+  "command_shape": [
+    "docker",
+    "run",
+    "--rm",
+    "--read-only",
+    "--tmpfs",
+    "/tmp:rw",
+    "--network",
+    "none",
+    "-v",
+    "/work:/work:rw",
+    "-w",
+    "/work",
+    "--",
+    "alpine:latest",
+    "agy",
+    "-p",
+    "<redacted>"
+  ],
+  "host": {
+    "kernel": "6.8.0-124-generic",
+    "docker": "snap-confined (/var/snap/docker)",
+    "bwrap": "unavailable (apparmor_restrict_unprivileged_userns=1, non-setuid)"
+  },
+  "witnessed_facts": [
+    "cage_available: docker run --network none exits 0 (bwrap fails here: apparmor userns restriction)",
+    "network_denied: wget http://example.com -> BLOCKED inside --network none (cage-level, not a model claim)",
+    "write_fenced: write to bound /work surfaces on host; write to /work/.. -> read-only filesystem (NO-LEAK)",
+    "isolation: ~/.ssh absent; host secrets never mounted (absence-restrictive)"
+  ],
+  "unwitnessed_or_gated": [
+    "agy behavioral probes (headless/write/network): need an auth-bearing agy image + network/auth ration + model spend",
+    "C11/seccomp confirmation: the bwrap-cage.v0 substrate-harness path (validate_bwrap_substrate.py)",
+    "Porter courier integration: serial-socket qemu recipe (network-isolated) or a docker-exec transport extension"
+  ]
+}

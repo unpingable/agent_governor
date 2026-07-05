@@ -203,10 +203,48 @@ ratification act pending)
   mandatory), U3-C (desk.html), U3-D (parity pin + live smoke), U3-E (nav
   + docs).
 
-## Next
+## Sprint 5 — "Front door + coherence + launch" (build work CLOSED 2026-07-05)
 
-**Sprint 5 — "Front door + coherence + launch"** (CAMPAIGN §9 packets
-18–22) can start; U3-B..E continue in parallel. **Operator acts now
-stacked:** (1) work-container ratification (memo `68eae6e` — Option A
-recommended); (2) spine OQ-1..OQ-5; (3) at S5 exit: final pushes + public
-claim minting + site deploy.
+- **18 Constellation map page — DONE** (unpingable-site `e829b38` +
+  story-pass `d98b3ad` + `cea34a0`; **4 commits LOCAL — deploy is the
+  operator's act**). NQ first, composition-not-prerequisite up front, grades
+  sourced; Fable pass caught vscode grade inflation (then U5 ran and
+  verified for real) + trimmed an unverified NQ capability.
+- **19 Cross-links** — folded into 18 (map links all repos) + AG README
+  "go deeper" line (item 4). Per-repo reverse links deferred to post-launch
+  (low value vs. spend).
+- **20 Coherence pass — DONE** (`d2f615f`, `coherence-pass.md`): per-repo
+  fix lists; items 2–6, 11–13, 18 ALL APPLIED same-day (AG `590bd6e`,
+  maude `3b68a1a`, AG integration `65a39a8` — contract suite 8-fail → 50
+  green; porter `7d4a686`; vscode `43f283e` — U5 verified vs 2.8.1, 176
+  tests; site limits paragraph `d4b61e3`). NQ items 7–10 remain offers.
+- **20b Reconciliation sweep — PARTIAL.** The independent Opus sweep died
+  on the MONTHLY SPEND LIMIT before reporting. Mechanical sweep run inline
+  instead (grep classes): gemini-as-live CLEAN; NQ-required CLEAN; site
+  internal links CLEAN; two residues found + fixed (leftover "one mutation
+  door" phrases in gov-webui code comments → `006bfeb`; dead
+  `~/git/scheduler` path in two internal AG docs → this commit).
+  **OWED: the independent-eyes sweep re-run** (launch-checklist act 6) —
+  the integrator authored much of the swept text and does not green its
+  own gate.
+- **21 Launch checklist + DoD walk — DONE** (`launch-checklist.md`, this
+  commit): 8 of 10 DoD criteria ☑; remaining ☐ are operator acts
+  (ratification; operator fresh-clone run; desk live smoke; 20b re-run;
+  repo-visibility check; site deploy; mint) + spine OQs.
+- **22 Demo script** — CAMPAIGN §13 Tracks A–D stand as the script; site
+  demo.html verified consistent with TOUR (item 18). Recording = operator
+  option.
+- **Desk adversarial sandwich (lane U) — BLOCK → FIXED:** F1 "one mutation
+  door" wording false (three mutating routes) → corrected everywhere;
+  F2 proceed scope/expiry laundering → daemon-side hardening `2990ed6`
+  (forged scope pinned inert). F5/F6 notes (desk GET/SSE unauthenticated by
+  app-wide posture; UI sends no bearer token, fails safe) → post-launch
+  follow-ups.
+
+## Campaign state: BUILD WORK COMPLETE — operator acts remain
+
+Everything model-side is done and pushed. The launch path is
+`launch-checklist.md` §Operator acts (8 steps, in order: ratify → spine
+OQs → repo-visibility check → operator fresh-clone → desk live smoke →
+20b re-run → site deploy → mint). Nothing armed anywhere; all public docs
+CANDIDATE until the mint.

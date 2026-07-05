@@ -99,7 +99,7 @@ v2 clients consume the daemon directly (UDS or stdio), not MCP.
 
 ### Nightshift
 
-**Repo:** `~/git/scheduler` (Night Shift — ops work with Claude)
+**Repo:** `~/git/nightshift` (moved from `~/git/scheduler`, 2026-07-05) (Night Shift — ops work with Claude)
 
 **Role candidate:** Client of governor's admission/quorum/runtime
 surface. Consumes runtime session supervision for ops tasks;

@@ -18,7 +18,7 @@
 | 7b | Spine v0 public or honestly re-scoped | ☑ (fallback holds) | Engine green (141), docs de-staled; S-B/S-D gated on **☐ OQ-1/OQ-2**; map page says "building" |
 | 7c | NQ flagship | ☑ | Stranger run + Track D + map-first + optionality pinned (`bff54d0`) |
 | 7d | gov-webui legacy green + desk v0 | ☑ code+tests / **☐ one live desk smoke** | 533 tests; desk landed `f10e1dd..7e30fbe`; the skip-by-default live smoke has not run against a live daemon yet |
-| 8 | Front door coherent; sweep clean | ☑ pages built / **☐ 20b verdict** | constellation.html (4 local site commits); 20b sweep in flight at compile time — attach verdict before mint |
+| 8 | Front door coherent; sweep clean | ☑ | Independent 20b sweep ran post-RC-0: 7 findings, all applied (STATUS §20b); clean classes explicit; site PUSHED (`52413b4`) |
 | 9 | Nothing armed | ☑ | C11/seccomp/H2/live-cage all refused; limits.html states it |
 | 10 | Public claim minted | **☐ OPERATOR** | The one step that converts candidate → public |
 
@@ -43,10 +43,11 @@
 5. **Desk live smoke** (DoD 7d) — `governor serve` + run gov-webui's
    skip-by-default live-integration test, or 2 minutes of clicking /desk
    against the live daemon.
-6. **Read the 20b sweep verdict** (attached to STATUS when it lands) and
-   accept/queue its dispositions.
-7. **Deploy the site** — push unpingable-site (4 local commits: map page +
-   story-pass fixes + limits paragraph + vscode grade). Deploy = publish.
+6. ~~20b sweep~~ **DONE 2026-07-05** — independent re-run complete, 7
+   findings applied (STATUS §20b); read the summary, nothing left queued.
+7. ~~Deploy the site~~ **PUSHED 2026-07-05** (operator-blessed; through
+   `52413b4` incl. positioning intro + sweep fixes). Verify hosting picked
+   it up, then external adversarial passes on the live URLs are cheap.
 8. **Mint** — the public claim, however you phrase it (site live + repos
    linked + this campaign's docs cited). After the mint, DRAFT markers that
    ratification (act 1) cleared may be removed per the memo.

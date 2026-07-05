@@ -241,6 +241,36 @@ ratification act pending)
   app-wide posture; UI sends no bearer token, fails safe) → post-launch
   follow-ups.
 
+## 20b independent sweep — RE-RUN COMPLETE (2026-07-05, post-RC-0)
+
+Independent Opus sweep over the full stranger set (6 site pages, 7 AG docs,
+6 README fronts; re-derived the integrator's pre-pass rather than trusting
+it). **Verdict: NOT LAUNCH-COHERENT — narrowly; 7 findings, all text edits,
+ALL APPLIED same-day:**
+- **F1 (blocking, stale):** README hero listed Gemini CLI as a live governed
+  backend — fixed per the existing "gemini defunct" ruling (AG `f38e3d3`).
+- **F2 (blocking, grade inflation):** index.html badged nightshift
+  `operational`, the exact maturity-parity-with-NQ the operator forbade →
+  `specimen` (site `52413b4`).
+- **F3/F4 (blocking, stale):** README advertised the deleted mcp_safety
+  module and linked retired Guvnah → fixed (AG `f38e3d3`).
+- **F5:** maude README claimed M-3 shipped (a coherence-applier error the
+  integrator's review missed) → back to planned (maude `6f4b7d5`).
+- **F6/F7 (low):** constellation one-door residual clarified; hub badges
+  aligned to constellation grades (site `52413b4`).
+
+**Clean classes (explicit):** admission-language leaks EMPTY; vocabulary
+imports EMPTY; internal link rot EMPTY; positioning coherence EMPTY
+(front-door claim matched by every linked doc); exit-code semantics,
+two-seam approval split, and NQ-optionality all consistent. With the seven
+fixes applied, the blocking subset is clear — **launch-checklist act 6 is
+CLOSED**; the sweep's full report is in the session transcript, summary
+here is the record.
+
+**Note for the operator:** F1's fix implements your 2026-07-04 ruling; if
+Gemini CLI is ever meant to return as a supported backend, that's a new
+ruling + the GAP-M fail-open fix first.
+
 ## Campaign state: BUILD WORK COMPLETE — operator acts remain
 
 Everything model-side is done and pushed. The launch path is

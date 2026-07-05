@@ -152,6 +152,11 @@ class SessionRecord:
     # GAP-N (Tock 2): session-attributable promotion.
     allow_dirty: bool = False
     baseline_dirty: list[str] | None = None
+    # NS-0 (nightshift-functional-mvp): extra argv appended to the backend
+    # CLI at launch (e.g. ["--model", "claude-haiku-4-5"]). Operator-chosen
+    # at create time; carries no authority — the gates don't care which
+    # model proposes.
+    harness_args: list[str] = field(default_factory=list)
 
 
 def _new_session_id() -> str:
@@ -271,6 +276,7 @@ class SessionSupervisor:
         operator_mode: str = "interactive",
         policy_context: dict[str, Any] | None = None,
         allow_dirty: bool = False,
+        harness_args: list[str] | None = None,
     ) -> SessionRecord:
         """Create a new supervised session (does not launch yet).
 
@@ -294,6 +300,7 @@ class SessionSupervisor:
             updated_at=now,
             task=task,
             allow_dirty=allow_dirty,
+            harness_args=[str(a) for a in (harness_args or [])],
         )
 
         events_path = self._state_dir / f"{session_id}_events.jsonl"
@@ -513,6 +520,8 @@ class SessionSupervisor:
                 task=record.task,
                 operator_mode=record.operator_mode,
                 policy_context=record.policy_context,
+                # NS-0: operator-chosen extra backend argv (e.g. --model).
+                args=list(record.harness_args),
                 # Thread the intervention decision window to the adapter so
                 # backend-side gates (pre-tool hooks) wait at least as long
                 # as the supervisor's timeout watcher before failing closed.

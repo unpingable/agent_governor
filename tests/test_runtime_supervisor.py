@@ -47,6 +47,7 @@ class MockAdapter:
 
     def launch(self, config: LaunchConfig) -> MockHandle:
         self._launched = True
+        self._launch_config = config
         self._handle = MockHandle(pid=12345)
         return self._handle
 
@@ -163,6 +164,34 @@ class TestSessionLifecycle:
         assert record.task == "Fix the bug"
         events = supervisor.get_events(record.session_id)
         assert events[0].payload.get("task") == "Fix the bug"
+
+
+class TestHarnessArgs:
+    """NS-0 (nightshift-functional-mvp): the model pin must survive
+    create_session -> LaunchConfig -> adapter argv."""
+
+    def test_harness_args_reach_launch_config(self, tmp_path):
+        adapter = MockAdapter()
+        sup = SessionSupervisor(state_dir=tmp_path)
+        record = sup.create_session(
+            adapter=adapter,
+            backend_kind="mock",
+            cwd=str(tmp_path),
+            harness_args=["--model", "claude-haiku-4-5"],
+        )
+        assert record.harness_args == ["--model", "claude-haiku-4-5"]
+        sup.launch_session(record.session_id)
+        assert adapter._launch_config.args == ["--model", "claude-haiku-4-5"]
+
+    def test_harness_args_default_empty(self, tmp_path):
+        adapter = MockAdapter()
+        sup = SessionSupervisor(state_dir=tmp_path)
+        record = sup.create_session(
+            adapter=adapter, backend_kind="mock", cwd=str(tmp_path)
+        )
+        assert record.harness_args == []
+        sup.launch_session(record.session_id)
+        assert adapter._launch_config.args == []
 
 
 class TestStateTransitions:

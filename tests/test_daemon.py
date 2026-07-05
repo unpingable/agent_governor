@@ -2312,6 +2312,17 @@ class TestChatStream:
         assert all(e.to_dict().get("scope") != "*" for e in exceptions)
 
     @pytest.mark.asyncio
+    async def test_session_create_refuses_non_string_harness_args(self, dispatcher_and_state):
+        """NS-0: a model pin is argv, strings only — garbage fails closed."""
+        d, _ = dispatcher_and_state
+        resp = await roundtrip(
+            d, "runtime.session.create",
+            {"backend_kind": "claude_code", "harness_args": [1, 2]},
+        )
+        assert "error" in resp
+        assert "harness_args" in str(resp["error"])
+
+    @pytest.mark.asyncio
     async def test_runtime_adapters_list_reports_capabilities(self, dispatcher_and_state):
         """runtime.adapters.list reports each backend + its declared capabilities."""
         d, _ = dispatcher_and_state

@@ -3405,6 +3405,12 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         task = params.get("task")
         operator_mode = params.get("operator_mode", "interactive")
         allow_dirty = bool(params.get("allow_dirty", False))
+        harness_args = params.get("harness_args") or []
+        # NS-0: fail closed on garbage — a model pin is argv, strings only.
+        if not isinstance(harness_args, list) or not all(
+            isinstance(a, str) for a in harness_args
+        ):
+            raise ValueError("harness_args must be a list of strings")
 
         if backend_kind == "claude_code":
             from .runtime.adapters.claude_code import ClaudeCodeAdapter
@@ -3423,6 +3429,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             task=task,
             operator_mode=operator_mode,
             allow_dirty=allow_dirty,
+            harness_args=harness_args,
         )
         return {
             "session_id": record.session_id,

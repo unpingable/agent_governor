@@ -80,6 +80,91 @@
       "$comment": "A REQUIREMENT expressed in the chain_gate.CapabilityClass vocabulary (not projected from a shipped instance): the CapabilityClass values a provider must support to accept this container.",
       "description": "CapabilityClass values a provider must support to accept this container."
     },
+    "admission_basis": {
+      "type": "object",
+      "$comment": "projects from: the admitted governed-plan governance block (plan-envelope-v0 governance) — the citation set the AG/M-1 admission verified. This is a RE-VERIFIABLE RECORD of citation verification state, NOT a grant: admission_ref (top-level) remains the thing to re-verify. A projection whose all_citations_verified is false MUST NOT be produced (fail-closed). does not mint: authority.",
+      "additionalProperties": false,
+      "properties": {
+        "citations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "ref", "verified"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "$comment": "e.g. playbook_digest / ration_card_digest / queued_playbook_ref / approval_ref."
+              },
+              "ref": {
+                "type": "string",
+                "$comment": "The cited content-address (sha256:<hex>) or witness reference (e.g. an approval-witness filename). Free-form because approval_ref is a witness path, not a digest."
+              },
+              "verified": {
+                "type": "boolean",
+                "$comment": "Whether admission independently resolved this citation against its witness. A container is only produced when every load-bearing citation is verified."
+              }
+            }
+          }
+        },
+        "all_citations_verified": {
+          "type": "boolean",
+          "$comment": "Conjunction over citations[].verified. Must be true for a produced container; false is unrepresentable (the projector refuses)."
+        }
+      },
+      "required": ["citations", "all_citations_verified"]
+    },
+    "routing": {
+      "type": "object",
+      "$comment": "projects from: the governed plan's declared harness (plan-envelope-v0 harness) — a LABEL naming a provider a governed_dispatch MAY select. This is routing eligibility, NOT trust and NOT a grant: registry presence/absence never alters admission, and provider selection remains governed_dispatch's decision. does not grant: trust.",
+      "additionalProperties": false,
+      "properties": {
+        "eligible_provider": {
+          "type": "string",
+          "$comment": "provider_id label (matches provider_descriptor.v1 provider_id when registered). A candidate, not a permission."
+        },
+        "forbidden_providers": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "produced_receipts": {
+      "type": "object",
+      "$comment": "projects from: the PRODUCED provider testimony for this container (ReviewPacket / obstruction / supervised run identity). This block is TESTIMONY, never AG admission — provider success/status here can NEVER be read as admitted success (§4.1). Reliance still requires re-verifying admission_ref and re-running the ReviewPacket validator. does not mint: authority. Optional: absent for a container that has not yet been dispatched.",
+      "additionalProperties": false,
+      "properties": {
+        "review_packet_ref": {
+          "$ref": "#/$defs/sha256Ref",
+          "$comment": "Content-address of the produced review_packet.v0 manifest. A reference to re-validate, not to trust."
+        },
+        "review_packet_status": {
+          "type": "string",
+          "$comment": "The ReviewPacket's own status vocabulary (review_packet.py REVIEW_PACKET_STATUSES). Provider-reported lifecycle, not an AG verdict.",
+          "enum": [
+            "proposed_patch",
+            "no_change",
+            "blocked",
+            "failed_tests",
+            "stopped",
+            "rejected_by_actor",
+            "needs_operator"
+          ]
+        },
+        "obstruction_ref": {
+          "$ref": "#/$defs/sha256Ref",
+          "$comment": "Content-address of a produced obstruction/partial-result artifact, when the run obstructed instead of reaching a packet."
+        },
+        "run_session_id": {
+          "type": "string",
+          "$comment": "The supervised runtime session id (e.g. sess_...). Identity/audit, not authority."
+        },
+        "promotion_id": {
+          "type": "string",
+          "$comment": "The runtime promotion id (e.g. prom_...). Identity/audit, not authority."
+        }
+      }
+    },
     "scope_projection": {
       "type": "object",
       "$comment": "projects from: playbooks.RationCard allowed_write_paths + QueuedPlaybook allowed_paths/forbidden_paths. READ-ONLY snapshot of the cited RationCard (source_ref). NOT a grant: a provider MAY only further restrict; it may never treat this as permission. AG dispatch (governed_dispatch) remains the enforcement source. does not grant: permission.",

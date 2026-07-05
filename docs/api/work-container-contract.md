@@ -217,10 +217,33 @@ compact separators, ASCII-safe) per `gate_receipt.canonical_json`;
 - No parallel verdict enum (§4); the AG-review outcome is an existing
   `gate_receipt` verdict, not a new word set (§4.1).
 
-## 8. Not in this slice (gated follow-ons)
+## 8. Slice status
 
-- No `ProviderRegistry` / `ProviderDescriptor` Python (Slice 2, gated on this
-  contract being reviewed).
-- No live `governed_dispatch` emission/consumption of a serialized WorkContainer
-  (Slice 4, **gated on CD-4** proving the runtime shape).
-- No Antigravity adapter (Slice 5 — a test case, never the interface designer).
+- **Slice 2 ✓** — `ProviderRegistry` / `ProviderDescriptor` Python (descriptors
+  only, structural conformance; `src/governor/provider_registry.py`).
+- **Slice 3 ✓** — Claude Code `agent_runtime` descriptor + the deliberate Maude
+  non-example (`src/governor/provider_descriptors.py`).
+- **Slice 4 ✓ (projection only)** — `src/governor/work_container.py`: the
+  `WorkContainer` projection primitive + `project_cd4b_work_container()`, which
+  projects the **proven CD-4B live shape** (session `sess_aabb2a056f9f`) into a
+  schema-valid, sealed container. Persisted candidate artifact:
+  `docs/campaigns/conveyor-dogfood/specimens/cd4-docs-normalize/work_container.v1.json`.
+  Every scope/ration/admission/custody field traces to a shipped object; the
+  produced ReviewPacket is linked as `produced_receipts` (testimony, not
+  admission). **Projection, not delegation** — the module consults no registry,
+  performs no dispatch, and imports neither `provider_registry` nor
+  `governed_dispatch` (pinned by test).
+
+### Still gated (not in Slice 4)
+
+- **Live `governed_dispatch` emission/consumption** of a serialized WorkContainer
+  — a running dispatch membrane that *emits* a first-class admission `GateReceipt`
+  and *consumes* a WorkContainer to route a live run. For the CD-4B specimen,
+  admission lived in the maude M-1/M-2 parser plus the operator's approval witness,
+  so `admission_ref` is the re-verifiable seal over the admission basis (plan_ref +
+  the verified citation set), **not** a stored `GateReceipt` id yet. Wiring
+  `governed_dispatch` to mint that receipt is the next gated step.
+- **No Antigravity adapter** (Slice 5 — a test case, never the interface designer).
+- **No routing through `ProviderRegistry`** — `routing.eligible_provider` is a
+  label; provider selection stays a `governed_dispatch` decision, and registry
+  presence/absence cannot change a projection (pinned by test).

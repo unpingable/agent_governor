@@ -197,6 +197,21 @@ CD-4B `sess_aabb2a056f9f` as the evidence spine) · S5 Antigravity spike.
 Playbooks demoted to one origin format (compiles into WorkContainer), not the
 spine. Plan: `~/.claude/plans/okay-two-things-1-luminous-bee.md`.
 
+**S4 LANDED (2026-07-04) — the projection, not the wiring.**
+`src/governor/work_container.py`: the `WorkContainer` projection primitive +
+`project_cd4b_work_container()`, which projects the proven CD-4B live shape
+(`sess_aabb2a056f9f`) into a schema-valid, sealed container. Persisted candidate
+artifact at `specimens/cd4-docs-normalize/work_container.v1.json`. Every field
+traces to a shipped object (plan/RationCard/QueuedPlaybook/PlaybookSpec digests,
+all four citations verified); the produced ReviewPacket links as
+`produced_receipts` (testimony, not admission). Pure projection — no registry, no
+dispatch (pinned: 14 tests in `tests/test_work_container.py`, incl. registry-
+independence, provider-success≠admission, seal-mismatch fail-closed). **Still
+gated:** live `governed_dispatch` emitting an admission `GateReceipt` behind
+`admission_ref` (for CD-4B it is the re-verifiable admission-basis seal) and
+consuming a WorkContainer to route a live run → then S5 Antigravity spike.
+**Projection, not delegation.**
+
 **Parked operator rulings (from the morning, dependency-ordered for later):**
 C2 read-plane trio → C2 wicket-guard absorption → GS-2b admissibility/HELD →
 B5 stale-basis mapping → B5 request-side linearity / LA fence → Q-B7 v7

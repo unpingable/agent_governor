@@ -85,6 +85,14 @@ The intermodal trick collapses if cargo is re-minted at every port. Therefore:
   WIRING** — `governed_dispatch` emitting/consuming a serialized WorkContainer —
   stays **gated on CD-4** proving the runtime shape (build vector Slice 4).
 
+  **Slice 4 landed the PROJECTION (2026-07-04), not the wiring.**
+  `src/governor/work_container.py` + `project_cd4b_work_container()` project the
+  proven CD-4B live shape (`sess_aabb2a056f9f`) into a schema-valid, sealed
+  container (persisted candidate at the CD-4 specimen dir). It is a pure projection
+  over shipped objects — no registry, no dispatch. The live `governed_dispatch`
+  emission/consumption (and a first-class admission `GateReceipt` behind
+  `admission_ref`) remain the next gated step. **Projection, not delegation.**
+
 > **AG owns legitimacy. Maude owns logistics. The WorkContainer is the bill of
 > lading between them.**
 

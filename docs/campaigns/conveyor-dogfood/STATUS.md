@@ -228,6 +228,20 @@ AGY-1 plan (named, not built) + `antigravity_api` (named, not built). 15 tests
 one-shot runner behind the outer cage; live behavioural probes (headless/write/
 network) require operator opt-in (model invocation) + the cage.
 
+**S5 / AGY-1 LANDED (2026-07-05) — fenced behavioral probes, AG owns the cage.**
+*AGY-1a:* `src/governor/runtime/adapters/antigravity_runner.py` — pure injected
+runner: `OuterCage` + `build_bwrap_argv` (network denied, absence-restrictive binds),
+`cage_preflight` (prove the cage before any agy run), `classify_probe` (fail-closed
+on every cage escape), `BehaviorProbeReceipt` (`evidence_kind="behavioral_probe"`,
+`authority="none"`). Three named probes (headless/write/network). *AGY-1b (live,
+opt-in):* attempted → **`cage_unavailable`** — this host has
+`apparmor_restrict_unprivileged_userns=1` + non-setuid bwrap, so no bwrap namespace
+can be created; AG **refused to run agy uncaged** (no model/write/network). The fence
+firing is the evidence (`docs/playbooks/antigravity-behavior-probe.v0.json`). 20
+tests (`tests/test_antigravity_runner.py`), ruff clean. **Gated:** live behavioral
+evidence needs a cage-capable host or a docker-backed cage (AGY-2); no runtime
+conformance, no WorkContainer→agy dispatch, no Maude-as-provider.
+
 **S4 LANDED (2026-07-04) — the projection, not the wiring.**
 `src/governor/work_container.py`: the `WorkContainer` projection primitive +
 `project_cd4b_work_container()`, which projects the proven CD-4B live shape

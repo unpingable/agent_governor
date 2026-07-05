@@ -68,10 +68,41 @@ Real capture (this environment, `docs/playbooks/antigravity-probe.v0.json`):
 - headless / write / network behavioural probes: `skipped` (they belong to AGY-1,
   behind the cage)
 
-## AGY-1 — sandboxed one-shot runner (NAMED, NOT BUILT)
+## AGY-1 — fenced behavioral probes under an AG-owned cage
 
-Only after the probe. A one-shot dispatch under a brutally narrow RationCard, with
-the outer cage doing enforcement:
+**Reframed (operator/chatty 2026-07-05):** AGY-1 is *behavioral probes where AG owns
+the cage*, not an Antigravity runtime adapter. It answers: **can AG safely observe
+minimal Antigravity behavior when AG — not agy — owns the cage?** The motto: **prove
+the cage before feeding it work.** No general task execution, no runtime conformance,
+no WorkContainer dispatch, no repo work.
+
+### AGY-1a — the fenced probe runner (LANDED)
+
+`src/governor/runtime/adapters/antigravity_runner.py`. Pure, injected-runner:
+`OuterCage` + `build_bwrap_argv` (network denied via `--unshare-net`; only the one
+writable dir and read-only system paths are bound — `$HOME`, `.git`, keys, and auth
+are enforced by **absence**), `cage_preflight` (proves the cage with a trivial
+`/bin/true` *before* any agy run), `classify_probe` (fail-closed verdict logic), and
+`BehaviorProbeReceipt` (`evidence_kind="behavioral_probe"`, `authority="none"` — a
+probe observes behavior, it never admits it). Three named probes: headless stdout,
+write, network-denied. Fully unit-tested (`tests/test_antigravity_runner.py`),
+including every cage-escape as fail-closed.
+
+### AGY-1b — live behavioral probes (RUN → CAGE UNAVAILABLE ON THIS HOST)
+
+Attempted live with opt-in. Result (`docs/playbooks/antigravity-behavior-probe.v0.json`):
+**`cage_unavailable`.** This host sets `kernel.apparmor_restrict_unprivileged_userns=1`
+and bwrap is not setuid, so *every* bwrap invocation fails at namespace creation
+(`setting up uid map: Permission denied` / netns `RTM_NEWADDR`). Per the motto, AG
+**refused to run agy uncaged** — no model call, no writes, no network. **The fence
+firing is the evidence.** Live behavioral evidence needs a cage-capable host (or a
+`docker`-backed cage — docker is present here — which is AGY-2 scope). We do **not**
+lower the fence to get a green run.
+
+### AGY-1's cage design (for a cage-capable host)
+
+A one-shot dispatch under a brutally narrow RationCard, with the outer cage doing
+enforcement:
 
 ```
 RationCard: agent=antigravity_cli, mode=one_shot

@@ -1,0 +1,36 @@
+[
+  {
+    "schema_version": "antigravity_behavior_probe.v1",
+    "evidence_kind": "behavioral_probe",
+    "provider_id": "antigravity_cli",
+    "agy_version": "1.0.9",
+    "probe_id": "agy-1-cage-preflight",
+    "live": true,
+    "outer_cage": {
+      "kind": "bwrap",
+      "network": "denied",
+      "write_scope": [
+        "<disposable_worktree>"
+      ],
+      "forbidden_paths": [
+        "~/.ssh",
+        "~/.gitconfig",
+        "~/.gemini",
+        "~/.config/gcloud",
+        ".git"
+      ]
+    },
+    "command_shape": [],
+    "exit_status": null,
+    "stdout_digest": null,
+    "stderr_digest": null,
+    "filesystem_delta": [],
+    "network_reachable": null,
+    "verdict": "cage_unavailable",
+    "authority": "none",
+    "notes": [
+      "outer cage unavailable: bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted",
+      "refused to run agy uncaged \u2014 prove the cage before feeding it work"
+    ]
+  }
+]

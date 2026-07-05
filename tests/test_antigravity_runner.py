@@ -183,6 +183,90 @@ def test_runner_imports_no_dispatch_or_registry_authority():
             assert "governed_dispatch" not in s
 
 
+# --- Porter-backed cage: AG consumes honest porter.record.v0 ---------------- #
+_PORTER_CAGE = OuterCage(kind="porter", network="denied", write_scope=("/work",))
+
+
+def _porter_record(outcome, *, exit_code=None, refusal_reason=None, run_id="r1"):
+    steps = []
+    if exit_code is not None:
+        steps = [{"kind": "exec", "exit_code_observed": True, "exit_code": exit_code}]
+    return {
+        "schema": "porter.record.v0",
+        "run_id": run_id,
+        "outcome": outcome,
+        "steps": steps,
+        "refusal_reason": refusal_reason,
+    }
+
+
+def _porter(record):
+    def run(*, target, command, **kw):
+        return record
+
+    return run
+
+
+def test_porter_completed_run_is_observed():
+    from governor.runtime.adapters.antigravity_runner import run_probe_via_porter
+
+    r = run_probe_via_porter(
+        NETWORK_PROBE, _PORTER_CAGE,
+        porter_run=_porter(_porter_record("completed", exit_code=0)),
+        target="recipe:/recipes/agy-docker",
+    )
+    assert r.verdict == "observed"
+    assert r.outer_cage["kind"] == "porter"
+    assert any("porter outcome=completed" in n for n in r.notes)
+
+
+def test_porter_refused_is_fail_closed_blocked():
+    # Porter never coerces an unknown exit — refused stays refused, AG blocks.
+    from governor.runtime.adapters.antigravity_runner import run_probe_via_porter
+
+    r = run_probe_via_porter(
+        WRITE_PROBE, _PORTER_CAGE,
+        porter_run=_porter(_porter_record("refused", refusal_reason="unknown exit code")),
+        target="recipe:/recipes/agy-docker",
+    )
+    assert r.verdict == "blocked"
+    assert any("porter refused" in n for n in r.notes)
+
+
+def test_porter_courier_failure_is_not_supported():
+    from governor.runtime.adapters.antigravity_runner import run_probe_via_porter
+
+    r = run_probe_via_porter(
+        WRITE_PROBE, _PORTER_CAGE,
+        porter_run=_porter(_porter_record("porter_failed", refusal_reason="no substrate")),
+        target="recipe:/recipes/agy-docker",
+    )
+    assert r.verdict == "not_supported"
+
+
+def test_porter_run_failed_nonzero_is_blocked_not_laundered():
+    from governor.runtime.adapters.antigravity_runner import run_probe_via_porter
+
+    r = run_probe_via_porter(
+        WRITE_PROBE, _PORTER_CAGE,
+        porter_run=_porter(_porter_record("run_failed", exit_code=3)),
+        target="recipe:/recipes/agy-docker",
+    )
+    assert r.verdict == "blocked"
+    assert r.exit_status == 3
+
+
+def test_porter_seam_requires_porter_cage():
+    from governor.runtime.adapters.antigravity_runner import run_probe_via_porter
+
+    with pytest.raises(ValueError):
+        run_probe_via_porter(
+            WRITE_PROBE, _CAGE,  # a bwrap cage, not porter
+            porter_run=_porter(_porter_record("completed", exit_code=0)),
+            target="recipe:/x",
+        )
+
+
 # --- persisted live artifact is the honest refusal -------------------------- #
 def test_persisted_behavior_artifact_is_the_caged_refusal():
     data = json.loads((_REPO / "docs/playbooks/antigravity-behavior-probe.v0.json").read_text())

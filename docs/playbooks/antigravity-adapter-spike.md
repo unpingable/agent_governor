@@ -99,6 +99,33 @@ firing is the evidence.** Live behavioral evidence needs a cage-capable host (or
 `docker`-backed cage — docker is present here — which is AGY-2 scope). We do **not**
 lower the fence to get a green run.
 
+### AGY-2 — Porter-backed cage (SEAM LANDED; live drive gated)
+
+The local bwrap wall is not a dead end — it is the reason **Porter** (`~/git/porter`)
+exists. Porter is the constellation's substrate courier: it runs a declared command
+on a declared ephemeral substrate (a VM where `userns` works, or docker — both
+available here: `docker run --network none` succeeds, `/dev/kvm` present) and returns
+an honest `porter.record.v0` (true exit or `refused`, never coerced). AG's own
+`harness/validate_bwrap_substrate.py` already produced Porter-VM cage specimens
+(`~/git/porter/outputs/ag-bwrap-substrate/`, `host_id: porter-cage-vm`,
+`userns_available: true`) — carrying the same doctrine (`not_live_testimony`,
+`confirms_isolation: false`, `mandatory_c11_refusal: true`).
+
+**Landed (the AG side):** `run_probe_via_porter` +
+`OuterCage(kind="porter")` in `antigravity_runner.py`. `porter_run` is **injected**
+(production: `porterlib.api.run`; tests: a fake) so AG stays decoupled — Porter owns
+substrate mechanics, AG consumes the record and maps it through the same fail-closed
+verdict logic: `refused` → `blocked` (unknown exit never coerced), `porter_failed` →
+`not_supported`, `run_failed` → `blocked` (nonzero captured, not laundered),
+`completed` → the probe verdict. Tested against synthetic `porter.record.v0`.
+
+**Still gated (the live drive):** a Porter recipe that provisions the docker/KVM
+substrate (network-denied, scope-fenced) with `agy` + auth, then the three live probes
+through it. This intersects existing deliberately-unarmed cage code (C11/seccomp in
+the substrate harness) and spends real model tokens, so it is operator-ratified, not
+rushed. When armed, the flow is: AG behavioral probe → `run_probe_via_porter` →
+Porter recipe (docker/KVM) → honest record → `BehaviorProbeReceipt`.
+
 ### AGY-1's cage design (for a cage-capable host)
 
 A one-shot dispatch under a brutally narrow RationCard, with the outer cage doing

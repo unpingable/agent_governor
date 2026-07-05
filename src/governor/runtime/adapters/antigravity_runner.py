@@ -53,7 +53,17 @@ PROVIDER_ID = "antigravity_cli"
 #: never "live_testimony": a probe observes behavior, it does not admit it.
 EVIDENCE_KIND = "behavioral_probe"
 
-CAGE_KINDS = frozenset({"bwrap", "docker", "disposable_worktree", "none"})
+CAGE_KINDS = frozenset({"bwrap", "docker", "disposable_worktree", "porter", "none"})
+
+# Porter is the constellation's substrate courier (~/git/porter): it runs a declared
+# command on a declared ephemeral substrate (a VM where userns works, or docker) and
+# returns an honest porter.record.v0 (true exit or `refused`, never coerced). AG
+# consumes that record — it does NOT learn substrate mechanics. Outcome vocabulary is
+# Porter's, reused verbatim (no parallel enum).
+PORTER_COMPLETED = "completed"
+PORTER_RUN_FAILED = "run_failed"
+PORTER_REFUSED = "refused"
+PORTER_FAILED = "porter_failed"
 CAGE_NETWORK = frozenset({"denied", "allowed"})
 
 #: Probe verdicts — LOCAL to this surface (deliberately not AG gate verdicts, to
@@ -368,10 +378,85 @@ def run_live_probes(
     ]
 
 
+def _exec_exit_from_porter(record: dict) -> Optional[int]:
+    """The dispatched command's exit code from the last OBSERVED step, or None if
+    unobserved (Porter never coerces an unknown exit — that surfaces as `refused`)."""
+    for step in reversed(record.get("steps", []) or []):
+        if step.get("exit_code_observed") and "exit_code" in step:
+            return int(step["exit_code"])
+    return None
+
+
+def run_probe_via_porter(
+    spec: ProbeSpec,
+    cage: OuterCage,
+    *,
+    porter_run,
+    target: str,
+    agy_version: Optional[str] = None,
+) -> BehaviorProbeReceipt:
+    """Run one behavioral probe through Porter as the outer cage.
+
+    ``porter_run`` is INJECTED (production: ``porterlib.api.run``; tests: a fake) so AG
+    stays decoupled from substrate mechanics — Porter owns the cage, AG consumes the
+    honest ``porter.record.v0``. ``target`` is a Porter target (e.g.
+    ``recipe:<docker-or-vm-recipe>``) whose recipe provisions the network-denied,
+    scope-fenced substrate; ``cage.kind`` must be ``porter``.
+
+    Fail-closed on Porter's honest refusals: ``refused`` (substrate could not testify
+    an exit) → ``blocked``; ``porter_failed`` (the courier itself broke) →
+    ``not_supported``. A completed/run_failed run flows through the same
+    :func:`classify_probe` verdict logic as a local run.
+    """
+    if cage.kind != "porter":
+        raise ValueError("run_probe_via_porter requires an OuterCage of kind 'porter'")
+    record = porter_run(target=target, command=spec.inner_argv())
+    outcome = record.get("outcome")
+    run_id = record.get("run_id")
+    base = dict(
+        probe_id=spec.probe_id,
+        outer_cage=cage.as_dict(),
+        live=True,
+        command_shape=(BINARY, "-p", "<redacted>", *spec.extra_argv),
+        agy_version=agy_version,
+    )
+
+    if outcome == PORTER_FAILED:
+        return BehaviorProbeReceipt(
+            verdict=V_NOT_SUPPORTED,
+            notes=(f"porter courier failed (run {run_id}): {record.get('refusal_reason')}",),
+            **base,
+        )
+    if outcome == PORTER_REFUSED:
+        return BehaviorProbeReceipt(
+            verdict=V_BLOCKED,
+            notes=(
+                f"porter refused (run {run_id}): {record.get('refusal_reason')} "
+                "— unknown exit not coerced",
+            ),
+            **base,
+        )
+
+    exit_status = _exec_exit_from_porter(record)
+    obs = ProbeObservation(ran=True, exit_status=exit_status, stdout="", stderr="")
+    verdict, notes = classify_probe(spec, cage, obs)
+    return BehaviorProbeReceipt(
+        verdict=verdict,
+        exit_status=exit_status,
+        notes=(f"porter outcome={outcome} run={run_id}", *notes),
+        **base,
+    )
+
+
 __all__ = [
     "PROVIDER_ID",
     "EVIDENCE_KIND",
     "CAGE_KINDS",
+    "PORTER_COMPLETED",
+    "PORTER_RUN_FAILED",
+    "PORTER_REFUSED",
+    "PORTER_FAILED",
+    "run_probe_via_porter",
     "PROBE_VERDICTS",
     "V_OBSERVED",
     "V_OBSERVED_UNSUCCESSFUL",

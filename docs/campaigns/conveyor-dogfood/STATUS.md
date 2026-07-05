@@ -242,6 +242,17 @@ tests (`tests/test_antigravity_runner.py`), ruff clean. **Gated:** live behavior
 evidence needs a cage-capable host or a docker-backed cage (AGY-2); no runtime
 conformance, no WorkContainer→agy dispatch, no Maude-as-provider.
 
+**S5 / AGY-2 SEAM LANDED (2026-07-05) — Porter-backed cage.** The bwrap wall is
+why `~/git/porter` exists (substrate courier: docker/KVM, both available here).
+`run_probe_via_porter` + `OuterCage(kind="porter")` in `antigravity_runner.py`:
+`porter_run` is INJECTED (decoupled), AG consumes the honest `porter.record.v0` and
+maps it fail-closed (`refused`→blocked/unknown-exit-not-coerced, `porter_failed`→
+not_supported, `run_failed`→blocked, `completed`→verdict). Tested vs synthetic
+records (25 tests total). AG's own `harness/validate_bwrap_substrate.py` already
+produced Porter-VM cage specimens. **Gated (live drive, operator-ratified):** a
+Porter docker/KVM recipe with agy+auth + the three live probes — intersects
+deliberately-unarmed C11/seccomp substrate code + real model spend.
+
 **S4 LANDED (2026-07-04) — the projection, not the wiring.**
 `src/governor/work_container.py`: the `WorkContainer` projection primitive +
 `project_cd4b_work_container()`, which projects the proven CD-4B live shape

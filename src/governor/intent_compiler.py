@@ -355,9 +355,22 @@ def _compilation_receipt_hash(
     schema_id: str,
     result_dict: dict[str, Any],
 ) -> str:
-    """Deterministic hash of the full compilation."""
+    """Deterministic hash of the full compilation.
+
+    Invariant: same compilation input → same receipt hash. ``timestamp`` is
+    metadata, NOT identity, so it is excluded from the hash payload (same rule
+    as gate_receipt.py's ``receipt_id`` = H(...) where timestamp is metadata).
+    Without this exclusion the daemon's injected ``datetime.now()`` timestamp
+    would give the SAME input a DIFFERENT hash per call, breaking the
+    content-addressed compilation contract.
+    """
+    # Exclude timestamp from identity — it rides along as metadata, never
+    # participates in the content address.
+    response_payload = {
+        k: v for k, v in response_dict.items() if k != "timestamp"
+    }
     payload = {
-        "response": response_dict,
+        "response": response_payload,
         "schema_id": schema_id,
         "intent_profile": result_dict.get("intent_profile", ""),
         "intent_scope": result_dict.get("intent_scope"),

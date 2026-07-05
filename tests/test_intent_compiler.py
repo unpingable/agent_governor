@@ -301,6 +301,19 @@ class TestHashing:
         result = {"intent_profile": "strict", "intent_scope": None, "intent_deny": None, "intent_timebox_minutes": None, "selected_branch": None}
         assert _compilation_receipt_hash(resp1, "x", result) != _compilation_receipt_hash(resp2, "x", result)
 
+    def test_compilation_receipt_hash_ignores_timestamp(self):
+        # Invariant: timestamp is metadata, not identity. Same compile input
+        # with DIFFERENT injected timestamps must yield the SAME hash. Pins the
+        # daemon-injected datetime.now() bug (public-mvp U1 audit).
+        result = {"intent_profile": "strict", "intent_scope": None, "intent_deny": None, "intent_timebox_minutes": None, "selected_branch": None}
+        resp_a = {"schema_id": "x", "values": {"a": 1}, "timestamp": "2026-01-01T00:00:00Z"}
+        resp_b = {"schema_id": "x", "values": {"a": 1}, "timestamp": "2026-07-05T12:34:56Z"}
+        resp_none = {"schema_id": "x", "values": {"a": 1}}
+        h_a = _compilation_receipt_hash(resp_a, "x", result)
+        h_b = _compilation_receipt_hash(resp_b, "x", result)
+        h_none = _compilation_receipt_hash(resp_none, "x", result)
+        assert h_a == h_b == h_none
+
 
 # -----------------------------------------------------------------------
 # Form policy
@@ -982,6 +995,28 @@ class TestCompileIntent:
         r1 = compile_intent(resp, schema)
         r2 = compile_intent(resp, schema)
         assert r1.receipt_hash == r2.receipt_hash
+
+    def test_receipt_hash_stable_across_injected_timestamps(self):
+        # Reproduces the daemon path (public-mvp U1 audit): the daemon injects
+        # datetime.now() into IntentFormResponse.timestamp. Two compiles of
+        # identical input with different timestamps must be content-identical.
+        schema = build_form_schema("session_start", mode="code")
+        resp1 = IntentFormResponse(
+            schema_id=schema.schema_id,
+            values={"profile": "strict", "mode": "code"},
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        resp2 = IntentFormResponse(
+            schema_id=schema.schema_id,
+            values={"profile": "strict", "mode": "code"},
+            timestamp="2026-07-05T12:34:56Z",
+        )
+        r1 = compile_intent(resp1, schema)
+        r2 = compile_intent(resp2, schema)
+        assert r1.receipt_hash == r2.receipt_hash
+        # Timestamp still travels as metadata on the response object.
+        assert resp1.timestamp == "2026-01-01T00:00:00Z"
+        assert "timestamp" in resp1.to_dict()
 
     def test_receipt_hash_changes_with_response(self):
         schema = build_form_schema("session_start", mode="code")

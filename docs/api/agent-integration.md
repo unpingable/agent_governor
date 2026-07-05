@@ -1,6 +1,6 @@
 # Agent Integration Contract (v1)
 
-**Status: DRAFT / CANDIDATE.** Non-binding until ratified. This document is a
+**Status: v1 — RATIFIED 2026-07-05 (operator, Option A per docs/campaigns/public-mvp/ratification-memo-work-container-v1.md). First provider: claude_code, STRUCTURALLY conformant (registered, fail-closed) with live supervised evidence via CD-4B (sess_aabb2a056f9f); RUNTIME (container-consumption) conformance not yet demonstrated — gated on S4 dispatch wiring. Schema changes from here are versioned (v1 → v2), not silent.** This document is a
 **formalization over surfaces that already exist and already enforce the law** —
 it adds a name and a closed vocabulary, not new enforcement.
 

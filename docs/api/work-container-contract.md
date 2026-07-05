@@ -1,6 +1,6 @@
 # WorkContainer Contract (v1) — the portable ABI
 
-**Status: DRAFT / CANDIDATE.** Non-binding until ratified *and* a first
+**Status: v1 — RATIFIED 2026-07-05 (operator, Option A per docs/campaigns/public-mvp/ratification-memo-work-container-v1.md). First provider: claude_code, STRUCTURALLY conformant (registered, fail-closed) with live supervised evidence via CD-4B (sess_aabb2a056f9f); RUNTIME (container-consumption) conformance not yet demonstrated — gated on S4 dispatch wiring. Schema changes from here are versioned (v1 → v2), not silent.** Superseded preamble (historical): non-binding until ratified *and* a first
 conforming implementation exists. This document names an export surface over
 existing Agent Governor (AG) machinery; it does not change any runtime behavior.
 

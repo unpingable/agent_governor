@@ -1,6 +1,6 @@
 # Provider Integration Contract (v1)
 
-**Status: DRAFT / CANDIDATE.** Non-binding until ratified *and* a first conforming
+**Status: v1 — RATIFIED 2026-07-05 (operator, Option A per docs/campaigns/public-mvp/ratification-memo-work-container-v1.md). First provider: claude_code, STRUCTURALLY conformant (registered, fail-closed) with live supervised evidence via CD-4B (sess_aabb2a056f9f); RUNTIME (container-consumption) conformance not yet demonstrated — gated on S4 dispatch wiring. Schema changes from here are versioned (v1 → v2), not silent.** Superseded preamble (historical): non-binding until ratified *and* a first conforming
 provider exists. **No provider is declared conforming by this document.**
 
 > This contract exports AG's existing admission and rationing machinery to agents

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpingable.com/agent_gov/schemas/provider_descriptor.v1.json",
-  "title": "ProviderDescriptor v1 (DRAFT / CANDIDATE)",
-  "$comment": "STATUS: DRAFT/CANDIDATE — non-binding until ratified. This schema exports names for existing AG law; it does not create a new authority surface. A descriptor DECLARES capabilities; it does not confer trust or conformance. authority_claims is empty by construction (an external provider never declares authority). See docs/api/provider-integration.md. NOTE: no provider is declared conforming by the existence of this schema.",
+  "title": "ProviderDescriptor v1 (RATIFIED 2026-07-05)",
+  "$comment": "STATUS: v1 — RATIFIED 2026-07-05 (operator, Option A per docs/campaigns/public-mvp/ratification-memo-work-container-v1.md). First provider: claude_code, STRUCTURALLY conformant (registered, fail-closed) with live supervised evidence via CD-4B (sess_aabb2a056f9f); RUNTIME (container-consumption) conformance not yet demonstrated — gated on S4 dispatch wiring. Schema changes from here are versioned (v1 → v2), not silent. This schema exports names for existing AG law; it does not create a new authority surface. A descriptor DECLARES capabilities; it does not confer trust or conformance. authority_claims is empty by construction (an external provider never declares authority). See docs/api/provider-integration.md. NOTE: no provider is declared conforming by the existence of this schema.",
   "type": "object",
   "$defs": {
     "capabilityClass": {

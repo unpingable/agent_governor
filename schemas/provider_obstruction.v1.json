@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpingable.com/agent_gov/schemas/provider_obstruction.v1.json",
-  "title": "ProviderObstruction v1 (DRAFT / CANDIDATE)",
-  "$comment": "STATUS: DRAFT/CANDIDATE — non-binding until ratified. This schema exports names for existing AG law; it does not create a new authority surface. An obstruction is honest reporting that a provider could not proceed. It is NOT a downgrade path and NOT an AG verdict. Shape reserved by plan-envelope-v0 §5. See docs/api/provider-integration.md.",
+  "title": "ProviderObstruction v1 (RATIFIED 2026-07-05)",
+  "$comment": "STATUS: v1 — RATIFIED 2026-07-05 (operator, Option A per docs/campaigns/public-mvp/ratification-memo-work-container-v1.md). First provider: claude_code, STRUCTURALLY conformant (registered, fail-closed) with live supervised evidence via CD-4B (sess_aabb2a056f9f); RUNTIME (container-consumption) conformance not yet demonstrated — gated on S4 dispatch wiring. Schema changes from here are versioned (v1 → v2), not silent. This schema exports names for existing AG law; it does not create a new authority surface. An obstruction is honest reporting that a provider could not proceed. It is NOT a downgrade path and NOT an AG verdict. Shape reserved by plan-envelope-v0 §5. See docs/api/provider-integration.md.",
   "type": "object",
   "$defs": {
     "sha256Ref": {

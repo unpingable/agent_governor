@@ -41,13 +41,72 @@ HEAD. **Dogfood verdict:** packet shapes worked; discovery-vs-reality drift
 (1.1/1.2/1.3 all wrong in surveys) says S2's fresh-clone verification must
 trust nothing but exit codes.
 
+## Sprint 2 — "Stranger path" (CLOSED 2026-07-05)
+
+- **2.1 Fresh-clone demo verification — DONE.** Clean clone + fresh venv,
+  README followed literally. ONE obstruction: bare `pip install -e .` broke the
+  demo (`ModuleNotFoundError: yaml` — pyyaml lived only in the `[webui]`
+  extra while the demo imports `playbooks/spec.py`). **Fixed** (pyyaml →
+  base deps, `a784364`), re-verified in a fresh venv (install 0, import 0).
+  After fix: all three demo scripts exit 0 on a fresh clone.
+- **2.2 TOUR.md — DONE** (`a784364`). Stranger-facing three-act walkthrough;
+  linked docs + clone URL verified; CANDIDATE, not minted.
+- **2.3 GOVERNED_WORKFLOW.md — DONE** (`303486b`). propose→verify→apply +
+  two refusal modes, every command executed. One grade-inflation fixed at
+  review ("cannot forge" → tamper-evident-not-tamper-proof, bootstrap limit
+  stated). Doc-pass backlog (S5): `governor receipts` doesn't surface
+  proposal receipts; `receipts --evidence` undocumented in --help.
+- **2.4 specimens/README.md — DONE** (`0b42cb0`). All 5 digests +
+  admission_ref/receipt_id cross-check re-verified live. **Adversarial
+  sandwich fired a real BLOCK:** witness verification was mis-attributed to
+  the queue parser (static boolean, no filesystem — `playbook_queue.py`);
+  actual seam is plan admission (`work_container.py` approval_ref → witness
+  file, `governance_approval_unverified`). Rewritten as the two-seam split.
+- **2.5 Maude live-daemon smoke — DONE, both layers PASS**
+  (`receipts-s2-maude-smoke.md`). Real daemon (99 RPC methods), five RPCs
+  exit 0; QUEUE/SESSIONS/ADAPTERS mounted via maude's Pilot harness against
+  the live socket, zero exceptions; adapters rows mirror the raw RPC payload
+  (live data, not fixture); maude live-integration suite 32 pass/1 skip.
+  **Risk R6 retired.** Friction filed: `governor serve --socket <deep path>`
+  → raw `OSError: AF_UNIX path too long` (serve-lane hardening candidate).
+
+**Obstruction (tooling, campaign-wide):** codex-exec's read-only sandbox is
+DEAD on this host (`bwrap: loopback: Failed RTM_NEWADDR` — same AppArmor
+userns wall as AGY-1); codex honestly refused to review. Substitute: Opus
+refute-mode subagent (used for 2.4) or inline-content prompts. Memory updated.
+
+**Sprint 2 exit ticket — cargo:** all five packets closed; four docs live on
+main as CANDIDATE; demo path verified stranger-runnable end-to-end; maude
+desk surfaces have a live-daemon receipt. **Dogfood:** the packet shapes
+carried — fresh-clone verification caught a real Track-B killer (pyyaml),
+and the adversarial sandwich caught a real narration-as-authority BLOCK;
+neither would have surfaced from happy-path review.
+
+## Lane re-scopes (from S2-wave audits)
+
+- **Lane P (porter) — much smaller than planned.** Audit verdict: all three
+  substrates + record.v0 + refusal semantics IMPLEMENTED+TESTED (13 tests,
+  exit 0). Remaining: **P11-R** (M: `--env KEY=VAL` injection recording keys
+  never values + dirty-worktree annotation at push), **P12-R** (S: scrub
+  `outputs/ag-bwrap-substrate/` — AG vocabulary violates porter's own
+  domain-separation charter, F6 — + golden fixture full-shape pin), **P13-R**
+  (S: `demo/refused-exit.sh` recipe-substrate refusal specimen + README
+  quickstart verification vs a real ssh host). F4/F5 stay soft-fenced.
+- **Lane S (spine) — engine already BUILT.** 141 tests green at `16ef81f`;
+  README "not yet started"/"build system TBD" is stale. Design note landed
+  (spine `c26576e`, CANDIDATE): plan collapses to S-A (de-stale docs),
+  S-B (public-mvp specimen manifest + edition), S-C (stranger runbook),
+  S-D (packaging, conditional). **5 operator questions parked** — OQ-1
+  distribution naming gates S-D; OQ-2 status-sourcing gates S-B; OQ-3
+  edition timestamp; OQ-4 stele scope; OQ-5 ingress framing.
+
 ## Next
 
-**Sprint 2 — "Stranger path"** (see CAMPAIGN.md §9): fresh-clone demo
-verification in a clean container; TOUR.md; smallest-governed-workflow guide;
-specimen corpus README; maude live-daemon smoke. Parallel lanes may start:
-P (porter — note: implementation partially exists, re-scope P11/P12 against
-reality), S (spine blueprint), U (gov-webui currency audit).
+**Sprint 3 — "Refusal gallery + non-grant list + NQ flagship"** (CAMPAIGN §9
+packets 6–9b). Lane U (gov-webui currency audit) may start in parallel;
+lanes P/S have re-scoped packet lists above (S-B/S-D blocked on operator
+OQs; P packets unblocked).
 
-**Operator acts pending:** none blocking Sprint 2. Contract ratification (S4)
-and public claim minting (S5) remain operator-gated.
+**Operator acts pending:** spine OQ-1..OQ-5 rulings (gate S-B/S-D only);
+contract ratification (S4) and public claim minting (S5) remain
+operator-gated. Nothing blocks Sprint 3.

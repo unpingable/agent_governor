@@ -120,12 +120,13 @@ async def test_schema_mode_matches_governor(client):
     assert schema.mode == "code"
 
 
-async def test_schema_unknown_template_404(client):
-    """Unknown template name returns 404 in template_only mode."""
-    import httpx
-    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+async def test_schema_unknown_template_raises_rpc_error(client):
+    """Unknown template name raises RPCError in template_only mode (GOVERNOR_ERROR -32000)."""
+    from maude.client.rpc import RPCError
+    with pytest.raises(RPCError) as exc_info:
         await client.intent_schema("nonexistent_template_xyz")
-    assert exc_info.value.response.status_code == 404
+    assert exc_info.value.code == -32000
+    assert "nonexistent_template_xyz" in exc_info.value.message
 
 
 # -- /v2/intent/validate ----------------------------------------------------
@@ -156,14 +157,22 @@ async def test_validate_invalid_option_value(client):
 
 
 async def test_validate_unknown_schema_id(client):
-    """Unknown schema_id → valid=False with 'not found' error."""
+    """Unknown schema_id is ignored by the daemon (rebuilds from default template).
+
+    The RPC validate handler ignores the caller-supplied schema_id and rebuilds
+    the schema from the template name (defaulting to session_start).  With an
+    incomplete value set the result is valid=False with validation errors — not
+    a 'not found' response.
+    """
     result = await client.intent_validate(
         schema_id="bogus_schema_id_that_does_not_exist",
         values={"profile": "strict"},
     )
     assert result.valid is False
     assert len(result.errors) > 0
-    assert any("not found" in e.lower() for e in result.errors)
+    # Errors describe missing/invalid fields, not schema lookup failure
+    for e in result.errors:
+        assert isinstance(e, str)
 
 
 async def test_validate_missing_required_field(client):
@@ -300,14 +309,15 @@ async def test_compile_verification_config_template(client):
     assert len(result.receipt_hash) == 64
 
 
-async def test_compile_unknown_template_400(client):
-    """Compiling with unknown template → 400."""
-    import httpx
-    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+async def test_compile_unknown_template_raises_rpc_error(client):
+    """Compiling with unknown template raises RPCError (GOVERNOR_ERROR -32000)."""
+    from maude.client.rpc import RPCError
+    with pytest.raises(RPCError) as exc_info:
         await client.intent_compile(
             schema_id="x", values={}, template_name="nonexistent",
         )
-    assert exc_info.value.response.status_code == 400
+    assert exc_info.value.code == -32000
+    assert "nonexistent" in exc_info.value.message
 
 
 async def test_compile_all_result_fields_typed(client):

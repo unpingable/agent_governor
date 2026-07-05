@@ -29,7 +29,7 @@ async def test_list_runs_returns_empty(client):
     assert len(runs) == 0
 
 
-async def test_create_run_returns_not_implemented(client):
-    """create_run() returns a not_implemented dict (stub)."""
+async def test_create_run_returns_stub(client):
+    """create_run() returns a stub dict (not wired to daemon RPC)."""
     result = await client.create_run(task="contract-test-task")
-    assert result.get("status") == "not_implemented"
+    assert result.get("status") == "stub"

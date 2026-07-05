@@ -197,6 +197,22 @@ CD-4B `sess_aabb2a056f9f` as the evidence spine) · S5 Antigravity spike.
 Playbooks demoted to one origin format (compiles into WorkContainer), not the
 spine. Plan: `~/.claude/plans/okay-two-things-1-luminous-bee.md`.
 
+**S4b LANDED (2026-07-05) — the emit/consume seam.**
+`src/governor/work_container_bridge.py`: admission is now a first-class, resolvable
+AG `GateReceipt` (gate `work_admission`, verdict `proceed`, role `measurement`).
+`emit_admission_receipt`/`admit_cd4b` mint over the verified basis and bind
+`admission_ref` = `sha256:<receipt_id>` (replaces the S4a bootstrap basis-seal —
+closes codex F2). `resolve_admission` refuses unless the receipt's evidence binds
+the container's WHOLE basis (plan_ref + citations + scope + ration source refs +
+role + honest metadata) — a forged container can't borrow a receipt admitting
+different/broader work (closes codex F1). `dispatch_preflight` allow rests on
+verify + resolve ONLY, never registry state (even a broken registry). Self-
+verifiable specimen pair: `work_container.s4b.json` + `admission_receipt.json`.
+Two adversarial codex passes; 6 findings applied. 37 tests
+(`tests/test_work_container{,_bridge}.py`), ruff clean. **Still gated:** operator
+role=authority admission via plan_review; live agent launch (stays the runtime
+supervisor's job — S4b decides, doesn't execute) → then S5 Antigravity spike.
+
 **S4 LANDED (2026-07-04) — the projection, not the wiring.**
 `src/governor/work_container.py`: the `WorkContainer` projection primitive +
 `project_cd4b_work_container()`, which projects the proven CD-4B live shape

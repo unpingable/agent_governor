@@ -234,16 +234,33 @@ compact separators, ASCII-safe) per `gate_receipt.canonical_json`;
   performs no dispatch, and imports neither `provider_registry` nor
   `governed_dispatch` (pinned by test).
 
+- **Slice 4b ✓ (emit/consume seam)** — `src/governor/work_container_bridge.py`:
+  admission is now a first-class, resolvable AG `GateReceipt`. `emit_admission_receipt`
+  mints a `work_admission` receipt (verdict `proceed`, role `measurement`) over the
+  *verified* basis; `admit_cd4b` produces a receipt-backed container whose
+  `admission_ref` = `sha256:<receipt_id>` (replacing S4a's bootstrap basis-seal).
+  `resolve_admission` refuses unless `admission_ref` resolves to a real receipt whose
+  evidence **binds the container's whole basis** (plan_ref + citations + scope AND
+  ration source refs + role + honest metadata) — a forged container cannot borrow a
+  receipt admitting different or broader-scoped work. `dispatch_preflight` is the
+  bailiff decision; `allow` rests on container-verify + admission-resolve ONLY —
+  never on registry state, even a broken registry. Self-verifiable specimen pair:
+  `work_container.s4b.json` + `admission_receipt.json`. Two adversarial codex passes;
+  hardening applied. **Still no live agent launch** — the decision is separate from
+  execution.
+
 ### Still gated (not in Slice 4)
 
-- **Live `governed_dispatch` emission/consumption** of a serialized WorkContainer
-  — a running dispatch membrane that *emits* a first-class admission `GateReceipt`
-  and *consumes* a WorkContainer to route a live run. For the CD-4B specimen,
-  admission lived in the maude M-1/M-2 parser plus the operator's approval witness,
-  so `admission_ref` is the re-verifiable seal over the admission basis (plan_ref +
-  the verified citation set), **not** a stored `GateReceipt` id yet. Wiring
-  `governed_dispatch` to mint that receipt is the next gated step.
+- **Operator role=`authority` admission** via `plan_review.authorize_agenda` — the
+  S4b receipt is a `measurement` (it *records* that the basis verified and work may
+  proceed; the force traces to the operator approval witness bound as evidence).
+  An operator-in-the-loop path that mints a role=`authority` grant is named, not
+  built.
+- **Live agent launch** from an admitted container — running the agent stays the
+  runtime supervisor's job; S4b decides, it does not execute. The live-run surface
+  is not broadened.
 - **No Antigravity adapter** (Slice 5 — a test case, never the interface designer).
 - **No routing through `ProviderRegistry`** — `routing.eligible_provider` is a
   label; provider selection stays a `governed_dispatch` decision, and registry
-  presence/absence cannot change a projection (pinned by test).
+  presence/absence cannot change a projection *or* a dispatch verdict (pinned by
+  test).

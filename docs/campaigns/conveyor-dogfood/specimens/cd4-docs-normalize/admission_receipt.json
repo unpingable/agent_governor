@@ -1,0 +1,46 @@
+{
+  "evidence": {
+    "all_citations_verified": true,
+    "citations": [
+      {
+        "name": "playbook_digest",
+        "ref": "sha256:a8e2caf97e59bdacf988a3a2f73ef1f347b37dcacf513634e667c75aed481524",
+        "verified": true
+      },
+      {
+        "name": "ration_card_digest",
+        "ref": "sha256:c55509c5049ce7c826833c2b07101342e1225f139da05735f3615416b9249bd0",
+        "verified": true
+      },
+      {
+        "name": "queued_playbook_ref",
+        "ref": "sha256:45741e3a6600b80bf47bf0e6d5d00ee953524b6dfea1460a486337fdc225eee3",
+        "verified": true
+      },
+      {
+        "name": "approval_ref",
+        "ref": "operator_queued_playbook.operator_approved_2026-07-04",
+        "verified": true
+      }
+    ],
+    "plan_ref": "sha256:d0015fa46674bd806260ddede7663d07553004478f2853230d8013f00c49ac95",
+    "ration_source_ref": "sha256:c55509c5049ce7c826833c2b07101342e1225f139da05735f3615416b9249bd0",
+    "record_kind": "work_admission",
+    "scope_source_ref": "sha256:c55509c5049ce7c826833c2b07101342e1225f139da05735f3615416b9249bd0"
+  },
+  "receipt": {
+    "auth_method": "none",
+    "evidence_hash": "67e4e3ad3096034a75146a069952ad80bc254fc54d9b6291435ba510812a64a9",
+    "gate": "work_admission",
+    "policy_hash": "93159b681f6a775446b4315a099c23a64e08ee9a0a8c6d2778f2212dd6069870",
+    "principal_id": "operator",
+    "receipt_id": "190fca6d951351f4049da31508a99ee6d40e011b92e736a8c89d89a9aa1c468e",
+    "receipt_role": "measurement",
+    "schema_version": 4,
+    "subject_hash": "7cda8f2b61233fe4421505e6808a9eb0bc29cfe40a513fbab139b91a546c357e",
+    "tenant_id": "default",
+    "timestamp": "2026-07-05T03:59:32.256652+00:00",
+    "unsettled": [],
+    "verdict": "proceed"
+  }
+}

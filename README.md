@@ -6,7 +6,7 @@ AI agents act on your code, your infrastructure, your data. Governor puts you in
 
 ![Governor guardrail demo — agent blocked, adapts, work gets done](docs/demo/guardrail.gif)
 
-Launch Claude Code or Gemini CLI as a governed process. Every tool call is intercepted — reads auto-approve, writes need your approval. When the session ends, you review the diff. Accept or revert. Fork from there to keep going. No changes land without your say-so.
+Launch Claude Code as a governed process. Every tool call is intercepted — reads auto-approve, writes need your approval. When the session ends, you review the diff. Accept or revert. Fork from there to keep going. No changes land without your say-so.
 
 ```bash
 python3 -m venv .venv
@@ -405,7 +405,7 @@ Multi-model claim comparison (interferometry — parallel + serial modes), code-
 Supervised agent sessions, canonical event bus, Claude Code adapter, tool interception, interventions (approve/deny/timeout), promotions (workspace diff/approve/reject/revert), session forking, settings cleanup.
 
 ### Integrations (~560 tests)
-[VS Code extension](https://github.com/unpingable/vscode-governor), [Maude](https://github.com/unpingable/maude) (governed REPL/TUI), [Phosphor](https://github.com/unpingable/gov-webui) (governed chat UI), SDK middleware, MCP safety controls, session continuity, git/Perforce governance, external constraint attachment.
+[VS Code extension](https://github.com/unpingable/vscode-governor), [Maude](https://github.com/unpingable/maude) (governed REPL/TUI), [Phosphor](https://github.com/unpingable/gov-webui) (governed chat UI), SDK middleware, session continuity, git/Perforce governance, external constraint attachment.
 
 ### Infrastructure (~960 tests)
 Structured telemetry, Prometheus metrics, config profiles, continuity enforcement, convergence auto-tuning, QA harness, golden-file/property-based/contract tests.
@@ -533,7 +533,7 @@ pip install -e ".[dev]"
 python3 -m pytest tests/ -v
 ```
 
-For client UIs, see: [Guvnah](https://github.com/unpingable/guvnah) (governor console) | [Phosphor](https://github.com/unpingable/gov-webui) (governed chat UI)
+For client UIs, see: [Maude](https://github.com/unpingable/maude) (operator TUI) | [Phosphor](https://github.com/unpingable/gov-webui) (governed web UI)
 
 ---
 

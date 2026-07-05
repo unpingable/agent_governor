@@ -100,13 +100,67 @@ neither would have surfaced from happy-path review.
   distribution naming gates S-D; OQ-2 status-sourcing gates S-B; OQ-3
   edition timestamp; OQ-4 stele scope; OQ-5 ingress framing.
 
+## Sprint 3 — "Refusal gallery + non-grant list + NQ flagship" (CLOSED 2026-07-05)
+
+- **6+7 Refusal gallery — DONE** (`9f19a23`, `docs/REFUSAL_GALLERY.md`).
+  EIGHT organs live-verified same-day (AG, NQ, Nightshift, Wicket, Standing,
+  Continuity, Porter, Verifier) — verbatim excerpts, typed reasons, honest
+  exit-code semantics (verdict tools exit 0 on refusal; blocking tools
+  nonzero). All runnable by a stranger, no network/LLM/live infra.
+- **8 NON_GRANTS.md — DONE** (`9d6e7b4`). Nine entries (7 planned + drills
+  fence + fail-closed pre-tool gate), 25+ pinning tests run green.
+  **Adversarial sandwich BLOCKed with 4 pointer-precision defects, all
+  applied** (test node-id qualifier; nested hookSpecificOutput wire shape;
+  hook error-path line range; outer-cage re-caveated — ration card is the
+  binding seam, cage is defense-in-depth). Substance of all nine held.
+- **9 NQ_RELATIONSHIP.md — DONE** (`bff54d0`). Optional-witness rule pinned;
+  wire-only coupling documented with read-verified pointers; integrator
+  caught two errors pre-commit (constant-name vs wire value
+  `origin_unrecognized`; Night Shift repo moved scheduler→nightshift —
+  memory pointer fixed too).
+- **9b NQ flagship evidence — DONE** (in `bff54d0`). Stranger run: build
+  exit 0, live findings, and the hero specimen — `preflight disk-state`
+  verifies disk occupancy while refusing SEVEN consequence claims in one
+  receipt. Verdict: "usable by a normal SRE today." 4 friction items = NQ
+  docs gaps (ports-in-use, /api/query endpoint, receipt-check flag,
+  hostname WARN) — NQ's lane.
+
+## Lane status after S3 wave
+
+- **Lane P (porter) — COMPLETE except P11-R.** `e64b3f6` (P12-R: AG-vocab
+  specimens scrubbed — porter's own charter F6 — golden fixture full-shape
+  pin + no-AG-vocab tree test) + `6986914` (P13-R: `demo/refused-exit.sh`,
+  exits 1 with `outcome: refused` / `exit_code_observed: false`). Suite 14
+  green, pushed. Remaining: P11-R (env injection + dirty-tree annotation, M).
+- **Lane S (spine) — S-A DONE** (`e198390` + `c435cf4` pushed: README/
+  REENTRY/CLAUDE/AGENTS de-staled, specimen-at-front commands live-verified,
+  doctrine verbatim). S-B/S-D still gated on operator OQ-1/OQ-2.
+- **Lane U (gov-webui) — U1 audit DONE** (report in transcript). Better than
+  feared: all 19 governor imports OK on 2.8.1, webui's own 481 tests exit 0,
+  live curl smoke mostly 200s. U2 fix list (5 bounded items: version string,
+  optional chat model field, COMPAT.md staleness, /api/state 404, one
+  daemon-side bug). U3 desk-mode design ready: DaemonShellClient over the
+  SAME socket framing + ag_shell_client typed models, /desk/* routes with
+  the GS-3 one-mutation-door invariant, desk.html three panels, parity pin +
+  live smoke, nav entry. 5 packets (U3-A..E).
+
+## New AG-lane bug (filed by U1 audit, NOT fixed inline)
+
+**intent-compiler receipt_hash non-determinism:** daemon injects
+`datetime.now().isoformat()` into `IntentFormResponse.timestamp` which is
+included in `_compilation_receipt_hash` — same compile input → different
+hash per call, contradicting the "content-addressed" comment and breaking
+contract tests. Authority-adjacent (receipt hashing) → needs its own packet
+with Opus review + pinning test. Also: maude contract-test drift (stub
+lacks `list_runs()`; `RPCError` vs `httpx.HTTPStatusError` expectations) —
+maude's lane.
+
 ## Next
 
-**Sprint 3 — "Refusal gallery + non-grant list + NQ flagship"** (CAMPAIGN §9
-packets 6–9b). Lane U (gov-webui currency audit) may start in parallel;
-lanes P/S have re-scoped packet lists above (S-B/S-D blocked on operator
-OQs; P packets unblocked).
+**Sprint 4 — "Contract v1 + Maude M-4"** (CAMPAIGN §9 packets 14–17):
+ratification memo (Fable) → **operator act: ratify**; maude M-4 run report
+(Opus); M-3 harness picker (stretch). Parallel: P11-R; U2 repairs + U3-A/B;
+intent-compiler hash fix packet.
 
-**Operator acts pending:** spine OQ-1..OQ-5 rulings (gate S-B/S-D only);
-contract ratification (S4) and public claim minting (S5) remain
-operator-gated. Nothing blocks Sprint 3.
+**Operator acts pending:** spine OQ-1..OQ-5; work-container ratification
+(S4); public claim minting (S5). Nothing blocks the S4 build work.

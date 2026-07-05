@@ -155,12 +155,58 @@ with Opus review + pinning test. Also: maude contract-test drift (stub
 lacks `list_runs()`; `RPCError` vs `httpx.HTTPStatusError` expectations) —
 maude's lane.
 
+## Sprint 4 — "Contract v1 + Maude M-4" (build work CLOSED 2026-07-05;
+ratification act pending)
+
+- **14 Ratification memo — DONE** (`68eae6e`,
+  `ratification-memo-work-container-v1.md`). Binds 4 docs + 4 schemas by
+  digest; evidence chain (CD-4B → S4 projection → S4b resolvable admission →
+  structural registry); names the honest wrinkle (projection direction
+  proven, consumption direction gated) and recommends **Option A: graded
+  ratification** (v1; claude_code STRUCTURALLY conformant + live supervised
+  evidence; runtime consumption explicitly gated). **OPERATOR ACT PENDING.**
+- **15 Maude M-4 run report — DONE** (maude `afc2a68`+`704f86b`, pushed).
+  Pure composer over existing reads only (session.get/events, promotion.get,
+  plan envelope, co-located ReviewPacket); surface/detail/law disclosure via
+  labels.py; `report <session_id> [plan.md]` command + law layer one `why`
+  away. Disciplines pinned by test: honest absence ("not recorded", never
+  inferred), testimony-not-admission (exit 0 is a report, never "passed";
+  used>granted renders OVERRUN, never "authorized"; criteria render
+  UNCHECKED). 301 pass/24 skip, ruff clean, integrator re-verified bare.
+  v0 exclusions recorded (no auto-trigger, no export, no auto-judging).
+- **16 M-3 harness picker — DELIBERATELY DROPPED** by the worker: correct
+  M-3 touches the launch path + fake-client tests across several files —
+  a separate packet's care; half-shipping would under-close. Re-queue post-S5.
+- **17 maude harness fix** — pre-closed in Sprint 1 (already landed).
+- **AG intent-compiler hash fix — DONE** (`97e29d7`, pushed). Invariant:
+  same input → same compilation receipt hash; timestamp is metadata
+  (gate_receipt precedent; payload-exclusion, field kept). Two injection
+  sites found (daemon.py:1276+1304). Stored-artifact impact: none (hash not
+  chained/persisted). New pins green; **full suite 16727 pass/49 skip
+  EXIT=0**; targeted re-verify by integrator.
+
+## Lanes after S4 wave
+
+- **Lane P — COMPLETE** (`6f8441a` pushed): P11-R env injection (keys
+  recorded, values proven absent from record+transcripts via sentinel test)
+  + dirty-worktree annotation (note, not verdict) + `--worktree`. Suite 19
+  green. Porter v0.1 charter commitments: all closed except the two
+  deliberately soft-fenced items (F4 transcript volume, F5 run-state locks).
+- **Lane S** — S-A done; S-B/S-D still gated on operator OQ-1/OQ-2.
+- **Lane U** — U2 DONE (webui `b0c99e4`: version single-sourced, model
+  optional, /api/state wired, COMPAT current) + U3-A DONE (`d70a673`:
+  DaemonShellClient over the same framing; 12 daemon methods
+  name-verified; ag_shell_client models VENDORED with drift-risk header —
+  packaging: no PyPI release of the lib; one-mutation-door pin
+  `test_resolve_passes_args_verbatim`). Suite 513 pass/3 skip. Remote fixed
+  to SSH + pushed. Remaining: U3-B (/desk routes — codex/Opus sandwich
+  mandatory), U3-C (desk.html), U3-D (parity pin + live smoke), U3-E (nav
+  + docs).
+
 ## Next
 
-**Sprint 4 — "Contract v1 + Maude M-4"** (CAMPAIGN §9 packets 14–17):
-ratification memo (Fable) → **operator act: ratify**; maude M-4 run report
-(Opus); M-3 harness picker (stretch). Parallel: P11-R; U2 repairs + U3-A/B;
-intent-compiler hash fix packet.
-
-**Operator acts pending:** spine OQ-1..OQ-5; work-container ratification
-(S4); public claim minting (S5). Nothing blocks the S4 build work.
+**Sprint 5 — "Front door + coherence + launch"** (CAMPAIGN §9 packets
+18–22) can start; U3-B..E continue in parallel. **Operator acts now
+stacked:** (1) work-container ratification (memo `68eae6e` — Option A
+recommended); (2) spine OQ-1..OQ-5; (3) at S5 exit: final pushes + public
+claim minting + site deploy.

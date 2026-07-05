@@ -9,7 +9,17 @@
 > hand-maintained table is a map that eventually lies, which is the exact remembered-approval
 > failure the rest of this repo exists to refuse.
 >
-> Updated 2026-07-04. `.governor/loop.json` is **stale** (tracks the completed AG-on-AG thread) — use this.
+> Updated 2026-07-05. `.governor/loop.json` is **stale** (tracks the completed AG-on-AG thread) — use this.
+
+## LIVE THREAD (2026-07-05) — public-MVP campaign
+
+**Canonical:** `docs/campaigns/public-mvp/STATUS.md` (card: `CAMPAIGN.md` same
+dir). Sprints 1-4 closed same-day; Sprint 5 (front door + coherence + launch)
+in flight. **Push-state note:** everything below tagged `LOCAL` landed on
+`origin/main` with the 2026-07-04 merges — verified `0 ahead / 0 behind` on
+2026-07-05; those tags are HISTORY of pre-merge commit ids, not a live
+disk-SPOF. Operator acts stacked: work-container ratification (memo in the
+campaign dir), spine OQ-1..5, site deploy + public mint at S5 exit.
 
 ## LANDED 2026-07-04 — both playbook lanes are on main
 

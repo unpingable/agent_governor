@@ -17,7 +17,7 @@
 | 7 | Porter v0.1 tested + README-runnable | ☑ | 19 tests; `demo/refused-exit.sh`; ssh real-host caveat honest (`7d4a686`) |
 | 7b | Spine v0 public or honestly re-scoped | ☑ (fallback holds) | Engine green (141), docs de-staled; S-B/S-D gated on **☐ OQ-1/OQ-2**; map page says "building" |
 | 7c | NQ flagship | ☑ | Stranger run + Track D + map-first + optionality pinned (`bff54d0`) |
-| 7d | gov-webui legacy green + desk v0 | ☑ code+tests / **☐ one live desk smoke** | 533 tests; desk landed `f10e1dd..7e30fbe`; the skip-by-default live smoke has not run against a live daemon yet |
+| 7d | gov-webui legacy green + desk v0 | ☑ | 533 tests; desk landed `f10e1dd..7e30fbe`; live smoke RUN 2026-07-05: /desk/decisions + /desk/sessions 200 against a real daemon; forged-id resolve refused 404 `decision_not_found` live |
 | 8 | Front door coherent; sweep clean | ☑ | Independent 20b sweep ran post-RC-0: 7 findings, all applied (STATUS §20b); clean classes explicit; site PUSHED (`52413b4`) |
 | 9 | Nothing armed | ☑ | C11/seccomp/H2/live-cage all refused; limits.html states it |
 | 10 | Public claim minted | **☐ OPERATOR** | The one step that converts candidate → public |
@@ -40,9 +40,8 @@
    clerk, governor-atlas. **A 404 on agent_governor kills Track B.**
 4. **Operator fresh-clone run** (DoD 1) — 15 minutes, on a machine that
    isn't this one if possible.
-5. **Desk live smoke** (DoD 7d) — `governor serve` + run gov-webui's
-   skip-by-default live-integration test, or 2 minutes of clicking /desk
-   against the live daemon.
+5. ~~Desk live smoke~~ **DONE 2026-07-05** — real daemon, feed+sessions
+   200, forged-id resolve refused live (404 decision_not_found).
 6. ~~20b sweep~~ **DONE 2026-07-05** — independent re-run complete, 7
    findings applied (STATUS §20b); read the summary, nothing left queued.
 7. ~~Deploy the site~~ **PUSHED 2026-07-05** (operator-blessed; through

@@ -1,4 +1,20 @@
-# CD-4 specimen — STAGED, awaiting the operator's two acts + a live daemon
+# CD-4 specimen — RUN (CD-4B self-drive, 2026-07-04)
+
+> **Run outcome (CD-4B, 2026-07-04 eve).** The operator's two acts landed
+> (`queue.json` latched `operator_approved: true`; witness
+> `operator_queued_playbook.operator_approved_2026-07-04`; `plan.md` promoted to
+> `governance_status: approved`). The normalization pass then executed under the
+> M-2 envelope and produced a ReviewPacket:
+>
+> - `review_packet.manifest.json` — `review_packet.v0`, **status `no_change`**.
+> - `review_packet.summary.md` — operator-facing summary + M-4 legibility notes.
+>
+> **Verdict:** the `docs/playbooks/*` corpus is already normalized for every term
+> the pass can safely act on; zero source files changed. One decision point is
+> handed back to the operator (the glossary does not define `RationCard` /
+> `ReviewPacket`, and "ration card" is a load-bearing metaphor, not the type —
+> see the packet's `risks` and `followups`). The staging record below is
+> preserved as history.
 
 Everything up to the execution seam is built and verified (2026-07-04):
 

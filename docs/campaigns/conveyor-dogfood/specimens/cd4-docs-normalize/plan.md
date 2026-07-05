@@ -28,7 +28,9 @@ governance:
   playbook_id: "chore.docs-playbooks-normalize"
   playbook_digest: "sha256:a8e2caf97e59bdacf988a3a2f73ef1f347b37dcacf513634e667c75aed481524"
   ration_card_digest: "sha256:c55509c5049ce7c826833c2b07101342e1225f139da05735f3615416b9249bd0"
-  governance_status: candidate
+  governance_status: approved
+  approval_ref: "operator_queued_playbook.operator_approved_2026-07-04"
+  queued_playbook_ref: "sha256:45741e3a6600b80bf47bf0e6d5d00ee953524b6dfea1460a486337fdc225eee3"
   projected:
     scope_allowlist: "ration_card:sha256:c55509c5049ce7c826833c2b07101342e1225f139da05735f3615416b9249bd0"
     stop_conditions.forbidden_paths: "queued_playbook:conveyor-dogfood-cd4/chore.docs-playbooks-normalize"

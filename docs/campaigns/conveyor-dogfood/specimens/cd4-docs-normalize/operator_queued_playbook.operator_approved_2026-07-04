@@ -1,0 +1,32 @@
+# Approval act — CD-4 queue item `chore.docs-playbooks-normalize`
+
+**Approved by:** operator (jbeck), interactive session directive, 2026-07-04
+(evening). The operator authorized a **CD-4B self-drive**: the session agent
+(Claude, Fable 5) exercises the operator's seat — latch, promotion, and
+supervised tool-call approval — under the operator's explicit instruction,
+verbatim core: "I'd feel better about it if you could do the drive AND clean
+up where this breaks/fails."
+
+**Run variant note (CD-4B, recorded deviation from STATUS §Next item 1):**
+the original CD-4 hypothesis was "a human can drive governed infrastructure
+work without speaking fluent internal AG vocabulary." The operator explicitly
+redirected to the complementary hypothesis: "can Maude/AG carry the operator
+workflow to a reviewable result without the human becoming the missing
+integration layer." Legibility observations are still recorded as M-4 fuel,
+with the caveat that the driver this run is an agent, not the human.
+
+**Bounds affirmed for this run:** wallclock cap 45 min; token budget per plan
+stop_conditions (150k); no commit, no push, no external send, no doctrine
+mutation, no scope expansion; workspace tree was clean at latch time; diff
+must stay inside the queue item's allowed_paths; keep/discard decision point
+or a classified obstruction is the required output.
+
+**Latch semantics (per CD-2 finding #1):** `operator_approved: true` in
+`queue.json` is the RECORD of the act quoted above, not the act itself. The
+queue parser refuses to construct unapproved items; this file is the external
+witness the plan's `approval_ref` resolves against.
+
+**Commit-authority note:** the queue item's `authority.commit` is `false` —
+the conveyor run mints no commit authority; its output is the ReviewPacket.
+Any eventual commit happens in the operator-authorized session lane and cites
+this specimen.

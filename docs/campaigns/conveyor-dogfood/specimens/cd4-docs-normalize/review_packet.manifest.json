@@ -1,0 +1,119 @@
+{
+  "schema_version": "review_packet.v0",
+  "packet_id": "cd4-docs-normalize",
+  "playbook_id": "chore.docs-playbooks-normalize",
+  "repo": "agent_gov",
+  "branch": "main",
+  "base_branch": "main",
+  "base_sha": "ad9d932b6b23faee39cba9c8318813f2b9ca0f93",
+  "proposed_head_sha": null,
+  "status": "no_change",
+  "lane": "conveyor-dogfood",
+  "authority": {
+    "requested": {
+      "commit": false,
+      "push": false,
+      "network": false,
+      "subprocess": false,
+      "live_origin": false,
+      "doctrine_write": false,
+      "constellation_write": false
+    },
+    "granted": {
+      "commit": false,
+      "push": false,
+      "network": false,
+      "subprocess": false,
+      "live_origin": false,
+      "doctrine_write": false,
+      "constellation_write": false
+    },
+    "used": {
+      "commit": false,
+      "push": false,
+      "network": false,
+      "subprocess": false,
+      "live_origin": false,
+      "doctrine_write": false,
+      "constellation_write": false
+    }
+  },
+  "allowed_paths": [
+    "docs/playbooks/*",
+    "docs/campaigns/conveyor-dogfood/*",
+    "docs/campaigns/conveyor-dogfood/specimens/cd4-docs-normalize/*"
+  ],
+  "forbidden_paths": [
+    "src/*",
+    "tests/*",
+    "specs/*",
+    ".governor/*",
+    "docs/roadmaps/*"
+  ],
+  "files_changed": [],
+  "tests": [
+    {
+      "command": "python3 -m pytest tests/playbooks -q",
+      "status": "passed",
+      "exit_code": 0,
+      "summary": "229 passed in 0.76s (baseline unchanged; zero source edits made)"
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "vocabulary_authority",
+      "path": "docs/playbooks/glossary.md",
+      "sha256": null,
+      "description": "The named authority for this pass. Defines PlaybookSpec, CertifiedPlaybook, RunRequest, RunPlan, RunInstance, BoundaryContract, ConvergenceFence, ConvergenceOutcome. Does NOT define RationCard or ReviewPacket (see risks[0])."
+    },
+    {
+      "kind": "reconciliation_target",
+      "path": "docs/playbooks/live-adapter-allowlist-review.md",
+      "sha256": null,
+      "description": "The doc named for cross-lineage reconciliation. Investigated: both branch lineages (feat/playbooks-gov-loop, feat/playbooks-synthetic-conveyor) merged into it LINEARLY with no conflict markers; the supersession banner + fresh-eyes section are additive and cross-reference each other. No mechanical duplication to remove."
+    },
+    {
+      "kind": "successor_gate",
+      "path": "docs/playbooks/harness-cage-review.md",
+      "sha256": null,
+      "description": "References the 11 ration-card terms as inherited constraints; does NOT verbatim-duplicate the table. Deliberate carry-forward, not duplication."
+    }
+  ],
+  "risks": [
+    "GLOSSARY GAP (operator decision): the plan names five terms to normalize (PlaybookSpec, CertifiedPlaybook, RunRequest, ReviewPacket, RationCard) but the named vocabulary authority (glossary.md) defines only the first three. RationCard and ReviewPacket are code types, not glossary terms. Adding them to the glossary is a semantic amendment = an explicit halt_if / stop_condition ('the glossary itself turns out to need semantic amendment ... that is doctrine work, not a wording pass'). Left for the operator; NOT self-actioned.",
+    "METAPHOR/TYPE COLLISION: 'ration card' (lowercase) is used ~24 times as a load-bearing English metaphor (door/lock/'no one has eaten with it yet'/'a ration card, not a hat'), distinct from the RationCard type (correctly CamelCase where the class is referenced, e.g. RationCard.agent_id). A naive normalize-all pass would flatten the metaphor into a type reference, changing register/meaning and breaching zero-semantic-change. This risk is why an automated find-and-replace on these terms must NOT be run.",
+    "PROSE-FORMULA vs OBJECT-MODEL register: the 'executable unit' conjunction is phrased as lowercase prose in two docs at different lengths (README.md: 'certified spec + live standing + run plan + fresh witnesses + spend authority'; governed-playbooks.md: 'certified playbook spec + live standing resolution + instantiated run plan + ...'). These paraphrase the four-layer object model on purpose (intuition vs precise types) and are marked 'stated once and never weakened'. Tightening them to CamelCase types would collapse an intentional distinction; left unchanged."
+  ],
+  "design_notes": [
+    "SURVEY: all 26 markdown files under docs/playbooks/ were surveyed for the five named terms plus the BoundaryContract/StepContract pair.",
+    "ReviewPacket: already 100% consistent (CamelCase in all 10 occurrences across 6 files; zero 'review packet'/'review-packet' lowercase forms). No edit needed.",
+    "PlaybookSpec / CertifiedPlaybook / RunRequest: consistent as type-symbols wherever a symbol is meant (PlaybookSpec IR, CertifiedPlaybook, RunRequest path, etc.). Lowercase appears only in (a) the two prose formulas above and (b) the glossary's OWN descriptive prose ('a certified playbook is certified only over its input domain'), so lowercase descriptive usage is licensed by the authority itself. No edit needed.",
+    "RunRequest vs RunPlan: the glossary treats these as DISTINCT objects (RunRequest = request admitted to judgment; RunPlan = bound object admitted at runtime). No doc collapses them into synonyms; governed-playbooks.md bundles them 'RunRequest / RunPlan' in the layer-3 model, which is the source design's own framing, not a wording bug. Left unchanged.",
+    "BoundaryContract vs StepContract: correct everywhere. All three 'StepContract' occurrences are the term being explicitly negated ('the shared leaf is NOT StepContract, it is a BoundaryContract'), matching the glossary. No edit needed.",
+    "RECONCILIATION SUB-TASK: 'reconcile the duplicated live-adapter-allowlist-review content from the two branch lineages' was investigated to ground (git log --all --source; conflict-marker grep). Finding: no duplication exists. feat/playbooks-gov-loop created the file (4638250 -> 19b310f -> 94cfd52); feat/playbooks-synthetic-conveyor added the fresh-eyes re-review (bfe1991) and supersession banner (69528bf) ADDITIVELY on top. The banner explicitly forward-references the fresh-eyes section; the fresh-eyes section states 'This is additive: the 2026-06-30 record stands.' The reconciliation is already done in-tree. Nothing to merge or delete.",
+    "NET RESULT: the corpus is already normalized for every term the pass can safely act on. The value of this run is the survey + the two boundary findings, not a diff."
+  ],
+  "explicit_non_actions": [
+    "Did NOT edit the glossary to add RationCard/ReviewPacket (would be a semantic amendment = halt_if; operator's doctrine call).",
+    "Did NOT normalize 'ration card' (metaphor) to the RationCard type (would change register/meaning).",
+    "Did NOT rewrite the two 'executable unit' prose formulas to CamelCase types (intentional prose vs object-model distinction).",
+    "Did NOT restructure or de-duplicate live-adapter-allowlist-review.md (no duplication exists; the two lineages are already reconciled additively).",
+    "Did NOT touch any file outside docs/playbooks/* or this specimen dir. Zero files under docs/playbooks/ were modified.",
+    "Did NOT commit or push (authority.commit / authority.push are false; the run mints no commit authority — any commit happens later in the operator-authorized session lane citing this specimen)."
+  ],
+  "followups": [
+    {
+      "id": "cd4-fu-1",
+      "title": "Doctrine decision: should the glossary define RationCard and ReviewPacket?",
+      "reason": "Two of the five terms the CD-4 plan names as normalization targets are not in the vocabulary authority. Either add them (glossary amendment = doctrine work with its own gate) or record that they are code types intentionally out of the glossary's scope. This is the classified decision point this run surfaces.",
+      "suggested_next_gate": "glossary-amendment review (doctrine), operator-run"
+    },
+    {
+      "id": "cd4-fu-2",
+      "title": "If a mechanical term-normalizer is ever built, exclude the 'ration card' metaphor and the prose formulas",
+      "reason": "The metaphor/type collision and the intentional prose-vs-object-model register mean a blind find-and-replace would breach zero-semantic-change. Any future automated pass needs a metaphor/prose allowlist.",
+      "suggested_next_gate": "none (design note for a future tooling pass)"
+    }
+  ],
+  "operator_review_required": true
+}

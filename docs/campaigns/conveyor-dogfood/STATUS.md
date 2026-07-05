@@ -1,10 +1,11 @@
 # Status — conveyor dogfood
 
-As of 2026-07-04 evening. **CD-0..CD-3 DONE; CD-4 STAGED at the execution
-seam** (one operator-driven live run from closing). Pushed heads: **AG
-`c3e95c0`**, **maude `015de38`** (both `origin/main`, clean). Maude remote
+As of 2026-07-04 evening. **CD-0..CD-3 DONE; CD-4 RUN (as CD-4B self-drive) —
+reached a deliberate keep on a validator-clean ReviewPacket.** Pushed heads:
+**AG `c3e95c0`**, **maude `015de38`** (both `origin/main`, clean). Maude remote
 fixed 2026-07-04 → github.com/unpingable/maude (was local-only; 22 commits
-now safe).
+now safe). CD-4B artifacts + a maude harness fix are **uncommitted** on `main`
+(see below) pending operator landing.
 
 ## Done
 
@@ -110,7 +111,38 @@ now safe).
   ollama is a chat backend only — so "run CD-4 on qwen" would be net-new
   adapter work, out of this slice's scope.)
 
-## Staged (awaiting operator acts + live daemon)
+- **CD-4 RUN (2026-07-04, as CD-4B self-drive) — the two-receipt-surface run
+  executed end-to-end.** Session `sess_aabb2a056f9f`; governed plan admitted
+  with all four citations verified; run finished in 8m19s (45-min cap never
+  bound); reached `supervised keep` on a `no_change` ReviewPacket that loads as
+  a real `ReviewPacket` object and passes the landed
+  `validate_review_packet_for_queue_item` (issues=[]). Every load-bearing claim
+  in the packet was independently re-verified (glossary omits RationCard/
+  ReviewPacket; ReviewPacket CamelCase-consistent; no cross-lineage duplication;
+  `pytest tests/playbooks` 229 passed exit 0). Drive record + M-4 findings:
+  `specimens/cd4-docs-normalize/CD4B_DRIVE.md`; work receipt:
+  `review_packet.{manifest.json,summary.md}`.
+
+  **Variant note:** run as **CD-4B** (agent in the operator's seat under the
+  operator's explicit authorization + reframed hypothesis — "can Maude/AG carry
+  the workflow to a reviewable result without the human becoming the missing
+  integration layer"), not the pure human-in-the-seat CD-4. The human's role
+  was the two flip acts + review; the machine carried the loop.
+
+  **Harness break found + fixed (maude, uncommitted):** `run <plan.md>` refused
+  a governed plan whose flip had (correctly) dirtied the specimen dir —
+  `launch_session` fails closed on a dirty tree without `allow_dirty`. Fixed by
+  threading `allow_dirty=True` through the governed-plan launch (Tock-2 baseline
+  fence, so the flip files are excluded from the run's keep/discard). +2 tests;
+  maude suite 281 passed / 24 skipped. Land in maude's lane.
+
+  **Verdict on the work itself:** the `docs/playbooks/*` corpus was already
+  normalized; the run's deliverable is the survey + a classified operator
+  decision (amend the glossary to define RationCard/ReviewPacket, or record them
+  as out-of-scope code types) — `followups[cd4-fu-1]`. Not doctrine-actioned
+  by the run (that would trip `halt_if`).
+
+## Was staged (now run — see CD-4 above)
 
 - **CD-4 STAGED (2026-07-04):** `specimens/cd4-docs-normalize/` — playbook
   spec (parses via landed parser) + ration card (landed class, locked axes) +
@@ -145,8 +177,8 @@ now safe).
 3. **GS-13** — why/help/command-palette overlays; retires maude's nav-key
    sprawl (flagged at GS-10b leg 3c) once there's a real report to navigate.
 
-**"Make the law portable" — CONTRACT ARTIFACT STARTED (2026-07-04); live
-wiring still gated on CD-4.** A stable EXPORTED conveyor projection
+**"Make the law portable" — CONTRACT LANDED, S4 UNBLOCKED by CD-4B
+(2026-07-04).** A stable EXPORTED conveyor projection
 (QueuedPlaybookRef / RationCardRef / ReviewPacket / ApprovalWitness /
 ConstraintProjection / GovernedPlanBinding + refusal classes + digest/citation
 rules + authority axes) so maude / Night Shift / NQ / Antigravity consume a
@@ -156,11 +188,14 @@ to a **provider/agent contract**, not to Maude directly. **Landed this slice
 (contract artifacts only, mints nothing):** `docs/api/work-container-contract.md`
 (deepest) + `agent-integration.md` + `provider-integration.md`, and
 `schemas/{work_container,provider_descriptor,provider_run_receipt,provider_obstruction}.v1.json`
-(DRAFT). Build vector: Slice 2 ProviderRegistry primitive (gated on contract
-review) → Slice 3 conforming descriptors → **Slice 4 live governed_dispatch
-wiring (gated on CD-4)** → Slice 5 Antigravity spike. Playbooks demoted to one
-origin format (compiles into WorkContainer), not the spine. Plan:
-`~/.claude/plans/okay-two-things-1-luminous-bee.md`.
+(DRAFT). Build vector: S1 ✓ contract · S2 ✓ ProviderRegistry primitive
+(`69cdc8a`) · S3 ✓ Claude Code descriptor + Maude exclusion (`fbf8255`) ·
+**CD-4 ✓ live Maude drive (CD-4B) — the projection is proven live, not fantasy
+architecture** · **S4 UNBLOCKED: WorkContainer projection / live
+governed_dispatch bridge over the now-proven shape** (its doc/code should cite
+CD-4B `sess_aabb2a056f9f` as the evidence spine) · S5 Antigravity spike.
+Playbooks demoted to one origin format (compiles into WorkContainer), not the
+spine. Plan: `~/.claude/plans/okay-two-things-1-luminous-bee.md`.
 
 **Parked operator rulings (from the morning, dependency-ordered for later):**
 C2 read-plane trio → C2 wicket-guard absorption → GS-2b admissibility/HELD →

@@ -31,7 +31,7 @@
       "required_tests": [
         "python3 -m pytest tests/playbooks -q"
       ],
-      "operator_approved": false,
+      "operator_approved": true,
       "authority": {
         "commit": false,
         "push": false,

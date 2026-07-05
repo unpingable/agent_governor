@@ -157,6 +157,12 @@ Or run `governor quickstart` for a guided demo with anchors, violations, and rec
 | **Inspect an incident** | `governor trace` + `governor receipts` — unified timeline and receipt query |
 | **Understand the architecture** | [Architecture](#architecture) + [PCAR specs](#pcar-proof-carrying-agent-runtime) |
 
+**Go deeper:** [Tour](docs/TOUR.md) — three-act walkthrough, from nothing to a contested refusal |
+[Refusal Gallery](docs/REFUSAL_GALLERY.md) — eight organs, live-verified, with typed reasons |
+[What It Doesn't Grant](docs/NON_GRANTS.md) — the authority inventory |
+[Governed Workflow](docs/GOVERNED_WORKFLOW.md) — propose/verify/apply, end to end |
+[Specimens](specimens/README.md) — five receipts, cross-examined.
+
 ---
 
 ## How It Works

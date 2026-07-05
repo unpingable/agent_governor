@@ -17,11 +17,21 @@ governor state --json            # Aggregated state as JSON (schema v2 default)
 governor state --json --schema v1  # Legacy v1 format (proposals/facts/decisions/tasks/regime/boil/autonomous)
 governor state --json --schema v2  # Canonical ViewModel (session/regime/decisions/claims/evidence/violations/execution/stability)
 governor rejections              # Show rejection history
-governor receipts                # List gate receipts (newest first)
-governor receipts --gate evidence_gate  # Filter by gate
-governor receipts --verdict block --last 10  # Last 10 blocks
-governor receipts --id <receipt_id> --evidence  # Show receipt + evidence bundle
-governor receipts --json         # Machine-readable output
+governor receipts                # Gate receipts only (command group)
+                                 # Proposal receipts (FileSnapshot/CmdRun) live in
+                                 # .governor/proposals.json + .governor/facts/index.json — no CLI list surface
+governor receipts list           # List gate receipts (newest first)
+governor receipts list --gate evidence_gate  # Filter by gate
+governor receipts list --verdict block --last 10  # Last 10 blocks
+governor receipts list --json    # Machine-readable output
+governor receipts list --format v1 --since <id>  # v1 receipts since cursor
+governor receipts show <id>      # Show a single receipt (auto-detects format from ID shape)
+governor receipts show <id> --evidence  # Show receipt + evidence bundle (canonical form)
+governor receipts list --id <receipt_id> --evidence  # Shortcut — same as show <id> --evidence
+governor receipts verify         # Verify v1 receipt chain integrity
+# Backwards-compatible shortcuts (governor receipts --gate / --json resolve to the list subcommand):
+governor receipts --gate evidence_gate  # Same as: governor receipts list --gate evidence_gate
+governor receipts --json         # Same as: governor receipts list --json
 
 # Configuration
 governor envelope                # Get/set operating mode (strict/exploratory)

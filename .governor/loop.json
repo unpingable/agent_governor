@@ -34,13 +34,13 @@
     ".governor"
   ],
   "re_entry_probes": [
-    "cat .governor/loop.json",
-    "cat working/campaign-ag-walking-skeleton.md",
+    "cat docs/campaigns/public-mvp/STATUS.md",
+    "cat docs/campaigns/public-mvp/CAMPAIGN.md | head -60",
     "git log --oneline -8",
     "git status --short -- src tests docs golden demo specs working",
-    "python3 -m pytest --collect-only -q tests/ 2>&1 | tail -1",
-    "grep -rn 'class ActiveTunableStore' src/governor/activation.py && grep -n 'P31_SURFACE\\|P31_TARGET\\|exactly one tunable' src/governor/activation.py | head"
+    "python3 -m pytest --collect-only -q tests/ 2>&1 | tail -1"
   ],
+  "active_thread": "public-mvp ('First Visitors') — docs/campaigns/public-mvp/STATUS.md. Walking-skeleton campaign parked; loop.json re_entry_probes repointed 2026-07-05 (coherence-pass item 3).",
   "preexisting_dirt_note": "The tree carries unrelated dirty/untracked files NOT part of the P0/P4 thread (docs/visual_registers.md, working/campaign-standing-before-spendability.md, working/nightshift-governor-unsettled-integration-state.md, working/parked-constellation-alignment-pass.md, docs/doctrine/briefings_not_cockpits.md, several working/GOV_GAP_*.md and working/*.md candidates, .tick/tick0{1,2}-gov/). They predate this slice. The P0-shadow-pass commit should stage ONLY its own new files. Treat the rest as pre-existing triage.",
   "prior_pointer_note": "History: P4 PARKED (chamber empty) -> P0-shadow-pass CLOSED (reachability audit, falsified own premise, library-only dormant tripwire) -> session 3 (audit/census/mcp_safety retirement) -> AG bootstrap-lab walking skeleton is now the ACTIVE thread (cold-admitted, blocked on operator fork). P0/P4 result fields above are retained as closure history, not active work.",
   "w1_slab": "items 1-5 + Act 2 DONE. STRANGER GATE: W0 FAIL -> W1 PASS -> W2 PASS. One GitHub-clone verification remains. (Launch campaign -- not the active P0 thread.)"

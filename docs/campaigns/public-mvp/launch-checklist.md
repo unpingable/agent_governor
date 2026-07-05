@@ -12,7 +12,7 @@
 | 2 | All cited bits on public HEADs | ☑ | Every repo pushed today; site cites only pushed AG docs. |
 | 3 | Refusal gallery ≥6 organs, run in launch week | ☑ (8 organs, all run 2026-07-05) | `REFUSAL_GALLERY.md` `9f19a23` |
 | 4 | Non-grant list survived BLOCK-hunt | ☑ | Opus refute: 4 pointer defects applied, substance held (`9d6e7b4`) |
-| 5 | Contract v1 ratified, one conforming provider | **☐ OPERATOR** | Memo `68eae6e` — Option A (graded) recommended |
+| 5 | Contract v1 ratified, one conforming provider | ☑ **RATIFIED 2026-07-05** | Operator: 'Ratified. Do it. And Option A.' — executed `74dcf86` (digests verified pre-edit; invariants preserved) |
 | 6 | Maude demo-ready (loop + plan + M-4 + live smoke) | ☑ | `receipts-s2-maude-smoke.md`; M-4 `afc2a68`+`704f86b`; suite 301+19 green |
 | 7 | Porter v0.1 tested + README-runnable | ☑ | 19 tests; `demo/refused-exit.sh`; ssh real-host caveat honest (`7d4a686`) |
 | 7b | Spine v0 public or honestly re-scoped | ☑ (fallback holds) | Engine green (141), docs de-staled; S-B/S-D gated on **☐ OQ-1/OQ-2**; map page says "building" |
@@ -24,10 +24,8 @@
 
 ## Operator acts, in order
 
-1. **Ratify work-container v1** — memo
-   `docs/campaigns/public-mvp/ratification-memo-work-container-v1.md`
-   (Option A recommended; edits status lines only; invariant sentences
-   untouchable).
+1. ~~Ratify work-container v1~~ **DONE 2026-07-05** — operator ratified
+   Option A in-session; executed `74dcf86` per the memo.
 2. **Spine OQ-1..OQ-5** — `spine/docs/design/v0-navigable-index.md` §open
    questions (OQ-1 gates packaging, OQ-2 gates the specimen edition; others
    cheap).

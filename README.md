@@ -6,6 +6,11 @@ AI agents act on your code, your infrastructure, your data. Governor puts you in
 
 ![Governor guardrail demo — agent blocked, adapts, work gets done](docs/demo/guardrail.gif)
 
+**Start here:** [what this is](docs/start-here/what-this-is.md) ·
+[inspect in 10 min, no install](docs/start-here/10-minute-inspect.md) ·
+[run it in 30 min](docs/start-here/30-minute-run.md) ·
+[concepts, plain words first](docs/start-here/concepts.md)
+
 Launch Claude Code as a governed process. Every tool call is intercepted — reads auto-approve, writes need your approval. When the session ends, you review the diff. Accept or revert. Fork from there to keep going. No changes land without your say-so.
 
 ```bash

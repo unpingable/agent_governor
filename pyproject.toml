@@ -15,6 +15,9 @@ authors = [
 dependencies = [
     "click>=8.0",
     "rich>=13.0",
+    # Base dep: the demo path imports governor.playbooks.spec (yaml) from a
+    # bare `pip install -e .` (fresh-clone verification, public-mvp S2 #1).
+    "pyyaml>=6.0",
 ]
 keywords = [
     "ai",

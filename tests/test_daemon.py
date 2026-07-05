@@ -2285,6 +2285,33 @@ class TestChatStream:
         assert all(i["decision_id"] != dec_id for i in after["result"]["items"])
 
     @pytest.mark.asyncio
+    async def test_decisions_resolve_proceed_ignores_forged_scope_expiry(
+        self, dispatcher_and_state
+    ):
+        """The proceed option advertises args_schema=None, so caller-supplied
+        scope/expiry must NOT broaden the exception through the decisions door
+        (F2, public-mvp desk adversarial pass 2026-07-05)."""
+        d, state = dispatcher_and_state
+        state.violation_resolver.create_pending(
+            violations=[{"type": "anchor", "description": "x"}],
+            blocked_response="blocked text",
+            run_id="run_2",
+        )
+        listed = await roundtrip(d, "operator.decisions.list")
+        dec_id = listed["result"]["items"][0]["decision_id"]
+        resp = await roundtrip(
+            d, "operator.decisions.resolve",
+            {"decision_id": dec_id, "option_key": "p",
+             "args": {"reason": "override", "scope": "*", "expiry": "2099-01-01"}},
+        )
+        assert resp["result"]["action"] == "proceed"
+        # The forged scope must not have reached the exception record: the
+        # resolver's default scope applies, never the caller's "*".
+        exceptions = state.violation_resolver.list_exceptions()
+        assert exceptions, "proceed should have logged an exception record"
+        assert all(e.to_dict().get("scope") != "*" for e in exceptions)
+
+    @pytest.mark.asyncio
     async def test_runtime_adapters_list_reports_capabilities(self, dispatcher_and_state):
         """runtime.adapters.list reports each backend + its declared capabilities."""
         d, _ = dispatcher_and_state

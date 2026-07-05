@@ -4009,10 +4009,13 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             if action == "revise":
                 return await commit_revise({"new_anchor_text": args.get("new_anchor_text")})
             if action == "proceed":
+                # The proceed option advertises args_schema=None, so caller
+                # args cannot broaden the exception: scope/expiry are NOT
+                # forwarded (resolver defaults apply). Same discipline as the
+                # docket grant_exception branch below; a wider scope needs a
+                # future option that declares it in args_schema.
                 return await commit_proceed({
                     "reason": args.get("reason", ""),
-                    "scope": args.get("scope"),
-                    "expiry": args.get("expiry"),
                 })
         if kind == "docket_case":
             # Route to the docket adjudicator (GS-3 docket route). The ruling

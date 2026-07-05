@@ -63,3 +63,45 @@ def claude_code_descriptor() -> ProviderDescriptor:
         custody_claims=frozenset({"transcript", "filesystem_delta"}),
         authority_claims=(),
     )
+
+
+def antigravity_cli_descriptor() -> ProviderDescriptor:
+    """Antigravity CLI (``agy``) as an `agent_runtime` provider — Slice 5 / AGY-0.
+
+    STRUCTURAL only, and DELIBERATELY THINNER than Claude Code's descriptor:
+    ``runtime_capabilities`` is **empty** because there is NO shipped Antigravity
+    ``RuntimeAdapter`` to project from — the recognition step so far is the
+    capability *probe* (``runtime/adapters/antigravity_probe.py``), not a live
+    adapter, and agent mode is blocked in this environment. Declaring runtime flags
+    we cannot project would be exactly the drift the Claude Code anti-drift test
+    guards against.
+
+    ``capabilities`` (CapabilityClass) is the honest DECLARED action space of an
+    agentic coding CLI — what it *can* do; a run's *permission* is the WorkContainer
+    ration + the OUTER cage, never this list and never Antigravity's own
+    ``--sandbox``/permission panel (``Antigravity sandbox != Gov cage``).
+    ``authority_claims`` is empty: a provider descriptor never declares authority.
+
+    This is Antigravity as a *test case*, not the interface designer: the descriptor
+    speaks the generic provider vocabulary; no Antigravity-specific permission leaks
+    into it.
+    """
+    return ProviderDescriptor(
+        provider_id="antigravity_cli",
+        provider_kind="agent_runtime",
+        display_name="Antigravity CLI (agy)",
+        version="0",
+        capabilities=frozenset(
+            {
+                "file_read",
+                "file_write",
+                "shell_exec",
+                "code_exec",
+                "model_call",
+                "network_egress",
+            }
+        ),
+        runtime_capabilities=frozenset(),  # no live adapter yet — honest empty
+        custody_claims=frozenset({"transcript", "filesystem_delta"}),
+        authority_claims=(),
+    )

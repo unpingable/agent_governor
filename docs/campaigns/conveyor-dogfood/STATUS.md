@@ -213,6 +213,21 @@ Two adversarial codex passes; 6 findings applied. 37 tests
 role=authority admission via plan_review; live agent launch (stays the runtime
 supervisor's job — S4b decides, doesn't execute) → then S5 Antigravity spike.
 
+**S5 / AGY-0 LANDED (2026-07-05) — the Antigravity capability probe.**
+`src/governor/runtime/adapters/antigravity_probe.py`: a pure, injected-runner probe
+over `agy --version`/`--help` — recognition, NOT admission, and NOT a live agentic
+run (agent mode is blocked here). Output is compatibility evidence, structurally
+never live testimony (`evidence_kind="probe_compatibility"`, enforced). Real
+capture (`docs/playbooks/antigravity-probe.v0.json`): agy 1.0.9, print/sandbox/
+model flags yes, **plan-mode NO** (issue #45 gap — headless writes must be fenced
+by the outer cage, not agy). STRUCTURAL `antigravity_cli` descriptor added (thinner
+than Claude Code: no live adapter → empty runtime_capabilities). Spike doc
+`docs/playbooks/antigravity-adapter-spike.md` carries the integration law +
+AGY-1 plan (named, not built) + `antigravity_api` (named, not built). 15 tests
+(`tests/test_antigravity_probe.py`), ruff clean. **Gated:** AGY-1 sandboxed
+one-shot runner behind the outer cage; live behavioural probes (headless/write/
+network) require operator opt-in (model invocation) + the cage.
+
 **S4 LANDED (2026-07-04) — the projection, not the wiring.**
 `src/governor/work_container.py`: the `WorkContainer` projection primitive +
 `project_cd4b_work_container()`, which projects the proven CD-4B live shape

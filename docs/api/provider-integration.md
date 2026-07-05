@@ -199,6 +199,16 @@ permissions leaking into the generic contract.
 - **Slice 3** first structural descriptor — landed: Claude Code (`agent_runtime`),
   `runtime_capabilities` projected live from `ClaudeCodeAdapter`, STRUCTURAL only
   (`src/governor/provider_descriptors.py`). Maude deliberately excluded (§1.1).
-- Still gated: the runtime-conformance **test suite** (needs a live provider);
-  **live `governed_dispatch` emission/consumption of a WorkContainer (Slice 4,
-  gated on CD-4)**; the Antigravity spike (Slice 5).
+- **Slice 4 ✓ / 4b ✓** — WorkContainer projection (`work_container.py`) + the
+  admission emit/consume bridge (`work_container_bridge.py`): admission is a real,
+  resolvable `gate_receipt`, consumption re-verifies the container against it.
+- **Slice 5 / AGY-0 ✓** — Antigravity capability **probe**
+  (`runtime/adapters/antigravity_probe.py`) + a STRUCTURAL `antigravity_cli`
+  descriptor (thinner than Claude Code — no live adapter, so no projected
+  `runtime_capabilities`). Recognition, not admission: the probe emits
+  compatibility evidence (`evidence_kind = "probe_compatibility"`, never live
+  testimony) and agent mode is blocked in this environment. Antigravity is the
+  *test case*, not the interface designer. Spike doc:
+  `docs/playbooks/antigravity-adapter-spike.md`.
+- Still gated: **AGY-1** (sandboxed one-shot Antigravity runner behind the outer
+  cage) and the live runtime-conformance suite it would exercise.

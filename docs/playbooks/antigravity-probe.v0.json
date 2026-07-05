@@ -1,0 +1,19 @@
+{
+  "adapter": "antigravity_cli",
+  "binary": "agy",
+  "availability": "available",
+  "agy_version": "1.0.9",
+  "supports_print_mode": "yes",
+  "supports_sandbox_flag": "yes",
+  "supports_model_flag": "yes",
+  "supports_plan_mode": "no",
+  "supports_mcp": "unknown",
+  "auth_state": "unknown",
+  "headless_stdout_probe": "skipped",
+  "write_probe_result": "skipped",
+  "network_probe_result": "skipped",
+  "evidence_kind": "probe_compatibility",
+  "notes": [
+    "no read-only/plan-mode flag observed \u2014 headless writes must be fenced by the outer cage (bwrap/porter), not by agy (see antigravity-cli #45)"
+  ]
+}

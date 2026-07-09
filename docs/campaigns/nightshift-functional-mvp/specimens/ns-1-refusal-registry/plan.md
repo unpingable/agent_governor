@@ -33,7 +33,6 @@ governance:
   governance_status: candidate
   projected:
     scope_allowlist: "ration_card:sha256:90ea2a86c71034c7f244399ee80da2f470c97afa54218094b20f9377611c7b69"
-    stop_conditions.forbidden_paths: "queued_playbook:nightshift-functional-mvp-ns1/feat.nightshift-refusal-registry"
 ---
 
 Specimen 1 of the nightshift-functional-mvp campaign — the first governed
@@ -42,10 +41,12 @@ dogfood). This envelope was compiled by the integrator session and is
 therefore **born `candidate`** per the M-1 admission rule: a compiler
 cannot approve its own plan by writing the word.
 
-The queue item in this directory is `operator_approved: false` and the
-real parser REFUSES to construct it (staging receipt in README.md —
-"provenance does not grant approval"). The operator's flip is the only
-thing that changes that.
+This envelope's `governance_status: candidate` makes maude's admission
+REFUSE it (`governance_not_approved`) — even with the witness resolver
+pointed at this directory. A candidate plan is compilable and inspectable,
+never executable. The operator's approval act (README.md) — promoting the
+status and citing an external witness file — is the only thing that clears
+it. A status field is never its own evidence.
 
 Model note: the model pin (`--model claude-haiku-4-5`) is applied at run
 time by the operator on the maude command line — it is deliberately NOT a

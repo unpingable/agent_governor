@@ -11,25 +11,42 @@ Card ratified 2026-07-05. Gap assessment done (65% of lane exists; 6+1 packets).
   (adapter already extended cmd). Model choice = operator's run-time spend
   decision, never plan-envelope content. Both suites green.
 
-- **NS-1 STAGED (2026-07-05, candidate — AG `f00386f`, local):**
-  `specimens/ns-1-refusal-registry/` — the first governed build packet,
-  staged for operator flip. All artifacts authored + digested via the REAL
-  landed classes; staging receipts (all verified):
+- **NS-1 STAGED (2026-07-05 staged; 2026-07-09 REPAIRED, candidate):**
+  `specimens/ns-1-refusal-registry/` — the first governed build packet, a
+  **live maude-supervised run**, staged for operator approval. All artifacts
+  authored + digested via the REAL landed classes; staging receipts
+  (re-verified 2026-07-09):
   - playbook.yaml → `parse_playbook` = `PlaybookSpec` (`sha256:0c0f0973…`)
   - ration_card.json → `RationCard`, locked axes hold, shell allowlist
     `cargo test`/`cargo build` (`sha256:90ea2a86…`)
-  - queue.json → `PlaybookQueue.from_manifest_dict` **REFUSES**
-    `not_operator_approved` ("provenance does not grant approval") — the
-    staging receipt
   - plan.md → parses in maude's envelope parser; admission **REFUSES**
     `governance_not_approved` even with the witness resolver pointed at the
-    dir (born-candidate rule holds — only the operator's flip clears it)
+    dir (born-candidate rule holds — only the operator's approval act clears
+    it). This refusal is the on-path staging receipt.
+  - **post-flip dry-run (throwaway copy):** `governance_status: approved` +
+    `approval_ref` → admission PASSES, `governed=True`, three citations
+    (`playbook_digest`/`ration_card_digest`/`approval_ref`) all `verified`.
+    The operator's act will admit; the post-approval path is proven sound.
 
-## Awaiting operator (NS-1 flip)
+- **NS-1 dry-run caught a real defect (2026-07-09), specimen repaired.**
+  A pre-flip dry-run on a throwaway copy found the original `queue.json`
+  (synthetic-conveyor `PlaybookQueue`) was a dead limb on a live-run
+  specimen: (a) `maude run` never calls the queue parser — off the execution
+  path entirely; (b) internally impossible — `subprocess: true` (needed for
+  `cargo test`) under `mode: synthetic_conveyor` requires fully-closed
+  authority, so latching `operator_approved: true` would NOT have cleared it
+  (`authority_not_closed` waited underneath the reported `not_operator_
+  approved`). The documented flip would have broken in the operator's hands.
+  Fix: `queue.json` removed, the `queued_playbook_ref` projection dropped
+  from `plan.md`, README staging receipts + flip procedure rewritten to the
+  pure live-run path. The synthetic-conveyor queue seam stays demonstrated
+  by the CD-4B corpus + refusal gallery — it just doesn't belong here.
 
-Flip procedure in `specimens/ns-1-refusal-registry/README.md`: latch queue
-(`operator_approved: true`) → witness file → promote plan
-(`governance_status: approved` + `approval_ref` + `queued_playbook_ref`) →
+## Awaiting operator (NS-1 approval)
+
+Approval procedure in `specimens/ns-1-refusal-registry/README.md`: create
+witness file (`operator_plan_approved_<date>`) → promote plan
+(`governance_status: approved` + `approval_ref` naming the witness) →
 `maude run …/ns-1-refusal-registry/plan.md --model claude-haiku-4-5` →
 approve/deny tool calls → `report <sid>` → keep/discard. If haiku fails the
 packet twice, escalate the MODEL (sonnet), never the authority.

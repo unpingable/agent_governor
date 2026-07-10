@@ -15,9 +15,18 @@ rubber-stamp and removes the confounding toil. The escalation (widening) prompt
 is the seam that must never soften.
 
 Fail-closed invariant: nothing reaches ``WithinGrant`` unless it is cleanly
-classified AND inside the card. Anything ambiguous (opaque shell, unknown tool,
-unparseable target) → ``Unverifiable``; anything outside the card →
-``WidensGrant``. See design-grant-use-gate.md.
+classified AND inside the grant. Anything ambiguous (opaque shell, unknown
+tool, unparseable target, effect-relocating flag) → ``Unverifiable``; anything
+outside the grant → ``WidensGrant``. See design-grant-use-gate.md.
+
+Known limits of a PURE classifier (the armed sandbox, not this gate, is the
+real fence — hence ``enforcement: declared-effects-only``): it matches on the
+declared path/command STRINGS, so it does not follow symlinks (a granted path
+that is a symlink out of the envelope is not caught here), and an allowlisted
+program still runs arbitrary code within its own process (``cargo test``
+compiles + runs test binaries and build scripts). The gate bounds
+program+subcommand+known-escape-flags and declared write paths; it does not —
+and cannot, without the cage — bound what admitted code then does.
 """
 
 from __future__ import annotations
@@ -85,9 +94,23 @@ WIDENED_AXES = frozenset({AXIS_WRITE_PATH, AXIS_SHELL, AXIS_NETWORK, AXIS_GIT})
 GU_OPAQUE_SHELL = "opaque_shell"          # compound/wrapped shell — not structurally checkable
 GU_UNKNOWN_TOOL = "unknown_tool"          # tool not recognized — cannot map to effects
 GU_UNPARSEABLE_TARGET = "unparseable_target"  # known tool, but no extractable target
+GU_EFFECT_ESCAPING_FLAG = "effect_escaping_flag"  # allowlisted program + a flag that relocates its effects
 UNVERIFIABLE_REASONS = frozenset(
-    {GU_OPAQUE_SHELL, GU_UNKNOWN_TOOL, GU_UNPARSEABLE_TARGET}
+    {GU_OPAQUE_SHELL, GU_UNKNOWN_TOOL, GU_UNPARSEABLE_TARGET, GU_EFFECT_ESCAPING_FLAG}
 )
+
+#: Flags that let an allowlisted program relocate its filesystem/config effects
+#: out of the granted envelope (write elsewhere, load a different project, or —
+#: for `--config` — inject an executable runner). Presence on an allowlisted
+#: command → Unverifiable (prompt), never a silent yes. NAMED + DOCUMENTED and
+#: deliberately NON-EXHAUSTIVE: a command allowlist is not an effect boundary
+#: (an allowlisted program still runs arbitrary code — e.g. `cargo test`
+#: compiles + runs test binaries and build scripts). The real fence is the
+#: armed sandbox (enforcement: declared-effects-only). This denylist only
+#: raises the bar on the obvious escapes.
+_EFFECT_ESCAPING_FLAGS = frozenset({
+    "-C", "--config", "--target-dir", "--out-dir", "--manifest-path", "--home",
+})
 
 # --------------------------------------------------------------------------
 # Pure decision types. These map 1:1 to the GrantUseResult union in S2:
@@ -130,7 +153,11 @@ GrantUseDecision = WithinGrant | WidensGrant | Unverifiable
 # Tool taxonomy (conservative; unknown → Unverifiable, never a default WRITE-yes).
 # --------------------------------------------------------------------------
 
-_READ_TOOLS = frozenset({"read", "glob", "grep", "read_file", "grep_search", "ls"})
+# MUST stay a subset of what the supervisor's classify_action() treats as READ
+# — a tool this set calls a read but the supervisor calls a WRITE would be
+# silently auto-approved by the gate with no grant check (the `ls` divergence
+# bug). Pinned by test_read_tools_are_reads_for_supervisor.
+_READ_TOOLS = frozenset({"read", "glob", "grep", "read_file", "grep_search"})
 _WRITE_FILE_TOOLS = frozenset(
     {"write", "edit", "notebookedit", "replace", "write_file"}
 )
@@ -157,11 +184,18 @@ def _path_within(path: str, allowed: frozenset[str]) -> bool:
     if not path or ".." in path.split("/"):
         return False
     for pat in allowed:
-        if pat.endswith("/**") or pat.endswith("/*"):
-            # both globs reduce to their directory prefix: dir/** , dir/* -> dir/
-            prefix = pat.rsplit("/", 1)[0] + "/"
+        if pat.endswith("/**"):
+            # any depth under the directory
+            prefix = pat[:-2]  # "dir/**" -> "dir/"
             if path.startswith(prefix):
                 return True
+        elif pat.endswith("/*"):
+            # exactly one level under the directory
+            prefix = pat[:-1]  # "dir/*" -> "dir/"
+            if path.startswith(prefix):
+                rest = path[len(prefix):]
+                if rest and "/" not in rest:
+                    return True
         elif path == pat:
             return True
     return False
@@ -208,11 +242,31 @@ def _classify_shell(command: str, grant: ExecutionGrant) -> GrantUseDecision:
     for cg in grant.commands:
         n = len(cg.argv_prefix)
         if program == cg.program and tuple(args[:n]) == cg.argv_prefix:
+            # Allowlisted program+subcommand — but the suffix argv is
+            # unconstrained. Refuse (prompt) if it carries a flag that relocates
+            # the program's fs/config effects out of the envelope. Defense in
+            # depth over the trust-labeled command match, NOT the boundary.
+            escaping = _find_effect_escaping_flag(args)
+            if escaping is not None:
+                return Unverifiable(
+                    GU_EFFECT_ESCAPING_FLAG,
+                    f"allowlisted {cg.program!r} carries effect-relocating flag {escaping!r}",
+                )
             return WithinGrant(action="shell", target=" ".join((cg.program, *cg.argv_prefix)))
     return WidensGrant(
         GRANT_SCOPE_WIDENED, AXIS_SHELL,
         f"command {program!r} not in the grant allowlist",
     )
+
+
+def _find_effect_escaping_flag(args: list[str]) -> str | None:
+    """Return the first effect-relocating flag in ``args`` (``--flag`` or
+    ``--flag=value`` form), else None."""
+    for tok in args:
+        head = tok.split("=", 1)[0]
+        if head in _EFFECT_ESCAPING_FLAGS:
+            return head
+    return None
 
 
 def classify_grant_use(
@@ -262,4 +316,5 @@ __all__ = [
     "GRANT_SCOPE_WIDENED", "WIDENED_AXES", "UNVERIFIABLE_REASONS",
     "AXIS_WRITE_PATH", "AXIS_SHELL", "AXIS_NETWORK", "AXIS_GIT",
     "GU_OPAQUE_SHELL", "GU_UNKNOWN_TOOL", "GU_UNPARSEABLE_TARGET",
+    "GU_EFFECT_ESCAPING_FLAG",
 ]

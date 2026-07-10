@@ -176,3 +176,56 @@ def test_empty_command_fails_closed():
 ])
 def test_no_adversarial_input_is_within(tool, ti):
     assert not isinstance(classify_grant_use(tool, ti, GRANT), WithinGrant)
+
+
+# --------------------------------------------------------------------------
+# Refute-pass regressions (2026-07-10 adversarial review).
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("cmd,flag", [
+    ("cargo test --config runner=/tmp/evil.sh", "--config"),
+    ("cargo test --config=runner=/tmp/evil.sh", "--config"),
+    ("cargo test --target-dir=/etc/cron.d", "--target-dir"),
+    ("cargo test --target-dir /etc/cron.d", "--target-dir"),
+    ("cargo build -C /somewhere", "-C"),
+    ("cargo test --manifest-path=/other/Cargo.toml", "--manifest-path"),
+])
+def test_effect_escaping_flag_on_allowlisted_command_fails_closed(cmd, flag):
+    from governor.runtime.grant_use_gate import GU_EFFECT_ESCAPING_FLAG
+    d = classify_grant_use("Bash", {"command": cmd}, GRANT)
+    assert isinstance(d, Unverifiable) and d.reason == GU_EFFECT_ESCAPING_FLAG
+
+
+def test_ordinary_flags_still_within():
+    for cmd in ["cargo test --lib", "cargo test --release -p nightshiftd", "cargo build --all-features"]:
+        assert isinstance(classify_grant_use("Bash", {"command": cmd}, GRANT), WithinGrant), cmd
+
+
+def test_single_star_is_one_level_only():
+    g = ExecutionGrant(write_paths=frozenset({"src/*"}),
+                       commands=())
+    assert isinstance(classify_grant_use("Edit", {"file_path": "src/a.rs"}, g), WithinGrant)
+    # one level deeper must NOT be admitted by a single star
+    assert isinstance(classify_grant_use("Edit", {"file_path": "src/deep/a.rs"}, g), WidensGrant)
+
+
+def test_double_star_is_any_depth():
+    g = ExecutionGrant(write_paths=frozenset({"src/**"}), commands=())
+    assert isinstance(classify_grant_use("Edit", {"file_path": "src/deep/nested/a.rs"}, g), WithinGrant)
+
+
+def test_ls_is_not_silently_reclassified_as_read():
+    # 'ls' is a supervisor WRITE (unknown -> WRITE); the gate must NOT treat it
+    # as a read and auto-approve it. Fail closed.
+    d = classify_grant_use("ls", {}, GRANT)
+    assert isinstance(d, Unverifiable)
+
+
+def test_read_tools_are_reads_for_the_supervisor():
+    # Consistency pin: every tool the gate calls a read must also be a READ for
+    # the supervisor's classify_action — else it would reach the gate as a
+    # WRITE and be silently auto-approved (the 'ls' divergence class).
+    from governor.runtime.grant_use_gate import _READ_TOOLS
+    from governor.runtime.supervisor import ActionClass, classify_action
+    for tool in _READ_TOOLS:
+        assert classify_action(tool) == ActionClass.READ, tool

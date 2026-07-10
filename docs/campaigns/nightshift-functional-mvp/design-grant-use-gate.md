@@ -180,6 +180,37 @@ it can **never** override a denial (denials already returned) nor widen
 authority. When a lab_gate is active it handles WRITE and returns first, so
 grant-use never bypasses LA enforcement. Inert until S3 attaches a grant.
 
+## Adversarial sandwich — 2026-07-10 (independent refute agent)
+
+An independent refuter attacked the seam on five modes. Verdict + dispositions:
+- **Mode 3 gate ordering — PASS.** Confirmed: every deny-gate returns before
+  `needs_approval`; no would-be-deny reaches auto-approve.
+- **Mode 4 axis leak — PASS.** network/git hardcoded denied; cannot reach
+  `allowed=True`. **Digest binding — fixed (contract):** `activate()` is a pure
+  mint, NOT an authority checkpoint; docstring now says loudly that the caller
+  (S3) must verify the plan/witness admission before minting.
+- **Mode 1 argv smuggling — FIXED.** `cargo test --target-dir=/etc` /
+  `--config runner=…` prefix-matched yet relocated effects. Added a named,
+  documented, non-exhaustive effect-escaping-flag denylist (`-C`, `--config`,
+  `--target-dir`, `--out-dir`, `--manifest-path`, `--home`) → `Unverifiable`
+  (prompt). Scoped honestly: an allowlisted program still runs arbitrary code
+  (`cargo test`); the command allowlist is not an effect boundary — the cage is.
+- **Mode 2 path containment — FIXED (`dir/*`) + disclosed (symlink).** `dir/*`
+  now means single-level (was collapsing to a prefix, admitting `dir/a/b/c`);
+  `dir/**` = any depth. Symlink escape is inherent to a pure string classifier
+  (the armed cage enforces real fs) — disclosed in the module docstring.
+- **Mode 5 read reclassification — FIXED.** `_READ_TOOLS` dropped the divergent
+  `ls` (supervisor classified it WRITE → gate silently auto-approved it as a
+  read). Pinned by `test_read_tools_are_reads_for_the_supervisor` (every gate
+  read tool must be a supervisor READ). Unbounded *reads* of arbitrary paths
+  are a **pre-existing** supervisor behavior (reads auto-approve before
+  grant-use), not a regression; read-scoping is future work.
+
+Scoped claim after fixes: the gate bounds **program+subcommand+known-escape-
+flags** and **declared write paths**; it does not bound what admitted code does
+internally, nor follow symlinks — that is the cage (`declared-effects-only`).
+All fixes pinned by regression tests (94 across the three suites).
+
 ## Non-negotiable guardrails
 
 - A grant NEVER lets a plan self-approve or auto-latch (born-candidate +

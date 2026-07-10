@@ -128,7 +128,16 @@ def activate_execution_grant(request: ExecutionRequest) -> ExecutionGrantArtifac
 
     v1 grants only ``write_paths`` + ``commands``; network/git/secrets/privilege
     are locked (``enforcement: declared-effects-only``). A request for a locked
-    axis is recorded in ``unmet_axes`` — visible, never silently honored."""
+    axis is recorded in ``unmet_axes`` — visible, never silently honored.
+
+    NOT AN AUTHORITY CHECKPOINT. This function only checks that the digests are
+    PRESENT (non-empty) and stamps them into the grant; it does NOT verify that
+    ``source_plan_digest`` names an actually-approved plan or that
+    ``approval_witness_digest`` resolves to a real operator witness. That
+    verification is the CALLER's obligation (S3 / the daemon), exactly as
+    maude's ``admit_for_execution`` verifies citations before a governed run.
+    Mint only from a request built out of a VERIFIED admission — otherwise a
+    forged request yields a well-formed but ungrounded grant."""
     if not request.source_plan_digest or not request.approval_witness_digest:
         raise ActivationError(
             "activation requires both source_plan_digest and approval_witness_digest "

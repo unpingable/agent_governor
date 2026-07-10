@@ -28,9 +28,20 @@ interrupt only on enlargement.
   Invariant closed: *used repeatedly, never past revocation or horizon.*
 - **S4c-minimal DONE** — read-only `grant [session_id]` diagnostic in maude
   (state/scope/dispositions). Instrumentation, not the cathedral. 7 tests.
-- **REMAINING:** S5d (multi-actor attribution), S4c-full (report dispositions,
-  widening-prompt buttons, lease panel), S6 (execution_request: plan block —
-  later schema slice).
+- **NEXT REAL SLICE — S6 (not optional cleanup):** canonicalize the plan→request
+  boundary. Add a first-class `execution_request:` block to the plan envelope
+  and RETIRE the temporary projection from `scope_allowlist` + the ration
+  command source. This is architectural, not decorative — without it the
+  plan→request boundary is inferred through legacy fields. **Deferred, not
+  dismissed:** it is a *versioned-contract* change (unlike the additive runtime
+  slices) — `plan_ref = sha256(plan bytes)`, so the schema change alters every
+  plan's digest and ripples into the NS-1 specimen (`plan.md`, its approval
+  witness) and any corpus; and the legacy fields must be retired SIMULTANEOUSLY
+  (no two-sources-of-truth precedence). Wants its own design note + migration +
+  sandwich in a fresh context, NOT a tail-of-session addition.
+- **DEFERRED (post-S6, unless a consumer forces them):** S5d (multi-actor
+  attribution), S4c-full (report dispositions, widening-prompt buttons, lease
+  panel).
 
 ## Verified estate — B is composition, not a new authority model
 

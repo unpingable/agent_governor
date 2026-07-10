@@ -22,12 +22,15 @@ interrupt only on enlargement.
 - **S5a DONE** — live smoke: seam observed crossing the daemon boundary once,
   receipt continuity.
 - **S5b DONE** — reusable harness + 9-scenario ops disposition corpus.
-- **REMAINING:** S5c-lifecycle (revocation + expiry — need a revoke path +
-  horizon enforcement, NEW machinery), S5d (multi-actor attribution), S4c
-  (render polish: report dispositions, widening-prompt reason + buttons, lease
-  panel), S6 (execution_request: plan block — later schema slice).
-- Test coverage: grant_use 44 + execution_grant 9 + supervisor grant-use 6 +
-  daemon grant 6 + S5 corpus/smoke 10 + maude projection/runner 7.
+- **S5c DONE** — grant LEASE lifecycle: revocation (idempotent, receipted) +
+  expiry (use-time, monotonic, no resurrection). `runtime.grant.revoke`
+  (registry 101→102). Terminal disposition distinct from widening. 12 tests.
+  Invariant closed: *used repeatedly, never past revocation or horizon.*
+- **S4c-minimal DONE** — read-only `grant [session_id]` diagnostic in maude
+  (state/scope/dispositions). Instrumentation, not the cathedral. 7 tests.
+- **REMAINING:** S5d (multi-actor attribution), S4c-full (report dispositions,
+  widening-prompt buttons, lease panel), S6 (execution_request: plan block —
+  later schema slice).
 
 ## Verified estate — B is composition, not a new authority model
 

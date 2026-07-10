@@ -1425,6 +1425,7 @@ class TestAllMethodsRegistered:
         "runtime.autopilot.set",
         "runtime.grant.activate",
         "runtime.grant.get",
+        "runtime.grant.revoke",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -1451,7 +1452,7 @@ class TestAllMethodsRegistered:
         # +2 for runtime.adapters.list + why.chain (governed-shell GS-6 exposure)
         # +1 for operator.decisions.resolve (governed-shell GS-3, the one door)
         # +2 for runtime.autopilot.get/set (governed-shell GS-7, envelope strip)
-        assert total == 101
+        assert total == 102
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1506,6 +1507,7 @@ class TestMethodClassification:
         "runtime.session.fork",
         "runtime.autopilot.set",
         "runtime.grant.activate",
+        "runtime.grant.revoke",
         "nightshift.record_receipt",
         "nightshift.authorize_transition",
     }

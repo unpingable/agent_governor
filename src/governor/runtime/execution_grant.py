@@ -29,6 +29,13 @@ from governor.runtime.grant_use_gate import CommandGrant, ExecutionGrant
 DERIVATION_VERSION = "execution-grant/v1"
 ENFORCEMENT_DECLARED_ONLY = "declared-effects-only"
 
+# Lease lifecycle states. active is the only non-terminal state; revoked and
+# expired are terminal and never transition back (no resurrection).
+GRANT_ACTIVE = "active"
+GRANT_REVOKED = "revoked"
+GRANT_EXPIRED = "expired"
+TERMINAL_STATES = frozenset({GRANT_REVOKED, GRANT_EXPIRED})
+
 #: horizons a v1 grant may declare.
 VALID_HORIZONS = frozenset({"run", "session"})
 
@@ -177,8 +184,46 @@ def activate_execution_grant(request: ExecutionRequest) -> ExecutionGrantArtifac
     )
 
 
+@dataclass
+class GrantLease:
+    """Mutable per-session lifecycle around an immutable grant artifact.
+
+    Invariant: **a grant may be used repeatedly, but never past revocation or
+    horizon.** ``active`` is the only usable state; ``revoked`` and ``expired``
+    are terminal and never transition back — a stale session cannot resurrect a
+    dead grant."""
+
+    artifact: ExecutionGrantArtifact
+    activated_monotonic: float
+    expires_after_ns: int | None = None  # None = no time bound (run/session scoped)
+    state: str = GRANT_ACTIVE
+    revoked_reason: str | None = None
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.state in TERMINAL_STATES
+
+    def revoke(self, reason: str) -> str:
+        """Idempotent. Only ACTIVE → revoked; a terminal lease is unchanged
+        (revoking an expired grant does not rewrite its cause). Returns the
+        resulting state."""
+        if self.state == GRANT_ACTIVE:
+            self.state = GRANT_REVOKED
+            self.revoked_reason = reason
+        return self.state
+
+    def check_expiry(self, now_monotonic: float) -> None:
+        """Lazy, evaluated AT USE TIME on a monotonic clock. Never un-expires;
+        never silently renews. No-op once terminal."""
+        if self.state == GRANT_ACTIVE and self.expires_after_ns is not None:
+            elapsed_ns = int((now_monotonic - self.activated_monotonic) * 1e9)
+            if elapsed_ns >= self.expires_after_ns:
+                self.state = GRANT_EXPIRED
+
+
 __all__ = [
     "ExecutionRequest", "ExecutionGrantArtifact", "ActivationError",
-    "activate_execution_grant",
+    "activate_execution_grant", "GrantLease",
     "DERIVATION_VERSION", "ENFORCEMENT_DECLARED_ONLY", "VALID_HORIZONS",
+    "GRANT_ACTIVE", "GRANT_REVOKED", "GRANT_EXPIRED", "TERMINAL_STATES",
 ]

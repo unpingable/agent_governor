@@ -267,6 +267,8 @@ class SessionSupervisor:
         self._buses: dict[str, EventBus] = {}
         self._adapters: dict[str, RuntimeAdapter] = {}
         self._lock = threading.Lock()
+        # Injectable monotonic clock for grant expiry (checked at use time).
+        self._monotonic: Callable[[], float] = time.monotonic
 
     def create_session(
         self,
@@ -969,49 +971,63 @@ class SessionSupervisor:
             # WithinGrant is silent — fail closed). No grant => unchanged. This
             # only ever REMOVES a prompt for an in-envelope call; it never
             # approves anything that would otherwise be denied.
-            grant_art = facet.execution_grant
+            lease = facet.execution_grant
             grant_annotation: dict[str, Any] | None = None
-            if grant_art is not None:
+            if lease is not None:
                 from governor.runtime.grant_use_gate import (
                     Unverifiable,
                     WidensGrant,
                     WithinGrant,
                     classify_grant_use,
                 )
-                gdec = classify_grant_use(tool_name, tool_input, grant_art.grant)
-                if isinstance(gdec, WithinGrant):
-                    bus.emit(
-                        EventKind.TOOL_CALL_ALLOWED,
-                        SourceLayer.POLICY,
-                        record.backend_kind,
-                        payload={
-                            "tool_call_id": tool_call_id,
-                            "tool_name": tool_name,
-                            "action_class": action_class.value,
-                            "auto": True,
-                            "grant_use": "accepted",
-                            "grant_id": grant_art.grant_id,
-                            "grant_action": gdec.action,
-                            "grant_target": gdec.target,
-                            "enforcement": grant_art.enforcement,
-                        },
-                        tool_call_id=tool_call_id,
-                    )
-                    if facet.handle:
-                        adapter.send_control(facet.handle, ControlAction(
-                            kind="approve", target_id=tool_call_id,
-                        ))
-                    return
-                if isinstance(gdec, WidensGrant):
+                art = lease.artifact
+                # Lifecycle FIRST (S5c): expiry is checked at USE time on a
+                # monotonic clock; a terminal lease (revoked/expired) refuses
+                # every subsequent call — never past revocation or horizon.
+                # Terminal disposition is distinct from scope widening, and it
+                # stops compression: the call falls through to a prompt.
+                lease.check_expiry(self._monotonic())
+                if lease.is_terminal:
                     grant_annotation = {
-                        "disposition": "widens", "grant_id": grant_art.grant_id,
-                        "axis": gdec.axis, "detail": gdec.detail,
+                        "disposition": lease.state,  # "revoked" | "expired"
+                        "grant_id": art.grant_id,
+                        "reason": lease.revoked_reason or f"grant {lease.state}",
                     }
-                elif isinstance(gdec, Unverifiable):
-                    grant_annotation = {
-                        "disposition": "unverifiable", "grant_id": grant_art.grant_id,
-                        "reason": gdec.reason, "detail": gdec.detail,
-                    }
+                else:
+                    gdec = classify_grant_use(tool_name, tool_input, art.grant)
+                    if isinstance(gdec, WithinGrant):
+                        bus.emit(
+                            EventKind.TOOL_CALL_ALLOWED,
+                            SourceLayer.POLICY,
+                            record.backend_kind,
+                            payload={
+                                "tool_call_id": tool_call_id,
+                                "tool_name": tool_name,
+                                "action_class": action_class.value,
+                                "auto": True,
+                                "grant_use": "accepted",
+                                "grant_id": art.grant_id,
+                                "grant_action": gdec.action,
+                                "grant_target": gdec.target,
+                                "enforcement": art.enforcement,
+                            },
+                            tool_call_id=tool_call_id,
+                        )
+                        if facet.handle:
+                            adapter.send_control(facet.handle, ControlAction(
+                                kind="approve", target_id=tool_call_id,
+                            ))
+                        return
+                    if isinstance(gdec, WidensGrant):
+                        grant_annotation = {
+                            "disposition": "widens", "grant_id": art.grant_id,
+                            "axis": gdec.axis, "detail": gdec.detail,
+                        }
+                    elif isinstance(gdec, Unverifiable):
+                        grant_annotation = {
+                            "disposition": "unverifiable", "grant_id": art.grant_id,
+                            "reason": gdec.reason, "detail": gdec.detail,
+                        }
 
             # Create intervention
             intervention = Intervention(
@@ -1440,19 +1456,41 @@ class SessionSupervisor:
             raise KeyError(f"No session: {session_id}")
         return record
 
-    def attach_execution_grant(self, session_id: str, artifact: Any) -> None:
-        """Attach a minted ExecutionGrantArtifact to a session (S2b). The daemon
-        calls this after activating a grant from an approved plan; the tool-gate
-        then compresses within-grant prompts. ``None`` clears it (compression
-        off — the default). Attaching a grant NEVER widens authority: it only
-        lets a call already inside the approved envelope skip a redundant
-        prompt. Absence = unchanged behavior."""
-        self._get_facet(session_id).execution_grant = artifact
+    def attach_execution_grant(
+        self, session_id: str, artifact: Any, expires_after_ns: int | None = None
+    ) -> None:
+        """Attach a minted ExecutionGrantArtifact to a session (S2b) as an active
+        lease. The daemon calls this after activating a grant from an approved
+        plan; the tool-gate then compresses within-grant prompts. Attaching a
+        grant NEVER widens authority: it only lets a call already inside the
+        approved envelope skip a redundant prompt. ``expires_after_ns`` sets a
+        time bound checked at use time (None = run/session scoped)."""
+        from governor.runtime.execution_grant import GrantLease
+        self._get_facet(session_id).execution_grant = GrantLease(
+            artifact=artifact,
+            activated_monotonic=self._monotonic(),
+            expires_after_ns=expires_after_ns,
+        )
+
+    def get_grant_lease(self, session_id: str) -> Any:
+        """Return the GrantLease (artifact + lifecycle state) or None."""
+        facet = self._facets.get(session_id)
+        return facet.execution_grant if facet else None
 
     def get_execution_grant(self, session_id: str) -> Any:
         """Return the ExecutionGrantArtifact attached to a session, or None."""
-        facet = self._facets.get(session_id)
-        return facet.execution_grant if facet else None
+        lease = self.get_grant_lease(session_id)
+        return lease.artifact if lease else None
+
+    def revoke_execution_grant(self, session_id: str, reason: str) -> str | None:
+        """Revoke a session's grant (idempotent). Returns the resulting terminal
+        state, or None if the session has no grant. After revocation every
+        subsequent tool call is refused (grant terminal); an already-classified
+        in-flight call completes — revocation governs the NEXT classification."""
+        lease = self.get_grant_lease(session_id)
+        if lease is None:
+            return None
+        return lease.revoke(reason)
 
     def _get_facet(self, session_id: str) -> RuntimeFacet:
         facet = self._facets.get(session_id)

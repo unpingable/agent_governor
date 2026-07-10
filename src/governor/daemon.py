@@ -3547,7 +3547,16 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             principal_ref=principal_ref,
         )
 
-        state.runtime_supervisor.attach_execution_grant(session_id, artifact)
+        # Optional time bound, checked at USE time (S5c expiry). Fail closed on
+        # garbage; None = run/session scoped (no time expiry).
+        expires_after_ns = params.get("expires_after_ns")
+        if expires_after_ns is not None:
+            if not isinstance(expires_after_ns, int) or isinstance(expires_after_ns, bool) or expires_after_ns <= 0:
+                raise ValueError("expires_after_ns must be a positive integer (nanoseconds)")
+
+        state.runtime_supervisor.attach_execution_grant(
+            session_id, artifact, expires_after_ns=expires_after_ns
+        )
         return {
             "grant_id": artifact.grant_id,
             "grant_digest": artifact.grant_digest,
@@ -3555,6 +3564,49 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "horizon": artifact.horizon,
             "unmet_axes": list(artifact.unmet_axes),
             "witness_verified": witness_bytes is not None,
+            "expires_after_ns": expires_after_ns,
+        }
+
+    async def runtime_grant_revoke(params: dict) -> dict:
+        """Revoke a session's execution grant (S5c1). Idempotent — a repeat call
+        on a terminal lease returns success without a duplicate receipt. After
+        revocation every subsequent tool call is refused (grant terminal); an
+        already-classified in-flight call completes. Emits a grant_revocation
+        receipt on the actual transition, citing the operator."""
+        session_id = params["session_id"]
+        reason = str(params.get("reason") or "operator revoked")
+        sup = state.runtime_supervisor
+        lease = sup.get_grant_lease(session_id)
+        if lease is None:
+            return {"revoked": False, "error": "no_grant", "session_id": session_id}
+        was_terminal = lease.is_terminal
+        new_state = sup.revoke_execution_grant(session_id, reason)
+        if not was_terminal:
+            principal_id, auth_method, principal_ref = state.resolve_principal(
+                params.get("principal_id"), params.get("standing_token"),
+            )
+            state.receipt_system.emit(
+                gate="grant_revocation",
+                verdict="observe",
+                subject_kind="execution_grant",
+                subject_bytes=lease.artifact.grant_digest.encode(),
+                evidence_bundle={
+                    "grant_id": lease.artifact.grant_id,
+                    "grant_digest": lease.artifact.grant_digest,
+                    "state": new_state,
+                    "reason": lease.revoked_reason,
+                },
+                gate_config={"derivation_version": lease.artifact.derivation_version},
+                principal_id=principal_id,
+                auth_method=auth_method,
+                principal_ref=principal_ref,
+            )
+        return {
+            "revoked": True,
+            "grant_id": lease.artifact.grant_id,
+            "state": new_state,
+            "reason": lease.revoked_reason,
+            "already_terminal": was_terminal,
         }
 
     async def runtime_grant_get(params: dict) -> dict | None:
@@ -3562,9 +3614,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         dispositions, for the operator surface (S4). Read-only, no authority."""
         session_id = params["session_id"]
         sup = state.runtime_supervisor
-        art = sup.get_execution_grant(session_id)
-        if art is None:
+        lease = sup.get_grant_lease(session_id)
+        if lease is None:
             return None
+        art = lease.artifact
         uses: list[dict] = []
         for ev in sup.get_events(session_id):
             payload = ev.payload if isinstance(ev.payload, dict) else {}
@@ -3591,6 +3644,9 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             ],
             "unmet_axes": list(art.unmet_axes),
             "recent_uses": uses[-20:],
+            "state": lease.state,
+            "revoked_reason": lease.revoked_reason,
+            "expires_after_ns": lease.expires_after_ns,
         }
 
     async def runtime_session_list(params: dict) -> list:
@@ -3774,6 +3830,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("runtime.session.launch", runtime_session_launch, mutating=True)
     dispatcher.register("runtime.session.get", runtime_session_get)
     dispatcher.register("runtime.grant.activate", runtime_grant_activate, mutating=True)
+    dispatcher.register("runtime.grant.revoke", runtime_grant_revoke, mutating=True)
     dispatcher.register("runtime.grant.get", runtime_grant_get)
     dispatcher.register("runtime.session.list", runtime_session_list)
     dispatcher.register("runtime.session.events", runtime_session_events)

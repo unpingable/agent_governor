@@ -51,8 +51,44 @@ witness file (`operator_plan_approved_<date>`) → promote plan
 approve/deny tool calls → `report <sid>` → keep/discard. If haiku fails the
 packet twice, escalate the MODEL (sonnet), never the authority.
 
+## NS-1 FIRST LIVE RUN — DONE (2026-07-10)
+
+Operator approved (witness `operator_plan_approved_2026-07-09` + plan
+promoted to `governance_status: approved`) and ran
+`maude run …/plan.md --model claude-haiku-4-5`.
+
+**Cargo verdict — the dogfood's core claim PROVEN:** haiku carried the Rust.
+Cargo went green; operator KEPT the diff. A smaller model, supervised
+through the governed loop, produced the `RefusalKind` work. NS-1's thesis
+(small model + governance loop can carry real work) holds.
+
+**Three integration bugs surfaced + fixed live** (none visible to unit tests
+or the screen-mount smoke — the dogfood earned its keep):
+1. socket-path derivation mismatch (env/cwd) — worked around (run both from
+   `~/git/agent_gov`); public-MVP papercut, discovery/print-the-dir fix owed.
+2. intent classifier dropped `--model` → chat → crash. NS-0 taught the
+   runner but not the classifier. Fixed: maude `c1e96aa` (+regression).
+3. `RichLog.write(end=)` crashed on `tool_call_proposed` — would have killed
+   the TUI on the first tool call. Fixed: maude `3b05786` (+regression).
+
+**Dogfood verdict — not thin, OVERBEARING.** The loop works; the human
+factors are demonstrated almost adversarially. Friction scales with
+interaction count, not risk (twenty `cargo test` approvals train the
+operator to mash `y`). Two things pinned (operator: "pin that for later"):
+- **Approval compression** — the bounded-class grant already exists as the
+  RationCard; the supervisor ignores it and re-prompts per-invocation.
+  Fix = honor the approved envelope, escalate only on material change.
+- **maude operator-surface UX** — named tool states, CURRENT DECISION
+  priority, collapse-by-tool-call, separate audit pane, lease display.
+- Bug: `Y`≠`y` case-sensitivity surfaced a stale `claude-3-haiku` model id.
+Full pin: `candidate-approval-compression.md` (this dir). NOT built —
+doctrine ("attention is a custody class"; "compress non-authority-changing
+transitions") is the durable part.
+
 ## Queued
 
-NS-2..6 to be authored as maude governed plans (`specimens/ns-*/`) after the
-NS-1 flip proves the loop. NS-3 and NS-5 carry the adversarial sandwich
+NS-2..6 to be authored as maude governed plans (`specimens/ns-*/`) now that
+the NS-1 loop is proven. NS-3 and NS-5 carry the adversarial sandwich
 (fail-closed gate refactor; vocabulary-boundary plan-envelope exporter).
+Open question for the operator: author NS-2..6 first, or land approval-
+compression first so the deeper packets aren't a `y`-mashing marathon?

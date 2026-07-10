@@ -2,6 +2,7 @@
 """Tests for the governor daemon — protocol, dispatcher, all 26 handlers."""
 
 import asyncio
+import hashlib
 import json
 import os
 import tempfile
@@ -1422,6 +1423,8 @@ class TestAllMethodsRegistered:
         "why.chain",
         "runtime.autopilot.get",
         "runtime.autopilot.set",
+        "runtime.grant.activate",
+        "runtime.grant.get",
     ]
 
     EXPECTED_STREAMING_METHODS = [
@@ -1448,7 +1451,7 @@ class TestAllMethodsRegistered:
         # +2 for runtime.adapters.list + why.chain (governed-shell GS-6 exposure)
         # +1 for operator.decisions.resolve (governed-shell GS-3, the one door)
         # +2 for runtime.autopilot.get/set (governed-shell GS-7, envelope strip)
-        assert total == 99
+        assert total == 101
 
     @pytest.mark.asyncio
     async def test_all_methods_callable(self, dispatcher_and_state):
@@ -1502,6 +1505,7 @@ class TestMethodClassification:
         "runtime.promotion.resolve",
         "runtime.session.fork",
         "runtime.autopilot.set",
+        "runtime.grant.activate",
         "nightshift.record_receipt",
         "nightshift.authorize_transition",
     }
@@ -5205,3 +5209,81 @@ class TestStandingEnforcement:
         result = resp["result"]
         assert result["standing"]["required"] is True
         assert result["standing"]["secret_configured"] is True
+
+
+class TestRuntimeGrantActivation:
+    """S3 — runtime.grant.activate/get: project→mint→attach an execution grant,
+    verify the witness digest (a forged digest is refused here), emit an
+    activation receipt. Trust-labeled (declared-effects-only)."""
+
+    def _req(self, witness="op-approved-2026-07-10"):
+        wdig = "sha256:" + hashlib.sha256(witness.encode()).hexdigest()
+        return {
+            "write_paths": ["crates/nightshiftd/src/**"],
+            "commands": [{"program": "cargo", "argv_prefix": ["test"]}],
+            "source_plan_digest": "sha256:plan",
+            "approval_witness_digest": wdig,
+            "horizon": "run",
+        }, witness
+
+    async def _session(self, d):
+        resp = await roundtrip(d, "runtime.session.create", {"backend_kind": "claude_code"})
+        return resp["result"]["session_id"]
+
+    @pytest.mark.asyncio
+    async def test_activate_mints_attaches_and_get_returns(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        sid = await self._session(d)
+        req, _ = self._req()
+        r = (await roundtrip(d, "runtime.grant.activate",
+                             {"session_id": sid, "execution_request": req}))["result"]
+        assert r["grant_id"].startswith("sgr_")
+        assert r["enforcement"] == "declared-effects-only"
+        g = (await roundtrip(d, "runtime.grant.get", {"session_id": sid}))["result"]
+        assert g["grant_id"] == r["grant_id"]
+        assert g["commands"] == [{"program": "cargo", "argv_prefix": ["test"]}]
+        assert g["write_paths"] == ["crates/nightshiftd/src/**"]
+
+    @pytest.mark.asyncio
+    async def test_forged_witness_digest_refused(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        sid = await self._session(d)
+        req, _ = self._req()
+        resp = await roundtrip(d, "runtime.grant.activate",
+            {"session_id": sid, "execution_request": req, "witness_bytes": "DIFFERENT"})
+        assert "error" in resp and "witness" in str(resp["error"]).lower()
+
+    @pytest.mark.asyncio
+    async def test_matching_witness_bytes_verified(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        sid = await self._session(d)
+        req, witness = self._req()
+        r = (await roundtrip(d, "runtime.grant.activate",
+             {"session_id": sid, "execution_request": req, "witness_bytes": witness}))["result"]
+        assert r["witness_verified"] is True
+
+    @pytest.mark.asyncio
+    async def test_malformed_request_fails_closed(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        sid = await self._session(d)
+        req, _ = self._req()
+        req["source_plan_digest"] = ""  # missing digest -> ActivationError
+        resp = await roundtrip(d, "runtime.grant.activate",
+                               {"session_id": sid, "execution_request": req})
+        assert "error" in resp
+
+    @pytest.mark.asyncio
+    async def test_get_is_none_when_no_grant(self, dispatcher_and_state):
+        d, _ = dispatcher_and_state
+        sid = await self._session(d)
+        resp = await roundtrip(d, "runtime.grant.get", {"session_id": sid})
+        assert resp["result"] is None
+
+    @pytest.mark.asyncio
+    async def test_activation_emits_receipt(self, dispatcher_and_state):
+        d, state = dispatcher_and_state
+        sid = await self._session(d)
+        req, _ = self._req()
+        await roundtrip(d, "runtime.grant.activate", {"session_id": sid, "execution_request": req})
+        receipts = list(state.receipt_system.receipt_store.all())
+        assert any(getattr(r, "gate", None) == "grant_activation" for r in receipts)

@@ -3478,6 +3478,121 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "input_capable": bool(caps and caps.supports_input_injection),
         }
 
+    async def runtime_grant_activate(params: dict) -> dict:
+        """Activate (mint) an execution grant from a projected ExecutionRequest
+        and attach it to a session (approval-compression S3).
+
+        THE authority checkpoint: the mint (`activate_execution_grant`) trusts
+        its caller, so this handler verifies what the daemon CAN — the approval
+        witness digest against the witness bytes, so a fabricated digest is
+        refused here. Plan-approval verification is the operator surface's
+        admission (`admit_for_execution`) upstream; this handler binds the grant
+        to the plan+witness digests in an activation receipt. Trust-labeled:
+        `enforcement: declared-effects-only` (arms nothing)."""
+        session_id = params["session_id"]
+        req_in = params.get("execution_request") or {}
+        from .runtime.execution_grant import ExecutionRequest, activate_execution_grant
+        from .runtime.grant_use_gate import CommandGrant
+
+        try:
+            commands = tuple(
+                CommandGrant(
+                    program=str(c["program"]),
+                    argv_prefix=tuple(str(a) for a in c.get("argv_prefix", [])),
+                )
+                for c in req_in.get("commands", [])
+            )
+            request = ExecutionRequest(
+                write_paths=frozenset(str(p) for p in req_in.get("write_paths", [])),
+                commands=commands,
+                source_plan_digest=str(req_in.get("source_plan_digest", "")),
+                approval_witness_digest=str(req_in.get("approval_witness_digest", "")),
+                horizon=str(req_in.get("horizon", "run")),
+                network_requested=bool(req_in.get("network_requested", False)),
+                git_requested=bool(req_in.get("git_requested", False)),
+            )
+        except (KeyError, TypeError) as exc:
+            raise ValueError(f"malformed execution_request: {exc}")
+
+        # The check the daemon can make: witness digest must match real bytes.
+        witness_bytes = params.get("witness_bytes")
+        if witness_bytes is not None:
+            raw = witness_bytes.encode() if isinstance(witness_bytes, str) else bytes(witness_bytes)
+            actual = "sha256:" + hashlib.sha256(raw).hexdigest()
+            if actual != request.approval_witness_digest:
+                raise ValueError(
+                    "approval_witness_digest does not match the witness bytes — refused "
+                    f"(claimed {request.approval_witness_digest}, actual {actual})"
+                )
+
+        artifact = activate_execution_grant(request)  # fail-closed on malformed request
+
+        principal_id, auth_method, principal_ref = state.resolve_principal(
+            params.get("principal_id"),
+            params.get("standing_token"),
+        )
+        state.receipt_system.emit(
+            gate="grant_activation",
+            verdict="observe",  # trust-labeled; arms nothing
+            subject_kind="execution_grant",
+            subject_bytes=artifact.grant_digest.encode(),
+            evidence_bundle=artifact.receipt_body(),
+            gate_config={
+                "derivation_version": artifact.derivation_version,
+                "enforcement": artifact.enforcement,
+                "witness_verified": witness_bytes is not None,
+            },
+            principal_id=principal_id,
+            auth_method=auth_method,
+            principal_ref=principal_ref,
+        )
+
+        state.runtime_supervisor.attach_execution_grant(session_id, artifact)
+        return {
+            "grant_id": artifact.grant_id,
+            "grant_digest": artifact.grant_digest,
+            "enforcement": artifact.enforcement,
+            "horizon": artifact.horizon,
+            "unmet_axes": list(artifact.unmet_axes),
+            "witness_verified": witness_bytes is not None,
+        }
+
+    async def runtime_grant_get(params: dict) -> dict | None:
+        """Return the execution grant attached to a session + recent use
+        dispositions, for the operator surface (S4). Read-only, no authority."""
+        session_id = params["session_id"]
+        sup = state.runtime_supervisor
+        art = sup.get_execution_grant(session_id)
+        if art is None:
+            return None
+        uses: list[dict] = []
+        for ev in sup.get_events(session_id):
+            payload = ev.payload if isinstance(ev.payload, dict) else {}
+            gu = payload.get("grant_use")
+            if gu is None:
+                continue
+            if gu == "accepted":
+                uses.append({
+                    "disposition": "accepted",
+                    "grant_action": payload.get("grant_action"),
+                    "grant_target": payload.get("grant_target"),
+                })
+            elif isinstance(gu, dict):
+                uses.append(gu)
+        return {
+            "grant_id": art.grant_id,
+            "grant_digest": art.grant_digest,
+            "enforcement": art.enforcement,
+            "horizon": art.horizon,
+            "write_paths": sorted(art.grant.write_paths),
+            "commands": [
+                {"program": c.program, "argv_prefix": list(c.argv_prefix)}
+                for c in art.grant.commands
+            ],
+            "unmet_axes": list(art.unmet_axes),
+            "recent_uses": uses[-20:],
+        }
+
     async def runtime_session_list(params: dict) -> list:
         """List all sessions."""
         sup = state.runtime_supervisor
@@ -3658,6 +3773,8 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     dispatcher.register("runtime.session.create", runtime_session_create, mutating=True)
     dispatcher.register("runtime.session.launch", runtime_session_launch, mutating=True)
     dispatcher.register("runtime.session.get", runtime_session_get)
+    dispatcher.register("runtime.grant.activate", runtime_grant_activate, mutating=True)
+    dispatcher.register("runtime.grant.get", runtime_grant_get)
     dispatcher.register("runtime.session.list", runtime_session_list)
     dispatcher.register("runtime.session.events", runtime_session_events)
     dispatcher.register("runtime.session.pause", runtime_session_pause, mutating=True)

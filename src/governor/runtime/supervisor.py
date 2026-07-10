@@ -1449,6 +1449,11 @@ class SessionSupervisor:
         prompt. Absence = unchanged behavior."""
         self._get_facet(session_id).execution_grant = artifact
 
+    def get_execution_grant(self, session_id: str) -> Any:
+        """Return the ExecutionGrantArtifact attached to a session, or None."""
+        facet = self._facets.get(session_id)
+        return facet.execution_grant if facet else None
+
     def _get_facet(self, session_id: str) -> RuntimeFacet:
         facet = self._facets.get(session_id)
         if not facet:

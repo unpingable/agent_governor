@@ -10,6 +10,25 @@
 **A use of standing is not a request for new standing.** Record every use;
 interrupt only on enlargement.
 
+## Build status (2026-07-10) — all LOCAL, unpushed (work hours)
+
+- **S1 DONE** — pure grant-use classification (fail-closed; sandwich-fixed).
+- **S2a DONE** — activation mint (deterministic/idempotent, axes locked).
+- **S2b DONE** — supervisor wiring (innermost gate; passed independent refute).
+- **S3 DONE** — `runtime.grant.activate`/`get` (witness-digest checkpoint,
+  activation receipt). Registry 99→101.
+- **S4a/S4b DONE** — maude projection + runner attaches the grant on an
+  approved run, fail-safe, with the trust banner. The y-storm is dead.
+- **S5a DONE** — live smoke: seam observed crossing the daemon boundary once,
+  receipt continuity.
+- **S5b DONE** — reusable harness + 9-scenario ops disposition corpus.
+- **REMAINING:** S5c-lifecycle (revocation + expiry — need a revoke path +
+  horizon enforcement, NEW machinery), S5d (multi-actor attribution), S4c
+  (render polish: report dispositions, widening-prompt reason + buttons, lease
+  panel), S6 (execution_request: plan block — later schema slice).
+- Test coverage: grant_use 44 + execution_grant 9 + supervisor grant-use 6 +
+  daemon grant 6 + S5 corpus/smoke 10 + maude projection/runner 7.
+
 ## Verified estate — B is composition, not a new authority model
 
 - **The grant object is NOT the RationCard** (estate correction while building

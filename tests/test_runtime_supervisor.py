@@ -488,3 +488,81 @@ class TestSendInput:
         assert inputs[0].source_layer == SourceLayer.OPERATOR
         assert inputs[0].payload["text"] == "run the tests"
         assert inputs[0].payload["chars"] == len("run the tests")
+
+
+class TestGrantUseCompression:
+    """S2b — approval compression at the supervisor gate. Within-grant
+    WRITE/COMMUNICATE calls auto-approve silently + receipt the use; widening
+    and unverifiable calls still prompt (annotated with why); no grant =
+    unchanged interactive behavior. Compression only ever REMOVES a prompt for
+    an in-envelope call — never approves a would-be-denied one."""
+
+    def _grant(self):
+        from governor.runtime.execution_grant import (
+            ExecutionRequest,
+            activate_execution_grant,
+        )
+        from governor.runtime.grant_use_gate import CommandGrant
+        return activate_execution_grant(ExecutionRequest(
+            write_paths=frozenset({"/tmp/**"}),
+            commands=(CommandGrant("cargo", ("test",)),),
+            source_plan_digest="sha256:p", approval_witness_digest="sha256:w",
+        ))
+
+    def _fire(self, supervisor, tool_name, tool_input, grant):
+        adapter = MockAdapter(events=[
+            NativeEvent(kind="pre_tool_use", payload={
+                "tool_name": tool_name, "tool_call_id": "tc_001", "tool_input": tool_input,
+            }),
+        ])
+        record = supervisor.create_session(adapter, "mock", "/tmp")
+        if grant is not None:
+            supervisor.attach_execution_grant(record.session_id, grant)
+        supervisor.launch_session(record.session_id)
+        time.sleep(0.3)
+        return adapter, record
+
+    def _prompt_payload(self, supervisor, session_id):
+        prompted = [e for e in supervisor.get_events(session_id)
+                    if e.kind == EventKind.OPERATOR_PROMPTED]
+        assert prompted, "expected an operator prompt"
+        return prompted[-1].payload
+
+    def test_within_grant_command_auto_approves_no_prompt(self, supervisor):
+        adapter, record = self._fire(supervisor, "Bash", {"command": "cargo test --lib"}, self._grant())
+        assert supervisor.get_pending_interventions(record.session_id) == []
+        approves = [a for a in adapter._control_actions
+                    if a.kind == "approve" and a.target_id == "tc_001"]
+        assert len(approves) == 1
+        allowed = [e for e in supervisor.get_events(record.session_id)
+                   if e.kind == EventKind.TOOL_CALL_ALLOWED]
+        assert allowed and allowed[-1].payload.get("grant_use") == "accepted"
+        assert allowed[-1].payload.get("grant_id", "").startswith("sgr_")
+
+    def test_within_grant_write_path_auto_approves(self, supervisor):
+        adapter, record = self._fire(supervisor, "Edit", {"file_path": "/tmp/foo.txt"}, self._grant())
+        assert supervisor.get_pending_interventions(record.session_id) == []
+        assert any(a.kind == "approve" for a in adapter._control_actions)
+
+    def test_widening_command_still_prompts_annotated(self, supervisor):
+        adapter, record = self._fire(supervisor, "Bash", {"command": "cargo publish"}, self._grant())
+        assert len(supervisor.get_pending_interventions(record.session_id)) == 1
+        gu = self._prompt_payload(supervisor, record.session_id).get("grant_use")
+        assert gu and gu["disposition"] == "widens" and gu["axis"] == "shell"
+
+    def test_opaque_shell_fails_closed_to_prompt(self, supervisor):
+        adapter, record = self._fire(supervisor, "Bash", {"command": "cargo test; rm -rf /"}, self._grant())
+        assert len(supervisor.get_pending_interventions(record.session_id)) == 1
+        gu = self._prompt_payload(supervisor, record.session_id).get("grant_use")
+        assert gu and gu["disposition"] == "unverifiable"
+
+    def test_write_outside_grant_still_prompts(self, supervisor):
+        adapter, record = self._fire(supervisor, "Edit", {"file_path": "/etc/passwd"}, self._grant())
+        assert len(supervisor.get_pending_interventions(record.session_id)) == 1
+        gu = self._prompt_payload(supervisor, record.session_id).get("grant_use")
+        assert gu and gu["disposition"] == "widens" and gu["axis"] == "write_path"
+
+    def test_no_grant_is_unchanged_interactive_prompt(self, supervisor):
+        adapter, record = self._fire(supervisor, "Bash", {"command": "cargo test"}, None)
+        assert len(supervisor.get_pending_interventions(record.session_id)) == 1
+        assert "grant_use" not in self._prompt_payload(supervisor, record.session_id)

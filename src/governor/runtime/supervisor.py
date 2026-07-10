@@ -129,6 +129,7 @@ class RuntimeFacet:
     lab_gate: Any = None  # LabGate | None (bootstrap_lab LA-backed effect gate)
     transition_probe: Any = None  # TransitionProbe | None (A2b: additive, flag-gated, default off)
     continuation_probe: Any = None  # ContinuationProbe | None (GAP-2 C2: observe/hold, no burn, default off)
+    execution_grant: Any = None  # ExecutionGrantArtifact | None (S2b approval-compression; None = off, opt-in by grant presence)
     event_thread: threading.Thread | None = None
     running: bool = False
 
@@ -961,6 +962,57 @@ class SessionSupervisor:
         )
 
         if needs_approval:
+            # S2b — approval compression. "A use of standing is not a request
+            # for new standing": if an execution grant is active AND this call
+            # falls WITHIN it, approve silently + receipt the use, skipping the
+            # redundant prompt. WidensGrant / Unverifiable still prompt (only
+            # WithinGrant is silent — fail closed). No grant => unchanged. This
+            # only ever REMOVES a prompt for an in-envelope call; it never
+            # approves anything that would otherwise be denied.
+            grant_art = facet.execution_grant
+            grant_annotation: dict[str, Any] | None = None
+            if grant_art is not None:
+                from governor.runtime.grant_use_gate import (
+                    Unverifiable,
+                    WidensGrant,
+                    WithinGrant,
+                    classify_grant_use,
+                )
+                gdec = classify_grant_use(tool_name, tool_input, grant_art.grant)
+                if isinstance(gdec, WithinGrant):
+                    bus.emit(
+                        EventKind.TOOL_CALL_ALLOWED,
+                        SourceLayer.POLICY,
+                        record.backend_kind,
+                        payload={
+                            "tool_call_id": tool_call_id,
+                            "tool_name": tool_name,
+                            "action_class": action_class.value,
+                            "auto": True,
+                            "grant_use": "accepted",
+                            "grant_id": grant_art.grant_id,
+                            "grant_action": gdec.action,
+                            "grant_target": gdec.target,
+                            "enforcement": grant_art.enforcement,
+                        },
+                        tool_call_id=tool_call_id,
+                    )
+                    if facet.handle:
+                        adapter.send_control(facet.handle, ControlAction(
+                            kind="approve", target_id=tool_call_id,
+                        ))
+                    return
+                if isinstance(gdec, WidensGrant):
+                    grant_annotation = {
+                        "disposition": "widens", "grant_id": grant_art.grant_id,
+                        "axis": gdec.axis, "detail": gdec.detail,
+                    }
+                elif isinstance(gdec, Unverifiable):
+                    grant_annotation = {
+                        "disposition": "unverifiable", "grant_id": grant_art.grant_id,
+                        "reason": gdec.reason, "detail": gdec.detail,
+                    }
+
             # Create intervention
             intervention = Intervention(
                 intervention_id=f"int_{uuid.uuid4().hex[:8]}",
@@ -981,6 +1033,10 @@ class SessionSupervisor:
                 "action_class": action_class.value,
                 "timeout_seconds": intervention.timeout_seconds,
             }
+            # Why the prompt fired: widening (escalation) vs unverifiable (fail
+            # closed). Absent = ordinary interactive prompt (no grant active).
+            if grant_annotation is not None:
+                payload["grant_use"] = grant_annotation
             # Communication gets extra visibility
             if action_class == ActionClass.COMMUNICATE:
                 payload["communication_warning"] = True
@@ -1383,6 +1439,15 @@ class SessionSupervisor:
         if not record:
             raise KeyError(f"No session: {session_id}")
         return record
+
+    def attach_execution_grant(self, session_id: str, artifact: Any) -> None:
+        """Attach a minted ExecutionGrantArtifact to a session (S2b). The daemon
+        calls this after activating a grant from an approved plan; the tool-gate
+        then compresses within-grant prompts. ``None`` clears it (compression
+        off — the default). Attaching a grant NEVER widens authority: it only
+        lets a call already inside the approved envelope skip a redundant
+        prompt. Absence = unchanged behavior."""
+        self._get_facet(session_id).execution_grant = artifact
 
     def _get_facet(self, session_id: str) -> RuntimeFacet:
         facet = self._facets.get(session_id)

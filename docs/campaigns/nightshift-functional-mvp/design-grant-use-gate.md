@@ -164,6 +164,22 @@ GrantUsed / GrantRefused / NoVerifiedResult
   canonicalization / corpus / witness digests / migration; kept out of S2 on
   purpose.
 
+## S2b composition safety (verified 2026-07-10)
+
+The grant-use check is the **innermost** gate in `_handle_tool_call_proposal`,
+placed inside `if needs_approval:`. Every deny-gate ahead of it **returns
+before** `needs_approval` is evaluated:
+- budget breach → deny + return (`supervisor.py:672`)
+- continuation C3 enforce non-grant → deny + return (`:833`)
+- transition-probe hold + kernel-refuse → deny + return (`:864`)
+- lab_gate WRITE (LA-backed) → allow OR deny, **both return** (`:955`/`:932`)
+
+So grant-use is reached ONLY when every prior gate passed, and it only ever
+downgrades a would-be *prompt* into a silent approve for a WithinGrant call —
+it can **never** override a denial (denials already returned) nor widen
+authority. When a lab_gate is active it handles WRITE and returns first, so
+grant-use never bypasses LA enforcement. Inert until S3 attaches a grant.
+
 ## Non-negotiable guardrails
 
 - A grant NEVER lets a plan self-approve or auto-latch (born-candidate +

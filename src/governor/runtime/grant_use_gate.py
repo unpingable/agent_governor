@@ -40,14 +40,28 @@ from typing import Any, Mapping
 
 
 @dataclass(frozen=True)
+class CommandGrant:
+    """A granted command family: ``program`` plus a required ``argv_prefix``.
+    STRUCTURED, never a shell string — the boundary is program+args, so a
+    command is only in-grant if its parsed tokens start with this exact prefix.
+    ``cargo test`` → ``CommandGrant("cargo", ("test",))``."""
+
+    program: str
+    argv_prefix: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ExecutionGrant:
-    """The effect envelope a supervised run may act within, assembled from the
-    operator-approved plan. Absence-restrictive: an empty ``write_paths`` means
-    NO writes are granted; a shell command not listed widens. Dangerous axes
-    default locked and only widen (never silently admitted)."""
+    """The effect envelope a supervised run may act within, minted by
+    ``activate()`` from the operator-approved plan (S2). Absence-restrictive:
+    an empty ``write_paths`` means NO writes are granted; a command family not
+    listed widens. Dangerous axes default locked and only widen (never silently
+    admitted). This is the pure effect surface the gate checks; the first-class
+    grant *artifact* (id / digest / horizon / source_plan_digest /
+    approval_witness_digest / derivation_version) wraps it at activation."""
 
     write_paths: frozenset[str] = field(default_factory=frozenset)
-    shell_commands: frozenset[str] = field(default_factory=frozenset)
+    commands: tuple[CommandGrant, ...] = ()
     network_allowed: bool = False
     git_allowed: bool = False
 
@@ -187,11 +201,14 @@ def _classify_shell(command: str, grant: ExecutionGrant) -> GrantUseDecision:
     if program == "git" and not grant.git_allowed:
         return WidensGrant(GRANT_SCOPE_WIDENED, AXIS_GIT, "git invoked (grant locks git)")
 
-    # Structured allowlist match: entry tokens must prefix the command tokens.
-    for entry in grant.shell_commands:
-        entry_tokens = entry.split()
-        if entry_tokens and tokens[: len(entry_tokens)] == entry_tokens:
-            return WithinGrant(action="shell", target=" ".join(entry_tokens))
+    # Structured allowlist match: program must equal the grant's program and
+    # the command's argv must START WITH the granted argv_prefix. Comparison is
+    # on parsed tokens, never raw string — no folklore.
+    args = tokens[1:]
+    for cg in grant.commands:
+        n = len(cg.argv_prefix)
+        if program == cg.program and tuple(args[:n]) == cg.argv_prefix:
+            return WithinGrant(action="shell", target=" ".join((cg.program, *cg.argv_prefix)))
     return WidensGrant(
         GRANT_SCOPE_WIDENED, AXIS_SHELL,
         f"command {program!r} not in the grant allowlist",
@@ -239,7 +256,7 @@ def classify_grant_use(
 
 
 __all__ = [
-    "ExecutionGrant",
+    "ExecutionGrant", "CommandGrant",
     "GrantUseDecision", "WithinGrant", "WidensGrant", "Unverifiable",
     "classify_grant_use",
     "GRANT_SCOPE_WIDENED", "WIDENED_AXES", "UNVERIFIABLE_REASONS",

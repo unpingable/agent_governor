@@ -95,16 +95,58 @@ Mapping rule for v0 (conservative, fail-closed on ambiguity):
   (material escalation) if the axis is denied.
 - unknown tool → `NoVerifiedResult` (fail closed).
 
+## Activation boundary — RATIFIED 2026-07-10 (operator)
+
+A plan **requests** execution scope; only **activation** may **mint** a grant.
+Putting `execution_grant:` in the plan envelope would seat authority on the
+wrong side of the seam. So:
+
+```
+approved plan
+   ↓ deterministic projection
+ExecutionRequest            (what the plan asks for — no authority)
+   ↓ activate() + witnessed approval
+ExecutionGrant  [first-class artifact]
+   ↓ repeated checked uses (this gate)
+GrantUsed / GrantRefused / NoVerifiedResult
+```
+
+- **S2 keeps the existing approved-plan fields as compatibility input** —
+  `scope_allowlist` → write_paths, declared command surface → structured
+  `CommandGrant`s. `activate()` mints + receipts a **first-class grant
+  artifact**; the supervisor consumes ONLY that artifact (never re-reads the
+  plan). Activation receipt shape:
+  ```
+  grant_id, source_plan_digest, approval_witness_digest,
+  derivation_version: execution-grant/v1,
+  write_paths: [...], commands: [{program: cargo, argv_prefix: [test]}, ...],
+  network: denied, secrets: denied, privilege: denied,
+  horizon: run, enforcement: declared-effects-only
+  ```
+  (`enforcement: declared-effects-only` IS the honest trust label on the wire.)
+- **The `execution_request:` plan block + legacy retirement is a SEPARATE
+  later schema slice (S6), NOT S2.** Adding it during the seam wiring drags
+  parser / canonicalization / corpus / witness digests / migration + precedence
+  rules into a delicate slice — "precedence rules are where authority models
+  quietly begin breeding in the walls." Project the existing fields
+  deterministically now; introduce the first-class request block and retire the
+  scattered declarations cleanly later, with no two-sources-of-truth window.
+- Commands are **structured** (`CommandGrant(program, argv_prefix)`), never
+  shell strings — S1 already matches on parsed tokens.
+
 ## Slice plan
 
 - **S1 — pure grant-use evaluation** (`runtime/grant_use_gate.py`): map tool
   call → effect request, check against RationCard, return `GrantUseResult`.
   Pure, no IO, exhaustively tested incl. the opaque-bash / unknown-tool
   fail-closed cases. Lands nothing into the live gate. *(this slice)*
-- **S2 — supervisor wiring** (flag-gated, default off): call S1 after the
-  continuation gate; `GrantUsed`→silent approve + receipt; `GrantRefused`→
-  intervention (widening prompt); `NoVerifiedResult`→deny/prompt fail-closed.
-  Composes with continuation. **Opus + adversarial sandwich mandatory.**
+- **S2 — activation + supervisor wiring** (flag-gated, default off): project
+  the approved plan → `ExecutionRequest`; `activate()` mints + receipts the
+  first-class `ExecutionGrant` artifact; the supervisor tool-gate (after the
+  continuation gate) calls S1 against the artifact — `GrantUsed`→silent approve
+  + receipt; `GrantRefused`→widening intervention; `NoVerifiedResult`→
+  deny/prompt fail-closed. Composes with continuation. **Opus + adversarial
+  sandwich mandatory.**
 - **S3 — daemon RPC**: expose grant activation + per-use disposition (grant id,
   disposition, scope delta, receipt ref).
 - **S4 — maude render**: `grant use: accepted / sgr_…`; widening prompt
@@ -115,6 +157,12 @@ Mapping rule for v0 (conservative, fail-closed on ambiguity):
   crossing, path/host expansion, secret/network request, horizon expiry mid-run,
   revocation after state change, partial completion with meaningful receipts,
   multi-actor steps. This is where "use ≠ new request" becomes the product.
+- **S6 — schema slice (LATER, not on the seam-wiring path):** introduce a
+  first-class plan block `execution_request:` / `requested_effects:` and retire
+  the scattered `scope_allowlist` / shell declarations in one move — no
+  precedence rules, no two-sources-of-truth window. Drags parser /
+  canonicalization / corpus / witness digests / migration; kept out of S2 on
+  purpose.
 
 ## Non-negotiable guardrails
 

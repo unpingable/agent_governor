@@ -205,6 +205,31 @@ work; these are surface fixes:
 - **Accumulated-lease panel** — show the session grant, let the operator
   revoke it.
 
+### Operator-SAFETY invariant (not cosmetic — pinned 2026-07-10)
+
+> **Text-selection gestures must never be authority-bearing.**
+
+Terminal users treat click-drag as "select a slab of output and fling it
+elsewhere." A TUI that captures the same gesture can silently reinterpret
+muscle memory as application input — and in Maude, application input may be
+authority-bearing (approve/deny/extend standing). That is a safety issue, not
+a preference. Concrete implications:
+- Mouse capture **off by default**, or scroll-only.
+- If mouse mode is enabled, it is **explicit and visibly indicated**.
+- Single-click may focus or inspect — **never** approve, deny, execute, or
+  extend standing. Approval stays **keyboard-explicit**.
+- Event/history panes permit **native terminal selection** (no special
+  "archaeological copy" ritual); ideally only the active decision pane is
+  interactive and the log pane is inert text.
+- First-class **`copy/export transcript`** action for bulk capture.
+- Do **not** rely on "hold Shift to bypass mouse capture" — emulator behavior
+  varies; nobody should need occult modifier knowledge to avoid authorizing
+  something.
+
+(Firing case: the NS-1 run — operator clicked the body to select output,
+maude's mouse capture ate it as input; a `Y`≠`y` slip also surfaced a stale
+`claude-3-haiku` id. Approval keystrokes must be case-insensitive too.)
+
 Proposed main-pane shape (operator/chatty):
 ```
 CURRENT DECISION

@@ -17,6 +17,7 @@ from governor.runtime.grant_use_gate import (
     GU_OPAQUE_SHELL,
     GU_UNKNOWN_TOOL,
     GU_UNPARSEABLE_TARGET,
+    CommandGrant,
     ExecutionGrant,
     Unverifiable,
     WidensGrant,
@@ -25,10 +26,10 @@ from governor.runtime.grant_use_gate import (
 )
 
 # The NS-1-shaped grant: may write the two crate subtrees; may run cargo
-# test/build; network + git locked.
+# test/build (structured program+argv_prefix); network + git locked.
 GRANT = ExecutionGrant(
     write_paths=frozenset({"crates/nightshiftd/src/**", "crates/nightshiftd/tests/**"}),
-    shell_commands=frozenset({"cargo test", "cargo build"}),
+    commands=(CommandGrant("cargo", ("test",)), CommandGrant("cargo", ("build",))),
 )
 
 
@@ -87,6 +88,17 @@ def test_write_with_empty_grant_widens():
 
 def test_unlisted_command_widens_shell():
     d = classify_grant_use("Bash", {"command": "cargo publish"}, GRANT)
+    assert isinstance(d, WidensGrant) and d.axis == AXIS_SHELL
+
+
+def test_program_substring_does_not_match():
+    # "cargotest" is a different program, not "cargo test".
+    d = classify_grant_use("Bash", {"command": "cargotest --lib"}, GRANT)
+    assert isinstance(d, WidensGrant) and d.axis == AXIS_SHELL
+
+
+def test_bare_program_without_required_subcommand_widens():
+    d = classify_grant_use("Bash", {"command": "cargo"}, GRANT)
     assert isinstance(d, WidensGrant) and d.axis == AXIS_SHELL
 
 

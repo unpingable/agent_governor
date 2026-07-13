@@ -1,0 +1,10 @@
+schema: governed-playbook.v0
+kind: procedure
+name: nightshift-refusal-registry
+steps:
+  - id: step1
+    action: add_refusal_kind_enum
+    target: crates/nightshiftd/src/packet.rs
+  - id: step2
+    action: populate_typed_refusal_at_liveness_gate
+    target: crates/nightshiftd/src/pipeline.rs

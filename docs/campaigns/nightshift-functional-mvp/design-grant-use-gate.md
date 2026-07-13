@@ -28,17 +28,21 @@ interrupt only on enlargement.
   Invariant closed: *used repeatedly, never past revocation or horizon.*
 - **S4c-minimal DONE** — read-only `grant [session_id]` diagnostic in maude
   (state/scope/dispositions). Instrumentation, not the cathedral. 7 tests.
-- **NEXT REAL SLICE — S6 (not optional cleanup):** canonicalize the plan→request
-  boundary. Add a first-class `execution_request:` block to the plan envelope
-  and RETIRE the temporary projection from `scope_allowlist` + the ration
-  command source. This is architectural, not decorative — without it the
-  plan→request boundary is inferred through legacy fields. **Deferred, not
-  dismissed:** it is a *versioned-contract* change (unlike the additive runtime
-  slices) — `plan_ref = sha256(plan bytes)`, so the schema change alters every
-  plan's digest and ripples into the NS-1 specimen (`plan.md`, its approval
-  witness) and any corpus; and the legacy fields must be retired SIMULTANEOUSLY
-  (no two-sources-of-truth precedence). Wants its own design note + migration +
-  sandwich in a fresh context, NOT a tail-of-session addition.
+- **S6 DONE (2026-07-13)** — first-class `execution_request:` plan block; legacy
+  `scope_allowlist` + ration-command inference RETIRED. Versioned-contract change
+  via `plan_version` discriminator (operator ruling: version-discriminate +
+  freeze NS-1, `design-s6-execution-request-schema.md`). v1 is the authoring
+  surface; v0 decodes only for the frozen NS-1 `plan_ref`; missing/unknown
+  refuse. maude: envelope schema + parser dispatch + projection rewrite + frozen
+  decoder + `plan-envelope-v1.md` spec + refusal tests (full suite 336 pass).
+  AG: daemon wire UNCHANGED (verified — the v1-projected request mints via the
+  existing `activate_execution_grant`, zero daemon edits); NS-1 frozen; v1
+  successor specimen `specimens/ns-1r-refusal-registry-v1/` with end-to-end
+  integration evidence (`integration_check.py`: parse → admit → project → mint
+  `sgr_969f042a…`). Doctrine: *approval attaches to plan bytes, not
+  reconstructed intent; migration creates a successor, never revises a
+  predecessor.* **Adversarial sandwich still owed before land** (parser
+  version-dispatch + frozen-allowlist seam — see design note §Sandwich).
 - **DEFERRED (post-S6, unless a consumer forces them):** S5d (multi-actor
   attribution), S4c-full (report dispositions, widening-prompt buttons, lease
   panel).

@@ -1,17 +1,18 @@
 {
  "id": "continuity-authoring-tier-repair",
- "kind": "substrate_defect",
- "spec_ref": "working/constellation-census-2026-07-13.md",
+ "kind": "spec_slice",
+ "spec_ref": "~/git/continuity/docs/gaps/AUTHORING_TIER_UNMIGRATED_READ_GAP.md",
  "priority_tier": 1,
  "status": "filed",
  "effort_band": "S",
  "canonical_source": "continuity repo (owner); census defect D6",
  "forcing_case": "continuity MCP returns 'no such column: authoring_tier' \u2014 governed-memory recovery path dead",
- "open_items": "schema migration or query fix in ~/git/continuity; ruled a live substrate defect, not cartographic cleanup",
+ "open_items": "spec_slice WRITTEN 2026-07-13 (gap spec + acceptance criteria + one design fork: migrate-on-open vs defensive, recommend A). NEXT: escape-count nod -> build_slice. Cross-repo build in continuity (AG standing).",
  "repo": "agent_gov",
  "reconciled": {
   "date": "2026-07-13",
   "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
   "confidence": "CURRENT"
- }
+ },
+ "note": " [2026-07-13] gov-loop candidate_next_slice; diagnosed as read-path migration miss (continuity sqlite.py:2149 already names it)."
 }

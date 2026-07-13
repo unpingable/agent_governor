@@ -1,17 +1,18 @@
 {
  "id": "approval-binds-plan-ref",
- "kind": "program_slice",
- "spec_ref": "docs/PROGRAM_LEDGER.md",
+ "kind": "spec_slice",
+ "spec_ref": "docs/campaigns/nightshift-functional-mvp/design-approval-binds-plan-ref.md",
  "priority_tier": 1,
  "status": "queued",
  "effort_band": "M",
  "canonical_source": "docs/PROGRAM_LEDGER.md (the ONE ruled NEXT)",
  "forcing_case": "a plan may replay another plan's approval witness (S6 sandwich finding 2)",
- "open_items": "approval witness cryptographically binds the exact approved plan bytes; replay against another plan refuses",
+ "open_items": "spec_slice framing WRITTEN 2026-07-13 (problem + two candidate contract shapes + migration story). CUSTODY-AFFECTING: operator must rule the contract shape (i/ii) + migration disposition BEFORE build. Then escape-count -> build_slice + codex sandwich.",
  "repo": "agent_gov",
  "reconciled": {
   "date": "2026-07-13",
   "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
   "confidence": "CURRENT"
- }
+ },
+ "note": " [2026-07-13] queued behind continuity as the loop's authority-semantics exam."
 }

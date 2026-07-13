@@ -49,9 +49,19 @@ interrupt only on enlargement.
   operator ruling in `GAP-s6-sandwich-authority-findings.md`, NOT folded into
   S6. S6 mechanical seam lands; the surrounding admission model is the named
   follow-up.
-- **DEFERRED (post-S6, unless a consumer forces them):** S5d (multi-actor
-  attribution), S4c-full (report dispositions, widening-prompt buttons, lease
-  panel).
+- **S6 CLOSED (2026-07-13)** at maude `a48df3b` / AG `4a63032` — mechanical seam
+  sandwich-clean.
+- **NEXT SLICE — S7 "Ration Citation Containment"**
+  (`design-s7-ration-citation-containment.md`): make the S6 citation
+  load-bearing — `execution_request ⊆ cited_ration` on every dimension the
+  RationCard models; single verified read (supersedes the S6 TOCTOU rehash);
+  no schema/approval/daemon changes; frozen NS-1 untouched. Promoted from
+  sandwich finding 1.
+- **PARKED — finding 2 (approval-binds-plan-bytes):** approval must attest to a
+  named `plan_ref`; own threat model + migration, independently ruled
+  (`GAP-s6-sandwich-authority-findings.md`).
+- **DEFERRED (unless a consumer forces them):** S5d (multi-actor attribution),
+  S4c-full (report dispositions, widening-prompt buttons, lease panel).
 
 ## Verified estate — B is composition, not a new authority model
 

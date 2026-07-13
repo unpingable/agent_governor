@@ -72,18 +72,20 @@ is an **approval-witness contract change** that ripples the NS-1 / NS-1R
 approval procedure (README steps) and any operator tooling that mints witnesses.
 Its own slice.
 
-## Recommendation
+## Disposition (operator ruling, 2026-07-13)
 
-- **Mechanical seam of S6 is sound** (refuter confirmed the discrimination,
-  frozen-gating, two-sources, and axis handling; the three mechanical holes are
-  fixed). S6's *own* claim — first-class request block, versioned contract,
-  frozen v0 — stands.
-- **Findings 1 & 2 are the admission model around it**, pre-existing, and
-  inert-to-execution while unarmed. Rule on them as a follow-up: (a) build the
-  §7 ration-containment check (finding 1, arguably completes an S6 design-note
-  promise), and (b) schedule the approval-binds-plan-bytes contract change
-  (finding 2, its own slice). Neither should be silently folded into S6 at
-  session-tail.
+- **S6 CLOSED** at maude `a48df3b` / AG `4a63032`. The mechanical seam is
+  sandwich-clean (discrimination, frozen-gating, two-sources, axis handling
+  confirmed; the three mechanical holes fixed).
+- **Finding 1 → promoted to slice S7 "Ration Citation Containment"**
+  (`design-s7-ration-citation-containment.md`). It completes S6's contract: an
+  explicit request must be *contained by* the cited ration, not merely cite it.
+  Brutally scoped there; sibling of the S6 TOCTOU fix (S7's single-verified-read
+  supersedes the defensive rehash).
+- **Finding 2 → PARKED** as an independently ruled gap. Approval must attest to
+  a named `plan_ref`, not merely be replayable alongside a plan — that changes
+  the approval-witness model itself and deserves its own threat model and
+  migration story. NOT part of S7. Remains recorded here until scheduled.
 
 Full refuter transcript retained in the session scratchpad
 (`s6_codex_out.txt`); provenance = codex gpt-5.5, read-only, 2026-07-13.

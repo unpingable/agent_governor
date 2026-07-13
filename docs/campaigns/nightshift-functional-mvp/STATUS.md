@@ -89,11 +89,11 @@ transitions") is the durable part.
 
 Built out as slices S1–S7 in `design-grant-use-gate.md` (the pinned
 approval-compression direction, `candidate-approval-compression.md`). State
-(2026-07-13): **S1–S6 DONE; S6 CLOSED** (first-class `execution_request` plan
-block, versioned contract, frozen NS-1 — maude `a48df3b` / AG `4a63032`;
-adversarial sandwich clean). **NEXT = S7 "Ration Citation Containment"**
-(`design-s7-ration-citation-containment.md`, spec'd) — make the citation
-load-bearing (`execution_request ⊆ cited_ration`). One authority finding parked:
+(2026-07-13): **S1–S7 DONE.** S6 CLOSED (first-class `execution_request` block,
+versioned contract, frozen NS-1 — maude `a48df3b` / AG `4a63032`). **S7 DONE**
+(Ration Citation Containment — the citation is now load-bearing,
+`execution_request ⊆ cited_ration`; single verified read; frozen v0 untouched —
+maude `ae4cf8a` / AG `16f1b9f`). One authority finding parked:
 approval-binds-plan-bytes (`GAP-s6-sandwich-authority-findings.md`, finding 2).
 
 ## Queued

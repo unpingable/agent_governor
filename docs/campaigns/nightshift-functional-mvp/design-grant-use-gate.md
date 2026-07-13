@@ -51,12 +51,14 @@ interrupt only on enlargement.
   follow-up.
 - **S6 CLOSED (2026-07-13)** at maude `a48df3b` / AG `4a63032` — mechanical seam
   sandwich-clean.
-- **NEXT SLICE — S7 "Ration Citation Containment"**
-  (`design-s7-ration-citation-containment.md`): make the S6 citation
-  load-bearing — `execution_request ⊆ cited_ration` on every dimension the
-  RationCard models; single verified read (supersedes the S6 TOCTOU rehash);
-  no schema/approval/daemon changes; frozen NS-1 untouched. Promoted from
-  sandwich finding 1.
+- **S7 "Ration Citation Containment" DONE (2026-07-13)** at maude `ae4cf8a` /
+  AG `16f1b9f` — the S6 citation is now load-bearing: `execution_request ⊆
+  cited_ration` on every modelled dimension; missing citation refuses
+  (`ration_citation_required`); broadening refuses
+  (`execution_request_exceeds_ration`); single verified read (supersedes the S6
+  TOCTOU rehash); frozen v0 byte-identical; no schema/approval/daemon change.
+  Containment predicate is a documented cross-repo MIRROR of `grant_use_gate`
+  (Maude can't import AG). 8 adversarial pins + subsumption property; maude 359.
 - **PARKED — finding 2 (approval-binds-plan-bytes):** approval must attest to a
   named `plan_ref`; own threat model + migration, independently ruled
   (`GAP-s6-sandwich-authority-findings.md`).

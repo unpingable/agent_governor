@@ -1,9 +1,14 @@
 # Design — Grant-use gate (approval compression), v0
 
-> STATUS: CANDIDATE design, grounded in verified estate (2026-07-10). Operator
-> ratified direction **B** (build compression before NS-2..6). Trust-labeled,
-> arms nothing, escalation stays fail-closed. Sandwich before the live-seam
-> slice lands. Pin: `candidate-approval-compression.md` (this dir).
+> STATUS: **TRACK CLOSED at S7 (operator, 2026-07-13).** S1–S7 built + each
+> sandwiched. Trust-labeled, arms nothing, escalation stays fail-closed. All
+> commits LOCAL/unpushed (work hours) — **push the chain INTACT when the window
+> opens, do NOT squash away the adversarial history** (the sandwich corrections
+> are the receipts). Next authority work is a NEW numbered slice
+> `approval-binds-plan_ref` (`GAP-s6-sandwich-authority-findings.md` finding 2),
+> NOT S7 cleanup — it changes what approval *means*, whereas S7 finished making
+> ration citation mean what it already claimed. Pin:
+> `candidate-approval-compression.md` (this dir).
 
 ## The one-sentence doctrine
 

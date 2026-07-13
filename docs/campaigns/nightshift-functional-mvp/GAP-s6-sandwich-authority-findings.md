@@ -82,10 +82,14 @@ Its own slice.
   explicit request must be *contained by* the cited ration, not merely cite it.
   Brutally scoped there; sibling of the S6 TOCTOU fix (S7's single-verified-read
   supersedes the defensive rehash).
-- **Finding 2 → PARKED** as an independently ruled gap. Approval must attest to
-  a named `plan_ref`, not merely be replayable alongside a plan — that changes
-  the approval-witness model itself and deserves its own threat model and
-  migration story. NOT part of S7. Remains recorded here until scheduled.
+- **Finding 2 → the NEXT numbered authority slice** (operator ruling
+  2026-07-13), provisionally `approval-binds-plan_ref`. Approval must attest to a
+  named `plan_ref`, not merely be replayable alongside a plan. It changes what
+  approval *means* (the approval-witness model itself) — a distinct threat model
+  and migration story, deliberately NOT disguised as S7 cleanup. S7 finished
+  making ration citation mean what it already claimed; this slice changes the
+  meaning of approval. Own design note + sandwich when opened. Remains parked
+  until then.
 
 Full refuter transcript retained in the session scratchpad
 (`s6_codex_out.txt`); provenance = codex gpt-5.5, read-only, 2026-07-13.

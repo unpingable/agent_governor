@@ -132,6 +132,32 @@ matching changes, the maude mirror must change too — a one-line pointer at AG'
 "reuse by import" (the boundary forbids it) but "mirror by contract," disclosed
 rather than hidden.
 
+### Adversarial sandwich (codex, vs frozen basis maude `ae4cf8a`)
+
+One finding landed, fixed in maude `f35f0da`:
+
+- **Mutable-buffer TOCTOU (fixed).** Admission captured the ration witness by
+  reference; a hostile resolver returning a `bytearray` (verified as card A)
+  could mutate it to a permissive card B when `approval_ref` resolved (after the
+  ration in `load_bearing_citations` order), so containment parsed B while the
+  digest verified A. Fix: `bytes()` snapshot at capture. +1 regression pin.
+
+Disclosed, no fix (documented boundaries, not containment bugs):
+
+- **Axis vs command side-effects.** The network/git axis check governs the
+  declared `execution_request.network`/`git` flag, not command side-effects; a
+  card that allows `curl` while denying the network axis is internally
+  permissive. S7 enforces the card's own declarations and does not infer axis
+  usage from command spelling (that is the gate's runtime job / the unarmed
+  cage). Same declared-effects-only limit as `grant_use_gate`.
+- **parse_ration laxity.** The comparison-surface parser is more permissive than
+  AG's authoritative `RationCard`, but every laxity is restrictive-by-default
+  (missing/other-typed fields → empty allowlists / denied axes / `RationParseError`
+  → refuse), so it never over-admits.
+
+Not found: write-path subsumption over-admission (property-tested), command
+containment bypass, citation bypass.
+
 ### Dimensions honestly out of scope
 
 `horizon`, `doctrine_writes_allowed`, `output_is_observe_only`, `task_kind`,

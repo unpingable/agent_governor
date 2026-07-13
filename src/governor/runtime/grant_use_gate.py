@@ -108,6 +108,10 @@ UNVERIFIABLE_REASONS = frozenset(
 #: compiles + runs test binaries and build scripts). The real fence is the
 #: armed sandbox (enforcement: declared-effects-only). This denylist only
 #: raises the bar on the obvious escapes.
+# MIRRORED cross-repo: maude's plan/ration_containment.py duplicates this list
+# for S7 ration-citation containment (Maude cannot import AG internals). If this
+# changes, update that mirror too — see agent_gov S7 design note § Cross-repo
+# mirror.
 _EFFECT_ESCAPING_FLAGS = frozenset({
     "-C", "--config", "--target-dir", "--out-dir", "--manifest-path", "--home",
 })

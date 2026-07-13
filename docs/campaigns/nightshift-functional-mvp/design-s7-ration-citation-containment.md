@@ -1,10 +1,11 @@
 # Design — S7: Ration Citation Containment
 
-> STATUS: SPEC (operator-scoped, 2026-07-13). The bounded completion of S6's
+> STATUS: **BUILT 2026-07-13** (maude). The bounded completion of S6's
 > contract: an explicit `execution_request` must not merely *cite* a RationCard,
 > it must be *contained by* it. Promoted from `GAP-s6-sandwich-authority-
 > findings.md` finding 1. Sibling finding 2 (approval-binds-plan-bytes) stays
-> parked — a separate threat model, NOT this slice.
+> parked — a separate threat model, NOT this slice. Implementation status +
+> cross-repo mirror at the bottom of this doc.
 
 ## The one sentence
 
@@ -94,3 +95,46 @@ Reuse existing classes; discriminate by detail token. No new refusal class.
   that seam (not a new dialect) is the thing to fix.
 - Sandwich this slice too (the adversarial cases above are the refuter's target
   list); land only after it is clean.
+
+## Implementation status (2026-07-13, BUILT — maude)
+
+Primarily Maude, as expected. **No AG source change** beyond this design receipt
+and one drift-prevention comment (below).
+
+- **maude** `src/maude/plan/ration_containment.py` — the containment predicate:
+  `parse_ration` (verified bytes → comparable surface), `write_path_subsumed`
+  (pattern⊆pattern, conservative), `command_contained` (program + argv-prefix-of
+  + escape-flag), `check_containment` (all modelled dimensions).
+- **maude** `envelope.py` — `admit_for_execution` captures the ration bytes it
+  already digest-verified, requires a `governance.projected` citation for each
+  non-empty modelled dimension (`ration_citation_required`), and refuses a
+  request that broadens (`execution_request_exceeds_ration`). Both reuse
+  `invalid_plan_envelope`; no new refusal class. Verified bytes returned on
+  `AdmissionRecord.verified_ration_bytes`.
+- **maude** `execution_request.py` / `runner.py` — projection consumes the
+  admission-verified bytes (single read); supersedes the S6 TOCTOU rehash for
+  the v0 path. v1 reads the block (no ration read), so the pins hold by
+  construction.
+- Tests: `tests/test_ration_containment.py` (all 8 adversarial pins + a
+  subsumption-consistency property + predicate units). Full maude suite 359
+  passed / 24 skipped. AG grant tests 192 (untouched); ns-1r integration OK.
+
+### Cross-repo mirror (the honest cost of the boundary)
+
+Maude cannot import AG internals, so `ration_containment.py`'s command semantics
+are a **documented mirror** of `governor.runtime.grant_use_gate` — specifically
+the effect-escaping-flag denylist (`_EFFECT_ESCAPING_FLAGS`) and the structured
+`program + argv_prefix` match. Write-path subsumption is defined to be
+*consistent* with the gate's concrete `_path_within` (property-tested: `R ⊆ A` ⇒
+every concrete path admitted under R is admitted under A). If AG's denylist or
+matching changes, the maude mirror must change too — a one-line pointer at AG's
+`_EFFECT_ESCAPING_FLAGS` names this coupling so it cannot drift silently. Not
+"reuse by import" (the boundary forbids it) but "mirror by contract," disclosed
+rather than hidden.
+
+### Dimensions honestly out of scope
+
+`horizon`, `doctrine_writes_allowed`, `output_is_observe_only`, `task_kind`,
+`agent_id` — the RationCard does not model these as a comparable ceiling for the
+`execution_request`. They are reported as `not_modelled`, never silently treated
+as contained (`ContainmentResult.not_modelled`).

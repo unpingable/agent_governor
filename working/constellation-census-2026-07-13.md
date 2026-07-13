@@ -95,17 +95,39 @@ cold agent hit.
   (`claimdocs verify-basis` not run); the machine edge-graph is ~3.5 weeks
   behind, including the S6/S7 grant-use wiring which may flip the maude edge
   from specified to wired.
-- **D12 — RRP is unregistered (operator-confirmed, 2026-07-13).** Precise
-  state: `~/git/rrp` working tree holds a real identity artifact (README:
-  "receipt-indexed admissibility gate prototype"; `ABI_STATUS.md` "prototype
-  ABI v1, corpus-backed, not production custody"; Rust+Python checkers,
-  corpus, schemas) — but the git repo has **zero commits**; every file is
-  untracked. `~/git/rrp-notes` is gptpro session sediment (volatile tier). The
-  only *committed* constellation evidence is lean's `docs/RRP-LEAN-CROSSWALK.md`
-  (2026-07-09). Not in the membership fence; not public. Recorded in the map's
-  Unregistered-nodes table as a negative control — NOT mapped from
-  conversational knowledge. Wake condition: RRP's first commit must state
-  identity, ownership, posture, and canonical-state location.
+- **D12 — RRP was unregistered. RESOLVED 2026-07-13 (naturalized same day,
+  operator ruling: AG is the registration authority).** Found state: identity
+  artifact on disk, **zero commits**; only committed evidence was lean's
+  `RRP-LEAN-CROSSWALK.md` ("the crosswalk was more real than the thing it
+  described"). Actions: secrets scan clean · `.gitignore` (1.4G `target/`
+  excluded) · README §Identity & constellation status (owner, posture =
+  prototype/private/no-stability-claim, canonical-state locations, lean
+  relationship, initial-import provenance note) · initial import `rrp 9a0abf6`
+  (248 files, tree banked as-is) · registered in the map's Nodes table,
+  roadmaps hub (ACTIVE 17→18, `tools/rrp.md`), and backlog projection
+  (`roadmap-rrp` stub). **Held for push window:** private remote creation +
+  push (R-RRP-1) — say the word.
+
+## Backlog reconciliation (2026-07-13, per operator ruling)
+
+The 55 `.governor/backlog/` stubs were reconciled against campaign STATUS
+files, PROGRAM_LEDGER, and tool-roadmap status lines; 10 stubs added (7 live
+campaigns, the ruled-NEXT program slice, `roadmap-rrp`, the D6
+`continuity-authoring-tier-repair` defect). Every stub now carries a clean
+closed-vocabulary `status`, `effort_band` (S/M/L, no fake percentages),
+`wake_condition` where dormant, `canonical_source`, and a
+`reconciled{date,basis,confidence}` block; pre-reconciliation verbose statuses
+preserved in `status_note`. 8 stubs are honestly marked `UNKNOWN` confidence
+(not verified against a source this pass) rather than guessed. Headline
+corrections: `governed-shell` was `filed` while GS-2b..8 had shipped; 5
+roadmap-ratification stubs (nq/standing/wicket/lean/tk) were `filed` though
+A8 ratified them 2026-07-02.
+
+**The report:** `python3 scripts/portfolio_report.py` — hot fronts, actionable
+queue, dormant-with-wake, untrustworthy records; aggregates only, never infers.
+**The maintenance loop** (smallest version, now in PROGRAM_LEDGER's update
+rule): a closing campaign/slice proposes its stub transition with receipts;
+an auditor may flag drift but never closes work.
 
 ## Rulings received (operator via relay, 2026-07-13)
 

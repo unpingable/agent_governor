@@ -1,11 +1,17 @@
 {
-  "id": "admission-receipt-linearity",
-  "repo": "agent_gov",
-  "kind": "gap",
-  "spec_ref": "docs/campaigns/constellation-reconciliation/INVENTORY.md \u00a73 F-A3b-2",
-  "forcing_case": "A3b screen vs one_receipt_cannot_license_two_discharges: one wicket admission receipt can fund multiple LA capacity requests (eligibility_reference reuse unfenced AG-side; request idempotency LA-optional)",
-  "priority_tier": 2,
-  "status": "filed",
-  "acceptance": "Decide the fence locus (AG pre-call vs LA contract \u2014 LA v0 is FROZEN so record-first) with operator; then one corpus case (B5 row 7) + the fence.",
-  "note": "Cross-repo. Do NOT unilaterally fence: composes with linearaccountant hands-off doctrine."
+ "id": "admission-receipt-linearity",
+ "repo": "agent_gov",
+ "kind": "gap",
+ "spec_ref": "docs/campaigns/constellation-reconciliation/INVENTORY.md \u00a73 F-A3b-2",
+ "forcing_case": "A3b screen vs one_receipt_cannot_license_two_discharges: one wicket admission receipt can fund multiple LA capacity requests (eligibility_reference reuse unfenced AG-side; request idempotency LA-optional)",
+ "priority_tier": 2,
+ "status": "filed",
+ "acceptance": "Decide the fence locus (AG pre-call vs LA contract \u2014 LA v0 is FROZEN so record-first) with operator; then one corpus case (B5 row 7) + the fence.",
+ "note": "Cross-repo. Do NOT unilaterally fence: composes with linearaccountant hands-off doctrine.",
+ "open_items": "not verified against a canonical source this pass",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "UNKNOWN"
+ }
 }

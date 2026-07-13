@@ -35,7 +35,7 @@ consolidation candidates, and drift findings must not sweep non-members in;
 if membership itself is in question, that is an operator ruling, not an
 inference.
 
-## Constellation table — ACTIVE lane (17)
+## Constellation table — ACTIVE lane (18; rrp registered 2026-07-13)
 
 HEADs as verified 2026-07-02 during the six-agent exploration sweep; each roadmap
 carries its own citations. Ratification: DRAFT roadmaps for the five tools Packet A
@@ -61,6 +61,7 @@ the rest may ratify from exploration evidence alone.
 | porter | ~/git/porter | design-only | n/a — no commits; no AG client yet | [tools/porter.md](tools/porter.md) |
 | transition-kernel | ~/git/transition-kernel | 2026-06-18 | MED — three worlds to reconcile (B0/B1) | [tools/transition-kernel.md](tools/transition-kernel.md) |
 | lean | ~/git/lean | 2026-07-02 | **HIGH** — v6.0.0 + v7 gap spec, way past AG scoping | [tools/lean.md](tools/lean.md) |
+| rrp | ~/git/rrp | 2026-07-13 | n/a — registered 2026-07-13 (naturalization ruling; first commit `9a0abf6`, private, prototype) | [tools/rrp.md](tools/rrp.md) |
 
 Docket note: `~/git/governor-atlas` (claim graph of AG architecture) already maps
 AG↔sibling edges as **specified vs wired** — the tool roadmaps cite atlas cases as

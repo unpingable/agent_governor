@@ -1,11 +1,20 @@
 {
-  "id": "roadmap-spine",
-  "repo": "agent_gov",
-  "kind": "integration_roadmap",
-  "spec_ref": "docs/roadmaps/tools/spine.md",
-  "forcing_case": "Three read-planes (spine / governor-atlas / state_index_export) growing toward each other",
-  "priority_tier": 3,
-  "status": "filed",
-  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/spine.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "R-SPINE-1 boundary note after C2 candidate #5"
+ "id": "roadmap-spine",
+ "repo": "agent_gov",
+ "kind": "integration_roadmap",
+ "spec_ref": "docs/roadmaps/tools/spine.md",
+ "forcing_case": "Three read-planes (spine / governor-atlas / state_index_export) growing toward each other",
+ "priority_tier": 3,
+ "status": "filed",
+ "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/spine.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+ "note": "R-SPINE-1 boundary note after C2 candidate #5",
+ "effort_band": "S",
+ "open_items": "ratification pass (DRAFT 2026-07-02; ratifiable from exploration evidence alone)",
+ "wake_condition": "a ratification pass or a live slice landing on the tool",
+ "canonical_source": "docs/roadmaps/tools/spine.md",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

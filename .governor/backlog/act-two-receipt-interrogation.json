@@ -1,11 +1,17 @@
 {
-  "id": "act-two-receipt-interrogation",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "spec_ref": "specs/gaps/GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001.md (RATIFIED 2026-06-12, defaults on all three open questions)",
-  "priority_tier": 1,
-  "status": "done (2026-06-12; four build items + rider probe green; receipts 033701Z/033702Z/033703Z; built by fable master, closed by opus successor after capacity-exhaustion transition 033659Z)",
-  "acceptance": "The spec's acceptance table: five questions as runnable queries with asserted outputs; provenance cameo (origin_mode visible); negative case (honest absence); user-visible transcript; composition with the frozen pair + OPA contrast. Ratified defaults: per-run <run>/.governor/ layout; standalone interrogate.sh; opa-contrast prints/writes the durable OPA receipt path.",
-  "rider": "Build receipt MUST include the parent-threading corpus probe: confirm real parent_receipt_ids on the spendability refusal do not alter frozen decision fields (expected pass — corpus freezes decision fields, not lineage; probe it anyway). Lineage at emission or never: post-emission parent patching forbidden.",
-  "note": "Converted from spec_slice on operator ratification 2026-06-12. The corpse gets cross-examined."
+ "id": "act-two-receipt-interrogation",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "spec_ref": "specs/gaps/GOV_GAP_ACT_TWO_RECEIPT_INTERROGATION_001.md (RATIFIED 2026-06-12, defaults on all three open questions)",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "The spec's acceptance table: five questions as runnable queries with asserted outputs; provenance cameo (origin_mode visible); negative case (honest absence); user-visible transcript; composition with the frozen pair + OPA contrast. Ratified defaults: per-run <run>/.governor/ layout; standalone interrogate.sh; opa-contrast prints/writes the durable OPA receipt path.",
+ "rider": "Build receipt MUST include the parent-threading corpus probe: confirm real parent_receipt_ids on the spendability refusal do not alter frozen decision fields (expected pass \u2014 corpus freezes decision fields, not lineage; probe it anyway). Lineage at emission or never: post-emission parent patching forbidden.",
+ "note": "Converted from spec_slice on operator ratification 2026-06-12. The corpse gets cross-examined.",
+ "status_note": "pre-reconciliation status: done (2026-06-12; four build items + rider probe green; receipts 033701Z/033702Z/033703Z; built by fable master, closed by opus successor after capacity-exhaustion transition 033659Z)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

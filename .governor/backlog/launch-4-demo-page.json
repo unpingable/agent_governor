@@ -1,10 +1,17 @@
 {
-  "id": "launch-4-demo-page",
-  "repo": "unpingable.com (site)",
-  "kind": "spec_slice",
-  "spec_ref": "working/launch-plan-2026-06-11.md item 4 (demo page + OPA contrast diagram + Limits page)",
-  "priority_tier": 1,
-  "status": "done (2026-06-12: spec SITE_GAP_DEMO_PAGE_001 + build unpingable-site 150b819, local/unpushed; all acceptance checks green; limits.html awaits operator tone read BEFORE push)",
-  "acceptance": "Output: gap spec with acceptance criteria. Depends on w1-5-opa-contrast-shim for the contrast diagram's substance.",
-  "note": null
+ "id": "launch-4-demo-page",
+ "repo": "unpingable.com (site)",
+ "kind": "spec_slice",
+ "spec_ref": "working/launch-plan-2026-06-11.md item 4 (demo page + OPA contrast diagram + Limits page)",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "Output: gap spec with acceptance criteria. Depends on w1-5-opa-contrast-shim for the contrast diagram's substance.",
+ "note": null,
+ "status_note": "pre-reconciliation status: done (2026-06-12: spec SITE_GAP_DEMO_PAGE_001 + build unpingable-site 150b819, local/unpushed; all acceptance checks green; limits.html awaits operator tone read BEFORE push)",
+ "open_items": "same push/tone-read dependency as launch-3",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "PARTIAL"
+ }
 }

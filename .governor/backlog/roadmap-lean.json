@@ -1,11 +1,18 @@
 {
-  "id": "roadmap-lean",
-  "repo": "agent_gov",
-  "kind": "integration_roadmap",
-  "spec_ref": "docs/roadmaps/tools/lean.md",
-  "forcing_case": "Lean at v6.0.0 + v7 gap spec; AG scoping ~5 releases behind; AG-AUDIT-CHECKLIST unapplied",
-  "priority_tier": 1,
-  "status": "filed",
-  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/lean.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "Catch-up lane: A3a/A3b + R-LEAN-2 citation-tier audit + B7 schema lane"
+ "id": "roadmap-lean",
+ "repo": "agent_gov",
+ "kind": "integration_roadmap",
+ "spec_ref": "docs/roadmaps/tools/lean.md",
+ "forcing_case": "Lean at v6.0.0 + v7 gap spec; AG scoping ~5 releases behind; AG-AUDIT-CHECKLIST unapplied",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/lean.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+ "note": "Catch-up lane: A3a/A3b + R-LEAN-2 citation-tier audit + B7 schema lane [2026-07-13] roadmap RATIFIED 2026-07-02 (A8) \u2014 acceptance met",
+ "status_note": "pre-reconciliation status: filed",
+ "canonical_source": "docs/roadmaps/tools/lean.md",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

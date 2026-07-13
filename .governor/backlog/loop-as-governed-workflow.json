@@ -1,11 +1,17 @@
 {
-  "id": "loop-as-governed-workflow",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "spec_ref": "docs/loop-protocol.md §7 (promotion clause)",
-  "forcing_case": "unfiled — W2 promotion under the wiring invariant; do not start before W1 exit criteria",
-  "priority_tier": 2,
-  "status": "filed",
-  "acceptance": "Replaces the loop.json mechanism with an AG-proper ledger-backed FSM WITHOUT changing phases, probes, or receipts (v0 is the stub the promotion replaces, not throwaway).",
-  "note": "DO NOT START. Building a workflow engine instead of running the loop is the quarry calling again."
+ "id": "loop-as-governed-workflow",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "spec_ref": "docs/loop-protocol.md \u00a77 (promotion clause)",
+ "forcing_case": "unfiled \u2014 W2 promotion under the wiring invariant; do not start before W1 exit criteria",
+ "priority_tier": 2,
+ "status": "filed",
+ "acceptance": "Replaces the loop.json mechanism with an AG-proper ledger-backed FSM WITHOUT changing phases, probes, or receipts (v0 is the stub the promotion replaces, not throwaway).",
+ "note": "DO NOT START. Building a workflow engine instead of running the loop is the quarry calling again.",
+ "open_items": "not verified against a canonical source this pass",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "UNKNOWN"
+ }
 }

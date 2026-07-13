@@ -1,0 +1,17 @@
+{
+ "id": "transition-kernel-pickup",
+ "kind": "campaign",
+ "spec_ref": "docs/campaigns/transition-kernel-pickup/STATUS.md",
+ "priority_tier": 2,
+ "status": "blocked",
+ "effort_band": "M",
+ "canonical_source": "docs/campaigns/transition-kernel-pickup/STATUS.md",
+ "wake_condition": "operator confirm+push of Standing 1e62ba9/f101c55 unlocks B4 (AG Slice 1b)",
+ "note": "B-series buildable set EXHAUSTED 2026-07-04 (B2+B6+B7 executed; checker stays SCRATCH/non-binding).",
+ "repo": "agent_gov",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
+}

@@ -1,11 +1,20 @@
 {
-  "id": "roadmap-phosphor",
-  "repo": "agent_gov",
-  "kind": "integration_roadmap",
-  "spec_ref": "docs/roadmaps/tools/phosphor.md",
-  "forcing_case": "Pinned >=2.3.0 vs AG 2.8.1; direct-import read path unverified across 5 minor versions",
-  "priority_tier": 2,
-  "status": "filed",
-  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/phosphor.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "Q-C2-1 amended: phosphor = web-native lane host (not retire-or-narrow); candidate ops-casework lane over NQ/Nightshift/AG/ticketing. R-PHOS-0 done -> R-PHOS-1 audit -> R-PHOS-2 lane design (fable+operator) -> R-PHOS-3 build."
+ "id": "roadmap-phosphor",
+ "repo": "agent_gov",
+ "kind": "integration_roadmap",
+ "spec_ref": "docs/roadmaps/tools/phosphor.md",
+ "forcing_case": "Pinned >=2.3.0 vs AG 2.8.1; direct-import read path unverified across 5 minor versions",
+ "priority_tier": 2,
+ "status": "filed",
+ "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/phosphor.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+ "note": "Q-C2-1 amended: phosphor = web-native lane host (not retire-or-narrow); candidate ops-casework lane over NQ/Nightshift/AG/ticketing. R-PHOS-0 done -> R-PHOS-1 audit -> R-PHOS-2 lane design (fable+operator) -> R-PHOS-3 build.",
+ "effort_band": "S",
+ "open_items": "ratification pass (DRAFT 2026-07-02; ratifiable from exploration evidence alone)",
+ "wake_condition": "a ratification pass or a live slice landing on the tool",
+ "canonical_source": "docs/roadmaps/tools/phosphor.md",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

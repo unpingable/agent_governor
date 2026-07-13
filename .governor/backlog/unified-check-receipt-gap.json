@@ -1,10 +1,16 @@
 {
-  "id": "unified-check-receipt-gap",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "spec_ref": "working/auto-run-audit-2026-06-12.md §9 + slice receipt 2026-06-12T051132Z (check.py:240 named as the sibling site, scope-membraned out of AUTO_RUN slice 2)",
-  "priority_tier": 1,
-  "status": "done (2026-06-12 morning loop, receipt 2026-06-12T144500Z)",
-  "acceptance": "run_check's continuity leg emits a gate receipt when a .governor store exists: `governor check` on content violating a reject anchor produces a continuity_checker BLOCK receipt visible to `governor receipts`. Same class as continuity-refusal-receipt-gap (emit gap one constructor argument wide). Covers all four run_check consumers: check CLI, hook pre-commit --check-continuity (write-blocking), wrap --check-continuity (write-blocking), MCP check_file. No store (governor_dir=None) → no sink, receipt-less is correct.",
-  "note": "Custody-adjacent: the two write-blocking consumers currently block with NO receipt — the exact thesis contradiction class. Known tradeoff accepted: ContinuityChecker emits on pass too, so editor-driven `governor check` traffic (VS Code realtime, separate repo) will produce pass receipts; matches the sibling fix's semantics on `governor continuity check`. If pass-receipt volume becomes a problem, that is a NEW surface (emission policy), not this slice."
+ "id": "unified-check-receipt-gap",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "spec_ref": "working/auto-run-audit-2026-06-12.md \u00a79 + slice receipt 2026-06-12T051132Z (check.py:240 named as the sibling site, scope-membraned out of AUTO_RUN slice 2)",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "run_check's continuity leg emits a gate receipt when a .governor store exists: `governor check` on content violating a reject anchor produces a continuity_checker BLOCK receipt visible to `governor receipts`. Same class as continuity-refusal-receipt-gap (emit gap one constructor argument wide). Covers all four run_check consumers: check CLI, hook pre-commit --check-continuity (write-blocking), wrap --check-continuity (write-blocking), MCP check_file. No store (governor_dir=None) \u2192 no sink, receipt-less is correct.",
+ "note": "Custody-adjacent: the two write-blocking consumers currently block with NO receipt \u2014 the exact thesis contradiction class. Known tradeoff accepted: ContinuityChecker emits on pass too, so editor-driven `governor check` traffic (VS Code realtime, separate repo) will produce pass receipts; matches the sibling fix's semantics on `governor continuity check`. If pass-receipt volume becomes a problem, that is a NEW surface (emission policy), not this slice.",
+ "status_note": "pre-reconciliation status: done (2026-06-12 morning loop, receipt 2026-06-12T144500Z)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

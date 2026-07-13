@@ -1,10 +1,16 @@
 {
-  "id": "init-clean-clone-detection",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "spec_ref": "working/punch-list-2026-06-12-stranger-run.md item 3",
-  "priority_tier": 1,
-  "status": "done (2026-06-12 AUTO_RUN slice 1)",
-  "acceptance": "`governor init` on a fresh clone (which now legitimately ships tracked .governor/{loop.json,loop-receipts,backlog} — the loop's program counter) initializes cleanly instead of reporting 'already initialized'. Key the check on runtime markers, not bare .governor/ existence. Negative test: clone-shaped fixture with only loop artifacts → init proceeds; dir with receipt_kernel.db → init reports initialized.",
-  "note": "Loop self-inflicted (the carve-out that put the program counter in git collided with init's existence check). Alternative if the fix is awkward: move loop artifacts to .loop/ — bigger move, not default."
+ "id": "init-clean-clone-detection",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "spec_ref": "working/punch-list-2026-06-12-stranger-run.md item 3",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "`governor init` on a fresh clone (which now legitimately ships tracked .governor/{loop.json,loop-receipts,backlog} \u2014 the loop's program counter) initializes cleanly instead of reporting 'already initialized'. Key the check on runtime markers, not bare .governor/ existence. Negative test: clone-shaped fixture with only loop artifacts \u2192 init proceeds; dir with receipt_kernel.db \u2192 init reports initialized.",
+ "note": "Loop self-inflicted (the carve-out that put the program counter in git collided with init's existence check). Alternative if the fix is awkward: move loop artifacts to .loop/ \u2014 bigger move, not default.",
+ "status_note": "pre-reconciliation status: done (2026-06-12 AUTO_RUN slice 1)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

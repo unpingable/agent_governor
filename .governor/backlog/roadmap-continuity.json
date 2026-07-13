@@ -1,11 +1,20 @@
 {
-  "id": "roadmap-continuity",
-  "repo": "agent_gov",
-  "kind": "integration_roadmap",
-  "spec_ref": "docs/roadmaps/tools/continuity.md",
-  "forcing_case": "GateReceipts carry no continuity linkage; reliance queries unwired",
-  "priority_tier": 2,
-  "status": "filed",
-  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/continuity.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "R-CONT-1 design gated on A8; linkage is testimony, never gating"
+ "id": "roadmap-continuity",
+ "repo": "agent_gov",
+ "kind": "integration_roadmap",
+ "spec_ref": "docs/roadmaps/tools/continuity.md",
+ "forcing_case": "GateReceipts carry no continuity linkage; reliance queries unwired",
+ "priority_tier": 2,
+ "status": "filed",
+ "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/continuity.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+ "note": "R-CONT-1 design gated on A8; linkage is testimony, never gating",
+ "effort_band": "S",
+ "open_items": "ratification pass (DRAFT 2026-07-02; ratifiable from exploration evidence alone)",
+ "wake_condition": "a ratification pass or a live slice landing on the tool",
+ "canonical_source": "docs/roadmaps/tools/continuity.md",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

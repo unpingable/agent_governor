@@ -1,10 +1,16 @@
 {
-  "id": "policy-register-citation-discipline",
-  "repo": "agent_gov (register convention + loop conformance); policies themselves are constellation-wide artifacts",
-  "kind": "build_slice",
-  "priority_tier": 2,
-  "status": "queued",
-  "spec_ref": "working/pipeline-doctrine-2026-06-12.md §3; docs/constellation-zoning.md §Quorum shape & policy custody",
-  "acceptance": "(1) policies/ directory convention exists with the two first-born residents as versioned artifacts (quorum_shape/*.v0.md from §2 shapes; loop_backoff/epistemic_backoff.v0.md mirroring loop-protocol §11.1), each carrying policy_id/version/policy_kind/competent_evaluator/scope/ratification ref/inputs_required/verdicts_possible/refusal classes; (2) the citation rule is a loop AUDIT obligation: a verdict receipt that cannot name policy_ref@version is an AUDIT deviation triggering extraction of exactly that policy; (3) no service, no DSL, no central evaluator — register stores custody, evaluators remain local.",
-  "note": "Policies are custody-affecting by definition — ratification ceremony applies to register entries (operator sign-off per artifact). ANTI-SCOPE: The Policy Engine (single calculus, Rego-shaped courthouse) is forbidden by the no-unifier result. Guardrail: artifacts typed by evaluator competence — quorum-shape policy cannot be evaluated by LA."
+ "id": "policy-register-citation-discipline",
+ "repo": "agent_gov (register convention + loop conformance); policies themselves are constellation-wide artifacts",
+ "kind": "build_slice",
+ "priority_tier": 2,
+ "status": "queued",
+ "spec_ref": "working/pipeline-doctrine-2026-06-12.md \u00a73; docs/constellation-zoning.md \u00a7Quorum shape & policy custody",
+ "acceptance": "(1) policies/ directory convention exists with the two first-born residents as versioned artifacts (quorum_shape/*.v0.md from \u00a72 shapes; loop_backoff/epistemic_backoff.v0.md mirroring loop-protocol \u00a711.1), each carrying policy_id/version/policy_kind/competent_evaluator/scope/ratification ref/inputs_required/verdicts_possible/refusal classes; (2) the citation rule is a loop AUDIT obligation: a verdict receipt that cannot name policy_ref@version is an AUDIT deviation triggering extraction of exactly that policy; (3) no service, no DSL, no central evaluator \u2014 register stores custody, evaluators remain local.",
+ "note": "Policies are custody-affecting by definition \u2014 ratification ceremony applies to register entries (operator sign-off per artifact). ANTI-SCOPE: The Policy Engine (single calculus, Rego-shaped courthouse) is forbidden by the no-unifier result. Guardrail: artifacts typed by evaluator competence \u2014 quorum-shape policy cannot be evaluated by LA.",
+ "effort_band": "S",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

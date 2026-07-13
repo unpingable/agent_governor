@@ -1,11 +1,18 @@
 {
-  "id": "roadmap-transition-kernel",
-  "repo": "agent_gov",
-  "kind": "integration_roadmap",
-  "spec_ref": "docs/roadmaps/tools/transition-kernel.md",
-  "forcing_case": "Three worlds unreconciled: repo summit stage3b2 vs AG parked branch vs Standing unpushed",
-  "priority_tier": 1,
-  "status": "filed",
-  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/transition-kernel.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "Tool-view index; slices B0-B7 in the pickup campaign"
+ "id": "roadmap-transition-kernel",
+ "repo": "agent_gov",
+ "kind": "integration_roadmap",
+ "spec_ref": "docs/roadmaps/tools/transition-kernel.md",
+ "forcing_case": "Three worlds unreconciled: repo summit stage3b2 vs AG parked branch vs Standing unpushed",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/transition-kernel.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+ "note": "Tool-view index; slices B0-B7 in the pickup campaign [2026-07-13] roadmap RATIFIED 2026-07-02 (A8) \u2014 acceptance met",
+ "status_note": "pre-reconciliation status: filed",
+ "canonical_source": "docs/roadmaps/tools/transition-kernel.md",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

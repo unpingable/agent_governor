@@ -1,11 +1,16 @@
 {
-  "id": "state-index-roadmap-kind",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "spec_ref": "specs/gaps/GOV_GAP_ROADMAP_INDEX_LEGIBILITY_001.md",
-  "forcing_case": "docs/roadmaps/ tree is invisible to state_index_export.v0 (scan roots hard-enumerated); interim legibility rides on these backlog stubs",
-  "priority_tier": 3,
-  "status": "done",
-  "acceptance": "state_index_export scans docs/roadmaps/ (tool_roadmap kind; optional dependency_edge later); deterministic output preserved; tests/test_state_index_export.py green (real exit code); existing kinds unchanged.",
-  "note": "Executed 2026-07-04 as conveyor-dogfood specimen CD-2 \u2014 the first governed conveyor run (QueuedPlaybook + operator latch + ReviewPacket, validator valid+ready). docs/roadmaps/ scanned; tools/*.md -> tool_roadmap (17 live records); hub files fall through kind_ambiguous honestly. Specimen artifacts: docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/."
+ "id": "state-index-roadmap-kind",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "spec_ref": "specs/gaps/GOV_GAP_ROADMAP_INDEX_LEGIBILITY_001.md",
+ "forcing_case": "docs/roadmaps/ tree is invisible to state_index_export.v0 (scan roots hard-enumerated); interim legibility rides on these backlog stubs",
+ "priority_tier": 3,
+ "status": "done",
+ "acceptance": "state_index_export scans docs/roadmaps/ (tool_roadmap kind; optional dependency_edge later); deterministic output preserved; tests/test_state_index_export.py green (real exit code); existing kinds unchanged.",
+ "note": "Executed 2026-07-04 as conveyor-dogfood specimen CD-2 \u2014 the first governed conveyor run (QueuedPlaybook + operator latch + ReviewPacket, validator valid+ready). docs/roadmaps/ scanned; tools/*.md -> tool_roadmap (17 live records); hub files fall through kind_ambiguous honestly. Specimen artifacts: docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/.",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

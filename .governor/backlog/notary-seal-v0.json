@@ -1,11 +1,19 @@
 {
-  "id": "notary-seal-v0",
-  "repo": "notary (NEW constellation project — not yet created; NOT AG, NOT NQ)",
-  "kind": "spec_slice",
-  "spec_ref": "docs/constellation-zoning.md §Notary (notary-seal-v0 build chisel, commit 4aebf6d)",
-  "forcing_case": "unfiled — log-continuity spine; graduates when log-triggered automation needs basis: unwitnessed_self_report",
-  "priority_tier": 2,
-  "status": "filed",
-  "acceptance": "Per the zoning chisel: hash-chained segments, admission-at-seal-time, index-is-never-the-evidence.",
-  "note": "DO NOT START (handoff §5 / W1 brake). Filed for recognition, not authorization."
+ "id": "notary-seal-v0",
+ "repo": "notary (NEW constellation project \u2014 not yet created; NOT AG, NOT NQ)",
+ "kind": "spec_slice",
+ "spec_ref": "docs/constellation-zoning.md \u00a7Notary (notary-seal-v0 build chisel, commit 4aebf6d)",
+ "forcing_case": "unfiled \u2014 log-continuity spine; graduates when log-triggered automation needs basis: unwitnessed_self_report",
+ "priority_tier": 2,
+ "status": "blocked",
+ "acceptance": "Per the zoning chisel: hash-chained segments, admission-at-seal-time, index-is-never-the-evidence.",
+ "note": "DO NOT START (handoff \u00a75 / W1 brake). Filed for recognition, not authorization.",
+ "status_note": "pre-reconciliation status: filed",
+ "effort_band": "M",
+ "wake_condition": "forcing case; NOTE: ~/git/notary is an EMPTY name-reservation (census D10)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

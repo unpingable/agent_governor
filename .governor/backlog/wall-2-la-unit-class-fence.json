@@ -1,11 +1,20 @@
 {
-  "id": "wall-2-la-unit-class-fence",
-  "repo": "linearaccountant + agent_gov (cross-repo contract change)",
-  "kind": "spec_slice",
-  "spec_ref": "working/candidate-la-unit-class-fence.md",
-  "forcing_case": "unfiled — named at Wall-1 wiring; promotes with the LA seam in W2",
-  "priority_tier": 2,
-  "status": "filed",
-  "acceptance": "LA per-class unit matching → unit_origin_mismatch refusal; the arithmetic complement to the Wall-1 type split.",
-  "note": "DO NOT START before W2. Candidate, non-binding."
+ "id": "wall-2-la-unit-class-fence",
+ "repo": "linearaccountant + agent_gov (cross-repo contract change)",
+ "kind": "spec_slice",
+ "spec_ref": "working/candidate-la-unit-class-fence.md",
+ "forcing_case": "unfiled \u2014 named at Wall-1 wiring; promotes with the LA seam in W2",
+ "priority_tier": 2,
+ "status": "filed",
+ "acceptance": "LA per-class unit matching \u2192 unit_origin_mismatch refusal; the arithmetic complement to the Wall-1 type split.",
+ "note": "DO NOT START before W2. Candidate, non-binding.",
+ "effort_band": "M",
+ "open_items": "LA per-class unit matching -> unit_origin_mismatch (cross-repo contract change)",
+ "wake_condition": "coordination slice with ~/git/linearaccountant",
+ "canonical_source": "working/candidate-la-unit-class-fence.md",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

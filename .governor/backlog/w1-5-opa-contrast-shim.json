@@ -1,10 +1,16 @@
 {
-  "id": "w1-5-opa-contrast-shim",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "spec_ref": "docs/constellation-wire-plan.md §W1 item 5 + working/launch-plan-2026-06-11.md §OPA contrast",
-  "priority_tier": 1,
-  "status": "done (2026-06-12; demo_opa_contrast.py + demo/opa-contrast.sh + 9 tests; receipts 2026-06-11T232302Z/232303Z/232430Z)",
-  "acceptance": "~100 lines, demo-grade, Act 2.5, NOT a product surface. Same incident (frozen corpus 08 input): OPA correctly returns allow over the unwitnessed input document; AG refuses the same incident upstream (premises failed preflight); OPA's verdict itself gets a receipt (policy hash, input provenance, decision) entering the evidence plane. Layering sentence verbatim on the surface. Graceful no-opa-binary degradation; live tests skip without binary; receipt/render tested pure; corpus untouched. No policy-adapter zoo.",
-  "note": "Was candidate_next_slice in the restart seed; adjudicated by audit 2026-06-11T231101Z — queued behind the item-4 acceptance gate, not blessed."
+ "id": "w1-5-opa-contrast-shim",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "spec_ref": "docs/constellation-wire-plan.md \u00a7W1 item 5 + working/launch-plan-2026-06-11.md \u00a7OPA contrast",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "~100 lines, demo-grade, Act 2.5, NOT a product surface. Same incident (frozen corpus 08 input): OPA correctly returns allow over the unwitnessed input document; AG refuses the same incident upstream (premises failed preflight); OPA's verdict itself gets a receipt (policy hash, input provenance, decision) entering the evidence plane. Layering sentence verbatim on the surface. Graceful no-opa-binary degradation; live tests skip without binary; receipt/render tested pure; corpus untouched. No policy-adapter zoo.",
+ "note": "Was candidate_next_slice in the restart seed; adjudicated by audit 2026-06-11T231101Z \u2014 queued behind the item-4 acceptance gate, not blessed.",
+ "status_note": "pre-reconciliation status: done (2026-06-12; demo_opa_contrast.py + demo/opa-contrast.sh + 9 tests; receipts 2026-06-11T232302Z/232303Z/232430Z)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

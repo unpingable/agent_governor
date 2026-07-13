@@ -1,10 +1,18 @@
 {
-  "id": "nq-crosstalk-n0-n4",
-  "repo": "nq (build home; AG holds the recognition record only \u2014 cross-repo custody seam respected)",
-  "kind": "build_slice_series",
-  "priority_tier": "2-high -> PROMOTED 2026-06-12 evening: now a named DEPENDENCY of guvnah-v2 phase 2 (fleet eyes) and demo-2's watch-from-the-chair view; forcing case fully arrived ('the chair needs to see the estate')",
-  "status": "zoned (record filed; behind launch slab)",
-  "spec_ref": "working/constellation-networking-patterns-2026-06-12.md \u00a74; docs/constellation-zoning.md \u00a7Networking patterns appendix",
-  "acceptance": "N0 transport (mesh preferred; linode mailbox-hub honest if typed mailbox-not-witness); N1 four keypairs + standing grants scoped to each instance's witness competence set (mac mini = narrower grant, typed partial participation); N2 ONE stream nq.heartbeat.v0 + receiver receipts (nq.receive.v0 / nq.origin_gap_detected.v0 / nq.coverage_interval.v0) \u2014 deliberately stupid first flow; N3 per-origin hash-chained selective shipping + transit receipts; N4 nq-why against local replica. Payoff specimen: absence coverage no longer shares a failure domain with the watched thing.",
-  "note": "ANTI-SCOPE (ceremony champion domain): no consensus, no gossip, no quorum, no CRDTs, no vector clocks, no distributed SQLite, push-only idempotent receive. Heartbeat absence receipts word as 'no admissible heartbeat from origin O in interval C by observer R under assumptions P', never 'host down'. Cross-host gap math refuses with gap_basis_mismatch by existing clock-witness design. N1 dogfoods the X1/X2 identity slice before WLP needs it. SEQUENCING (2026-06-12): launch -> N0-N2 -> guvnah phase 2 + demo-2 (share the linode work) -> X1 only when the first remote HALT demands a couch-nod. The chair pulls the network forward exactly as far as sight requires and not one envelope further."
+ "id": "nq-crosstalk-n0-n4",
+ "repo": "nq (build home; AG holds the recognition record only \u2014 cross-repo custody seam respected)",
+ "kind": "build_slice_series",
+ "priority_tier": "2-high -> PROMOTED 2026-06-12 evening: now a named DEPENDENCY of guvnah-v2 phase 2 (fleet eyes) and demo-2's watch-from-the-chair view; forcing case fully arrived ('the chair needs to see the estate')",
+ "status": "zoned",
+ "spec_ref": "working/constellation-networking-patterns-2026-06-12.md \u00a74; docs/constellation-zoning.md \u00a7Networking patterns appendix",
+ "acceptance": "N0 transport (mesh preferred; linode mailbox-hub honest if typed mailbox-not-witness); N1 four keypairs + standing grants scoped to each instance's witness competence set (mac mini = narrower grant, typed partial participation); N2 ONE stream nq.heartbeat.v0 + receiver receipts (nq.receive.v0 / nq.origin_gap_detected.v0 / nq.coverage_interval.v0) \u2014 deliberately stupid first flow; N3 per-origin hash-chained selective shipping + transit receipts; N4 nq-why against local replica. Payoff specimen: absence coverage no longer shares a failure domain with the watched thing.",
+ "note": "ANTI-SCOPE (ceremony champion domain): no consensus, no gossip, no quorum, no CRDTs, no vector clocks, no distributed SQLite, push-only idempotent receive. Heartbeat absence receipts word as 'no admissible heartbeat from origin O in interval C by observer R under assumptions P', never 'host down'. Cross-host gap math refuses with gap_basis_mismatch by existing clock-witness design. N1 dogfoods the X1/X2 identity slice before WLP needs it. SEQUENCING (2026-06-12): launch -> N0-N2 -> guvnah phase 2 + demo-2 (share the linode work) -> X1 only when the first remote HALT demands a couch-nod. The chair pulls the network forward exactly as far as sight requires and not one envelope further.",
+ "status_note": "pre-reconciliation status: zoned (record filed; behind launch slab)",
+ "effort_band": "L",
+ "wake_condition": "named dependency of guvnah-v2 phase 2 (fleet eyes) + demo-2 chair view",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

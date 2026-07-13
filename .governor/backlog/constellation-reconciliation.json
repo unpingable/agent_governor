@@ -1,0 +1,16 @@
+{
+ "id": "constellation-reconciliation",
+ "kind": "campaign",
+ "spec_ref": "docs/campaigns/constellation-reconciliation/STATUS.md",
+ "priority_tier": 2,
+ "status": "in_progress",
+ "effort_band": "S",
+ "canonical_source": "docs/campaigns/constellation-reconciliation/STATUS.md",
+ "open_items": "A9 closeout state unverified this pass; A8 ratified 5 tool roadmaps 2026-07-02; consolidation candidates operator-resolved",
+ "repo": "agent_gov",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "PARTIAL"
+ }
+}

@@ -16,7 +16,9 @@
 > `docs/roadmaps/` (constellation posture/wake/membership), then
 > `docs/PROGRAM_LEDGER.md` (the active governed program's sequence), then the
 > relevant campaign `STATUS.md`. Each surface answers a different question; do
-> not make one answer another's.
+> not make one answer another's. For "what remains, where, roughly how much":
+> `python3 scripts/portfolio_report.py` (reads the reconciled
+> `.governor/backlog/` projection; every line traces to a canonical source).
 
 ## LIVE THREAD (2026-07-05) — public-MVP campaign
 

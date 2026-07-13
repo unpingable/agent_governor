@@ -1,0 +1,17 @@
+{
+ "id": "public-mvp",
+ "kind": "campaign",
+ "spec_ref": "docs/campaigns/public-mvp/CAMPAIGN.md",
+ "priority_tier": 1,
+ "status": "in_progress",
+ "effort_band": "M",
+ "canonical_source": "docs/campaigns/public-mvp/STATUS.md",
+ "open_items": "Sprint 5 (front door + Fable doc-coherence + launch); parallel lanes P (porter v0.1), S (spine OQ-1..5 ratification), U (gov-webui desk mode)",
+ "note": "Sprints 1-4 CLOSED by 2026-07-05.",
+ "repo": "agent_gov",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
+}

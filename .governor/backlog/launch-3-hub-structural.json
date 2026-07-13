@@ -1,10 +1,17 @@
 {
-  "id": "launch-3-hub-structural",
-  "repo": "unpingable.com (site) + agent_gov (topology source)",
-  "kind": "spec_slice",
-  "spec_ref": "working/launch-plan-2026-06-11.md item 3 ('hub dumb but structurally right: thesis \u00b6 + topology map with stubs')",
-  "priority_tier": 1,
-  "status": "done (2026-06-12: spec working/SITE_GAP_HUB_001.md + build unpingable-site 9ff045e, local/unpushed; acceptance checks green)",
-  "acceptance": "Output: gap spec with acceptance criteria (a phrase is not acceptance). Launch-order item 3.",
-  "note": null
+ "id": "launch-3-hub-structural",
+ "repo": "unpingable.com (site) + agent_gov (topology source)",
+ "kind": "spec_slice",
+ "spec_ref": "working/launch-plan-2026-06-11.md item 3 ('hub dumb but structurally right: thesis \u00b6 + topology map with stubs')",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "Output: gap spec with acceptance criteria (a phrase is not acceptance). Launch-order item 3.",
+ "note": null,
+ "status_note": "pre-reconciliation status: done (2026-06-12: spec working/SITE_GAP_HUB_001.md + build unpingable-site 9ff045e, local/unpushed; acceptance checks green)",
+ "open_items": "site push + operator tone-read of limits.html were pending at close; verify unpingable-site push state",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "PARTIAL"
+ }
 }

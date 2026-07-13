@@ -1,10 +1,16 @@
 {
-  "id": "readme-venv-and-interrogate-wording",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "priority_tier": 4,
-  "status": "done (2026-06-12 morning loop, receipt 2026-06-12T151500Z)",
-  "spec_ref": "stranger RERUN friction 2-5",
-  "acceptance": "README install block shows the two venv lines (python3 -m venv .venv; . .venv/bin/activate) before pip install -e .; README's interrogate line passes the printed root (./demo/interrogate.sh <root-from-act-1>) or the comment stops saying 'those same receipts' for the no-arg form.",
-  "note": "Doc polish; batches with any next front-door touch."
+ "id": "readme-venv-and-interrogate-wording",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "priority_tier": 4,
+ "status": "done",
+ "spec_ref": "stranger RERUN friction 2-5",
+ "acceptance": "README install block shows the two venv lines (python3 -m venv .venv; . .venv/bin/activate) before pip install -e .; README's interrogate line passes the printed root (./demo/interrogate.sh <root-from-act-1>) or the comment stops saying 'those same receipts' for the no-arg form.",
+ "note": "Doc polish; batches with any next front-door touch.",
+ "status_note": "pre-reconciliation status: done (2026-06-12 morning loop, receipt 2026-06-12T151500Z)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

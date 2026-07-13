@@ -1,10 +1,17 @@
 {
-  "id": "w1-exit-stranger-run",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "spec_ref": "docs/constellation-wire-plan.md §W1 exit criteria ('a stranger reproduces one end-to-end refusal in <15 min') + operator dispatch 2026-06-12 (cold-model stranger proxy protocol)",
-  "priority_tier": 1,
-  "status": "done (2026-06-12; gate verdict FAIL recorded honestly — punch list at working/punch-list-2026-06-12-stranger-run.md; re-run required post-fixes before W1 exit criteria can be marked met; receipts 042155Z/042156Z/042157Z)",
-  "acceptance": "A COLD model (codex, fresh session, fresh clone, fresh venv) attempts the stranger path following ONLY what's on screen (README → install → run), forbidden from inferring undocumented steps, narrating every confusion. Output: a punch list artifact (working/) recording every friction point in encounter order — the missing hint, the layout bite, every 'what do I do next' with no on-screen answer. The punch list is the input the hub/demo-page/README-ratchet items build against (sequencing rationale: polish first and the run-through invalidates the polish). PASS/FAIL of the 15-min gate recorded honestly either way — a failed gate is a successful run of the slice.",
-  "note": "Who's the stranger? Not the operator (most saturated human alive on this system) and not warm agents. Cold-auditor protocol applied to onboarding: a model that refuses to fill gaps with inference is a decent simulation of a tired SRE at 11pm."
+ "id": "w1-exit-stranger-run",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "spec_ref": "docs/constellation-wire-plan.md \u00a7W1 exit criteria ('a stranger reproduces one end-to-end refusal in <15 min') + operator dispatch 2026-06-12 (cold-model stranger proxy protocol)",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "A COLD model (codex, fresh session, fresh clone, fresh venv) attempts the stranger path following ONLY what's on screen (README \u2192 install \u2192 run), forbidden from inferring undocumented steps, narrating every confusion. Output: a punch list artifact (working/) recording every friction point in encounter order \u2014 the missing hint, the layout bite, every 'what do I do next' with no on-screen answer. The punch list is the input the hub/demo-page/README-ratchet items build against (sequencing rationale: polish first and the run-through invalidates the polish). PASS/FAIL of the 15-min gate recorded honestly either way \u2014 a failed gate is a successful run of the slice.",
+ "note": "Who's the stranger? Not the operator (most saturated human alive on this system) and not warm agents. Cold-auditor protocol applied to onboarding: a model that refuses to fill gaps with inference is a decent simulation of a tired SRE at 11pm. [2026-07-13] ran honestly to a FAIL verdict; W1 exit criteria not met at that time",
+ "status_note": "pre-reconciliation status: done (2026-06-12; gate verdict FAIL recorded honestly \u2014 punch list at working/punch-list-2026-06-12-stranger-run.md; re-run required post-fixes before W1 exit criteria can be marked met; receipts 042155Z/042156Z/042157Z)",
+ "open_items": "re-run absorbed by public-mvp S2 stranger path (see campaign)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "PARTIAL"
+ }
 }

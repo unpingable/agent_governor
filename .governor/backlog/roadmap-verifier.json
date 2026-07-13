@@ -1,11 +1,20 @@
 {
-  "id": "roadmap-verifier",
-  "repo": "agent_gov",
-  "kind": "integration_roadmap",
-  "spec_ref": "docs/roadmaps/tools/verifier.md",
-  "forcing_case": "Coverage-provenance gap (2026-06-17) rollout unaudited across AG consumers",
-  "priority_tier": 3,
-  "status": "filed",
-  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/verifier.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "R-VER-1 consumer contract audit; seam fails open by design"
+ "id": "roadmap-verifier",
+ "repo": "agent_gov",
+ "kind": "integration_roadmap",
+ "spec_ref": "docs/roadmaps/tools/verifier.md",
+ "forcing_case": "Coverage-provenance gap (2026-06-17) rollout unaudited across AG consumers",
+ "priority_tier": 3,
+ "status": "filed",
+ "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/verifier.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+ "note": "R-VER-1 consumer contract audit; seam fails open by design",
+ "effort_band": "S",
+ "open_items": "ratification pass (DRAFT 2026-07-02; ratifiable from exploration evidence alone)",
+ "wake_condition": "a ratification pass or a live slice landing on the tool",
+ "canonical_source": "docs/roadmaps/tools/verifier.md",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

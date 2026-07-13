@@ -1,11 +1,21 @@
 {
-  "id": "capsule-authority-reverify",
-  "repo": "agent_gov",
-  "kind": "gap",
-  "spec_ref": "docs/campaigns/constellation-reconciliation/INVENTORY.md \u00a73 F-A3b-1",
-  "forcing_case": "A3b screen finding vs refresh_is_inexpressible: session-continuity capsules carry AUTHORITY across sessions; nothing forces re-verification at resume (copy-forward refresh lane)",
-  "priority_tier": 2,
-  "status": "doc_fence_landed",
-  "acceptance": "Doc-level first: session-continuity docs state capsule authority = context requiring re-verification at resume, never admission. Code fence only on a real resume-consumption forcing case.",
-  "note": "Lean theorem family F1 refresh_is_inexpressible; screen-grade, not wall. Doc-level half EXECUTED 2026-07-04: session_continuity.py module docstring + CLI group help + feature-history now state capsule authority = context requiring re-verification at resume, never admission. Code fence remains gated on a real resume-consumption forcing case."
+ "id": "capsule-authority-reverify",
+ "repo": "agent_gov",
+ "kind": "gap",
+ "spec_ref": "docs/campaigns/constellation-reconciliation/INVENTORY.md \u00a73 F-A3b-1",
+ "forcing_case": "A3b screen finding vs refresh_is_inexpressible: session-continuity capsules carry AUTHORITY across sessions; nothing forces re-verification at resume (copy-forward refresh lane)",
+ "priority_tier": 2,
+ "status": "blocked",
+ "acceptance": "Doc-level first: session-continuity docs state capsule authority = context requiring re-verification at resume, never admission. Code fence only on a real resume-consumption forcing case.",
+ "note": "Lean theorem family F1 refresh_is_inexpressible; screen-grade, not wall. Doc-level half EXECUTED 2026-07-04: session_continuity.py module docstring + CLI group help + feature-history now state capsule authority = context requiring re-verification at resume, never admission. Code fence remains gated on a real resume-consumption forcing case.",
+ "status_note": "pre-reconciliation status: doc_fence_landed",
+ "effort_band": "M",
+ "open_items": "code fence (doc fence F-A3b-1 landed 2026-07-04)",
+ "wake_condition": "a resume-consumption forcing case (backlog name: capsule-authority-reverify)",
+ "canonical_source": ".claude/rules/feature-history.md \u00a7Session Continuity",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

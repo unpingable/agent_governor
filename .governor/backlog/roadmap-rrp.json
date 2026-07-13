@@ -1,0 +1,17 @@
+{
+ "id": "roadmap-rrp",
+ "kind": "integration_roadmap",
+ "spec_ref": "docs/roadmaps/tools/rrp.md",
+ "priority_tier": 2,
+ "status": "filed",
+ "effort_band": "S",
+ "canonical_source": "~/git/rrp README \u00a7Identity + ABI_STATUS.md",
+ "forcing_case": "census D12: identity artifact existed with zero commits; naturalized 2026-07-13 (rrp 9a0abf6)",
+ "open_items": "R-RRP-1 remote+push (banked local, held for push window); R-RRP-2 obligation-ledger legibility (what does the corpus still owe the ABI)",
+ "repo": "agent_gov",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
+}

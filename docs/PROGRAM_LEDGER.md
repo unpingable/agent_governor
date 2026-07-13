@@ -120,11 +120,17 @@ Before pushing (when the window opens):
 
 ## Update rule
 
-Every completed work session updates this ledger by doing exactly three things:
+Every completed work session updates this ledger by doing exactly four things:
 1. move completed work to `CLOSED` and record its receipts;
 2. name exactly one `NEXT`, or state that no next item has been ruled;
 3. record every newly discovered gap as `OPEN` / `PARKED` / `DEFERRED` — never
-   leave it implied in a narrative report.
+   leave it implied in a narrative report;
+4. **propose the matching `.governor/backlog/` stub transition** (with the
+   receipts from step 1) for any campaign or slice that changed state — the
+   stubs are the cross-constellation projection behind
+   `scripts/portfolio_report.py`, and they went weeks stale the one time this
+   was left implicit (census D9/D7, reconciled 2026-07-13). An auditor may
+   flag stub drift; it never marks work closed.
 
 The Markdown projection may be rewritten, but transitions are **append-only in
 meaning**: a slice does not silently un-close, and a ruling is extended, not

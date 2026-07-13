@@ -1,10 +1,16 @@
 {
-  "id": "refusal-receipt-id-mismatch",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "spec_ref": "stranger RERUN worst moment (working/auto-run-audit-2026-06-12.md): Act-1's surface 'leaf receipt' line, the printed interrogation command, and the JSON envelope leaf_receipt_id all use impostor.receipt_ids[-1] — which is the WICKET pass (the refusal receipt id is never appended to DrillRunResult.receipt_ids on the refusal path).",
-  "priority_tier": 1,
-  "status": "done (2026-06-12 AUTO_RUN pass 2, slice 1)",
-  "acceptance": "On a refused run, the refusal receipt id (verdict=block) is what the surface shows as the leaf, what the printed `why`/`receipts --id` commands cite, and what the JSON envelope carries. Root fix preferred (drill_runner appends the spendability receipt id to receipt_ids on refusal) over render-side fishing. Pin with a test asserting the printed id's verdict is block.",
-  "note": "Found by the stranger RERUN — tonight's own Act-2 print amplified a pre-existing receipt_ids gap. Out of overnight budget (3 slices spent); first candidate for morning dispatch. interrogate.sh itself is unaffected (reads the store for verdict=block)."
+ "id": "refusal-receipt-id-mismatch",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "spec_ref": "stranger RERUN worst moment (working/auto-run-audit-2026-06-12.md): Act-1's surface 'leaf receipt' line, the printed interrogation command, and the JSON envelope leaf_receipt_id all use impostor.receipt_ids[-1] \u2014 which is the WICKET pass (the refusal receipt id is never appended to DrillRunResult.receipt_ids on the refusal path).",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "On a refused run, the refusal receipt id (verdict=block) is what the surface shows as the leaf, what the printed `why`/`receipts --id` commands cite, and what the JSON envelope carries. Root fix preferred (drill_runner appends the spendability receipt id to receipt_ids on refusal) over render-side fishing. Pin with a test asserting the printed id's verdict is block.",
+ "note": "Found by the stranger RERUN \u2014 tonight's own Act-2 print amplified a pre-existing receipt_ids gap. Out of overnight budget (3 slices spent); first candidate for morning dispatch. interrogate.sh itself is unaffected (reads the store for verdict=block).",
+ "status_note": "pre-reconciliation status: done (2026-06-12 AUTO_RUN pass 2, slice 1)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

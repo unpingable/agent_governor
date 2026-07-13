@@ -1,11 +1,20 @@
 {
-  "id": "governed-shell",
-  "repo": "agent_gov",
-  "kind": "campaign",
-  "spec_ref": "docs/campaigns/governed-shell/CAMPAIGN.md",
-  "forcing_case": "Q-C2-1 amendment reframed maude/phosphor as operator shells; operator brought the deferred product conversation forward — no captured workflow was both easy AND governed",
-  "priority_tier": 1,
-  "status": "filed",
-  "acceptance": "GS-0/GS-1 done with filing. Campaign completes when maude 3.0 ships the desk (queue/session/board/diff over operator.decisions + operator.watch + send_input), ag_shell_client is extracted and CI-tested against the daemon, and phosphor's governed-session lane v0 passes generated lane-contract tests. Sandwiched slices (GS-3, GS-5, GS-7) carry mandatory codex-exec review.",
-  "note": "Design docs in docs/design/governed-shell/ (loop-ux, shell-contract-v0 CANDIDATE, maude-boundary = R-MAUDE-3 executed, phosphor-lanes). Ratified: queue-first, chat cut, lanes new-only, widening offers parked. Boundary law: maude runs the room; AG decides what the room may claim."
+ "id": "governed-shell",
+ "repo": "agent_gov",
+ "kind": "campaign",
+ "spec_ref": "docs/campaigns/governed-shell/CAMPAIGN.md",
+ "forcing_case": "Q-C2-1 amendment reframed maude/phosphor as operator shells; operator brought the deferred product conversation forward \u2014 no captured workflow was both easy AND governed",
+ "priority_tier": 1,
+ "status": "in_progress",
+ "acceptance": "GS-0/GS-1 done with filing. Campaign completes when maude 3.0 ships the desk (queue/session/board/diff over operator.decisions + operator.watch + send_input), ag_shell_client is extracted and CI-tested against the daemon, and phosphor's governed-session lane v0 passes generated lane-contract tests. Sandwiched slices (GS-3, GS-5, GS-7) carry mandatory codex-exec review.",
+ "note": "Design docs in docs/design/governed-shell/ (loop-ux, shell-contract-v0 CANDIDATE, maude-boundary = R-MAUDE-3 executed, phosphor-lanes). Ratified: queue-first, chat cut, lanes new-only, widening offers parked. Boundary law: maude runs the room; AG decides what the room may claim. [2026-07-13] GS-2b..GS-8 SHIPPED 2026-07-03 (daemon 91->99 RPC; stub had gone stale at 'filed')",
+ "status_note": "pre-reconciliation status: filed",
+ "effort_band": "L",
+ "canonical_source": "docs/campaigns/governed-shell/STATUS.md",
+ "open_items": "GS-2b admissibility+HELD remainder (re-tiered authority-semantics); GS-8b live-socket client; GS-9 maude consumes client; maude 3.0 desk; phosphor lane v0",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

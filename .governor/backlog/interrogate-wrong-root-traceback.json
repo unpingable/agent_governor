@@ -1,10 +1,16 @@
 {
-  "id": "interrogate-wrong-root-traceback",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "priority_tier": 4,
-  "status": "done (2026-06-23 reduced-throttle pilot — reproduced, admitted, fixed, tested)",
-  "spec_ref": "found during readme-venv-and-interrogate-wording live verification 2026-06-12",
-  "acceptance": "demo/interrogate.sh (governor.demo_interrogate) given a wrong/nonexistent root exits nonzero with a one-line human message naming the expected layout (the root Act 1 printed, not its /impostor subdir), no raw traceback.",
-  "note": "Reproduction: ./demo/interrogate.sh /tmp/<act1-root>/impostor -> FileNotFoundError traceback (it appends /impostor itself). Plausible stranger confusion: Act 1's other printed commands use --root <root>/impostor, the interrogate line uses <root>. Hostile/wrong-input polish; the happy paths (no-arg, printed root) are verified live and hold."
+ "id": "interrogate-wrong-root-traceback",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "priority_tier": 4,
+ "status": "done",
+ "spec_ref": "found during readme-venv-and-interrogate-wording live verification 2026-06-12",
+ "acceptance": "demo/interrogate.sh (governor.demo_interrogate) given a wrong/nonexistent root exits nonzero with a one-line human message naming the expected layout (the root Act 1 printed, not its /impostor subdir), no raw traceback.",
+ "note": "Reproduction: ./demo/interrogate.sh /tmp/<act1-root>/impostor -> FileNotFoundError traceback (it appends /impostor itself). Plausible stranger confusion: Act 1's other printed commands use --root <root>/impostor, the interrogate line uses <root>. Hostile/wrong-input polish; the happy paths (no-arg, printed root) are verified live and hold.",
+ "status_note": "pre-reconciliation status: done (2026-06-23 reduced-throttle pilot \u2014 reproduced, admitted, fixed, tested)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

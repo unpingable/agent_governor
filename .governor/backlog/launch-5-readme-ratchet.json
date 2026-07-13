@@ -1,22 +1,29 @@
 {
-  "id": "launch-5-readme-ratchet",
-  "repo": "public constellation repos (verifier DONE 2026-06-11; sweep in progress 2026-06-12)",
-  "kind": "build_slice_series (5.1-5.n per operator 2026-06-12: paranoid decomposition, one repo per sub-slice)",
-  "spec_ref": "working/launch-plan-2026-06-11.md \u00a7README specimen gate v0; HitL placement rule (loop-protocol \u00a7Doctrine): review at admission/boundary/budget/audit, not inside every admissible action \u2014 this envelope is the admission",
-  "priority_tier": 1,
-  "status": "COMPLETE 2026-06-12 \u2014 all sub-slices closed (5.1-5.7); local commits only, batch push after 17:00 pending operator tone-read of limits.html",
-  "acceptance": "Each public repo README passes the specimen gate v0: example/quickstart/specimen/30-second-run section BEFORE the first doctrine H2; one command that runs it (user-facing, not pytest). The README's specimen is the repo's receipt. Template: ~/git/verifier README (done). Envelope fences: minimal shape only (specimen + example/golden, NO logic), commands I author executed live before landing, verbatim moves allowed without re-execution, skip operator-fenced repos (papers, lean, atproto-nutrition), local commits only / no push, foreign-repo pre-existing dirty state untouched.",
-  "audit_table": {
-    "verifier": "DONE 2026-06-11 (template; 0155f5c)",
-    "agent_governor": "PASS (Start Here trilogy before doctrine, ratcheted this week)",
-    "nq": "PASS-IN-SPIRIT, not touched \u2014 lead sections ARE specimens (concrete failure contradictions + live demo link at top); letter-of-gate gap (no examples/+golden) deferred to nq's own context, it has its own design culture",
-    "wicket": "5.1 DONE (de5cd50) \u2014 denied-irreversible-commit pair at front, live-executed against release binary",
-    "standing": "5.2 DONE (25c4cba) \u2014 stale-yes specimen (grant expired at spend, query why chain), live-executed in throwaway db",
-    "rpp": "5.3 DONE (49a8bcb) \u2014 pure section move, Quick start above Architecture, text verbatim",
-    "wicket-guard": "5.4 CLEARED BY OPERATOR 2026-06-12 (README edited by hand)",
-    "continuity": "5.5 DONE (continuity 4590f11) \u2014 lifecycle specimen before the essay: observe/commit/revoke with hash-chained receipts, rely_ok False->True->False; full sequence verified from fresh venv install; essay body untouched",
-    "nightshift": "5.6 DONE 2026-06-12 (nightshift 01a65bf) \u2014 liveness-gate refusal as 30-second specimen before first doctrine H2. Lead line: 'Night Shift does not make incidents go away. It refuses to close the loop until the witnesses needed for closure exist.' Two-beat executable transcript: stale witness (age_seconds 600 vs 90s threshold) via documented --nq-bin override halts run BEFORE findings consulted (ok_to_proceed false, blocked liveness_gate, revalidate-only proposal, 'no remediation proposed: liveness gate failure is not a basis for action', governor not consulted); flags dropped = normal fixture packet. Live-executed twice (authoring + verbatim README-block reproduce). Real nq binary probed first per dispatch: nq-root/nq has liveness export code (nq-monitor crate) but NO built binaries; /usr/bin/nq is the Unix job-queue tool (wrong-binary hazard, job file created+removed during probe). Stub-replay chosen over cargo-test fallback: it exercises the REAL CLI path (CliLivenessSource shells to argv[0], --nq-bin is the documented resolution override), reader-reproducible with no live NQ. No behavior/policy/fixture changes; tree had no unrelated dirt. Run-dependent values noted in README.",
-    "atproto-labelwatch/driftwatch/labeler/feeds/archive/stats": "5.7 AUDITED 2026-06-12, ZERO CHANGES PROPOSED \u2014 repos nest in ~/git/atproto-nutrition (umbrella; fence lifted as specific exemption, read-only consumed, no write needed; atproto Claude to be informed n/a). All six hub-linked repos PASS-shape: quickstart with real commands before architecture, every one. Letter gap (no examples/+golden) same as nq's accepted pass-in-spirit \u2014 operational tools, two with live instances linked from the hub. Remote names verified against hub links (labelwatch->atproto-labelwatch, driftwatch->atproto-driftwatch, reference-labeler->atproto-labeler): no 404s. nebgraph: private prototype ('not for distribution'), correctly off the hub, gate does not apply. stechometer: static HTML page, not a tool repo, not hub-linked, no README owed. Residual (not gate scope): quickstart commands not live-executed (need credentials/services); structure verified only."
-  },
-  "note": "Launch-order item 5. Hard cases (5.5/5.6) are construction sub-slices, not reorders \u2014 dispatch individually."
+ "id": "launch-5-readme-ratchet",
+ "repo": "public constellation repos (verifier DONE 2026-06-11; sweep in progress 2026-06-12)",
+ "kind": "build_slice_series (5.1-5.n per operator 2026-06-12: paranoid decomposition, one repo per sub-slice)",
+ "spec_ref": "working/launch-plan-2026-06-11.md \u00a7README specimen gate v0; HitL placement rule (loop-protocol \u00a7Doctrine): review at admission/boundary/budget/audit, not inside every admissible action \u2014 this envelope is the admission",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "Each public repo README passes the specimen gate v0: example/quickstart/specimen/30-second-run section BEFORE the first doctrine H2; one command that runs it (user-facing, not pytest). The README's specimen is the repo's receipt. Template: ~/git/verifier README (done). Envelope fences: minimal shape only (specimen + example/golden, NO logic), commands I author executed live before landing, verbatim moves allowed without re-execution, skip operator-fenced repos (papers, lean, atproto-nutrition), local commits only / no push, foreign-repo pre-existing dirty state untouched.",
+ "audit_table": {
+  "verifier": "DONE 2026-06-11 (template; 0155f5c)",
+  "agent_governor": "PASS (Start Here trilogy before doctrine, ratcheted this week)",
+  "nq": "PASS-IN-SPIRIT, not touched \u2014 lead sections ARE specimens (concrete failure contradictions + live demo link at top); letter-of-gate gap (no examples/+golden) deferred to nq's own context, it has its own design culture",
+  "wicket": "5.1 DONE (de5cd50) \u2014 denied-irreversible-commit pair at front, live-executed against release binary",
+  "standing": "5.2 DONE (25c4cba) \u2014 stale-yes specimen (grant expired at spend, query why chain), live-executed in throwaway db",
+  "rpp": "5.3 DONE (49a8bcb) \u2014 pure section move, Quick start above Architecture, text verbatim",
+  "wicket-guard": "5.4 CLEARED BY OPERATOR 2026-06-12 (README edited by hand)",
+  "continuity": "5.5 DONE (continuity 4590f11) \u2014 lifecycle specimen before the essay: observe/commit/revoke with hash-chained receipts, rely_ok False->True->False; full sequence verified from fresh venv install; essay body untouched",
+  "nightshift": "5.6 DONE 2026-06-12 (nightshift 01a65bf) \u2014 liveness-gate refusal as 30-second specimen before first doctrine H2. Lead line: 'Night Shift does not make incidents go away. It refuses to close the loop until the witnesses needed for closure exist.' Two-beat executable transcript: stale witness (age_seconds 600 vs 90s threshold) via documented --nq-bin override halts run BEFORE findings consulted (ok_to_proceed false, blocked liveness_gate, revalidate-only proposal, 'no remediation proposed: liveness gate failure is not a basis for action', governor not consulted); flags dropped = normal fixture packet. Live-executed twice (authoring + verbatim README-block reproduce). Real nq binary probed first per dispatch: nq-root/nq has liveness export code (nq-monitor crate) but NO built binaries; /usr/bin/nq is the Unix job-queue tool (wrong-binary hazard, job file created+removed during probe). Stub-replay chosen over cargo-test fallback: it exercises the REAL CLI path (CliLivenessSource shells to argv[0], --nq-bin is the documented resolution override), reader-reproducible with no live NQ. No behavior/policy/fixture changes; tree had no unrelated dirt. Run-dependent values noted in README.",
+  "atproto-labelwatch/driftwatch/labeler/feeds/archive/stats": "5.7 AUDITED 2026-06-12, ZERO CHANGES PROPOSED \u2014 repos nest in ~/git/atproto-nutrition (umbrella; fence lifted as specific exemption, read-only consumed, no write needed; atproto Claude to be informed n/a). All six hub-linked repos PASS-shape: quickstart with real commands before architecture, every one. Letter gap (no examples/+golden) same as nq's accepted pass-in-spirit \u2014 operational tools, two with live instances linked from the hub. Remote names verified against hub links (labelwatch->atproto-labelwatch, driftwatch->atproto-driftwatch, reference-labeler->atproto-labeler): no 404s. nebgraph: private prototype ('not for distribution'), correctly off the hub, gate does not apply. stechometer: static HTML page, not a tool repo, not hub-linked, no README owed. Residual (not gate scope): quickstart commands not live-executed (need credentials/services); structure verified only."
+ },
+ "note": "Launch-order item 5. Hard cases (5.5/5.6) are construction sub-slices, not reorders \u2014 dispatch individually.",
+ "status_note": "pre-reconciliation status: COMPLETE 2026-06-12 \u2014 all sub-slices closed (5.1-5.7); local commits only, batch push after 17:00 pending operator tone-read of limits.html",
+ "open_items": "batch push pending operator tone-read at close; verify",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "PARTIAL"
+ }
 }

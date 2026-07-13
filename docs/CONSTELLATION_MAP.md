@@ -68,6 +68,7 @@ Negative ownership is load-bearing: it is what keeps seams from collapsing.
 | **nightshift** | scheduling/resuming deferred agent *intent* under policy (execution plane, with AG) | being Governor (CLAUDE.md); NS→AG adapter direction only, never back (wire-plan) | nightshift `FEATURE-HISTORY.md` |
 | **porter** | (design-only) governed-container substrate ABI for its own v0 design | — no AG client exists; no live path found | porter `DESIGN.md` ("authoritative for v0") |
 | **governor-atlas / claimdocs** | atlas: AG claim-graph specimen; claimdocs: the engine + its own vocabulary (CHARTER) | authority over AG or the constellation — "pages explain the graph, they don't outrank it" | atlas `NEXT.md`, `REFRESH.md` |
+| **rrp** (`~/git/rrp`, private) | receipt-indexed admissibility gate prototype (Python reference + Rust parity checkers, corpus-backed, ABI v1) | being a policy engine, sandbox, runtime, theorem prover, or effect executor (README); production custody (placeholder verifier seam) | rrp README §Identity + `ABI_STATUS.md`; AG view: `docs/roadmaps/tools/rrp.md`. Registered 2026-07-13 (naturalization ruling; first commit `9a0abf6`) |
 
 Membership beyond this table (incl. the 9 PARKED residents and their wake
 triggers): `docs/roadmaps/README.md` + `PARKED.md`. Non-members observed
@@ -82,9 +83,10 @@ a recorded fact, not folklore. Do NOT map them from conversational knowledge;
 their first committed artifact must state identity, ownership, posture, and
 canonical-state location.
 
-| Node | What is recoverable | What is not |
-|---|---|---|
-| **RRP** (`~/git/rrp`) | working tree exists with an identity artifact (README: "receipt-indexed admissibility gate prototype", `ABI_STATUS.md`, Rust+Python checkers, corpus); referenced by lean's committed `docs/RRP-LEAN-CROSSWALK.md` (2026-07-09) | **the repo has zero commits** — every file untracked; not in the membership fence; not public; ownership/edges unrecorded (census D12) |
+*(None currently. RRP occupied this table 2026-07-13 for a few hours — filed
+as census D12, then naturalized the same day: identity block + initial import
+`rrp 9a0abf6`, registered above. The table stays as the protocol for the next
+one.)*
 
 ## Edges
 
@@ -108,6 +110,7 @@ census D11).
 | AG | cites | lean (refusal-class theorems, citation tiers) | wired (citation discipline) | `src/governor/proof_seam.py`; lean `Admissibility/README.md` custody classes |
 | constellation-artifacts | supplies-specimen-to | NQ (declared-deny lab, Step-0 check) | receipted, lab decommissioned 2026-06-27 | constellation-artifacts manifests + TEARDOWN receipts |
 | governor-atlas | indexes | AG (claim graph; specified-vs-wired) | observing only | atlas README ("docs that fail closed") |
+| lean | pins-semantics-for | rrp (checker semantics crosswalk; proves nothing about the code) | documented both sides | lean `docs/RRP-LEAN-CROSSWALK.md` (2026-07-09); rrp README §Identity |
 
 **Not edges** (recorded so they stop being re-derived): the nq-witness 5-layer
 role table (Witness→NQ→Night Shift→Governor→Human) is unilateral, unreciprocated
@@ -136,9 +139,12 @@ defect owed its own repair slice, not cartographic cleanup (D6) ·
 PROGRAM_LEDGER scope + ingress insufficiently declared — relevant campaigns
 should cite it; unrelated campaigns must not be conscripted (D7) · `~/git`
 root indices contradict each other (D8) · atlas edge-graph unverified since
-2026-06-19 (D11) · RRP unregistered (D12, table above). Resolved 2026-07-13:
-D1 (cartography archival committed, wicket/wlp repointed; standing residue
-noted in census), D2/D3 (staleness headers added).
+2026-06-19 (D11) · 8 backlog stubs carry UNKNOWN reconciliation confidence
+(run `python3 scripts/portfolio_report.py` for the live list). Resolved
+2026-07-13: D1 (cartography archival committed, wicket/wlp repointed;
+standing residue noted in census), D2/D3 (staleness headers added), D9
+(superseded by the reconciled `.governor/backlog/` projection), D12 (RRP
+naturalized — `rrp 9a0abf6`).
 
 ## Maintenance rule
 

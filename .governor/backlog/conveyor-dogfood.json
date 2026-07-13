@@ -1,0 +1,17 @@
+{
+ "id": "conveyor-dogfood",
+ "kind": "campaign",
+ "spec_ref": "docs/campaigns/conveyor-dogfood/STATUS.md",
+ "priority_tier": 2,
+ "status": "in_progress",
+ "effort_band": "M",
+ "canonical_source": "docs/campaigns/conveyor-dogfood/STATUS.md",
+ "open_items": "CD-4 (self-drive) running as of 2026-07-04; CD-5+ unverified this pass",
+ "note": "CD-0..CD-3 DONE.",
+ "repo": "agent_gov",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "PARTIAL"
+ }
+}

@@ -1,11 +1,20 @@
 {
-  "id": "roadmap-claimc",
-  "repo": "agent_gov",
-  "kind": "integration_roadmap",
-  "spec_ref": "docs/roadmaps/tools/claimc.md",
-  "forcing_case": "None yet \u2014 consumer-pull holds; playbook claim compilation is a watched candidate",
-  "priority_tier": 3,
-  "status": "filed",
-  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/claimc.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "R-CLAIMC-1 blocked on first unsettleable-claim incident in the conveyor"
+ "id": "roadmap-claimc",
+ "repo": "agent_gov",
+ "kind": "integration_roadmap",
+ "spec_ref": "docs/roadmaps/tools/claimc.md",
+ "forcing_case": "None yet \u2014 consumer-pull holds; playbook claim compilation is a watched candidate",
+ "priority_tier": 3,
+ "status": "filed",
+ "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/claimc.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+ "note": "R-CLAIMC-1 blocked on first unsettleable-claim incident in the conveyor",
+ "effort_band": "S",
+ "open_items": "ratification pass (DRAFT 2026-07-02; ratifiable from exploration evidence alone)",
+ "wake_condition": "a ratification pass or a live slice landing on the tool",
+ "canonical_source": "docs/roadmaps/tools/claimc.md",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

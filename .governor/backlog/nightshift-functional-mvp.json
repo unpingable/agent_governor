@@ -1,0 +1,16 @@
+{
+ "id": "nightshift-functional-mvp",
+ "kind": "campaign",
+ "spec_ref": "docs/campaigns/nightshift-functional-mvp/STATUS.md",
+ "priority_tier": 1,
+ "status": "in_progress",
+ "effort_band": "L",
+ "canonical_source": "docs/campaigns/nightshift-functional-mvp/STATUS.md + docs/PROGRAM_LEDGER.md",
+ "open_items": "approval-binds-plan_ref is the ruled NEXT; ~35% of lane remains per campaign's own gap assessment (65% exists; 6+1 packets); grant-use track S1-S7 CLOSED 2026-07-13",
+ "repo": "agent_gov",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
+}

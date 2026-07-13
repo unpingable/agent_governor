@@ -1,11 +1,18 @@
 {
-  "id": "roadmap-wicket",
-  "repo": "agent_gov",
-  "kind": "integration_roadmap",
-  "spec_ref": "docs/roadmaps/tools/wicket.md",
-  "forcing_case": "Fixture corpus (2 files) too thin to serve as shared Lean/Rust/Python corpus",
-  "priority_tier": 2,
-  "status": "filed",
-  "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/wicket.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
-  "note": "R-WICKET-1 corpus growth after Q-B3; R-WICKET-2 on SPEC v0.4"
+ "id": "roadmap-wicket",
+ "repo": "agent_gov",
+ "kind": "integration_roadmap",
+ "spec_ref": "docs/roadmaps/tools/wicket.md",
+ "forcing_case": "Fixture corpus (2 files) too thin to serve as shared Lean/Rust/Python corpus",
+ "priority_tier": 2,
+ "status": "done",
+ "acceptance": "Roadmap ratified (Status flips to RATIFIED in docs/roadmaps/tools/wicket.md) and its unblocked slices executed or explicitly re-parked with named triggers.",
+ "note": "R-WICKET-1 corpus growth after Q-B3; R-WICKET-2 on SPEC v0.4 [2026-07-13] roadmap RATIFIED 2026-07-02 (A8) \u2014 acceptance met",
+ "status_note": "pre-reconciliation status: filed",
+ "canonical_source": "docs/roadmaps/tools/wicket.md",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

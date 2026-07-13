@@ -1,10 +1,16 @@
 {
-  "id": "strict-path-taint-error-leak",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "spec_ref": "found during AUTO_RUN slice 3 README verification: `governor gate check --strict ...` on a fresh init prints `release taint computation failed: 'ReceiptKernelBridge' object has no attribute '_store'` before the (correct) BLOCKED output",
-  "priority_tier": 1,
-  "status": "done (2026-06-12 AUTO_RUN pass 2, slice 2)",
-  "acceptance": "The strict gate path emits no internal error text on a fresh init; the taint computation either works or degrades silently-by-design with a typed receipt. Root-cause the missing _store attribute (release_taint.py / receipt_bridge.py seam).",
-  "note": "Front-door blemish on the README's own recommended command — discovered because the ratchet verified every printed command live. NOT fixed overnight (outside the queued punch items; mutation membrane)."
+ "id": "strict-path-taint-error-leak",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "spec_ref": "found during AUTO_RUN slice 3 README verification: `governor gate check --strict ...` on a fresh init prints `release taint computation failed: 'ReceiptKernelBridge' object has no attribute '_store'` before the (correct) BLOCKED output",
+ "priority_tier": 1,
+ "status": "done",
+ "acceptance": "The strict gate path emits no internal error text on a fresh init; the taint computation either works or degrades silently-by-design with a typed receipt. Root-cause the missing _store attribute (release_taint.py / receipt_bridge.py seam).",
+ "note": "Front-door blemish on the README's own recommended command \u2014 discovered because the ratchet verified every printed command live. NOT fixed overnight (outside the queued punch items; mutation membrane).",
+ "status_note": "pre-reconciliation status: done (2026-06-12 AUTO_RUN pass 2, slice 2)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

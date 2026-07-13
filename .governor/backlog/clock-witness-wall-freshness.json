@@ -1,11 +1,19 @@
 {
-  "id": "clock-witness-wall-freshness",
-  "repo": "agent_gov",
-  "kind": "build_slice",
-  "spec_ref": "working/clock-witness-spec.md (three-valued wall freshness over ±x bounds: current/expired/indeterminate-straddle; refusals blocked_timestamp_laundering + blocked_self_attested_freshness)",
-  "forcing_case": "pending — fires when a wall-clock freshness claim becomes load-bearing (e.g. a validity-interval check on a real credential, or multi-host standing)",
-  "priority_tier": 2,
-  "status": "filed",
-  "acceptance": "Per the spec'd ratification (4 amendments): measured-or-unknown uncertainty; three-valued freshness incl. indeterminate; pinning tests for timestamp-laundering and self-attested-freshness.",
-  "note": "Spec'd, deliberately not built — the hero's predicate is the monotonic gap and does not consult wall freshness."
+ "id": "clock-witness-wall-freshness",
+ "repo": "agent_gov",
+ "kind": "build_slice",
+ "spec_ref": "working/clock-witness-spec.md (three-valued wall freshness over \u00b1x bounds: current/expired/indeterminate-straddle; refusals blocked_timestamp_laundering + blocked_self_attested_freshness)",
+ "forcing_case": "pending \u2014 fires when a wall-clock freshness claim becomes load-bearing (e.g. a validity-interval check on a real credential, or multi-host standing)",
+ "priority_tier": 2,
+ "status": "filed",
+ "acceptance": "Per the spec'd ratification (4 amendments): measured-or-unknown uncertainty; three-valued freshness incl. indeterminate; pinning tests for timestamp-laundering and self-attested-freshness.",
+ "note": "Spec'd, deliberately not built \u2014 the hero's predicate is the monotonic gap and does not consult wall freshness.",
+ "effort_band": "M",
+ "canonical_source": "working/clock-witness-spec.md",
+ "open_items": "three-valued wall freshness over +/-x bounds + timestamp-laundering refusals (spec'd, not built)",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
 }

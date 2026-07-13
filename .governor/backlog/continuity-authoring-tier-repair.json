@@ -1,0 +1,17 @@
+{
+ "id": "continuity-authoring-tier-repair",
+ "kind": "substrate_defect",
+ "spec_ref": "working/constellation-census-2026-07-13.md",
+ "priority_tier": 1,
+ "status": "filed",
+ "effort_band": "S",
+ "canonical_source": "continuity repo (owner); census defect D6",
+ "forcing_case": "continuity MCP returns 'no such column: authoring_tier' \u2014 governed-memory recovery path dead",
+ "open_items": "schema migration or query fix in ~/git/continuity; ruled a live substrate defect, not cartographic cleanup",
+ "repo": "agent_gov",
+ "reconciled": {
+  "date": "2026-07-13",
+  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "confidence": "CURRENT"
+ }
+}

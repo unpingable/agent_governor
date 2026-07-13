@@ -60,6 +60,10 @@ def main():
     print(f"Ruled-scope completion (ESTIMATE, stub-count only): "
           f"~{100 * n_done // max(1, n_done + n_open)}% "
           f"(a stub is not a unit of work; see effort bands)")
+    print("  SCOPE: this measures NAMED, RULED work only — not activation debt "
+          "(what it takes to\n  operate a node persistently) or scale debt. Those "
+          "become owed when a deployment\n  posture is ratified; until then they are "
+          "un-entailed. See working/activation-debt-candidate.md.")
 
     hot = sorted((s for s in stubs
                   if s.get("status") in ("in_progress", "queued")

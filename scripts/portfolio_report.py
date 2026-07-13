@@ -1,10 +1,25 @@
 #!/usr/bin/env python3
-"""Portfolio report — the operator's "what remains, where, and roughly how much?"
+"""Portfolio report — "what named, ruled work is queued, where, and roughly how big?"
 
-Reads .governor/backlog/*.json (the cross-constellation projection; canonical
-truth stays in campaign STATUS files / PROGRAM_LEDGER / tool roadmaps — every
-stub carries a canonical_source pointer and a reconciled{date,basis,confidence}
-block). This script only aggregates; it never infers or mutates status.
+This answers that question. It does NOT answer "how complete is the
+constellation?" — there is no honest single number for that, and this report
+does not manufacture one.
+
+MEASUREMENT BOUNDARY (read before trusting any count here):
+- Named backlog is MEASURED — the reconciled .governor/backlog/*.json records.
+- Activation obligations (what it takes to OPERATE a node persistently: TLS,
+  supervision, backup/restore, health, identity) are DERIVED ONLY AFTER an
+  operating posture is ratified. Un-entailed until then; not counted here.
+- Scale debt and unratified ambition are EXCLUDED.
+- The closure ratio below is over RECORDS, not effort. A stub is not a unit of
+  work: S/M/L records count as peers, roadmap-ratification paperwork sits
+  beside build slices, and naming new work makes the ratio FALL despite real
+  progress. Treat it as "how much of the named list is checked off," never as
+  a progress bar. See working/activation-debt-candidate.md for the class cut.
+
+Canonical truth stays in campaign STATUS files / PROGRAM_LEDGER / tool
+roadmaps — every stub carries a canonical_source + reconciled{date,basis,
+confidence}. This script only aggregates; it never infers or mutates status.
 
 Usage: python3 scripts/portfolio_report.py [--json]
 """
@@ -17,6 +32,7 @@ from collections import defaultdict
 ROOT = os.path.join(os.path.dirname(__file__), "..", ".governor", "backlog")
 OPEN = ("in_progress", "queued", "filed", "blocked", "zoned")
 DONE = ("done", "closed", "retired")
+ACTIONABLE = ("in_progress", "queued", "filed")
 
 
 def load():
@@ -55,20 +71,36 @@ def main():
     newest = max((s.get("reconciled", {}).get("date", "") for s in stubs),
                  default="never")
 
-    print(f"PORTFOLIO — {len(stubs)} stubs · {n_open} open · {n_done} done/"
-          f"closed/retired · last reconciled {newest}")
-    print(f"Ruled-scope completion (ESTIMATE, stub-count only): "
-          f"~{100 * n_done // max(1, n_done + n_open)}% "
-          f"(a stub is not a unit of work; see effort bands)")
-    print("  SCOPE: this measures NAMED, RULED work only — not activation debt "
-          "(what it takes to\n  operate a node persistently) or scale debt. Those "
-          "become owed when a deployment\n  posture is ratified; until then they are "
-          "un-entailed. See working/activation-debt-candidate.md.")
+    actionable = [s for s in stubs if s.get("status") in ACTIONABLE]
+    # roadmap-* stubs are "ratify the roadmap doc" paperwork, not build work.
+    paperwork = [s for s in actionable if s["id"].startswith("roadmap-")]
+    substantive = [s for s in actionable if s not in paperwork]
+    dormant = [s for s in stubs if s.get("status") in ("blocked", "zoned")]
+    bands = defaultdict(int)
+    for s in actionable:
+        bands[s.get("effort_band") or "?"] += 1
+    band_str = " ".join(f"{k}={bands[k]}" for k in ("S", "M", "L", "?") if bands[k])
 
     hot = sorted((s for s in stubs
                   if s.get("status") in ("in_progress", "queued")
                   and s.get("priority_tier") == 1),
                  key=lambda s: s["id"])
+
+    print(f"NAMED-WORK QUEUE — reconciled {newest}")
+    print(f"  hot fronts:          {len(hot)} (tier-1 active or ruled-next)")
+    print(f"  actionable records:  {len(actionable)}  "
+          f"(in_progress {len(by_status['in_progress'])} / "
+          f"queued {len(by_status['queued'])} / filed {len(by_status['filed'])})")
+    print(f"    substantive build: {len(substantive)}   ·   "
+          f"roadmap-ratification paperwork: {len(paperwork)}")
+    print(f"    effort bands:      {band_str}  (S/M/L; ? = unsized)")
+    print(f"  dormant w/ wake:     {len(dormant)} (blocked / zoned)")
+    print(f"  uncertain records:   {len(unknown) + len(stale)} (verify before relying)")
+    print(f"  closed/retired:      {n_done}   —   named-record closure "
+          f"{100 * n_done // max(1, n_done + n_open)}% (records checked off, NOT effort, "
+          f"NOT completeness)")
+    print("  Measures named, ruled work only — activation/scale/ambition excluded "
+          "by construction\n  (see module docstring + working/activation-debt-candidate.md).")
     print(f"\nHOT FRONTS ({len(hot)}) — active or ruled-next, tier 1:")
     for s in hot:
         print(line(s))

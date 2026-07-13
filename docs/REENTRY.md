@@ -9,7 +9,14 @@
 > hand-maintained table is a map that eventually lies, which is the exact remembered-approval
 > failure the rest of this repo exists to refuse.
 >
-> Updated 2026-07-05. `.governor/loop.json` is **stale** (tracks the completed AG-on-AG thread) — use this.
+> Updated 2026-07-05 (cold-start ordering added 2026-07-13). `.governor/loop.json` is **stale** (tracks the completed AG-on-AG thread) — use this.
+>
+> **Cold-start ingress order** (census D7 ruling, 2026-07-13): read
+> `docs/CONSTELLATION_MAP.md` (who owns what — canonical topology index), then
+> `docs/roadmaps/` (constellation posture/wake/membership), then
+> `docs/PROGRAM_LEDGER.md` (the active governed program's sequence), then the
+> relevant campaign `STATUS.md`. Each surface answers a different question; do
+> not make one answer another's.
 
 ## LIVE THREAD (2026-07-05) — public-MVP campaign
 

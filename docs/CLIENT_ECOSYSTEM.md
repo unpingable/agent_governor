@@ -1,5 +1,12 @@
 # Client Ecosystem
 
+**STATUS: STALE (marker added 2026-07-13, census D3).** Content dates from
+2026-02-11 and predates the 2026-07-02 UI-shell rulings — guvnah is RETIRED
+(specimen only), maude is reframed as the terminal-native operator shell,
+phosphor as the web lane host; see `docs/roadmaps/CONSOLIDATION.md` for the
+rulings and `docs/CONSTELLATION_MAP.md` for topology. The per-client narrative
+below is retained as history; the daemon-authority principle still holds.
+
 > v2 apps talk to a daemon you own (local). v3 apps talk to a service you operate (remote).
 
 ## The Principle

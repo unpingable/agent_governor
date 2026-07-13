@@ -330,6 +330,13 @@ These rules cannot be broken:
 
 ## The Constellation
 
+> **⚠ STALE — topology superseded (marker added 2026-07-13, census D2).** This
+> section's peer inventory dates from 2026-06-10 and predates the 2026-07-02
+> roadmaps-hub rulings (guvnah retired, maude reframed, UI shells regrouped)
+> and the constellation census. The canonical topology index is
+> `docs/CONSTELLATION_MAP.md`; membership is `docs/roadmaps/README.md`. The
+> constitutional rule below still holds; the inventory does not.
+
 Governor is one star, not a monolith. It sits in a constellation of independent tools that can each be used standalone. The constitutional rule:
 
 > **Governor may coordinate independent tools, but it must not be the reason they are usable.**

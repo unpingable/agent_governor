@@ -1,10 +1,18 @@
 # Governed Work — Program Ledger
 
-**Canonical record.** Cross-repository source of truth for active, parked,
-deferred, and closed governed-work slices. Detailed design lives in slice
-documents; this file answers only: *where are we, what is actually closed, what
-is NEXT, what remains real but deliberately unbuilt, and which receipts prove
-it.* Maude/NQ keep one-line pointers to this file, not divergent copies.
+**Canonical record — scope declared.** Source of truth for the governed
+multi-repo **program(s) this file enumerates** (currently: the grant-use /
+plan-admission road and its testimony detour) — their active, parked,
+deferred, and closed slices. It is **not** the universal backlog: constellation
+posture/wake/membership lives in `docs/roadmaps/`; authority topology lives in
+`docs/CONSTELLATION_MAP.md`; campaigns outside the enumerated program(s) keep
+their own `STATUS.md` and owe this file nothing. Campaigns *inside* the
+program cite it. Detailed design lives in slice documents; this file answers
+only: *where are we, what is actually closed, what is NEXT, what remains real
+but deliberately unbuilt, and which receipts prove it.* Maude/NQ keep one-line
+pointers to this file, not divergent copies. (Scope declaration added
+2026-07-13 per census defect D7 — see
+`working/constellation-census-2026-07-13.md`.)
 
 **Last updated:** 2026-07-13
 

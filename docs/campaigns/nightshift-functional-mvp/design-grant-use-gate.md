@@ -41,8 +41,14 @@ interrupt only on enlargement.
   integration evidence (`integration_check.py`: parse → admit → project → mint
   `sgr_969f042a…`). Doctrine: *approval attaches to plan bytes, not
   reconstructed intent; migration creates a successor, never revises a
-  predecessor.* **Adversarial sandwich still owed before land** (parser
-  version-dispatch + frozen-allowlist seam — see design note §Sandwich).
+  predecessor.* **Sandwich DONE** (codex gpt-5.5 vs frozen basis 6a35965 +
+  dc0a383): Modes 3/5 SAFE; 3 mechanical findings FIXED (maude `a48df3b` —
+  type-confusion, TOCTOU rehash, byte-exact frozen check; suite 342). Two
+  Criticals were **pre-existing admission-model** gaps (§7 value-verification
+  unbuilt; approval not bound to plan_ref) — inert while unarmed, filed for
+  operator ruling in `GAP-s6-sandwich-authority-findings.md`, NOT folded into
+  S6. S6 mechanical seam lands; the surrounding admission model is the named
+  follow-up.
 - **DEFERRED (post-S6, unless a consumer forces them):** S5d (multi-actor
   attribution), S4c-full (report dispositions, widening-prompt buttons, lease
   panel).

@@ -168,7 +168,8 @@ the approval.
 
 Under v1 the plan author copies the RationCard's allowed shell commands and the
 approved scope into `execution_request`, AND records the source in
-`governance.projected` exactly as v0 required. maude verifies three-valued:
+`governance.projected` exactly as v0 required. The **intended** three-valued
+discipline:
 
 - `execution_request.commands` disagrees with the cited RationCard →
   `governance_ref_mismatch`.
@@ -178,9 +179,21 @@ approved scope into `execution_request`, AND records the source in
 - an uncheckable citation on a *governed, approved* run → refuses
   (`governance_approval_unverified`).
 
-So S6 moves the request into the plan **without** loosening the authority
-binding: the declared effects must still match their AG sources, or the run
-refuses. Legibility up, authority-locality intact, no new grant path.
+> **Implementation status (corrected after the S6 sandwich, 2026-07-13):** the
+> **value-comparison** of a projected `execution_request` field against its
+> cited source is **specified but not yet implemented** — admission today
+> presence-checks the citation and digest-resolves the source, but does not
+> verify declared-⊆-allowed. This is a **pre-existing** §7 gap (v0's
+> `scope_allowlist` projection was presence-only too), surfaced by the refuter
+> and recorded in `GAP-s6-sandwich-authority-findings.md` (finding 1) for an
+> operator ruling. Until built, the citation is structurally present but not
+> value-load-bearing; the operator's approval of the visible plan bytes is the
+> operative authority, not the ration cross-check.
+
+So S6 moves the request into the plan and keeps the citation *structure* intact;
+the value-verification that would make the citation load-bearing is the named
+follow-up. Legibility up (commands visible in the approved bytes); the machine
+cross-check against the ration is scheduled, not yet enforced.
 
 ## Sandwich placement
 

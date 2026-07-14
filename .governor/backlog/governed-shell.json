@@ -11,10 +11,10 @@
  "status_note": "pre-reconciliation status: filed",
  "effort_band": "L",
  "canonical_source": "docs/campaigns/governed-shell/STATUS.md",
- "open_items": "GS-2b admissibility+HELD remainder (re-tiered authority-semantics); GS-8b live-socket client; GS-9 maude consumes client; maude 3.0 desk; phosphor lane v0",
+ "open_items": "STALE-CORRECTED 2026-07-14: GS-8b (AsyncDaemonClient) + GS-9 (maude consumes ag_shell_client, maude f143efc) both EXECUTED 2026-07-03 \u2014 NOT remainders. Actual remainder: GS-2b admissibility+HELD (re-tiered AUTHORITY-SEMANTICS, needs ruling \u2014 OBSTRUCTION-gs2b-admissibility-held.md) + GS-10..GS-15 maude 3.0 desk UI build (large, fresh) + phosphor GS-16/17. No small mechanical AG-side item remains.",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "date": "2026-07-14",
+  "basis": "NEXT.md GS-8b/GS-9 both marked EXECUTED 2026-07-03; verified against feature-history + AsyncDaemonClient in libs/ag_shell_client",
   "confidence": "CURRENT"
  }
 }

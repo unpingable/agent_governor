@@ -5,15 +5,16 @@
  "spec_ref": "working/clock-witness-spec.md (three-valued wall freshness over \u00b1x bounds: current/expired/indeterminate-straddle; refusals blocked_timestamp_laundering + blocked_self_attested_freshness)",
  "forcing_case": "pending \u2014 fires when a wall-clock freshness claim becomes load-bearing (e.g. a validity-interval check on a real credential, or multi-host standing)",
  "priority_tier": 2,
- "status": "filed",
+ "status": "blocked",
  "acceptance": "Per the spec'd ratification (4 amendments): measured-or-unknown uncertainty; three-valued freshness incl. indeterminate; pinning tests for timestamp-laundering and self-attested-freshness.",
  "note": "Spec'd, deliberately not built \u2014 the hero's predicate is the monotonic gap and does not consult wall freshness.",
  "effort_band": "M",
  "canonical_source": "working/clock-witness-spec.md",
- "open_items": "three-valued wall freshness over +/-x bounds + timestamp-laundering refusals (spec'd, not built)",
+ "open_items": "RATIFICATION HELD 2026-07-14: escape-count found 5 escapes (3 engineering pins foldable at build: units, policy shape, blocked_not_yet_valid; 2 DESIGN decisions needing a ruling: unknown-uncertainty verdict + anti-laundering MECHANISM \u2014 the refusals are asserted but unbuildable with the current WallWitness type). NOT build-ready. Layer B (hero StandingWindow revision + corpus 08/09 re-freeze) is a separate later slice.",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "date": "2026-07-14",
+  "basis": "escape-count ratification pass vs clock_witness.py: 5 escapes, 2 design-level; recorded in working/clock-witness-spec.md",
   "confidence": "CURRENT"
- }
+ },
+ "wake_condition": "two design rulings (working/clock-witness-spec.md \u00a7Ratification 2026-07-14): (a) unknown-uncertainty verdict [proposed: indeterminate], (b) anti-laundering enforcement mechanism [proposed: actor/provenance field on the evaluator witness so 'the claim is not its own clock' is type-enforceable]"
 }

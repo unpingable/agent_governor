@@ -212,3 +212,44 @@ precision. No ambient `now`. Leave the six-ledger taxonomy in the drawer.
   doctrine this implements; the gap is temporal (clock), not metabolic (ledger).
 - `~/git/lean` Freshness.lean (`expired_not_fresh`, `not_yet_valid_not_fresh`) —
   the freshness class boundary; reconcile gap-vs-freshness citation at build.
+
+## Ratification pass 2026-07-14 — NOT build-ready (5 escapes, 2 design-level)
+
+Escape-count against the current `clock_witness.py`, scoped to LAYER A
+(`freshness_verdict` + anti-laundering refusals; the hero-revision layer B was
+out of scope). The 2026-06-12 "operator decision-grade" status was relay-authored
+and never independently verified; this pass found layer A does NOT teach its own
+boundaries. **Do not build until resolved.**
+
+**Engineering pins (patchable at build):**
+1. **Units undefined.** `observed_at` is an ISO-8601 `str`, `uncertainty_ms` is
+   ms, `valid_until` ISO — the spec never says how they combine. Pin: parse ISO
+   → epoch ms (or ns), uncertainty in ms, one common unit; a raw-ms-vs-seconds
+   mix is silently wrong by 1000×.
+4. **`policy` shape + precedence undeclared.** "allowed skew" is never a defined
+   field; precedence when ε both straddles T *and* exceeds max-skew is unstated.
+5. **`blocked_not_yet_valid` off-table.** Needs a claim `valid_from`/`issued`
+   not in the (t, ε, T) table; uses a point `now` vs the `t±ε` interval used
+   elsewhere; ordering vs the trichotomy unstated.
+
+**Design decisions (need a ruling before build — authority-relevant):**
+2. **`unknown` uncertainty → which verdict?** `t ± ε` is uncomputable when ε is
+   `unknown`. Spec prohibits a flattering default but names no verdict. Proposed
+   (fail-honest): `unknown` → `indeterminate_under_clock_policy` (the witness
+   cannot distinguish; that is what the gray zone is for), never `current`;
+   `blocked_clock_uncertain` stays for a *measured* ε wider than allowed skew.
+   Operator ruling wanted.
+3. **Anti-laundering needs a MECHANISM, not prose (the crux).**
+   `blocked_timestamp_laundering` / `blocked_self_attested_freshness` require the
+   evaluator to know a timestamp's provenance, but `freshness_verdict(claim_interval,
+   wall_witness, policy)` has no provenance field and a `WallWitness` is a struct
+   any caller can build from the claim's own `observed_at`. Proposed: add an
+   `actor`/provenance field to the evaluator's clock witness (or take the
+   evaluator witness as a distinct typed input the claim cannot populate) so the
+   refusal is type-enforceable — "the claim is not its own clock" becomes a
+   compile/type fact, not a comment. Operator ruling wanted (it changes the
+   `WallWitness` type / the function contract).
+
+**Verdict: RATIFICATION HELD.** Layer A returns to `filed` pending the two design
+rulings; the three engineering pins fold in at build. Layer B (hero revision +
+corpus 08/09 re-freeze) remains a separate later slice.

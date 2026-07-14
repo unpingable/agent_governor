@@ -10,8 +10,8 @@
  "note": "Capability is not the scarce resource; attention-shaped capability is. The vendor recon (model names, prices) is deployment config \u2014 the tier abstraction is the doctrine. The A/B (fable-master vs opus-master+fable-audit) is accumulating in the loop's own receipt trail; let the ledger settle it. BEHIND LAUNCH.",
  "open_items": "not verified against a canonical source this pass",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
-  "confidence": "UNKNOWN"
+  "date": "2026-07-14",
+  "basis": "telemetry reconciliation: ref docs/loop-protocol.md \u00a712 + forcing receipt resolve; not built; still filed",
+  "confidence": "CURRENT"
  }
 }

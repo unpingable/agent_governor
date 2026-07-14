@@ -10,8 +10,8 @@
  "note": "Cross-repo. Do NOT unilaterally fence: composes with linearaccountant hands-off doctrine.",
  "open_items": "not verified against a canonical source this pass",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
-  "confidence": "UNKNOWN"
+  "date": "2026-07-14",
+  "basis": "telemetry reconciliation: ref docs/campaigns/constellation-reconciliation/INVENTORY.md \u00a73 resolves; not in feature-history; still filed",
+  "confidence": "CURRENT"
  }
 }

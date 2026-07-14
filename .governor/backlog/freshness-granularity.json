@@ -10,8 +10,8 @@
  "note": "Ruling 2026-07-03: keep single kind + typed freshness_subcase now (Lean correspondence via receipt diagnostic, no new AG public kinds). AG vocab remains coarser than Lean Freshness [1.0] by design until a consumer forces the split. B2 refinement 2026-07-04 (lean HEAD 84d6d24): the mismatch is 5-vs-4 \u2014 Lean proves five negative theorems (opaque Time.le splits the two TemporallyCoherent failure directions: incoherent_not_fresh vs not_precedes_not_fresh); AG's incoherent_interval folds both. Any future split must decide the fold explicitly (the directions collapse in a total order, which AG's monotonic readings satisfy).",
  "open_items": "not verified against a canonical source this pass",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
-  "confidence": "UNKNOWN"
+  "date": "2026-07-14",
+  "basis": "telemetry reconciliation: ref transition-kernel-pickup/INVENTORY.md resolves; not built; still filed gap",
+  "confidence": "CURRENT"
  }
 }

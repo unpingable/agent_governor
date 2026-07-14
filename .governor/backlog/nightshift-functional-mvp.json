@@ -3,14 +3,15 @@
  "kind": "campaign",
  "spec_ref": "docs/campaigns/nightshift-functional-mvp/STATUS.md",
  "priority_tier": 1,
- "status": "in_progress",
- "effort_band": "L",
+ "status": "blocked",
+ "effort_band": "M",
  "canonical_source": "docs/campaigns/nightshift-functional-mvp/STATUS.md + docs/PROGRAM_LEDGER.md",
- "open_items": "approval-binds-plan_ref is the ruled NEXT; ~35% of lane remains per campaign's own gap assessment (65% exists; 6+1 packets); grant-use track S1-S7 CLOSED 2026-07-13",
+ "open_items": "STALE-CORRECTED 2026-07-14: approval-binds-plan_ref is CLOSED (seam B, AG 5a0bca3 + producer 16ea68a), NOT the ruled NEXT. Lane state: NS-0 done; NS-1 refusal-registry packet STAGED, awaiting the operator's approval act to admit (post-approval path proven sound). No AG-buildable authority slice is currently ruled here; the remaining testimony adapters are DEFERRED behind an operator ruling (PROGRAM_LEDGER immediate-backlog #2-5). Was falsely surfaced as a tier-1 hot front citing approval as NEXT.",
  "repo": "agent_gov",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "date": "2026-07-14",
+  "basis": "approval-binds-plan_ref CLOSED this session; nightshift STATUS (NS-0 done, NS-1 staged for operator approval); PROGRAM_LEDGER testimony items DEFERRED",
   "confidence": "CURRENT"
- }
+ },
+ "wake_condition": "operator approval act to admit NS-1 (born-candidate; approval_ref clears on the operator's act); + a ruling to open the DEFERRED testimony-adapter packets (PROGRAM_LEDGER #2-5)"
 }

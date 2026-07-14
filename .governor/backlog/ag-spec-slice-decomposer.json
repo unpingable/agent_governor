@@ -8,10 +8,10 @@
  "status": "filed",
  "admission_boundary_test": "required",
  "notes": "CANDIDATE-SLICE COMPILER (name is load-bearing: compilers don't ship the binary). Decomposes architecture/doctrine docs into candidate spec_slices. Proposes, never admits (\u00a78 boundary \u2014 slicing is adjudication-adjacent: it decides review grain). HitL clarification: typed, BATCHED (one batch, never serial drip), no defaults on custody questions (unanswered = parked), answers become operator-attested provenance in the spec (derived-from-docs vs resolved-by-fiat). Ships shadow-mode first: NQ doctrine doc \u2192 proposed cuts vs operator's cuts \u2192 calibration receipt (matched/over-sliced/under-specified/custody-ambiguity-correctly-parked \u2014 calibrating slice judgment, not codegen; the instrument measures the calibrator too). Three pinning tests demanded: proposal/admission wall; custody-question no-default; batch clarification. Composes with loop-as-governed-workflow W2 promotion. Surfaces: workflow lives in AG; maude hosts clarification (operator-attested by the right door), phosphor displays status. BEHIND LAUNCH \u2014 order: corpse, interrogation, rolling, then the compiler.",
- "open_items": "not verified against a canonical source this pass",
+ "open_items": "NO spec_ref \u2014 under-specified; needs a spec home before it is actionable. Verify/rescope before relying.",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "date": "2026-07-14",
+  "basis": "telemetry reconciliation: no spec_ref, cannot verify against a source \u2014 honestly UNKNOWN pending a spec",
   "confidence": "UNKNOWN"
  }
 }

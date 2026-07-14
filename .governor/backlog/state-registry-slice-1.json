@@ -10,8 +10,8 @@
  "note": "DO NOT START YET. Boundaries from the spec are load-bearing: registry status != authority, declared != observed != execution, .governor/ is projection cache not doctrine. Building a records office because the word 'registry' was said is the quarry calling (cf. loop-as-governed-workflow.json).",
  "open_items": "not verified against a canonical source this pass",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
-  "confidence": "UNKNOWN"
+  "date": "2026-07-14",
+  "basis": "telemetry reconciliation: ref specs/gaps/GOV_GAP_STATE_REGISTRY_001.md resolves; not built; still filed build_slice",
+  "confidence": "CURRENT"
  }
 }

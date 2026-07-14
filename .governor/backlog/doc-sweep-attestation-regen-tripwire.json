@@ -9,8 +9,8 @@
  "note": "Tidiness tier \u2014 the regen script exists and the validator fails closed correctly; this only shortens detection latency.",
  "open_items": "not verified against a canonical source this pass",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
-  "confidence": "UNKNOWN"
+  "date": "2026-07-14",
+  "basis": "telemetry reconciliation: scar commit 0ddcf82 exists; attestation-regen tripwire not built; still filed spec_slice",
+  "confidence": "CURRENT"
  }
 }

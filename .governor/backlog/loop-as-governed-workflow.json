@@ -10,8 +10,8 @@
  "note": "DO NOT START. Building a workflow engine instead of running the loop is the quarry calling again.",
  "open_items": "not verified against a canonical source this pass",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
-  "confidence": "UNKNOWN"
+  "date": "2026-07-14",
+  "basis": "telemetry reconciliation: ref docs/loop-protocol.md \u00a77 resolves; not built; still filed build_slice",
+  "confidence": "CURRENT"
  }
 }

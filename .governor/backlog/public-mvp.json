@@ -3,15 +3,16 @@
  "kind": "campaign",
  "spec_ref": "docs/campaigns/public-mvp/CAMPAIGN.md",
  "priority_tier": 1,
- "status": "in_progress",
- "effort_band": "M",
+ "status": "blocked",
+ "effort_band": "S",
  "canonical_source": "docs/campaigns/public-mvp/STATUS.md",
- "open_items": "Sprint 5 (front door + Fable doc-coherence + launch); parallel lanes P (porter v0.1), S (spine OQ-1..5 ratification), U (gov-webui desk mode)",
+ "open_items": "STALE-CORRECTED 2026-07-14: Sprint 5 BUILD closed 2026-07-05 (front door, constellation map page, coherence pass, launch checklist) and the owed independent 20b sweep DONE (7 findings applied, site 52413b4). Remaining = OPERATOR/LAUNCH acts only, all push- or operator-gated (fresh-clone operator repeat, spine OQ-1/2, site deploy, public mint). NO AG-buildable work remains in this campaign. Was falsely surfaced as a tier-1 hot front.",
  "note": "Sprints 1-4 CLOSED by 2026-07-05.",
  "repo": "agent_gov",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "date": "2026-07-14",
+  "basis": "launch-checklist.md (20b DONE 2026-07-05, 52413b4; DoD remaining are operator acts) vs stale STATUS \u00a720b",
   "confidence": "CURRENT"
- }
+ },
+ "wake_condition": "operator launch acts (push window + operator-only): fresh-clone operator run, spine OQ-1/OQ-2 ratification, site deploy, public claim mint"
 }

@@ -218,15 +218,13 @@ ratification act pending)
   maude `3b68a1a`, AG integration `65a39a8` — contract suite 8-fail → 50
   green; porter `7d4a686`; vscode `43f283e` — U5 verified vs 2.8.1, 176
   tests; site limits paragraph `d4b61e3`). NQ items 7–10 remain offers.
-- **20b Reconciliation sweep — PARTIAL.** The independent Opus sweep died
-  on the MONTHLY SPEND LIMIT before reporting. Mechanical sweep run inline
-  instead (grep classes): gemini-as-live CLEAN; NQ-required CLEAN; site
-  internal links CLEAN; two residues found + fixed (leftover "one mutation
-  door" phrases in gov-webui code comments → `006bfeb`; dead
-  `~/git/scheduler` path in two internal AG docs → this commit).
-  **OWED: the independent-eyes sweep re-run** (launch-checklist act 6) —
-  the integrator authored much of the swept text and does not green its
-  own gate.
+- **20b Reconciliation sweep — DONE 2026-07-05** (superseding the earlier
+  PARTIAL note below; reconciled 2026-07-14). The independent-eyes re-run
+  completed: 7 findings, all applied; site pushed `52413b4` (positioning intro
+  + sweep fixes). See launch-checklist act 6. _(Historical: the first Opus
+  sweep died on the monthly spend limit; a mechanical grep-class sweep ran
+  inline — gemini-as-live/NQ-required/site-links CLEAN, two residues fixed
+  `006bfeb`; the owed independent re-run then landed at 52413b4.)_
 - **21 Launch checklist + DoD walk — DONE** (`launch-checklist.md`, this
   commit): 8 of 10 DoD criteria ☑; remaining ☐ are operator acts
   (ratification; operator fresh-clone run; desk live smoke; 20b re-run;

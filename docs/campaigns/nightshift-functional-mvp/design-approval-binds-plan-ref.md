@@ -301,3 +301,30 @@ build, not done unilaterally.
   NS-1/NS-1R bytes untouched; a re-run is a successor plan. Witness *content*
   format (`{witness_version, decision, plan_ref}`) is operator-minting tooling —
   AG parses it; producing bound witnesses for real NS runs is downstream.
+
+## Witness producer (completeness follow-on, 2026-07-14)
+
+The slice above defined the witness *format* AG enforces but left nothing that
+*produced* one — inert for real runs until the operator can mint a bound
+witness. Now shipped:
+
+- `src/governor/runtime/approval_witness.py` — `build_approval_witness(plan, decision)`
+  mints the bound witness (`plan_ref = sha256(plan bytes)`, canonical JSON,
+  reuses the verifier's version/decision constants — no format drift);
+  `write_approval_witness(...)` writes it to the witness directory maude's
+  resolver reads, keyed by `sanitize_ref(approval_ref)` (mirrors
+  `maude/plan/witness.py`); refuses to overwrite an existing approval act.
+- CLI: `governor runtime approve-plan <plan_file> --ref <approval_ref>
+  --witness-dir <dir> [--decision approve]` — running it IS the operator's
+  approval act.
+- **Round-trip invariant (the load-bearing test):** a witness minted for plan P
+  verifies for P and refuses beside any other plan (`tests/test_approval_witness.py`,
+  11 tests incl. the CLI). **Cross-repo drive PASSED:** AG producer → maude's
+  real `parse_plan_envelope` + `project_execution_request` → AG verifier accepts,
+  all three `plan_ref`s identical; replay refuses. maude is unchanged (its
+  resolver is format-agnostic — it returns bytes; the witness format is AG
+  semantics).
+- **Still downstream (not this):** witness *authenticity* (that a witness
+  reflects a recorded, authorized operator decision — signing/attestation) is
+  standing/testimony territory. Running the producer is the approval act; a
+  governed signing layer is future work, per the slice non-goals.

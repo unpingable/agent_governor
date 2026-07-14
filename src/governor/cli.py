@@ -19578,6 +19578,54 @@ def runtime_group():
     pass
 
 
+@runtime_group.command("approve-plan")
+@click.argument("plan_file", type=click.Path(exists=True, dir_okay=False))
+@click.option("--ref", "approval_ref", required=True,
+              help="The plan's approval_ref (the governance act the witness records)")
+@click.option("--witness-dir", required=True, type=click.Path(file_okay=False),
+              help="Directory the plan runner's witness resolver reads")
+@click.option("--decision", default="approve", show_default=True,
+              help="'approve' authorizes; any other value records a non-authorizing decision")
+@click.option("--json", "as_json", is_flag=True, help="JSON output")
+def runtime_approve_plan(plan_file: str, approval_ref: str, witness_dir: str,
+                         decision: str, as_json: bool) -> None:
+    """Mint an approval witness BOUND to a plan's exact bytes (seam B).
+
+    Writes a witness to WITNESS_DIR keyed by --ref that the governor will accept
+    ONLY for this plan: a plan citing another plan's witness is refused. Running
+    this command IS the operator's approval act. It does not overwrite an
+    existing witness at that ref.
+    """
+    from pathlib import Path
+
+    from .runtime.approval_witness import build_approval_witness, write_approval_witness
+
+    plan_bytes = Path(plan_file).read_bytes()
+    witness = build_approval_witness(plan_bytes, decision)
+    try:
+        dest = write_approval_witness(witness_dir, approval_ref, plan_bytes, decision)
+    except FileExistsError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if as_json:
+        import json
+        click.echo(json.dumps({
+            "witness_path": str(dest),
+            "approval_ref": approval_ref,
+            "plan_ref": witness.plan_ref,
+            "approval_witness_digest": witness.approval_witness_digest,
+            "decision": decision,
+        }, indent=2))
+    else:
+        click.echo(f"Minted approval witness: {dest}")
+        click.echo(f"  plan_ref:  {witness.plan_ref}")
+        click.echo(f"  decision:  {decision}")
+        click.echo(f"  digest:    {witness.approval_witness_digest}")
+        if decision != "approve":
+            click.echo("  NOTE: decision is not 'approve' — the governor will "
+                       "refuse this witness (it does not authorize).")
+
+
 # =============================================================================
 # Constraint Gate (formal admissibility via Z3 verifier)
 # =============================================================================

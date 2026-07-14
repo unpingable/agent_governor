@@ -3,17 +3,16 @@
  "kind": "spec_slice",
  "spec_ref": "docs/campaigns/nightshift-functional-mvp/design-approval-binds-plan-ref.md",
  "priority_tier": 1,
- "status": "blocked",
+ "status": "filed",
  "effort_band": "M",
  "canonical_source": "docs/PROGRAM_LEDGER.md (the ONE ruled NEXT)",
  "forcing_case": "a plan may replay another plan's approval witness (S6 sandwich finding 2)",
- "open_items": "RULED shape (witness-carries-plan_ref) + migration banked. Gate 2 escape-count found 6 escapes: 4 pinnable (witness format, decision vocab, fail-closed witness_bytes, witness_version); #3/#4 revealed the binding check is NOT AG-local (plan bytes at maude admit_for_execution; AG handler gets caller-supplied source_plan_digest an attacker can forge) -> cross-repo authority-placement decision, build BLOCKED.",
+ "open_items": "ALL GATES CLEARED (build-ready, noted for tomorrow). Shape=witness-carries-plan_ref; seam=B (AG re-hashes exact plan_bytes it's given; caller digest is a consistency assertion only); migration=no grandfather. Escape-count found 6, resolved (4 pinned + seam ruled). Build = wire-contract (execution_request carries bounded plan_bytes, maude-coordinated) + AG re-hash + 8 pins + snapshot-to-immutable (S7 scar) + adversarial sandwich. Re-run escape-count to zero before dispatch.",
  "repo": "agent_gov",
  "reconciled": {
   "date": "2026-07-13",
-  "basis": "Gate 1 ruling banked (583b24f); Gate 2 escape-count found the AG/maude seam decision (design-approval-binds-plan-ref.md Gate 2 section)",
+  "basis": "Gate 1 ruling + Gate 2 escape-count + seam ruling B all banked in design-approval-binds-plan-ref.md; loop next_action carries the build sequence",
   "confidence": "CURRENT"
  },
- "note": " [2026-07-13] queued behind continuity as the loop's authority-semantics exam.",
- "wake_condition": "operator seam ruling: where witness.plan_ref==sha256(plan_bytes) is enforced (maude admit_for_execution AG-trusts vs plan bytes cross to AG for independent re-hash)"
+ "note": " [2026-07-13] queued behind continuity as the loop's authority-semantics exam."
 }

@@ -45,12 +45,15 @@ plan
    once, don't re-fetch);
 5. replaying that witness beside any *other* plan refuses.
 
-**Grounding (where this lands):** `daemon.py:~3518` already does check (1) —
-`sha256(witness_bytes) == approval_witness_digest`. Today it then activates. The
-build adds checks (2)+(3): parse witness content, verify `decision` authorizes
-and `witness.plan_ref == request.source_plan_digest` (the plan-byte digest).
-Check (4) = compute over the one `witness_bytes` already resolved; (5) is the
-negative test.
+**Grounding (where this lands) — see the Seam ruling (B) below; this note is
+superseded by it.** `daemon.py:~3518` already does check (1) —
+`sha256(witness_bytes) == approval_witness_digest`. The build does NOT trust the
+caller-supplied `source_plan_digest` as the plan identity (escape #3). Per seam
+ruling B, `execution_request` carries the exact `plan_bytes`; AG computes
+`actual_plan_ref = sha256(plan_bytes)` itself and requires
+`witness.plan_ref == actual_plan_ref == source_plan_digest` (the caller digest
+is a consistency assertion only). Check (4) = one resolved, snapshotted
+`witness_bytes` copy; (5) is the negative regression.
 
 **Hash-cycle caveat (pinned, operator):** ensure `approval_ref` can be allocated
 independently of witness content. If `approval_ref` were itself a content digest
@@ -118,8 +121,10 @@ semantic meaning smuggled into reference strings.
   Contract shape ruled = witness-carries-plan_ref (shape (ii) rejected);
   migration disposition ruled = no grandfather aperture, successors not in-place
   rewrites. Hash-cycle caveat pinned.
-- **Gate 2 — escape-count pass (2026-07-13): 6 escapes. Build BLOCKED on a
-  cross-repo seam decision (below); the other 4 are pinnable engineering.**
+- **Gate 2 — escape-count pass (2026-07-13): 6 escapes → seam RULED (B),
+  build-ready.** The load-bearing #3/#4 became the seam decision, ruled B
+  (see "Seam ruling" section); the other 4 are pinnable engineering (below). A
+  confirmatory escape-count over the fully-pinned spec runs before dispatch.
   - **#1 witness content format** — no wire format pinned (JSON? canonical-JSON?
     key names? encoding? `witness_bytes` is str-or-bytes at daemon L3520). *Pin
     at build:* canonical-JSON, keys `{witness_version, decision, plan_ref}`,
@@ -153,7 +158,81 @@ semantic meaning smuggled into reference strings.
       room may claim."
     - Having AG re-hash requires the plan bytes to cross to AG's grant-binding
       step (a wire-contract change), so AG independently verifies.
-    This is a cross-repo authority-placement decision (custody-adjacent). **NOT
-    resolved unilaterally.** Build blocked until ruled.
+    This is a cross-repo authority-placement decision (custody-adjacent).
+    **RULED (operator, 2026-07-13): B — AG re-hashes over exact bytes.** See the
+    "Seam ruling" section below.
   - **Not escaping:** hash-cycle caveat (clear negative guard); TOCTOU/resolve-once
     (AC6 + single witness_bytes copy).
+
+## Seam ruling (operator, 2026-07-13): B — AG re-hashes over exact bytes
+
+**Chosen: B.** AG re-hashes the exact plan bytes supplied with the grant-binding
+request. **Not B′** (AG verifies a content-addressed reference): B′ solves
+"don't trust maude's digest" by trusting an as-yet-unruled retrieval substrate
+(resolver identity/availability, immutable-retrieval semantics, custody of
+returned bytes, disappearance behavior, a new TOCTOU seam) — that is trust
+relocation, not verification. **A is out** — if maude alone verifies the
+relation, AG accepts maude's conclusion about an authority predicate rather than
+adjudicating it.
+
+### The contract
+
+```text
+maude reads exact plan bytes once
+  → computes its local plan_ref
+  → sends exact immutable plan_bytes + approval witness_bytes to AG
+
+AG (grant-binding):
+  actual_plan_ref = sha256(plan_bytes)          # AG's own hash of the bytes it was given
+  require source_plan_digest == actual_plan_ref  # caller digest is a CONSISTENCY ASSERTION, never the authority basis
+  require witness.plan_ref     == actual_plan_ref
+  require witness decision / version / authenticity valid
+  mint or refuse
+```
+
+The caller-supplied digest becomes a **consistency assertion**, never the
+authority basis. Authority-critical identity is established by AG over the exact
+bytes, independently.
+
+### Pins (required before/for build)
+
+1. Hash the **original bytes**, not parsed or reserialized YAML.
+2. **Snapshot both `plan_bytes` and `witness_bytes` to immutable bytes
+   immediately** at request construction — a digest-verified *mutable* buffer is
+   not a frozen witness (repeat firing of the S7 mutable-verified-buffer scar;
+   `~/.claude/.../scar_mutable_verified_buffer.md`). Mutation after request
+   construction cannot change either hash input.
+3. Refuse if either `plan_bytes` or `witness_bytes` is absent for the new
+   witness version (fail-closed — closes escape #5's fail-open guard).
+4. Refuse unless claimed digest, AG-computed digest, and `witness.plan_ref` are
+   **all three identical**.
+5. Replaying Plan A's witness with Plan B bytes refuses **even if the caller
+   lies about `source_plan_digest`** (the load-bearing regression).
+6. Unknown witness versions refuse (escape #6).
+7. Legacy (pre-binding) witnesses do not silently enter the new path
+   (composes with the migration ruling — no grandfather aperture).
+8. A sane **size bound** on transmitted plan bytes ("plans, not Blu-rays").
+
+### The general principle (candidate doctrine — composes with predicate-witness)
+
+> Authority-critical identity is established by AG over exact evidence bytes
+> presented in the adjudication request. References and caller-supplied digests
+> may locate or cross-check evidence, but cannot substitute for independent
+> verification.
+
+Firing case for why the ceremony mattered: the escape-count caught code that
+would *visually* implement the ruling while *semantically* checking an
+attacker-controlled restatement of it (`witness.plan_ref == source_plan_digest`,
+both caller-supplied) — the kind of check that looks reassuring in review.
+
+### B′ later (transport optimization only)
+
+B′ can become a *carriage* optimization once the constellation has a governed
+content-addressed artifact service whose contract AG is authorized to rely upon.
+The logical rule stays B — AG obtains bytes and hashes them independently; only
+the transport changes. Not now; not part of this slice.
+
+**Wire-contract implication (for the build):** `execution_request` (maude→AG)
+must carry `plan_bytes` (bounded), not just `source_plan_digest`. That is a
+plan-envelope contract change coordinated with maude — flagged, sequenced in the
+build, not done unilaterally.

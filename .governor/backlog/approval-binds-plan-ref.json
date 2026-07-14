@@ -7,11 +7,11 @@
  "effort_band": "M",
  "canonical_source": "docs/PROGRAM_LEDGER.md (the ONE ruled NEXT)",
  "forcing_case": "a plan may replay another plan's approval witness (S6 sandwich finding 2)",
- "open_items": "spec_slice framing WRITTEN 2026-07-13 (problem + two candidate contract shapes + migration story). CUSTODY-AFFECTING: operator must rule the contract shape (i/ii) + migration disposition BEFORE build. Then escape-count -> build_slice + codex sandwich.",
+ "open_items": "RULED 2026-07-13 (witness-carries-plan_ref; no grandfather aperture; hash-cycle pinned). Fix is localized: daemon.py ~3518 add decision+plan_ref checks after the authenticity check; witness content carries plan_ref+decision; refusal approval_plan_ref_mismatch; NS-1 replay regression. NEXT: escape-count -> build_slice + sandwich.",
  "repo": "agent_gov",
  "reconciled": {
   "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "basis": "operator contract-shape + migration ruling banked in design-approval-binds-plan-ref.md (Gate 1 done); escape-count Gate 2 pending",
   "confidence": "CURRENT"
  },
  "note": " [2026-07-13] queued behind continuity as the loop's authority-semantics exam."

@@ -2,18 +2,18 @@
  "id": "clock-witness-wall-freshness",
  "repo": "agent_gov",
  "kind": "build_slice",
- "spec_ref": "working/clock-witness-spec.md (three-valued wall freshness over \u00b1x bounds: current/expired/indeterminate-straddle; refusals blocked_timestamp_laundering + blocked_self_attested_freshness)",
- "forcing_case": "pending \u2014 fires when a wall-clock freshness claim becomes load-bearing (e.g. a validity-interval check on a real credential, or multi-host standing)",
+ "spec_ref": "working/clock-witness-spec.md (three-valued wall freshness over ±x bounds: current/expired/indeterminate-straddle; refusals blocked_timestamp_laundering + blocked_self_attested_freshness)",
+ "forcing_case": "pending — fires when a wall-clock freshness claim becomes load-bearing (e.g. a validity-interval check on a real credential, or multi-host standing)",
  "priority_tier": 2,
- "status": "in_progress",
+ "status": "done",
  "acceptance": "Per the spec'd ratification (4 amendments): measured-or-unknown uncertainty; three-valued freshness incl. indeterminate; pinning tests for timestamp-laundering and self-attested-freshness.",
- "note": "Spec'd, deliberately not built \u2014 the hero's predicate is the monotonic gap and does not consult wall freshness.",
+ "note": "Spec'd, deliberately narrow — the hero's predicate is the monotonic gap and does not consult wall freshness. freshness_verdict (Layer A) is a SEPARATE temporal boundary; wiring it into the hero would be a new semantic seam (Layer C), not completion of this slice.",
  "effort_band": "M",
  "canonical_source": "working/clock-witness-spec.md",
- "open_items": "LAYER A BUILT 2026-07-14 (freshness_verdict + three-valued trichotomy + anti-laundering custody in clock_witness.py; escape-count 5->4->2->0, sandwich 0 findings, 16 crime-table tests). LAYER B remains a separate later slice: revise the shipped hero StandingWindow (standing_spendability.py) + re-freeze golden corpus 08/09 + demo surface.",
+ "open_items": "",
  "reconciled": {
   "date": "2026-07-14",
-  "basis": "Layer A built via gov-loop: operator ruled 2 design decisions; escape-count to zero (4 passes); adversarial sandwich 0 exploitable; 30+47 tests green",
+  "basis": "CLOSED. Layer A built via gov-loop (ad7eddc): freshness_verdict + three-valued trichotomy + anti-laundering custody in clock_witness.py; escape-count 5->4->2->0; adversarial sandwich 0 exploitable; 16 crime-table tests. Layer B (hero StandingWindow structured clock readings + corpus 08/09 re-freeze + demo surface) found ALREADY BUILT on independent reverification 2026-07-14 — it landed incrementally in June (1a0e6a5 monotonic gap basis, 1ddd781 typed freshness_subcase) + the demo/interrogate commits, NOT a pending obligation. Reverification receipts: standing_spendability.StandingWindow uses MonotonicReading/WallWitness; live drill builds it (drill_runner.py:408) with display-only wall + honestly-unknown uncertainty; corpus 08/09 on-disk sha256 == MANIFEST (9ee6639.../8fbd696...); test_corpus_contract reproduces 08's expected_receipt_block against the LIVE chain with an attested monotonic gap_basis; 91 passed/12 skipped exit 0 across corpus+clock+freshness+spendability+drill. Corpus deliberately NOT churned. No ceremonial escape-count run (no modification to gate). This was a completion-redshift event: the spec text carried a false future obligation for work already shipped.",
   "confidence": "CURRENT"
  }
 }

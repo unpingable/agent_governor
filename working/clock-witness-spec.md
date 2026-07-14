@@ -414,6 +414,44 @@ findings** (verdict logic sound, custody honest-not-overclaimed); tests
 pins) + existing clock/standing/drill green (30 + 47). The monotonic gap surface
 (`elapsed_ns`) is untouched.
 
-**Layer B remains a separate later slice:** revise the shipped hero
-`StandingWindow` (`standing_spendability.py`) to carry structured clock readings,
-re-freeze golden corpus 08/09, render the demo surface. Not built here.
+**Layer B — CLOSED, previously implemented, independently reverified 2026-07-14.**
+Not built as a fresh slice: on reverification every Layer B obligation was already
+satisfied. The hero migration to the structured clock witness landed incrementally
+in June — `1a0e6a5` (monotonic gap basis for the temporal-lapse seam) and `1ddd781`
+(typed `freshness_subcase` on the spendability receipt) — plus the demo/interrogate
+commits. What was genuinely new on 2026-07-14 was Layer A (wall-freshness trichotomy
++ custody), which is correctly **NOT** wired into the hero: the hero's predicate is
+the monotonic *gap* (`standing exercised within the allowed gap?`), a deliberately
+separate temporal boundary from Layer A's civil-time validity question (`is a
+validity interval current under an evaluator-owned wall observation?`). Conflating
+them would quietly change the refusal semantics — that would be a new seam ("Layer C")
+requiring its own ruling, not completion of this slice (operator ruling 2026-07-14).
+
+Reverification receipts (each Layer B item, from §"What this revises in the shipped
+hero"):
+
+1. `StandingWindow` carries structured clock readings — `standing_spendability.py`
+   uses `MonotonicReading`/`WallWitness`; the live drill builds it at
+   `drill_runner.py:408` (`_mono` monotonic readings + display-only `WallWitness`,
+   `uncertainty_ms=None` honestly unknown). No `clock_basis`/bare-seconds costume
+   remains.
+2. Gap on monotonic ns, refuses `gap_basis_mismatch`/`monotonic_epoch_mismatch` —
+   `elapsed_ns` is the only licensed subtraction.
+3. Three-valued freshness *if the gate does validity-interval checking* — the gate
+   does the gap, not a validity check; correctly N/A (see the proof-seam
+   reconciliation, §6 RESOLVED).
+4. Corpus 08/09 clock-witness block + re-freeze — on-disk sha256 == MANIFEST
+   (`9ee6639…` / `8fbd696…`); `test_corpus_contract` reproduces 08's
+   `expected_receipt_block` **exactly against the live cooked-context chain** with an
+   attested monotonic `gap_basis`. Corpus deliberately **not** churned.
+5. `demo_refused_spend.py` renders the clock witness honestly — `gap_basis:
+   monotonic, source, epoch (sound: one source, one epoch)` + `wall [display_only]`.
+6. Proof citation reconciled — §6 RESOLVED (`expired_not_fresh` via the monotonic
+   single-epoch instantiation; honest residue recorded).
+
+Verification: `test_corpus_contract + test_clock_witness + test_clock_witness_freshness
++ test_standing_spendability + test_drill_temporal_lapse` → 91 passed, 12 skipped,
+exit 0. No ceremonial escape-count was run: escape-count gates a spec_slice
+*modification*, and there is no modification — the frozen artifacts already match the
+live chain. (A completion-redshift event: this spec text itself carried a false
+future obligation for work already shipped.)

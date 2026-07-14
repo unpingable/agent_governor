@@ -253,3 +253,167 @@ boundaries. **Do not build until resolved.**
 **Verdict: RATIFICATION HELD.** Layer A returns to `filed` pending the two design
 rulings; the three engineering pins fold in at build. Layer B (hero revision +
 corpus 08/09 re-freeze) remains a separate later slice.
+
+## Design rulings (operator, 2026-07-14) — build-ready; supersedes the HELD verdict
+
+Both design escapes ruled; the three engineering pins fold in with the interval
+semantics below. Layer A is build-ready pending an escape-count re-run to zero.
+
+### Ruling 1 — `unknown` uncertainty is OUTSIDE the freshness trichotomy
+
+`indeterminate_under_clock_policy` means precisely: a **measured, policy-admissible**
+uncertainty interval **straddles a validity boundary**. It is NOT the catch-all for
+"can't tell." `unknown` uncertainty is a different epistemic failure — there is no
+interval to classify — so it refuses, it does not render a freshness verdict.
+
+Interval semantics (explicit, symmetric):
+- claim validity is `[valid_from, valid_until)` — from inclusive, until exclusive.
+- evaluator observation is the closed interval `[t−ε, t+ε]`.
+
+Verdict order (first match wins):
+1. no evaluator observation supplied → `blocked_missing_clock_witness`.
+2. `ε` is `unknown` → `blocked_clock_uncertain`, reason `uncertainty_unknown`.
+3. `ε` measured but `> policy.max_skew_ms` → `blocked_clock_uncertain`, reason
+   `uncertainty_exceeds_policy`.
+4. measured, admissible `ε` (the ONLY domain that yields a freshness verdict):
+   - `t − ε ≥ valid_until` → `expired_under_clock_policy`.
+   - `t + ε < valid_from` → `blocked_not_yet_valid`.
+   - `valid_from ≤ t − ε` AND `t + ε < valid_until` → `current_under_clock_policy`.
+   - otherwise (observation straddles `valid_from` or `valid_until`) →
+     `indeterminate_under_clock_policy`.
+
+So the trichotomy is genuinely three-valued **within its measured-admissible
+domain**; `unknown`/`exceeds-policy`/`missing` are refusals of the *prerequisites*,
+kept distinct. (Resolves escapes #2, #4, #5.)
+
+### Ruling 2 — anti-laundering by CUSTODY + TYPE SEPARATION, not a field
+
+An `actor`/provenance field is evidence, not enforcement — a claim can fill out the
+evaluator's form correctly (a better clock costume). Enforce structurally instead:
+
+- `ClaimInterval` (`valid_from`, `valid_until`) — the ONLY thing derived from claim
+  data.
+- `EvaluatorWallObservation` — a **distinct internal type**, produced ONLY by an
+  evaluator-owned `ClockSampler` (factory) at evaluation time. **No `from_dict` /
+  deserialization path** — untrusted/claim data has no route to become one.
+- `freshness_verdict(claim_interval, evaluator_observation, policy)` accepts that
+  internal observation, never an arbitrary serialized `WallWitness` handed in
+  alongside the claim.
+- `actor` / `source` / provenance live in the **emitted receipt** — they document
+  the custody path; they do not create it.
+- Consequence: `blocked_timestamp_laundering` and `blocked_self_attested_freshness`
+  become **UNREPRESENTABLE** (the claim never receives the evaluator's form), not
+  runtime refusals. The pinning "crimes" become *type/API* tests: a claim's
+  timestamp cannot be passed as the evaluator observation; the fake evaluator clock
+  is injected through the `ClockSampler` interface, never via constructed "trusted"
+  JSON. (Resolves escape #3 — the crux.)
+- **Out of scope (separate seam):** if a clock witness ever crosses a process
+  boundary, authenticity/attestation is its own seam — do NOT invent a provenance
+  enum / miniature temporal PKI here.
+
+### Engineering pin 1 — units
+
+Parse ISO-8601 (`observed_at`, `valid_from`, `valid_until`) → epoch **milliseconds**
+(int); `uncertainty_ms` is already ms; one unit (ms) internally. No raw-ms-vs-seconds
+mixing. (The gap predicate stays on `monotonic_ns` — unaffected; this is the wall/
+civil freshness side only.)
+
+**Build order:** bank rulings (done) → rerun escape-count → build Layer A only if 0.
+
+### Build pins 2 (escape-count pass 2 → 3, 2026-07-14) — 4 residual holes closed
+
+Pass 2 (post-ruling) found 4 buildability escapes; patched here (engineering
+realizations of the rulings, no new ruling needed):
+
+- **P1 — validity bounds are mandatory (open-ended is out of Layer A).**
+  `ClaimInterval` requires BOTH `valid_from_ms` and `valid_until_ms` (ints).
+  Open-ended validity (`valid_until = None`, "valid forever after issue") is NOT
+  Layer A — a consumer needing it passes a far-future `valid_until`, or it lands
+  in a later slice. This keeps `freshness_verdict` total (no `None < t+ε` crash).
+  Degenerate `valid_until ≤ valid_from` falls to `expired` by first-match, which
+  is harmless and acceptable.
+- **P2 — `evaluator_observation` is `EvaluatorWallObservation | None`.** Branch 1
+  (`None → blocked_missing_clock_witness`) is live: an evaluator with no
+  configured/successful sampler passes `None`. The type is Optional; the missing
+  branch is not dead code.
+- **P3 — custody is a construction TOKEN, and the honest scope of "custody".**
+  Python has no private constructors, so "unrepresentable / compile fact"
+  OVERCLAIMS — a plain dataclass is directly instantiable and would let
+  `freshness_verdict(ci, EvaluatorWallObservation(observed_at=claim.observed_at,…))`
+  launder. Buildable mechanism: `EvaluatorWallObservation.__init__` requires a
+  module-private `_SAMPLER_TOKEN` sentinel that ONLY `ClockSampler` implementations
+  hold; direct construction without it raises. No `from_dict`/deserialization path
+  exists. **Honest threat scope (this is what custody delivers, stated plainly):**
+  this closes (a) untrusted/serialized *claim* data becoming an observation — the
+  real threat, since a claim arrives as data and deserializes to `ClaimInterval`
+  only, and (b) *accidental* in-process construction. It does NOT prevent the
+  trusted evaluator from *deliberately* importing the token and laundering — no
+  Python mechanism does, and that is out of the threat model (the evaluator is
+  trusted; the claim is not). So the two "crimes" are: untrusted-path-closed +
+  accidental-construction-fails-at-`__init__`; NOT a compile-time impossibility.
+  (Cross-process authenticity remains a separate seam, unchanged.)
+- **P4 — `ClockSampler` interface.** `class ClockSampler(Protocol): def sample(self)
+  -> EvaluatorWallObservation`. Concrete `SystemClockSampler(source: str,
+  uncertainty_ms: int | None = None)` stamps `observed_at_ms = int(time()*1000)`,
+  carries `source` + `uncertainty_ms` (None = honestly unknown), and mints the
+  observation with `_SAMPLER_TOKEN`. Test doubles implement the Protocol to inject
+  a fixed/fake clock — never by constructing "trusted" JSON.
+
+### Build pins 3 (escape-count pass 3 → 4, 2026-07-14) — return contract + closed enum
+
+Pass 3 confirmed P1–P4 close (custody scope honest, no overclaim). Two API-shape
+gaps, pinned from the spec's own doctrine (no new ruling):
+
+- **P5 — `freshness_verdict` RETURNS, never raises.** Signature:
+  `freshness_verdict(claim: ClaimInterval, obs: EvaluatorWallObservation | None,
+  policy: FreshnessPolicy) -> FreshnessResult`, where
+  `FreshnessResult(verdict: str, reason: str | None)` (frozen). It never raises
+  for any of the outcomes below — the *verdict layer preserves the trichotomy*
+  (spec doctrine: "so later someone can ask 'refused because stale, or because the
+  witness couldn't tell?'"); the GATE/policy layer decides which verdicts refuse.
+  `reason` is populated ONLY for `blocked_clock_uncertain`
+  (`uncertainty_unknown` | `uncertainty_exceeds_policy`); `None` otherwise.
+  (Distinct from the existing monotonic-gap functions, which DO raise
+  `GapBasisMismatch`/`MonotonicEpochMismatch` — the gap is a different surface.)
+- **P6 — one closed verdict enum; Ruling 1 names are authoritative.** The
+  complete, closed output set of `freshness_verdict.verdict`:
+  `current_under_clock_policy`, `expired_under_clock_policy`,
+  `blocked_not_yet_valid`, `indeterminate_under_clock_policy`,
+  `blocked_clock_uncertain`, `blocked_missing_clock_witness`. The pre-ruling
+  "Refusal vocabulary" / "Test crimes" tables above are HISTORICAL; where they
+  conflict, Ruling 1 wins — specifically `blocked_expired` is **superseded by
+  `expired_under_clock_policy`**. (`blocked_timestamp_laundering` /
+  `blocked_self_attested_freshness` are NOT in this enum — per P3 they are
+  prevented by construction custody, not returned as verdicts.)
+
+## Build outcome — Layer A BUILT (2026-07-14)
+
+Escape-count converged 5→4→2→0 (four passes; the two design escapes resolved by
+operator ruling 2026-07-14, the rest folded as pins). Built into
+`src/governor/clock_witness.py`:
+
+- `freshness_verdict(claim, observation, policy) -> FreshnessResult` — total,
+  never raises; the closed 6-verdict enum; `reason` only on
+  `blocked_clock_uncertain`. `unknown` uncertainty refuses (NOT `indeterminate`);
+  `indeterminate` reserved for a measured-admissible interval that straddles a
+  boundary; intervals `[valid_from, valid_until)` half-open vs `[t±ε]` closed.
+- `ClaimInterval` (claim-derived; `from_iso` → epoch ms), `FreshnessPolicy`
+  (`max_skew_ms`), `FreshnessResult`.
+- **Anti-laundering by custody:** `EvaluatorWallObservation` is token-gated
+  (`_SAMPLER_TOKEN`), minted only by a `ClockSampler` (`SystemClockSampler` +
+  Protocol), no deserialization path — so claim-as-data has no route to become
+  the evaluator's clock. Honest scope: closes the untrusted path + accidental
+  construction; deliberate in-process token import by the trusted evaluator is
+  out of the threat model (no compile-time impossibility claimed).
+- Hardening from the adversarial pass: negative `uncertainty_ms` refused at
+  construction (analogous to `elapsed_ns` refusing backwards readings).
+
+**Gates:** escape-count 0 (pass 4); adversarial sandwich **0 exploitable
+findings** (verdict logic sound, custody honest-not-overclaimed); tests
+`tests/test_clock_witness_freshness.py` (16, the crime table incl. the custody
+pins) + existing clock/standing/drill green (30 + 47). The monotonic gap surface
+(`elapsed_ns`) is untouched.
+
+**Layer B remains a separate later slice:** revise the shipped hero
+`StandingWindow` (`standing_spendability.py`) to carry structured clock readings,
+re-freeze golden corpus 08/09, render the demo surface. Not built here.

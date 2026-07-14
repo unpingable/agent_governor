@@ -3,16 +3,16 @@
  "kind": "spec_slice",
  "spec_ref": "~/git/continuity/docs/gaps/AUTHORING_TIER_UNMIGRATED_READ_GAP.md",
  "priority_tier": 1,
- "status": "filed",
+ "status": "done",
  "effort_band": "S",
  "canonical_source": "continuity repo (owner); census defect D6",
  "forcing_case": "continuity MCP returns 'no such column: authoring_tier' \u2014 governed-memory recovery path dead",
- "open_items": "spec_slice RATIFIED 2026-07-13 (4 escape-count passes 4->1->1->1). Fix = HYBRID: heal-on-writable-open (call _add_missing_columns) + defensive-degrade-on-read (Pin E2 semantics). build_slice READY to dispatch; its first task is the deferred reduction (which open-path raised + does a writable open reach the live store). Escalate to continuity owner if live store needs a manual one-time migration.",
+ "open_items": "CLOSED 2026-07-13. Fix: initialize() adds missing columns before schema index creation (continuity c937be0). Reduction falsified the spec's read-path hypothesis -> real cause was an initialize() ordering bug. Store self-heals on next MCP open. Live operator store not touched unilaterally (self-heals on restart).",
  "repo": "agent_gov",
  "reconciled": {
   "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "basis": "build_slice closed end-to-end via gov-loop; continuity c937be0 (fix+regression+spec outcome); suite 289 passed, 4 pre-existing env failures stash-confirmed unrelated",
   "confidence": "CURRENT"
  },
- "note": "[2026-07-13] gov-loop candidate_next_slice; diagnosed as read-path migration miss (continuity sqlite.py:2149 already names it). [2026-07-13] spec ratified via escape-count; build_slice ready. Loop demonstrated: passes caught 4 real holes + 1 self-inflicted patch bug + the read-only-write precondition + the contingent-self-heal overclaim."
+ "note": "[2026-07-13] gov-loop candidate_next_slice; diagnosed as read-path migration miss (continuity sqlite.py:2149 already names it). [2026-07-13] spec ratified via escape-count; build_slice ready. Loop demonstrated: passes caught 4 real holes + 1 self-inflicted patch bug + the read-only-write precondition + the contingent-self-heal overclaim. [2026-07-13] gov-loop's first end-to-end slice: spec_slice -> 4-pass escape-count ratify -> build reduce+fix+test -> AUDIT. Demonstrated the loop catches the master's own errors (schema_version pin injected in patching, caught by pass 2)."
 }

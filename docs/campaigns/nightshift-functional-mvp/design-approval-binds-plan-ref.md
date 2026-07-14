@@ -118,5 +118,42 @@ semantic meaning smuggled into reference strings.
   Contract shape ruled = witness-carries-plan_ref (shape (ii) rejected);
   migration disposition ruled = no grandfather aperture, successors not in-place
   rewrites. Hash-cycle caveat pinned.
-- **Gate 2 — escape-count pass over this ruled spec:** required to read 0
-  escapes before the build_slice dispatches. Pending.
+- **Gate 2 — escape-count pass (2026-07-13): 6 escapes. Build BLOCKED on a
+  cross-repo seam decision (below); the other 4 are pinnable engineering.**
+  - **#1 witness content format** — no wire format pinned (JSON? canonical-JSON?
+    key names? encoding? `witness_bytes` is str-or-bytes at daemon L3520). *Pin
+    at build:* canonical-JSON, keys `{witness_version, decision, plan_ref}`,
+    UTF-8; the digest is over those exact bytes. (Changes operator minting
+    tooling — already in Ripple.)
+  - **#2 `decision` vocabulary** — no closed set for "authorizes execution."
+    *Pin at build:* closed vocabulary, `decision == "approve"` authorizes; any
+    other value refuses (mirrors AC1's closed refusal).
+  - **#5 `witness_bytes` optional → fail-OPEN** — daemon L3519 runs the check
+    only `if witness_bytes is not None`; omit the witness and all binding skips.
+    *Pin at build:* witness_bytes MANDATORY for any plan requiring approval;
+    absent → refuse (fail-closed). This is arguably a latent bug in the current
+    code independent of this slice.
+  - **#6 `witness_version`** — shown, unchecked. *Pin at build:* known version
+    required; unknown → refuse.
+  - **#3 + #4 — the replay hole survives, and the fix is NOT AG-local (SEAM
+    DECISION, operator/architecture).** The ruled check is
+    `witness.plan_ref == sha256(exact current plan bytes)`. But the plan bytes
+    live at the plan-admission site (`admit_for_execution`, **maude-side**;
+    `work_container.py:601` computes `plan_ref = sha256(plan_bytes)`). AG's
+    daemon handler (L3505) only receives a **caller-supplied** `source_plan_digest`
+    — it has no plan bytes to hash. So `witness.plan_ref == source_plan_digest`
+    is satisfiable by an attacker who sets `source_plan_digest = witness.plan_ref`
+    while running a different plan. **The grounding note in this spec that said
+    "== request.source_plan_digest" was wrong — it weakened the ruling.** The
+    real question the ruling did not resolve: **where is
+    `witness.plan_ref == sha256(plan_bytes)` enforced, and does AG verify it
+    independently or trust maude's upstream admission?**
+    - Placing it only in maude's `admit_for_execution` = AG trusts a maude-supplied
+      digest for an authority decision, which cuts against "AG decides what the
+      room may claim."
+    - Having AG re-hash requires the plan bytes to cross to AG's grant-binding
+      step (a wire-contract change), so AG independently verifies.
+    This is a cross-repo authority-placement decision (custody-adjacent). **NOT
+    resolved unilaterally.** Build blocked until ruled.
+  - **Not escaping:** hash-cycle caveat (clear negative guard); TOCTOU/resolve-once
+    (AC6 + single witness_bytes copy).

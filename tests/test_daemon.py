@@ -5218,15 +5218,22 @@ class TestRuntimeGrantActivation:
     verify the witness digest (a forged digest is refused here), emit an
     activation receipt. Trust-labeled (declared-effects-only)."""
 
-    def _req(self, witness="op-approved-2026-07-10"):
+    def _req(self, plan_text="# nightshift plan\nplan_version: 1\n"):
+        # Seam B: a plan + a witness attesting the plan's exact byte hash.
+        plan_ref = "sha256:" + hashlib.sha256(plan_text.encode("utf-8")).hexdigest()
+        witness = json.dumps({
+            "witness_version": "approval-witness/v1",
+            "decision": "approve",
+            "plan_ref": plan_ref,
+        })
         wdig = "sha256:" + hashlib.sha256(witness.encode()).hexdigest()
         return {
             "write_paths": ["crates/nightshiftd/src/**"],
             "commands": [{"program": "cargo", "argv_prefix": ["test"]}],
-            "source_plan_digest": "sha256:plan",
+            "source_plan_digest": plan_ref,
             "approval_witness_digest": wdig,
             "horizon": "run",
-        }, witness
+        }, witness, plan_text
 
     async def _session(self, d):
         resp = await roundtrip(d, "runtime.session.create", {"backend_kind": "claude_code"})
@@ -5236,9 +5243,10 @@ class TestRuntimeGrantActivation:
     async def test_activate_mints_attaches_and_get_returns(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         sid = await self._session(d)
-        req, _ = self._req()
+        req, witness, plan_text = self._req()
         r = (await roundtrip(d, "runtime.grant.activate",
-                             {"session_id": sid, "execution_request": req}))["result"]
+                             {"session_id": sid, "execution_request": req,
+                              "witness_bytes": witness, "plan_bytes": plan_text}))["result"]
         assert r["grant_id"].startswith("sgr_")
         assert r["enforcement"] == "declared-effects-only"
         g = (await roundtrip(d, "runtime.grant.get", {"session_id": sid}))["result"]
@@ -5250,28 +5258,55 @@ class TestRuntimeGrantActivation:
     async def test_forged_witness_digest_refused(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         sid = await self._session(d)
-        req, _ = self._req()
+        req, _, plan_text = self._req()
         resp = await roundtrip(d, "runtime.grant.activate",
-            {"session_id": sid, "execution_request": req, "witness_bytes": "DIFFERENT"})
+            {"session_id": sid, "execution_request": req,
+             "witness_bytes": "DIFFERENT", "plan_bytes": plan_text})
         assert "error" in resp and "witness" in str(resp["error"]).lower()
 
     @pytest.mark.asyncio
-    async def test_matching_witness_bytes_verified(self, dispatcher_and_state):
+    async def test_plan_binding_verified(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         sid = await self._session(d)
-        req, witness = self._req()
+        req, witness, plan_text = self._req()
         r = (await roundtrip(d, "runtime.grant.activate",
-             {"session_id": sid, "execution_request": req, "witness_bytes": witness}))["result"]
-        assert r["witness_verified"] is True
+             {"session_id": sid, "execution_request": req,
+              "witness_bytes": witness, "plan_bytes": plan_text}))["result"]
+        assert r["plan_binding_verified"] is True
+
+    @pytest.mark.asyncio
+    async def test_approval_replay_refused_at_rpc(self, dispatcher_and_state):
+        """AC3 at the wire: a witness bound to plan A, run against plan B, with
+        the caller lying that source_plan_digest == A's digest → refused."""
+        d, _ = dispatcher_and_state
+        sid = await self._session(d)
+        req, witness, _plan_a = self._req(plan_text="# PLAN A\nplan_version: 1\n")
+        # attacker runs a different plan B but ships A's (req, witness) verbatim
+        resp = await roundtrip(d, "runtime.grant.activate",
+            {"session_id": sid, "execution_request": req,
+             "witness_bytes": witness, "plan_bytes": "# PLAN B - attacker\nplan_version: 1\n"})
+        assert "error" in resp
+        assert "approval_plan_ref_mismatch" in str(resp["error"])
+
+    @pytest.mark.asyncio
+    async def test_missing_plan_bytes_refused_fail_closed(self, dispatcher_and_state):
+        """#5: witness present but plan_bytes omitted → refused (no fail-open)."""
+        d, _ = dispatcher_and_state
+        sid = await self._session(d)
+        req, witness, _ = self._req()
+        resp = await roundtrip(d, "runtime.grant.activate",
+            {"session_id": sid, "execution_request": req, "witness_bytes": witness})
+        assert "error" in resp
 
     @pytest.mark.asyncio
     async def test_malformed_request_fails_closed(self, dispatcher_and_state):
         d, _ = dispatcher_and_state
         sid = await self._session(d)
-        req, _ = self._req()
-        req["source_plan_digest"] = ""  # missing digest -> ActivationError
+        req, witness, plan_text = self._req()
+        req["source_plan_digest"] = ""  # inconsistent digest -> refuse
         resp = await roundtrip(d, "runtime.grant.activate",
-                               {"session_id": sid, "execution_request": req})
+                               {"session_id": sid, "execution_request": req,
+                                "witness_bytes": witness, "plan_bytes": plan_text})
         assert "error" in resp
 
     @pytest.mark.asyncio
@@ -5285,7 +5320,8 @@ class TestRuntimeGrantActivation:
     async def test_activation_emits_receipt(self, dispatcher_and_state):
         d, state = dispatcher_and_state
         sid = await self._session(d)
-        req, _ = self._req()
-        await roundtrip(d, "runtime.grant.activate", {"session_id": sid, "execution_request": req})
+        req, witness, plan_text = self._req()
+        await roundtrip(d, "runtime.grant.activate", {"session_id": sid, "execution_request": req,
+                        "witness_bytes": witness, "plan_bytes": plan_text})
         receipts = list(state.receipt_system.receipt_store.all())
         assert any(getattr(r, "gate", None) == "grant_activation" for r in receipts)

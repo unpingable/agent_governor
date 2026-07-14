@@ -109,6 +109,33 @@ semantic meaning smuggled into reference strings.
    or the fresh-no-context-agent substitute — codex sandbox dead on this host).
    Exit codes observed; no ceremonial green.
 
+## Build pins (folded 2026-07-14, resolving the 4 engineering escapes)
+
+- **Witness wire format (#1):** `witness_bytes` is UTF-8 JSON, a single object
+  with (at least) `{"witness_version": str, "decision": str, "plan_ref":
+  "sha256:<64hex>"}`. AG **parses the exact received bytes** (`json.loads`) and
+  **never re-serializes** — the authenticity digest and `actual_plan_ref` are
+  over original bytes (pin 1). The three keys must be present with correct
+  types; extra keys tolerated (forward-compat); wrong shape → invalid.
+- **`decision` vocabulary (#2):** closed. `decision == "approve"` authorizes;
+  any other value → refuse (does not authorize).
+- **`witness_version` (#6):** known set `{"approval-witness/v1"}`; unknown → refuse.
+- **Mandatory bytes (#5, fail-closed):** BOTH `plan_bytes` and `witness_bytes`
+  must be present and non-empty for a v1 grant activation. Absent/empty → refuse.
+  (Closes the daemon's `if witness_bytes is not None` fail-open.)
+- **Size bound (pin 8):** `plan_bytes` ≤ 1 MiB, `witness_bytes` ≤ 64 KiB. Over → refuse.
+- **Refusal vocabulary (closed, 2 kinds):**
+  - `approval_plan_ref_mismatch` — the triple `source_plan_digest ==
+    sha256(plan_bytes) == witness.plan_ref` is not all-identical (the replay
+    defense; the slice's named refusal).
+  - `approval_witness_invalid` — every structural failure: missing/empty bytes,
+    size exceeded, authenticity digest ≠ `sha256(witness_bytes)`, non-JSON,
+    missing/mistyped keys, unknown `witness_version`, `decision != "approve"`.
+- **Placement:** the pure verifier `verify_approval_binds_plan(...)` runs in the
+  daemon's `runtime_grant_activate` (THE authority checkpoint, `daemon.py:3481`)
+  **before** `activate_execution_grant`; it snapshots both byte blobs to
+  immutable `bytes` at entry and reads them once (pins 2 + 6, TOCTOU closed).
+
 ## Non-goals
 
 - Not a general approval ontology. Not ration-schema expansion. Not supervisor /
@@ -123,8 +150,18 @@ semantic meaning smuggled into reference strings.
   rewrites. Hash-cycle caveat pinned.
 - **Gate 2 — escape-count pass (2026-07-13): 6 escapes → seam RULED (B),
   build-ready.** The load-bearing #3/#4 became the seam decision, ruled B
-  (see "Seam ruling" section); the other 4 are pinnable engineering (below). A
-  confirmatory escape-count over the fully-pinned spec runs before dispatch.
+  (see "Seam ruling" section); the other 4 are pinnable engineering (below).
+- **Gate 2b — confirmatory escape-count on the fully-pinned spec (2026-07-14):
+  0 escapes.** Verifier fully specified; all three replay paths (attacker
+  controls source_plan_digest / witness content beside another plan / omits
+  bytes) closed. One boundary-clarity residual, NOT a build-wrong: the
+  `sha256(witness_bytes) == approval_witness_digest` check is **integrity, not
+  authenticity** — a *forged* (not replayed) witness that self-hashes is an
+  upstream operator-minting concern, explicitly out of scope (non-goals: not
+  testimony adapters; witness authenticity is established where witnesses are
+  minted, NOT here). Wording corrected so no implementer reads "authentic" as
+  "vetted by AG." Digest-format pin: all three digests compared in the same
+  `sha256:<64hex>` form (normalize before compare); mismatch fails closed.
   - **#1 witness content format** — no wire format pinned (JSON? canonical-JSON?
     key names? encoding? `witness_bytes` is str-or-bytes at daemon L3520). *Pin
     at build:* canonical-JSON, keys `{witness_version, decision, plan_ref}`,
@@ -236,3 +273,30 @@ the transport changes. Not now; not part of this slice.
 must carry `plan_bytes` (bounded), not just `source_plan_digest`. That is a
 plan-envelope contract change coordinated with maude — flagged, sequenced in the
 build, not done unilaterally.
+
+## Build outcome (2026-07-14) — DONE, all gates green
+
+- **AG (authority):** `src/governor/runtime/approval_binding.py` — pure
+  `verify_approval_binds_plan()` implementing seam B (AG re-hashes exact
+  plan_bytes; `source_plan_digest == sha256(plan_bytes) == witness.plan_ref`,
+  all normalized; two closed refusals; snapshot-to-immutable; mandatory
+  fail-closed; size bounds). Wired into `daemon.py` `runtime_grant_activate`
+  BEFORE `activate_execution_grant`, replacing the `if witness_bytes is not
+  None` fail-open. `witness_verified` → `plan_binding_verified`.
+- **maude (wire lockstep):** `execution_request` now carries the exact
+  `plan_bytes` — `PlanEnvelope.source_text` (the bytes `plan_ref` hashes) →
+  `GrantActivationCall.plan_bytes` → `runtime_grant_activate(plan_bytes=…)` →
+  daemon `params["plan_bytes"]`. maude computes nothing AG trusts; AG re-hashes.
+- **Tests:** `tests/test_approval_binding.py` (18 — positive twin, replay-refused
+  even when the caller lies about source_plan_digest, missing/oversized/malformed/
+  unknown-version/non-approve/non-bytes all → closed refusals) + daemon
+  `test_approval_replay_refused_at_rpc` + `test_missing_plan_bytes_refused_fail_closed`
+  + updated grant fixtures/harness. Suites bare: **AG 16875 passed**, **maude 360
+  passed**.
+- **Sandwich:** fresh-agent adversarial review → **0 exploitable findings**
+  (replay requires a SHA-256 collision). Its one non-exploitable note (dict as
+  evidence bytes → raw TypeError) hardened to `approval_witness_invalid`.
+- **Migration:** unchanged legacy path refuses (mandatory bytes, no grandfather);
+  NS-1/NS-1R bytes untouched; a re-run is a successor plan. Witness *content*
+  format (`{witness_version, decision, plan_ref}`) is operator-minting tooling —
+  AG parses it; producing bound witnesses for real NS runs is downstream.

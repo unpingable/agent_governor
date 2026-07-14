@@ -38,16 +38,25 @@ class OpsScenario:
     expect: dict[str, str]
 
 
-def _grant_request(scenario: OpsScenario) -> tuple[dict, str]:
-    witness = f"operator approved {scenario.name}"
+def _grant_request(scenario: OpsScenario) -> tuple[dict, str, str]:
+    # Seam B (approval-binds-plan_ref): build a plan + a witness that attests the
+    # plan's exact byte hash. AG re-hashes plan_bytes and requires
+    # source_plan_digest == sha256(plan_bytes) == witness.plan_ref.
+    plan_text = f"# plan for {scenario.name}\nplan_version: 1\n"
+    plan_ref = "sha256:" + hashlib.sha256(plan_text.encode("utf-8")).hexdigest()
+    witness = json.dumps({
+        "witness_version": "approval-witness/v1",
+        "decision": "approve",
+        "plan_ref": plan_ref,
+    })
     wdig = "sha256:" + hashlib.sha256(witness.encode()).hexdigest()
     return {
         "write_paths": list(scenario.write_paths),
         "commands": list(scenario.commands),
-        "source_plan_digest": "sha256:plan",
+        "source_plan_digest": plan_ref,
         "approval_witness_digest": wdig,
         "horizon": "run",
-    }, witness
+    }, witness, plan_text
 
 
 def _disposition_for(tid: str, evs) -> str:
@@ -92,10 +101,13 @@ async def run_ops_scenario(tmp_path, scenario: OpsScenario) -> dict:
     record = sup.create_session(adapter=MockAdapter(events=events), backend_kind="mock", cwd="/work")
     sid = record.session_id
 
-    req, witness = _grant_request(scenario)
+    req, witness, plan_text = _grant_request(scenario)
     resp = await d.dispatch({
         "jsonrpc": "2.0", "id": 1, "method": "runtime.grant.activate",
-        "params": {"session_id": sid, "execution_request": req, "witness_bytes": witness},
+        "params": {
+            "session_id": sid, "execution_request": req,
+            "witness_bytes": witness, "plan_bytes": plan_text,
+        },
     })
     assert resp["result"]["grant_id"].startswith("sgr_"), resp
 

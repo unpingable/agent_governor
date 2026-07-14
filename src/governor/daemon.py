@@ -3514,16 +3514,28 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         except (KeyError, TypeError) as exc:
             raise ValueError(f"malformed execution_request: {exc}")
 
-        # The check the daemon can make: witness digest must match real bytes.
-        witness_bytes = params.get("witness_bytes")
-        if witness_bytes is not None:
-            raw = witness_bytes.encode() if isinstance(witness_bytes, str) else bytes(witness_bytes)
-            actual = "sha256:" + hashlib.sha256(raw).hexdigest()
-            if actual != request.approval_witness_digest:
-                raise ValueError(
-                    "approval_witness_digest does not match the witness bytes — refused "
-                    f"(claimed {request.approval_witness_digest}, actual {actual})"
-                )
+        # Seam B (approval-binds-plan_ref, 2026-07-14): AG re-hashes the exact
+        # plan+witness bytes it was given and requires
+        #   source_plan_digest == sha256(plan_bytes) == witness.plan_ref.
+        # The caller-supplied digests are consistency assertions, never the
+        # authority basis. MANDATORY + fail-closed — a plan citing another plan's
+        # witness (approval replay) refuses even if the caller lies about
+        # source_plan_digest. (Replaces the prior `if witness_bytes is not None`
+        # fail-open.)
+        from .runtime.approval_binding import (
+            ApprovalBindingError,
+            verify_approval_binds_plan,
+        )
+
+        try:
+            verify_approval_binds_plan(
+                plan_bytes=params.get("plan_bytes"),
+                witness_bytes=params.get("witness_bytes"),
+                source_plan_digest=request.source_plan_digest,
+                approval_witness_digest=request.approval_witness_digest,
+            )
+        except ApprovalBindingError as exc:
+            raise ValueError(f"approval binding refused [{exc.refusal_kind}]: {exc}") from exc
 
         artifact = activate_execution_grant(request)  # fail-closed on malformed request
 
@@ -3540,7 +3552,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             gate_config={
                 "derivation_version": artifact.derivation_version,
                 "enforcement": artifact.enforcement,
-                "witness_verified": witness_bytes is not None,
+                "plan_binding_verified": True,  # seam B: AG re-hashed plan+witness bytes
             },
             principal_id=principal_id,
             auth_method=auth_method,
@@ -3563,7 +3575,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "enforcement": artifact.enforcement,
             "horizon": artifact.horizon,
             "unmet_axes": list(artifact.unmet_axes),
-            "witness_verified": witness_bytes is not None,
+            "plan_binding_verified": True,  # seam B: reaching here means it passed
             "expires_after_ns": expires_after_ns,
         }
 

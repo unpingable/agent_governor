@@ -48,19 +48,24 @@ async def test_s5a_live_smoke_activation_uses_and_receipt_continuity(tmp_path):
     record = sup.create_session(adapter=MockAdapter(events=events), backend_kind="mock", cwd="/work")
     sid = record.session_id
 
-    # Activate + attach a grant through the REAL RPC.
-    witness = "operator approved 2026-07-10"
+    # Activate + attach a grant through the REAL RPC (seam B: bound plan+witness).
+    plan_text = "# integration plan\nplan_version: 1\n"
+    plan_ref = "sha256:" + hashlib.sha256(plan_text.encode("utf-8")).hexdigest()
+    witness = json.dumps({
+        "witness_version": "approval-witness/v1", "decision": "approve", "plan_ref": plan_ref,
+    })
     wdig = "sha256:" + hashlib.sha256(witness.encode()).hexdigest()
     resp = await d.dispatch(_rpc("runtime.grant.activate", {
         "session_id": sid,
         "execution_request": {
             "write_paths": ["/work/src/**"],
             "commands": [{"program": "cargo", "argv_prefix": ["test"]}],
-            "source_plan_digest": "sha256:plan",
+            "source_plan_digest": plan_ref,
             "approval_witness_digest": wdig,
             "horizon": "run",
         },
         "witness_bytes": witness,
+        "plan_bytes": plan_text,
     }))
     grant_id = resp["result"]["grant_id"]
     assert grant_id.startswith("sgr_")

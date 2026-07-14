@@ -105,18 +105,23 @@ def _cargo_session(sup, tcid="c1"):
 
 
 def _activate(d, sid, expires_after_ns=None):
-    witness = "operator approved"
+    plan_text = "# grant-lease plan\nplan_version: 1\n"
+    plan_ref = "sha256:" + hashlib.sha256(plan_text.encode("utf-8")).hexdigest()
+    witness = json.dumps({
+        "witness_version": "approval-witness/v1", "decision": "approve", "plan_ref": plan_ref,
+    })
     wdig = "sha256:" + hashlib.sha256(witness.encode()).hexdigest()
     params = {
         "session_id": sid,
         "execution_request": {
             "write_paths": ["/work/src/**"],
             "commands": [{"program": "cargo", "argv_prefix": ["test"]}],
-            "source_plan_digest": "sha256:plan",
+            "source_plan_digest": plan_ref,
             "approval_witness_digest": wdig,
             "horizon": "run",
         },
         "witness_bytes": witness,
+        "plan_bytes": plan_text,
     }
     if expires_after_ns is not None:
         params["expires_after_ns"] = expires_after_ns

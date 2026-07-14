@@ -3,15 +3,15 @@
  "kind": "spec_slice",
  "spec_ref": "docs/campaigns/nightshift-functional-mvp/design-approval-binds-plan-ref.md",
  "priority_tier": 1,
- "status": "filed",
+ "status": "done",
  "effort_band": "M",
  "canonical_source": "docs/PROGRAM_LEDGER.md (the ONE ruled NEXT)",
  "forcing_case": "a plan may replay another plan's approval witness (S6 sandwich finding 2)",
- "open_items": "ALL GATES CLEARED (build-ready, noted for tomorrow). Shape=witness-carries-plan_ref; seam=B (AG re-hashes exact plan_bytes it's given; caller digest is a consistency assertion only); migration=no grandfather. Escape-count found 6, resolved (4 pinned + seam ruled). Build = wire-contract (execution_request carries bounded plan_bytes, maude-coordinated) + AG re-hash + 8 pins + snapshot-to-immutable (S7 scar) + adversarial sandwich. Re-run escape-count to zero before dispatch.",
+ "open_items": "CLOSED 2026-07-14 (seam B). AG re-hashes exact plan bytes; source_plan_digest==sha256(plan_bytes)==witness.plan_ref; replay refuses even with a lying source_plan_digest. approval_binding.py + daemon wiring + maude plan_bytes wire. Gates: escape-count 6->0, sandwich 0 findings, AG 16875 / maude 360 bare. Receipts AG 5a0bca3, maude e5fd7f1.",
  "repo": "agent_gov",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "Gate 1 ruling + Gate 2 escape-count + seam ruling B all banked in design-approval-binds-plan-ref.md; loop next_action carries the build sequence",
+  "date": "2026-07-14",
+  "basis": "built end-to-end via gov-loop; AG 5a0bca3 + maude e5fd7f1; suites bare AG 16875 / maude 360; adversarial sandwich 0 exploitable findings",
   "confidence": "CURRENT"
  },
  "note": " [2026-07-13] queued behind continuity as the loop's authority-semantics exam."

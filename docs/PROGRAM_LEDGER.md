@@ -26,14 +26,19 @@ pointers to this file, not divergent copies. (Scope declaration added
 ## Current position
 
 - **Active road:** grant-use / plan-admission authority
-- **Last closed slice:** S7 — Ration Citation Containment
-- **NEXT (exactly one, ruled):** **Approval binds `plan_ref`** — an approval
-  witness must identify and bind the exact approved plan bytes; replay against
-  another plan refuses. (Grant-use track itself is CLOSED at S7; this is the
-  next *numbered authority* slice, not S7 cleanup.)
-- **Push state:** AG + maude + NQ local chains UNPUSHED (work hours). Push
-  **intact** — preserve implementation → adversarial finding → correction
-  history; do not squash the sandbox corrections.
+- **Last closed slice:** **Approval binds `plan_ref` (seam B)** — CLOSED
+  2026-07-14 (AG `5a0bca3`, maude `e5fd7f1`). AG re-hashes the exact plan bytes
+  and requires `source_plan_digest == sha256(plan_bytes) == witness.plan_ref`;
+  a plan citing another plan's witness refuses even when the caller lies about
+  `source_plan_digest`. Built via the gov-loop with all gates (escape-count
+  6→0, adversarial sandwich 0 findings, suites bare AG 16875 / maude 360).
+- **NEXT (exactly one, ruled):** none ruled — the two operator-selected
+  portfolio slices (continuity repair, approval-binds-plan_ref) are both
+  CLOSED. Await operator selection; `python3 scripts/portfolio_report.py` for
+  the queue (hot fronts: governed-shell remainder, public-mvp Sprint 5).
+- **Push state:** AG + maude + continuity + yesterday's cross-repo chains
+  UNPUSHED (operator: no pushes during work hours). Push **intact** — preserve
+  implementation → adversarial finding → correction history; do not squash.
 
 ## Status vocabulary
 
@@ -51,7 +56,7 @@ pointers to this file, not divergent copies. (Scope declaration added
 
 | # | Status | Item | Boundary | Completion condition |
 |--:|---|---|---|---|
-| 1 | `NEXT` | Approval binds `plan_ref` | approval-witness model | witness cryptographically binds the exact approved plan bytes; replay against another plan refuses |
+| 1 | `CLOSED` | Approval binds `plan_ref` (seam B) | approval-witness model | DONE 2026-07-14 — AG re-hashes exact plan bytes; `source_plan_digest == sha256(plan_bytes) == witness.plan_ref`; replay refuses even on a lying caller digest. AG `5a0bca3`, maude `e5fd7f1` |
 | 2 | `DEFERRED` | NQ testimony authorization adapter | NQ owns `authorized` ceiling | NQ receipts → explicit authorized relation-strength; no causal inflation, no absence inference |
 | 3 | `DEFERRED` | Maude testimony requirement adapter | Maude owns `required` floor | plans declare required relation + strength; insufficient testimony refuses before inference |
 | 4 | `DEFERRED` | Governed-inquiry integration specimen | cross-repo bounded specimen | `required ≤ asserted ≤ authorized` exercised end-to-end with retained receipts |

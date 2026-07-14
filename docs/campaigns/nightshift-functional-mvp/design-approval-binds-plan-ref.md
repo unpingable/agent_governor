@@ -1,9 +1,10 @@
 # Design spec_slice: approval binds plan_ref
 
-**Status:** spec_slice — **RATIFIED 2026-07-13 (operator ruling).** Contract
-shape + migration disposition ruled below. Next gate: escape-count pass over
-this ruled spec (zero escapes) → build_slice with mandatory codex-exec (or
-substitute) sandwich. Custody-affecting ratification received per §8.
+**Status: BUILT + CLOSED 2026-07-14.** Contract ruled (witness carries plan_ref,
+seam B: AG re-hashes exact plan bytes), pins folded, escape-count 6→0, built,
+adversarial sandwich 0 findings, suites bare AG 16875 / maude 360. Receipts:
+AG `5a0bca3`, maude `e5fd7f1`. See "Build outcome" at the tail. The ruling +
+pins below are the record; history retained.
 
 **Source finding:** `GAP-s6-sandwich-authority-findings.md` Finding 2 (codex
 Critical, 2026-07-13). **Backlog stub:** `.governor/backlog/approval-binds-plan-ref.json`.

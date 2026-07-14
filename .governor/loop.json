@@ -1,18 +1,16 @@
 {
   "phase": "PLAN",
   "current_slice": null,
-  "candidate_next_slice": "approval-binds-plan_ref",
-  "slice_spec": [
-    "docs/campaigns/nightshift-functional-mvp/design-approval-binds-plan-ref.md (spec_slice framing filed; CUSTODY-AFFECTING — operator must rule the contract shape + migration disposition before it admits a build_slice)"
-  ],
-  "acceptance": "See the approval spec's Acceptance Criteria (to finalize AFTER the contract shape is ruled): a plan citing an approval witness naming a DIFFERENT plan_ref is refused at admission (typed refusal); correct self-approval admits; the NS-1 replay specimen is refused; migration re-approves or grandfathers every prior plan with a receipt; mandatory codex sandwich. Backlog stub: .governor/backlog/approval-binds-plan-ref.json.",
-  "blocked_on": "nothing — seam RULED 2026-07-13: B (AG re-hashes over exact bytes; B′/A rejected). Contract + 8 pins + the general principle banked in the spec's 'Seam ruling' section. Ready to build next session (operator: note for tomorrow).",
-  "next_action": "TOMORROW — build_slice for approval-binds-plan_ref (all gates cleared): (1) wire-contract change — execution_request (maude→AG) carries bounded exact plan_bytes, coordinated with maude (cross-repo, sequence it); (2) AG grant-binding computes actual_plan_ref=sha256(plan_bytes), requires source_plan_digest==actual_plan_ref==witness.plan_ref (caller digest = consistency assertion only), decision=='approve', known witness_version, witness_bytes MANDATORY (fail-closed); snapshot plan_bytes+witness_bytes to IMMUTABLE bytes at request construction (S7 mutable-buffer scar); refusal `approval_plan_ref_mismatch`; size bound. (3) Tests: NS-1 replay-with-lying-source_plan_digest refuses (load-bearing), positive twin, malformed/missing witness refuses, legacy-no-admit, unknown-version refuses; run suite bare. (4) Re-run escape-count over the pinned spec to zero BEFORE dispatch; (5) adversarial sandwich (codex dead on host → fresh-agent substitute). Migration: no grandfather; re-runs are successor plans; NS-1/NS-1R bytes untouched.",
-  "last_slice_closed": "continuity-authoring-tier-repair — CLOSED 2026-07-13. spec_slice ratified via 4 escape-count passes (4->1->1->1); build_slice reduced against the real store (falsified the spec's read-path hypothesis — real cause was an initialize() ordering bug: executescript ran CREATE INDEX on memory_objects(scope, authoring_tier) before _add_missing_columns added the column). Fix: add missing columns before the schema (guarded for fresh DB); store self-heals on next MCP open; hybrid-B defensive-read proved unnecessary (doctrine.py SELECT*+Row.keys() already safe). Receipt: continuity c937be0 (regression test_initialize_heals_pre_authoring_tier_db; suite 289 passed, 4 pre-existing env failures confirmed unrelated by stash). AG census defect D6 RESOLVED.",
-  "last_verified_commit": "AG 514267a; continuity c937be0",
-  "last_verified_note": "2026-07-13: continuity slice EXECUTE+REVIEW+AUDIT done — master verified by bare pytest (exit-code verdict), stash-confirmed the 4 remaining failures pre-exist and are environmental (git-root-under-/tmp), reduced+reproduced the bug against a copy of the live store before fixing. AG HEAD 514267a (loop/portfolio docs). The live operator continuity store (~/.config/continuity/.../observatory-family) self-heals on next MCP restart; NOT touched unilaterally (operator's live memory).",
-  "last_updated": "2026-07-13T22:15:00Z",
-  "session_id": "portfolio-churn: continuity repair CLOSED end-to-end (spec_slice -> escape-count ratify -> build_slice reduce+fix+test -> AUDIT); loop advanced to approval-binds-plan_ref (operator-gated)",
+  "candidate_next_slice": null,
+  "slice_spec": [],
+  "acceptance": "No slice ruled NEXT. The two operator-selected portfolio items (continuity-authoring-tier-repair, approval-binds-plan_ref) are both CLOSED. Next selection is the operator's — run `python3 scripts/portfolio_report.py` for the queue (hot fronts: governed-shell remainder, public-mvp Sprint 5).",
+  "blocked_on": "nothing — awaiting operator selection of the next slice.",
+  "next_action": "AWAIT operator selection. Candidate hot fronts from the portfolio: governed-shell remainder (GS-2b/GS-8b/GS-9, maude 3.0 desk), public-mvp Sprint 5 (front door + launch). Cold-start: read docs/CONSTELLATION_MAP.md, then `python3 scripts/portfolio_report.py`, then this file.",
+  "last_slice_closed": "approval-binds-plan_ref — CLOSED 2026-07-14. Seam B built: AG re-hashes the exact plan bytes it is given and requires source_plan_digest == sha256(plan_bytes) == witness.plan_ref (caller digest is a consistency assertion only); a plan citing another plan's witness refuses even when the caller lies about source_plan_digest. `src/governor/runtime/approval_binding.py` (pure verifier) + daemon runtime_grant_activate wiring (replaced the fail-open) + maude wire lockstep (plan_bytes over the RPC). Gates all green: escape-count 6->0 on the pinned spec, adversarial sandwich 0 exploitable findings, suites bare AG 16875 passed / maude 360 passed. Receipts: AG 5a0bca3, maude e5fd7f1 (LOCAL, unpushed). Migration: legacy no-witness activations now refuse (no grandfather); NS-1/NS-1R bytes untouched; witness content format (JSON {witness_version,decision,plan_ref}) is operator-minting tooling, downstream.",
+  "last_verified_commit": "AG 5a0bca3; maude e5fd7f1",
+  "last_verified_note": "2026-07-14: approval-binds-plan_ref built end-to-end via the loop (spec ruled -> pins folded -> escape-count 6->0 -> build -> sandwich 0 findings -> AUDIT). Suites run BARE (exit-code verdict): AG 16875 passed/49 skipped exit 0; maude 360 passed/24 skipped exit 0. NO PUSH (operator: commits only during work hours).",
+  "last_updated": "2026-07-14T00:00:00Z",
+  "session_id": "portfolio-churn: continuity + approval-binds-plan_ref both CLOSED end-to-end via the gov-loop",
   "loop_master": "opus",
   "wip_limit": 1,
   "dirty_tree_allowed": false,
@@ -26,6 +24,7 @@
     "git log --oneline -8",
     "git status --short -- src tests docs scripts .governor working"
   ],
-  "active_thread": "portfolio churn via the gov-loop (operator-selected 2026-07-13). (1) continuity-authoring-tier-repair CLOSED. (2) approval-binds-plan_ref = NEXT, blocked on operator contract ruling (custody-affecting). Read the queue with scripts/portfolio_report.py. public-mvp remains a LIVE parallel campaign, parked as the loop's focus, not abandoned.",
-  "prior_threads_closed": "Walking-skeleton bootstrap-lab (Slices 1-2 DONE) + AG-on-AG maintenance (Slices 1+2 DONE). P4 PARKED (operator 2026-06-16; activation is valid custody machinery with zero operational consumers). P0-shadow tripwire ISOLATED+dormant. Detail in git + working/witness-*.md; compressed out of loop-state 2026-07-13."
+  "active_thread": "portfolio churn via the gov-loop (operator-selected 2026-07-13/14). (1) continuity-authoring-tier-repair CLOSED. (2) approval-binds-plan_ref CLOSED 2026-07-14. No next slice ruled — await operator. public-mvp remains a LIVE parallel campaign, parked as the loop's focus.",
+  "prior_threads_closed": "Walking-skeleton bootstrap-lab (Slices 1-2 DONE) + AG-on-AG maintenance (Slices 1+2 DONE). P4 PARKED (operator 2026-06-16). P0-shadow tripwire ISOLATED+dormant. Detail in git + working/witness-*.md; compressed out of loop-state 2026-07-13.",
+  "push_backlog": "UNPUSHED (operator: no pushes during work hours): AG main ahead by the constellation-map/portfolio/loop/continuity-spec + approval slice commits; maude ahead by the wire-lockstep commit e5fd7f1; continuity c937be0; plus yesterday's cartography b63217d / wicket 0493093 / wlp dda47ba / rrp 9a0abf6. Push when the operator gives a present-tense go."
 }

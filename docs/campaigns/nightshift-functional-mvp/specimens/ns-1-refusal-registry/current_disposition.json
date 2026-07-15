@@ -17,9 +17,9 @@
     "plan_approval": "unverifiable_exact_artifact",
     "runtime_activity": "terminal",
     "effect_authority": "terminal_no_live_grant_evidenced",
-    "custody": "partial"
+    "custody": "impl_closed_unpushed_approval_unverifiable"
   },
-  "basis": "Runtime and promotion receipts prove that an NS-1 run exited and its five-file diff was kept. They do not preserve the exact approved plan bytes: the tracked plan remains candidate and the approval witness named by STATUS is absent. The implementation diff also remains uncommitted in the Nightshift repository.",
+  "basis": "Runtime and promotion receipts prove that an NS-1 run exited and its five-file diff was kept. They do not preserve the exact approved plan bytes: the tracked plan remains candidate and the approval witness named by STATUS is absent. IMPLEMENTATION custody closed 2026-07-15 at nightshift e71303f (operator-amended; local, unpushed). APPROVAL custody is unchanged and remains unverifiable — the landing is not approval evidence, and plan_approval therefore stays unverifiable_exact_artifact.",
   "evidence": [
     {
       "kind": "tracked_candidate_plan",
@@ -51,8 +51,17 @@
     {
       "kind": "external_worktree_probe",
       "ref": "/home/jbeck/git/nightshift@01a65bf",
-      "facts": "the five promoted files remain a 337-insertion uncommitted diff"
+      "facts": "the five promoted files remain a 337-insertion uncommitted diff",
+      "superseded_by": "external_worktree_probe@2026-07-15",
+      "superseded_note": "true when recorded 2026-07-15T03:00:16Z; the commit landed ~8h later"
+    },
+    {
+      "kind": "external_worktree_probe",
+      "recorded_at": "2026-07-15T16:00:00Z",
+      "ref": "/home/jbeck/git/nightshift@e71303f",
+      "facts": "the promoted diff is committed (parent 01a65bf), worktree clean, 1 ahead of origin/main. Landed as 6 files / 487 insertions rather than the promoted 5 / 337: an operator amendment during integration added a distinct LivenessSkewed refusal variant (replacing a skew->stale conflation) plus packet-level acceptance tests in a sixth file."
     }
   ],
-  "historical_artifact_policy": "The candidate plan is unchanged. This successor neither reconstructs an approval witness nor claims approval consumption/revocation; exact approval custody remains unverifiable."
+  "historical_artifact_policy": "The candidate plan is unchanged. This successor neither reconstructs an approval witness nor claims approval consumption/revocation; exact approval custody remains unverifiable. The 2026-07-15 landing closes IMPLEMENTATION custody only — a commit is not an approval artifact, and no part of this record may be read as supplying the missing witness.",
+  "unresolved_semantic": "The landed implementation exceeds the tracked candidate plan (four RefusalKind variants vs three) under a direct operator ruling that no plan artifact records. Under the S6 ruling — approval attaches to plan bytes; migration creates a successor, not a revision — a conforming record would be an NS-1R successor, NOT an edit to these bytes. This record does not create one and does not rule on whether a direct operator ruling substitutes for a plan artifact."
 }

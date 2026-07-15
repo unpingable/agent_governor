@@ -4,8 +4,18 @@ As of 2026-07-04 evening. **CD-0..CD-3 DONE; CD-4 RUN (as CD-4B self-drive) —
 reached a deliberate keep on a validator-clean ReviewPacket.** Pushed heads:
 **AG `c3e95c0`**, **maude `015de38`** (both `origin/main`, clean). Maude remote
 fixed 2026-07-04 → github.com/unpingable/maude (was local-only; 22 commits
-now safe). CD-4B artifacts + a maude harness fix are **uncommitted** on `main`
-(see below) pending operator landing.
+now safe). ~~CD-4B artifacts + a maude harness fix are **uncommitted** on `main`
+(see below) pending operator landing.~~
+
+> **Audit correction 2026-07-15 (custody only — no campaign-state ruling).**
+> The uncommitted claim is superseded and retracted: the maude harness fix
+> landed as maude `6501016` ("fix(plan-runner): governed launch fences a dirty
+> flip (allow_dirty)"), which `git branch -r --contains` places in
+> `origin/main`; and AG's worktree is clean, so no CD-4B artifact is
+> uncommitted. The pushed heads named above (`c3e95c0` / `015de38`) verify but
+> have long since moved. Everything below this line is retained as the
+> 2026-07-04 record and is NOT re-adjudicated here: CD-5+ and the parked
+> operator rulings remain exactly as stated.
 
 ## Done
 

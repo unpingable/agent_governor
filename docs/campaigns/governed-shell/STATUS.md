@@ -168,7 +168,21 @@ MERGE-SAFE. verify-run `cdd283ce` [pass]; 386 in the operator/docket/daemon band
 green. The one door now covers all four sourced kinds (intervention/violation/
 promotion/docket_case); only GS-2b's re-tiered admissibility/HELD remain AG-side.
 
-## Current next
+## Current next — **STALE BLOCK, SUPERSEDED 2026-07-15 (audit correction)**
+
+> Every slice named below has since landed, per this file's own dated sections
+> above. Verified commits: GS-2a `caaa036`, GS-2b `a28d727`, GS-3 `cd11091`,
+> GS-4 `3fe0acb`, GS-5 `a698abd`, GS-6 `f3294e4`, GS-8 `76397d6`, GS-9 maude
+> `f143efc`, plus GS-7 and GS-8b. This is an unpruned forward-looking block
+> that contradicts the history above it, not a live queue. It is retained
+> rather than deleted (chronology is not rewritten).
+>
+> **Genuine remainder:** GS-2b's admissibility source + HELD-launch state,
+> re-tiered to authority-semantics — see
+> `OBSTRUCTION-gs2b-admissibility-held.md` (Status: BLOCKED). Verified still
+> open: `SessionStatus` in `src/governor/runtime/supervisor.py` has no `HELD`
+> member. (That obstruction record quotes the enum as 7 members; it actually
+> has 10 — the extra members do not include `HELD`, so its verdict stands.)
 
 Daemon slices unblocked: **GS-2** (decisions.list + docket/admissibility
 reads), then GS-3 (resolve, sandwich); GS-4 (watch), GS-5 (send_input,

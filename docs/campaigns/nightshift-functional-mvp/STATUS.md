@@ -48,11 +48,25 @@ NS-1 regressions. Same class as the `nq_cli` skip-path hardening (`40ee42b`);
 not repaired in this slice.
 
 State axes: admission=`ratified`; selection=`unselected`;
-plan_approval=`ns1_amended_by_operator_ns2_6_not_attached`;
+plan_approval=`ns1_unverifiable_exact_artifact_impl_amended_by_operator_ns2_6_not_attached`;
 runtime_activity=`inactive`;
 effect_authority=`not_evidenced_for_unselected_packets`;
 custody=`ns1_closed_unpushed` (NS-1 landed at `e71303f`; S1–S7 are closed;
 NS-2..6 are not built).
+
+**Approval custody is NOT closed by this landing (audit correction 2026-07-15).**
+NS-1's exact approved plan bytes were never preserved: the tracked `plan.md`
+still reads `governance_status: candidate` and the `operator_plan_approved_2026-07-09`
+witness named by the run history is absent from the specimen directory. The
+landed code additionally *exceeds* that tracked plan — four `RefusalKind`
+variants where the plan specified three — under a direct operator ruling that
+no plan artifact records. The `plan_approval` axis therefore stays
+`unverifiable_exact_artifact`; the amendment is recorded as an implementation
+fact, not as approval evidence. Under the S6 ruling (approval attaches to plan
+bytes; migration creates a successor, not a revision) a conforming record would
+be an NS-1R successor — NOT an edit to these bytes. Whether a direct operator
+ruling substitutes for a plan artifact is an open semantic question; it is
+reported, not resolved here.
 
 Doctrine kept from this slice: a closed refusal registry earns its name only
 if an unrepresentable refusal forces a new variant. The cheap failure is not

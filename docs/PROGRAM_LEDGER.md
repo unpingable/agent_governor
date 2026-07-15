@@ -36,10 +36,18 @@ pointers to this file, not divergent copies. (Scope declaration added
   portfolio slices (continuity repair, approval-binds-plan_ref) are both
   CLOSED. Await operator selection; `python3 scripts/portfolio_report.py` for
   the queue (hot fronts: governed-shell remainder, public-mvp Sprint 5).
-- **Push state:** AG + maude + continuity + nightshift (`e71303f`, NS-1 landed
-  2026-07-15) + yesterday's cross-repo chains UNPUSHED (operator: no pushes
-  during work hours). Push **intact** — preserve implementation → adversarial
-  finding → correction history; do not squash.
+- **Push state (measured 2026-07-15, not asserted):** AG **2 ahead**
+  (`84e8c43`, `443ff63`) · maude **6 ahead** (`6a35965`…`e5fd7f1`) · nightshift
+  **1 ahead** (`e71303f`, NS-1 landed 2026-07-15). **Every other constellation
+  repo is 0 ahead** — continuity, cartography, wicket, wlp, rrp, standing,
+  linearaccountant, spine, claimc, nq, lean. Unpushed by operator rule (no
+  pushes during work hours). Push **intact** — preserve implementation →
+  adversarial finding → correction history; do not squash.
+  > Correction 2026-07-15: this line previously named continuity and
+  > "yesterday's cross-repo chains" as unpushed. Direct measurement shows
+  > continuity at 0 ahead; `.governor/loop.json` `historical_push_claim` had
+  > already superseded that claim with "only maude remains ahead". The stale
+  > claim was carried forward by `84e8c43` and is retracted here.
 
 ## Status vocabulary
 

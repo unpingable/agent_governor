@@ -164,7 +164,14 @@ ratification act pending)
   structural registry); names the honest wrinkle (projection direction
   proven, consumption direction gated) and recommends **Option A: graded
   ratification** (v1; claude_code STRUCTURALLY conformant + live supervised
-  evidence; runtime consumption explicitly gated). **OPERATOR ACT PENDING.**
+  evidence; runtime consumption explicitly gated). ~~**OPERATOR ACT PENDING.**~~
+  **RATIFIED 2026-07-05 — executed `74dcf86`** ("RATIFY: work-container
+  contract v1 — Option A (operator act, 2026-07-05)", contained in
+  `origin/main`). Audit correction 2026-07-15: the pending claim was stale
+  against this campaign's own `launch-checklist.md:15` (☑ RATIFIED, same
+  commit) and against the commit itself. Operator act 1 is DONE; the other
+  operator acts (mint, spine OQ-1/OQ-2, repo-visibility, fresh-clone run)
+  are unaffected.
 - **15 Maude M-4 run report — DONE** (maude `afc2a68`+`704f86b`, pushed).
   Pure composer over existing reads only (session.get/events, promotion.get,
   plan envelope, co-located ReviewPacket); surface/detail/law disclosure via

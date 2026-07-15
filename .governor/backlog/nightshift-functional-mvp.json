@@ -6,11 +6,11 @@
  "status": "queued",
  "effort_band": "M",
  "canonical_source": "docs/campaigns/nightshift-functional-mvp/STATUS.md + docs/PROGRAM_LEDGER.md",
- "open_items": "NS-0 is DONE. NS-1 implementation is built, verified, and kept from the 2026-07-10 governed run, but its exact 337-line five-file diff remains uncommitted in ~/git/nightshift, so implementation custody is PARTIAL rather than closed. The grant-use track S1-S7 is CLOSED. Campaign packets NS-2..NS-6 remain ratified and queued for authoring/execution in campaign order; each exact packet still requires its documented queue latch and plan-approval witness. The separate testimony-adapter items in PROGRAM_LEDGER #2-5 remain DEFERRED. No Nightshift packet is currently selected as NEXT.",
+ "open_items": "NS-0 is DONE. NS-1 implementation custody is CLOSED: the kept diff landed as nightshift e71303f (2026-07-15, local/unpushed), operator-amended during integration (a distinct LivenessSkewed refusal variant replaced a skew->stale conflation; 6 files / 487 insertions, where the promoted diff was 5 files / 337). NS-1 exact PLAN-APPROVAL custody remains UNVERIFIABLE and is unaffected by the landing: the tracked plan.md is still governance_status=candidate and the named operator_plan_approved_2026-07-09 witness is absent. The grant-use track S1-S7 is CLOSED. Campaign packets NS-2..NS-6 remain ratified and queued for authoring/execution in campaign order; each exact packet still requires its documented queue latch and plan-approval witness. The separate testimony-adapter items in PROGRAM_LEDGER #2-5 remain DEFERRED. No Nightshift packet is currently selected as NEXT.",
  "repo": "agent_gov",
  "reconciled": {
-  "date": "2026-07-14",
-  "basis": "NS-1 terminal runtime event + approved promotion in .governor/runtime/sess_3a2ea5348a85_events.jsonl; nightshift STATUS first-run completion; campaign packet table and per-packet approval gate; grant-use S1-S7 closure receipts",
+  "date": "2026-07-15",
+  "basis": "nightshift e71303f (NS-1 landed; parent 01a65bf; clean worktree) + AG 84e8c43 status successor; NS-1 terminal runtime event + approved promotion in .governor/runtime/sess_3a2ea5348a85_events.jsonl; nightshift STATUS first-run completion; campaign packet table and per-packet approval gate; grant-use S1-S7 closure receipts",
   "confidence": "CURRENT"
  },
  "wake_condition": "selection of a ratified NS-2..6 packet for exact packet authoring; execution then requires that packet's documented queue latch and plan-approval witness. A separate ruling remains necessary for the DEFERRED testimony-adapter items in PROGRAM_LEDGER #2-5.",
@@ -20,26 +20,38 @@
    "status": "blocked",
    "claim": "NS-1 staged and awaiting the operator approval act",
    "disposition": "superseded by the 2026-07-10 completed run already recorded later in STATUS.md and by runtime session/promotion receipts"
+  },
+  {
+   "recorded": "2026-07-15T03:00:16Z",
+   "status": "queued",
+   "claim": "custody=partial; the operator-kept NS-1 diff is a 337-insertion five-file dirty diff, uncommitted in ~/git/nightshift at 01a65bf",
+   "disposition": "superseded by nightshift e71303f (2026-07-15): the diff was committed, operator-amended, and the worktree is clean. The claim was true when recorded and lost the race to a commit made ~8h later; it is retained as the pre-landing custody state, not retracted as false."
   }
  ],
  "current_disposition": {
   "schema": "ag-current-disposition/v1",
-  "recorded_at": "2026-07-15T03:00:16Z",
+  "recorded_at": "2026-07-15T16:00:00Z",
+  "supersedes_fields": [
+   "current_disposition.state_axes.custody@2026-07-15T03:00:16Z",
+   "current_disposition.custody_delta@2026-07-15T03:00:16Z"
+  ],
   "state_axes": {
    "admission": "ratified",
    "selection": "unselected",
    "plan_approval": "ns1_unverifiable_ns2_6_not_attached",
    "runtime_activity": "inactive",
    "effect_authority": "not_evidenced_for_unselected_packets",
-   "custody": "partial"
+   "custody": "ns1_closed_unpushed"
   },
   "evidence": [
    "docs/campaigns/nightshift-functional-mvp/CAMPAIGN.md packets NS-2..NS-6 and per-packet operator acts",
    "docs/campaigns/nightshift-functional-mvp/STATUS.md NS-1 FIRST LIVE RUN — DONE",
    ".governor/runtime/sess_3a2ea5348a85_events.jsonl seq 271 session_exited and seq 274 promotion_resolved approved",
    "git e276115 (NS-1 first-run verdict)",
-   "~/git/nightshift at 01a65bf has a 337-insertion dirty diff in the same five files named by promotion receipt seq 274"
+   "nightshift e71303f (2026-07-15): the promoted diff is committed, operator-amended; parent 01a65bf; worktree clean; 1 ahead of origin/main",
+   "docs/campaigns/nightshift-functional-mvp/specimens/ns-1-refusal-registry/plan.md#governance_status=candidate and the absence of any operator_plan_approved_* witness — exact plan approval remains unverifiable and is NOT closed by the landing"
   ],
-  "custody_delta": "operator-kept NS-1 diff is not committed in the Nightshift repository"
+  "custody_delta": "implementation custody CLOSED at nightshift e71303f (local, unpushed — operator rule: no pushes during work hours). Plan-approval custody remains open and unverifiable; the landing does not touch it. NS-2..6 unbuilt.",
+  "semantic_note": "the landed implementation exceeds the tracked candidate plan (four RefusalKind variants vs the plan's three) under a direct operator ruling that no plan artifact records. Per the S6 ruling (approval attaches to plan bytes; migration creates a successor, not a revision), a conforming record would be an NS-1R successor rather than an edit. Reported as an unresolved semantic finding; not reconciled here."
  }
 }

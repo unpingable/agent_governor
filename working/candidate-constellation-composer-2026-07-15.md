@@ -115,10 +115,14 @@ if a desktop app is genuinely needed. Candidate shapes, none ruled:
    Distinct from shape 3: this is one surface rendered twice, not two
    surfaces — so it survives the fence IF the core is genuinely web-first
    and the app shell is a wrapper, never a fork. Consequences to rule at
-   ratification: (a) **clerk's app-shell-donor role evaporates** — if guvnah
-   carries its own shell, clerk's "parked, kept" disposition likely tightens
-   toward retirement (operator call; touches the 2026-07-02 consolidation
-   table); (b) **phosphor stays purpose-focused on what it does now**
+   ratification: (a) **clerk's app-shell-donor role evaporates**, but its
+   disposition stays "parked, kept" — operator provenance (2026-07-15):
+   clerk was a POC for governed chat, an early MVP-demo idea from before
+   the realization that "I was building a platform, not a bunch of random
+   tools"; "maybe it finds another use later." Historically load-bearing
+   (the artifact the platform lesson was learned on), not
+   retirement-leaning; no consolidation-table change needed;
+   (b) **phosphor stays purpose-focused on what it does now**
    (operator, same exchange) — web-native lane host, ops-casework lane; the
    seat is a sibling surface, not a phosphor lane, and no shared-hosting
    arrangement is contemplated; (c) the demo-able MVP specimen should ship

@@ -14,7 +14,7 @@ pointers to this file, not divergent copies. (Scope declaration added
 2026-07-13 per census defect D7 — see
 `working/constellation-census-2026-07-13.md`.)
 
-**Last updated:** 2026-07-15
+**Last updated:** 2026-07-15 (evening — push window)
 
 > **The rule that makes this real:** an agent PROPOSES a transition backed by
 > named receipts; it does not narrate completion. `CLOSED` requires linked
@@ -26,28 +26,40 @@ pointers to this file, not divergent copies. (Scope declaration added
 ## Current position
 
 - **Active road:** grant-use / plan-admission authority
-- **Last closed slice:** **Approval binds `plan_ref` (seam B)** — CLOSED
-  2026-07-14 (AG `5a0bca3`, maude `e5fd7f1`). AG re-hashes the exact plan bytes
-  and requires `source_plan_digest == sha256(plan_bytes) == witness.plan_ref`;
-  a plan citing another plan's witness refuses even when the caller lies about
-  `source_plan_digest`. Built via the gov-loop with all gates (escape-count
-  6→0, adversarial sandwich 0 findings, suites bare AG 16875 / maude 360).
-- **NEXT (exactly one, ruled):** none ruled — the two operator-selected
-  portfolio slices (continuity repair, approval-binds-plan_ref) are both
-  CLOSED. Await operator selection; `python3 scripts/portfolio_report.py` for
-  the queue (hot fronts: governed-shell remainder, public-mvp Sprint 5).
-- **Push state (measured 2026-07-15, not asserted):** AG **2 ahead**
-  (`84e8c43`, `443ff63`) · maude **6 ahead** (`6a35965`…`e5fd7f1`) · nightshift
-  **1 ahead** (`e71303f`, NS-1 landed 2026-07-15). **Every other constellation
-  repo is 0 ahead** — continuity, cartography, wicket, wlp, rrp, standing,
-  linearaccountant, spine, claimc, nq, lean. Unpushed by operator rule (no
-  pushes during work hours). Push **intact** — preserve implementation →
-  adversarial finding → correction history; do not squash.
-  > Correction 2026-07-15: this line previously named continuity and
-  > "yesterday's cross-repo chains" as unpushed. Direct measurement shows
-  > continuity at 0 ahead; `.governor/loop.json` `historical_push_claim` had
-  > already superseded that claim with "only maude remains ahead". The stale
-  > claim was carried forward by `84e8c43` and is retracted here.
+- **Last closed slice:** **2026-07-15 — a four-item operator-sequenced
+  selection, all four closed**, plus a security slice, an audit, a ruling, and
+  a sweep. `operator_mode` closed-domain (`443ff63`, A-7 CLOSED) · six-axis
+  audit (`5916f14`) · closed axis vocabulary + mechanical checker (`9166f02`;
+  live-record coverage 0% → 100%) · cli-ref closed (`42d432f`) · NS-2 staged
+  (`464efeb`) · **A-1 RULED and built** (`09104ba` packet → `401ba69` Option 4b
+  lane labeling, observe-only; 4a filed blocked) · epistemic backoff
+  mechanized (`9ed3ed7`, §11.1) · fiction knowledge paths (`7f49fa6` — a real
+  author's canon-loss failure is now a typed finding) · composer penciled
+  (`264d1a0`..`5e670a0`) · lean sweep + four rulings named (`f7c1854`,
+  `9e558ee`). Suite 17021 passed / 0 failed, exit 0 observed bare.
+- **NEXT (exactly one, ruled):** none ruled. The 2026-07-15 four-item operator
+  selection act is fully consumed (all four closed). **The largest named-and-
+  unruled thing on the estate is now the inexpressibility family** — R1–R4,
+  from the first lean sweep since 2026-07-02 (AG was citing v7 while lean
+  shipped v10; v11 in flight). Each is separately rulable, all are
+  custody-affecting, none is authorized:
+  `working/rulings-pending-inexpressibility-2026-07-15.md`. R4 is doctrine,
+  not a slice, and if ruled first it decides the shape of R1–R3.
+  Operator-only besides: NS-2 approval act + run; public-mvp launch acts;
+  A-2..A-6; the Standing expired-materialized-active grant.
+- **Push state: CLEAR** (measured post-push 2026-07-15 evening). AG
+  `9e558ee` · maude `e5fd7f1` · nightshift `e71303f` all pushed on an explicit
+  operator go; **all 14 constellation repos measure `ahead=0`.** Pushed
+  **intact** — no squash: the implementation → adversarial finding →
+  correction history is preserved on origin, including the A-1 packet's two
+  FATAL refutations and this session's own laundering defect and its repair.
+  The no-push-during-work-hours rule stands; this clears the backlog, it
+  grants nothing.
+  > Correction 2026-07-15: the prior line named continuity and "yesterday's
+  > cross-repo chains" as unpushed. Direct measurement showed continuity at 0
+  > ahead; `.governor/loop.json` `historical_push_claim` had already
+  > superseded that claim with "only maude remains ahead". The stale claim was
+  > carried forward by `84e8c43` and is retracted.
 
 ## Status vocabulary
 

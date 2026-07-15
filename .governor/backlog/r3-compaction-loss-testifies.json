@@ -1,0 +1,39 @@
+{
+ "id": "r3-compaction-loss-testifies",
+ "kind": "candidate",
+ "spec_ref": "working/rulings-pending-inexpressibility-2026-07-15.md",
+ "priority_tier": 1,
+ "status": "blocked",
+ "effort_band": "S",
+ "canonical_source": "working/rulings-pending-inexpressibility-2026-07-15.md",
+ "open_items": "R3 (NAMED, UNRULED): 'Compaction loss must always produce testimony, regardless of convenience flags.' Evidence: context_compact.py:580,611 — preserved_* = ... if config.always_keep_* else [], while dropped_items is populated ONLY from dropped_turns; flags off => decisions/anchors/constraints vanish with no DroppedItem. Unrecorded loss in the module built to record loss. Backing: lean check 8, checkpoint_mints_nothing. Available split the ruling may exploit: 'don't preserve it' and 'don't record that it's gone' are DIFFERENT POWERS and today one flag buys both — a ruling could keep the convenience and forbid the silence. LATENT (all three flags default True, :165-167). CUSTODY-AFFECTING: compaction custody.",
+ "repo": "agent_gov",
+ "wake_condition": "an explicit operator ruling of R3. Custody-affecting.",
+ "reconciled": {
+  "date": "2026-07-15",
+  "basis": "operator slicing in-session 2026-07-15 ('at least four separate rulings'); evidence in working/lean-sweep-2026-07-15.md + working/finding-oracle-class-self-attested-2026-07-15.md; nothing built",
+  "confidence": "CURRENT"
+ },
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-16T00:00:00Z",
+  "state_axes": {
+   "admission": {
+    "state": "admitted",
+    "detail": "named by the operator as one of four separate rulings; the RULING itself is not made"
+   },
+   "selection": "unselected",
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": {
+    "state": "none_evidenced",
+    "detail": "naming is not ratification; authorizes no edit"
+   },
+   "custody": {
+    "state": "open",
+    "detail": "nothing built; custody-affecting, awaiting its own ruling"
+   }
+  },
+  "basis": "working/rulings-pending-inexpressibility-2026-07-15.md"
+ }
+}

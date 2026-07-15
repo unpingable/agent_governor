@@ -1,0 +1,39 @@
+{
+ "id": "r4-unearned-transitions-unrepresentable",
+ "kind": "candidate",
+ "spec_ref": "working/rulings-pending-inexpressibility-2026-07-15.md",
+ "priority_tier": 1,
+ "status": "blocked",
+ "effort_band": "?",
+ "canonical_source": "working/rulings-pending-inexpressibility-2026-07-15.md",
+ "open_items": "R4 (NAMED, UNRULED) — DOCTRINE, not a code slice: 'Public APIs must make unearned transitions unrepresentable, not merely discouraged.' The general law of which R1-R3 are instances. GENUINELY NEW, not a restatement: the estate's existing allowlist rule (feedback_allowlist_authority_blocklist_detection) governs WHAT VALUES A FIELD MAY HOLD; R4 governs WHAT OPERATIONS MAY EXIST AT ALL. revalidate(claim_id) has no invalid value — the signature permits refresh without evidence, and a vocabulary rule cannot reach it. Formal source: the lean *_is_inexpressible family. Six AG firing cases 2026-07-15: operator_mode, axis values, custody: strings, Belief.source (all four FIXED same day), oracle_class + revalidate() (open). Meta-finding: every lane is latent — safe defaults, disciplined callers, expressible violations; AG enforces the unsaid half by convention and the kernel says convention is the wrong instrument. CANDIDATE for promotion to ~/.claude/CLAUDE.md (constellation-wide; the law is not AG-specific and lean is its source) — a doctrine-promotion act, provenance + firing cases carried up, local trim points upward.",
+ "repo": "agent_gov",
+ "wake_condition": "an explicit operator ruling: promote to doctrine or not, and at what scope (AG-local vs ~/.claude/CLAUDE.md constellation-wide). Operator fiat. If ruled first, R4 decides the SHAPE of R1-R3's fixes.",
+ "reconciled": {
+  "date": "2026-07-15",
+  "basis": "operator slicing in-session 2026-07-15 ('at least four separate rulings'); evidence in working/lean-sweep-2026-07-15.md + working/finding-oracle-class-self-attested-2026-07-15.md; nothing built",
+  "confidence": "CURRENT"
+ },
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-16T00:00:00Z",
+  "state_axes": {
+   "admission": {
+    "state": "admitted",
+    "detail": "named by the operator as one of four separate rulings; the RULING itself is not made"
+   },
+   "selection": "unselected",
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": {
+    "state": "none_evidenced",
+    "detail": "naming is not ratification; authorizes no edit"
+   },
+   "custody": {
+    "state": "open",
+    "detail": "nothing built; custody-affecting, awaiting its own ruling"
+   }
+  },
+  "basis": "working/rulings-pending-inexpressibility-2026-07-15.md"
+ }
+}

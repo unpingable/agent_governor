@@ -1,0 +1,39 @@
+{
+ "id": "r1-publish-consumes-provenance",
+ "kind": "candidate",
+ "spec_ref": "working/rulings-pending-inexpressibility-2026-07-15.md",
+ "priority_tier": 1,
+ "status": "blocked",
+ "effort_band": "M",
+ "canonical_source": "working/rulings-pending-inexpressibility-2026-07-15.md",
+ "open_items": "R1 (NAMED, UNRULED): 'Publish/release decisions must consume claim-indexed provenance, not confidence classes.' Evidence: oracle_class self-attested end to end (oracle_pytest.py:284-291 constructor param -> evidence_gate.py:1181 -> blob meta -> _helpers.py:89 -> oracle_independence -> release_taint.py:40-44 publish threshold). Backing: lean check 1 F2 (fluentSystem — score without provenance binding at >1 unrelated gate) + check 4 (reliance_roots_in_provenance; HighConfidence !|- MayRely). Four options drafted in the oracle_class finding. LATENT (thresholds inert at class 0). CUSTODY-AFFECTING: receipt-kernel invariants + publish boundary.",
+ "repo": "agent_gov",
+ "wake_condition": "an explicit operator ruling of R1 (see the four options in working/finding-oracle-class-self-attested-2026-07-15.md). Custody-affecting; naming is not ratification.",
+ "reconciled": {
+  "date": "2026-07-15",
+  "basis": "operator slicing in-session 2026-07-15 ('at least four separate rulings'); evidence in working/lean-sweep-2026-07-15.md + working/finding-oracle-class-self-attested-2026-07-15.md; nothing built",
+  "confidence": "CURRENT"
+ },
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-16T00:00:00Z",
+  "state_axes": {
+   "admission": {
+    "state": "admitted",
+    "detail": "named by the operator as one of four separate rulings; the RULING itself is not made"
+   },
+   "selection": "unselected",
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": {
+    "state": "none_evidenced",
+    "detail": "naming is not ratification; authorizes no edit"
+   },
+   "custody": {
+    "state": "open",
+    "detail": "nothing built; custody-affecting, awaiting its own ruling"
+   }
+  },
+  "basis": "working/rulings-pending-inexpressibility-2026-07-15.md"
+ }
+}

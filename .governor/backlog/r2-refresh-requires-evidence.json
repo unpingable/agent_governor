@@ -1,0 +1,39 @@
+{
+ "id": "r2-refresh-requires-evidence",
+ "kind": "candidate",
+ "spec_ref": "working/rulings-pending-inexpressibility-2026-07-15.md",
+ "priority_tier": 1,
+ "status": "blocked",
+ "effort_band": "S",
+ "canonical_source": "working/rulings-pending-inexpressibility-2026-07-15.md",
+ "open_items": "R2 (NAMED, UNRULED): 'Refresh must require new evidence and probably return a new state rather than mutate age away.' Evidence: TTLManager.revalidate(claim_id) (ttl.py:235) restores last_validated_at AND current_confidence = original_confidence with NO evidence parameter. Backing: lean check 5, refresh_is_inexpressible. TWO separable questions: (a) must refresh take evidence? (b) must it return a NEW STATE rather than mutate in place — operator hedged 'probably', and it is the deeper one: in-place mutation destroys the pre-refresh age, so nothing can testify a refresh happened or what it rested on. LATENT (sole caller ttl.py:609 fires only on AuditDecision.ALLOW_HARD — caller disciplined, method is the lane). CUSTODY-AFFECTING: TTL semantics.",
+ "repo": "agent_gov",
+ "wake_condition": "an explicit operator ruling of R2, including the (b) question (mutate vs return successor state). Custody-affecting.",
+ "reconciled": {
+  "date": "2026-07-15",
+  "basis": "operator slicing in-session 2026-07-15 ('at least four separate rulings'); evidence in working/lean-sweep-2026-07-15.md + working/finding-oracle-class-self-attested-2026-07-15.md; nothing built",
+  "confidence": "CURRENT"
+ },
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-16T00:00:00Z",
+  "state_axes": {
+   "admission": {
+    "state": "admitted",
+    "detail": "named by the operator as one of four separate rulings; the RULING itself is not made"
+   },
+   "selection": "unselected",
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": {
+    "state": "none_evidenced",
+    "detail": "naming is not ratification; authorizes no edit"
+   },
+   "custody": {
+    "state": "open",
+    "detail": "nothing built; custody-affecting, awaiting its own ruling"
+   }
+  },
+  "basis": "working/rulings-pending-inexpressibility-2026-07-15.md"
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "id": "lean-sweep-findings-2026-07-15",
+ "kind": "findings",
+ "spec_ref": "working/lean-sweep-2026-07-15.md",
+ "priority_tier": 1,
+ "status": "filed",
+ "effort_band": "?",
+ "canonical_source": "working/lean-sweep-2026-07-15.md + ~/git/lean/docs/AG-AUDIT-CHECKLIST.md (v10)",
+ "open_items": "First lean sweep since 2026-07-02 — AG's lean roadmap is pinned at v7.0.0/762967c while lean shipped v10 (2026-07-14); v11 in flight. Sweep applied the kernel author's own AG-AUDIT-CHECKLIST. HIT: oracle_class self-attestation (found by hand earlier same day) is exactly check 1's F2 special case (score without provenance binding at >1 unrelated gate) + check 4's fluency check (reliance rooted in a confidence signal) — hand-audit and formal screen converged independently. Codex adversarial pass on checks 5-8 returned 6 findings; TWO VERIFIED BY THIS SESSION: (1) TTLManager.revalidate(claim_id) restores freshness AND original_confidence with no evidence parameter — refresh_is_inexpressible, WALL-grade by the discipline, LATENT (sole caller fires only on AuditDecision.ALLOW_HARD); (2) context_compact drops decisions/anchors/constraints with NO DroppedItem when always_keep_* flags are off — checkpoint_mints_nothing, LATENT (all three default True). FOUR UNVERIFIED codex candidates (claims_evidence_binding has_blob any-state; ci.py caveat-blind pass acceptance; confer_operational_effect re-read; commitment_transport multiplicity collapse). META-FINDING: every lane is latent — safe defaults, disciplined callers, EXPRESSIBLE violations; the *_is_inexpressible family says the operation should not be SAYABLE, and AG has been enforcing the unsaid half by convention. NOTHING FIXED: all items are custody-affecting (kernel invariants / publish boundary / TTL semantics / compaction custody).",
+ "repo": "agent_gov",
+ "wake_condition": "per-item operator rulings. Independent sub-items, rulable separately: (a) oracle_class (see working/finding-oracle-class-self-attested-2026-07-15.md, 4 options); (b) revalidate evidence parameter; (c) compaction loss-record completeness; (d) verification of the 4 unverified codex candidates; (e) the mechanical lean-roadmap v7->v10 correction (not a ruling); (f) a full pass over checks 1-4, not done.",
+ "reconciled": {
+  "date": "2026-07-15",
+  "basis": "sweep executed 2026-07-15 against lean v10 shipped (c47faee HEAD; v10 tag 6918769); codex smoke-tested then run read-only on checks 5-8; findings 1 and 5 verified at file:line by this session; nothing built",
+  "confidence": "CURRENT"
+ },
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T23:30:00Z",
+  "state_axes": {
+   "admission": {
+    "state": "admitted",
+    "detail": "the sweep rule (sweep lean on kernel-axis work) fired legitimately on the oracle_class finding"
+   },
+   "selection": "unselected",
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": {
+    "state": "none_evidenced",
+    "detail": "findings only; the sweep authorizes nothing"
+   },
+   "custody": {
+    "state": "open",
+    "detail": "findings recorded, no fixes; every item custody-affecting and awaiting its own ruling"
+   }
+  },
+  "basis": "working/lean-sweep-2026-07-15.md"
+ }
+}

@@ -3,7 +3,7 @@
  "repo": "agent_gov",
  "kind": "build_slice",
  "priority_tier": 2,
- "status": "queued",
+ "status": "done",
  "spec_ref": "docs/loop-protocol.md §11.1 (normative); working/pipeline-doctrine-2026-06-12.md §1 (reasoning + confusion_receipt schema)",
  "acceptance": "(1) PROBE pinning test: 'probe sessions emit zero mutation receipts' checkable mechanically from the receipt trail — a probe that patched something is evidenced after the fact (the wall audits itself); (2) confusion receipt emitted with the §1 schema (slice_id, attempt_count, failure_classes_seen, repeated/distinct counts, capacity_spent, slice_advancing_receipts, burn_per_progress, inferred_signature, prescribed_next_mode); (3) correlated-confusion audit query: confusion receipts from N>=2 agents on unrelated slices in one window flags environment-level diagnosis, runs as part of morning AUDIT; (4) failure matching is by CLASS, never exact string.",
  "note": "Protocol-first, code-second: §11.1 binds agent behavior today via the loop contract; this slice makes the walls evidenced rather than promised. Burn-per-progress thresholds start as named constants — they become policies/loop_backoff/epistemic_backoff.v0.md fields when the register lands (see policy-register-citation-discipline).",
@@ -11,27 +11,34 @@
  "effort_band": "M",
  "wake_condition": "protocol text ratified (loop-protocol §11.1); mechanize when loop work resumes",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "date": "2026-07-15",
+  "basis": "src/governor/loop_backoff.py + tests/test_loop_backoff.py (28 tests, all four acceptance criteria keyed to test classes); correlated-confusion wired into portfolio_audit.collect_consistency_findings (runs in --check / morning AUDIT); mutation probes: wall-ignores-writes and superstitious-third-retry both caught",
   "confidence": "CURRENT"
  },
  "current_disposition": {
   "schema": "ag-current-disposition/v1",
-  "recorded_at": "2026-07-15T18:00:00Z",
+  "recorded_at": "2026-07-15T21:30:00Z",
   "state_axes": {
-   "selection": "unselected",
-   "plan_approval": "none",
-   "runtime_activity": "inactive",
-   "effect_authority": "none_evidenced",
    "admission": {
     "state": "admitted",
     "detail": "mechanizes ratified loop-protocol §11.1 (a148944; doctrine c3a3bc2)"
    },
+   "selection": {
+    "state": "unselected",
+    "detail": "was item 4/4 of the operator 2026-07-15 sequenced selection; consumed by closure"
+   },
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": {
+    "state": "none_evidenced",
+    "detail": "confusion receipts are verdict=observe; the module authorizes nothing"
+   },
    "custody": {
-    "state": "open",
-    "detail": "not built"
+    "state": "complete",
+    "detail": "module+tests+audit wiring landed; emission at loop discipline (no automated retry engine exists to wire); burn thresholds are pre-calibration heuristics"
    }
   },
-  "basis": "2026-07-15 six-axis audit (AG 5916f14): selection from .governor/loop.json phase=PLAN/current_slice=null; runtime from 3 terminal runtime ledgers (newest 2026-07-10); effect authority from 0 grant_activation across 2928 gate receipts, no scope.json, empty overrides/"
- }
+  "basis": "§11.1 mechanization closure 2026-07-15"
+ },
+ "open_items": ""
 }

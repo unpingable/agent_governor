@@ -852,6 +852,37 @@ def _prose_axis_findings(root: Path) -> list[ConsistencyFinding]:
     return findings
 
 
+def _correlated_confusion_findings(root: Path) -> list[ConsistencyFinding]:
+    """§11.1 morning-audit obligation: correlated confusion is environmental.
+
+    Confusion receipts from N>=2 principals on unrelated slices in one window
+    mean the environment is failing, not the slices — escalate to environment
+    diagnosis before any recomposition, and before any quorum over the
+    diagnosis counts agreement as evidence.
+    """
+
+    from governor.loop_backoff import correlated_confusion_audit
+
+    governor_dir = root / ".governor"
+    receipts = governor_dir / "receipts" / "gate_receipts.jsonl"
+    findings: list[ConsistencyFinding] = []
+    for hit in correlated_confusion_audit(receipts, governor_dir):
+        findings.append(
+            ConsistencyFinding(
+                code="correlated_confusion_environmental",
+                severity="environment_diagnosis_required",
+                subject=f"slices {', '.join(hit.slice_ids)}",
+                claim=(
+                    f"principals {', '.join(hit.principal_ids)} each emitted "
+                    f"confusion receipts within {hit.window_start} + window"
+                ),
+                ground_truth=hit.describe(),
+                evidence=tuple(hit.receipt_ids),
+            )
+        )
+    return findings
+
+
 def collect_consistency_findings(
     root: Path,
     *,
@@ -875,6 +906,7 @@ def collect_consistency_findings(
         _vocabulary_findings(project_state_axes(root)),
         _coverage_findings(root),
         _prose_axis_findings(root),
+        _correlated_confusion_findings(root),
     )
     return sorted(
         (finding for group in finding_groups for finding in group),

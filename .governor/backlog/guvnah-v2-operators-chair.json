@@ -30,5 +30,6 @@
    }
   },
   "basis": "2026-07-15 six-axis audit (AG 5916f14): selection from .governor/loop.json phase=PLAN/current_slice=null; runtime from 3 terminal runtime ledgers (newest 2026-07-10); effect authority from 0 grant_activation across 2928 gate receipts, no scope.json, empty overrides/"
- }
+ },
+ "open_items": "CANDIDATE IDENTITY PIVOT (2026-07-15, operator, unratified): guvnah as the operator's SYSTEM-MODELING SEAT — the chair where the constellation model (composer output) is reviewed, edited, challenged, ratified. Resolves the vague operator-console identity by giving it a concrete object of work: the constellation model itself. 'A bigger pivot than maude's.' See working/candidate-constellation-composer-2026-07-15.md; tension with Q-A7 (guvnah v1 RETIRED) recorded there, not resolved. Design-before-build posture unchanged."
 }

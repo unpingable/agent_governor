@@ -1,0 +1,17 @@
+{
+ "id": "constellation-composer-specimen",
+ "kind": "candidate",
+ "spec_ref": "working/candidate-constellation-composer-2026-07-15.md",
+ "priority_tier": 1,
+ "status": "filed",
+ "effort_band": "M",
+ "canonical_source": "working/candidate-constellation-composer-2026-07-15.md",
+ "open_items": "CANDIDATE, operator-penciled 2026-07-15 ('pencil this in lightly'). Demo-able composer, NOT composer product: declare bounded scope, typed components/relationships, observed-vs-asserted split, authority/evidence/custody boundaries, stable export specimen (1-2 consumers), visible refusal on contradictory scope. Candidate launch-DoD item — NOT ratified into the public-mvp envelope. Guvnah pivot rides along as candidate identity (operator's system-modeling seat). Theory drafts: ~/git/skunkworks/ux-design/. Gates: operator scope ratification; hostile-to-features review of the MVP definition BEFORE slice 1; export schema as its own reviewed record.",
+ "repo": "agent_gov",
+ "wake_condition": "operator ratification of scope + launch-DoD membership; then a hostile-to-features review of the MVP definition before any build slice.",
+ "reconciled": {
+  "date": "2026-07-15",
+  "basis": "operator pencil-in act (in-session, 2026-07-15) + candidate note filed; nothing built",
+  "confidence": "CURRENT"
+ }
+}

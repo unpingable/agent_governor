@@ -48,11 +48,12 @@ NS-1 regressions. Same class as the `nq_cli` skip-path hardening (`40ee42b`);
 not repaired in this slice.
 
 State axes: admission=`ratified`; selection=`unselected`;
-plan_approval=`ns1_unverifiable_exact_artifact_impl_amended_by_operator_ns2_6_not_attached`;
+plan_approval=`unverifiable` (NS-1 exact approved artifact unverifiable; NS-2..6 not attached);
 runtime_activity=`inactive`;
-effect_authority=`not_evidenced_for_unselected_packets`;
-custody=`ns1_closed_unpushed` (NS-1 landed at `e71303f`; S1–S7 are closed;
-NS-2..6 are not built).
+effect_authority=`none_evidenced` (for unselected packets);
+custody=`partial` (NS-1 impl closed at nightshift `e71303f`, local/unpushed;
+S1–S7 closed; NS-2..6 unbuilt). Vocabulary: ag-state-axes-vocab/v1; canonical
+home: `.governor/backlog/nightshift-functional-mvp.json`.
 
 **Approval custody is NOT closed by this landing (audit correction 2026-07-15).**
 NS-1's exact approved plan bytes were never preserved: the tracked `plan.md`

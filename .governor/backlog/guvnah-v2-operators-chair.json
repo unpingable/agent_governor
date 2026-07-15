@@ -1,18 +1,34 @@
 {
  "id": "guvnah-v2-operators-chair",
- "repo": "~/git/guvnah (exists locally; Electron+Svelte, daemon as stdio child) \u2014 design spec lands there or in agent_gov working/",
+ "repo": "~/git/guvnah (exists locally; Electron+Svelte, daemon as stdio child) — design spec lands there or in agent_gov working/",
  "kind": "spec_slice",
  "priority_tier": "2 (post-launch; design before build)",
  "status": "queued",
- "spec_ref": "working/demo-2-correctly-bored-and-operators-chair-2026-06-12.md \u00a73-\u00a75",
- "acceptance": "A design doc leading with the role re-scope sentence (v1 = daemon cockpit; v2 = where the human-in-the-loop sits: ratification authority + attention-budget holder), covering: nod queue as center (decision cards: ask/blocker/evidence links/options/one-tap ratify-override-park; 5-minute morning audit from the couch); correctly-bored default state with evidence ('I would prefer not to bother you' + receipts); loop panel (loop.json alive + burn-per-progress sparkline, confusion amber, correlated-confusion red); constellation panel projected from the SHARED component register (same source as the public hub \u2014 the anti-seance mechanism); budgets panel including the dash metering its own interruptions against the attention ledger; presence-surface doctrine (nods carry operator-present provenance, optional freshness check; chat namespace stays dark). Phases: 1 local chair (zero network) / 2 fleet eyes (forces N0-N2; remote claims render WITH model age) / 3 remote nod (forces X1; honest interim = surface the HALT, nod over ssh, receipt records cli_origin).",
- "note": "Dependencies: webui-vocabulary-refresh (shared contract work), policy-register-citation-discipline (cards cite policy_refs), component register (topology source; card schema in record \u00a73 supersedes hub-v1 five-field skeleton when next touched). Phase-3 bootstrap fact worth keeping: the operator's ratification key is the FIRST standing-backed identity on the wire \u2014 the key hierarchy starts where authority actually starts.",
- "status_note": "pre-reconciliation status: queued \u2014 DESIGN SPEC IS OPERATOR-OWNED, not loop-delegable (the operator designing the operator's chair is the point, and the fun)",
+ "spec_ref": "working/demo-2-correctly-bored-and-operators-chair-2026-06-12.md §3-§5",
+ "acceptance": "A design doc leading with the role re-scope sentence (v1 = daemon cockpit; v2 = where the human-in-the-loop sits: ratification authority + attention-budget holder), covering: nod queue as center (decision cards: ask/blocker/evidence links/options/one-tap ratify-override-park; 5-minute morning audit from the couch); correctly-bored default state with evidence ('I would prefer not to bother you' + receipts); loop panel (loop.json alive + burn-per-progress sparkline, confusion amber, correlated-confusion red); constellation panel projected from the SHARED component register (same source as the public hub — the anti-seance mechanism); budgets panel including the dash metering its own interruptions against the attention ledger; presence-surface doctrine (nods carry operator-present provenance, optional freshness check; chat namespace stays dark). Phases: 1 local chair (zero network) / 2 fleet eyes (forces N0-N2; remote claims render WITH model age) / 3 remote nod (forces X1; honest interim = surface the HALT, nod over ssh, receipt records cli_origin).",
+ "note": "Dependencies: webui-vocabulary-refresh (shared contract work), policy-register-citation-discipline (cards cite policy_refs), component register (topology source; card schema in record §3 supersedes hub-v1 five-field skeleton when next touched). Phase-3 bootstrap fact worth keeping: the operator's ratification key is the FIRST standing-backed identity on the wire — the key hierarchy starts where authority actually starts.",
+ "status_note": "pre-reconciliation status: queued — DESIGN SPEC IS OPERATOR-OWNED, not loop-delegable (the operator designing the operator's chair is the point, and the fun)",
  "effort_band": "L",
  "wake_condition": "post-launch; DESIGN IS OPERATOR-OWNED, not loop-delegable",
  "reconciled": {
   "date": "2026-07-13",
   "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
   "confidence": "CURRENT"
+ },
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T18:00:00Z",
+  "state_axes": {
+   "selection": "unselected",
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": "none_evidenced",
+   "admission": "admitted",
+   "custody": {
+    "state": "open",
+    "detail": "not built; post-launch, operator-owned design before build"
+   }
+  },
+  "basis": "2026-07-15 six-axis audit (AG 5916f14): selection from .governor/loop.json phase=PLAN/current_slice=null; runtime from 3 terminal runtime ledgers (newest 2026-07-10); effect authority from 0 grant_activation across 2928 gate receipts, no scope.json, empty overrides/"
  }
 }

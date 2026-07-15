@@ -12,5 +12,21 @@
   "date": "2026-07-13",
   "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
   "confidence": "PARTIAL"
+ },
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T18:00:00Z",
+  "state_axes": {
+   "selection": "unselected",
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": "none_evidenced",
+   "admission": "admitted",
+   "custody": {
+    "state": "partial",
+    "detail": "D-pre done 2026-07-05 (8174af2); D-main gated on the nightshift-functional-mvp exit demo"
+   }
+  },
+  "basis": "2026-07-15 six-axis audit (AG 5916f14): selection from .governor/loop.json phase=PLAN/current_slice=null; runtime from 3 terminal runtime ledgers (newest 2026-07-10); effect authority from 0 grant_activation across 2928 gate receipts, no scope.json, empty overrides/"
  }
 }

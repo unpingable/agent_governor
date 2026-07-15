@@ -13,9 +13,11 @@ set is exhausted. Remaining entries stay classified as design-blocked or
 operator-gated below; this successor does not select one.
 
 State axes: admission=`ratified`; selection=`unselected`;
-plan_approval=`not_attached_to_unselected_remainders`;
+plan_approval=`none` (not attached to unselected remainders);
 runtime_activity=`inactive`;
-effect_authority=`not_evidenced_for_unselected_remainders`; custody=`partial`.
+effect_authority=`none_evidenced` (for unselected remainders); custody=`partial`.
+Vocabulary: ag-state-axes-vocab/v1; canonical home:
+`.governor/backlog/transition-kernel-pickup.json`.
 
 ## 2026-07-04 (later) — B6 + B7 executed; B-series buildable set EXHAUSTED
 

@@ -38,10 +38,19 @@
   "state_axes": {
    "admission": "ratified",
    "selection": "unselected",
-   "plan_approval": "ns1_unverifiable_ns2_6_not_attached",
+   "plan_approval": {
+    "state": "unverifiable",
+    "detail": "NS-1 exact approved artifact unverifiable; NS-2..6 not attached"
+   },
    "runtime_activity": "inactive",
-   "effect_authority": "not_evidenced_for_unselected_packets",
-   "custody": "ns1_closed_unpushed"
+   "effect_authority": {
+    "state": "none_evidenced",
+    "detail": "for unselected packets"
+   },
+   "custody": {
+    "state": "partial",
+    "detail": "NS-1 impl closed at nightshift e71303f (local, unpushed); S1-S7 closed; NS-2..6 unbuilt"
+   }
   },
   "evidence": [
    "docs/campaigns/nightshift-functional-mvp/CAMPAIGN.md packets NS-2..NS-6 and per-packet operator acts",

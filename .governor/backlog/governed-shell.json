@@ -3,7 +3,7 @@
  "repo": "agent_gov",
  "kind": "campaign",
  "spec_ref": "docs/campaigns/governed-shell/CAMPAIGN.md",
- "forcing_case": "Q-C2-1 amendment reframed maude/phosphor as operator shells; operator brought the deferred product conversation forward \u2014 no captured workflow was both easy AND governed",
+ "forcing_case": "Q-C2-1 amendment reframed maude/phosphor as operator shells; operator brought the deferred product conversation forward — no captured workflow was both easy AND governed",
  "priority_tier": 1,
  "status": "in_progress",
  "acceptance": "GS-0/GS-1 done with filing. Campaign completes when maude 3.0 ships the desk (queue/session/board/diff over operator.decisions + operator.watch + send_input), ag_shell_client is extracted and CI-tested against the daemon, and phosphor's governed-session lane v0 passes generated lane-contract tests. Sandwiched slices (GS-3, GS-5, GS-7) carry mandatory codex-exec review.",
@@ -11,10 +11,26 @@
  "status_note": "pre-reconciliation status: filed",
  "effort_band": "L",
  "canonical_source": "docs/campaigns/governed-shell/STATUS.md",
- "open_items": "STALE-CORRECTED 2026-07-14: GS-8b (AsyncDaemonClient) + GS-9 (maude consumes ag_shell_client, maude f143efc) both EXECUTED 2026-07-03 \u2014 NOT remainders. Actual remainder: GS-2b admissibility+HELD (re-tiered AUTHORITY-SEMANTICS, needs ruling \u2014 OBSTRUCTION-gs2b-admissibility-held.md) + GS-10..GS-15 maude 3.0 desk UI build (large, fresh) + phosphor GS-16/17. No small mechanical AG-side item remains.",
+ "open_items": "STALE-CORRECTED 2026-07-14: GS-8b (AsyncDaemonClient) + GS-9 (maude consumes ag_shell_client, maude f143efc) both EXECUTED 2026-07-03 — NOT remainders. Actual remainder: GS-2b admissibility+HELD (re-tiered AUTHORITY-SEMANTICS, needs ruling — OBSTRUCTION-gs2b-admissibility-held.md) + GS-10..GS-15 maude 3.0 desk UI build (large, fresh) + phosphor GS-16/17. No small mechanical AG-side item remains.",
  "reconciled": {
   "date": "2026-07-14",
   "basis": "NEXT.md GS-8b/GS-9 both marked EXECUTED 2026-07-03; verified against feature-history + AsyncDaemonClient in libs/ag_shell_client",
   "confidence": "CURRENT"
+ },
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T18:00:00Z",
+  "state_axes": {
+   "selection": "unselected",
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": "none_evidenced",
+   "admission": "admitted",
+   "custody": {
+    "state": "partial",
+    "detail": "GS-0..GS-11 landed incl. GS-8b/GS-9 (maude f143efc); remainder = GS-2b admissibility+HELD, re-tiered authority-semantics, BLOCKED"
+   }
+  },
+  "basis": "2026-07-15 six-axis audit (AG 5916f14): selection from .governor/loop.json phase=PLAN/current_slice=null; runtime from 3 terminal runtime ledgers (newest 2026-07-10); effect authority from 0 grant_activation across 2928 gate receipts, no scope.json, empty overrides/"
  }
 }

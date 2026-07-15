@@ -18,17 +18,29 @@
   "state_axes": {
    "admission": "ratified",
    "selection": "unselected",
-   "plan_approval": "not_applicable_completed",
+   "plan_approval": {
+    "state": "not_applicable",
+    "detail": "completed run"
+   },
    "runtime_activity": "inactive",
-   "effect_authority": "not_evidenced_for_new_effect",
+   "effect_authority": {
+    "state": "none_evidenced",
+    "detail": "no new-effect grant evidenced"
+   },
    "custody": "complete"
   },
   "push_state": {
    "scope": "campaign_commits",
    "unpushed": false,
    "upstream": "origin/main",
-   "commits_contained": ["fb4322d", "8a76306"],
-   "repository_ahead_behind_at_measurement": [0, 0],
+   "commits_contained": [
+    "fb4322d",
+    "8a76306"
+   ],
+   "repository_ahead_behind_at_measurement": [
+    0,
+    0
+   ],
    "measurement_parent": "e52355c"
   },
   "evidence": [

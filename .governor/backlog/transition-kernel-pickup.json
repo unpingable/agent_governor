@@ -27,9 +27,15 @@
   "state_axes": {
    "admission": "ratified",
    "selection": "unselected",
-   "plan_approval": "not_attached_to_unselected_remainders",
+   "plan_approval": {
+    "state": "none",
+    "detail": "not attached to unselected remainders"
+   },
    "runtime_activity": "inactive",
-   "effect_authority": "not_evidenced_for_unselected_remainders",
+   "effect_authority": {
+    "state": "none_evidenced",
+    "detail": "for unselected remainders"
+   },
    "custody": "partial"
   },
   "evidence": [

@@ -25,17 +25,22 @@ from typing import Any, Iterable
 
 import yaml
 
+from governor.state_axes import (  # noqa: F401  (AXES re-exported for consumers)
+    AXES,
+    AXIS_VOCABULARY_VERSION,
+    current_prose_block,
+    is_canonical_prose_header,
+    validate_state_axes,
+)
 
 AUDIT_SCHEMA = "ag-portfolio-audit/v1"
 DISPOSITION_SCHEMA = "ag-current-disposition/v1"
-AXES = (
-    "admission",
-    "selection",
-    "plan_approval",
-    "runtime_activity",
-    "effect_authority",
-    "custody",
-)
+
+#: Backlog statuses that claim activity or impediment. Records in these
+#: statuses MUST carry an explicit six-axis disposition — a live record with
+#: all-unknown axes is a coverage gap, not a neutral absence. Passive statuses
+#: (filed/zoned/done/closed/retired) may stay unknown.
+LIVE_STATUSES = frozenset({"in_progress", "queued", "blocked"})
 
 
 @dataclass(frozen=True)
@@ -97,6 +102,35 @@ def load_backlog(root: Path) -> list[dict[str, Any]]:
     return records
 
 
+def _axis_source(record: dict[str, Any]) -> dict[str, Any]:
+    """The mapping that owns a record's current ``state_axes`` block.
+
+    Append-only successors are deliberately nested so the historical claim
+    remains intact.  The successor is the current projection when present.
+    """
+
+    disposition = record.get("current_disposition")
+    if (
+        not isinstance(record.get("state_axes"), dict)
+        and isinstance(disposition, dict)
+        and isinstance(disposition.get("state_axes"), dict)
+    ):
+        return disposition
+    return record
+
+
+def raw_state_axes(record: dict[str, Any] | None) -> dict[str, Any]:
+    """The raw (unnormalized) current ``state_axes`` mapping, or ``{}``.
+
+    Unlike :func:`normalize_state_axes`, this preserves unknown axis names and
+    malformed values — which is exactly what vocabulary validation needs to
+    see.
+    """
+
+    raw = _axis_source(record or {}).get("state_axes")
+    return raw if isinstance(raw, dict) else {}
+
+
 def normalize_state_axes(record: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     """Return all six axes without deriving authority from legacy fields.
 
@@ -107,16 +141,7 @@ def normalize_state_axes(record: dict[str, Any] | None) -> dict[str, dict[str, A
     """
 
     record = record or {}
-    # Append-only successors are deliberately nested so the historical claim
-    # remains intact.  The successor is the current projection when present.
-    disposition = record.get("current_disposition")
-    axis_source = (
-        disposition
-        if not isinstance(record.get("state_axes"), dict)
-        and isinstance(disposition, dict)
-        and isinstance(disposition.get("state_axes"), dict)
-        else record
-    )
+    axis_source = _axis_source(record)
     raw_axes = axis_source.get("state_axes")
     if not isinstance(raw_axes, dict):
         raw_axes = {}
@@ -131,6 +156,7 @@ def normalize_state_axes(record: dict[str, Any] | None) -> dict[str, dict[str, A
         if isinstance(raw, str) and raw:
             normalized[axis] = {
                 "state": raw,
+                "detail": None,
                 "basis": record_basis,
                 "evidence": list(record_evidence),
             }
@@ -138,11 +164,12 @@ def normalize_state_axes(record: dict[str, Any] | None) -> dict[str, dict[str, A
             evidence = raw.get("evidence", record_evidence)
             normalized[axis] = {
                 "state": raw["state"],
+                "detail": raw.get("detail"),
                 "basis": raw.get("basis", record_basis),
                 "evidence": list(evidence) if isinstance(evidence, list) else [],
             }
         else:
-            normalized[axis] = {"state": "unknown", "basis": None, "evidence": []}
+            normalized[axis] = {"state": "unknown", "detail": None, "basis": None, "evidence": []}
     return normalized
 
 
@@ -240,6 +267,7 @@ def _axis_record(record_id: str, record: dict[str, Any], source_path: str) -> di
         "source_path": source_path,
         "legacy_status": record.get("status"),
         "state_axes": normalize_state_axes(record),
+        "raw_axes": raw_state_axes(record),
     }
 
 
@@ -700,6 +728,130 @@ def _loop_findings(root: Path) -> list[ConsistencyFinding]:
     ]
 
 
+def _vocabulary_findings(records: list[dict[str, Any]]) -> list[ConsistencyFinding]:
+    """Closed-vocabulary enforcement: a novel axis value is a violation.
+
+    Allowlist, not blocklist (same law as ``operator_mode``): a string outside
+    the vocabulary is a typed finding, never a de-facto new state.
+    """
+
+    findings: list[ConsistencyFinding] = []
+    for record in records:
+        for violation in validate_state_axes(record.get("raw_axes", {})):
+            findings.append(
+                ConsistencyFinding(
+                    code="axis_value_not_in_closed_vocabulary",
+                    severity="vocabulary_violation",
+                    subject=f"{record['id']} ({record['source_path']})",
+                    claim=f"state_axes carries {violation.axis}={violation.value!r}",
+                    ground_truth=violation.describe(),
+                    evidence=(record["source_path"], AXIS_VOCABULARY_VERSION),
+                )
+            )
+    return findings
+
+
+def _coverage_findings(root: Path) -> list[ConsistencyFinding]:
+    """Live records (in_progress/queued/blocked) must carry explicit axes.
+
+    An all-unknown live record is the audit's biggest blind spot: the
+    apparatus classifies what is already settled and goes silent on the live
+    queue. Passive statuses (filed/zoned/done) may stay unknown.
+    """
+
+    findings: list[ConsistencyFinding] = []
+    for record in load_backlog(root):
+        status = record.get("status")
+        if status not in LIVE_STATUSES:
+            continue
+        if not raw_state_axes(record):
+            findings.append(
+                ConsistencyFinding(
+                    code="live_record_missing_state_axes",
+                    severity="coverage_gap",
+                    subject=str(record.get("id", record["_source_path"])),
+                    claim=f"backlog status {status!r} asserts live work",
+                    ground_truth=(
+                        "no explicit six-axis disposition exists; every axis "
+                        "projects as unknown for a record claiming activity "
+                        "or impediment"
+                    ),
+                    evidence=(record["_source_path"],),
+                )
+            )
+    return findings
+
+
+def _prose_axis_findings(root: Path) -> list[ConsistencyFinding]:
+    """Single-home enforcement: STATUS prose axes must match the stub.
+
+    The canonical home for six-axis state is the backlog stub's
+    ``current_disposition``; a campaign STATUS ``State axes:`` line is a
+    projection of it. Divergence or a drifted header (``Current axes:``) is a
+    finding. Only the FIRST prose block is compared — later blocks are
+    superseded history and stay untouched.
+    """
+
+    findings: list[ConsistencyFinding] = []
+    stub_by_status_path: dict[str, dict[str, Any]] = {}
+    for record in load_backlog(root):
+        for key in ("spec_ref", "canonical_source"):
+            ref = record.get(key)
+            if isinstance(ref, str):
+                for part in ref.split("+"):
+                    part = part.strip()
+                    if part.endswith("STATUS.md"):
+                        stub_by_status_path.setdefault(part, record)
+
+    for status_path in sorted((root / "docs" / "campaigns").glob("*/STATUS.md")):
+        rel = status_path.relative_to(root).as_posix()
+        block = current_prose_block(_read_text(status_path))
+        if block is None:
+            continue
+        if not is_canonical_prose_header(block):
+            findings.append(
+                ConsistencyFinding(
+                    code="prose_axes_header_drift",
+                    severity="convention_drift",
+                    subject=rel,
+                    claim=f"axis block at line {block.line_number} is headed {block.header!r}",
+                    ground_truth=(
+                        "the canonical prose header is 'State axes'; a drifted "
+                        "header makes a conformant record invisible to "
+                        "convention-matching tools"
+                    ),
+                    evidence=(f"{rel}:{block.line_number}",),
+                )
+            )
+        stub = stub_by_status_path.get(rel)
+        if stub is None:
+            continue
+        stub_axes = normalize_state_axes(stub)
+        diverged = {
+            axis: (value, stub_axes[axis]["state"])
+            for axis, value in block.values.items()
+            if axis in stub_axes and value != stub_axes[axis]["state"]
+        }
+        if diverged:
+            detail = "; ".join(
+                f"{axis}: prose={prose!r} vs stub={canon!r}"
+                for axis, (prose, canon) in sorted(diverged.items())
+            )
+            findings.append(
+                ConsistencyFinding(
+                    code="prose_axes_diverge_from_canonical",
+                    severity="single_home_violation",
+                    subject=rel,
+                    claim=f"prose axis block (line {block.line_number}) disagrees with the stub",
+                    ground_truth=(
+                        f"the backlog stub is the canonical home; {detail}"
+                    ),
+                    evidence=(f"{rel}:{block.line_number}", stub["_source_path"]),
+                )
+            )
+    return findings
+
+
 def collect_consistency_findings(
     root: Path,
     *,
@@ -720,6 +872,9 @@ def collect_consistency_findings(
         _standing_findings(standing_db, now),
         _queue_findings(root, dispositions),
         _loop_findings(root),
+        _vocabulary_findings(project_state_axes(root)),
+        _coverage_findings(root),
+        _prose_axis_findings(root),
     )
     return sorted(
         (finding for group in finding_groups for finding in group),
@@ -744,6 +899,7 @@ def build_audit(
     findings = collect_consistency_findings(root, standing_db=standing_db, now=now)
     return {
         "schema": AUDIT_SCHEMA,
+        "axis_vocabulary": AXIS_VOCABULARY_VERSION,
         "measurement_boundary": (
             "Axes are explicit state custody only. Legacy backlog status never implies "
             "selection, plan approval, runtime activity, or effect authority."

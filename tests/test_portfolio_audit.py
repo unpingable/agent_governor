@@ -157,6 +157,7 @@ def test_nested_axis_can_carry_axis_specific_receipts() -> None:
     )
     assert axes["selection"] == {
         "state": "unselected",
+        "detail": None,
         "basis": "loop program counter",
         "evidence": [".governor/loop.json"],
     }
@@ -355,3 +356,163 @@ def test_append_only_successors_suppress_superseded_campaign_and_session_claims(
     assert "transition_slice_1b_stale_active" not in codes
     assert "ag_admit_stale_unpushed" not in codes
     assert "session_stale_active_marker" not in codes
+
+
+# ---------------------------------------------------------------------
+# Closed axis vocabulary + single-home checker (ruled 2026-07-15)
+# ---------------------------------------------------------------------
+
+
+def _vocab_repo(tmp_path: Path) -> Path:
+    """Minimal repo exercising only the vocabulary/coverage/prose checks."""
+
+    root = tmp_path / "ag"
+    (root / ".governor" / "backlog").mkdir(parents=True)
+    (root / "docs" / "campaigns").mkdir(parents=True)
+    _write_json(root / ".governor/loop.json", {"current_slice": None})
+    return root
+
+
+def test_novel_axis_value_is_a_vocabulary_violation(tmp_path: Path) -> None:
+    root = _vocab_repo(tmp_path)
+    _write_json(
+        root / ".governor/backlog/thing.json",
+        {
+            "id": "thing",
+            "status": "done",
+            "current_disposition": {
+                "state_axes": {"custody": "ns1_closed_unpushed"}
+            },
+        },
+    )
+
+    findings = audit.collect_consistency_findings(root)
+    vocab = [f for f in findings if f.code == "axis_value_not_in_closed_vocabulary"]
+    assert len(vocab) == 1
+    assert "ns1_closed_unpushed" in vocab[0].claim
+    assert "never mints a state" in vocab[0].ground_truth
+
+
+def test_closed_values_raise_no_vocabulary_finding(tmp_path: Path) -> None:
+    root = _vocab_repo(tmp_path)
+    _write_json(
+        root / ".governor/backlog/thing.json",
+        {
+            "id": "thing",
+            "status": "queued",
+            "current_disposition": {
+                "state_axes": {
+                    "admission": "admitted",
+                    "selection": "unselected",
+                    "plan_approval": "none",
+                    "runtime_activity": "inactive",
+                    "effect_authority": "none_evidenced",
+                    "custody": {"state": "partial", "detail": "one label left"},
+                }
+            },
+        },
+    )
+
+    findings = audit.collect_consistency_findings(root)
+    codes = {f.code for f in findings}
+    assert "axis_value_not_in_closed_vocabulary" not in codes
+    assert "live_record_missing_state_axes" not in codes
+
+
+def test_live_record_without_axes_is_a_coverage_gap(tmp_path: Path) -> None:
+    root = _vocab_repo(tmp_path)
+    _write_json(
+        root / ".governor/backlog/live-thing.json",
+        {"id": "live-thing", "status": "in_progress"},
+    )
+    _write_json(
+        root / ".governor/backlog/passive-thing.json",
+        {"id": "passive-thing", "status": "filed"},
+    )
+
+    findings = audit.collect_consistency_findings(root)
+    gaps = [f for f in findings if f.code == "live_record_missing_state_axes"]
+    assert [f.subject for f in gaps] == ["live-thing"]
+
+
+def test_prose_axes_diverging_from_stub_is_a_single_home_violation(
+    tmp_path: Path,
+) -> None:
+    root = _vocab_repo(tmp_path)
+    _write_json(
+        root / ".governor/backlog/camp.json",
+        {
+            "id": "camp",
+            "status": "queued",
+            "spec_ref": "docs/campaigns/camp/STATUS.md",
+            "current_disposition": {
+                "state_axes": {
+                    "admission": "ratified",
+                    "selection": "unselected",
+                    "plan_approval": "none",
+                    "runtime_activity": "inactive",
+                    "effect_authority": "none_evidenced",
+                    "custody": "partial",
+                }
+            },
+        },
+    )
+    status = root / "docs/campaigns/camp/STATUS.md"
+    status.parent.mkdir(parents=True)
+    status.write_text(
+        "# Status\n\nState axes: admission=`ratified`; custody=`complete`.\n"
+    )
+
+    findings = audit.collect_consistency_findings(root)
+    home = [f for f in findings if f.code == "prose_axes_diverge_from_canonical"]
+    assert len(home) == 1
+    assert "custody" in home[0].ground_truth
+    assert "complete" in home[0].ground_truth
+
+
+def test_prose_matching_stub_is_quiet_and_superseded_blocks_ignored(
+    tmp_path: Path,
+) -> None:
+    root = _vocab_repo(tmp_path)
+    _write_json(
+        root / ".governor/backlog/camp.json",
+        {
+            "id": "camp",
+            "status": "queued",
+            "spec_ref": "docs/campaigns/camp/STATUS.md",
+            "current_disposition": {
+                "state_axes": {"admission": "ratified", "custody": "partial"}
+            },
+        },
+    )
+    status = root / "docs/campaigns/camp/STATUS.md"
+    status.parent.mkdir(parents=True)
+    # Current block matches; an older superseded block below diverges — and
+    # must NOT fire (history is not re-adjudicated).
+    status.write_text(
+        "# Status\n\n"
+        "State axes: admission=`ratified`; custody=`partial`.\n"
+        "\n"
+        "## Old disposition [SUPERSEDED]\n"
+        "\n"
+        "State axes: admission=`ratified`; custody=`complete`.\n"
+    )
+
+    findings = audit.collect_consistency_findings(root)
+    codes = {f.code for f in findings}
+    assert "prose_axes_diverge_from_canonical" not in codes
+
+
+def test_drifted_prose_header_is_flagged_even_midline(tmp_path: Path) -> None:
+    root = _vocab_repo(tmp_path)
+    status = root / "docs/campaigns/camp/STATUS.md"
+    status.parent.mkdir(parents=True)
+    status.write_text(
+        "# Status\n\nmeasured dynamically. Current axes: admission=`ratified`;\n"
+        "custody=`complete`.\n"
+    )
+
+    findings = audit.collect_consistency_findings(root)
+    drift = [f for f in findings if f.code == "prose_axes_header_drift"]
+    assert len(drift) == 1
+    assert "Current axes" in drift[0].claim

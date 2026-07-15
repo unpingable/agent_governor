@@ -2,7 +2,7 @@
  "id": "capsule-authority-reverify",
  "repo": "agent_gov",
  "kind": "gap",
- "spec_ref": "docs/campaigns/constellation-reconciliation/INVENTORY.md \u00a73 F-A3b-1",
+ "spec_ref": "docs/campaigns/constellation-reconciliation/INVENTORY.md §3 F-A3b-1",
  "forcing_case": "A3b screen finding vs refresh_is_inexpressible: session-continuity capsules carry AUTHORITY across sessions; nothing forces re-verification at resume (copy-forward refresh lane)",
  "priority_tier": 2,
  "status": "blocked",
@@ -12,10 +12,26 @@
  "effort_band": "M",
  "open_items": "code fence (doc fence F-A3b-1 landed 2026-07-04)",
  "wake_condition": "a resume-consumption forcing case (backlog name: capsule-authority-reverify)",
- "canonical_source": ".claude/rules/feature-history.md \u00a7Session Continuity",
+ "canonical_source": ".claude/rules/feature-history.md §Session Continuity",
  "reconciled": {
   "date": "2026-07-13",
   "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
   "confidence": "CURRENT"
+ },
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T18:00:00Z",
+  "state_axes": {
+   "selection": "unselected",
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": "none_evidenced",
+   "admission": "admitted",
+   "custody": {
+    "state": "partial",
+    "detail": "doc fence F-A3b-1 executed 2026-07-04; code fence gated on a resume-consumption forcing case"
+   }
+  },
+  "basis": "2026-07-15 six-axis audit (AG 5916f14): selection from .governor/loop.json phase=PLAN/current_slice=null; runtime from 3 terminal runtime ledgers (newest 2026-07-10); effect authority from 0 grant_activation across 2928 gate receipts, no scope.json, empty overrides/"
  }
 }

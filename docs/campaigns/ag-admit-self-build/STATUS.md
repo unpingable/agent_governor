@@ -8,10 +8,13 @@ The `unpushed: yes` statement in the dated snapshot below is preserved as
 history, but no longer describes custody of these campaign commits. At audit
 parent `e52355c`, `origin/main...e52355c` was `0/0`, and `origin/main` contains
 both `fb4322d` and `8a76306`. Later audit commits are outside this campaign-
-commit disposition and must be measured dynamically. Current axes:
-admission=`ratified`; selection=`unselected`;
-plan_approval=`not_applicable_completed`; runtime_activity=`inactive`;
-effect_authority=`not_evidenced_for_new_effect`; custody=`complete`.
+commit disposition and must be measured dynamically.
+
+State axes: admission=`ratified`; selection=`unselected`;
+plan_approval=`not_applicable` (completed run); runtime_activity=`inactive`;
+effect_authority=`none_evidenced` (no new-effect grant evidenced);
+custody=`complete`. Vocabulary: ag-state-axes-vocab/v1; canonical home:
+`.governor/backlog/ag-admit-self-build.json`.
 
 ## Committed (on `main`)
 

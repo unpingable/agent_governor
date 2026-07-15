@@ -13,7 +13,10 @@
     "selection": "unselected",
     "plan_approval": "not_applicable",
     "runtime_activity": "inactive",
-    "effect_authority": "not_applicable_completed",
+    "effect_authority": {
+      "state": "not_applicable",
+      "detail": "completed run"
+    },
     "custody": "complete"
   },
   "basis": "The queue latch is a preserved record of the 2026-07-04 operator act. The admitted work, verification, review, and landing are complete; the latch is not current selection or effect authority.",

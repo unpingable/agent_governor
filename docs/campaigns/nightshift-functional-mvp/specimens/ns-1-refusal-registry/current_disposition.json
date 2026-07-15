@@ -12,12 +12,21 @@
     "runtime_session": "sess_3a2ea5348a85"
   },
   "state_axes": {
-    "admission": "unverifiable_exact_artifact",
+    "admission": {
+      "state": "unverifiable",
+      "detail": "exact artifact unverifiable"
+    },
     "selection": "unselected",
-    "plan_approval": "unverifiable_exact_artifact",
+    "plan_approval": {
+      "state": "unverifiable",
+      "detail": "exact artifact unverifiable"
+    },
     "runtime_activity": "terminal",
-    "effect_authority": "terminal_no_live_grant_evidenced",
-    "custody": "impl_closed_unpushed_approval_unverifiable"
+    "effect_authority": "terminal_no_live_grant",
+    "custody": {
+      "state": "partial",
+      "detail": "implementation closed (local, unpushed); approval custody unverifiable"
+    }
   },
   "basis": "Runtime and promotion receipts prove that an NS-1 run exited and its five-file diff was kept. They do not preserve the exact approved plan bytes: the tracked plan remains candidate and the approval witness named by STATUS is absent. IMPLEMENTATION custody closed 2026-07-15 at nightshift e71303f (operator-amended; local, unpushed). APPROVAL custody is unchanged and remains unverifiable — the landing is not approval evidence, and plan_approval therefore stays unverifiable_exact_artifact.",
   "evidence": [

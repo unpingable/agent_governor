@@ -11,8 +11,24 @@
  "repo": "agent_gov",
  "reconciled": {
   "date": "2026-07-14",
-  "basis": "launch-checklist.md (20b DONE 2026-07-05, 52413b4; DoD remaining are operator acts) vs stale STATUS \u00a720b",
+  "basis": "launch-checklist.md (20b DONE 2026-07-05, 52413b4; DoD remaining are operator acts) vs stale STATUS §20b",
   "confidence": "CURRENT"
  },
- "wake_condition": "operator launch acts (push window + operator-only): fresh-clone operator run, spine OQ-1/OQ-2 ratification, site deploy, public claim mint"
+ "wake_condition": "operator launch acts (push window + operator-only): fresh-clone operator run, spine OQ-1/OQ-2 ratification, site deploy, public claim mint",
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T18:00:00Z",
+  "state_axes": {
+   "selection": "unselected",
+   "plan_approval": "none",
+   "runtime_activity": "inactive",
+   "effect_authority": "none_evidenced",
+   "admission": "admitted",
+   "custody": {
+    "state": "partial",
+    "detail": "build sprints 1-5 closed and pushed; work-container v1 ratified 74dcf86; remainder operator-only (mint, spine OQ-1/OQ-2, repo-visibility, fresh-clone run)"
+   }
+  },
+  "basis": "2026-07-15 six-axis audit (AG 5916f14): selection from .governor/loop.json phase=PLAN/current_slice=null; runtime from 3 terminal runtime ledgers (newest 2026-07-10); effect authority from 0 grant_activation across 2928 gate receipts, no scope.json, empty overrides/"
+ }
 }

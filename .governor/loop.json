@@ -38,7 +38,10 @@
       "plan_approval": "not_determined",
       "runtime_activity": "inactive",
       "effect_authority": "not_determined",
-      "custody": "current"
+      "custody": {
+        "state": "complete",
+        "detail": "record custody reconciled current"
+      }
     },
     "basis": [
       ".governor/loop.json current_slice=null and candidate_next_slice=null",
@@ -56,7 +59,15 @@
   "wip_limit": 1,
   "dirty_tree_allowed": false,
   "dirty_tree_scope": [
-    "src", "tests", "docs", "golden", "demo", "specs", "working", ".governor", "scripts"
+    "src",
+    "tests",
+    "docs",
+    "golden",
+    "demo",
+    "specs",
+    "working",
+    ".governor",
+    "scripts"
   ],
   "re_entry_probes": [
     "cat docs/CONSTELLATION_MAP.md | head -40",

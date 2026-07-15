@@ -12,9 +12,9 @@
   "state_axes": {
     "admission": "not_applicable",
     "selection": "not_applicable",
-    "plan_approval": "none_recorded",
+    "plan_approval": "none",
     "runtime_activity": "not_evidenced",
-    "effect_authority": "none_recorded",
+    "effect_authority": "none_evidenced",
     "custody": "stale_marker"
   },
   "basis": "The ignored generic session file is continuity/mainline metadata. Its state=active field is not a runtime supervisor event, selected slice, or authority grant. No terminal state is fabricated because no terminal receipt exists for this generic session ID.",

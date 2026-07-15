@@ -21,9 +21,12 @@
   "state_axes": {
     "admission": "admitted",
     "selection": "unselected",
-    "plan_approval": "approved_record_retained",
+    "plan_approval": {
+      "state": "retained_historical",
+      "detail": "approved record retained without consumption state"
+    },
     "runtime_activity": "terminal",
-    "effect_authority": "terminal_no_live_grant_evidenced",
+    "effect_authority": "terminal_no_live_grant",
     "custody": "complete"
   },
   "basis": "The exact queue, plan, and witness bytes remain the historical admission basis. The supervised run exited, its no-change ReviewPacket was kept, and no live ExecutionGrant or pending promotion remains. Retaining the approval record does not make it current selection or effect authority.",

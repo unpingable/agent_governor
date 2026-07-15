@@ -81,6 +81,42 @@ as a vague console concept. This pivot would re-scope v2 around a concrete
 object. Whether that is a v2 re-scope or a fresh surface is an operator
 ruling at pickup time; nothing in this filing amends Q-A7.
 
+## Delivery surface — open question (operator noodling, 2026-07-15, same day)
+
+Operator: guvnah "might want to be both app + web (chrome+firefox support) —
+right now I think I was focused on app." Plus: "what to do with govwebui and
+clerk, if anything" — and, rediscovered mid-thought, the VS Code extension.
+
+**The full human-facing surface inventory** (the operator's own head dropped
+one — which is this candidate's thesis demonstrating itself):
+
+| Surface | Substrate | Standing ruling (2026-07-02, `docs/roadmaps/CONSOLIDATION.md`) |
+|---|---|---|
+| maude | terminal TUI | KEEP — terminal-native operator shell (live, proven by NS-1) |
+| gov-webui → **phosphor** | web | KEEP + REFRAME — web-native lane host (ops-casework lane = near-term cockpit) |
+| clerk | Electron | parked assistant shell (kept, inactive) |
+| guvnah v1 | Electron-ish/stdio | RETIRE (Q-A7 — "premature surface area") |
+| vscode-governor | editor extension | separate repo; `docs/CLIENT_ECOSYSTEM.md` narrative STALE (census D3) |
+
+**The substrate question for the seat, unruled:** if the chair wants
+app + web, note the constellation already owns (a) a ruled web-native host —
+phosphor, where chrome+firefox support is free because it's just the web —
+and (b) a parked Electron shell — clerk — that is the obvious app-shell donor
+if a desktop app is genuinely needed. Candidate shapes, none ruled:
+
+1. **Seat as a phosphor lane** (web-first; cheapest; both browsers free;
+   clerk stays parked; "guvnah" survives as the lane's name or not at all).
+2. **Seat as resurrected guvnah app** consuming the same model; web later —
+   re-opens Q-A7 and doubles the surface early.
+3. **Both from birth** — the "another quarter" fence says no.
+
+Whatever the ruling, the daemon-authority invariant is unchanged: clients
+are views; the composer MODEL and its export specimen are the product, and
+they must not care which chrome renders them. Deciding the model/specimen
+first makes the substrate question cheap; deciding substrate first makes it
+expensive. `CLIENT_ECOSYSTEM.md` (already marked STALE) is where the
+eventual ruling should land, not new prose here.
+
 ## Gates before any build
 
 1. **Operator ratification** of scope + whether it enters the launch DoD

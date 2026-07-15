@@ -6,7 +6,7 @@
  "status": "blocked",
  "effort_band": "S",
  "canonical_source": "working/decision-packet-a1-runtime-admission-2026-07-15.md",
- "open_items": "4a = refuse ungoverned x autonomous at create (closed conjunction), refuse runtime.grant.activate on an ungoverned-labeled session. A REAL breaking change, stated as such in the packet: it breaks `runtime launch --mode autonomous` (documented CLI), parser-blessed synthetic_agent ungoverned plans (maude), and direct-construction autonomous test fixtures. NOT authorized by the 4b ruling; requires its own operator ruling with usage data in hand.",
+ "open_items": "4a = refuse ungoverned x autonomous at create (closed conjunction), refuse runtime.grant.activate on an ungoverned-labeled session. A REAL breaking change, stated as such in the packet: it breaks `runtime launch --mode autonomous` (documented CLI), parser-blessed synthetic_agent ungoverned plans (maude), and direct-construction autonomous test fixtures. NOT authorized by the 4b ruling; requires its own operator ruling with usage data in hand. CROSS-LINK (2026-07-15): should probably be ruled in the same breath as break-glass-alternate-path — 4a is exactly the fence an incident wants to climb; a refusal shipped without a typed door invites an untyped one (chmod/env). See working/candidate-break-glass-2026-07-15.md.",
  "repo": "agent_gov",
  "wake_condition": "labeled trail (CanonicalEvent.lane, shipped with 4b) accumulates enough usage data to show who actually occupies the ungoverned x autonomous square; then an explicit operator ruling of 4a with a migration story for the three named breakage surfaces.",
  "reconciled": {

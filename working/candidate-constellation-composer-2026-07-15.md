@@ -339,6 +339,45 @@ notice the same machine governs code and authored corpora *after* they have
 seen it do something difficult and concrete. Otherwise you become "a platform
 nobody asked for, now featuring four pastel tabs."
 
+## Sequencing rule — prove neutrality, never declare it (2026-07-15)
+
+Operator reached for "phosphor updated for all domains"; withdrew it
+unprompted ("I got greedy with 'all domains'. It's just that coding is also
+important, but that deserves its own slice"). Chatty's statement of the rule:
+
+> Domain-neutral kernel does NOT mean one universal slice with a dropdown.
+> **Prove domain-neutrality by building multiple narrow slices, not by
+> declaring it.** Abstraction after the third instance.
+
+```text
+shared composer kernel          NOT:  all domains
+    ├── fiction slice                     └── generic metadata soup
+    ├── code slice
+    └── research slice
+```
+
+Each pack: its own ontology, witness pack, refusal semantics, UX. Sketched
+(candidate stubs `composer-pack-code`, `composer-pack-research`):
+
+| pack | local ontology |
+|---|---|
+| fiction | canon state · character knowledge · chronology · object custody · POV boundaries · hard continuity constraints · soft narrative penalties |
+| code | source/artifact identity · build graph · specification and invariants · compiler/test/verifier witnesses · dependency and version constraints · change impact · release authority |
+| research | claims · sources · citation location · evidentiary support · methodological constraints · competing interpretations · retraction/supersession · confidence and unresolved questions |
+
+**Instance 1 is BUILT (fiction, 2026-07-15):** `fiction_governor/knowledge.py`
+— closed `TransmissionPath` + `KnowledgeVerifier` adjudicating belief paths
+against canon presence and chapter order. Erin's canon-loss failure is now a
+typed finding. Instances 2 and 3 are named, unbuilt, and each needs its own
+forcing case. **Only after three does extraction of what genuinely repeats
+become admissible** — and the fiction build already suggests what will
+repeat: a closed path/basis vocabulary, a presence-or-equivalent check, and
+the gap-vs-violation split.
+
+Note the fiction slice needed **no new UI at all** — which is the sequencing
+rule paying immediately: the gate is the product; phosphor renders it later,
+if ever.
+
 ## Gates before any build
 
 1. **Operator ratification** of scope + whether it enters the launch DoD

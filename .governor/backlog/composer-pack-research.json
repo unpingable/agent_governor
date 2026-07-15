@@ -1,0 +1,17 @@
+{
+ "id": "composer-pack-research",
+ "kind": "candidate",
+ "spec_ref": "working/candidate-constellation-composer-2026-07-15.md",
+ "priority_tier": 2,
+ "status": "filed",
+ "effort_band": "M",
+ "canonical_source": "working/candidate-constellation-composer-2026-07-15.md",
+ "open_items": "CANDIDATE domain pack, named 2026-07-15 (operator: 'also research, I think there was a plan for that too'). Local ontology per chatty: claims · sources · citation location · evidentiary support · methodological constraints · competing interpretations · retraction/supersession · confidence and unresolved questions. AG already holds much of it (nonfiction_governor corpus/doi/cfi, research.py hypothesis lifecycle, research_store.py epistemic debt, dissent.py, ttl.py). Prior pin (sidelane memory): 'nonfiction governor = same consumer class, lower urgency (no human edge yet); same relation audit before it goes human-facing' — that audit is the precondition. NOT a phosphor tab.",
+ "repo": "agent_gov",
+ "wake_condition": "operator selection + a forcing case; per the 2026-07-15 sequencing rule (chatty: 'prove domain-neutrality by building multiple narrow slices, not by declaring it'), each pack earns its OWN specimen, ontology, witnesses, and compiled projection. Abstraction only after the third instance.",
+ "reconciled": {
+  "date": "2026-07-15",
+  "basis": "named by the operator during the composer pencil-in; nothing built. Fiction pack (knowledge.py) is the first instance and the only one authorized.",
+  "confidence": "CURRENT"
+ }
+}

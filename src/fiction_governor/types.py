@@ -591,6 +591,112 @@ class Motivation:
         )
 
 
+class TransmissionKind(str, Enum):
+    """How a character came to hold a belief — the transmission path.
+
+    Closed vocabulary (2026-07-15). Free-form ``Belief.source`` let a belief
+    assert its own basis: ``source="witnessed"`` was a string nobody checked
+    against canon, so "the character knows something they never witnessed"
+    was unrepresentable-as-an-error rather than caught. That is an
+    unauthorized projection across an epistemic boundary — the same crime the
+    rest of the constellation refuses, in nicer prose.
+
+    ``UNSPECIFIED`` is the honest unknown (legacy beliefs, unmigrated notes).
+    It is a member so that absence of a path is *sayable*; it never counts as
+    a verified path, and the verifier reports it rather than passing it.
+    """
+
+    WITNESSED = "witnessed"  # present at a canon event — CHECKABLE against presence
+    TOLD_BY = "told_by"  # another character told them — CHECKABLE (teller + timing)
+    INFERRED = "inferred"  # reasoned from other knowledge — self-declared, not checked
+    ASSUMED = "assumed"  # assumed without basis (may be false) — self-declared
+    UNSPECIFIED = "unspecified"  # honest unknown; never a verified path
+
+
+@dataclass(frozen=True)
+class TransmissionPath:
+    """A structured claim about how a belief was acquired.
+
+    Refuses at construction when the claimed kind lacks its referent — a
+    ``WITNESSED`` path with no event to check against is not a weaker claim,
+    it is an uncheckable one, and this vocabulary exists precisely so that
+    uncheckable claims cannot masquerade as checked. Same law as
+    ``operator_mode`` and the six-axis vocabulary: the class is earned by its
+    evidence, never asserted by its name.
+    """
+
+    kind: TransmissionKind
+    event_id: UUID | None = None  # WITNESSED: the canon event attended
+    teller: str | None = None  # TOLD_BY: who told them
+    at_chapter: int | None = None  # TOLD_BY: when the telling happened
+    note: str | None = None  # free text — display only, never load-bearing
+
+    def __post_init__(self) -> None:
+        if self.kind is TransmissionKind.WITNESSED and self.event_id is None:
+            raise ValueError(
+                "TransmissionKind.WITNESSED requires event_id — a witnessed "
+                "claim with no canon event to check is uncheckable, not weak"
+            )
+        if self.kind is TransmissionKind.TOLD_BY and not self.teller:
+            raise ValueError(
+                "TransmissionKind.TOLD_BY requires teller — an unattributed "
+                "telling has no path to verify"
+            )
+
+    @property
+    def is_checkable(self) -> bool:
+        """Whether this path makes a claim canon can adjudicate."""
+        return self.kind in (TransmissionKind.WITNESSED, TransmissionKind.TOLD_BY)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind.value,
+            "event_id": str(self.event_id) if self.event_id else None,
+            "teller": self.teller,
+            "at_chapter": self.at_chapter,
+            "note": self.note,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TransmissionPath":
+        return cls(
+            kind=TransmissionKind(data["kind"]),
+            event_id=UUID(data["event_id"]) if data.get("event_id") else None,
+            teller=data.get("teller"),
+            at_chapter=data.get("at_chapter"),
+            note=data.get("note"),
+        )
+
+    @classmethod
+    def unspecified(cls, note: str | None = None) -> "TransmissionPath":
+        """The honest unknown — an unmigrated or unstated path."""
+        return cls(kind=TransmissionKind.UNSPECIFIED, note=note)
+
+
+def migrate_legacy_source(source: str | None) -> TransmissionPath:
+    """Map a legacy free-form ``Belief.source`` onto the closed vocabulary.
+
+    Deliberately conservative: only the self-declaring kinds (inferred /
+    assumed) are recognized outright, because they claim no external backing
+    and so cannot launder one. A legacy ``"witnessed"`` or ``"told by X"``
+    string CANNOT become a checkable path — it names no event and its teller
+    was never bound to a scene — so it degrades to ``UNSPECIFIED`` carrying
+    the original text as a display note. That is the honest reading: the old
+    string was never evidence, and promoting it now would manufacture custody
+    the data never had. Re-authoring those beliefs with real referents is the
+    author's act, not a migration's.
+    """
+
+    if source is None or not source.strip():
+        return TransmissionPath.unspecified()
+    text = source.strip().lower()
+    if text == "inferred":
+        return TransmissionPath(kind=TransmissionKind.INFERRED, note=source)
+    if text in ("assumed", "assumption"):
+        return TransmissionPath(kind=TransmissionKind.ASSUMED, note=source)
+    return TransmissionPath.unspecified(note=source)
+
+
 @dataclass
 class Belief:
     """
@@ -617,7 +723,20 @@ class Belief:
     """When the character learned/formed this belief."""
 
     source: str | None = None
-    """How they learned it (e.g., 'witnessed', 'told by X', 'assumed')."""
+    """How they learned it, free text (e.g., 'witnessed', 'told by X').
+
+    DISPLAY ONLY as of 2026-07-15. Retained untouched so authored prose
+    survives, but it is not the basis for any check — a string cannot be its
+    own evidence. The typed ``transmission`` below carries the checkable
+    claim. (Same split as nightshift's typed refusal beside its free-text
+    ``blocked[]``.)
+    """
+
+    transmission: "TransmissionPath | None" = None
+    """The typed, checkable transmission path. ``None`` on beliefs authored
+    before the vocabulary existed; ``from_dict`` migrates legacy ``source``
+    conservatively rather than inventing custody (see
+    :func:`migrate_legacy_source`)."""
 
     contradicts_belief: str | None = None
     """ID of a belief this replaces (character changed their mind)."""
@@ -641,6 +760,7 @@ class Belief:
             "confidence": self.confidence,
             "learned_at_chapter": self.learned_at_chapter,
             "source": self.source,
+            "transmission": self.transmission.to_dict() if self.transmission else None,
             "contradicts_belief": self.contradicts_belief,
             "invalidated_at_chapter": self.invalidated_at_chapter,
             "created_at": self.created_at.isoformat(),
@@ -648,6 +768,15 @@ class Belief:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Belief":
+        # Legacy beliefs carry only free-form `source`. Migrate conservatively
+        # so an old string never becomes a checkable claim it never earned.
+        raw = data.get("transmission")
+        if raw is not None:
+            transmission = TransmissionPath.from_dict(raw)
+        elif "source" in data:
+            transmission = migrate_legacy_source(data.get("source"))
+        else:
+            transmission = None
         return cls(
             id=UUID(data["id"]),
             character=data["character"],
@@ -656,6 +785,7 @@ class Belief:
             confidence=data.get("confidence", 5),
             learned_at_chapter=data.get("learned_at_chapter", 0),
             source=data.get("source"),
+            transmission=transmission,
             contradicts_belief=data.get("contradicts_belief"),
             invalidated_at_chapter=data.get("invalidated_at_chapter"),
             created_at=datetime.fromisoformat(data["created_at"]),

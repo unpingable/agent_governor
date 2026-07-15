@@ -31,11 +31,21 @@ from .types import (
     Belief,
     BehavioralConstraint,
     NarrativeWarning,
+    # Knowledge paths (closed vocabulary, 2026-07-15)
+    TransmissionKind,
+    TransmissionPath,
+    migrate_legacy_source,
     # Plot threads
     ThreadType,
     ThreadStatus,
     PlotThread,
     SceneProposal,
+)
+from .knowledge import (
+    BLOCKING_KINDS,
+    KnowledgeFinding,
+    KnowledgeFindingKind,
+    KnowledgeVerifier,
 )
 from .bible import Bible
 from .canon import Canon
@@ -145,6 +155,14 @@ __all__ = [
     "Belief",
     "BehavioralConstraint",
     "NarrativeWarning",
+    # Knowledge paths — the transmission-path vocabulary + its verifier
+    "TransmissionKind",
+    "TransmissionPath",
+    "migrate_legacy_source",
+    "KnowledgeVerifier",
+    "KnowledgeFinding",
+    "KnowledgeFindingKind",
+    "BLOCKING_KINDS",
     # Types - Plot threads
     "ThreadType",
     "ThreadStatus",

@@ -1,0 +1,17 @@
+{
+ "id": "composer-pack-code",
+ "kind": "candidate",
+ "spec_ref": "working/candidate-constellation-composer-2026-07-15.md",
+ "priority_tier": 2,
+ "status": "filed",
+ "effort_band": "M",
+ "canonical_source": "working/candidate-constellation-composer-2026-07-15.md",
+ "open_items": "CANDIDATE domain pack, named 2026-07-15 (operator: 'coding is also important, but that deserves its own slice'). Local ontology per chatty: source/artifact identity · build graph · specification and invariants · compiler/test/verifier witnesses · dependency and version constraints · change impact · release authority. AG already holds much of it (spine.py, invariants.py, verifier_gate.py, oracle_pytest.py, evidence_gate.py, ci.py, verify.py) — expect completion-redshift, audit before building. NOT a phosphor tab: its own specimen + witnesses + projection. Fiction slice (5e670a0-era knowledge.py) is instance 1.",
+ "repo": "agent_gov",
+ "wake_condition": "operator selection + a forcing case; per the 2026-07-15 sequencing rule (chatty: 'prove domain-neutrality by building multiple narrow slices, not by declaring it'), each pack earns its OWN specimen, ontology, witnesses, and compiled projection. Abstraction only after the third instance.",
+ "reconciled": {
+  "date": "2026-07-15",
+  "basis": "named by the operator during the composer pencil-in; nothing built. Fiction pack (knowledge.py) is the first instance and the only one authorized.",
+  "confidence": "CURRENT"
+ }
+}

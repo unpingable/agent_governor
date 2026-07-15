@@ -136,6 +136,57 @@ first makes the substrate question cheap; deciding substrate first makes it
 expensive. `CLIENT_ECOSYSTEM.md` (already marked STALE) is where the
 eventual ruling should land, not new prose here.
 
+## Category note — "CAD for operational systems" (operator + chatty, 2026-07-15, same day)
+
+Operator: "I'm basically pulling ops-work into the kind of context-heavy
+engineering that actual formal engineering disciplines use — using CAD as a
+point of reference is basically not an exaggeration." Chatty concurred: the
+category holds because the composer would do what real engineering tools do —
+authored model distinct from observed reality; constraints/interfaces/
+tolerances/admissible transitions; compile to consumer-specific artifacts;
+detect invalid structure pre-deployment; intended-vs-measured comparison;
+revisions/cuts/provenance; changes legible in downstream consequences. The
+pipeline: `design model → validation → ratified revision → compiled
+projections → realized system → inspection evidence → deviation analysis`.
+Not merely infrastructure CAD — the modeled object includes authority,
+identity, topology, dependencies, evidence requirements, operational
+boundaries, degraded states, permitted effects, unresolved obligations.
+Candidate deeper category: "systems assurance CAD" / "operational systems
+engineering workbench"; the CMDB contrast ("here are some records about
+things" vs "here is the governed design, the witnesses competent to measure
+it, where measurement diverges, and the consequences of change"). From
+folklore ("Dave knows that tag means production except the old cluster") to
+engineering ("asserted in revision R, validated under constraint set C,
+projected to NQ as P, contradicted by witness set W").
+
+**AG-side observation (drafter): the constellation already built the verbs;
+the composer is only the missing noun.** Authored-vs-observed = the
+facts/decisions split (day-one NLAI) + origin_mode + external attachment;
+constraints/transitions = the FSMs + standing validator + closed
+vocabularies; compile-to-artifacts = claimc / NS-5 exporter /
+state_index_export; pre-deploy structure check = admissibility/preflight/
+wicket; intended-vs-measured = NQ witnesses + drift/staleness (the
+2026-07-15 six-axis audit's prose-vs-stub divergence WAS deviation
+analysis); revisions/provenance = supersession ceremony + S6
+successor-not-revision + append-only dispositions. **The usual CAD
+inversion:** in MCAD the geometry kernel was the hard part and constraints
+came a generation later; here the constraint kernel is built (16,996 tests)
+and the geometry/topology model is the easy part — which is why the six-need
+fence is credible.
+
+**Closer cousin: EDA, not MCAD.** DRC = the composer refusing contradictory
+scope; tape-out ceremony = ratification/minting; **LVS
+(layout-versus-schematic) = declared model vs witnessed reality WITH a
+refusal verdict** — "the measured system diverges from revision R" is an LVS
+failure, and the discipline that failing LVS means you don't ship is the
+cultural import.
+
+**Vocabulary hygiene (pencil line):** CAD is the outward CATEGORY, never the
+wire vocabulary. The export specimen speaks constellation grammar
+(admission, custody, witness, standing); "CAD"/"assurance workbench" stays
+on the positioning layer. Local grammar > shared vocabulary — conceptual
+dependency on the analogy is the named failure mode.
+
 ## Gates before any build
 
 1. **Operator ratification** of scope + whether it enters the launch DoD

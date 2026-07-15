@@ -7,11 +7,11 @@
   ],
   "acceptance": "Four-item operator-sequenced selection. Each item closes on its own receipts; WIP-1 holds (one current_slice at a time, sequence advances on closure).",
   "blocked_on": null,
-  "next_action": "Sequenced selection COMPLETE (4/4). Await operator selection or evening push window. Open operator items: NS-2 approval act + run; A-1 ruling (packet drafted, 4b-then-4a recommended); pushes (AG/maude/nightshift banked).",
-  "last_slice_closed": "epistemic-backoff-mechanization — CLOSED 2026-07-15 (operator-selected item 4/4, completing the sequence). src/governor/loop_backoff.py: FailureClass (closed enum, honest UNCLASSIFIED), evaluate_backoff (§11.1 ladder: retry→probe→escalate-once→park→halt; burn-per-progress soft/hard; escalation illegal pre-probe, single-use), confusion receipt (§1 schema verbatim, gate=loop_backoff verdict=observe, evidence-store canonical home), probe_wall_audit (zero-mutation-receipts, mechanical, after-the-fact), correlated_confusion_audit WIRED into portfolio --check (morning AUDIT). 28 tests; mutation probes A (wall ignores writes) + B (superstitious third retry) both caught by exactly the intended tests. Prior: A-1 packet drafted+refuted+amended.",
+  "next_action": "Await operator selection or evening push window. Open operator items: NS-2 approval act + run; pushes (AG/maude/nightshift banked). A-1 is RULED (4b implemented; 4a = named blocked stub a1-lane-restriction-4a).",
+  "last_slice_closed": "a1-option-4b-lane-labeling — RULED + BUILT 2026-07-15 (operator ruling: \"4b now / 4a later — name the distinction without pretending you can enforce the stronger boundary for free\"). Derived lane (governed iff seam-B grant attached; SessionSupervisor.session_lane), stamped on every CanonicalEvent at emission via EventBus.lane_provider, exposed on runtime.session.get. Observe-only: zero behavioral change (16996 suite green incl. golden traces). Derived-never-declared per single-canonical-home: grant_activation receipt + attach act are the fact. 4a filed as blocked stub a1-lane-restriction-4a (wake: labeled usage data + fresh ruling). 8 tests; mutation probe (provider unwired) bit exactly the three trail tests. Prior: epistemic-backoff-mechanization CLOSED 2026-07-15.",
   "last_verified_commit": "AG ad7eddc (clock-witness Layer A: freshness + anti-laundering custody). Prior: approval producer 16ea68a; approval core 5a0bca3 + maude e5fd7f1; telemetry reconcile ceaa544",
   "last_verified_note": "2026-07-14: approval-binds-plan_ref built end-to-end via the loop (spec ruled -> pins folded -> escape-count 6->0 -> build -> sandwich 0 findings -> AUDIT). Suites run BARE (exit-code verdict): AG 16875 passed/49 skipped exit 0; maude 360 passed/24 skipped exit 0. NO PUSH (operator: commits only during work hours).",
-  "last_updated": "2026-07-15T21:30:00Z",
+  "last_updated": "2026-07-15T22:30:00Z",
   "selection_condition": {
     "observed": "current_slice and candidate_next_slice are null; phase is PLAN",
     "recorded_claim": "requires_operator",
@@ -28,7 +28,7 @@
   },
   "current_disposition": {
     "schema": "ag-current-disposition/v1",
-    "recorded_at": "2026-07-15T21:30:00Z",
+    "recorded_at": "2026-07-15T22:30:00Z",
     "supersedes_fields": [
       "acceptance@2026-07-14T12:00:00Z",
       "blocked_on@2026-07-14T12:00:00Z",

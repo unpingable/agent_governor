@@ -3476,6 +3476,9 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "pending_interventions": len(sup.get_pending_interventions(session_id)),
             "capabilities": _dc.asdict(caps) if caps else None,
             "input_capable": bool(caps and caps.supports_input_injection),
+            # A-1 ruling (4b): derived from grant presence at read time —
+            # never stored, never gating. See SessionSupervisor.session_lane.
+            "lane": sup.session_lane(session_id),
         }
 
     async def runtime_grant_activate(params: dict) -> dict:

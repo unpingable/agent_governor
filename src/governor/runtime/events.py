@@ -16,7 +16,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 
 class EventKind(str, Enum):
@@ -87,6 +87,14 @@ class CanonicalEvent:
     parent_event_id: str | None = None
     receipt_ids: list[str] = field(default_factory=list)
     payload: dict[str, Any] = field(default_factory=dict)
+    # A-1 ruling (4b, 2026-07-15): which lane the session was in when this
+    # event was emitted — "governed" (seam-B execution grant attached) or
+    # "ungoverned" (no grant). DERIVED at emission from grant presence, never
+    # declared: the canonical fact is the grant_activation receipt + the
+    # attach act; this field is its per-event projection, so the trail shows
+    # exactly when a session became governed. None on pre-4b events (absence
+    # of testimony, not a third lane). Observe-only — the label never gates.
+    lane: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -117,10 +125,29 @@ class EventBus:
         self._next_seq = 0
         self._events: list[CanonicalEvent] = []
         self._seen_tool_call_ids: set[str] = set()
+        # A-1/4b: called at each emit to stamp the session's current lane
+        # ("governed"/"ungoverned") onto the event. Set by the supervisor,
+        # which owns the grant facet the lane derives from. None = unlabeled
+        # (e.g. a bus constructed outside a supervisor).
+        self.lane_provider: Callable[[], str] | None = None
 
         # Load existing events if store exists
         if self._store_path.exists():
             self._load_existing()
+
+    def _current_lane(self) -> str | None:
+        """The lane to stamp on the next event, or None when unlabeled.
+
+        Observe-only labeling must never break emission: a raising provider
+        degrades to an unlabeled event rather than a lost one. The label is
+        testimony; the event is the record.
+        """
+        if self.lane_provider is None:
+            return None
+        try:
+            return self.lane_provider()
+        except Exception:
+            return None
 
     def _load_existing(self) -> None:
         """Load events from JSONL store, set next_seq."""
@@ -190,6 +217,7 @@ class EventBus:
             parent_event_id=parent_event_id,
             receipt_ids=receipt_ids or [],
             payload=payload,
+            lane=self._current_lane(),
         )
         self._next_seq += 1
         self._events.append(evt)

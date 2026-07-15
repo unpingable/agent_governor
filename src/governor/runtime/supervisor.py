@@ -329,6 +329,14 @@ class SessionSupervisor:
 
         events_path = self._state_dir / f"{session_id}_events.jsonl"
         bus = EventBus(session_id, events_path)
+        # A-1 ruling (4b, 2026-07-15): stamp every event with the session's
+        # lane, DERIVED from grant presence at emission time — "governed" iff
+        # a seam-B execution grant is attached (including a revoked/terminal
+        # lease: that is a governed session whose grant died, not an
+        # ungoverned one). Derived, never declared: the grant_activation
+        # receipt + attach act are the canonical fact; a stored lane field
+        # would be a second home for it. Observe-only — the label never gates.
+        bus.lane_provider = lambda sid=session_id: self.session_lane(sid)
 
         from governor.runtime.budget import RunBudgetLedger, default_budget_policy
 
@@ -1502,6 +1510,21 @@ class SessionSupervisor:
         """Return the GrantLease (artifact + lifecycle state) or None."""
         facet = self._facets.get(session_id)
         return facet.execution_grant if facet else None
+
+    def session_lane(self, session_id: str) -> str:
+        """The session's lane, derived from grant presence (A-1 ruling, 4b).
+
+        ``"governed"`` iff a seam-B execution grant is attached — including a
+        revoked/terminal lease (a governed session whose grant died is still
+        a governed session). ``"ungoverned"`` otherwise, which is every plain
+        launch and every M-2 ungoverned-plan run. Derived at read time, never
+        stored: the grant_activation receipt and the attach act are the
+        canonical fact, and this is their projection. Observe-only — nothing
+        gates on the return value (4a, the restriction variant, is a named
+        follow-up ruling and is deliberately NOT implemented here).
+        """
+
+        return "governed" if self.get_grant_lease(session_id) is not None else "ungoverned"
 
     def get_execution_grant(self, session_id: str) -> Any:
         """Return the ExecutionGrantArtifact attached to a session, or None."""

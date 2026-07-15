@@ -9,7 +9,15 @@ Nothing here is part of the authorized reconciliation implementation. Each
 decision below must be ruled independently before it changes a runtime gate,
 authority artifact, or approval lifecycle.
 
-## A-1 — What admits a runtime session to effect-bearing execution?
+## A-1 — What admits a runtime session to effect-bearing execution? — **RULED 2026-07-15**
+
+> **Ruled via the successor packet**
+> (`working/decision-packet-a1-runtime-admission-2026-07-15.md`): Option 4b
+> now (derived lane labeling, observe-only, implemented same day), 4a
+> (ungoverned×autonomous restriction) as a named follow-up gated on labeled
+> usage data (`a1-lane-restriction-4a`). Options 1–3 not adopted. The
+> original statement below is retained unchanged as history. A-2..A-6 remain
+> UNRULED; this ruling authorizes nothing in them.
 
 **Observed:** `runtime.session.create` and `runtime.session.launch` do not consult
 `loop.json`, a selected slice, Plan Review Agenda authority, campaign

@@ -2,9 +2,32 @@
 
 **ID:** `a1-runtime-admission`
 **Filed:** 2026-07-15 (operator-selected item 3/4 of the 2026-07-15 sequenced selection)
-**Status:** **DRAFT — requires explicit operator ruling; authorizes no implementation**
+**Status:** **RULED 2026-07-15 (operator) — Option 4b now, 4a later**
 **Parent:** `working/authority-seams-decision-packet-2026-07-14.md` §A-1
 **Class:** canonical runtime-authorization semantics
+
+## Ruling (2026-07-15)
+
+Operator, in-session: *"4b now / 4a later sounds structurally sane: name the
+distinction without pretending you can enforce the stronger boundary for
+free."* That rules:
+
+- **4b IMPLEMENTED** (same day): lane labeling, observe-only, zero behavioral
+  change. The lane is **derived, never declared** — `"governed"` iff a seam-B
+  execution grant is attached (`SessionSupervisor.session_lane`), consistent
+  with single-canonical-home: the `grant_activation` receipt + attach act are
+  the fact; the label is their projection. Stamped on every canonical event
+  at emission (`CanonicalEvent.lane`, provider on the `EventBus`) and exposed
+  on `runtime.session.get`. A raising provider degrades to an unlabeled
+  event, never a lost one — the label is testimony, the event is the record.
+  Old events read back with `lane=None` (absence of testimony, not a third
+  lane). A revoked/terminal lease stays `governed` — a governed session whose
+  grant died is not an ungoverned session.
+- **4a is a NAMED FOLLOW-UP, not implemented**: backlog stub
+  `a1-lane-restriction-4a`, blocked, wake = usage data from the labeled
+  trail showing who actually occupies the ungoverned×autonomous square.
+  Nothing in 4b gates on the label.
+- Options 1–3: not adopted; remain available only via a fresh ruling.
 
 ## Confirmed current state (re-verified 2026-07-15 at AG `464efeb`)
 

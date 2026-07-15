@@ -1,0 +1,58 @@
+{
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T03:00:16Z",
+  "subject": {
+    "kind": "completed_queue_and_plan_approval_latches",
+    "queue": {
+      "path": "docs/campaigns/conveyor-dogfood/specimens/cd4-docs-normalize/queue.json",
+      "sha256": "45741e3a6600b80bf47bf0e6d5d00ee953524b6dfea1460a486337fdc225eee3"
+    },
+    "plan": {
+      "path": "docs/campaigns/conveyor-dogfood/specimens/cd4-docs-normalize/plan.md",
+      "sha256": "d0015fa46674bd806260ddede7663d07553004478f2853230d8013f00c49ac95"
+    },
+    "approval_witness": {
+      "path": "docs/campaigns/conveyor-dogfood/specimens/cd4-docs-normalize/operator_queued_playbook.operator_approved_2026-07-04",
+      "sha256": "dd8a9dff48f156b1b3ef3d1a18fb1b1e45363b3d41ffeff60e58d9766220a178"
+    },
+    "queue_id": "conveyor-dogfood-cd4",
+    "playbook_id": "chore.docs-playbooks-normalize"
+  },
+  "state_axes": {
+    "admission": "admitted",
+    "selection": "unselected",
+    "plan_approval": "approved_record_retained",
+    "runtime_activity": "terminal",
+    "effect_authority": "terminal_no_live_grant_evidenced",
+    "custody": "complete"
+  },
+  "basis": "The exact queue, plan, and witness bytes remain the historical admission basis. The supervised run exited, its no-change ReviewPacket was kept, and no live ExecutionGrant or pending promotion remains. Retaining the approval record does not make it current selection or effect authority.",
+  "evidence": [
+    {
+      "kind": "work_admission_receipt",
+      "ref": "190fca6d951351f4049da31508a99ee6d40e011b92e736a8c89d89a9aa1c468e",
+      "verdict": "proceed"
+    },
+    {
+      "kind": "runtime_terminal_event",
+      "ref": ".governor/runtime/sess_aabb2a056f9f_events.jsonl#seq=140",
+      "event": "session_exited",
+      "returncode": 0
+    },
+    {
+      "kind": "promotion_resolution",
+      "ref": ".governor/runtime/sess_aabb2a056f9f_events.jsonl#seq=143",
+      "decision": "approved"
+    },
+    {
+      "kind": "review_packet",
+      "ref": "docs/campaigns/conveyor-dogfood/specimens/cd4-docs-normalize/review_packet.manifest.json",
+      "status": "no_change"
+    },
+    {
+      "kind": "landing_commit",
+      "ref": "78971b9"
+    }
+  ],
+  "historical_artifact_policy": "queue.json, plan.md, and witness bytes are unchanged to preserve their load-bearing hashes; this successor deliberately introduces no approval consumption, expiry, or revocation semantics"
+}

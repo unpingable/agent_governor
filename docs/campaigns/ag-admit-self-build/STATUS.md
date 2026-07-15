@@ -2,6 +2,17 @@
 
 As of 2026-06-23.
 
+## Current custody successor (2026-07-14)
+
+The `unpushed: yes` statement in the dated snapshot below is preserved as
+history, but no longer describes custody of these campaign commits. At audit
+parent `e52355c`, `origin/main...e52355c` was `0/0`, and `origin/main` contains
+both `fb4322d` and `8a76306`. Later audit commits are outside this campaign-
+commit disposition and must be measured dynamically. Current axes:
+admission=`ratified`; selection=`unselected`;
+plan_approval=`not_applicable_completed`; runtime_activity=`inactive`;
+effect_authority=`not_evidenced_for_new_effect`; custody=`complete`.
+
 ## Committed (on `main`)
 
 ```

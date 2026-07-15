@@ -2,6 +2,28 @@
 
 Card ratified 2026-07-05. Gap assessment done (65% of lane exists; 6+1 packets).
 
+## Current disposition — custody successor (2026-07-14)
+
+This section supersedes the earlier "NS-1 staged / awaiting operator" state
+without deleting that staging history. **NS-1 implementation is built and
+verified, but its custody is not closed:** the governed run exited
+successfully and the operator kept its diff
+(`.governor/runtime/sess_3a2ea5348a85_events.jsonl`, seq 271
+`session_exited`, seq 274 `promotion_resolved` with `decision=approved`; status
+commit `e276115`). As remeasured on 2026-07-14, `~/git/nightshift` at
+`01a65bf` still carries the exact five promoted files as an uncommitted
+337-insertion diff. The remaining NS-1 delta is therefore commit/landing
+custody, not implementation. The grant-use track S1–S7 is also closed. NS-2..6 remain
+inside the ratified campaign envelope and are queued, but none is selected as
+`NEXT`; each exact packet retains the campaign's queue-latch and plan-approval
+witness gate.
+
+State axes: admission=`ratified`; selection=`unselected`;
+plan_approval=`ns1_unverifiable_ns2_6_not_attached`;
+runtime_activity=`inactive`;
+effect_authority=`not_evidenced_for_unselected_packets`; custody=`partial` (NS-1 is verified+kept but
+uncommitted; S1–S7 are closed; NS-2..6 are not built).
+
 ## Done
 
 - **NS-0 DONE (2026-07-05):** the model pin threads end-to-end — maude
@@ -43,6 +65,11 @@ Card ratified 2026-07-05. Gap assessment done (65% of lane exists; 6+1 packets).
   by the CD-4B corpus + refusal gallery — it just doesn't belong here.
 
 ## Awaiting operator (NS-1 approval)
+
+> **Historical gate record, superseded 2026-07-10.** The procedure below is
+> retained as the pre-run approval history. The completed run and kept
+> promotion are recorded in the immediately following section and in the
+> current-disposition successor above.
 
 Approval procedure in `specimens/ns-1-refusal-registry/README.md`: create
 witness file (`operator_plan_approved_<date>`) → promote plan

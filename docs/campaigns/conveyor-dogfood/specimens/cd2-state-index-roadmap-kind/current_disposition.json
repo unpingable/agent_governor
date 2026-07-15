@@ -1,0 +1,51 @@
+{
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T03:00:16Z",
+  "subject": {
+    "kind": "completed_queue_approval_latch",
+    "path": "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/queue.json",
+    "sha256": "c95e1c34cb5780c004de3c533c7c161013a5978e7d3d752eb63c2650f338773e",
+    "queue_id": "conveyor-dogfood-cd2",
+    "playbook_id": "chore.state-index-roadmap-kind"
+  },
+  "state_axes": {
+    "admission": "admitted",
+    "selection": "unselected",
+    "plan_approval": "not_applicable",
+    "runtime_activity": "inactive",
+    "effect_authority": "not_applicable_completed",
+    "custody": "complete"
+  },
+  "basis": "The queue latch is a preserved record of the 2026-07-04 operator act. The admitted work, verification, review, and landing are complete; the latch is not current selection or effect authority.",
+  "evidence": [
+    {
+      "kind": "operator_approval_record",
+      "ref": "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/approval.md"
+    },
+    {
+      "kind": "required_test_receipt",
+      "ref": "338051377de096218b9c80a3e68bb03ffd7c0b00a93bd4612519301a10ad6812",
+      "verdict": "pass"
+    },
+    {
+      "kind": "full_suite_receipt",
+      "ref": "ad4227725f3976c3fd733434904084625cf7533a49bc8b863ca0c79f655265e6",
+      "verdict": "pass"
+    },
+    {
+      "kind": "review_packet_validation",
+      "ref": "docs/campaigns/conveyor-dogfood/specimens/cd2-state-index-roadmap-kind/validation.json",
+      "verdict": "valid_and_ready"
+    },
+    {
+      "kind": "landing_commit",
+      "ref": "ca63a34"
+    },
+    {
+      "kind": "backlog_disposition",
+      "ref": ".governor/backlog/state-index-roadmap-kind.json",
+      "status": "done"
+    }
+  ],
+  "historical_artifact_policy": "queue.json bytes are unchanged because the queue digest and approval act are historical evidence; this successor adds no approval consumption, expiry, or revocation semantics"
+}

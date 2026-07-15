@@ -1,0 +1,58 @@
+{
+  "receipt_kind": "loop_audit_reconciliation",
+  "timestamp": "2026-07-15T03:00:16Z",
+  "parent_head": "e52355c37a69687f793f70aa09c9d7be7852e1b3",
+  "subject": ".governor/loop.json and receipt-backed portfolio custody surfaces",
+  "operator_scope": {
+    "authorized": [
+      "replace the retracted scalar authority conclusion with a multi-axis verdict",
+      "reconcile Nightshift, transition, AG-admit, generic-session, Standing-expiry, and completed queue/approval custody where existing evidence supports the disposition",
+      "record admission, selection, plan approval, runtime activity, effect authority, and custody separately",
+      "report the unevidenced requires_operator inconsistency without resolving it semantically",
+      "add read-only consistency checks and separately ruled findings for unresolved seams"
+    ],
+    "forbidden": [
+      "change canonical runtime authorization",
+      "wire dormant authority surfaces into production",
+      "introduce approval consumption or revocation",
+      "change autonomous execution behavior during cleanup"
+    ]
+  },
+  "corrected_verdict": "No implementation slice is currently selected as NEXT or recorded as actively executing. Accepted, ratified, and admitted state remains recorded despite an empty selector, but this audit does not decide whether prior execution authority persists without a fresh selection ruling. No exact-plan approval is attached to selected or in-flight work, and no live repo-visible AG runtime/effect grant was found; historical approval records remain retained.",
+  "state_axes": {
+    "admission": "ratified_or_admitted_work_exists",
+    "selection": "unselected",
+    "plan_approval": "no_selected_or_inflight_plan; historical_records_retained",
+    "runtime_activity": "inactive_in_tracked_runtime_ledgers",
+    "effect_authority": "no_current_repo_visible_ag_grant",
+    "custody": "mixed_object_specific"
+  },
+  "selection_condition": {
+    "recorded_claim": "requires_operator",
+    "evidence_status": "inconsistent",
+    "semantic_resolution": "none",
+    "basis": "No receipt or named protocol exception was found that displaces ordinary PLAN selection from ratified backlog. The reconciliation neither auto-selects work nor establishes an operator-only rule."
+  },
+  "primary_evidence": [
+    "docs/PROGRAM_LEDGER.md status vocabulary",
+    "docs/loop-protocol.md §§2, 8, 10, and 11.2",
+    ".governor/loop.json current_slice=null and candidate_next_slice=null",
+    "working/authority-state-custody-audit-correction-2026-07-14.md",
+    ".governor/runtime/sess_3a2ea5348a85_events.jsonl",
+    ".governor/runtime/sess_aabb2a056f9f_events.jsonl",
+    ".governor/verify_receipts/python3_96742282.json"
+  ],
+  "preservation": "Historical manifests and hash-bound plan/queue/witness bytes were not rewritten. Current dispositions are additive successors. The ignored generic session marker and external Standing DB were not mutated.",
+  "external_custody": {
+    "standing_grant": "d1004816-06b8-425c-a35a-cea53bf3b2e4",
+    "effective_authority": "expired",
+    "materialized_state": "active",
+    "reconciliation": "not completed — canonical sweep could not write across the sandbox's read-only sibling-repo boundary"
+  },
+  "verification": [
+    "git diff --check",
+    "all changed JSON parsed with Python json",
+    "campaign YAML parsed with yaml.safe_load",
+    "hash-bound CD-2/CD-4/NS-1 plan, queue, and witness bytes re-hashed without mutation"
+  ]
+}

@@ -3,13 +3,54 @@
   "current_slice": null,
   "candidate_next_slice": null,
   "slice_spec": [],
-  "acceptance": "No slice ruled NEXT. Three portfolio items CLOSED (continuity-authoring-tier-repair, approval-binds-plan_ref, clock-witness-wall-freshness incl. Layer B). Next selection is the operator's — run `python3 scripts/portfolio_report.py` for the queue (hot fronts: governed-shell remainder, public-mvp Sprint 5).",
-  "blocked_on": "nothing — awaiting operator selection of the next slice.",
-  "next_action": "AWAIT operator selection. clock-witness slice FULLY CLOSED 2026-07-14. Layer A BUILT (ad7eddc — freshness_verdict three-valued + anti-laundering construction-custody; escape-count 5->4->2->0, sandwich 0, 16 crime-table tests). Layer B (hero StandingWindow structured clock readings + corpus 08/09 re-freeze + demo surface) CLOSED as PREVIOUSLY-IMPLEMENTED, independently reverified: it landed in June (1a0e6a5 monotonic gap basis, 1ddd781 typed freshness_subcase) + demo/interrogate — NOT a pending obligation. Reverification: 91 passed/12 skipped exit 0 (corpus+clock+freshness+spendability+drill); corpus 08/09 sha256 == MANIFEST; test_corpus_contract reproduces 08's block against the LIVE chain. Corpus NOT churned; no ceremonial escape-count (no modification to gate). Ruling: do NOT wire freshness_verdict into the hero — separate temporal boundary (would be Layer C, needs its own ruling). Stale surfaces reconciled: backlog stub clock-witness-wall-freshness->done, spec Layer-B text->CLOSED. Completion-redshift event (third stale decision surface: spec carried a false future obligation). Options: select a slice via `python3 scripts/portfolio_report.py`.",
+  "acceptance": "Selection-state verdict only: no slice is ruled NEXT and no slice is recorded as active WIP. Accepted, ratified, and admitted state is reported independently; this selector does not determine whether that state bears execution authority. Three portfolio items are CLOSED (continuity-authoring-tier-repair, approval-binds-plan_ref, clock-witness-wall-freshness incl. Layer B).",
+  "blocked_on": "selection-condition inconsistency — this record previously asserted requires_operator, but cites no custody boundary, rung change, or ruling that displaces the ordinary PLAN auto-selection rule in docs/loop-protocol.md. The inconsistency is reported, not semantically resolved here.",
+  "next_action": "REPORT selection_condition.inconsistency; do not infer execution authority from the empty NEXT selector and do not use this custody reconciliation to select or begin a slice. clock-witness remains FULLY CLOSED 2026-07-14; its detailed completion and verification receipts remain in last_slice_closed.",
   "last_slice_closed": "clock-witness-wall-freshness (Layer A + Layer B) — CLOSED 2026-07-14. Layer B verified-already-built (June commits) not rebuilt; frozen corpus untouched; spec + backlog stub reconciled. Prior: approval-binds-plan_ref — CLOSED 2026-07-14. Seam B built: AG re-hashes the exact plan bytes it is given and requires source_plan_digest == sha256(plan_bytes) == witness.plan_ref (caller digest is a consistency assertion only); a plan citing another plan's witness refuses even when the caller lies about source_plan_digest. `src/governor/runtime/approval_binding.py` (pure verifier) + daemon runtime_grant_activate wiring (replaced the fail-open) + maude wire lockstep (plan_bytes over the RPC). Gates all green: escape-count 6->0 on the pinned spec, adversarial sandwich 0 exploitable findings, suites bare AG 16875 passed / maude 360 passed. Receipts: AG 5a0bca3, maude e5fd7f1 (LOCAL, unpushed). Migration: legacy no-witness activations now refuse (no grandfather); NS-1/NS-1R bytes untouched; witness content format (JSON {witness_version,decision,plan_ref}) is operator-minting tooling, downstream.",
   "last_verified_commit": "AG ad7eddc (clock-witness Layer A: freshness + anti-laundering custody). Prior: approval producer 16ea68a; approval core 5a0bca3 + maude e5fd7f1; telemetry reconcile ceaa544",
   "last_verified_note": "2026-07-14: approval-binds-plan_ref built end-to-end via the loop (spec ruled -> pins folded -> escape-count 6->0 -> build -> sandwich 0 findings -> AUDIT). Suites run BARE (exit-code verdict): AG 16875 passed/49 skipped exit 0; maude 360 passed/24 skipped exit 0. NO PUSH (operator: commits only during work hours).",
-  "last_updated": "2026-07-14T12:00:00Z",
+  "last_updated": "2026-07-15T03:00:16Z",
+  "selection_condition": {
+    "observed": "current_slice and candidate_next_slice are null; phase is PLAN",
+    "recorded_claim": "requires_operator",
+    "evidence_status": "inconsistent",
+    "inconsistency": "No receipt or named loop-protocol exception supports the recorded operator-only selection condition. docs/loop-protocol.md section 2 requires PLAN to select from the ratified backlog; section 8 says PLAN auto-selects by ratified priority and names the boundary classes requiring operator ratification; section 11.2 requires ratification for an authority-rung change. Section 10 permits a halt for ambiguity, but this record identifies neither a qualifying boundary nor an ambiguity.",
+    "semantic_resolution": "none — this record neither auto-selects a slice nor creates a new operator-only constitutional rule",
+    "governing_refs": [
+      "docs/loop-protocol.md §2 (FSM rules)",
+      "docs/loop-protocol.md §8 (Backlog protocol — constellation-wide)",
+      "docs/loop-protocol.md §10 (Restart seed + selection rule)",
+      "docs/loop-protocol.md §11.2 (Automation rungs)"
+    ]
+  },
+  "current_disposition": {
+    "schema": "ag-current-disposition/v1",
+    "recorded_at": "2026-07-15T03:00:16Z",
+    "supersedes_fields": [
+      "acceptance@2026-07-14T12:00:00Z",
+      "blocked_on@2026-07-14T12:00:00Z",
+      "next_action@2026-07-14T12:00:00Z",
+      "active_thread@2026-07-14T12:00:00Z"
+    ],
+    "state_axes": {
+      "admission": "not_determined",
+      "selection": "unselected",
+      "plan_approval": "not_determined",
+      "runtime_activity": "inactive",
+      "effect_authority": "not_determined",
+      "custody": "current"
+    },
+    "basis": [
+      ".governor/loop.json current_slice=null and candidate_next_slice=null",
+      ".governor/runtime tracked ledgers end in session_exited or session_failed",
+      "docs/loop-protocol.md §§2, 8, 10, and 11.2"
+    ]
+  },
+  "historical_selection_claim": {
+    "recorded_at": "2026-07-14T12:00:00Z",
+    "claim": "No slice ruled NEXT; next selection is the operator's; nothing blocked except awaiting operator selection.",
+    "current_disposition": "preserved as the superseded claim that triggered the authority-state audit; no supporting exception receipt was found"
+  },
   "session_id": "clock-witness Layer B closed as verified-already-built (completion-redshift); spec+backlog reconciled, corpus untouched",
   "loop_master": "opus",
   "wip_limit": 1,
@@ -24,7 +65,12 @@
     "git log --oneline -8",
     "git status --short -- src tests docs scripts .governor working"
   ],
-  "active_thread": "portfolio churn via the gov-loop (operator-selected 2026-07-13/14). (1) continuity-authoring-tier-repair CLOSED. (2) approval-binds-plan_ref CLOSED 2026-07-14. No next slice ruled — await operator. public-mvp remains a LIVE parallel campaign, parked as the loop's focus.",
+  "active_thread": "No slice selected and no slice recorded as actively executing. continuity-authoring-tier-repair and approval-binds-plan_ref are CLOSED. Prior campaign ratification or admission is not adjudicated by this selector field; see current_disposition and selection_condition.",
   "prior_threads_closed": "Walking-skeleton bootstrap-lab (Slices 1-2 DONE) + AG-on-AG maintenance (Slices 1+2 DONE). P4 PARKED (operator 2026-06-16). P0-shadow tripwire ISOLATED+dormant. Detail in git + working/witness-*.md; compressed out of loop-state 2026-07-13.",
-  "push_backlog": "UNPUSHED (operator: no pushes during work hours): AG main ahead by the constellation-map/portfolio/loop/continuity-spec + approval slice commits; maude ahead by the wire-lockstep commit e5fd7f1; continuity c937be0; plus yesterday's cartography b63217d / wicket 0493093 / wlp dda47ba / rrp 9a0abf6. Push when the operator gives a present-tense go."
+  "push_backlog": "AUDIT BASELINE at parent e52355c on 2026-07-14: AG and the continuity/cartography/wicket/wlp/rrp repositories were each 0 ahead / 0 behind their configured origin. Maude (`/home/jbeck/git/agent_gov_ui/maude`) was 6 ahead / 0 behind; approval wire-lockstep commit e5fd7f1 was not contained by its origin/main. Commits created by this audit pass are intentionally not predicted by this snapshot and must be measured dynamically. This is custody reporting only and grants no push authority.",
+  "historical_push_claim": {
+    "recorded_at": "2026-07-14T12:00:00Z",
+    "claim": "AG, maude, continuity, cartography, wicket, wlp, and rrp carried unpushed commits",
+    "current_disposition": "superseded by current upstream probes: only maude remains ahead"
+  }
 }

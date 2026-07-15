@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Portfolio report — "what named, ruled work is queued, where, and roughly how big?"
+"""Portfolio report — declared work plus explicit authority/custody axes.
 
 This answers that question. It does NOT answer "how complete is the
 constellation?" — there is no honest single number for that, and this report
@@ -19,15 +19,37 @@ MEASUREMENT BOUNDARY (read before trusting any count here):
 
 Canonical truth stays in campaign STATUS files / PROGRAM_LEDGER / tool
 roadmaps — every stub carries a canonical_source + reconciled{date,basis,
-confidence}. This script only aggregates; it never infers or mutates status.
+confidence}. This script only aggregates; it never mutates status. In
+particular, legacy ``open``/``queued``/priority fields never imply selection,
+plan approval, runtime activity, or effect authority. Those axes are reported
+only when an explicit ``state_axes`` record exists; otherwise they are
+``unknown``.
 
-Usage: python3 scripts/portfolio_report.py [--json]
+Usage:
+  python3 scripts/portfolio_report.py
+  python3 scripts/portfolio_report.py --json        # legacy raw stubs
+  python3 scripts/portfolio_report.py --audit-json  # axes + findings
+  python3 scripts/portfolio_report.py --check       # read-only consistency check
 """
+import argparse
 import json
 import glob
 import os
 import sys
 from collections import defaultdict
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from governor.portfolio_audit import (  # noqa: E402
+    AXES,
+    build_audit,
+    collect_consistency_findings,
+    default_standing_db,
+    project_state_axes,
+    summarize_axes,
+)
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", ".governor", "backlog")
 OPEN = ("in_progress", "queued", "filed", "blocked", "zoned")
@@ -53,11 +75,57 @@ def line(s):
     return f"  t{s.get('priority_tier','?')}{band} {s['id']}{flag}"
 
 
-def main():
-    stubs = load()
-    if "--json" in sys.argv:
-        print(json.dumps(stubs, indent=1))
+def _parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--json", action="store_true", help="emit legacy raw backlog stubs")
+    modes.add_argument(
+        "--audit-json", action="store_true", help="emit explicit state axes and findings"
+    )
+    modes.add_argument(
+        "--check",
+        action="store_true",
+        help="run read-only custody consistency checks (nonzero while findings remain)",
+    )
+    return parser.parse_args(argv)
+
+
+def _print_axis_summary():
+    summary = summarize_axes(project_state_axes(REPO_ROOT))
+    print("\nSTATE AXES (explicit records only; absent evidence stays unknown):")
+    for axis in AXES:
+        values = " / ".join(f"{state}={count}" for state, count in summary[axis].items())
+        print(f"  {axis + ':':20} {values or 'no records'}")
+    print("  Legacy backlog status is not used to infer any axis.")
+
+
+def _print_findings(findings):
+    if not findings:
+        print("\nCONSISTENCY: no bounded contradictions found.")
         return
+    print(f"\nCONSISTENCY FINDINGS ({len(findings)}):")
+    for finding in findings:
+        print(f"  [{finding.severity}] {finding.code}: {finding.subject}")
+        print(f"      claim: {finding.claim}")
+        print(f"      ground truth: {finding.ground_truth}")
+        print(f"      evidence: {', '.join(finding.evidence)}")
+
+
+def main(argv=None):
+    args = _parse_args(argv)
+    stubs = load()
+    if args.json:
+        print(json.dumps(stubs, indent=1))
+        return 0
+
+    standing_db = default_standing_db(REPO_ROOT)
+    if args.audit_json:
+        print(json.dumps(build_audit(REPO_ROOT, standing_db=standing_db), indent=2))
+        return 0
+    if args.check:
+        findings = collect_consistency_findings(REPO_ROOT, standing_db=standing_db)
+        _print_findings(findings)
+        return 1 if findings else 0
 
     by_status = defaultdict(list)
     for s in stubs:
@@ -86,9 +154,9 @@ def main():
                   and s.get("priority_tier") == 1),
                  key=lambda s: s["id"])
 
-    print(f"NAMED-WORK QUEUE — reconciled {newest}")
-    print(f"  hot fronts:          {len(hot)} (tier-1 active or ruled-next)")
-    print(f"  actionable records:  {len(actionable)}  "
+    print(f"DECLARED-WORK PORTFOLIO — reconciled {newest}")
+    print(f"  tier-1 status tags:  {len(hot)} (records tagged in_progress / queued)")
+    print(f"  open status records: {len(actionable)}  "
           f"(in_progress {len(by_status['in_progress'])} / "
           f"queued {len(by_status['queued'])} / filed {len(by_status['filed'])})")
     print(f"    substantive build: {len(substantive)}   ·   "
@@ -99,15 +167,15 @@ def main():
     print(f"  closed/retired:      {n_done}   —   named-record closure "
           f"{100 * n_done // max(1, n_done + n_open)}% (records checked off, NOT effort, "
           f"NOT completeness)")
-    print("  Measures named, ruled work only — activation/scale/ambition excluded "
+    print("  Measures named, declared records only — activation/scale/ambition excluded "
           "by construction\n  (see module docstring + working/activation-debt-candidate.md).")
-    print(f"\nHOT FRONTS ({len(hot)}) — active or ruled-next, tier 1:")
+    print(f"\nTIER-1 STATUS RECORDS ({len(hot)}) — not inferred as selected or authorized:")
     for s in hot:
         print(line(s))
         if s.get("open_items"):
             print(f"      -> {s['open_items'][:140]}")
 
-    print("\nACTIONABLE QUEUE (in_progress / queued / filed):")
+    print("\nDECLARED OPEN RECORDS (in_progress / queued / filed):")
     for st in ("in_progress", "queued", "filed"):
         items = sorted(by_status[st],
                        key=lambda s: (str(s.get("priority_tier", 9)), s["id"]))
@@ -129,10 +197,14 @@ def main():
         for s in stale:
             print(f"  never reconciled:   {s['id']}")
 
+    _print_axis_summary()
+    _print_findings(collect_consistency_findings(REPO_ROOT, standing_db=standing_db))
+
     print("\nEvery stub carries canonical_source + reconciled.basis — "
           "trace before acting. RRP registered 2026-07-13; unregistered "
           "nodes are excluded from these totals by construction.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

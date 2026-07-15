@@ -58,3 +58,31 @@ cross_repo:
   standing_grant_type: "crates/standing-grant/src/grant.rs:30 (Grant{id,subject,scope,issued_at,expires_at})"
   standing_mint_boundary: "GrantAction::Request -> GrantMachine::issue -> record_transition(Issued)"
   ag_consumer_seam: src/governor/standing_client.py (StandingClient.verify — SPEC stub today)
+
+# Append-only custody successor. The 2026-06-23 snapshot above is retained as
+# campaign history; this object is the current disposition and takes precedence
+# for reporting.
+current_disposition:
+  schema: ag-current-disposition/v1
+  recorded_at: "2026-07-15T03:00:16Z"
+  supersedes:
+    - "slices_done[*] comments claiming Standing commits were not pushed"
+    - "next_build.status=active"
+    - "next_build.open_subquestion"
+  state_axes:
+    admission: ratified
+    selection: unselected
+    plan_approval: not_attached_to_unselected_remainders
+    runtime_activity: inactive
+    effect_authority: not_evidenced_for_unselected_remainders
+    custody: partial
+  standing_commits:
+    status: pushed
+    refs: [1e62ba9, f101c55]
+    evidence: "docs/campaigns/transition-kernel-pickup/DECISIONS.md Q-B1; both refs contained by Standing origin/main"
+  slice_1b:
+    status: completed
+    adopted_on_main: true
+    verification_receipt: 59cf25532d2f3fb393dc087ee6f2e49164bb9ea40a2deff447530117ad00d8d0
+    evidence: "git 8a9dd85; docs/campaigns/transition-kernel-pickup/STATUS.md 2026-07-03 B4 closure"
+  remaining: "B-series buildable set exhausted; remaining items are design-blocked or operator-gated as classified in STATUS.md"

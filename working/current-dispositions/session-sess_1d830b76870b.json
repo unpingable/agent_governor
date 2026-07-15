@@ -1,0 +1,39 @@
+{
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T03:00:16Z",
+  "subject": {
+    "kind": "generic_session_marker",
+    "path": ".governor/sessions/sess_1d830b76870b/meta.json",
+    "session_id": "sess_1d830b76870b",
+    "historical_state": "active",
+    "created_at": "2026-07-04T18:57:20.125321",
+    "last_active": "2026-07-04T18:57:20.125321"
+  },
+  "state_axes": {
+    "admission": "not_applicable",
+    "selection": "not_applicable",
+    "plan_approval": "none_recorded",
+    "runtime_activity": "not_evidenced",
+    "effect_authority": "none_recorded",
+    "custody": "stale_marker"
+  },
+  "basis": "The ignored generic session file is continuity/mainline metadata. Its state=active field is not a runtime supervisor event, selected slice, or authority grant. No terminal state is fabricated because no terminal receipt exists for this generic session ID.",
+  "evidence": [
+    {
+      "kind": "empty_session_ledger",
+      "ref": ".governor/sessions/sess_1d830b76870b/ledger.yaml",
+      "facts": "authority={} and anchors/decisions/constraints/canon_events are empty"
+    },
+    {
+      "kind": "runtime_ledger_absence",
+      "ref": ".governor/runtime/sess_1d830b76870b_events.jsonl",
+      "facts": "no such tracked runtime event ledger"
+    },
+    {
+      "kind": "marker_shape",
+      "ref": ".governor/sessions/sess_1d830b76870b/meta.json",
+      "facts": "created_at equals last_active; checkpoint_count=0; fork_count=0"
+    }
+  ],
+  "historical_artifact_policy": "The ignored runtime marker is preserved byte-for-byte; this tracked successor reports its evidentiary limit and does not assert exited or failed state."
+}

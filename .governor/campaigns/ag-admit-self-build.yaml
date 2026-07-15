@@ -49,3 +49,28 @@ source_code:
     - tests/test_waiver_admission_completeness.py
     - tests/test_forbidden_surface_gate.py
     - tests/test_self_correction.py
+
+# Append-only custody successor. `state.unpushed: true` above is the original
+# 2026-06-23 snapshot and is intentionally retained.
+current_disposition:
+  schema: ag-current-disposition/v1
+  recorded_at: "2026-07-15T03:00:16Z"
+  supersedes: "state.unpushed=true in the 2026-06-23 snapshot"
+  state_axes:
+    admission: ratified
+    selection: unselected
+    plan_approval: not_applicable_completed
+    runtime_activity: inactive
+    effect_authority: not_evidenced_for_new_effect
+    custody: complete
+  push_state:
+    scope: campaign_commits
+    unpushed: false
+    upstream: origin/main
+    commits_contained: [fb4322d, 8a76306]
+    repository_ahead_behind_at_measurement: [0, 0]
+    measurement_parent: e52355c
+  evidence:
+    - "git rev-list --left-right --count origin/main...e52355c => 0 0"
+    - "git merge-base --is-ancestor fb4322d origin/main => 0"
+    - "git merge-base --is-ancestor 8a76306 origin/main => 0"

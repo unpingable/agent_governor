@@ -6,12 +6,37 @@
  "status": "blocked",
  "effort_band": "M",
  "canonical_source": "docs/campaigns/transition-kernel-pickup/STATUS.md",
- "wake_condition": "operator confirm+push of Standing 1e62ba9/f101c55 unlocks B4 (AG Slice 1b)",
+ "wake_condition": "No B4 wake remains: Standing 1e62ba9/f101c55 are on origin/main and AG Slice 1b/B4 is adopted and verified. Remaining work wakes only at the specific design or operator gates classified in STATUS.md; the B-series buildable set is exhausted.",
  "note": "B-series buildable set EXHAUSTED 2026-07-04 (B2+B6+B7 executed; checker stays SCRATCH/non-binding).",
  "repo": "agent_gov",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
+  "date": "2026-07-14",
+  "basis": "transition DECISIONS Q-B1; STATUS B4 closure; verifier receipt 59cf2553; Standing origin/main containment for 1e62ba9/f101c55",
   "confidence": "CURRENT"
+ },
+ "historical_claims": [
+  {
+   "claim": "operator confirm+push of Standing 1e62ba9/f101c55 unlocks B4",
+   "disposition": "superseded: Q-B1 resolved by evidence and B4 completed",
+   "evidence": "docs/campaigns/transition-kernel-pickup/DECISIONS.md Q-B1; git 8a9dd85; receipt 59cf2553"
+  }
+ ],
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T03:00:16Z",
+  "state_axes": {
+   "admission": "ratified",
+   "selection": "unselected",
+   "plan_approval": "not_attached_to_unselected_remainders",
+   "runtime_activity": "inactive",
+   "effect_authority": "not_evidenced_for_unselected_remainders",
+   "custody": "partial"
+  },
+  "evidence": [
+   "docs/campaigns/transition-kernel-pickup/DECISIONS.md Q-B1",
+   "docs/campaigns/transition-kernel-pickup/STATUS.md B4 closure",
+   ".governor/verify_receipts/python3_96742282.json receipt 59cf2553",
+   "git 8a9dd85"
+  ]
  }
 }

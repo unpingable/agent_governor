@@ -3,15 +3,43 @@
  "kind": "campaign",
  "spec_ref": "docs/campaigns/nightshift-functional-mvp/STATUS.md",
  "priority_tier": 1,
- "status": "blocked",
+ "status": "queued",
  "effort_band": "M",
  "canonical_source": "docs/campaigns/nightshift-functional-mvp/STATUS.md + docs/PROGRAM_LEDGER.md",
- "open_items": "STALE-CORRECTED 2026-07-14: approval-binds-plan_ref is CLOSED (seam B, AG 5a0bca3 + producer 16ea68a), NOT the ruled NEXT. Lane state: NS-0 done; NS-1 refusal-registry packet STAGED, awaiting the operator's approval act to admit (post-approval path proven sound). No AG-buildable authority slice is currently ruled here; the remaining testimony adapters are DEFERRED behind an operator ruling (PROGRAM_LEDGER immediate-backlog #2-5). Was falsely surfaced as a tier-1 hot front citing approval as NEXT.",
+ "open_items": "NS-0 is DONE. NS-1 implementation is built, verified, and kept from the 2026-07-10 governed run, but its exact 337-line five-file diff remains uncommitted in ~/git/nightshift, so implementation custody is PARTIAL rather than closed. The grant-use track S1-S7 is CLOSED. Campaign packets NS-2..NS-6 remain ratified and queued for authoring/execution in campaign order; each exact packet still requires its documented queue latch and plan-approval witness. The separate testimony-adapter items in PROGRAM_LEDGER #2-5 remain DEFERRED. No Nightshift packet is currently selected as NEXT.",
  "repo": "agent_gov",
  "reconciled": {
   "date": "2026-07-14",
-  "basis": "approval-binds-plan_ref CLOSED this session; nightshift STATUS (NS-0 done, NS-1 staged for operator approval); PROGRAM_LEDGER testimony items DEFERRED",
+  "basis": "NS-1 terminal runtime event + approved promotion in .governor/runtime/sess_3a2ea5348a85_events.jsonl; nightshift STATUS first-run completion; campaign packet table and per-packet approval gate; grant-use S1-S7 closure receipts",
   "confidence": "CURRENT"
  },
- "wake_condition": "operator approval act to admit NS-1 (born-candidate; approval_ref clears on the operator's act); + a ruling to open the DEFERRED testimony-adapter packets (PROGRAM_LEDGER #2-5)"
+ "wake_condition": "selection of a ratified NS-2..6 packet for exact packet authoring; execution then requires that packet's documented queue latch and plan-approval witness. A separate ruling remains necessary for the DEFERRED testimony-adapter items in PROGRAM_LEDGER #2-5.",
+ "historical_claims": [
+  {
+   "recorded": "2026-07-14",
+   "status": "blocked",
+   "claim": "NS-1 staged and awaiting the operator approval act",
+   "disposition": "superseded by the 2026-07-10 completed run already recorded later in STATUS.md and by runtime session/promotion receipts"
+  }
+ ],
+ "current_disposition": {
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T03:00:16Z",
+  "state_axes": {
+   "admission": "ratified",
+   "selection": "unselected",
+   "plan_approval": "ns1_unverifiable_ns2_6_not_attached",
+   "runtime_activity": "inactive",
+   "effect_authority": "not_evidenced_for_unselected_packets",
+   "custody": "partial"
+  },
+  "evidence": [
+   "docs/campaigns/nightshift-functional-mvp/CAMPAIGN.md packets NS-2..NS-6 and per-packet operator acts",
+   "docs/campaigns/nightshift-functional-mvp/STATUS.md NS-1 FIRST LIVE RUN — DONE",
+   ".governor/runtime/sess_3a2ea5348a85_events.jsonl seq 271 session_exited and seq 274 promotion_resolved approved",
+   "git e276115 (NS-1 first-run verdict)",
+   "~/git/nightshift at 01a65bf has a 337-insertion dirty diff in the same five files named by promotion receipt seq 274"
+  ],
+  "custody_delta": "operator-kept NS-1 diff is not committed in the Nightshift repository"
+ }
 }

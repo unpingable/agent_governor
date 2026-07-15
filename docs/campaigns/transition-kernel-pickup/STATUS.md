@@ -2,6 +2,21 @@
 
 As of 2026-07-04 (B2 + B6 + B7 executed; prior snapshots preserved below).
 
+## Current disposition — custody successor (2026-07-14)
+
+The discovery manifest's 2026-06-23 `next_build.status: active` and its
+"Standing commits not pushed" comments are historical snapshots, not current
+state. Q-B1 established that Standing `1e62ba9` and `f101c55` are contained by
+`origin/main`; Slice 1b/B4 was then adopted on AG `main` and independently
+verified by receipt `59cf2553` (status commit `8a9dd85`). The B-series buildable
+set is exhausted. Remaining entries stay classified as design-blocked or
+operator-gated below; this successor does not select one.
+
+State axes: admission=`ratified`; selection=`unselected`;
+plan_approval=`not_attached_to_unselected_remainders`;
+runtime_activity=`inactive`;
+effect_authority=`not_evidenced_for_unselected_remainders`; custody=`partial`.
+
 ## 2026-07-04 (later) — B6 + B7 executed; B-series buildable set EXHAUSTED
 
 - **B6** (v6 checker pilot): INVENTORY §"Pilot: v6 finite-support checker" —

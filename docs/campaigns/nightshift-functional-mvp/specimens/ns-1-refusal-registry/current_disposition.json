@@ -1,0 +1,58 @@
+{
+  "schema": "ag-current-disposition/v1",
+  "recorded_at": "2026-07-15T03:00:16Z",
+  "subject": {
+    "kind": "completed_run_with_unretained_approval_artifact",
+    "plan": {
+      "path": "docs/campaigns/nightshift-functional-mvp/specimens/ns-1-refusal-registry/plan.md",
+      "sha256": "da241bc77f8b209c3a25a21866fbde22f2a8b799d1ea3b61d588a727849a1b47",
+      "tracked_governance_status": "candidate"
+    },
+    "campaign_packet": "NS-1 refusal receipt type registry",
+    "runtime_session": "sess_3a2ea5348a85"
+  },
+  "state_axes": {
+    "admission": "unverifiable_exact_artifact",
+    "selection": "unselected",
+    "plan_approval": "unverifiable_exact_artifact",
+    "runtime_activity": "terminal",
+    "effect_authority": "terminal_no_live_grant_evidenced",
+    "custody": "partial"
+  },
+  "basis": "Runtime and promotion receipts prove that an NS-1 run exited and its five-file diff was kept. They do not preserve the exact approved plan bytes: the tracked plan remains candidate and the approval witness named by STATUS is absent. The implementation diff also remains uncommitted in the Nightshift repository.",
+  "evidence": [
+    {
+      "kind": "tracked_candidate_plan",
+      "ref": "docs/campaigns/nightshift-functional-mvp/specimens/ns-1-refusal-registry/plan.md#governance_status",
+      "value": "candidate"
+    },
+    {
+      "kind": "approval_artifact_absence",
+      "ref": "docs/campaigns/nightshift-functional-mvp/specimens/ns-1-refusal-registry/",
+      "facts": "no operator_plan_approved_* witness is retained"
+    },
+    {
+      "kind": "runtime_terminal_event",
+      "ref": ".governor/runtime/sess_3a2ea5348a85_events.jsonl#seq=271",
+      "event": "session_exited",
+      "returncode": 0
+    },
+    {
+      "kind": "promotion_resolution",
+      "ref": ".governor/runtime/sess_3a2ea5348a85_events.jsonl#seq=274",
+      "decision": "approved",
+      "changed_files": 5
+    },
+    {
+      "kind": "status_record",
+      "ref": "docs/campaigns/nightshift-functional-mvp/STATUS.md#ns-1-first-live-run--done-2026-07-10",
+      "commit": "e276115"
+    },
+    {
+      "kind": "external_worktree_probe",
+      "ref": "/home/jbeck/git/nightshift@01a65bf",
+      "facts": "the five promoted files remain a 337-insertion uncommitted diff"
+    }
+  ],
+  "historical_artifact_policy": "The candidate plan is unchanged. This successor neither reconstructs an approval witness nor claims approval consumption/revocation; exact approval custody remains unverifiable."
+}

@@ -1,15 +1,17 @@
 {
-  "phase": "PLAN",
-  "current_slice": null,
-  "candidate_next_slice": null,
-  "slice_spec": [],
-  "acceptance": "Selection-state verdict only: no slice is ruled NEXT and no slice is recorded as active WIP. Accepted, ratified, and admitted state is reported independently; this selector does not determine whether that state bears execution authority. Three portfolio items are CLOSED (continuity-authoring-tier-repair, approval-binds-plan_ref, clock-witness-wall-freshness incl. Layer B).",
-  "blocked_on": "selection-condition inconsistency — this record previously asserted requires_operator, but cites no custody boundary, rung change, or ruling that displaces the ordinary PLAN auto-selection rule in docs/loop-protocol.md. The inconsistency is reported, not semantically resolved here.",
-  "next_action": "REPORT selection_condition.inconsistency; do not infer execution authority from the empty NEXT selector and do not use this custody reconciliation to select or begin a slice. clock-witness remains FULLY CLOSED 2026-07-14; its detailed completion and verification receipts remain in last_slice_closed.",
-  "last_slice_closed": "clock-witness-wall-freshness (Layer A + Layer B) — CLOSED 2026-07-14. Layer B verified-already-built (June commits) not rebuilt; frozen corpus untouched; spec + backlog stub reconciled. Prior: approval-binds-plan_ref — CLOSED 2026-07-14. Seam B built: AG re-hashes the exact plan bytes it is given and requires source_plan_digest == sha256(plan_bytes) == witness.plan_ref (caller digest is a consistency assertion only); a plan citing another plan's witness refuses even when the caller lies about source_plan_digest. `src/governor/runtime/approval_binding.py` (pure verifier) + daemon runtime_grant_activate wiring (replaced the fail-open) + maude wire lockstep (plan_bytes over the RPC). Gates all green: escape-count 6->0 on the pinned spec, adversarial sandwich 0 exploitable findings, suites bare AG 16875 passed / maude 360 passed. Receipts: AG 5a0bca3, maude e5fd7f1 (LOCAL, unpushed). Migration: legacy no-witness activations now refuse (no grandfather); NS-1/NS-1R bytes untouched; witness content format (JSON {witness_version,decision,plan_ref}) is operator-minting tooling, downstream.",
+  "phase": "BUILD",
+  "current_slice": "ns2-packet-authoring (nightshift-functional-mvp)",
+  "candidate_next_slice": "a1-runtime-admission-decision-packet (draft only, operator rules)",
+  "slice_spec": [
+    "OPERATOR SELECTION ACT 2026-07-15 (in-session ruling, sequenced, multi-item): (1) cli-reference-wording-pass closure — DONE this cycle (9th finding closed no-current-target via negative re-sweep); (2) NS-2 packet authoring for the maude governed loop (born-candidate specimen: playbook/ration/plan; operator approval act stays operator-only); (3) A-1 runtime-admission decision packet — DRAFT ONLY, no implementation until ruled; (4) epistemic-backoff-mechanization build. Constraint: no pushes (work hours); commits fine. Codex quota hold until 2026-07-21 — adversarial checkpoints via Claude-family refute agents."
+  ],
+  "acceptance": "Four-item operator-sequenced selection. Each item closes on its own receipts; WIP-1 holds (one current_slice at a time, sequence advances on closure).",
+  "blocked_on": null,
+  "next_action": "BUILD ns2-packet-authoring: author the NS-2 specimen (playbook.yaml, ration_card.json, plan.md born-candidate) under docs/campaigns/nightshift-functional-mvp/specimens/, staging receipts verified via the real parsers, admission refusal as the staging receipt — same shape as NS-1, with the approval witness path done correctly from birth.",
+  "last_slice_closed": "cli-reference-wording-pass — CLOSED 2026-07-15 (operator-selected item 1/4). 8/9 labels were already reworded at 6238c99; the 9th finding (glossary PROPOSED-name-in-copy, quote lost to record condensation) closed as no-current-target: the prescribed recovery (re-run the A2 sweep) was executed over the complete 16-term PROPOSED vocabulary against cli.md + mirror + glossary prose — zero instances; 6238c99 removed no PROPOSED term. Closed on the negative re-sweep, not a guess. Prior: clock-witness-wall-freshness (Layer A + Layer B) — CLOSED 2026-07-14.",
   "last_verified_commit": "AG ad7eddc (clock-witness Layer A: freshness + anti-laundering custody). Prior: approval producer 16ea68a; approval core 5a0bca3 + maude e5fd7f1; telemetry reconcile ceaa544",
   "last_verified_note": "2026-07-14: approval-binds-plan_ref built end-to-end via the loop (spec ruled -> pins folded -> escape-count 6->0 -> build -> sandwich 0 findings -> AUDIT). Suites run BARE (exit-code verdict): AG 16875 passed/49 skipped exit 0; maude 360 passed/24 skipped exit 0. NO PUSH (operator: commits only during work hours).",
-  "last_updated": "2026-07-15T03:00:16Z",
+  "last_updated": "2026-07-15T19:15:00Z",
   "selection_condition": {
     "observed": "current_slice and candidate_next_slice are null; phase is PLAN",
     "recorded_claim": "requires_operator",
@@ -21,11 +23,12 @@
       "docs/loop-protocol.md §8 (Backlog protocol — constellation-wide)",
       "docs/loop-protocol.md §10 (Restart seed + selection rule)",
       "docs/loop-protocol.md §11.2 (Automation rungs)"
-    ]
+    ],
+    "superseded_for_this_cycle": "A live operator selection act (2026-07-15, in-session, sequenced 4 items) now governs the current cycle, recorded in slice_spec. This supplies the operator ruling the stale requires_operator claim lacked — for THIS cycle only. The doctrinal question (whether PLAN may auto-select from ratified backlog absent such an act) remains open and unresolved; the inconsistency record below is preserved unchanged."
   },
   "current_disposition": {
     "schema": "ag-current-disposition/v1",
-    "recorded_at": "2026-07-15T03:00:16Z",
+    "recorded_at": "2026-07-15T19:15:00Z",
     "supersedes_fields": [
       "acceptance@2026-07-14T12:00:00Z",
       "blocked_on@2026-07-14T12:00:00Z",
@@ -34,7 +37,10 @@
     ],
     "state_axes": {
       "admission": "not_determined",
-      "selection": "unselected",
+      "selection": {
+        "state": "selected",
+        "detail": "operator selection act 2026-07-15: sequenced 4-item ruling (see slice_spec); current = ns2-packet-authoring"
+      },
       "plan_approval": "not_determined",
       "runtime_activity": "inactive",
       "effect_authority": "not_determined",
@@ -54,7 +60,7 @@
     "claim": "No slice ruled NEXT; next selection is the operator's; nothing blocked except awaiting operator selection.",
     "current_disposition": "preserved as the superseded claim that triggered the authority-state audit; no supporting exception receipt was found"
   },
-  "session_id": "clock-witness Layer B closed as verified-already-built (completion-redshift); spec+backlog reconciled, corpus untouched",
+  "session_id": "six-axis vocabulary closed (9166f02); operator sequenced 4-item selection; cli-ref closed 1/4",
   "loop_master": "opus",
   "wip_limit": 1,
   "dirty_tree_allowed": false,

@@ -5,31 +5,42 @@
  "spec_ref": "docs/campaigns/constellation-reconciliation/INVENTORY.md §2 A2 (A9-upgraded)",
  "forcing_case": "A2 sweep verdict: cli.md is the main laundering surface; A9 refused the fix-on-touch downgrade",
  "priority_tier": 2,
- "status": "in_progress",
+ "status": "done",
  "acceptance": "Reword the 9 quoted cli.md labels so imperative labels never name authority outcomes ('apply' describes; 'authorize/permit/rule' reserved for the gate's own vocabulary); zero semantic/flag changes; diff confined to docs/interfaces/cli.md + .claude/rules/cli-reference.md mirrors.",
  "note": "Executed 2026-07-04 (Fable): 8/9 targets reworded across docs/interfaces/cli.md + .claude/rules/cli-reference.md per the standing rule (imperative labels never name authority outcomes; decisions attributed to the operator; 'apply' describes mechanics). anchor --type canon handled as a clarifying note (flag value unchanged — zero flag changes). 9th finding ('glossary PROPOSED-name-in-copy', pair 1) NOT executed: its verbatim quote did not survive the A2 record's condensation (A2's own acceptance said zero findings without quotes; the committed table condensed them away — a completeness debt of the A2 record). No match found for internal-ops-glossary PROPOSED terms or FSM-state wording in cli.md; refusing to guess the target. Recoverable only by re-running the A2 sweep over cli.md.",
  "status_note": "pre-reconciliation status: executed_partial",
  "effort_band": "S",
- "open_items": "remainder of the wording pass (executed_partial)",
+ "open_items": "",
  "reconciled": {
-  "date": "2026-07-13",
-  "basis": "manual reconciliation vs campaign STATUS.md files, docs/PROGRAM_LEDGER.md, docs/roadmaps/tools/*.md status lines, and .claude/rules/feature-history.md; census wf_8f19f9bd-e28 (working/constellation-census-2026-07-13.md)",
-  "confidence": "PARTIAL"
+  "date": "2026-07-15",
+  "basis": "mechanical re-sweep of the 16 PROPOSED glossary ops terms over docs/interfaces/cli.md + .claude/rules/cli-reference.md + glossary prose (zero hits); git show 6238c99 (no PROPOSED-term removal); INVENTORY.md §2 A2 disposition appended",
+  "confidence": "CURRENT"
  },
  "current_disposition": {
   "schema": "ag-current-disposition/v1",
-  "recorded_at": "2026-07-15T18:00:00Z",
+  "recorded_at": "2026-07-15T19:00:00Z",
   "state_axes": {
-   "selection": "unselected",
+   "admission": "admitted",
+   "selection": {
+    "state": "unselected",
+    "detail": "was first in the operator 2026-07-15 sequenced selection; consumed by closure"
+   },
    "plan_approval": "none",
    "runtime_activity": "inactive",
    "effect_authority": "none_evidenced",
-   "admission": "admitted",
    "custody": {
-    "state": "partial",
-    "detail": "8/9 wording targets executed 2026-07-04; remainder = one label (anchor --type canon)"
+    "state": "complete",
+    "detail": "8/9 reworded at 6238c99; 9th closed no-current-target via negative re-sweep 2026-07-15"
    }
   },
-  "basis": "2026-07-15 six-axis audit (AG 5916f14): selection from .governor/loop.json phase=PLAN/current_slice=null; runtime from 3 terminal runtime ledgers (newest 2026-07-10); effect authority from 0 grant_activation across 2928 gate receipts, no scope.json, empty overrides/"
- }
+  "basis": "closure: negative re-sweep of the complete PROPOSED vocabulary; INVENTORY.md §2 A2 appended disposition"
+ },
+ "historical_claims": [
+  {
+   "recorded": "2026-07-14",
+   "status": "in_progress",
+   "claim": "executed_partial — 8/9 labels reworded; 9th finding (glossary PROPOSED-name-in-copy) unexecuted, quote lost to record condensation",
+   "disposition": "closed 2026-07-15: the prescribed recovery (re-run the A2 sweep over cli.md) was executed against the complete 16-term PROPOSED ops vocabulary — zero instances in cli.md, the mirror, or glossary prose; commit 6238c99 removed no PROPOSED term. No current target exists; closed on the negative re-sweep, not a guess."
+  }
+ ]
 }

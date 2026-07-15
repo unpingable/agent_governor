@@ -108,7 +108,22 @@ if a desktop app is genuinely needed. Candidate shapes, none ruled:
    clerk stays parked; "guvnah" survives as the lane's name or not at all).
 2. **Seat as resurrected guvnah app** consuming the same model; web later —
    re-opens Q-A7 and doubles the surface early.
-3. **Both from birth** — the "another quarter" fence says no.
+3. **Both as two parallel builds** — the "another quarter" fence says no.
+4. **Guvnah as one codebase, two distributions** — web-native core serving
+   a webui (chrome+firefox free) AND wrapped in an app shell.
+   **← OPERATOR LEAN (2026-07-15, same day; a lean, not a ruling).**
+   Distinct from shape 3: this is one surface rendered twice, not two
+   surfaces — so it survives the fence IF the core is genuinely web-first
+   and the app shell is a wrapper, never a fork. Consequences to rule at
+   ratification: (a) **clerk's app-shell-donor role evaporates** — if guvnah
+   carries its own shell, clerk's "parked, kept" disposition likely tightens
+   toward retirement (operator call; touches the 2026-07-02 consolidation
+   table); (b) **phosphor stays purpose-focused on what it does now**
+   (operator, same exchange) — web-native lane host, ops-casework lane; the
+   seat is a sibling surface, not a phosphor lane, and no shared-hosting
+   arrangement is contemplated; (c) the demo-able MVP specimen should ship
+   as the WEB rendering first (zero install for the launch audience), app
+   shell after — the shell is distribution, not product.
 
 Whatever the ruling, the daemon-authority invariant is unchanged: clients
 are views; the composer MODEL and its export specimen are the product, and

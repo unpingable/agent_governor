@@ -187,6 +187,134 @@ wire vocabulary. The export specimen speaks constellation grammar
 on the positioning layer. Local grammar > shared vocabulary — conceptual
 dependency on the analogy is the named failure mode.
 
+## Enforcement is claim-relative, not domain-relative (2026-07-15)
+
+**A drafter error, corrected and worth keeping as the correction.** The
+drafter proposed `domain → witness strength` ("ops and code can gate;
+authoring can only advise"). Chatty refuted: **witness strength is
+claim-relative.** Code has weak witnesses (tests can encode the same mistaken
+assumption as the implementation; snapshots prove consistency with yesterday,
+not correctness; typecheck proves what the type system expresses; a Lean
+theorem proves the stated model, not that the model describes the intended
+world). Authoring has hard ones (cited text exists at the claimed location; a
+date contradicts an established timeline; a character is in two places; a
+quotation differs from source; a required disclosure is absent). Only the
+*semantic* claims — "this motivation is believable", "this argument follows",
+"this voice is consistent" — are testimony-typed.
+
+**The repo already knew this; the drafter was behind the code** (verified
+2026-07-15):
+
+- `libs/receipt_kernel/.../oracle_independence.py` grades witnesses on an
+  independence ladder: **0 local same-host (e.g. pytest on the dev machine)
+  → 1 same-org CI → 2 cross-org CI → 3 independent third-party.** Local
+  pytest is the WEAKEST class — the "code gates" intuition graded by the
+  kernel itself.
+- `claims_evidence_binding` binds evidence **per factual claim**;
+  `epistemic_mode_requirements` gates by mode. Claim-relative enforcement is
+  already constitutional.
+- Authoring hard witnesses already ship: `nonfiction_governor/doi.py`
+  (citation exists at claimed location, CrossRef/DataCite),
+  `governor/chrono.py` (dates), `governor/identity.py` (names),
+  `fiction_governor/guardrails.py` (**C1–C3 hard constraints** vs **P1–P4
+  soft penalties** — fiction already splits gate-able from advisory).
+
+**Determination shape (candidate, NOT built):**
+
+```text
+claim kind + witness bundle + independence + coverage
++ reproducibility + authority + consequence class
+    → permissible enforcement
+```
+
+Candidate closed vocabulary — **name only; minting it is custody-affecting
+(cross-module vocabulary) and needs its own ruling**:
+
+```text
+EnforcementClass = DescriptiveOnly | Advisory | RequiresReview | Blocking
+```
+
+**Earned per compiled claim, never assigned wholesale to a domain.** Same law
+as the week's other three closures (novel string ≠ new mode; novel value ≠
+new state; skew ≠ stale): the class is derived from evidence, not declared by
+category.
+
+## Three-layer split (candidate architecture — resolves phosphor)
+
+- **Composer** — declares entities, relations, constraints, claims, witness
+  requirements, cuts, projections. Domain-neutral kernel.
+- **Domain packs** — local ontology + admissible witness types per domain
+  (ops, code, fiction, nonfiction). This is `local grammar > shared
+  vocabulary` applied: the kernel stays neutral, each pack keeps its own
+  grammar. See `constellation_constraint` doctrine.
+- **Phosphor** — hosts the human workflow: lanes, inspection surfaces,
+  drafting, review, ratification, consequence display. **The workbench over a
+  model-and-witness kernel** — not "the universal framework for every kind of
+  thought". This salvages phosphor's generality claim by removing it: it
+  renders lanes; it never carries the kernel's domain-generality.
+
+So fiction is not a tab bolted onto an ops product:
+
+```text
+Composer model kind: narrative continuity
+Phosphor lane:       fiction casework
+Witness pack:        manuscript + canon + timeline + human review
+```
+
+```text
+Composer model kind: software artifact
+Phosphor lane:       implementation casework
+Witness pack:        compiler + tests + verifier + repository history
+```
+
+## Fiction is state-tracking, not taste (operator + chatty, 2026-07-15)
+
+Operator (from Erin's complaint about ChatGPT/Claude losing canon while
+drafting): "there are STILL hard constraints in fiction." Chatty: losing canon
+is **not a taste failure, it is a state-tracking failure** — and *"Claude
+deciding a character suddenly knows something they never witnessed is
+basically an unauthorized projection across an epistemic boundary. Same
+crime, nicer prose."*
+
+**That is this constellation's core crime exactly** — assertion converted to
+relied-upon fact with no witness path. A character's knowledge state is
+standing; witnessing an event is the evidence; inferring knowledge without a
+transmission path is laundering. The fiction governor's job and AG's job are
+the same job.
+
+Hard state a story carries: who knows what and when; who is alive, present,
+injured, married, missing, lying; dates, distances, travel time, ages; object
+custody; established world rules; POV visibility; promises made on-page;
+whether a reveal contradicts prior text or merely recontextualizes it.
+
+```text
+hard constraint:     Character A was not present for event X.
+derived constraint:  A cannot know X unless a transmission path exists.
+soft judgment:       Would that path feel dramatically satisfying?
+```
+
+First two gate; the third needs human review. So a fiction model is not "a
+bible" — it is `entities + temporal state + knowledge state + relationship
+state + world constraints + textual evidence + unresolved obligations`, and
+the tool can then classify: **contradiction** (violates canon) ·
+**unsupported addition** (no textual basis yet) · **legal extension** (new,
+consistent) · **interpretive ambiguity** (multiple readings) · **style
+concern** (advisory only).
+
+Erin's complaint is the authoring-domain equivalent of *"the dashboard was
+green but the service was dead."* Different scenery, same missing discipline.
+
+## Why ops is still the launch domain
+
+Not because the kernel is secretly ops-only — because ops is the best **stress
+test**: richest mix of authored design, heterogeneous external witnesses,
+consequential disagreement, authority boundaries, and real refusal value.
+
+**Generality stays an architectural fact, never a homepage claim.** Let people
+notice the same machine governs code and authored corpora *after* they have
+seen it do something difficult and concrete. Otherwise you become "a platform
+nobody asked for, now featuring four pastel tabs."
+
 ## Gates before any build
 
 1. **Operator ratification** of scope + whether it enters the launch DoD

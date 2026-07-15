@@ -1,0 +1,17 @@
+{
+  "agent_id": "maude-ns2-supervised-small",
+  "allowed_shell_commands": [
+    "cargo test",
+    "cargo build"
+  ],
+  "allowed_write_paths": [
+    "crates/nightshiftd/src/*",
+    "crates/nightshiftd/tests/*",
+    "docs/architecture/*"
+  ],
+  "doctrine_writes_allowed": false,
+  "git_allowed": false,
+  "network_allowed": false,
+  "output_is_observe_only": true,
+  "task_kind": "rust_feature_bounded"
+}

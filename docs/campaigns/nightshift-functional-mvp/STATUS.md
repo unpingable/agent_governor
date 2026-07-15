@@ -97,6 +97,23 @@ uncommitted; S1–S7 are closed; NS-2..6 are not built).
 
 ## Done
 
+- **NS-2 STAGED (2026-07-15):** `specimens/ns-2-candidate-authority/` — the
+  Candidate authority level packet (explicit `Candidate` between `Advise` and
+  `Stage`; ungoverned ceiling caps at Candidate; docs line "fresh → candidate;
+  Governor approval → stage/apply"), authored as **plan_version 1 from birth**
+  (S6 `execution_request` + S7 containment — no v0 in this packet's lineage).
+  Staging receipts (integrator-staged, real classes): playbook parses
+  (`sha256:b0f87b91…`), RationCard constructs with locked axes
+  (`sha256:c7b487ac…`), maude envelope parses (v1), admission **REFUSES**
+  `governance_not_approved` (born-candidate rule — the refusal is the staging
+  receipt), and a post-flip dry-run on a throwaway copy ADMITS with all three
+  citations `verified` + the S7 ration-bytes snapshot. **NS-1's
+  approval-custody gap is closed by construction here:** the README flip
+  procedure is promote-first-then-witness, the witness content binds
+  `sha256(promoted plan bytes)` (seam B), and both are committed and retained
+  permanently. Awaiting the operator approval act + run (model pinned at run
+  time).
+
 - **NS-0 DONE (2026-07-05):** the model pin threads end-to-end — maude
   `run <plan.md> --model X` (maude `442703e`, tests + refusal path) →
   `runtime.session.create` `harness_args` (strings-only, fail-closed; AG

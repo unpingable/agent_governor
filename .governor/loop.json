@@ -1,17 +1,17 @@
 {
   "phase": "BUILD",
-  "current_slice": "ns2-packet-authoring (nightshift-functional-mvp)",
-  "candidate_next_slice": "a1-runtime-admission-decision-packet (draft only, operator rules)",
+  "current_slice": "a1-runtime-admission-decision-packet (draft only, operator rules)",
+  "candidate_next_slice": "epistemic-backoff-mechanization",
   "slice_spec": [
     "OPERATOR SELECTION ACT 2026-07-15 (in-session ruling, sequenced, multi-item): (1) cli-reference-wording-pass closure — DONE this cycle (9th finding closed no-current-target via negative re-sweep); (2) NS-2 packet authoring for the maude governed loop (born-candidate specimen: playbook/ration/plan; operator approval act stays operator-only); (3) A-1 runtime-admission decision packet — DRAFT ONLY, no implementation until ruled; (4) epistemic-backoff-mechanization build. Constraint: no pushes (work hours); commits fine. Codex quota hold until 2026-07-21 — adversarial checkpoints via Claude-family refute agents."
   ],
   "acceptance": "Four-item operator-sequenced selection. Each item closes on its own receipts; WIP-1 holds (one current_slice at a time, sequence advances on closure).",
   "blocked_on": null,
-  "next_action": "BUILD ns2-packet-authoring: author the NS-2 specimen (playbook.yaml, ration_card.json, plan.md born-candidate) under docs/campaigns/nightshift-functional-mvp/specimens/, staging receipts verified via the real parsers, admission refusal as the staging receipt — same shape as NS-1, with the approval witness path done correctly from birth.",
-  "last_slice_closed": "cli-reference-wording-pass — CLOSED 2026-07-15 (operator-selected item 1/4). 8/9 labels were already reworded at 6238c99; the 9th finding (glossary PROPOSED-name-in-copy, quote lost to record condensation) closed as no-current-target: the prescribed recovery (re-run the A2 sweep) was executed over the complete 16-term PROPOSED vocabulary against cli.md + mirror + glossary prose — zero instances; 6238c99 removed no PROPOSED term. Closed on the negative re-sweep, not a guess. Prior: clock-witness-wall-freshness (Layer A + Layer B) — CLOSED 2026-07-14.",
+  "next_action": "DRAFT the A-1 decision packet (working/): what admits a runtime session to effect-bearing execution — the four options from the 2026-07-14 authority-seams packet, each with compatibility analysis and exact acceptance tests, same shape as the A-7 packet that worked. NO implementation until the operator rules.",
+  "last_slice_closed": "ns2-packet-authoring — CLOSED 2026-07-15 (operator-selected item 2/4). specimens/ns-2-candidate-authority/ authored (playbook sha256:b0f87b91…, ration sha256:c7b487ac…, plan.md v1 born-candidate, README with promote-first-then-witness flip). Staging receipts: real parsers PASS, admission REFUSES governance_not_approved (the staging receipt), post-flip dry-run on throwaway copy ADMITS with 3 citations verified + S7 ration-bytes snapshot. Tracked specimen verified still-refusing after the dry-run. The RUN is operator-only (approval act + model pin). Prior: cli-reference-wording-pass CLOSED 2026-07-15.",
   "last_verified_commit": "AG ad7eddc (clock-witness Layer A: freshness + anti-laundering custody). Prior: approval producer 16ea68a; approval core 5a0bca3 + maude e5fd7f1; telemetry reconcile ceaa544",
   "last_verified_note": "2026-07-14: approval-binds-plan_ref built end-to-end via the loop (spec ruled -> pins folded -> escape-count 6->0 -> build -> sandwich 0 findings -> AUDIT). Suites run BARE (exit-code verdict): AG 16875 passed/49 skipped exit 0; maude 360 passed/24 skipped exit 0. NO PUSH (operator: commits only during work hours).",
-  "last_updated": "2026-07-15T19:15:00Z",
+  "last_updated": "2026-07-15T20:00:00Z",
   "selection_condition": {
     "observed": "current_slice and candidate_next_slice are null; phase is PLAN",
     "recorded_claim": "requires_operator",
@@ -28,7 +28,7 @@
   },
   "current_disposition": {
     "schema": "ag-current-disposition/v1",
-    "recorded_at": "2026-07-15T19:15:00Z",
+    "recorded_at": "2026-07-15T20:00:00Z",
     "supersedes_fields": [
       "acceptance@2026-07-14T12:00:00Z",
       "blocked_on@2026-07-14T12:00:00Z",
@@ -39,7 +39,7 @@
       "admission": "not_determined",
       "selection": {
         "state": "selected",
-        "detail": "operator selection act 2026-07-15: sequenced 4-item ruling (see slice_spec); current = ns2-packet-authoring"
+        "detail": "operator selection act 2026-07-15: sequenced 4-item ruling (see slice_spec); items 1-2 closed; current = a1-decision-packet draft"
       },
       "plan_approval": "not_determined",
       "runtime_activity": "inactive",

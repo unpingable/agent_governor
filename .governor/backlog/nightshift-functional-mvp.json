@@ -6,11 +6,11 @@
  "status": "queued",
  "effort_band": "M",
  "canonical_source": "docs/campaigns/nightshift-functional-mvp/STATUS.md + docs/PROGRAM_LEDGER.md",
- "open_items": "NS-0 is DONE. NS-1 implementation custody is CLOSED: the kept diff landed as nightshift e71303f (2026-07-15, local/unpushed), operator-amended during integration (a distinct LivenessSkewed refusal variant replaced a skew->stale conflation; 6 files / 487 insertions, where the promoted diff was 5 files / 337). NS-1 exact PLAN-APPROVAL custody remains UNVERIFIABLE and is unaffected by the landing: the tracked plan.md is still governance_status=candidate and the named operator_plan_approved_2026-07-09 witness is absent. The grant-use track S1-S7 is CLOSED. Campaign packets NS-2..NS-6 remain ratified and queued for authoring/execution in campaign order; each exact packet still requires its documented queue latch and plan-approval witness. The separate testimony-adapter items in PROGRAM_LEDGER #2-5 remain DEFERRED. No Nightshift packet is currently selected as NEXT.",
+ "open_items": "NS-0 is DONE. NS-1 implementation custody is CLOSED: the kept diff landed as nightshift e71303f (2026-07-15, local/unpushed), operator-amended during integration (a distinct LivenessSkewed refusal variant replaced a skew->stale conflation; 6 files / 487 insertions, where the promoted diff was 5 files / 337). NS-1 exact PLAN-APPROVAL custody remains UNVERIFIABLE and is unaffected by the landing: the tracked plan.md is still governance_status=candidate and the named operator_plan_approved_2026-07-09 witness is absent. The grant-use track S1-S7 is CLOSED. NS-2 is AUTHORED+STAGED (2026-07-15, specimens/ns-2-candidate-authority/ — v1 from birth, staging receipts green, admission refuses born-candidate; awaiting the operator approval act + run). Campaign packets NS-3..NS-6 remain ratified and queued for authoring/execution in campaign order; each exact packet still requires its documented queue latch and plan-approval witness. The separate testimony-adapter items in PROGRAM_LEDGER #2-5 remain DEFERRED. No Nightshift packet is currently selected as NEXT.",
  "repo": "agent_gov",
  "reconciled": {
   "date": "2026-07-15",
-  "basis": "nightshift e71303f (NS-1 landed; parent 01a65bf; clean worktree) + AG 84e8c43 status successor; NS-1 terminal runtime event + approved promotion in .governor/runtime/sess_3a2ea5348a85_events.jsonl; nightshift STATUS first-run completion; campaign packet table and per-packet approval gate; grant-use S1-S7 closure receipts",
+  "basis": "nightshift e71303f (NS-1 landed; parent 01a65bf; clean worktree) + AG 84e8c43 status successor; NS-1 terminal runtime event + approved promotion in .governor/runtime/sess_3a2ea5348a85_events.jsonl; nightshift STATUS first-run completion; campaign packet table and per-packet approval gate; grant-use S1-S7 closure receipts; NS-2 staging receipts (parse_playbook + RationCard + maude parse/admission-refusal + post-flip dry-run) 2026-07-15",
   "confidence": "CURRENT"
  },
  "wake_condition": "selection of a ratified NS-2..6 packet for exact packet authoring; execution then requires that packet's documented queue latch and plan-approval witness. A separate ruling remains necessary for the DEFERRED testimony-adapter items in PROGRAM_LEDGER #2-5.",
@@ -30,7 +30,7 @@
  ],
  "current_disposition": {
   "schema": "ag-current-disposition/v1",
-  "recorded_at": "2026-07-15T16:00:00Z",
+  "recorded_at": "2026-07-15T20:00:00Z",
   "supersedes_fields": [
    "current_disposition.state_axes.custody@2026-07-15T03:00:16Z",
    "current_disposition.custody_delta@2026-07-15T03:00:16Z"
@@ -49,7 +49,7 @@
    },
    "custody": {
     "state": "partial",
-    "detail": "NS-1 impl closed at nightshift e71303f (local, unpushed); S1-S7 closed; NS-2..6 unbuilt"
+    "detail": "NS-1 impl closed at nightshift e71303f (local, unpushed); S1-S7 closed; NS-2 authored+staged awaiting operator approval act; NS-3..6 unbuilt"
    }
   },
   "evidence": [

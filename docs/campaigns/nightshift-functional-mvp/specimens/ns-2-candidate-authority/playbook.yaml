@@ -1,0 +1,13 @@
+schema: governed-playbook.v0
+kind: procedure
+name: nightshift-candidate-authority
+steps:
+  - id: step1
+    action: add_candidate_authority_level
+    target: crates/nightshiftd/src/agenda.rs
+  - id: step2
+    action: cap_ungoverned_ceiling_at_candidate
+    target: crates/nightshiftd/src/pipeline.rs
+  - id: step3
+    action: document_candidate_promotion_line
+    target: docs/architecture/DESIGN.md

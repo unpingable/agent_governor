@@ -111,9 +111,16 @@ state. This is an external operator action, not an AG-local authority change.
 reported swept count, and an all-failed sweep should return nonzero. This needs a
 Standing-local packet and tests; it is not authorized here.
 
-## A-7 — `operator_mode` fail-open
+## A-7 — `operator_mode` fail-open — **RULED + CLOSED 2026-07-15**
 
 The confirmed reproduction, compatibility analysis, smallest repair, and exact
 acceptance tests are isolated in
 `working/security-slice-operator-mode-closed-domain-2026-07-14.md`. That packet
 must be ruled separately. No runtime repair was applied during reconciliation.
+
+**Ruled by the operator 2026-07-15 and implemented as filed** — closed domain at
+`create_session`, fail-closed at the effect point (`!= "autonomous"`), CLI
+closed choice. See that packet's Disposition section for receipts. A-1..A-6
+remain **UNRULED**; this closure authorizes nothing in them. In particular the
+slice did not answer A-1 (what admits a session to effect-bearing execution) —
+it only ensured that whatever admits one cannot be an unvetted string.

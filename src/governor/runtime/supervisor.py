@@ -134,6 +134,16 @@ class RuntimeFacet:
     running: bool = False
 
 
+#: Closed domain for ``operator_mode``.
+#:
+#: A value outside this set is not a private custom mode — it is a typo, a
+#: case variant, or a forgery. The effect path grants silent write/communicate
+#: authority to exactly one mode (``autonomous``), so an unrecognized value
+#: must refuse at construction rather than arrive at the gate as de-facto
+#: autonomy. Allowlist, not blocklist: a novel string never admits.
+OPERATOR_MODES: tuple[str, ...] = ("interactive", "autonomous")
+
+
 @dataclass
 class SessionRecord:
     """Durable session metadata (capsule-adjacent)."""
@@ -288,7 +298,18 @@ class SessionSupervisor:
         custody can't be established. ``allow_dirty=True`` instead records the
         pre-existing dirty set as a baseline and fences it from this session's
         promotion/rejection.
+
+        ``operator_mode`` must be a member of :data:`OPERATOR_MODES`. This is
+        the authoritative construction point — RPC, CLI, fork, tests, and
+        direct callers all pass through here — so the domain is closed once,
+        here, before a session ID or event file exists.
         """
+        if not isinstance(operator_mode, str) or operator_mode not in OPERATOR_MODES:
+            raise ValueError(
+                f"operator_mode must be one of "
+                f"{', '.join(repr(m) for m in OPERATOR_MODES)}; got {operator_mode!r}"
+            )
+
         session_id = _new_session_id()
         now = _now_iso()
 
@@ -957,9 +978,14 @@ class SessionSupervisor:
                 ))
             return
 
-        # In interactive mode, block write and communicate tools
+        # Block write and communicate tools unless the record is EXACTLY
+        # autonomous. Stated negatively on purpose: `== "interactive"` made
+        # every other value — typo, case variant, restored-legacy record,
+        # forgery — silently auto-approve, which is de-facto autonomy granted
+        # by a string nobody vetted. create_session closes the domain; this is
+        # the second fence, at the point where the write actually happens.
         needs_approval = (
-            record.operator_mode == "interactive"
+            record.operator_mode != "autonomous"
             and action_class in (ActionClass.WRITE, ActionClass.COMMUNICATE)
         )
 

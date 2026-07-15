@@ -20023,7 +20023,13 @@ _populate_advanced()
 @click.option("--backend", default="claude_code", help="Backend kind (claude_code)")
 @click.option("--cwd", default=None, help="Working directory for the session")
 @click.option("--task", default=None, help="Task description for the agent")
-@click.option("--mode", "operator_mode", default="interactive", help="Operator mode (interactive/autonomous)")
+@click.option(
+    "--mode",
+    "operator_mode",
+    default="interactive",
+    type=click.Choice(["interactive", "autonomous"], case_sensitive=True),
+    help="Operator mode (interactive/autonomous)",
+)
 @click.option("--allow-dirty", is_flag=True, help="Fence a dirty working tree at launch instead of refusing (GAP-N)")
 @click.pass_context
 def runtime_launch(ctx: click.Context, backend: str, cwd: str | None, task: str | None, operator_mode: str, allow_dirty: bool):

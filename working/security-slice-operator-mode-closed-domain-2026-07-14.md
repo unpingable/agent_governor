@@ -1,9 +1,40 @@
-# Candidate security slice — close the `operator_mode` domain and fail closed
+# Security slice — close the `operator_mode` domain and fail closed
 
 **ID:** `operator-mode-closed-domain-fail-closed`  
 **Filed:** 2026-07-14  
-**Status:** **CANDIDATE — separately ruled; not authorized by filing**  
+**Status:** **RULED 2026-07-15 (operator) — IMPLEMENTED, local, unpushed**  
 **Class:** runtime authority seam / write-effect fail-open
+
+## Disposition (2026-07-15)
+
+Ruled and implemented as filed. Both fences landed; no scope was added.
+
+| Repair | Site | Receipt |
+|---|---|---|
+| 1. Closed domain at ingress | `runtime/supervisor.py` `OPERATOR_MODES` + `create_session` | refuses before session ID or event file exists |
+| 2. Fail-closed at the effect point | `runtime/supervisor.py` — `!= "autonomous"` replaces `== "interactive"` | a forged/restored record prompts instead of auto-approving |
+| 3. CLI closed choice (optional) | `cli.py` `runtime launch --mode` | `click.Choice(case_sensitive=True)`; ergonomics, not the boundary |
+
+Tests: `tests/test_operator_mode_closed_domain.py` — 21 pass, all seven
+acceptance items covered. Full AG suite 16935 passed / 0 failed.
+
+**Both fences were falsified before being trusted.** Reverting the effect point
+to `== "interactive"` fails exactly the two malformed-record tests and nothing
+else; removing the ingress validation fails the ingress, daemon-RPC, and fork
+tests. The failing sets are disjoint, so neither fence is decorative.
+
+**The reproduction now refuses at ingress**
+(`ValueError: operator_mode must be one of 'interactive', 'autonomous'`) and so
+exits 1 where it exited 0 at filing commit `e52355c`. That inversion is the
+proof for fence 1. The script is retained unmodified as filed evidence; it can
+no longer demonstrate fence 2, which is why acceptance tests 3–5 forge the
+stored record directly rather than going through `create_session`.
+
+Unrelated pre-existing flake observed while verifying, NOT touched:
+`tests/test_runtime_golden.py::TestGoldenTrace::test_golden_event_sequence`
+fails under full-suite CPU contention (bare `time.sleep(1)`), passes in
+isolation and on a clean full-suite re-run. It uses only `interactive` and
+`autonomous`, the two values where this slice's change is provably a no-op.
 
 ## Confirmed finding
 

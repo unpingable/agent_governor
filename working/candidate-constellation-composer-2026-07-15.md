@@ -304,6 +304,30 @@ concern** (advisory only).
 Erin's complaint is the authoring-domain equivalent of *"the dashboard was
 green but the service was dead."* Different scenery, same missing discipline.
 
+**And the fiction pack largely exists already (verified 2026-07-15 —
+completion-redshift, fifth instance today).** `fiction_governor/types.py:595`
+`Belief` already carries `character` · `belief` · `is_true` (world truth vs
+character belief — the epistemic split) · `learned_at_chapter` (temporal
+index) · `source` (**the transmission path**: "witnessed" / "told by X" /
+"assumed") · `invalidated_at_chapter`. Its docstring: exists to catch
+"impossible reactions, **premature knowledge**, and emotional responses that
+assume facts not yet learned." The hard/derived ladder above is already
+schema; `bible.py` is the decisions ledger and `canon.py` the facts ledger.
+
+The real gap is two small things — **and it is this week's law a fifth
+time**: (1) `source` is a **free-form string** (`types.py:620`,
+`cli.py:1875`) where a closed vocabulary belongs — `TransmissionPath =
+Witnessed{event} | ToldBy{character, scene} | Inferred | Assumed`; (2) **no
+interlock** validates `source="witnessed"` against canon presence (verified:
+zero matches). Fiction has the schema and not the gate. That is a closed
+vocab + one verifier, not a subsystem — which is more evidence the
+domain-pack layer is a re-labelling of what got built, not a new build.
+
+Operator disposition (2026-07-15): **fiction is NOT deprecated** — "Erin
+still wants a fiction authoring tool; even if that's not front-and-center,
+I'm not deprecating it." A named live consumer is a forcing case in waiting;
+a future audit must not retire the module for being off the ops hot path.
+
 ## Why ops is still the launch domain
 
 Not because the kernel is secretly ops-only — because ops is the best **stress

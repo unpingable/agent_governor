@@ -14,7 +14,7 @@ pointers to this file, not divergent copies. (Scope declaration added
 2026-07-13 per census defect D7 — see
 `working/constellation-census-2026-07-13.md`.)
 
-**Last updated:** 2026-07-13
+**Last updated:** 2026-07-15
 
 > **The rule that makes this real:** an agent PROPOSES a transition backed by
 > named receipts; it does not narrate completion. `CLOSED` requires linked
@@ -36,9 +36,10 @@ pointers to this file, not divergent copies. (Scope declaration added
   portfolio slices (continuity repair, approval-binds-plan_ref) are both
   CLOSED. Await operator selection; `python3 scripts/portfolio_report.py` for
   the queue (hot fronts: governed-shell remainder, public-mvp Sprint 5).
-- **Push state:** AG + maude + continuity + yesterday's cross-repo chains
-  UNPUSHED (operator: no pushes during work hours). Push **intact** — preserve
-  implementation → adversarial finding → correction history; do not squash.
+- **Push state:** AG + maude + continuity + nightshift (`e71303f`, NS-1 landed
+  2026-07-15) + yesterday's cross-repo chains UNPUSHED (operator: no pushes
+  during work hours). Push **intact** — preserve implementation → adversarial
+  finding → correction history; do not squash.
 
 ## Status vocabulary
 

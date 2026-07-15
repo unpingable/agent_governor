@@ -2,7 +2,63 @@
 
 Card ratified 2026-07-05. Gap assessment done (65% of lane exists; 6+1 packets).
 
-## Current disposition — custody successor (2026-07-14)
+## Current disposition — NS-1 LANDED, operator-amended (2026-07-15)
+
+This section supersedes the 2026-07-14 custody-successor state below without
+deleting it. **NS-1 custody is CLOSED: nightshift `e71303f`** (base `01a65bf`,
+6 files, 487 insertions, local — NOT pushed). The preserved pre-amendment
+implementation is retained unchanged at
+`~/preservation/nightshift/ns1/2026-07-14/` (patch sha256 `b78940ac…`,
+re-verified at integration) as evidence of what was amended.
+
+The kept diff was integrated from the existing dirty tree, not re-applied:
+`git diff --full-index` at `01a65bf` was proven byte-identical to the
+preserved patch before anything was touched.
+
+**Operator amendment (2026-07-15) — skew is not staleness.** Integration
+review found the promoted implementation mapped `LivenessVerdict::Skewed` onto
+`RefusalKind::LivenessStale` and synthesized a `threshold_seconds` from
+opts/default to fill the shape. That is a false typed claim: `liveness.rs`
+documents skew as "an epistemic hole, not freshness", and `verdict_for`
+returns `Skewed` on negative age *before* any threshold comparison — so the
+reported threshold took no part in the verdict and the free-text `blocked[]`
+beside it never renders one. A closed refusal registry that launders an
+unrepresentable case into a near-miss defeats its own purpose, so the operator
+refused it and ruled a narrow amendment rather than landing as-is:
+
+1. `LivenessSkewed { age_seconds }` added as a distinct closed variant;
+   `Skewed` maps to it. Each variant carries only values its verdict produced.
+2. The mapping was extracted to `pipeline::refusal_for_verdict` — the real
+   function `liveness_gate_failed` calls — because the shipped pipeline tests
+   were tautological (they re-implemented the mapping in the test body and
+   asserted it against itself; deleting production would have left them green).
+3. Packet-level acceptance tests added in `tests/liveness_pipeline.rs` (a
+   sixth file, beyond the plan's five — real pipeline-produced packets need
+   that harness) proving stale AND skew each carry the correct typed refusal
+   *and* their free-text `blocked[]`, in packet JSON. Both new skew tests were
+   falsified against the pre-amendment mapping before being trusted.
+
+Verification: `cargo test -p nightshiftd` → 180 unit (168 at base + 12),
+`liveness_pipeline` 6, all other targets green; `cargo clippy --all-targets`
+clean. Pre-existing and untouched: `drill_runner_all_green` fails 3/6 — its
+skip guard errors instead of skipping when AG's `python3 -m
+governor.drill_runner` is absent. Identical failures reproduce on a clean
+worktree at `01a65bf` with NS-1 absent, so they are baseline evidence, not
+NS-1 regressions. Same class as the `nq_cli` skip-path hardening (`40ee42b`);
+not repaired in this slice.
+
+State axes: admission=`ratified`; selection=`unselected`;
+plan_approval=`ns1_amended_by_operator_ns2_6_not_attached`;
+runtime_activity=`inactive`;
+effect_authority=`not_evidenced_for_unselected_packets`;
+custody=`ns1_closed_unpushed` (NS-1 landed at `e71303f`; S1–S7 are closed;
+NS-2..6 are not built).
+
+Doctrine kept from this slice: a closed refusal registry earns its name only
+if an unrepresentable refusal forces a new variant. The cheap failure is not
+a missing variant — it is a plausible neighboring one.
+
+## Current disposition — custody successor (2026-07-14) [SUPERSEDED 2026-07-15]
 
 This section supersedes the earlier "NS-1 staged / awaiting operator" state
 without deleting that staging history. **NS-1 implementation is built and

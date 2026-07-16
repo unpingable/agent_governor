@@ -1,0 +1,17 @@
+{
+ "id": "anticipatory-decision-pack",
+ "kind": "gap",
+ "spec_ref": "specs/gaps/GOV_GAP_ANTICIPATORY_DECISION_PACK_001.md",
+ "priority_tier": 2,
+ "status": "filed",
+ "effort_band": "L",
+ "canonical_source": "specs/gaps/GOV_GAP_ANTICIPATORY_DECISION_PACK_001.md",
+ "open_items": "GAP SPEC, filed 2026-07-16 from operator's 2026-07-15 night idea: anticipatory governance — human moves from runtime operator to design-time legislator ('human over the loop'). Pack = question -> admissible answer classes -> per-answer evidence requirements -> derived permissions -> escalation rules; agent instantiates answers FROM EVIDENCE (NLAI: pointers, governor verifies), novelty = typed escalation trigger. Census says ~90% of parts exist (intent_compiler forms/escape classification, RationCard doctrine, Layer-3 evidence kinds, S7 containment, Z3 lint substrate, docket precedent); the genuinely new seams: (2) evidence-instantiation check (answer admissible only when bound to verified evidence — validate_response checks well-formed, nothing checks EVIDENCED), (3) closed-world novelty fence, (4) doctrine lint pre-deploy, (5) pack decay/anti-YAML-burial (stale pack degrades to interactive, never keeps spending). NO new effect authority: packs change WHEN the human decides, never how much an agent may do. 4 OQs incl. whether ratified packs are custody-affecting per se (OQ-C) and orientation!=evidence for pack answers (OQ-D).",
+ "repo": "agent_gov",
+ "wake_condition": "operator ratification of the pack concept + a forcing case: a real project whose interactive-loop question set is stable enough to legislate (the walking-skeleton or a public-mvp consumer), OR the staged-ops sibling gets ruled first (its incident-class doctrine IS a pack instance and would force the artifact shape).",
+ "reconciled": {
+  "date": "2026-07-16",
+  "basis": "filed this session from operator idea + same-session census (intent_compiler.py, ops types, playbooks, S7, chain_gate surveyed); nothing built",
+  "confidence": "CURRENT"
+ }
+}

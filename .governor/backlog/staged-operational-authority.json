@@ -1,0 +1,17 @@
+{
+ "id": "staged-operational-authority",
+ "kind": "gap",
+ "spec_ref": "specs/gaps/GOV_GAP_STAGED_OPERATIONAL_AUTHORITY_001.md",
+ "priority_tier": 2,
+ "status": "filed",
+ "effort_band": "L",
+ "canonical_source": "specs/gaps/GOV_GAP_STAGED_OPERATIONAL_AUTHORITY_001.md",
+ "open_items": "GAP SPEC, filed 2026-07-16 (operator 2026-07-15 night): staged remediation — restore service (bounded/reversible) -> investigate (read-mostly, FailureFinding binds diagnosis to evidence) -> prevent recurrence (classified paths only), EACH stage its own grant, EACH transition demands the prior stage's witness (RecoveryReceipt / FailureFinding / DeploymentReceipt). 'Permission to restart the service' must not become 'permission to rewrite the scheduler' — anti-laundering by TYPE (origin-fence idiom, R4-adjacent). Restoration success is typed apart from diagnosis; RESOLVED-at-stage-1 (recovered, cause not established) is a LEGAL terminal. Census: ops IncidentStatus FSM is bookkeeping not authority; phase_control/scope ladder/deployment profiles/S7 containment all exist; missing = stage-typed grants + transition-witness minting. Completes the constellation split: Maude=how, AG=whether, Nightshift=execute+receipts (this is Nightshift's missing standing-delegation layer), NQ=novelty escape hatch. NOTHING ARMED. 4 OQs incl. where stage grants live (LA/standing/ration — provider choice mutates admissibility basis) and who may sign a FailureFinding.",
+ "repo": "agent_gov",
+ "wake_condition": "an operator ruling on the pack concept (sibling gap) or a real Nightshift incident-class doctrine wanting pre-approval — NS-2 lineage is the natural first consumer. Break-glass candidate is the door to these walls; ruling them together would be coherent.",
+ "reconciled": {
+  "date": "2026-07-16",
+  "basis": "filed this session; ops_governor/types.py IncidentStatus + intent_compiler + phase_control surveyed same-session; nothing built",
+  "confidence": "CURRENT"
+ }
+}

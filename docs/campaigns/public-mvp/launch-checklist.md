@@ -26,9 +26,14 @@
 
 1. ~~Ratify work-container v1~~ **DONE 2026-07-05** — operator ratified
    Option A in-session; executed `74dcf86` per the memo.
-2. **Spine OQ-1..OQ-5** — `spine/docs/design/v0-navigable-index.md` §open
-   questions (OQ-1 gates packaging, OQ-2 gates the specimen edition; others
-   cheap).
+2. ~~Spine OQ-1..OQ-5~~ **DONE 2026-07-16** — all five ruled by the operator
+   (rulings recorded in `spine/docs/design/v0-navigable-index.md` §OQ rulings;
+   spine `739fa0f` applies them: `status_quote` verbatim-quotation field +
+   `UnattributedQuoteError`, edition-timestamp docstring, loud
+   provisional-ingress README callout, stele split = defer artifact / pour
+   rebar, falsification pass failed pre-fix and is now test-pinned; suite
+   148 green bare). OQ-1: dist name `spine-readplane`, import stays `spine`
+   (applies at S-D). Lane order confirmed S-B → S-C → S-D.
 3. **Repo-visibility check** — constellation.html links 16 repos at
    github.com/unpingable/*; each must actually be public before deploy
    (mechanical: `for r in …; do curl -s -o /dev/null -w "%{http_code} $r\n" https://github.com/unpingable/$r; done` from any logged-OUT context).

@@ -199,7 +199,11 @@ ratification act pending)
   + dirty-worktree annotation (note, not verdict) + `--worktree`. Suite 19
   green. Porter v0.1 charter commitments: all closed except the two
   deliberately soft-fenced items (F4 transcript volume, F5 run-state locks).
-- **Lane S** — S-A done; S-B/S-D still gated on operator OQ-1/OQ-2.
+- **Lane S** — S-A done; **OQ-1..OQ-5 RULED 2026-07-16** (spine `739fa0f`:
+  rulings recorded + rebar applied — `status_quote` schema fix from the
+  failed stele falsification pass, loud provisional-ingress callout; 148
+  green). S-B/S-C/S-D unblocked, in that order; S-D opens with the
+  `spine-readplane` dist rename.
 - **Lane U** — U2 DONE (webui `b0c99e4`: version single-sourced, model
   optional, /api/state wired, COMPAT current) + U3-A DONE (`d70a673`:
   DaemonShellClient over the same framing; 12 daemon methods

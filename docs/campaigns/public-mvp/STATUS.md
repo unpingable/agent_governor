@@ -201,9 +201,14 @@ ratification act pending)
   deliberately soft-fenced items (F4 transcript volume, F5 run-state locks).
 - **Lane S** — S-A done; **OQ-1..OQ-5 RULED 2026-07-16** (spine `739fa0f`:
   rulings recorded + rebar applied — `status_quote` schema fix from the
-  failed stele falsification pass, loud provisional-ingress callout; 148
-  green). S-B/S-C/S-D unblocked, in that order; S-D opens with the
-  `spine-readplane` dist rename.
+  failed stele falsification pass, loud provisional-ingress callout).
+  **S-B DONE same day** (spine `ba59859`, local): 41-doc specimen corpus
+  over real AG roadmaps+campaigns, all three status lanes exercised
+  (6 ratified w/ witness refs, 13 candidate, 9 quotable-but-unmapped shown
+  verbatim w/ normalization declined, 13 bare unknown); edition
+  `sha256:b9b16649…d504d` frozen at fixed timestamp; suite 153 green bare;
+  stranger CLI path exits 0. Remaining: S-C (stranger runbook) → S-D
+  (packaging, opens with `spine-readplane` rename).
 - **Lane U** — U2 DONE (webui `b0c99e4`: version single-sourced, model
   optional, /api/state wired, COMPAT current) + U3-A DONE (`d70a673`:
   DaemonShellClient over the same framing; 12 daemon methods

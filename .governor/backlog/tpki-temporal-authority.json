@@ -1,0 +1,17 @@
+{
+ "id": "tpki-temporal-authority",
+ "kind": "candidate",
+ "spec_ref": "../tpki/README.md",
+ "priority_tier": 3,
+ "status": "filed",
+ "effort_band": "?",
+ "canonical_source": "~/git/tpki (docs/cross-project-field-survey.md = amendable register)",
+ "open_items": "REGISTERED 2026-07-16: tpki = temporal-authority doctrine + evidence corpus (the as-of second-order judgment family; duality with orientation). Docs-only BY DESIGN — owns no runtime, issues no verdicts; implementation gate = two projects needing the same EXECUTABLE adjudication, not the same prose distinction. AG rows filed: AG-005 (clock-witness control pair), AG-006 (=R2 revalidate, ruling pending), AG-007 (gate receipts pin policy_hash but not evaluator build — AG's NQ-004 mirror), SP-001 (spine succession/quotation refusals). Citation rule: cite with locator + repo cut, ratify locally; doctrine candidates cannot ratify. This stub tracks the RELATIONSHIP, not a build.",
+ "repo": "tpki",
+ "wake_condition": "Any of: (1) R2 ruled — record disposition on AG-006 in the tpki register (update protocol); (2) a real consumer needs an as-of query an existing organ can't answer honestly (e.g. Standing freeze_governing_at, AG ledger as-of verdict — today explicitly a cache, AG-004); (3) anticipatory-pack decay seam gets built (pack = certificate whose entitlement-to-govern expires — tpki vocabulary applies); (4) a second project needs executable as-of adjudication → the implementation gate opens and the envelope becomes a design question. Until then tpki is fed by rulings, never scheduled.",
+ "reconciled": {
+  "date": "2026-07-16",
+  "basis": "surveyed this session; git-initialized abf28ac..757978c; CONSTELLATION_MAP node row added; memory pointer tpki_repo.md",
+  "confidence": "CURRENT"
+ }
+}

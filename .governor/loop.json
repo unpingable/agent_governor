@@ -3,30 +3,30 @@
   "current_slice": null,
   "candidate_next_slice": null,
   "slice_spec": [],
-  "acceptance": "Cold-start orientation for 2026-07-16. The 2026-07-15 operator selection act (4 items) is FULLY CONSUMED — all four closed. No slice is selected; selection is the operator's next act. Everything below is REPORTED state, not a queue: nothing here bears execution authority.",
+  "acceptance": "Parked 2026-07-16 mid-afternoon. Theory-heavy banner day; operator chewing toward lean v12 tonight. No slice selected (selection = operator act). THE BIG UNRULED THING remains R1-R4 (inexpressibility family) \u2014 R2 now does DOUBLE DUTY: it also becomes tpki register AG-006's first disposition event. R1-R3 builds deliberately deferred: their fix SHAPE is downstream of R4, which is co-baking with the lean orientation/v12 work.",
   "blocked_on": null,
-  "next_action": "AUDIT first (run re_entry_probes). Then await operator selection. THE ONE THING TO KNOW: the lean sweep (first since 2026-07-02; AG was pinned at v7 while lean shipped v10) produced FOUR NAMED, UNRULED rulings — r1-publish-consumes-provenance / r2-refresh-requires-evidence / r3-compaction-loss-testifies / r4-unearned-transitions-unrepresentable (DOCTRINE). See working/rulings-pending-inexpressibility-2026-07-15.md. Each needs its own operator ruling; all are custody-affecting; NOTHING is authorized. R4 if ruled first decides the SHAPE of R1-R3. Also open + operator-only: NS-2 approval act + run (specimens/ns-2-candidate-authority/, promote-FIRST-then-witness — the order is load-bearing); public-mvp launch acts; A-2..A-6 unruled; the Standing expired-materialized-active grant (external, needs a writable Standing workspace).",
-  "last_slice_closed": "2026-07-15 was a four-item operator-sequenced selection, ALL CLOSED, plus two rulings and a sweep: (1) cli-reference-wording-pass CLOSED (9th finding closed no-current-target via negative re-sweep, 42d432f); (2) ns2-packet-authoring CLOSED (464efeb — v1-from-birth specimen, staging receipts green, admission refuses born-candidate; the RUN is operator-only); (3) a1-runtime-admission-decision-packet DRAFTED+REFUTED+AMENDED (09104ba — Opus-refute caught 2 FATAL: 'zero breakage' false, autonomy/governance axes conflated) then RULED by the operator (4b now / 4a later) and BUILT (401ba69 — derived lane labeling, observe-only, 4a filed blocked); (4) epistemic-backoff-mechanization CLOSED (9ed3ed7 — §11.1 ladder, confusion receipts, self-auditing probe wall, correlated-confusion wired into --check). Also: operator_mode closed-domain security slice (443ff63), six-axis audit (5916f14), closed axis vocabulary + checker (9166f02, live coverage 0%->100%), fiction knowledge paths (7f49fa6 — Erin's canon-loss failure now a typed finding), composer candidate penciled (264d1a0..5e670a0), code-pack audit finding (9f49dd5), lean sweep (f7c1854), four rulings named (9e558ee).",
-  "last_verified_commit": "AG 9e558ee (four rulings named) — PUSHED to origin/main 2026-07-15 post-5pm along with maude e5fd7f1 and nightshift e71303f. Prior: 443ff63 (operator_mode), 9166f02 (axis vocabulary), 401ba69 (lane 4b), 9ed3ed7 (backoff).",
-  "last_verified_note": "2026-07-15: full AG suite 17021 passed / 49 skipped / 0 failed, exit 0 observed BARE (verification discipline). Every build slice mutation-probed with the intended tests failing and disjoint failing sets. KNOWN LATENT FLAKE (recorded, NOT repaired): tests/test_runtime_golden.py::TestGoldenTrace::test_golden_event_sequence fails only under full-suite CPU contention (bare time.sleep(1)); passes in isolation and on a clean re-run; uses only interactive/autonomous, where 443ff63 is provably a no-op.",
-  "last_updated": "2026-07-16T00:30:00Z",
+  "next_action": "AUDIT (re_entry_probes), then: (1) EVENING PUSH QUEUE: AG 8 commits, spine 2 (739fa0f OQ rulings + ba59859 S-B), tpki 4 (abf28ac..5e2b923, remote unpingable/tpki wired, first push). (2) After push: operator fresh-clone run (launch act 4 \u2014 must follow the push to test real origin). (3) Remaining launch acts: repo-visibility check, desk live smoke, site deploy, mint. (4) Await R1-R4 rulings \u2014 likely informed by v12 if it lands tonight. NOTE: skunkworks formalization has UNCOMMITTED work (operator's JudgmentOrientation.lean + Claude's JudgmentOrientationAttribution.lean + registration edits) \u2014 operator's active workspace tonight, do not touch from here.",
+  "last_slice_closed": "2026-07-16 (theory day): orientation calculus validated+extended in skunkworks (attribution theorem + accumulator repair, compile green, custody-manifest registered, UNCOMMITTED by design \u2014 swarm active); AG crosswalk candidate a31eb4b + interferometry origin-blind finding bd25a34; anticipatory gaps filed 1436351+80d3bdc (decision packs + staged operational authority, named not built); spine OQ-1..5 RULED by operator + applied (spine 739fa0f: status_quote schema fix from failed stele falsification pass) + S-B specimen edition CLOSED (spine ba59859, 153 tests, edition sha256:b9b16649 frozen; AG 13121f8+556b7c8 campaign records; launch acts 1-2 now done); tpki surveyed + git-initialized (abf28ac..5e2b923) + registered in CONSTELLATION_MAP (d1cc36f) \u2014 temporal-authority doctrine corpus, docs-only by design, fed by rulings never scheduled; cadence = owner-confirmed name reservation, held for tpki graduation.",
+  "last_verified_commit": "AG d1cc36f (tpki registration) local; spine ba59859 local; tpki 5e2b923 local. NOTHING PUSHED TODAY (work-hours rule) \u2014 evening window owes AG/spine/tpki.",
+  "last_verified_note": "2026-07-16: spine suite 153 passed exit 0 bare (was 141; +7 status_quote incl. mutation probe, +5 corpus pins); skunkworks lake build 78 jobs green + custody audit PASS 21 checks; AG suite NOT re-run today (no src/ changes \u2014 docs/specs/stubs only).",
+  "last_updated": "2026-07-16T19:30:00Z",
   "selection_condition": {
     "observed": "current_slice and candidate_next_slice are null; phase is PLAN",
     "recorded_claim": "requires_operator",
     "evidence_status": "inconsistent",
     "inconsistency": "No receipt or named loop-protocol exception supports the recorded operator-only selection condition. docs/loop-protocol.md section 2 requires PLAN to select from the ratified backlog; section 8 says PLAN auto-selects by ratified priority and names the boundary classes requiring operator ratification; section 11.2 requires ratification for an authority-rung change. Section 10 permits a halt for ambiguity, but this record identifies neither a qualifying boundary nor an ambiguity.",
-    "semantic_resolution": "none — this record neither auto-selects a slice nor creates a new operator-only constitutional rule",
+    "semantic_resolution": "none \u2014 this record neither auto-selects a slice nor creates a new operator-only constitutional rule",
     "governing_refs": [
-      "docs/loop-protocol.md §2 (FSM rules)",
-      "docs/loop-protocol.md §8 (Backlog protocol — constellation-wide)",
-      "docs/loop-protocol.md §10 (Restart seed + selection rule)",
-      "docs/loop-protocol.md §11.2 (Automation rungs)"
+      "docs/loop-protocol.md \u00a72 (FSM rules)",
+      "docs/loop-protocol.md \u00a78 (Backlog protocol \u2014 constellation-wide)",
+      "docs/loop-protocol.md \u00a710 (Restart seed + selection rule)",
+      "docs/loop-protocol.md \u00a711.2 (Automation rungs)"
     ],
-    "superseded_for_this_cycle": "The 2026-07-15 operator selection act governed that cycle and is now FULLY CONSUMED (4/4 closed). The cycle is over; this field is history. The doctrinal question it did NOT resolve — whether PLAN may auto-select from the ratified backlog absent an operator act — remains OPEN and unresolved, and the inconsistency record below stands unchanged. Do not read the consumed act as a standing rule in either direction."
+    "superseded_for_this_cycle": "The 2026-07-15 operator selection act governed that cycle and is now FULLY CONSUMED (4/4 closed). The cycle is over; this field is history. The doctrinal question it did NOT resolve \u2014 whether PLAN may auto-select from the ratified backlog absent an operator act \u2014 remains OPEN and unresolved, and the inconsistency record below stands unchanged. Do not read the consumed act as a standing rule in either direction."
   },
   "current_disposition": {
     "schema": "ag-current-disposition/v1",
-    "recorded_at": "2026-07-16T00:30:00Z",
+    "recorded_at": "2026-07-16T19:30:00Z",
     "supersedes_fields": [
       "acceptance@2026-07-14T12:00:00Z",
       "blocked_on@2026-07-14T12:00:00Z",
@@ -37,20 +37,20 @@
       "admission": "not_determined",
       "selection": {
         "state": "unselected",
-        "detail": "the 2026-07-15 four-item act is fully consumed; no new selection ruled — the next selection is an operator act"
+        "detail": "the 2026-07-15 four-item act is fully consumed; no new selection ruled \u2014 the next selection is an operator act"
       },
       "plan_approval": "not_determined",
       "runtime_activity": "inactive",
       "effect_authority": "not_determined",
       "custody": {
-        "state": "complete",
-        "detail": "ALL REPOS PUSHED 2026-07-15 post-5pm (AG 9e558ee, maude e5fd7f1, nightshift e71303f); constellation-wide ahead=0 measured post-push. Push custody is CLOSED — the first time in the recorded history of this ledger."
+        "state": "pending_push_window",
+        "detail": "AG 8 / spine 2 / tpki 4 commits local; remotes wired (tpki first push to unpingable/tpki). Work-hours rule held all day; evening window opens the queue."
       }
     },
     "basis": [
       ".governor/loop.json current_slice=null and candidate_next_slice=null",
       ".governor/runtime tracked ledgers end in session_exited or session_failed",
-      "docs/loop-protocol.md §§2, 8, 10, and 11.2"
+      "docs/loop-protocol.md \u00a7\u00a72, 8, 10, and 11.2"
     ]
   },
   "historical_selection_claim": {
@@ -58,7 +58,7 @@
     "claim": "No slice ruled NEXT; next selection is the operator's; nothing blocked except awaiting operator selection.",
     "current_disposition": "preserved as the superseded claim that triggered the authority-state audit; no supporting exception receipt was found"
   },
-  "session_id": "2026-07-15 closed: 4-item selection consumed + A-1 ruled&built + lean sweep -> 4 named rulings. ALL REPOS PUSHED (constellation-wide ahead=0, measured).",
+  "session_id": "2026-07-16 parked: theory day (orientation calculus, tpki naturalized) + spine OQs ruled + S-B closed. Push queue: AG 8 / spine 2 / tpki 4.",
   "loop_master": "opus",
   "wip_limit": 1,
   "dirty_tree_allowed": false,
@@ -82,7 +82,7 @@
   ],
   "active_thread": "No slice selected and no slice recorded as actively executing. continuity-authoring-tier-repair and approval-binds-plan_ref are CLOSED. Prior campaign ratification or admission is not adjudicated by this selector field; see current_disposition and selection_condition.",
   "prior_threads_closed": "Walking-skeleton bootstrap-lab (Slices 1-2 DONE) + AG-on-AG maintenance (Slices 1+2 DONE). P4 PARKED (operator 2026-06-16). P0-shadow tripwire ISOLATED+dormant. Detail in git + working/witness-*.md; compressed out of loop-state 2026-07-13.",
-  "push_backlog": "CLEARED 2026-07-15 post-5pm on an explicit operator go ('it's well past five'). AG (20 commits, 690ab62..9e558ee), maude (6, 6a6c268..e5fd7f1), nightshift (1, 01a65bf..e71303f) all pushed INTACT — no squash, per the ledger rule: the implementation -> adversarial finding -> correction history is preserved on origin, including the A-1 packet's 2 FATAL refutations and this session's own laundering defect + its repair. Post-push probe: all 14 constellation repos measure ahead=0. Custody reporting only; grants no future push authority — the work-hours rule stands.",
+  "push_backlog": "CLEARED 2026-07-15 post-5pm on an explicit operator go ('it's well past five'). AG (20 commits, 690ab62..9e558ee), maude (6, 6a6c268..e5fd7f1), nightshift (1, 01a65bf..e71303f) all pushed INTACT \u2014 no squash, per the ledger rule: the implementation -> adversarial finding -> correction history is preserved on origin, including the A-1 packet's 2 FATAL refutations and this session's own laundering defect + its repair. Post-push probe: all 14 constellation repos measure ahead=0. Custody reporting only; grants no future push authority \u2014 the work-hours rule stands.",
   "historical_push_claim": {
     "recorded_at": "2026-07-14T12:00:00Z",
     "claim": "AG, maude, continuity, cartography, wicket, wlp, and rrp carried unpushed commits",

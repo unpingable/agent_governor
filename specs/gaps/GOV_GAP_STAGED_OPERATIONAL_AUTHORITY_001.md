@@ -97,6 +97,13 @@ Stage N+1's grant is mintable only against stage N's required witness:
 Restoration success is *typed apart* from diagnosis: a `RecoveryReceipt`
 can never satisfy the `FailureFinding` requirement.
 
+**This is a custody chain of authority, not a log:** each grant's only legal
+parent is the prior stage's witness. That is the same parentage discipline
+the standing-chain validator already ratifies (validator_contract §5.1
+parentage transitions, content-bound parents, C2) — which suggests stage
+grants may *be* standing receipts under stage-typed parentage rules rather
+than a new artifact family. Recorded as OQ-A's leading option, not decided.
+
 ### Seam 3 — legal terminals
 
 `RESOLVED`-at-stage-1 (recovered, no prevention attempted) is a first-class

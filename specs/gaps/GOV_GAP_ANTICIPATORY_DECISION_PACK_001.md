@@ -101,6 +101,14 @@ answer with no fitting evidence binding is a typed refusal, not a warning.
 `intent_compiler.validate_response` today checks that an answer is
 *well-formed*; nothing checks that it is *evidenced*. That check is the gap.
 
+**Structural constraint (anti-duplicate-authority):** a survey answer is
+just another claim. `answer → evidence → authority` is the same judgment as
+the existing `claim → provenance → admissibility`; instantiation MUST reuse
+the claim/evidence machinery (typed claims, evidence kinds, receipts), not
+grow a parallel evidence system with its own vocabulary. If the pack needs a
+binding the claim machinery cannot express, that is a claim-machinery gap to
+file, not a fork to build.
+
 ### Seam 3 — the novelty fence
 
 Closed-world at two levels: (a) a question the pack does not contain, and
@@ -133,6 +141,13 @@ factual premises (existing `ttl.py` machinery), and drift detection when
 instantiation-time evidence systematically diverges from the pack's
 legislated assumptions. A stale pack degrades to interactive mode; it never
 silently keeps spending.
+
+The pack's lifecycle shape is a **certificate**, not eternal configuration:
+scope, issuance conditions, freshness, review cadence, revocation. The
+runtime question is not only "was this answer evidenced?" but "**is this
+legislation still entitled to govern?**" — the doctrine itself is
+evidence-sensitive. (A serialized pack is a compiled representation of a
+reviewed policy whose validity can expire; the YAML is never the authority.)
 
 ## Acceptance criteria (for an eventual build; none scheduled)
 

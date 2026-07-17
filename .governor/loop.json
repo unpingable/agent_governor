@@ -5,11 +5,11 @@
   "slice_spec": [],
   "acceptance": "Parked 2026-07-16 mid-afternoon. Theory-heavy banner day; operator chewing toward lean v12 tonight. No slice selected (selection = operator act). THE BIG UNRULED THING remains R1-R4 (inexpressibility family) \u2014 R2 now does DOUBLE DUTY: it also becomes tpki register AG-006's first disposition event. R1-R3 builds deliberately deferred: their fix SHAPE is downstream of R4, which is co-baking with the lean orientation/v12 work.",
   "blocked_on": null,
-  "next_action": "AUDIT (re_entry_probes), then: (1) EVENING PUSH QUEUE: AG 8 commits, spine 2 (739fa0f OQ rulings + ba59859 S-B), tpki 4 (abf28ac..5e2b923, remote unpingable/tpki wired, first push). (2) After push: operator fresh-clone run (launch act 4 \u2014 must follow the push to test real origin). (3) Remaining launch acts: repo-visibility check, desk live smoke, site deploy, mint. (4) Await R1-R4 rulings \u2014 likely informed by v12 if it lands tonight. NOTE: skunkworks formalization has UNCOMMITTED work (operator's JudgmentOrientation.lean + Claude's JudgmentOrientationAttribution.lean + registration edits) \u2014 operator's active workspace tonight, do not touch from here.",
+  "next_action": "AUDIT (re_entry_probes), then: (1) operator fresh-clone run (launch act 4 \u2014 origin now carries everything). (2) Remaining launch acts: repo-visibility check, desk live smoke, site deploy (site HEAD moved past 20b sweep cut \u2014 light re-sweep first), mint. (3) Await R1-R4 rulings (R2 = triple duty: R-family shape + tpki AG-006 disposition + successor-lean stage-2 revalidation referent); lean v12 PROMOTED the orientation family to stable \u2014 [1.0] citation force at the public mint (expected 2026-07-17 w/ v13). (4) Browser-tab intake may continue: PLS roster (unpingable-site/drafts/pls/), pack Seam 6 filed. NOTE: skunkworks formalization = operator+codex active workspace (v14 campaign); patterns/ commits from here OK with explicit paths only.",
   "last_slice_closed": "2026-07-16 (theory day): orientation calculus validated+extended in skunkworks (attribution theorem + accumulator repair, compile green, custody-manifest registered, UNCOMMITTED by design \u2014 swarm active); AG crosswalk candidate a31eb4b + interferometry origin-blind finding bd25a34; anticipatory gaps filed 1436351+80d3bdc (decision packs + staged operational authority, named not built); spine OQ-1..5 RULED by operator + applied (spine 739fa0f: status_quote schema fix from failed stele falsification pass) + S-B specimen edition CLOSED (spine ba59859, 153 tests, edition sha256:b9b16649 frozen; AG 13121f8+556b7c8 campaign records; launch acts 1-2 now done); tpki surveyed + git-initialized (abf28ac..5e2b923) + registered in CONSTELLATION_MAP (d1cc36f) \u2014 temporal-authority doctrine corpus, docs-only by design, fed by rulings never scheduled; cadence = owner-confirmed name reservation, held for tpki graduation.",
-  "last_verified_commit": "AG d1cc36f (tpki registration) local; spine ba59859 local; tpki 5e2b923 local. NOTHING PUSHED TODAY (work-hours rule) \u2014 evening window owes AG/spine/tpki.",
+  "last_verified_commit": "EVERYTHING PUSHED (operator go, evening 2026-07-16): AG through 4189bc0, spine ba59859, tpki 5e2b923 (first push, unpingable/tpki), unpingable-site 67fb9c0, verifier 902111b (pushed by its own claude). All measured ahead=0.",
   "last_verified_note": "2026-07-16: spine suite 153 passed exit 0 bare (was 141; +7 status_quote incl. mutation probe, +5 corpus pins); skunkworks lake build 78 jobs green + custody audit PASS 21 checks; AG suite NOT re-run today (no src/ changes \u2014 docs/specs/stubs only).",
-  "last_updated": "2026-07-16T19:30:00Z",
+  "last_updated": "2026-07-16T23:30:00Z",
   "selection_condition": {
     "observed": "current_slice and candidate_next_slice are null; phase is PLAN",
     "recorded_claim": "requires_operator",
@@ -26,7 +26,7 @@
   },
   "current_disposition": {
     "schema": "ag-current-disposition/v1",
-    "recorded_at": "2026-07-16T19:30:00Z",
+    "recorded_at": "2026-07-16T23:30:00Z",
     "supersedes_fields": [
       "acceptance@2026-07-14T12:00:00Z",
       "blocked_on@2026-07-14T12:00:00Z",
@@ -43,8 +43,8 @@
       "runtime_activity": "inactive",
       "effect_authority": "not_determined",
       "custody": {
-        "state": "pending_push_window",
-        "detail": "AG 8 / spine 2 / tpki 4 commits local; remotes wired (tpki first push to unpingable/tpki). Work-hours rule held all day; evening window opens the queue."
+        "state": "complete",
+        "detail": "Evening push executed on explicit operator go: AG 4189bc0 / spine ba59859 / tpki 5e2b923 (first push) / unpingable-site 67fb9c0 all ahead=0. Skunkworks patterns committed (233a960), push left to that repo's active flow."
       }
     },
     "basis": [
@@ -58,7 +58,7 @@
     "claim": "No slice ruled NEXT; next selection is the operator's; nothing blocked except awaiting operator selection.",
     "current_disposition": "preserved as the superseded claim that triggered the authority-state audit; no supporting exception receipt was found"
   },
-  "session_id": "2026-07-16 parked: theory day (orientation calculus, tpki naturalized) + spine OQs ruled + S-B closed. Push queue: AG 8 / spine 2 / tpki 4.",
+  "session_id": "2026-07-16 CLOSED: theory day \u2014 orientation calculus (promoted to lean v12 stable same day), tpki naturalized+registered, anticipatory gaps + Seam 6 challenge separation, fail-logical cross-refs, model-exhaustion pattern (skunkworks 233a960), spine OQs ruled + S-B closed, PLS genre captured. All repos pushed.",
   "loop_master": "opus",
   "wip_limit": 1,
   "dirty_tree_allowed": false,

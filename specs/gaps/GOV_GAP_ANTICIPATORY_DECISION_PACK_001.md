@@ -149,6 +149,71 @@ legislation still entitled to govern?**" — the doctrine itself is
 evidence-sensitive. (A serialized pack is a compiled representation of a
 reviewed policy whose validity can expire; the YAML is never the authority.)
 
+## Seam 6 — challenge separation (added 2026-07-16, second operator capture)
+
+> **Proposal does not carry its own adjudication.**
+
+The runtime law: **an agent may not exercise derived authority from a
+proposal it has not subjected to an explicit challenge pass.** Advisory work
+needs no such ceremony — "trust but challenge" is operator craft there, and
+formalizing every thinking technique is a monastery with YAML. The law
+activates precisely when the same actor interprets evidence, chooses the
+frame, derives permission, and would exercise it — the spot where an
+imported assumption becomes authority without ever appearing as a decision.
+
+**Schema consequence (pack artifact, Seam 1):** the instantiated pack keeps
+four record kinds separate, so a rejected recommendation cannot take its
+valid observation down with it:
+
+- `findings` — pressure points identified (observations; survive rejection);
+- `recommendations` — proposed dispositions;
+- `challenges` — the hostile pass: assumptions the proposal depends on;
+  strongest admissible competing interpretation; any doctrine/boundary the
+  recommendation would relax; evidence that would REVERSE it; whether the
+  evidence fits no registered answer class (novelty fence tie-in, Seam 3);
+- `dispositions` — final adjudication of each challenge.
+
+**Authority derivation consumes the adjudicated pack, never the raw
+proposal.** First pass proposes and prefills; second pass challenges the
+frame; only the adjudicated artifact reaches the permission derivation.
+
+**Independence is proportional to the authority delta** (a ladder, not a
+uniform mandate — same-agent self-critique is useful but is NOT
+independence; models defend their own decomposition while generating
+objections):
+
+| Authority delta | Challenger independence |
+|---|---|
+| testimony-only work | same agent, separate challenge phase |
+| reversible low-impact action | separate context or agent role |
+| guarantee expansion / production authority | independent agent or model; human adjudicates unresolved novelty |
+| irreversible or constitutional action | proposer is not the final signer, full stop |
+
+Without the ladder, "challenge" degrades into a decorative paragraph the
+proposing agent writes before approving itself — corporate risk assessment,
+but faster.
+
+**Prior art already in the estate (recognition, not invention):** the A-1
+runtime-admission decision packet ran this exact pipeline with a human
+terminal (drafted → Opus-refute found 2 FATAL → amended → operator ruled;
+`09104ba`→`401ba69`) and its findings survived its refuted recommendations
+because they were recorded separately. `ActorOutputNormalizer` (playbooks) —
+actor cannot green its own gate. `oracle_independence` (receipt-kernel
+constitutional invariant). Dissent ledger — objections are first-class and
+gate commits. `quorum_ext` two-man rule. `independence.py` anti-cheat
+scoring. The Opus-refute/codex-exec HIGH-checkpoint practice
+(`memory/feedback_codex_for_adversarial_review`). This seam is what those
+become when the adjudicator is no longer always the operator.
+
+**Insertion map (recorded, not applied):** the capture names three landing
+points — (1) the governed-loop contract (proposal → challenge → adjudication
+→ permission derivation), (2) this pack schema, (3) an authority rule
+(guarantee-typed actions require challenger independence per the ladder).
+Item (2) is absorbed here. Items (1) and (3) touch `docs/loop-protocol.md`
+and gate policy — **ratified/custody-affecting surfaces; each needs its own
+ruling at build time.** Named so the retrofit cost is visible; not amended
+by this filing.
+
 ## Acceptance criteria (for an eventual build; none scheduled)
 
 1. A pack with one question, two admissible answers, distinct evidence
@@ -162,6 +227,11 @@ reviewed policy whose validity can expire; the YAML is never the authority.)
 4. An expired pack premise flips the affected questions back to interactive;
    receipts show the degradation.
 5. Mutation probe: removing the evidence-binding check makes test 1 fail.
+6. Challenge separation: a permission derivation offered the raw
+   (unadjudicated) pack refuses by type; a rejected recommendation leaves
+   its findings intact and queryable; a guarantee-typed derivation whose
+   challenge record names the proposer as challenger is refused
+   (independence ladder enforced at the top rung).
 
 ## Non-goals
 

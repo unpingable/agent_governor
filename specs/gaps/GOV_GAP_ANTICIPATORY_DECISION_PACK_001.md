@@ -174,6 +174,27 @@ reviewed policy whose validity can expire; the YAML is never the authority.)
 - Packs do not self-modify; amendment is an operator act (docket/ruling).
 - No build until a forcing case; this filing is the handle for review.
 
+## Composes with fail-logical (verifier, named 2026-07-16)
+
+The verifier's fail-logical surface (`~/git/verifier/VERIFIER_FAIL_LOGICAL_GAP.md`,
+named the same week) inserts the missing rung in this spec's escalation
+ladder. As filed above, a pack routes: evidence fits an admissible answer →
+proceed; novelty → escalate to the human. Fail-logical adds the middle case:
+*no legislated answer, but the answer is derivable from the pack's
+constraints + admitted facts* — a bounded formal obligation the verifier can
+decide (`entailed`/`refuted`), whose own machinery failures remain closed
+(UNKNOWN = refusal). The full ladder becomes:
+
+    legislated answer (pack) → derivable answer (fail-logical) → human
+
+This narrows Seam 3's escalation volume without weakening it: only questions
+that cannot even be FORMED without a new premise page the human
+(`RequiresJudgment`), and machinery failures page as machinery
+(`indeterminate`). Custody stays split: the pack legislates the admissible
+world; AG constructs the typed obligation; the verifier owns the proof
+machinery and never invents premises. Cross-ref only — neither surface's
+construction gate is altered by this note.
+
 ## Open questions
 
 - **OQ-A:** pack home — in-repo artifact (`.governor/packs/`) vs. sibling of

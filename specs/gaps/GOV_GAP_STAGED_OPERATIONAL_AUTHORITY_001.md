@@ -131,6 +131,19 @@ judgment calls.
 - **NQ** is the escape hatch: no applicable branch, or evidence fits no
   authorized answer → governed inquiry, not confident guessing.
 
+## Composes with fail-logical (verifier, named 2026-07-16)
+
+The verifier's fail-logical surface
+(`~/git/verifier/VERIFIER_FAIL_LOGICAL_GAP.md`) names this spec's transition
+question as its query class 1 worked example — *"does staged authority
+entail the requested next step?"* — and its query class 3 (bounded plan
+existence, refusal distinguishing "conflicting evidence" from "no consistent
+plan" with a named core) is the remediation-planning shape. If both surfaces
+ever build, the stage-transition check is a typed obligation AG constructs
+and the verifier decides; `entailed` is the only positive class that can
+support an advance, and UNKNOWN/timeout refuse (fail-closed machinery under
+a fail-logical path). Cross-ref only — neither construction gate is altered.
+
 ## Acceptance criteria (for an eventual build; none scheduled)
 
 1. A recovery-stage session requesting a prevention-class action is refused

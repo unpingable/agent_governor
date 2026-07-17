@@ -2,10 +2,17 @@
 
 **Filed:** 2026-07-16
 **Status:** CANDIDATE, non-binding. A recognition record, not a build plan.
-**Formal source:** `~/git/skunkworks/formalization/Calculi/Scratch/`
-`JudgmentOrientation.lean` + `JudgmentOrientationAttribution.lean` —
-**[scratch] tier: recon, cannot ratify.** Compile-is-contact only (both
-exit 0 on v4.29.0, custody-manifest registered, audit PASS 21 checks).
+**Formal source:** ~~`Calculi/Scratch/JudgmentOrientation(.Attribution).lean`,
+[scratch] tier: recon, cannot ratify~~ **TIER UPGRADED same day (lean v12,
+2026-07-16):** the family was promoted to `~/git/lean`
+`LeanProofs.JudgmentOrientation` (Core / Attribution / Provenance /
+OriginSupport / Bridge) — **Custody-Class PUBLIC-SHIPPED, STABLE-SURFACE**,
+promoted from skunkworks `4f8e076`, frozen axiom-footprint CI gate, fixtures
+in a separately-imported annex. Rename note: `MayOrient.paid` →
+`MayOrient.admitted` (reusable standing ≠ linear spend). **Effective tier
+[1.0]-track once the v12/v13 release is publicly minted (operator act,
+expected ~2026-07-17); until the mint, cite as stable-local.** Original
+scratch filing preserved above the strikethrough for lineage.
 
 ## The claim
 

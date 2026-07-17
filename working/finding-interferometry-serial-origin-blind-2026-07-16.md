@@ -2,11 +2,16 @@
 
 **Filed:** 2026-07-16
 **Status:** FINDING, unruled. Names a defect class; authorizes no edit.
-**Formal instrument:** `~/git/skunkworks/formalization/Calculi/Scratch/JudgmentOrientation.lean`
-(`OrientationLaundering.source_blind_relay_amplifies_orientation`,
-`orientation_laundering_violates_origin_bound`) — **[scratch] tier: recon,
-cannot ratify** (per lean citation tiers). The countermodel names the class;
-the AG evidence below stands on its own.
+**Formal instrument:** the orientation-laundering countermodel
+(`source_blind_relay_amplifies_orientation`,
+`orientation_laundering_violates_origin_bound`). ~~[scratch] tier: recon,
+cannot ratify~~ **TIER UPGRADED same day (lean v12, 2026-07-16):** the family
+is now `~/git/lean` `LeanProofs.JudgmentOrientation` (PUBLIC-SHIPPED,
+STABLE-SURFACE; laundering/accumulator-repair fixtures in the annex —
+annex cannot ratify, but the stable core's origin-support theorems can once
+the v12/v13 release is publicly minted, expected ~2026-07-17). A ruling on
+options 1–4 below may then cite the stable family as formal warrant. The AG
+evidence stands on its own regardless.
 
 ## Evidence
 

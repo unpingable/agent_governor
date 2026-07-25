@@ -19,13 +19,17 @@ Unix sockets. Acceptance criteria:
 """
 
 import json
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
 from typing import Any, Iterable
+
+import pytest
 
 from governor.runtime.adapter import (
     AdapterCapabilities,
@@ -48,6 +52,20 @@ HOOK_STDIN = json.dumps({
     "tool_input": {"file_path": "/tmp/x", "content": "y"},
     "tool_use_id": "tc_failclosed_001",
 })
+
+
+@pytest.fixture()
+def sock_dir():
+    """Temp dir with a short path for AF_UNIX binds.
+
+    pytest's ``tmp_path`` on macOS lives under ``/private/var/folders/.../
+    pytest-of-<user>/pytest-N/<test-name>0/``, which overruns the 104-byte
+    ``sun_path`` limit and raises ``OSError: AF_UNIX path too long`` at bind
+    time. Same fixture shape as ``short_tmp`` in tests/test_cli_backend.py.
+    """
+    d = tempfile.mkdtemp(prefix="gov_")
+    yield Path(d)
+    shutil.rmtree(d, ignore_errors=True)
 
 
 def run_hook(tmp_path: Path, env: dict[str, str], stdin: str = HOOK_STDIN,
@@ -125,8 +143,8 @@ class TestFailClosedPaths:
         assert decision["permissionDecision"] == "deny"
         assert "unreachable" in decision["permissionDecisionReason"]
 
-    def test_deny_on_decision_timeout(self, tmp_path):
-        sock = tmp_path / "supervisor.sock"
+    def test_deny_on_decision_timeout(self, tmp_path, sock_dir):
+        sock = sock_dir / "supervisor.sock"
         ReplyServer(sock, reply=None)  # accepts, never answers
         start = time.monotonic()
         proc = run_hook(tmp_path, env={
@@ -141,15 +159,15 @@ class TestFailClosedPaths:
         assert "no supervisor decision" in decision["permissionDecisionReason"]
         assert elapsed < 8, "hook must honor the configured wait, not a hardcoded 30s"
 
-    def test_deny_on_garbage_response(self, tmp_path):
-        sock = tmp_path / "supervisor.sock"
+    def test_deny_on_garbage_response(self, tmp_path, sock_dir):
+        sock = sock_dir / "supervisor.sock"
         ReplyServer(sock, reply=b"not json at all\n")
         proc = run_hook(tmp_path, env={"GOVERNOR_SUPERVISOR_SOCKET": str(sock)})
         decision = parse_decision(proc)
         assert decision is not None and decision["permissionDecision"] == "deny"
 
-    def test_deny_on_unrecognized_decision(self, tmp_path):
-        sock = tmp_path / "supervisor.sock"
+    def test_deny_on_unrecognized_decision(self, tmp_path, sock_dir):
+        sock = sock_dir / "supervisor.sock"
         ReplyServer(sock, reply=json.dumps({"decision": "maybe"}).encode() + b"\n")
         proc = run_hook(tmp_path, env={"GOVERNOR_SUPERVISOR_SOCKET": str(sock)})
         decision = parse_decision(proc)
@@ -167,8 +185,8 @@ class TestFailClosedPaths:
 class TestExistingFlowStillWorks:
     """Acceptance 6: allow and explicit deny are unchanged."""
 
-    def test_allow_response_is_silent_allow(self, tmp_path):
-        sock = tmp_path / "supervisor.sock"
+    def test_allow_response_is_silent_allow(self, tmp_path, sock_dir):
+        sock = sock_dir / "supervisor.sock"
         server = ReplyServer(sock, reply=json.dumps({"decision": "allow"}).encode() + b"\n")
         proc = run_hook(tmp_path, env={"GOVERNOR_SUPERVISOR_SOCKET": str(sock)})
         assert proc.returncode == 0
@@ -177,8 +195,8 @@ class TestExistingFlowStillWorks:
         assert sent["tool_name"] == "Write"
         assert sent["tool_call_id"] == "tc_failclosed_001"
 
-    def test_deny_response_carries_operator_reason(self, tmp_path):
-        sock = tmp_path / "supervisor.sock"
+    def test_deny_response_carries_operator_reason(self, tmp_path, sock_dir):
+        sock = sock_dir / "supervisor.sock"
         ReplyServer(sock, reply=json.dumps(
             {"decision": "deny", "reason": "out of scope fence"}).encode() + b"\n")
         proc = run_hook(tmp_path, env={"GOVERNOR_SUPERVISOR_SOCKET": str(sock)})

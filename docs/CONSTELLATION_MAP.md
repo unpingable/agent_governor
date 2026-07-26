@@ -2,8 +2,10 @@
 
 > **SUPERSEDED as the canonical topology index (2026-07-26).** The operator's
 > canonicalization direction of 2026-07-26 moved the current topology index to
-> the cartography repository's operational-generation record; this file is
-> retained as the 2026-07-13 census it was. Known falsified rows, left in
+> the cartography repository's operational-generation record (a privately
+> retained records venue); this file is retained as the 2026-07-13 census it
+> was. The public statement of the current offices lives in each office
+> repository's README status section (ag_ng, docket, nq, nightshift). Known falsified rows, left in
 > place below: `~/git/docket` is **not** an "empty reservation" — it is the
 > live canonical governed-execution office (two completed governed verticals);
 > `ag_ng` (canonical authority office), `nq-ng`, `nq-witness`, and

@@ -1,5 +1,15 @@
 # Campaign card — AG-classic Reference Freeze
 
+> **Supersession note (2026-07-26):** the three-beat sequencing below ("AG-ng
+> specified from the stabilized classic") was overtaken by events — AG ng is
+> live and is the canonical authority office (it authorized the completed
+> four-office pilot). This card's "comparative arm … not as legacy" vocabulary
+> was not ratified and is superseded where it conflicts with the recorded
+> disposition: agent_gov is the **legacy/historical** authority implementation,
+> maintained, with retained live diagnostic helpers (see the README banner).
+> The card remains filed as the honest proposal it was; its freeze mechanics,
+> if ever ratified, would need re-scoping against that disposition.
+
 > **STATUS: PROPOSED — NOT RATIFIED.** Filed 2026-07-18 from an operator-directed planning
 > pass. Planner output — NOT authority. This card is a handle for review, not authorization
 > to build. **Nothing below S0 may execute until an explicit operator ratification act**,

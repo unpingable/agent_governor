@@ -1,6 +1,10 @@
 # VM Deployment (sp00ky.net)
 
-Production deployment on Linode (192.46.223.21), running behind Caddy with basic auth.
+The operator's personal single-user VM deployment on Linode (192.46.223.21),
+running behind Caddy with basic auth. "Production" here means the operator's
+own live box — it is **not** a production-hardening or production-service
+claim (see `docs/start-here/what-this-is.md`: alpha software, installed from
+source).
 
 ## Services
 

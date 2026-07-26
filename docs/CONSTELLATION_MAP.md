@@ -1,5 +1,15 @@
 # Constellation Map — authority topology
 
+> **SUPERSEDED as the canonical topology index (2026-07-26).** The operator's
+> canonicalization direction of 2026-07-26 moved the current topology index to
+> the cartography repository's operational-generation record; this file is
+> retained as the 2026-07-13 census it was. Known falsified rows, left in
+> place below: `~/git/docket` is **not** an "empty reservation" — it is the
+> live canonical governed-execution office (two completed governed verticals);
+> `ag_ng` (canonical authority office), `nq-ng`, `nq-witness`, and
+> `nq-blackbox` are absent as nodes; and this repository itself is now the
+> legacy authority implementation (see the README disposition banner).
+
 **STATUS: CANONICAL topology index (adopted by operator ruling 2026-07-13;
 filed as CANDIDATE same day).** Canonical does not mean complete — it means
 this is where incompleteness is recorded. One page of topology: who owns what,

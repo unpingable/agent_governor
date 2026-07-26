@@ -28,6 +28,18 @@ This is not the model provider deciding what's safe for you. This is you decidin
 > *Language is a proposal, not an authority.*
 
 > **Status:** Alpha. Under active solo development. The core kernel is stable and tested. Not packaged for distribution — install from source.
+>
+> **Disposition (2026-07-26): legacy/historical authority implementation, maintained.**
+> This repository is the classic Python Agent Governor. New authority work lives in
+> **AG ng** (`ag_ng` — the Rust hard successor, with no compatibility surface between
+> the two); governed execution lives in **Docket** (`docket`). agent_gov is **not
+> unused**: Night Shift still invokes its bounded diagnostic drill helpers
+> (`governor.drill_runner` / `governor.drill_poster` — diagnostics only; no authority,
+> policy decision, credential, or capability crosses that wire), and it remains the
+> custody home of the frozen PCAR conformance corpus that `transition-kernel` mirrors.
+> Maintenance here is bug fixes, documentation accuracy, corpus custody, and keeping
+> the drill helpers importable — not new authority features. No wire compatibility
+> with AG ng exists or is implied.
 
 ---
 

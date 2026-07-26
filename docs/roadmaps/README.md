@@ -4,6 +4,12 @@
 retained as fossil). AG is the coordination hub: cross-repo integration plans live
 here; each sibling repo keeps its own internal roadmap.
 
+> *Scope note (2026-07-26): "coordination hub" here is scoped to this
+> repository's own integration campaigns. The canonical constellation
+> topology index moved to cartography's operational-generation record; this
+> repo is the legacy authority implementation (see the README disposition
+> banner), and its membership tables predate the ag_ng/Docket offices.*
+
 What this is: an index over per-tool integration roadmaps plus two execution
 campaigns, decomposed into slices that smaller models can execute as work orders
 (see [ROUTING.md](ROUTING.md) — normative). What this is **not**: authority.

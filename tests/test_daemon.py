@@ -2628,7 +2628,12 @@ class TestChatBlockingViolation:
             result = resp["result"]
             assert result["pending"] is not None
             assert result["pending"]["blocked_response"] == "This violates everything"
+            assert result["pending"]["context_id"] == "default"
+            assert result["pending"]["receipt_id"] == result["receipt"]["receipt_id"]
             assert len(result["violations"]) == 1
+            assert result["receipt"]["gate"] == "chat_bridge"
+            assert result["receipt"]["verdict"] == "block"
+            assert result["receipt"]["receipt_role"] == "authority"
 
     @pytest.mark.asyncio
     async def test_stream_with_violation_returns_pending(self, tmp_gov_dir):
@@ -2705,7 +2710,6 @@ class TestChatPendingPreCheck:
     @pytest.fixture
     def state_with_pending(self, tmp_gov_dir):
         """DaemonState with a mock backend AND a pre-existing pending violation."""
-        import json as _json
         from governor.violation_resolver import PendingViolation, ResolutionStatus
 
         state = DaemonState(tmp_gov_dir, mode="general")
@@ -2725,7 +2729,9 @@ class TestChatPendingPreCheck:
         state._backend_kwargs = {}
         state._context_manager = ctx_mgr
 
-        # Write a pending violation to disk
+        # Write pending state where chat governance writes it: beneath the
+        # selected context, not in the daemon's legacy top-level state.
+        resolver = state.chat_violation_resolver("default")
         pending = PendingViolation(
             id="pending_test_1",
             context_id="default",
@@ -2739,9 +2745,7 @@ class TestChatPendingPreCheck:
             mode="general",
             status=ResolutionStatus.PENDING,
         )
-        (tmp_gov_dir / "pending_violations.json").write_text(
-            _json.dumps(pending.to_dict())
-        )
+        resolver._save_pending(pending)
 
         return state
 
@@ -2847,6 +2851,89 @@ class TestChatPendingPreCheck:
         assert result["content"] == "Hello from the governed LLM"
 
 
+class TestContextScopedGovernedChatContract:
+    """The public chat/commit seam preserves one durable context boundary."""
+
+    @pytest.mark.asyncio
+    async def test_pending_isolated_persisted_and_authoritatively_resolved(
+        self, state_with_mock_backend, tmp_gov_dir
+    ):
+        state = state_with_mock_backend
+        original_receipt = _emit_chat_receipt(
+            state,
+            "block",
+            "blocked alpha response",
+            "run_alpha",
+            model="mock-model",
+            context_id="alpha",
+        )
+        assert original_receipt is not None
+
+        alpha = state.chat_violation_resolver("alpha")
+        pending = alpha.create_pending(
+            [{"anchor_id": "a1", "description": "alpha only", "severity": "reject"}],
+            "blocked alpha response",
+            "run_alpha",
+            receipt_id=original_receipt.receipt_id,
+        )
+
+        dispatcher = Dispatcher()
+        register_handlers(dispatcher, state)
+
+        alpha_pending = await roundtrip(
+            dispatcher, "commit.pending", {"context_id": "alpha"}
+        )
+        beta_pending = await roundtrip(
+            dispatcher, "commit.pending", {"context_id": "beta"}
+        )
+        assert alpha_pending["result"]["id"] == pending.id
+        assert beta_pending["result"] is None
+
+        wrong_resolution = await roundtrip(
+            dispatcher, "commit.proceed", {"context_id": "beta"}
+        )
+        assert wrong_resolution["result"]["success"] is False
+        assert alpha.get_pending() is not None
+
+        # Recreate daemon state to prove the contract is filesystem-durable,
+        # rather than surviving only in an in-process resolver object.
+        restarted = DaemonState(tmp_gov_dir, mode="general")
+        restarted._backend_type = "mock"
+        restarted_dispatcher = Dispatcher()
+        register_handlers(restarted_dispatcher, restarted)
+
+        after_restart = await roundtrip(
+            restarted_dispatcher, "commit.pending", {"context_id": "alpha"}
+        )
+        assert after_restart["result"]["id"] == pending.id
+        assert after_restart["result"]["receipt_id"] == original_receipt.receipt_id
+
+        resolved = await roundtrip(
+            restarted_dispatcher,
+            "commit.proceed",
+            {"context_id": "alpha", "reason": "intentional exception"},
+        )
+        result = resolved["result"]
+        assert result["success"] is True
+        assert result["receipt"]["gate"] == "violation_resolution"
+        assert result["receipt"]["receipt_role"] == "authority"
+
+        cleared = await roundtrip(
+            restarted_dispatcher, "commit.pending", {"context_id": "alpha"}
+        )
+        assert cleared["result"] is None
+
+        detail = await roundtrip(
+            restarted_dispatcher,
+            "receipts.detail",
+            {"receipt_id": result["receipt"]["receipt_id"]},
+        )
+        evidence = detail["result"]["evidence"]
+        assert evidence["context_id"] == "alpha"
+        assert evidence["pending_id"] == pending.id
+        assert evidence["original_receipt_id"] == original_receipt.receipt_id
+
+
 # =============================================================================
 # Receipt-Exception Linking in Daemon
 # =============================================================================
@@ -2910,9 +2997,7 @@ class TestReceiptExceptionLinkingDaemon:
         (state.governor_dir / "evidence").mkdir(exist_ok=True)
 
         # Create pending violation
-        from governor.violation_resolver import ViolationResolver
-        resolver = ViolationResolver(state.governor_dir, mode="general")
-        state._violation_resolver = resolver
+        resolver = state.chat_violation_resolver("default")
         pending = resolver.create_pending(
             [{"anchor_id": "a1", "description": "test", "severity": "reject"}],
             "blocked",
@@ -3029,9 +3114,7 @@ class TestReceiptProvenance:
         (state.governor_dir / "gate_receipts").mkdir(exist_ok=True)
         (state.governor_dir / "evidence").mkdir(exist_ok=True)
 
-        from governor.violation_resolver import ViolationResolver
-        resolver = ViolationResolver(state.governor_dir, mode="general")
-        state._violation_resolver = resolver
+        resolver = state.chat_violation_resolver("default")
         resolver.create_pending(
             [{"anchor_id": "a1", "description": "test", "severity": "reject"}],
             "blocked", "run_001",

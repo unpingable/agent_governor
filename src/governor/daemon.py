@@ -679,6 +679,26 @@ class DaemonState:
             )
         return self._violation_resolver
 
+    def chat_context(self, context_id: str):
+        """Return the durable governor context used by a chat request."""
+        return self.context_manager.get_or_create(context_id, mode=self.mode)
+
+    def chat_violation_resolver(self, context_id: str):
+        """Return a resolver scoped to the same context as governed chat.
+
+        The daemon-level resolver is intentionally retained for non-chat legacy
+        operations. Chat must never use it: ``GovernorHooks`` persists pending
+        violations beneath the selected chat context.
+        """
+        from .violation_resolver import ViolationResolver
+
+        context = self.chat_context(context_id)
+        return ViolationResolver(
+            context.governor_dir,
+            mode=context.mode,
+            context_id=context.context_id,
+        )
+
     @property
     def daemon_config(self) -> dict[str, str]:
         if self._config is None:
@@ -917,13 +937,14 @@ def _emit_chat_receipt(
     content: str,
     run_id: str,
     model: str = "",
+    context_id: str = "default",
     principal_id: str = "local",
     auth_method: str = "none",
     principal_ref: str | None = None,
 ) -> "GateReceipt | None":
     """Emit a gate receipt for a chat generation check. Returns the receipt or None."""
     try:
-        from .gate_receipt import GateReceipt  # noqa: F811
+        from .gate_receipt import GateReceipt, ROLE_AUTHORITY  # noqa: F811
         receipt = state.receipt_system.emit(
             gate="chat_bridge",
             verdict=verdict,
@@ -931,13 +952,15 @@ def _emit_chat_receipt(
             subject_bytes=content.encode("utf-8"),
             evidence_bundle={
                 "run_id": run_id,
+                "context_id": context_id,
                 "backend_type": state.backend_type,
                 "model": model,
             },
-            gate_config={"mode": state.mode},
+            gate_config={"mode": state.mode, "context_id": context_id},
             principal_id=principal_id,
             auth_method=auth_method,
             principal_ref=principal_ref,
+            receipt_role=ROLE_AUTHORITY,
         )
         return receipt
     except Exception:
@@ -950,12 +973,118 @@ def _emit_chat_receipt(
         return None
 
 
+def _receipt_dict(receipt: Any | None) -> dict | None:
+    """Return the authoritative serialized receipt, if one was emitted."""
+    return receipt.to_dict() if receipt is not None else None
+
+
+def _receipt_for_id(state: DaemonState, receipt_id: str | None) -> dict | None:
+    """Resolve a stable receipt reference from the daemon's authority store."""
+    if not receipt_id:
+        return None
+    receipt = state.receipt_system.receipt_store.get_by_id(receipt_id)
+    return _receipt_dict(receipt)
+
+
+def _durable_pending_result(
+    resolver: Any,
+    transient: Any,
+    receipt: Any | None,
+    context_id: str,
+) -> dict[str, Any]:
+    """Return and link the durable pending record created by chat hooks."""
+    pending = resolver.get_pending()
+    if pending is not None:
+        if receipt is not None:
+            pending.receipt_id = receipt.receipt_id
+            resolver._save_pending(pending)
+        return pending.to_dict()
+
+    # Tests and third-party hooks may return the transient response without
+    # persisting a record. Keep the wire shape context-complete even then.
+    payload = transient.to_dict()
+    payload["context_id"] = context_id
+    if receipt is not None:
+        payload["receipt_id"] = receipt.receipt_id
+    return payload
+
+
+def _chat_resolver_from_params(
+    state: DaemonState, params: dict
+) -> tuple[str | None, Any]:
+    """Resolve explicit chat contexts while retaining legacy operator state.
+
+    Marginalia's governed-chat contract always supplies ``context_id``. Calls
+    without it are pre-contract operator clients whose pending state lives at
+    the daemon root.
+    """
+    context_id = params.get("context_id")
+    if context_id is None:
+        return None, state.violation_resolver
+    return context_id, state.chat_violation_resolver(context_id)
+
+
+def _emit_resolution_receipt(
+    state: DaemonState,
+    pending: Any,
+    result: Any,
+    context_id: str,
+    *,
+    model: str = "",
+    principal_id: str = "local",
+    auth_method: str = "none",
+    principal_ref: str | None = None,
+) -> "GateReceipt | None":
+    """Emit the authority receipt for a successful pending-state transition."""
+    if not result.success:
+        return None
+
+    try:
+        from .gate_receipt import ROLE_AUTHORITY
+
+        action = result.action.value
+        subject = result.new_content or result.exception_id or pending.id
+        return state.receipt_system.emit(
+            gate="violation_resolution",
+            verdict="proceed" if action == "proceed" else "pass",
+            subject_kind="violation_resolution",
+            subject_bytes=subject.encode("utf-8"),
+            evidence_bundle={
+                "pending_id": pending.id,
+                "context_id": context_id,
+                "action": action,
+                "original_receipt_id": getattr(pending, "receipt_id", None),
+                "exception_id": result.exception_id,
+                "backend_type": state.backend_type,
+                "model": model,
+            },
+            gate_config={
+                "mode": pending.mode,
+                "context_id": context_id,
+                "action": action,
+            },
+            principal_id=principal_id,
+            auth_method=auth_method,
+            principal_ref=principal_ref,
+            receipt_role=ROLE_AUTHORITY,
+        )
+    except Exception:
+        logger.error(
+            "receipt_emit_failed: violation resolution receipt not written"
+            " — audit linkage broken (pending_id=%s, context_id=%s)",
+            getattr(pending, "id", None), context_id, exc_info=True,
+        )
+        return None
+
+
 async def _resolve_violation(
     state: DaemonState,
     pending: Any,
     action: Any,
     bridge: Any,
     model: str,
+    resolver: Any,
+    context_id: str,
     principal_id: str = "local",
     auth_method: str = "none",
     principal_ref: str | None = None,
@@ -967,41 +1096,24 @@ async def _resolve_violation(
     from .violation_resolver import ResolutionAction
 
     if action == ResolutionAction.FIX:
-        result = await state.violation_resolver.resolve_fix(
+        result = await resolver.resolve_fix(
             pending, bridge.backend, model
         )
     elif action == ResolutionAction.REVISE:
-        result = state.violation_resolver.resolve_revise(pending)
+        result = resolver.resolve_revise(pending)
     else:  # PROCEED
-        result = state.violation_resolver.resolve_proceed(pending)
+        result = resolver.resolve_proceed(pending)
 
-    # Emit resolution receipt on PROCEED for audit trail
-    if action == ResolutionAction.PROCEED and result.success:
-        try:
-            state.receipt_system.emit(
-                gate="violation_resolution",
-                verdict="proceed",
-                subject_kind="exception",
-                subject_bytes=(result.exception_id or "").encode("utf-8"),
-                evidence_bundle={
-                    "exception_id": result.exception_id,
-                    "original_receipt_id": getattr(pending, "receipt_id", None),
-                    "action": "proceed",
-                    "backend_type": state.backend_type,
-                    "model": model,
-                },
-                gate_config={"mode": state.mode},
-                principal_id=principal_id,
-                auth_method=auth_method,
-                principal_ref=principal_ref,
-            )
-        except Exception:
-            logger.error(
-                "receipt_emit_failed: violation_resolution receipt not written"
-                " — resolution audit trail broken (exception_id=%s, mode=%s)",
-                result.exception_id, state.mode,
-                exc_info=True,
-            )
+    receipt = _emit_resolution_receipt(
+        state,
+        pending,
+        result,
+        context_id,
+        model=model,
+        principal_id=principal_id,
+        auth_method=auth_method,
+        principal_ref=principal_ref,
+    )
 
     content = ""
     if result.success:
@@ -1019,6 +1131,7 @@ async def _resolve_violation(
         "violations": [],
         "footer": None,
         "pending": None,
+        "receipt": _receipt_dict(receipt),
     }
 
 
@@ -1049,6 +1162,11 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 "scars": True,
                 "commit": True,
                 "signals_preflight": True,
+                "governed_chat": {
+                    "contract_version": "1",
+                    "context_scoped_pending": True,
+                    "authoritative_receipts": True,
+                },
                 "backend": backend_info,
             },
             "governor": {
@@ -1058,6 +1176,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 "mode": state.mode,
                 "initialized": initialized,
                 "session_id": state.session_id,
+                "governor_dir": str(state.governor_dir.resolve()),
             },
             "session": {
                 "session_id": state.session_id,
@@ -1566,7 +1685,8 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
     # --- Commit / Waive ---
 
     async def commit_pending(params: dict) -> dict | None:
-        pending = state.violation_resolver.get_pending()
+        _, resolver = _chat_resolver_from_params(state, params)
+        pending = resolver.get_pending()
         if pending is None:
             return None
         return pending.to_dict()
@@ -1577,7 +1697,8 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         if not corrected_text:
             raise ValueError("Missing required param: corrected_text")
 
-        pending = state.violation_resolver.get_pending()
+        context_id, resolver = _chat_resolver_from_params(state, params)
+        pending = resolver.get_pending()
         if pending is None:
             return {
                 "action": "fix",
@@ -1587,10 +1708,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
 
         # Validate the candidate against continuity anchors
         try:
-            from .continuity import AnchorRegistry, ContinuityChecker
-            registry = AnchorRegistry(state.governor_dir)
-            checker = ContinuityChecker(registry)
-            violations = checker.check(corrected_text)
+            from .continuity import ContinuityChecker, create_registry
+            registry = create_registry(resolver.governor_dir)
+            checker = ContinuityChecker()
+            violations = checker.check(corrected_text, registry.all()).violations
 
             if violations:
                 descs = [v.description for v in violations]
@@ -1605,18 +1726,33 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         # Candidate passes — resolve
         from .violation_resolver import ResolutionStatus
         pending.status = ResolutionStatus.FIXED
-        state.violation_resolver._save_pending(pending)
-        state.violation_resolver.clear_pending()
+        resolver._save_pending(pending)
+        resolver.clear_pending()
 
-        return {
+        result = {
             "action": "fix",
             "success": True,
             "message": "Candidate accepted. Violation resolved.",
             "new_content": corrected_text,
         }
+        from .violation_resolver import ResolutionAction, ResolutionResult
+        receipt = _emit_resolution_receipt(
+            state,
+            pending,
+            ResolutionResult(
+                action=ResolutionAction.FIX,
+                success=True,
+                message=result["message"],
+                new_content=corrected_text,
+            ),
+            context_id or pending.context_id,
+        )
+        result["receipt"] = _receipt_dict(receipt)
+        return result
 
     async def commit_revise(params: dict) -> dict:
-        pending = state.violation_resolver.get_pending()
+        context_id, resolver = _chat_resolver_from_params(state, params)
+        pending = resolver.get_pending()
         if pending is None:
             return {
                 "action": "revise",
@@ -1624,13 +1760,20 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                 "message": "No pending violation to revise.",
             }
         new_anchor_text = params.get("new_anchor_text")
-        result = state.violation_resolver.resolve_revise(
+        result = resolver.resolve_revise(
             pending, new_anchor_text=new_anchor_text
         )
-        return result.to_dict()
+        response = result.to_dict()
+        response["receipt"] = _receipt_dict(
+            _emit_resolution_receipt(
+                state, pending, result, context_id or pending.context_id
+            )
+        )
+        return response
 
     async def commit_proceed(params: dict) -> dict:
-        pending = state.violation_resolver.get_pending()
+        context_id, resolver = _chat_resolver_from_params(state, params)
+        pending = resolver.get_pending()
         if pending is None:
             return {
                 "action": "proceed",
@@ -1640,13 +1783,20 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         reason = params.get("reason", "")
         scope = params.get("scope")
         expiry = params.get("expiry")
-        result = state.violation_resolver.resolve_proceed(
+        result = resolver.resolve_proceed(
             pending, scope=scope, expiry=expiry
         )
-        return result.to_dict()
+        response = result.to_dict()
+        response["receipt"] = _receipt_dict(
+            _emit_resolution_receipt(
+                state, pending, result, context_id or pending.context_id
+            )
+        )
+        return response
 
     async def commit_exceptions(params: dict) -> list:
-        exceptions = state.violation_resolver.list_exceptions()
+        _, resolver = _chat_resolver_from_params(state, params)
+        exceptions = resolver.list_exceptions()
         return [e.to_dict() for e in exceptions]
 
     # --- Chat ---
@@ -1668,14 +1818,18 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         if not messages_raw:
             raise ValueError("Missing required param: messages")
 
+        ctx = state.chat_context(context_id)
+        resolver = state.chat_violation_resolver(context_id)
+
         # Check for pre-existing pending violation BEFORE generation
-        pending = state.violation_resolver.get_pending()
+        pending = resolver.get_pending()
         if pending:
             last_msg = messages_raw[-1].get("content", "") if messages_raw else ""
-            action = state.violation_resolver.is_resolution_command(last_msg)
+            action = resolver.is_resolution_command(last_msg)
             if action:
                 result = await _resolve_violation(
                     state, pending, action, bridge, model,
+                    resolver, context_id,
                     principal_id=principal_id,
                     auth_method=auth_method,
                     principal_ref=principal_ref,
@@ -1691,6 +1845,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "violations": pending.violations,
                     "footer": None,
                     "pending": pending.to_dict(),
+                    "receipt": _receipt_for_id(state, pending.receipt_id),
                 }
 
         # --- Optional lane routing (opt-in) ---
@@ -1746,9 +1901,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     generate_fn=sync_generate,
                 )
                 run_id = uuid.uuid4().hex[:12]
-                _emit_chat_receipt(
+                receipt = _emit_chat_receipt(
                     state, "pass", cascade_result.output, run_id,
-                    model=cascade_result.model_used, principal_id=principal_id,
+                    model=cascade_result.model_used, context_id=context_id,
+                    principal_id=principal_id,
                     auth_method=auth_method, principal_ref=principal_ref,
                 )
                 return {
@@ -1758,6 +1914,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "violations": [],
                     "footer": None,
                     "pending": None,
+                    "receipt": _receipt_dict(receipt),
                     "routing": {
                         "enabled": True,
                         "lane": cascade_result.lane_used,
@@ -1783,7 +1940,6 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         ]
 
         # Get hooks for violation checking
-        ctx = state.context_manager.get_or_create(context_id, mode=state.mode)
         from .chat_bridge import GovernorHooks, _format_governor_footer
         hooks = GovernorHooks(ctx)
         augmented = hooks.augment_messages(messages)
@@ -1801,29 +1957,29 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             # Blocking violation — emit receipt first, then link to pending
             receipt = _emit_chat_receipt(
                 state, "block", response.content, run_id,
-                model=model, principal_id=principal_id,
+                model=response.model, context_id=context_id,
+                principal_id=principal_id,
                 auth_method=auth_method, principal_ref=principal_ref,
             )
-            if receipt is not None:
-                # Update the pending violation with the receipt_id
-                pending = state.violation_resolver.get_pending()
-                if pending is not None:
-                    pending.receipt_id = receipt.receipt_id
-                    state.violation_resolver._save_pending(pending)
+            pending_result = _durable_pending_result(
+                resolver, check_result, receipt, context_id
+            )
             return {
                 "content": response.content,
                 "model": response.model,
                 "usage": response.usage,
                 "violations": check_result.violations,
                 "footer": None,
-                "pending": check_result.to_dict(),
+                "pending": pending_result,
+                "receipt": _receipt_dict(receipt),
             }
 
         # Non-blocking — format footer
         footer = _format_governor_footer(check_result, bridge.show_ok_footer)
-        _emit_chat_receipt(
+        receipt = _emit_chat_receipt(
             state, "pass", response.content, run_id,
-            model=model, principal_id=principal_id,
+            model=response.model, context_id=context_id,
+            principal_id=principal_id,
             auth_method=auth_method, principal_ref=principal_ref,
         )
 
@@ -1834,6 +1990,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "violations": check_result.violations,
             "footer": footer,
             "pending": None,
+            "receipt": _receipt_dict(receipt),
         }
         if use_lanes and _send_lanes_fell_through:
             result["routing"] = {
@@ -1859,14 +2016,18 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         if not messages_raw:
             raise ValueError("Missing required param: messages")
 
+        ctx = state.chat_context(context_id)
+        resolver = state.chat_violation_resolver(context_id)
+
         # Check for pre-existing pending violation BEFORE generation
-        pending = state.violation_resolver.get_pending()
+        pending = resolver.get_pending()
         if pending:
             last_msg = messages_raw[-1].get("content", "") if messages_raw else ""
-            action = state.violation_resolver.is_resolution_command(last_msg)
+            action = resolver.is_resolution_command(last_msg)
             if action:
                 result = await _resolve_violation(
                     state, pending, action, bridge, model,
+                    resolver, context_id,
                     principal_id=principal_id,
                     auth_method=auth_method,
                     principal_ref=principal_ref,
@@ -1880,6 +2041,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "violations": pending.violations,
                     "footer": None,
                     "pending": pending.to_dict(),
+                    "receipt": _receipt_for_id(state, pending.receipt_id),
                 }
 
         # --- Optional lane routing (opt-in) ---
@@ -1991,9 +2153,10 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                             "cooldown store stream record failed", exc_info=True,
                         )
 
-                _emit_chat_receipt(
+                receipt = _emit_chat_receipt(
                     state, "pass", full_content, run_id,
-                    model=routed_model, principal_id=principal_id,
+                    model=routed_model, context_id=context_id,
+                    principal_id=principal_id,
                     auth_method=auth_method, principal_ref=principal_ref,
                 )
 
@@ -2004,6 +2167,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
                     "violations": [],
                     "footer": None,
                     "pending": None,
+                    "receipt": _receipt_dict(receipt),
                     "routing": {
                         "enabled": True,
                         "lane": plan.lane,
@@ -2031,7 +2195,6 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         ]
 
         # Get hooks
-        ctx = state.context_manager.get_or_create(context_id, mode=state.mode)
         from .chat_bridge import GovernorHooks, _format_governor_footer
         hooks = GovernorHooks(ctx)
         augmented = hooks.augment_messages(messages)
@@ -2059,27 +2222,26 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
         if isinstance(check_result, ViolationPendingResponse):
             receipt = _emit_chat_receipt(
                 state, "block", full_content, run_id,
-                model=model, principal_id=principal_id,
+                model=model, context_id=context_id, principal_id=principal_id,
                 auth_method=auth_method, principal_ref=principal_ref,
             )
-            if receipt is not None:
-                pending = state.violation_resolver.get_pending()
-                if pending is not None:
-                    pending.receipt_id = receipt.receipt_id
-                    state.violation_resolver._save_pending(pending)
+            pending_result = _durable_pending_result(
+                resolver, check_result, receipt, context_id
+            )
             return {
                 "content": full_content,
                 "model": model,
                 "usage": stream_usage,
                 "violations": check_result.violations,
                 "footer": None,
-                "pending": check_result.to_dict(),
+                "pending": pending_result,
+                "receipt": _receipt_dict(receipt),
             }
 
         footer = _format_governor_footer(check_result, bridge.show_ok_footer)
-        _emit_chat_receipt(
+        receipt = _emit_chat_receipt(
             state, "pass", full_content, run_id,
-            model=model, principal_id=principal_id,
+            model=model, context_id=context_id, principal_id=principal_id,
             auth_method=auth_method, principal_ref=principal_ref,
         )
 
@@ -2090,6 +2252,7 @@ def register_handlers(dispatcher: Dispatcher, state: DaemonState) -> None:
             "violations": check_result.violations,
             "footer": footer,
             "pending": None,
+            "receipt": _receipt_dict(receipt),
         }
         # When use_lanes was requested but failed, include routing disabled info
         if use_lanes and _lanes_fell_through:

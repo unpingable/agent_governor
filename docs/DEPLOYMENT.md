@@ -1,8 +1,8 @@
 # VM Deployment (sp00ky.net)
 
 The operator's personal single-user VM deployment on Linode (192.46.223.21),
-running behind Caddy with basic auth. "Production" here means the operator's
-own live box — it is **not** a production-hardening or production-service
+protected by HTTP Basic authentication, is documented here for operating the
+operator's own live box — it is **not** a production-hardening or production-service
 claim (see `docs/start-here/what-this-is.md`: alpha software, installed from
 source).
 
@@ -13,7 +13,11 @@ source).
 | Governor daemon | `governor.service` | Unix socket | JSON-RPC 2.0 control plane. Single authority for chat governance. |
 | WebUI | `gov-webui.service` | `127.0.0.1:8420` | FastAPI (OpenAI-compat API). Delegates chat to daemon via socket. |
 | Bridge | `governor-bridge.service` | `127.0.0.1:7777` | socat TCP→Unix socket. For Maude over SSH tunnel. |
-| Caddy | manual (PID-based) | `:80`, `:443` | TLS termination + basic auth for sp00ky.net → :8420 |
+
+The public HTTPS entrypoint is `https://sp00ky.net` and requires Basic auth.
+The credential is deployment-secret material and must not be stored in this
+repository. Existing exposed credentials require rotation/revocation through
+the deployment owner.
 
 ## Socket path
 
@@ -66,6 +70,10 @@ echo "ANTHROPIC_API_KEY=sk-ant-..." > /etc/governor/secrets.env
 chmod 600 /etc/governor/secrets.env
 systemctl restart governor
 ```
+
+The WebUI Basic-auth credential belongs in equivalent deployment-owned secret
+custody. Examples below refer to `GOV_WEBUI_BASIC_AUTH`, whose value has the
+usual `username:password` form; never commit its value.
 
 ## Log rotation
 
@@ -124,8 +132,8 @@ async def t():
 asyncio.run(t())
 "'
 
-# 5. HTTPS via Caddy
-curl -s -u gov:sp00ky2026 https://sp00ky.net/health | python3 -m json.tool
+# 5. HTTPS via Caddy (set the credential outside the repository)
+curl --silent --user "$GOV_WEBUI_BASIC_AUTH" https://sp00ky.net/health | python3 -m json.tool
 ```
 
 ## Known gotchas

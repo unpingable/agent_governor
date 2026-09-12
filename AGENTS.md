@@ -1,5 +1,38 @@
 # AGENTS.md — Working in this repo
 
+## Deprecated: Agent Governor classic (2026-09-08)
+
+This repository (`unpingable/agent_governor`, commonly checked out as
+`agent_gov`) is **deprecated**. NQ classic (`unpingable/nq`) is also deprecated.
+Neither is a target for new integrations, features, provider execution paths,
+or qualification intended to establish a new supported consumer.
+
+- Use **Constellation AG** (`unpingable/constellation-ag`) for supported exact-work authorization
+  and one-use authority, and **Constellation Docket** (`unpingable/constellation-docket`) for attempt,
+  dispatch, and reconciliation custody. Discover their current supported
+  interfaces and qualified revisions before implementing an integration.
+- Keep evidence qualification and application validation with their supported
+  owners. Do not assume classic receipts or APIs transfer unchanged, or that
+  ag-ng/Docket replace every diagnostic capability supplied by classic.
+- Retain classic only for explicitly identified transitional dependencies and
+  rollback. Record the consumer, supplied capability, owner, and removal gate;
+  distinguish source, build-image, and production removal.
+- Do not add classic imports, pins, container installs, fixture-generation
+  requirements, or automatic fallback. A renamed wrapper does not retire a
+  classic dependency. Historical evidence may remain identified as historical.
+- Inspection, migration, and retirement work may proceed within the user's
+  scope. Repairs to a remaining classic runtime require explicit bounded
+  transitional or rollback authorization; do not revive its architecture.
+- Remove deployed classic dependencies only after replacement qualification.
+  Deprecation alone does not authorize service shutdown, deletion, or migration.
+
+This section governs how to use the legacy guide below. Its quick-start,
+architecture, and deployment instructions describe classic only; they do not
+authorize installing or selecting it for current work. References below to
+"the governor" as the authority do not designate classic as today's owner.
+
+## Legacy maintenance guide
+
 This file is a **travel guide**, not a law.
 Enforcement lives in the governor (admissibility, receipts, waivers).
 

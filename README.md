@@ -1,5 +1,19 @@
 # Agent Governor
 
+> **Deprecated — Agent Governor classic.** For new exact-work authorization,
+> use [Constellation AG](https://github.com/unpingable/constellation-ag), with
+> [Constellation Docket](https://github.com/unpingable/constellation-docket)
+> for execution custody and reconciliation. Package and command names remain
+> unchanged by the repository renames.
+> This is not a drop-in upgrade: classic commands, RPC, databases, and authority
+> tokens do not transfer to AG-NG. Preserve historical records and qualify each
+> transitional consumer before retiring its classic dependency.
+
+The documentation below describes the historical Python implementation. Its
+installation and “start here” links are for that lineage, not current adoption.
+Deprecation does not authorize shutting down an existing deployment or deleting
+its evidence. See [the retirement guidance](AGENTS.md#deprecated-agent-governor-classic-2026-09-08).
+
 **Your agent. Your rules. Your receipts.**
 
 AI agents act on your code, your infrastructure, your data. Governor puts you in the loop — not the model provider, not the framework, *you*. You define what the agent can do. Governor enforces it. Every decision is receipted.
